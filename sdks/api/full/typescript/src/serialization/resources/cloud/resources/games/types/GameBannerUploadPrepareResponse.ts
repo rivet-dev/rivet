@@ -16,7 +16,7 @@ export const GameBannerUploadPrepareResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameBannerUploadPrepareResponse {
-    interface Raw {
+    export interface Raw {
         upload_id: string;
         presigned_request: PresignedRequest.Raw;
     }

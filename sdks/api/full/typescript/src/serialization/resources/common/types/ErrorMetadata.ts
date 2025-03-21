@@ -10,5 +10,5 @@ export const ErrorMetadata: core.serialization.Schema<serializers.ErrorMetadata.
     core.serialization.unknown();
 
 export declare namespace ErrorMetadata {
-    type Raw = unknown;
+    export type Raw = unknown;
 }

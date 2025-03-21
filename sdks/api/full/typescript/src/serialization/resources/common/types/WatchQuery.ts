@@ -11,5 +11,5 @@ export const WatchQuery: core.serialization.Schema<serializers.WatchQuery.Raw, R
     .optional();
 
 export declare namespace WatchQuery {
-    type Raw = string | null | undefined;
+    export type Raw = string | null | undefined;
 }

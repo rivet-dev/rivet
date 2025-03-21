@@ -15,7 +15,7 @@ export const ExportMatchmakerLobbyHistoryRequest: core.serialization.ObjectSchem
 });
 
 export declare namespace ExportMatchmakerLobbyHistoryRequest {
-    interface Raw {
+    export interface Raw {
         query_start: number;
         query_end: number;
     }

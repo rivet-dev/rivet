@@ -15,7 +15,7 @@ export const GameModeVerificationConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeVerificationConfig {
-    interface Raw {
+    export interface Raw {
         url: string;
         headers: Record<string, string>;
     }

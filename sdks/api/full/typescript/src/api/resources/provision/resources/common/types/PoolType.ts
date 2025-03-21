@@ -3,7 +3,6 @@
  */
 
 export type PoolType = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb" | "worker";
-
 export const PoolType = {
     Job: "job",
     Gg: "gg",

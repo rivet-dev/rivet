@@ -15,7 +15,7 @@ export const UpdateNamespaceCdnAuthUserRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpdateNamespaceCdnAuthUserRequest {
-    interface Raw {
+    export interface Raw {
         user: string;
         password: string;
     }

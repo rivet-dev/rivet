@@ -15,7 +15,7 @@ export const GlobalEventKind: core.serialization.ObjectSchema<
 });
 
 export declare namespace GlobalEventKind {
-    interface Raw {
+    export interface Raw {
         identity_update?: GlobalEventIdentityUpdate.Raw | null;
     }
 }

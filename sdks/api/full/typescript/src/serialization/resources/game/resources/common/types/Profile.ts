@@ -25,16 +25,16 @@ export const Profile: core.serialization.ObjectSchema<serializers.game.Profile.R
         recommendedGroups: core.serialization.property("recommended_groups", core.serialization.list(GroupSummary)),
         identityLeaderboardCategories: core.serialization.property(
             "identity_leaderboard_categories",
-            core.serialization.list(LeaderboardCategory)
+            core.serialization.list(LeaderboardCategory),
         ),
         groupLeaderboardCategories: core.serialization.property(
             "group_leaderboard_categories",
-            core.serialization.list(LeaderboardCategory)
+            core.serialization.list(LeaderboardCategory),
         ),
     });
 
 export declare namespace Profile {
-    interface Raw {
+    export interface Raw {
         game_id: string;
         name_id: string;
         display_name: DisplayName.Raw;

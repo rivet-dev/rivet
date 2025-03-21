@@ -7,7 +7,6 @@
  * The registration requirement for a user when joining/finding/creating a lobby. "None" allows for connections without an identity.
  */
 export type GameModeIdentityRequirement = "none" | "guest" | "registered";
-
 export const GameModeIdentityRequirement = {
     None: "none",
     Guest: "guest",

@@ -12,15 +12,17 @@ import { Analytics } from "../resources/analytics/client/Client";
 import { Logs } from "../resources/logs/client/Client";
 
 export declare namespace Namespaces {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -35,7 +37,18 @@ export declare namespace Namespaces {
 }
 
 export class Namespaces {
+    protected _analytics: Analytics | undefined;
+    protected _logs: Logs | undefined;
+
     constructor(protected readonly _options: Namespaces.Options = {}) {}
+
+    public get analytics(): Analytics {
+        return (this._analytics ??= new Analytics(this._options));
+    }
+
+    public get logs(): Logs {
+        return (this._logs ??= new Logs(this._options));
+    }
 
     /**
      * Creates a new namespace for the given game.
@@ -61,12 +74,14 @@ export class Namespaces {
     public async createGameNamespace(
         gameId: string,
         request: Rivet.cloud.games.namespaces.CreateGameNamespaceRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.CreateGameNamespaceResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces`,
             ),
             method: "POST",
             headers: {
@@ -106,7 +121,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -116,7 +131,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -126,7 +141,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -136,7 +151,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -146,7 +161,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -156,7 +171,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -174,7 +189,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -206,12 +221,14 @@ export class Namespaces {
     public async validateGameNamespace(
         gameId: string,
         request: Rivet.cloud.games.namespaces.ValidateGameNamespaceRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.ValidateGameNamespaceResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/validate`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/validate`,
             ),
             method: "POST",
             headers: {
@@ -251,7 +268,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -261,7 +278,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -271,7 +288,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -281,7 +298,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -291,7 +308,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -301,7 +318,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -319,7 +336,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/validate."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/validate.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -348,12 +365,14 @@ export class Namespaces {
     public async getGameNamespaceById(
         gameId: string,
         namespaceId: string,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.GetGameNamespaceByIdResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}`,
             ),
             method: "GET",
             headers: {
@@ -390,7 +409,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -400,7 +419,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -410,7 +429,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -420,7 +439,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -430,7 +449,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -440,7 +459,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -458,7 +477,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}."
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -492,12 +511,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.UpdateNamespaceCdnAuthUserRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/auth-user`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/auth-user`,
             ),
             method: "POST",
             headers: {
@@ -531,7 +552,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -541,7 +562,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -551,7 +572,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -561,7 +582,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -571,7 +592,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -581,7 +602,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -599,7 +620,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -630,14 +651,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         user: string,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/auth-user/${encodeURIComponent(user)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/auth-user/${encodeURIComponent(user)}`,
             ),
             method: "DELETE",
             headers: {
@@ -668,7 +689,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -678,7 +699,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -688,7 +709,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -698,7 +719,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -708,7 +729,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -718,7 +739,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -736,7 +757,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user/{user}."
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user/{user}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -769,12 +790,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.SetNamespaceCdnAuthTypeRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/cdn-auth`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/cdn-auth`,
             ),
             method: "PUT",
             headers: {
@@ -808,7 +831,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -818,7 +841,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -828,7 +851,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -838,7 +861,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -848,7 +871,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -858,7 +881,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -876,7 +899,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth."
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -909,14 +932,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.ToggleNamespaceDomainPublicAuthRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/domain-public-auth`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/domain-public-auth`,
             ),
             method: "PUT",
             headers: {
@@ -950,7 +973,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -960,7 +983,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -970,7 +993,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -980,7 +1003,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -990,7 +1013,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1000,7 +1023,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1018,7 +1041,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth."
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1051,12 +1074,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.AddNamespaceDomainRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/domains`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/domains`,
             ),
             method: "POST",
             headers: {
@@ -1090,7 +1115,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1100,7 +1125,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1110,7 +1135,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1120,7 +1145,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1130,7 +1155,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1140,7 +1165,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1158,7 +1183,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/domains."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/domains.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1189,14 +1214,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         domain: string,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/domains/${encodeURIComponent(domain)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/domains/${encodeURIComponent(domain)}`,
             ),
             method: "DELETE",
             headers: {
@@ -1227,7 +1252,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1237,7 +1262,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1247,7 +1272,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1257,7 +1282,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1267,7 +1292,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1277,7 +1302,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1295,7 +1320,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/domains/{domain}."
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/domains/{domain}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1329,12 +1354,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.UpdateGameNamespaceMatchmakerConfigRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/mm-config`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/mm-config`,
             ),
             method: "POST",
             headers: {
@@ -1368,7 +1395,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1378,7 +1405,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1388,7 +1415,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1398,7 +1425,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1408,7 +1435,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1418,7 +1445,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1436,7 +1463,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1470,10 +1497,10 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.GetGameNamespaceVersionHistoryRequest = {},
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.GetGameNamespaceVersionHistoryResponse> {
         const { anchor, limit } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (anchor != null) {
             _queryParams["anchor"] = anchor;
         }
@@ -1484,10 +1511,10 @@ export class Namespaces {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/version-history`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/version-history`,
             ),
             method: "GET",
             headers: {
@@ -1514,7 +1541,7 @@ export class Namespaces {
                     allowUnrecognizedEnumValues: true,
                     skipValidation: true,
                     breadcrumbsPrefix: ["response"],
-                }
+                },
             );
         }
 
@@ -1528,7 +1555,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1538,7 +1565,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1548,7 +1575,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1558,7 +1585,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1568,7 +1595,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1578,7 +1605,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1596,7 +1623,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}/version-history."
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}/version-history.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1630,14 +1657,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.ValidateGameNamespaceMatchmakerConfigRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.ValidateGameNamespaceMatchmakerConfigResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/mm-config/validate`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/mm-config/validate`,
             ),
             method: "POST",
             headers: {
@@ -1666,7 +1693,7 @@ export class Namespaces {
                     allowUnrecognizedEnumValues: true,
                     skipValidation: true,
                     breadcrumbsPrefix: ["response"],
-                }
+                },
             );
         }
 
@@ -1680,7 +1707,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1690,7 +1717,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1700,7 +1727,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1710,7 +1737,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1720,7 +1747,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1730,7 +1757,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1748,7 +1775,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config/validate."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config/validate.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1794,14 +1821,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/tokens/development`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/tokens/development`,
             ),
             method: "POST",
             headers: {
@@ -1830,7 +1857,7 @@ export class Namespaces {
                     allowUnrecognizedEnumValues: true,
                     skipValidation: true,
                     breadcrumbsPrefix: ["response"],
-                }
+                },
             );
         }
 
@@ -1844,7 +1871,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1854,7 +1881,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1864,7 +1891,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1874,7 +1901,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1884,7 +1911,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1894,7 +1921,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1912,7 +1939,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1951,14 +1978,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/tokens/development/validate`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/tokens/development/validate`,
             ),
             method: "POST",
             headers: {
@@ -1987,7 +2014,7 @@ export class Namespaces {
                     allowUnrecognizedEnumValues: true,
                     skipValidation: true,
                     breadcrumbsPrefix: ["response"],
-                }
+                },
             );
         }
 
@@ -2001,7 +2028,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2011,7 +2038,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2021,7 +2048,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2031,7 +2058,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2041,7 +2068,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2051,7 +2078,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2069,7 +2096,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -2098,12 +2125,14 @@ export class Namespaces {
     public async createGameNamespaceTokenPublic(
         gameId: string,
         namespaceId: string,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.CreateGameNamespaceTokenPublicResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/tokens/public`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/tokens/public`,
             ),
             method: "POST",
             headers: {
@@ -2129,7 +2158,7 @@ export class Namespaces {
                     allowUnrecognizedEnumValues: true,
                     skipValidation: true,
                     breadcrumbsPrefix: ["response"],
-                }
+                },
             );
         }
 
@@ -2143,7 +2172,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2153,7 +2182,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2163,7 +2192,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2173,7 +2202,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2183,7 +2212,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2193,7 +2222,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2211,7 +2240,7 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/public."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/public.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -2244,12 +2273,14 @@ export class Namespaces {
         gameId: string,
         namespaceId: string,
         request: Rivet.cloud.games.namespaces.UpdateGameNamespaceVersionRequest,
-        requestOptions?: Namespaces.RequestOptions
+        requestOptions?: Namespaces.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/version`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/version`,
             ),
             method: "PUT",
             headers: {
@@ -2283,7 +2314,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2293,7 +2324,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2303,7 +2334,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2313,7 +2344,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2323,7 +2354,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2333,7 +2364,7 @@ export class Namespaces {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2351,25 +2382,13 @@ export class Namespaces {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/version."
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/version.",
                 );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _analytics: Analytics | undefined;
-
-    public get analytics(): Analytics {
-        return (this._analytics ??= new Analytics(this._options));
-    }
-
-    protected _logs: Logs | undefined;
-
-    public get logs(): Logs {
-        return (this._logs ??= new Logs(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

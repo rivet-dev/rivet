@@ -40,7 +40,7 @@ export const Profile: core.serialization.ObjectSchema<serializers.identity.Profi
     });
 
 export declare namespace Profile {
-    interface Raw {
+    export interface Raw {
         identity_id: string;
         display_name: DisplayName.Raw;
         account_number: AccountNumber.Raw;

@@ -21,7 +21,7 @@ export const CdnSiteSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace CdnSiteSummary {
-    interface Raw {
+    export interface Raw {
         site_id: string;
         upload_id: string;
         display_name: DisplayName.Raw;

@@ -12,5 +12,5 @@ export const IdentityNamespaceConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace IdentityNamespaceConfig {
-    interface Raw {}
+    export interface Raw {}
 }

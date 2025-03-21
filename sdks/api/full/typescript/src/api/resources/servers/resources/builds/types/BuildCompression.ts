@@ -9,7 +9,6 @@ export type BuildCompression =
     /**
      * LZ4 compression. Use the minimum compression level. */
     | "lz4";
-
 export const BuildCompression = {
     None: "none",
     Lz4: "lz4",

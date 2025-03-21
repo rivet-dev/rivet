@@ -15,7 +15,7 @@ export const CaptchaTurnstile: core.serialization.ObjectSchema<
 });
 
 export declare namespace CaptchaTurnstile {
-    interface Raw {
+    export interface Raw {
         site_key: string;
         secret_key: string;
     }

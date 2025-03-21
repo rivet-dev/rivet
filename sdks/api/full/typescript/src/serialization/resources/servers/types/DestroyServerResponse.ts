@@ -12,5 +12,5 @@ export const DestroyServerResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace DestroyServerResponse {
-    interface Raw {}
+    export interface Raw {}
 }

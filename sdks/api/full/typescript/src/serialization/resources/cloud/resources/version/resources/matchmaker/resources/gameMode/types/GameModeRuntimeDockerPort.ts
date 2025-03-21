@@ -23,7 +23,7 @@ export const GameModeRuntimeDockerPort: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeRuntimeDockerPort {
-    interface Raw {
+    export interface Raw {
         port?: number | null;
         port_range?: PortRange.Raw | null;
         protocol?: PortProtocol.Raw | null;

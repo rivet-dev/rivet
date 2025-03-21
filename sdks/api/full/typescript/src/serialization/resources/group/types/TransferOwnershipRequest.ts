@@ -14,7 +14,7 @@ export const TransferOwnershipRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace TransferOwnershipRequest {
-    interface Raw {
+    export interface Raw {
         new_owner_identity_id: string;
     }
 }

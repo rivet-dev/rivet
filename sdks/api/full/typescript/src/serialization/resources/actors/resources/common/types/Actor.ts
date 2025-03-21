@@ -26,7 +26,7 @@ export const Actor: core.serialization.ObjectSchema<serializers.actors.Actor.Raw
     });
 
 export declare namespace Actor {
-    interface Raw {
+    export interface Raw {
         id: string;
         region: string;
         tags?: unknown;

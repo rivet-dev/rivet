@@ -12,5 +12,5 @@ export const StatAggregationMethod: core.serialization.Schema<
 > = core.serialization.enum_(["sum", "average", "min", "max"]);
 
 export declare namespace StatAggregationMethod {
-    type Raw = "sum" | "average" | "min" | "max";
+    export type Raw = "sum" | "average" | "min" | "max";
 }

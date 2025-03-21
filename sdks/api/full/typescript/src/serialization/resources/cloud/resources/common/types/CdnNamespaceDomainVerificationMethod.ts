@@ -17,7 +17,7 @@ export const CdnNamespaceDomainVerificationMethod: core.serialization.ObjectSche
 });
 
 export declare namespace CdnNamespaceDomainVerificationMethod {
-    interface Raw {
+    export interface Raw {
         invalid?: EmptyObject.Raw | null;
         http?: CdnNamespaceDomainVerificationMethodHttp.Raw | null;
     }

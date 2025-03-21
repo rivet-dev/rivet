@@ -21,7 +21,7 @@ export const NamespaceConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace NamespaceConfig {
-    interface Raw {
+    export interface Raw {
         cdn: CdnNamespaceConfig.Raw;
         matchmaker: MatchmakerNamespaceConfig.Raw;
         kv: KvNamespaceConfig.Raw;

@@ -10,15 +10,17 @@ import * as serializers from "../../../../../../serialization/index";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Datacenters {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -51,12 +53,14 @@ export class Datacenters {
      */
     public async getTls(
         datacenterId: string,
-        requestOptions?: Datacenters.RequestOptions
+        requestOptions?: Datacenters.RequestOptions,
     ): Promise<Rivet.provision.datacenters.GetTlsResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/datacenters/${encodeURIComponent(datacenterId)}/tls`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/datacenters/${encodeURIComponent(datacenterId)}/tls`,
             ),
             method: "GET",
             headers: {
@@ -93,7 +97,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -103,7 +107,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -113,7 +117,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -123,7 +127,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -133,7 +137,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -143,7 +147,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -161,7 +165,7 @@ export class Datacenters {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /datacenters/{datacenter_id}/tls."
+                    "Timeout exceeded when calling GET /datacenters/{datacenter_id}/tls.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -186,12 +190,14 @@ export class Datacenters {
      */
     public async getServers(
         datacenterId: string,
-        requestOptions?: Datacenters.RequestOptions
+        requestOptions?: Datacenters.RequestOptions,
     ): Promise<Rivet.provision.datacenters.GetServersResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/datacenters/${encodeURIComponent(datacenterId)}/servers`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/datacenters/${encodeURIComponent(datacenterId)}/servers`,
             ),
             method: "GET",
             headers: {
@@ -228,7 +234,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -238,7 +244,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -248,7 +254,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -258,7 +264,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -268,7 +274,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -278,7 +284,7 @@ export class Datacenters {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -296,7 +302,7 @@ export class Datacenters {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /datacenters/{datacenter_id}/servers."
+                    "Timeout exceeded when calling GET /datacenters/{datacenter_id}/servers.",
                 );
             case "unknown":
                 throw new errors.RivetError({

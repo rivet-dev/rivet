@@ -15,7 +15,7 @@ export const GetRayPerfLogsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetRayPerfLogsResponse {
-    interface Raw {
+    export interface Raw {
         perf_lists: SvcPerf.Raw[];
     }
 }

@@ -12,5 +12,5 @@ export const GodotConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace GodotConfig {
-    interface Raw {}
+    export interface Raw {}
 }

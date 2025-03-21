@@ -17,7 +17,7 @@ export const GetGameProfileResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetGameProfileResponse {
-    interface Raw {
+    export interface Raw {
         game: Profile.Raw;
         watch: WatchResponse.Raw;
     }

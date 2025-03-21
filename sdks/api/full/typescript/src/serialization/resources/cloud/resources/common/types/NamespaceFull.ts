@@ -22,7 +22,7 @@ export const NamespaceFull: core.serialization.ObjectSchema<
 });
 
 export declare namespace NamespaceFull {
-    interface Raw {
+    export interface Raw {
         namespace_id: string;
         create_ts: Timestamp.Raw;
         display_name: DisplayName.Raw;

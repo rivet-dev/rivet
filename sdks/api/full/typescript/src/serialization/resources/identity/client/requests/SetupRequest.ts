@@ -15,7 +15,7 @@ export const SetupRequest: core.serialization.Schema<
 });
 
 export declare namespace SetupRequest {
-    interface Raw {
+    export interface Raw {
         existing_identity_token?: Jwt.Raw | null;
     }
 }

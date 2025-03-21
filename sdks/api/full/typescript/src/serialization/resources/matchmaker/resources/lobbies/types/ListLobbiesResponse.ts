@@ -19,7 +19,7 @@ export const ListLobbiesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListLobbiesResponse {
-    interface Raw {
+    export interface Raw {
         game_modes: GameModeInfo.Raw[];
         regions: RegionInfo.Raw[];
         lobbies: LobbyInfo.Raw[];

@@ -3,7 +3,6 @@
  */
 
 export type LogStream = "std_out" | "std_err";
-
 export const LogStream = {
     StdOut: "std_out",
     StdErr: "std_err",

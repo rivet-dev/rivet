@@ -15,7 +15,7 @@ export const ValidateGameNamespaceResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateGameNamespaceResponse {
-    interface Raw {
+    export interface Raw {
         errors: ValidationError.Raw[];
     }
 }

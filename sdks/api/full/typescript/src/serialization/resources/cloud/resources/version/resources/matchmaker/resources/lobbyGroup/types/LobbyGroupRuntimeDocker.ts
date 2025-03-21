@@ -21,7 +21,7 @@ export const LobbyGroupRuntimeDocker: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroupRuntimeDocker {
-    interface Raw {
+    export interface Raw {
         build_id?: string | null;
         args: string[];
         env_vars: LobbyGroupRuntimeDockerEnvVar.Raw[];

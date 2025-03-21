@@ -16,7 +16,7 @@ export const PrepareCustomAvatarUploadRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareCustomAvatarUploadRequest {
-    interface Raw {
+    export interface Raw {
         path: string;
         mime?: string | null;
         content_length: number;

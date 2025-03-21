@@ -17,7 +17,7 @@ export const CaptchaHcaptcha: core.serialization.ObjectSchema<
 });
 
 export declare namespace CaptchaHcaptcha {
-    interface Raw {
+    export interface Raw {
         level?: CaptchaHcaptchaLevel.Raw | null;
         site_key?: string | null;
         secret_key?: string | null;

@@ -12,5 +12,5 @@ export const KvNamespaceConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace KvNamespaceConfig {
-    interface Raw {}
+    export interface Raw {}
 }

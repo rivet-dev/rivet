@@ -14,7 +14,7 @@ export const PrewarmImageRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrewarmImageRequest {
-    interface Raw {
+    export interface Raw {
         image_artifact_url_stub: string;
     }
 }

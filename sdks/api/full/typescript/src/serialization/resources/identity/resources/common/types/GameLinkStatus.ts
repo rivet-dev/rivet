@@ -12,5 +12,5 @@ export const GameLinkStatus: core.serialization.Schema<
 > = core.serialization.enum_(["incomplete", "complete", "cancelled"]);
 
 export declare namespace GameLinkStatus {
-    type Raw = "incomplete" | "complete" | "cancelled";
+    export type Raw = "incomplete" | "complete" | "cancelled";
 }

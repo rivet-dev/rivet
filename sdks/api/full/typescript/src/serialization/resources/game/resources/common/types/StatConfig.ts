@@ -26,7 +26,7 @@ export const StatConfig: core.serialization.ObjectSchema<serializers.game.StatCo
     });
 
 export declare namespace StatConfig {
-    interface Raw {
+    export interface Raw {
         record_id: string;
         icon_id: string;
         format: StatFormatMethod.Raw;

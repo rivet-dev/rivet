@@ -16,7 +16,7 @@ export const UpdateGameActivity: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpdateGameActivity {
-    interface Raw {
+    export interface Raw {
         message?: string | null;
         public_metadata?: unknown | null;
         mutual_metadata?: unknown | null;

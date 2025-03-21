@@ -20,7 +20,7 @@ export const NamespaceSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace NamespaceSummary {
-    interface Raw {
+    export interface Raw {
         namespace_id: string;
         create_ts: Timestamp.Raw;
         display_name: DisplayName.Raw;

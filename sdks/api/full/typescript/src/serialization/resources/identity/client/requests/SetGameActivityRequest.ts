@@ -15,7 +15,7 @@ export const SetGameActivityRequest: core.serialization.Schema<
 });
 
 export declare namespace SetGameActivityRequest {
-    interface Raw {
+    export interface Raw {
         game_activity: UpdateGameActivity.Raw;
     }
 }

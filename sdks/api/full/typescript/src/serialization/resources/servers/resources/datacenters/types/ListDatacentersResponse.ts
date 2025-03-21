@@ -15,7 +15,7 @@ export const ListDatacentersResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListDatacentersResponse {
-    interface Raw {
+    export interface Raw {
         datacenters: Datacenter.Raw[];
     }
 }

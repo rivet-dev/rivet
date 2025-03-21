@@ -17,7 +17,7 @@ export const GetHandlesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetHandlesResponse {
-    interface Raw {
+    export interface Raw {
         identities: Handle.Raw[];
         watch: WatchResponse.Raw;
     }

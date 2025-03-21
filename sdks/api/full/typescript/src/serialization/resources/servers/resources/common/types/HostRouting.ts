@@ -12,5 +12,5 @@ export const HostRouting: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace HostRouting {
-    interface Raw {}
+    export interface Raw {}
 }

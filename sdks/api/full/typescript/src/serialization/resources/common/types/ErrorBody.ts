@@ -17,7 +17,7 @@ export const ErrorBody: core.serialization.ObjectSchema<serializers.ErrorBody.Ra
     });
 
 export declare namespace ErrorBody {
-    interface Raw {
+    export interface Raw {
         code: string;
         message: string;
         ray_id: string;

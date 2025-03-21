@@ -15,7 +15,7 @@ export const ExportLobbyLogsRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ExportLobbyLogsRequest {
-    interface Raw {
+    export interface Raw {
         stream: LogStream.Raw;
     }
 }

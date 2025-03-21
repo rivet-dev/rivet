@@ -10,5 +10,5 @@ export const BuildKind: core.serialization.Schema<serializers.cloud.games.BuildK
     core.serialization.enum_(["docker_image", "oci_bundle"]);
 
 export declare namespace BuildKind {
-    type Raw = "docker_image" | "oci_bundle";
+    export type Raw = "docker_image" | "oci_bundle";
 }

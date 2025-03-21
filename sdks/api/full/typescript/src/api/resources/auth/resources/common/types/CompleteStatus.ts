@@ -24,7 +24,6 @@ export type CompleteStatus =
     /**
      * The code given to the current linking process is incorrect. */
     | "incorrect";
-
 export const CompleteStatus = {
     SwitchIdentity: "switch_identity",
     LinkedAccountAdded: "linked_account_added",

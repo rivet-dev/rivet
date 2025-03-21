@@ -17,7 +17,7 @@ export const LogsLobbyStatusStopped: core.serialization.ObjectSchema<
 });
 
 export declare namespace LogsLobbyStatusStopped {
-    interface Raw {
+    export interface Raw {
         stop_ts: Timestamp.Raw;
         failed: boolean;
         exit_code: number;

@@ -13,7 +13,7 @@ export const Coord: core.serialization.ObjectSchema<serializers.geo.Coord.Raw, R
     });
 
 export declare namespace Coord {
-    interface Raw {
+    export interface Raw {
         latitude: number;
         longitude: number;
     }

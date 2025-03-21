@@ -14,7 +14,7 @@ export const CreateGameNamespaceTokenPublicResponse: core.serialization.ObjectSc
 });
 
 export declare namespace CreateGameNamespaceTokenPublicResponse {
-    interface Raw {
+    export interface Raw {
         token: string;
     }
 }

@@ -17,12 +17,12 @@ export const MatchmakerNamespaceConfig: core.serialization.ObjectSchema<
     maxPlayersPerClientTor: core.serialization.property("max_players_per_client_tor", core.serialization.number()),
     maxPlayersPerClientHosting: core.serialization.property(
         "max_players_per_client_hosting",
-        core.serialization.number()
+        core.serialization.number(),
     ),
 });
 
 export declare namespace MatchmakerNamespaceConfig {
-    interface Raw {
+    export interface Raw {
         lobby_count_max: number;
         max_players_per_client: number;
         max_players_per_client_vpn: number;

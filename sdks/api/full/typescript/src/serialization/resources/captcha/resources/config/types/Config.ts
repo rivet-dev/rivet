@@ -15,7 +15,7 @@ export const Config: core.serialization.ObjectSchema<serializers.captcha.Config.
     });
 
 export declare namespace Config {
-    interface Raw {
+    export interface Raw {
         hcaptcha?: ConfigHcaptcha.Raw | null;
         turnstile?: ConfigTurnstile.Raw | null;
     }

@@ -15,7 +15,7 @@ export const CreateInviteRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateInviteRequest {
-    interface Raw {
+    export interface Raw {
         ttl?: number | null;
         use_count?: number | null;
     }

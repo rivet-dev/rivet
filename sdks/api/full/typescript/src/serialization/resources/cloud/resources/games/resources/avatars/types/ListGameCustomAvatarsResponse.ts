@@ -15,7 +15,7 @@ export const ListGameCustomAvatarsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListGameCustomAvatarsResponse {
-    interface Raw {
+    export interface Raw {
         custom_avatars: CustomAvatarSummary.Raw[];
     }
 }

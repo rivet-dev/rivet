@@ -15,7 +15,7 @@ export const JoinPortRange: core.serialization.ObjectSchema<
 });
 
 export declare namespace JoinPortRange {
-    interface Raw {
+    export interface Raw {
         min: number;
         max: number;
     }

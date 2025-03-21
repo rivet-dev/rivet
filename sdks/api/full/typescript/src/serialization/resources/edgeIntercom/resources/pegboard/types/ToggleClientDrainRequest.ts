@@ -16,7 +16,7 @@ export const ToggleClientDrainRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ToggleClientDrainRequest {
-    interface Raw {
+    export interface Raw {
         draining: boolean;
         drain_complete_ts?: Timestamp.Raw | null;
     }

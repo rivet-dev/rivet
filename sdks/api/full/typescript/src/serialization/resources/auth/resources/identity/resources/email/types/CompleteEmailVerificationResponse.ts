@@ -15,7 +15,7 @@ export const CompleteEmailVerificationResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CompleteEmailVerificationResponse {
-    interface Raw {
+    export interface Raw {
         status: CompleteStatus.Raw;
     }
 }

@@ -10,5 +10,5 @@ export const DevState: core.serialization.Schema<serializers.identity.DevState.R
     core.serialization.enum_(["inactive", "pending", "accepted"]);
 
 export declare namespace DevState {
-    type Raw = "inactive" | "pending" | "accepted";
+    export type Raw = "inactive" | "pending" | "accepted";
 }

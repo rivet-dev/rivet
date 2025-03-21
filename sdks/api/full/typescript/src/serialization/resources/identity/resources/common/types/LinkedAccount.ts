@@ -16,7 +16,7 @@ export const LinkedAccount: core.serialization.ObjectSchema<
 });
 
 export declare namespace LinkedAccount {
-    interface Raw {
+    export interface Raw {
         email?: EmailLinkedAccount.Raw | null;
         default_user?: boolean | null;
     }

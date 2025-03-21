@@ -16,7 +16,7 @@ export const GameLogoUploadPrepareRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameLogoUploadPrepareRequest {
-    interface Raw {
+    export interface Raw {
         path: string;
         mime?: string | null;
         content_length: number;

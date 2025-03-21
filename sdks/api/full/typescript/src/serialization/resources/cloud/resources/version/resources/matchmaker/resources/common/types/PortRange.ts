@@ -15,7 +15,7 @@ export const PortRange: core.serialization.ObjectSchema<
 });
 
 export declare namespace PortRange {
-    interface Raw {
+    export interface Raw {
         min: number;
         max: number;
     }

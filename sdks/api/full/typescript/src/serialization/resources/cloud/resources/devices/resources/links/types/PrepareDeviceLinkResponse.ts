@@ -16,7 +16,7 @@ export const PrepareDeviceLinkResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareDeviceLinkResponse {
-    interface Raw {
+    export interface Raw {
         device_link_id: string;
         device_link_token: string;
         device_link_url: string;

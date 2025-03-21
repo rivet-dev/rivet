@@ -18,7 +18,7 @@ export const GetBansResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetBansResponse {
-    interface Raw {
+    export interface Raw {
         banned_identities: BannedIdentity.Raw[];
         anchor?: string | null;
         watch: WatchResponse.Raw;

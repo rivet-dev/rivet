@@ -19,7 +19,7 @@ export const ValidateProfileRequest: core.serialization.Schema<
 });
 
 export declare namespace ValidateProfileRequest {
-    interface Raw {
+    export interface Raw {
         display_name?: DisplayName.Raw | null;
         account_number?: AccountNumber.Raw | null;
         bio?: Bio.Raw | null;

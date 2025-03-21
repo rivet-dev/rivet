@@ -10,15 +10,17 @@ import * as serializers from "../../../../../../serialization/index";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Games {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -57,18 +59,20 @@ export class Games {
     public async getGameProfile(
         gameNameId: string,
         request: Rivet.portal.GetGameProfileRequest = {},
-        requestOptions?: Games.RequestOptions
+        requestOptions?: Games.RequestOptions,
     ): Promise<Rivet.portal.GetGameProfileResponse> {
         const { watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/portal/games/${encodeURIComponent(gameNameId)}/profile`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/portal/games/${encodeURIComponent(gameNameId)}/profile`,
             ),
             method: "GET",
             headers: {
@@ -106,7 +110,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -116,7 +120,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -126,7 +130,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -136,7 +140,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -146,7 +150,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -156,7 +160,7 @@ export class Games {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -174,7 +178,7 @@ export class Games {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /portal/games/{game_name_id}/profile."
+                    "Timeout exceeded when calling GET /portal/games/{game_name_id}/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({

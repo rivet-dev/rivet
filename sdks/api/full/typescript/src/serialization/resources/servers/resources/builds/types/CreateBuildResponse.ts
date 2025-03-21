@@ -15,12 +15,12 @@ export const CreateBuildResponse: core.serialization.ObjectSchema<
     imagePresignedRequest: core.serialization.property("image_presigned_request", PresignedRequest.optional()),
     imagePresignedRequests: core.serialization.property(
         "image_presigned_requests",
-        core.serialization.list(PresignedRequest).optional()
+        core.serialization.list(PresignedRequest).optional(),
     ),
 });
 
 export declare namespace CreateBuildResponse {
-    interface Raw {
+    export interface Raw {
         build: string;
         image_presigned_request?: PresignedRequest.Raw | null;
         image_presigned_requests?: PresignedRequest.Raw[] | null;

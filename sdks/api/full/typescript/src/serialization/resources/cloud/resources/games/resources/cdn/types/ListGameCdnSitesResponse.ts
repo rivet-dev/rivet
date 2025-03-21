@@ -15,7 +15,7 @@ export const ListGameCdnSitesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListGameCdnSitesResponse {
-    interface Raw {
+    export interface Raw {
         sites: CdnSiteSummary.Raw[];
     }
 }

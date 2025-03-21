@@ -17,7 +17,7 @@ export const JoinLobbyRequest: core.serialization.Schema<
 });
 
 export declare namespace JoinLobbyRequest {
-    interface Raw {
+    export interface Raw {
         lobby_id: string;
         captcha?: Config.Raw | null;
         verification_data?: unknown | null;

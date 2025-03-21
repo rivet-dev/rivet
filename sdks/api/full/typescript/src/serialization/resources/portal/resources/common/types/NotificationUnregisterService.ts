@@ -12,5 +12,5 @@ export const NotificationUnregisterService: core.serialization.Schema<
 > = core.serialization.enum_(["firebase"]);
 
 export declare namespace NotificationUnregisterService {
-    type Raw = "firebase";
+    export type Raw = "firebase";
 }

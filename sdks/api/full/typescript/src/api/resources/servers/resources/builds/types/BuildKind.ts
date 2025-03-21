@@ -9,7 +9,6 @@ export type BuildKind =
     /**
      * OCI-compliant bundle. */
     | "oci_bundle";
-
 export const BuildKind = {
     DockerImage: "docker_image",
     OciBundle: "oci_bundle",

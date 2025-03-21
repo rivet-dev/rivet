@@ -15,7 +15,7 @@ export const LobbyGroupIdleLobbiesConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroupIdleLobbiesConfig {
-    interface Raw {
+    export interface Raw {
         min_idle_lobbies: number;
         max_idle_lobbies: number;
     }

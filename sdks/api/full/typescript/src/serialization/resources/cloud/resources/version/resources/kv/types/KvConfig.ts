@@ -12,5 +12,5 @@ export const KvConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace KvConfig {
-    interface Raw {}
+    export interface Raw {}
 }

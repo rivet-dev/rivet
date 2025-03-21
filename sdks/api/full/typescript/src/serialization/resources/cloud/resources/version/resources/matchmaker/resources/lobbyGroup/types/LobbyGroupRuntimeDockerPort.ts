@@ -19,7 +19,7 @@ export const LobbyGroupRuntimeDockerPort: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroupRuntimeDockerPort {
-    interface Raw {
+    export interface Raw {
         label: string;
         target_port?: number | null;
         port_range?: PortRange.Raw | null;

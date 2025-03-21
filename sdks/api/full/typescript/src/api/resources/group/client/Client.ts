@@ -12,15 +12,17 @@ import { Invites } from "../resources/invites/client/Client";
 import { JoinRequests } from "../resources/joinRequests/client/Client";
 
 export declare namespace Group {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -35,7 +37,18 @@ export declare namespace Group {
 }
 
 export class Group {
+    protected _invites: Invites | undefined;
+    protected _joinRequests: JoinRequests | undefined;
+
     constructor(protected readonly _options: Group.Options = {}) {}
+
+    public get invites(): Invites {
+        return (this._invites ??= new Invites(this._options));
+    }
+
+    public get joinRequests(): JoinRequests {
+        return (this._joinRequests ??= new JoinRequests(this._options));
+    }
 
     /**
      * Returns a list of suggested groups.
@@ -57,18 +70,20 @@ export class Group {
      */
     public async listSuggested(
         request: Rivet.group.ListSuggestedRequest = {},
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.ListSuggestedResponse> {
         const { watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/group/groups"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/group/groups",
             ),
             method: "GET",
             headers: {
@@ -106,7 +121,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -116,7 +131,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -126,7 +141,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -136,7 +151,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -146,7 +161,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -156,7 +171,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -201,12 +216,14 @@ export class Group {
      */
     public async create(
         request: Rivet.group.CreateRequest,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.CreateResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/group/groups"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/group/groups",
             ),
             method: "POST",
             headers: {
@@ -244,7 +261,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -254,7 +271,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -264,7 +281,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -274,7 +291,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -284,7 +301,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -294,7 +311,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -342,12 +359,14 @@ export class Group {
      */
     public async prepareAvatarUpload(
         request: Rivet.group.PrepareAvatarUploadRequest,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.PrepareAvatarUploadResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/group/groups/avatar-upload/prepare"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/group/groups/avatar-upload/prepare",
             ),
             method: "POST",
             headers: {
@@ -387,7 +406,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -397,7 +416,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -407,7 +426,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -417,7 +436,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -427,7 +446,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -437,7 +456,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -455,7 +474,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/avatar-upload/prepare."
+                    "Timeout exceeded when calling POST /group/groups/avatar-upload/prepare.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -486,12 +505,14 @@ export class Group {
      */
     public async validateProfile(
         request: Rivet.group.ValidateProfileRequest,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.ValidateProfileResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/group/groups/profile/validate"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/group/groups/profile/validate",
             ),
             method: "POST",
             headers: {
@@ -529,7 +550,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -539,7 +560,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -549,7 +570,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -559,7 +580,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -569,7 +590,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -579,7 +600,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -597,7 +618,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/profile/validate."
+                    "Timeout exceeded when calling POST /group/groups/profile/validate.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -628,12 +649,14 @@ export class Group {
     public async completeAvatarUpload(
         groupId: string,
         uploadId: string,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/avatar-upload/${encodeURIComponent(uploadId)}/complete`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/avatar-upload/${encodeURIComponent(uploadId)}/complete`,
             ),
             method: "POST",
             headers: {
@@ -664,7 +687,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -674,7 +697,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -684,7 +707,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -694,7 +717,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -704,7 +727,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -714,7 +737,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -732,7 +755,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/avatar-upload/{upload_id}/complete."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/avatar-upload/{upload_id}/complete.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -765,10 +788,10 @@ export class Group {
     public async getBans(
         groupId: string,
         request: Rivet.group.GetBansRequest = {},
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.GetBansResponse> {
         const { anchor, count, watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (anchor != null) {
             _queryParams["anchor"] = anchor;
         }
@@ -783,8 +806,10 @@ export class Group {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/bans`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/bans`,
             ),
             method: "GET",
             headers: {
@@ -822,7 +847,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -832,7 +857,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -842,7 +867,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -852,7 +877,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -862,7 +887,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -872,7 +897,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -917,12 +942,14 @@ export class Group {
     public async banIdentity(
         groupId: string,
         identityId: string,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(identityId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(identityId)}`,
             ),
             method: "POST",
             headers: {
@@ -953,7 +980,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -963,7 +990,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -973,7 +1000,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -983,7 +1010,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -993,7 +1020,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1003,7 +1030,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1021,7 +1048,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/bans/{identity_id}."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/bans/{identity_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1050,12 +1077,14 @@ export class Group {
     public async unbanIdentity(
         groupId: string,
         identityId: string,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(identityId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(identityId)}`,
             ),
             method: "DELETE",
             headers: {
@@ -1086,7 +1115,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1096,7 +1125,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1106,7 +1135,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1116,7 +1145,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1126,7 +1155,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1136,7 +1165,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1154,7 +1183,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /group/groups/{group_id}/bans/{identity_id}."
+                    "Timeout exceeded when calling DELETE /group/groups/{group_id}/bans/{identity_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1187,10 +1216,10 @@ export class Group {
     public async getJoinRequests(
         groupId: string,
         request: Rivet.group.GetJoinRequestsRequest = {},
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.GetJoinRequestsResponse> {
         const { anchor, count, watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (anchor != null) {
             _queryParams["anchor"] = anchor;
         }
@@ -1205,8 +1234,10 @@ export class Group {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/join-requests`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/join-requests`,
             ),
             method: "GET",
             headers: {
@@ -1244,7 +1275,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1254,7 +1285,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1264,7 +1295,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1274,7 +1305,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1284,7 +1315,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1294,7 +1325,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1312,7 +1343,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /group/groups/{group_id}/join-requests."
+                    "Timeout exceeded when calling GET /group/groups/{group_id}/join-requests.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1341,8 +1372,10 @@ export class Group {
     public async kickMember(groupId: string, identityId: string, requestOptions?: Group.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/kick/${encodeURIComponent(identityId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/kick/${encodeURIComponent(identityId)}`,
             ),
             method: "POST",
             headers: {
@@ -1373,7 +1406,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1383,7 +1416,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1393,7 +1426,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1403,7 +1436,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1413,7 +1446,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1423,7 +1456,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1441,7 +1474,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/kick/{identity_id}."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/kick/{identity_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1469,8 +1502,10 @@ export class Group {
     public async leave(groupId: string, requestOptions?: Group.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/leave`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/leave`,
             ),
             method: "POST",
             headers: {
@@ -1501,7 +1536,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1511,7 +1546,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1521,7 +1556,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1531,7 +1566,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1541,7 +1576,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1551,7 +1586,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1569,7 +1604,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/leave."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/leave.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1602,10 +1637,10 @@ export class Group {
     public async getMembers(
         groupId: string,
         request: Rivet.group.GetMembersRequest = {},
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.GetMembersResponse> {
         const { anchor, count, watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (anchor != null) {
             _queryParams["anchor"] = anchor;
         }
@@ -1620,8 +1655,10 @@ export class Group {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/members`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/members`,
             ),
             method: "GET",
             headers: {
@@ -1659,7 +1696,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1669,7 +1706,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1679,7 +1716,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1689,7 +1726,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1699,7 +1736,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1709,7 +1746,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1727,7 +1764,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /group/groups/{group_id}/members."
+                    "Timeout exceeded when calling GET /group/groups/{group_id}/members.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1758,18 +1795,20 @@ export class Group {
     public async getProfile(
         groupId: string,
         request: Rivet.group.GetProfileRequest = {},
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.GetProfileResponse> {
         const { watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/profile`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/profile`,
             ),
             method: "GET",
             headers: {
@@ -1807,7 +1846,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1817,7 +1856,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1827,7 +1866,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1837,7 +1876,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1847,7 +1886,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1857,7 +1896,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1875,7 +1914,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /group/groups/{group_id}/profile."
+                    "Timeout exceeded when calling GET /group/groups/{group_id}/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1906,12 +1945,14 @@ export class Group {
     public async updateProfile(
         groupId: string,
         request: Rivet.group.UpdateProfileRequest,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/profile`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/profile`,
             ),
             method: "POST",
             headers: {
@@ -1943,7 +1984,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1953,7 +1994,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1963,7 +2004,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1973,7 +2014,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1983,7 +2024,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1993,7 +2034,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2011,7 +2052,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/profile."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -2036,12 +2077,14 @@ export class Group {
      */
     public async getSummary(
         groupId: string,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<Rivet.group.GetSummaryResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/summary`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/summary`,
             ),
             method: "GET",
             headers: {
@@ -2078,7 +2121,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2088,7 +2131,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2098,7 +2141,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2108,7 +2151,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2118,7 +2161,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2128,7 +2171,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2146,7 +2189,7 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /group/groups/{group_id}/summary."
+                    "Timeout exceeded when calling GET /group/groups/{group_id}/summary.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -2177,12 +2220,14 @@ export class Group {
     public async transferOwnership(
         groupId: string,
         request: Rivet.group.TransferOwnershipRequest,
-        requestOptions?: Group.RequestOptions
+        requestOptions?: Group.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/group/groups/${encodeURIComponent(groupId)}/transfer-owner`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/group/groups/${encodeURIComponent(groupId)}/transfer-owner`,
             ),
             method: "POST",
             headers: {
@@ -2214,7 +2259,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2224,7 +2269,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2234,7 +2279,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2244,7 +2289,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2254,7 +2299,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2264,7 +2309,7 @@ export class Group {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2282,25 +2327,13 @@ export class Group {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /group/groups/{group_id}/transfer-owner."
+                    "Timeout exceeded when calling POST /group/groups/{group_id}/transfer-owner.",
                 );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _invites: Invites | undefined;
-
-    public get invites(): Invites {
-        return (this._invites ??= new Invites(this._options));
-    }
-
-    protected _joinRequests: JoinRequests | undefined;
-
-    public get joinRequests(): JoinRequests {
-        return (this._joinRequests ??= new JoinRequests(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

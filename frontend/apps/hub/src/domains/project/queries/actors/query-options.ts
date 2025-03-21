@@ -277,7 +277,7 @@ export const actorBuildsQueryOptions = ({
 			],
 			signal: abortSignal,
 		}) =>
-			rivetClient.actors.builds.list(
+			rivetClient.builds.list(
 				{ project, environment, tagsJson: JSON.stringify(tagsJson) },
 				{
 					abortSignal,
@@ -384,7 +384,7 @@ export const actorBuildQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment, ___, build],
 		}) =>
-			rivetClient.actors.builds.get(
+			rivetClient.builds.get(
 				build,
 				{ project, environment },
 				{
@@ -411,7 +411,7 @@ export const actorRegionsQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment],
 		}) =>
-			rivetClient.actors.regions.list(
+			rivetClient.regions.list(
 				{ project, environment },
 				{
 					abortSignal,

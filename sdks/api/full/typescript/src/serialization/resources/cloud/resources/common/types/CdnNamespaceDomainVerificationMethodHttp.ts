@@ -14,7 +14,7 @@ export const CdnNamespaceDomainVerificationMethodHttp: core.serialization.Object
 });
 
 export declare namespace CdnNamespaceDomainVerificationMethodHttp {
-    interface Raw {
+    export interface Raw {
         cname_record: string;
     }
 }

@@ -23,7 +23,7 @@ export const CreateLobbyRequest: core.serialization.Schema<
 });
 
 export declare namespace CreateLobbyRequest {
-    interface Raw {
+    export interface Raw {
         game_mode: string;
         region?: string | null;
         publicity?: CustomLobbyPublicity.Raw | null;

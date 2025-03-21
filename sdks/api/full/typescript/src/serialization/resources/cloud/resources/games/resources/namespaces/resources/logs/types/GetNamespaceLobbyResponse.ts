@@ -17,17 +17,17 @@ export const GetNamespaceLobbyResponse: core.serialization.ObjectSchema<
     metrics: SvcMetrics.optional(),
     stdoutPresignedUrls: core.serialization.property(
         "stdout_presigned_urls",
-        core.serialization.list(core.serialization.string())
+        core.serialization.list(core.serialization.string()),
     ),
     stderrPresignedUrls: core.serialization.property(
         "stderr_presigned_urls",
-        core.serialization.list(core.serialization.string())
+        core.serialization.list(core.serialization.string()),
     ),
     perfLists: core.serialization.property("perf_lists", core.serialization.list(SvcPerf)),
 });
 
 export declare namespace GetNamespaceLobbyResponse {
-    interface Raw {
+    export interface Raw {
         lobby: LogsLobbySummary.Raw;
         metrics?: SvcMetrics.Raw | null;
         stdout_presigned_urls: string[];

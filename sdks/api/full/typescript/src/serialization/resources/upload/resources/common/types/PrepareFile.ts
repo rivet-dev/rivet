@@ -16,7 +16,7 @@ export const PrepareFile: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareFile {
-    interface Raw {
+    export interface Raw {
         path: string;
         content_type?: string | null;
         content_length: number;

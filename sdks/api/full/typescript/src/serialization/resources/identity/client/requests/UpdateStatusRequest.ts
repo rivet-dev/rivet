@@ -15,7 +15,7 @@ export const UpdateStatusRequest: core.serialization.Schema<
 });
 
 export declare namespace UpdateStatusRequest {
-    interface Raw {
+    export interface Raw {
         status: Status.Raw;
     }
 }

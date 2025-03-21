@@ -3,7 +3,6 @@
  */
 
 export type GameLinkStatus = "incomplete" | "complete" | "cancelled";
-
 export const GameLinkStatus = {
     Incomplete: "incomplete",
     Complete: "complete",

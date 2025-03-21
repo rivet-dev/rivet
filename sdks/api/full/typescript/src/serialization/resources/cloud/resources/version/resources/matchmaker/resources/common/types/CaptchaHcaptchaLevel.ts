@@ -12,5 +12,5 @@ export const CaptchaHcaptchaLevel: core.serialization.Schema<
 > = core.serialization.enum_(["easy", "moderate", "difficult", "always_on"]);
 
 export declare namespace CaptchaHcaptchaLevel {
-    type Raw = "easy" | "moderate" | "difficult" | "always_on";
+    export type Raw = "easy" | "moderate" | "difficult" | "always_on";
 }

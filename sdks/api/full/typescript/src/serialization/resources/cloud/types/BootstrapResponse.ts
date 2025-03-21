@@ -26,7 +26,7 @@ export const BootstrapResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapResponse {
-    interface Raw {
+    export interface Raw {
         cluster: BootstrapCluster.Raw;
         access: BootstrapAccess.Raw;
         domains: BootstrapDomains.Raw;

@@ -18,7 +18,7 @@ export const MatchmakerDevelopmentPort: core.serialization.ObjectSchema<
 });
 
 export declare namespace MatchmakerDevelopmentPort {
-    interface Raw {
+    export interface Raw {
         port?: number | null;
         port_range?: PortRange.Raw | null;
         protocol: PortProtocol.Raw;

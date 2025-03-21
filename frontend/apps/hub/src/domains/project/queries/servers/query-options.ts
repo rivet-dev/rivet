@@ -343,7 +343,7 @@ export const regionsQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, projectId, __, environmentId],
 		}) =>
-			rivetClient.actors.regions.list(
+			rivetClient.regions.list(
 				{
 					project: projectId,
 					environment: environmentId,

@@ -15,7 +15,7 @@ export const ListNamespaceLobbiesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListNamespaceLobbiesResponse {
-    interface Raw {
+    export interface Raw {
         lobbies: LogsLobbySummary.Raw[];
     }
 }

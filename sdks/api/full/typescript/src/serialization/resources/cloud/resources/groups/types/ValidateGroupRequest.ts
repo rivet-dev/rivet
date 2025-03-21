@@ -15,7 +15,7 @@ export const ValidateGroupRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateGroupRequest {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
     }
 }

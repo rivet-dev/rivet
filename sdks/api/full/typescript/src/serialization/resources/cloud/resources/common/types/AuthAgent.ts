@@ -15,7 +15,7 @@ export const AuthAgent: core.serialization.ObjectSchema<serializers.cloud.AuthAg
     });
 
 export declare namespace AuthAgent {
-    interface Raw {
+    export interface Raw {
         identity?: AuthAgentIdentity.Raw | null;
         game_cloud?: AuthAgentGameCloud.Raw | null;
     }

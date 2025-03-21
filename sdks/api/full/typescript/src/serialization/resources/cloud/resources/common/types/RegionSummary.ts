@@ -21,7 +21,7 @@ export const RegionSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace RegionSummary {
-    interface Raw {
+    export interface Raw {
         region_id: string;
         region_name_id: string;
         provider: string;

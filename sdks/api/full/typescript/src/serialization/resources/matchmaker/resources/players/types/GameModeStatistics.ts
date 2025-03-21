@@ -17,7 +17,7 @@ export const GameModeStatistics: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeStatistics {
-    interface Raw {
+    export interface Raw {
         player_count: number;
         regions: Record<Identifier.Raw, RegionStatistics.Raw>;
     }

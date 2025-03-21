@@ -16,7 +16,7 @@ export const PrepareCustomAvatarUploadResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareCustomAvatarUploadResponse {
-    interface Raw {
+    export interface Raw {
         upload_id: string;
         presigned_request: PresignedRequest.Raw;
     }

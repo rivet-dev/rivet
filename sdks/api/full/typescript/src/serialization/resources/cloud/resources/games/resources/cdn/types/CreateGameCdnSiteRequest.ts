@@ -17,7 +17,7 @@ export const CreateGameCdnSiteRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameCdnSiteRequest {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
         files: PrepareFile.Raw[];
     }

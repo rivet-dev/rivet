@@ -14,7 +14,7 @@ export const CreateGameVersionResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameVersionResponse {
-    interface Raw {
+    export interface Raw {
         version_id: string;
     }
 }

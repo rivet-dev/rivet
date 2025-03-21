@@ -14,7 +14,7 @@ export const ExportLobbyLogsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ExportLobbyLogsResponse {
-    interface Raw {
+    export interface Raw {
         url: string;
     }
 }

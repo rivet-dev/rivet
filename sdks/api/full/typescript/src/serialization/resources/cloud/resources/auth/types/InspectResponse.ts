@@ -15,7 +15,7 @@ export const InspectResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace InspectResponse {
-    interface Raw {
+    export interface Raw {
         agent: AuthAgent.Raw;
     }
 }

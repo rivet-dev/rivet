@@ -10,15 +10,17 @@ import * as serializers from "../../../../../../../../serialization/index";
 import * as errors from "../../../../../../../../errors/index";
 
 export declare namespace Avatars {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -53,12 +55,14 @@ export class Avatars {
      */
     public async listGameCustomAvatars(
         gameId: string,
-        requestOptions?: Avatars.RequestOptions
+        requestOptions?: Avatars.RequestOptions,
     ): Promise<Rivet.cloud.games.ListGameCustomAvatarsResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/avatars`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/avatars`,
             ),
             method: "GET",
             headers: {
@@ -95,7 +99,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -105,7 +109,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -115,7 +119,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -125,7 +129,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -135,7 +139,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -145,7 +149,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -195,12 +199,14 @@ export class Avatars {
     public async prepareCustomAvatarUpload(
         gameId: string,
         request: Rivet.cloud.games.PrepareCustomAvatarUploadRequest,
-        requestOptions?: Avatars.RequestOptions
+        requestOptions?: Avatars.RequestOptions,
     ): Promise<Rivet.cloud.games.PrepareCustomAvatarUploadResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/prepare`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/prepare`,
             ),
             method: "POST",
             headers: {
@@ -240,7 +246,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -250,7 +256,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -260,7 +266,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -270,7 +276,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -280,7 +286,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -290,7 +296,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -308,7 +314,7 @@ export class Avatars {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/prepare."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/prepare.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -337,12 +343,14 @@ export class Avatars {
     public async completeCustomAvatarUpload(
         gameId: string,
         uploadId: string,
-        requestOptions?: Avatars.RequestOptions
+        requestOptions?: Avatars.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/avatar-upload/${encodeURIComponent(uploadId)}/complete`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/avatar-upload/${encodeURIComponent(uploadId)}/complete`,
             ),
             method: "POST",
             headers: {
@@ -373,7 +381,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -383,7 +391,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -393,7 +401,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -403,7 +411,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -413,7 +421,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -423,7 +431,7 @@ export class Avatars {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -441,7 +449,7 @@ export class Avatars {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/avatar-upload/{upload_id}/complete."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/avatar-upload/{upload_id}/complete.",
                 );
             case "unknown":
                 throw new errors.RivetError({

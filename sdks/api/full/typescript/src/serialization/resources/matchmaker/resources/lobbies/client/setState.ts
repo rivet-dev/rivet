@@ -11,5 +11,5 @@ export const Request: core.serialization.Schema<
 > = core.serialization.unknown().optional();
 
 export declare namespace Request {
-    type Raw = unknown | null | undefined;
+    export type Raw = unknown | null | undefined;
 }

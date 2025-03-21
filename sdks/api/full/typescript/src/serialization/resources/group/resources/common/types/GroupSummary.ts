@@ -27,7 +27,7 @@ export const GroupSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace GroupSummary {
-    interface Raw {
+    export interface Raw {
         group_id: string;
         display_name: DisplayName.Raw;
         avatar_url?: string | null;

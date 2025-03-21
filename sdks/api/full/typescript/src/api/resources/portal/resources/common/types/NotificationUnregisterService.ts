@@ -3,7 +3,6 @@
  */
 
 export type NotificationUnregisterService = "firebase";
-
 export const NotificationUnregisterService = {
     Firebase: "firebase",
 } as const;

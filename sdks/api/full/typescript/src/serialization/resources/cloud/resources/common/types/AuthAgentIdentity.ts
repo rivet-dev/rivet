@@ -14,7 +14,7 @@ export const AuthAgentIdentity: core.serialization.ObjectSchema<
 });
 
 export declare namespace AuthAgentIdentity {
-    interface Raw {
+    export interface Raw {
         identity_id: string;
     }
 }

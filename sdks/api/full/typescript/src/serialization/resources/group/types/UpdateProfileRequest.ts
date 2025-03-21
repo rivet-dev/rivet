@@ -18,7 +18,7 @@ export const UpdateProfileRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpdateProfileRequest {
-    interface Raw {
+    export interface Raw {
         display_name?: DisplayName.Raw | null;
         bio?: string | null;
         publicity?: Publicity.Raw | null;

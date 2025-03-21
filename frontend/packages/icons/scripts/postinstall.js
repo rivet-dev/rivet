@@ -75,7 +75,7 @@ const banner = dedent`
 
 let indexJsSource = dedent`
   ${banner}
-  import {FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+  import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
   import { createElement } from "react";
   export function Icon(props) { return createElement(FontAwesomeIcon, props)}
 `;
@@ -120,7 +120,10 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 fs.writeFileSync(join(sourceDir, "index.gen.js"), `${indexJsSource}`);
 
 let indexTsSource = dedent`
-  ${indexJsSource}
+  ${banner}
+  import {FontAwesomeIcon, FontAwesomeIconProps } from "@fortawesome/react-fontawesome";
+  import { ComponentProps, createElement } from "react";
+  export function Icon(props: Omit<ComponentProps<typeof FontAwesomeIcon>, 'icon'> & {icon: IconProp}) { return createElement(FontAwesomeIcon, props as FontAwesomeIconProps)}
   export type IconProp = string | { prefix: string; iconName: string } | [string, string];
 `;
 fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);

@@ -17,7 +17,7 @@ export const CreateGameCdnSiteResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameCdnSiteResponse {
-    interface Raw {
+    export interface Raw {
         site_id: string;
         upload_id: string;
         presigned_requests: PresignedRequest.Raw[];

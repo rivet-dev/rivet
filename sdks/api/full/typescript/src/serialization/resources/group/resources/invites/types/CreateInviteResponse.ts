@@ -14,7 +14,7 @@ export const CreateInviteResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateInviteResponse {
-    interface Raw {
+    export interface Raw {
         code: string;
     }
 }

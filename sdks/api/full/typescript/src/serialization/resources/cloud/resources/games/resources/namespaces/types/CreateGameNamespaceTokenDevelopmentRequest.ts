@@ -16,12 +16,12 @@ export const CreateGameNamespaceTokenDevelopmentRequest: core.serialization.Obje
     ports: core.serialization.record(core.serialization.string(), MatchmakerDevelopmentPort).optional(),
     lobbyPorts: core.serialization.property(
         "lobby_ports",
-        core.serialization.list(LobbyGroupRuntimeDockerPort).optional()
+        core.serialization.list(LobbyGroupRuntimeDockerPort).optional(),
     ),
 });
 
 export declare namespace CreateGameNamespaceTokenDevelopmentRequest {
-    interface Raw {
+    export interface Raw {
         hostname: string;
         ports?: Record<string, MatchmakerDevelopmentPort.Raw> | null;
         lobby_ports?: LobbyGroupRuntimeDockerPort.Raw[] | null;

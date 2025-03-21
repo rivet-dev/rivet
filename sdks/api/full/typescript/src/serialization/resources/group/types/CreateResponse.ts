@@ -14,7 +14,7 @@ export const CreateResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateResponse {
-    interface Raw {
+    export interface Raw {
         group_id: string;
     }
 }

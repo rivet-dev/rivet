@@ -18,7 +18,7 @@ export const SignupForBetaRequest: core.serialization.Schema<
 });
 
 export declare namespace SignupForBetaRequest {
-    interface Raw {
+    export interface Raw {
         name: string;
         company_name?: string | null;
         company_size: string;

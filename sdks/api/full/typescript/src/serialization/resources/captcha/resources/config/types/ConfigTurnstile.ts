@@ -14,7 +14,7 @@ export const ConfigTurnstile: core.serialization.ObjectSchema<
 });
 
 export declare namespace ConfigTurnstile {
-    interface Raw {
+    export interface Raw {
         client_response: string;
     }
 }

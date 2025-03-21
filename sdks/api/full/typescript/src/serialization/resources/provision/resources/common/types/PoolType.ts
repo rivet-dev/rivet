@@ -10,5 +10,5 @@ export const PoolType: core.serialization.Schema<serializers.provision.PoolType.
     core.serialization.enum_(["job", "gg", "ats", "pegboard", "pegboard_isolate", "fdb", "worker"]);
 
 export declare namespace PoolType {
-    type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb" | "worker";
+    export type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb" | "worker";
 }

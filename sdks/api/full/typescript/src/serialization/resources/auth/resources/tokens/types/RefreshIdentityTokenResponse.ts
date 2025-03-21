@@ -16,7 +16,7 @@ export const RefreshIdentityTokenResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace RefreshIdentityTokenResponse {
-    interface Raw {
+    export interface Raw {
         token: string;
         exp: string;
         identity_id: string;

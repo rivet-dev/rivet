@@ -15,6 +15,10 @@ interface ActorLogsTabProps {
 	projectNameId: string;
 	environmentNameId: string;
 	actorId: string;
+
+	createdAt: Date;
+	startedAt?: Date;
+	destroyedAt?: Date;
 }
 
 export function ActorLogsTab(props: ActorLogsTabProps) {

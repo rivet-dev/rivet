@@ -23,7 +23,7 @@ export const CreateGameBuildRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameBuildRequest {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
         image_tag: string;
         image_file: PrepareFile.Raw;

@@ -15,7 +15,7 @@ export const ExternalLinks: core.serialization.ObjectSchema<
 });
 
 export declare namespace ExternalLinks {
-    interface Raw {
+    export interface Raw {
         profile: string;
         settings?: string | null;
     }

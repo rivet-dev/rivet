@@ -18,7 +18,7 @@ export const GameActivity: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameActivity {
-    interface Raw {
+    export interface Raw {
         game: Handle.Raw;
         message: string;
         public_metadata?: unknown | null;

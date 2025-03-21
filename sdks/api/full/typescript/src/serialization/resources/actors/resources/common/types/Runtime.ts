@@ -14,7 +14,7 @@ export const Runtime: core.serialization.ObjectSchema<serializers.actors.Runtime
     });
 
 export declare namespace Runtime {
-    interface Raw {
+    export interface Raw {
         build: string;
         arguments?: string[] | null;
         environment?: Record<string, string> | null;

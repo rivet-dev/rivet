@@ -21,7 +21,7 @@ export const Profile: core.serialization.ObjectSchema<serializers.group.Profile.
         bio: core.serialization.string(),
         isCurrentIdentityMember: core.serialization.property(
             "is_current_identity_member",
-            core.serialization.boolean().optional()
+            core.serialization.boolean().optional(),
         ),
         publicity: Publicity,
         memberCount: core.serialization.property("member_count", core.serialization.number().optional()),
@@ -29,13 +29,13 @@ export const Profile: core.serialization.ObjectSchema<serializers.group.Profile.
         joinRequests: core.serialization.property("join_requests", core.serialization.list(JoinRequest)),
         isCurrentIdentityRequestingJoin: core.serialization.property(
             "is_current_identity_requesting_join",
-            core.serialization.boolean().optional()
+            core.serialization.boolean().optional(),
         ),
         ownerIdentityId: core.serialization.property("owner_identity_id", core.serialization.string()),
     });
 
 export declare namespace Profile {
-    interface Raw {
+    export interface Raw {
         group_id: string;
         display_name: DisplayName.Raw;
         avatar_url?: string | null;

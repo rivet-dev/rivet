@@ -15,7 +15,7 @@ export const GetSummaryResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetSummaryResponse {
-    interface Raw {
+    export interface Raw {
         group: GroupSummary.Raw;
     }
 }

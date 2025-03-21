@@ -10,15 +10,17 @@ import * as serializers from "../../../../../../../../../../serialization/index"
 import * as errors from "../../../../../../../../../../errors/index";
 
 export declare namespace Analytics {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -55,14 +57,14 @@ export class Analytics {
     public async getAnalyticsMatchmakerLive(
         gameId: string,
         namespaceId: string,
-        requestOptions?: Analytics.RequestOptions
+        requestOptions?: Analytics.RequestOptions,
     ): Promise<Rivet.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(
-                    namespaceId
-                )}/analytics/matchmaker/live`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/namespaces/${encodeURIComponent(namespaceId)}/analytics/matchmaker/live`,
             ),
             method: "GET",
             headers: {
@@ -99,7 +101,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -109,7 +111,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -119,7 +121,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -129,7 +131,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -139,7 +141,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -149,7 +151,7 @@ export class Analytics {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -167,7 +169,7 @@ export class Analytics {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}/analytics/matchmaker/live."
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}/analytics/matchmaker/live.",
                 );
             case "unknown":
                 throw new errors.RivetError({

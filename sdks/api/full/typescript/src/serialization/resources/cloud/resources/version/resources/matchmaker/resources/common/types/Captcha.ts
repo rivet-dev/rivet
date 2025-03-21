@@ -19,7 +19,7 @@ export const Captcha: core.serialization.ObjectSchema<
 });
 
 export declare namespace Captcha {
-    interface Raw {
+    export interface Raw {
         requests_before_reverify: number;
         verification_ttl: number;
         hcaptcha?: CaptchaHcaptcha.Raw | null;

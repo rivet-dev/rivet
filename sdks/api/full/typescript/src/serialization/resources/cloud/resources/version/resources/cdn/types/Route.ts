@@ -17,7 +17,7 @@ export const Route: core.serialization.ObjectSchema<
 });
 
 export declare namespace Route {
-    interface Raw {
+    export interface Raw {
         glob: string;
         priority: number;
         middlewares: Middleware.Raw[];

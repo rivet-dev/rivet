@@ -15,7 +15,7 @@ export const GlobalEventIdentityUpdate: core.serialization.ObjectSchema<
 });
 
 export declare namespace GlobalEventIdentityUpdate {
-    interface Raw {
+    export interface Raw {
         identity: Profile.Raw;
     }
 }

@@ -19,7 +19,7 @@ export const FindLobbyResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace FindLobbyResponse {
-    interface Raw {
+    export interface Raw {
         lobby: JoinLobby.Raw;
         ports: Record<string, JoinPort.Raw>;
         player: JoinPlayer.Raw;

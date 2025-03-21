@@ -22,7 +22,7 @@ export const BuildSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace BuildSummary {
-    interface Raw {
+    export interface Raw {
         build_id: string;
         upload_id: string;
         display_name: DisplayName.Raw;

@@ -13,7 +13,7 @@ export const Region: core.serialization.ObjectSchema<serializers.regions.Region.
     });
 
 export declare namespace Region {
-    interface Raw {
+    export interface Raw {
         id: string;
         name: string;
     }

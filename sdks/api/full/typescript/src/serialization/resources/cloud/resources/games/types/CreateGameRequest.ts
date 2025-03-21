@@ -18,7 +18,7 @@ export const CreateGameRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameRequest {
-    interface Raw {
+    export interface Raw {
         name_id?: Identifier.Raw | null;
         display_name: DisplayName.Raw;
         developer_group_id: string;

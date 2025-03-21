@@ -22,7 +22,7 @@ export const GameSummary: core.serialization.ObjectSchema<serializers.game.GameS
     });
 
 export declare namespace GameSummary {
-    interface Raw {
+    export interface Raw {
         game_id: string;
         name_id: Identifier.Raw;
         display_name: DisplayName.Raw;

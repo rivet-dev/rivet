@@ -18,7 +18,7 @@ export const CreateActorPortRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateActorPortRequest {
-    interface Raw {
+    export interface Raw {
         protocol: PortProtocol.Raw;
         internal_port?: number | null;
         routing?: PortRouting.Raw | null;

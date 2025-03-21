@@ -15,7 +15,7 @@ export const ListServersResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListServersResponse {
-    interface Raw {
+    export interface Raw {
         servers: Server.Raw[];
     }
 }

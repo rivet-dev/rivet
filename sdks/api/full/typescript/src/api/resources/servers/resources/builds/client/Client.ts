@@ -10,15 +10,17 @@ import * as serializers from "../../../../../../serialization/index";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Builds {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -61,20 +63,20 @@ export class Builds {
         environmentId: string,
         buildId: string,
         request: Rivet.servers.GetBuildRequest = {},
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.servers.GetBuildResponse> {
         const { tagsJson } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/${encodeURIComponent(buildId)}`,
             ),
             method: "GET",
             headers: {
@@ -112,7 +114,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -122,7 +124,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -132,7 +134,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -142,7 +144,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -152,7 +154,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -162,7 +164,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -180,7 +182,7 @@ export class Builds {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/builds/{build_id}."
+                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/builds/{build_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -213,18 +215,20 @@ export class Builds {
         gameId: string,
         environmentId: string,
         request: Rivet.servers.ListBuildsRequest = {},
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.servers.ListBuildsResponse> {
         const { tagsJson } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds`,
             ),
             method: "GET",
             headers: {
@@ -262,7 +266,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -272,7 +276,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -282,7 +286,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -292,7 +296,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -302,7 +306,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -312,7 +316,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -330,7 +334,7 @@ export class Builds {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/builds."
+                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/builds.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -366,14 +370,14 @@ export class Builds {
         environmentId: string,
         buildId: string,
         request: Rivet.servers.PatchBuildTagsRequest,
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.servers.PatchBuildTagsResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}/tags`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/${encodeURIComponent(buildId)}/tags`,
             ),
             method: "PATCH",
             headers: {
@@ -411,7 +415,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -421,7 +425,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -431,7 +435,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -441,7 +445,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -451,7 +455,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -461,7 +465,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -479,7 +483,7 @@ export class Builds {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling PATCH /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags."
+                    "Timeout exceeded when calling PATCH /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -522,12 +526,14 @@ export class Builds {
         gameId: string,
         environmentId: string,
         request: Rivet.servers.CreateBuildRequest,
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.servers.CreateBuildResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/prepare`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/prepare`,
             ),
             method: "POST",
             headers: {
@@ -565,7 +571,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -575,7 +581,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -585,7 +591,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -595,7 +601,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -605,7 +611,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -615,7 +621,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -633,7 +639,7 @@ export class Builds {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/builds/prepare."
+                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/builds/prepare.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -664,14 +670,14 @@ export class Builds {
         gameId: string,
         environmentId: string,
         buildId: string,
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}/complete`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/${encodeURIComponent(buildId)}/complete`,
             ),
             method: "POST",
             headers: {
@@ -702,7 +708,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -712,7 +718,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -722,7 +728,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -732,7 +738,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -742,7 +748,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -752,7 +758,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -770,7 +776,7 @@ export class Builds {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete."
+                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete.",
                 );
             case "unknown":
                 throw new errors.RivetError({

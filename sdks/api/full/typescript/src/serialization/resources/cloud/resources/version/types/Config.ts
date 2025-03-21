@@ -22,7 +22,7 @@ export const Config: core.serialization.ObjectSchema<serializers.cloud.version.C
     });
 
 export declare namespace Config {
-    interface Raw {
+    export interface Raw {
         scripts?: Record<string, string> | null;
         engine?: EngineConfig.Raw | null;
         cdn?: CdnConfig.Raw | null;

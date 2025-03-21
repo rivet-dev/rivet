@@ -12,7 +12,7 @@ export const ValidationError: core.serialization.ObjectSchema<serializers.Valida
     });
 
 export declare namespace ValidationError {
-    interface Raw {
+    export interface Raw {
         path: string[];
     }
 }

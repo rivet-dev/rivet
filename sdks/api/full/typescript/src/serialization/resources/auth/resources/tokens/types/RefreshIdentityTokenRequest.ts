@@ -14,7 +14,7 @@ export const RefreshIdentityTokenRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace RefreshIdentityTokenRequest {
-    interface Raw {
+    export interface Raw {
         logout?: boolean | null;
     }
 }

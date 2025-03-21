@@ -13,15 +13,17 @@ import { Datacenters } from "../resources/datacenters/client/Client";
 import { Logs } from "../resources/logs/client/Client";
 
 export declare namespace Servers {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -36,7 +38,23 @@ export declare namespace Servers {
 }
 
 export class Servers {
+    protected _builds: Builds | undefined;
+    protected _datacenters: Datacenters | undefined;
+    protected _logs: Logs | undefined;
+
     constructor(protected readonly _options: Servers.Options = {}) {}
+
+    public get builds(): Builds {
+        return (this._builds ??= new Builds(this._options));
+    }
+
+    public get datacenters(): Datacenters {
+        return (this._datacenters ??= new Datacenters(this._options));
+    }
+
+    public get logs(): Logs {
+        return (this._logs ??= new Logs(this._options));
+    }
 
     /**
      * Gets a dynamic server.
@@ -60,14 +78,14 @@ export class Servers {
         gameId: string,
         environmentId: string,
         serverId: string,
-        requestOptions?: Servers.RequestOptions
+        requestOptions?: Servers.RequestOptions,
     ): Promise<Rivet.servers.GetServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/servers/${encodeURIComponent(serverId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers/${encodeURIComponent(serverId)}`,
             ),
             method: "GET",
             headers: {
@@ -104,7 +122,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -114,7 +132,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -124,7 +142,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -134,7 +152,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -144,7 +162,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -154,7 +172,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -172,7 +190,7 @@ export class Servers {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/servers/{server_id}."
+                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/servers/{server_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -207,10 +225,10 @@ export class Servers {
         gameId: string,
         environmentId: string,
         request: Rivet.servers.GetServersRequest = {},
-        requestOptions?: Servers.RequestOptions
+        requestOptions?: Servers.RequestOptions,
     ): Promise<Rivet.servers.ListServersResponse> {
         const { tagsJson, includeDestroyed, cursor } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
@@ -225,8 +243,10 @@ export class Servers {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`,
             ),
             method: "GET",
             headers: {
@@ -264,7 +284,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -274,7 +294,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -284,7 +304,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -294,7 +314,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -304,7 +324,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -314,7 +334,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -332,7 +352,7 @@ export class Servers {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/servers."
+                    "Timeout exceeded when calling GET /games/{game_id}/environments/{environment_id}/servers.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -395,12 +415,14 @@ export class Servers {
         gameId: string,
         environmentId: string,
         request: Rivet.servers.CreateServerRequest,
-        requestOptions?: Servers.RequestOptions
+        requestOptions?: Servers.RequestOptions,
     ): Promise<Rivet.servers.CreateServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`,
             ),
             method: "POST",
             headers: {
@@ -438,7 +460,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -448,7 +470,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -458,7 +480,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -468,7 +490,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -478,7 +500,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -488,7 +510,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -506,7 +528,7 @@ export class Servers {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/servers."
+                    "Timeout exceeded when calling POST /games/{game_id}/environments/{environment_id}/servers.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -541,20 +563,20 @@ export class Servers {
         environmentId: string,
         serverId: string,
         request: Rivet.servers.DestroyServerRequest = {},
-        requestOptions?: Servers.RequestOptions
+        requestOptions?: Servers.RequestOptions,
     ): Promise<Rivet.servers.DestroyServerResponse> {
         const { overrideKillTimeout } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (overrideKillTimeout != null) {
             _queryParams["override_kill_timeout"] = overrideKillTimeout.toString();
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/servers/${encodeURIComponent(serverId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers/${encodeURIComponent(serverId)}`,
             ),
             method: "DELETE",
             headers: {
@@ -592,7 +614,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -602,7 +624,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -612,7 +634,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -622,7 +644,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -632,7 +654,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -642,7 +664,7 @@ export class Servers {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -660,31 +682,13 @@ export class Servers {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /games/{game_id}/environments/{environment_id}/servers/{server_id}."
+                    "Timeout exceeded when calling DELETE /games/{game_id}/environments/{environment_id}/servers/{server_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _builds: Builds | undefined;
-
-    public get builds(): Builds {
-        return (this._builds ??= new Builds(this._options));
-    }
-
-    protected _datacenters: Datacenters | undefined;
-
-    public get datacenters(): Datacenters {
-        return (this._datacenters ??= new Datacenters(this._options));
-    }
-
-    protected _logs: Logs | undefined;
-
-    public get logs(): Logs {
-        return (this._logs ??= new Logs(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

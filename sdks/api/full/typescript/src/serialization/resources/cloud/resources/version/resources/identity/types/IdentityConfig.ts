@@ -14,18 +14,18 @@ export const IdentityConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({
     displayNames: core.serialization.property(
         "display_names",
-        core.serialization.list(core.serialization.string()).optional()
+        core.serialization.list(core.serialization.string()).optional(),
     ),
     avatars: core.serialization.list(core.serialization.string()).optional(),
     customDisplayNames: core.serialization.property(
         "custom_display_names",
-        core.serialization.list(CustomDisplayName).optional()
+        core.serialization.list(CustomDisplayName).optional(),
     ),
     customAvatars: core.serialization.property("custom_avatars", core.serialization.list(CustomAvatar).optional()),
 });
 
 export declare namespace IdentityConfig {
-    interface Raw {
+    export interface Raw {
         display_names?: string[] | null;
         avatars?: string[] | null;
         custom_display_names?: CustomDisplayName.Raw[] | null;

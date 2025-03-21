@@ -12,5 +12,5 @@ export const StatSortingMethod: core.serialization.Schema<
 > = core.serialization.enum_(["desc", "asc"]);
 
 export declare namespace StatSortingMethod {
-    type Raw = "desc" | "asc";
+    export type Raw = "desc" | "asc";
 }

@@ -23,7 +23,7 @@ export const CreateServerRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateServerRequest {
-    interface Raw {
+    export interface Raw {
         datacenter: string;
         tags?: unknown;
         runtime: CreateServerRuntimeRequest.Raw;

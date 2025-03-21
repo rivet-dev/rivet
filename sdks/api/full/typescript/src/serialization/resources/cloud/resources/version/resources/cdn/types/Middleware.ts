@@ -15,7 +15,7 @@ export const Middleware: core.serialization.ObjectSchema<
 });
 
 export declare namespace Middleware {
-    interface Raw {
+    export interface Raw {
         kind: MiddlewareKind.Raw;
     }
 }

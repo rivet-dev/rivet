@@ -23,7 +23,7 @@ export const EngineConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace EngineConfig {
-    interface Raw {
+    export interface Raw {
         unity?: UnityConfig.Raw | null;
         unreal?: UnrealConfig.Raw | null;
         godot?: GodotConfig.Raw | null;

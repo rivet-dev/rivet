@@ -18,7 +18,7 @@ export const GetMembersResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetMembersResponse {
-    interface Raw {
+    export interface Raw {
         members: Member.Raw[];
         anchor?: string | null;
         watch: WatchResponse.Raw;

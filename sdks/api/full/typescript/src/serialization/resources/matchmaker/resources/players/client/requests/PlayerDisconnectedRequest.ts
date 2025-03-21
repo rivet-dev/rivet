@@ -14,7 +14,7 @@ export const PlayerDisconnectedRequest: core.serialization.Schema<
 });
 
 export declare namespace PlayerDisconnectedRequest {
-    interface Raw {
+    export interface Raw {
         player_token: string;
     }
 }

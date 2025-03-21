@@ -21,15 +21,17 @@ import { Matchmaker } from "./api/resources/matchmaker/client/Client";
 import { Portal } from "./api/resources/portal/client/Client";
 
 export declare namespace RivetClient {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -44,93 +46,79 @@ export declare namespace RivetClient {
 }
 
 export class RivetClient {
-    constructor(protected readonly _options: RivetClient.Options = {}) {}
-
     protected _actors: Actors | undefined;
+    protected _builds: Builds | undefined;
+    protected _cloud: Cloud | undefined;
+    protected _coreIntercom: CoreIntercom | undefined;
+    protected _edgeIntercom: EdgeIntercom | undefined;
+    protected _group: Group | undefined;
+    protected _identity: Identity | undefined;
+    protected _provision: Provision | undefined;
+    protected _regions: Regions | undefined;
+    protected _servers: Servers | undefined;
+    protected _auth: Auth | undefined;
+    protected _games: Games | undefined;
+    protected _job: Job | undefined;
+    protected _matchmaker: Matchmaker | undefined;
+    protected _portal: Portal | undefined;
+
+    constructor(protected readonly _options: RivetClient.Options = {}) {}
 
     public get actors(): Actors {
         return (this._actors ??= new Actors(this._options));
     }
 
-    protected _builds: Builds | undefined;
-
     public get builds(): Builds {
         return (this._builds ??= new Builds(this._options));
     }
-
-    protected _cloud: Cloud | undefined;
 
     public get cloud(): Cloud {
         return (this._cloud ??= new Cloud(this._options));
     }
 
-    protected _coreIntercom: CoreIntercom | undefined;
-
     public get coreIntercom(): CoreIntercom {
         return (this._coreIntercom ??= new CoreIntercom(this._options));
     }
-
-    protected _edgeIntercom: EdgeIntercom | undefined;
 
     public get edgeIntercom(): EdgeIntercom {
         return (this._edgeIntercom ??= new EdgeIntercom(this._options));
     }
 
-    protected _group: Group | undefined;
-
     public get group(): Group {
         return (this._group ??= new Group(this._options));
     }
-
-    protected _identity: Identity | undefined;
 
     public get identity(): Identity {
         return (this._identity ??= new Identity(this._options));
     }
 
-    protected _provision: Provision | undefined;
-
     public get provision(): Provision {
         return (this._provision ??= new Provision(this._options));
     }
-
-    protected _regions: Regions | undefined;
 
     public get regions(): Regions {
         return (this._regions ??= new Regions(this._options));
     }
 
-    protected _servers: Servers | undefined;
-
     public get servers(): Servers {
         return (this._servers ??= new Servers(this._options));
     }
-
-    protected _auth: Auth | undefined;
 
     public get auth(): Auth {
         return (this._auth ??= new Auth(this._options));
     }
 
-    protected _games: Games | undefined;
-
     public get games(): Games {
         return (this._games ??= new Games(this._options));
     }
-
-    protected _job: Job | undefined;
 
     public get job(): Job {
         return (this._job ??= new Job(this._options));
     }
 
-    protected _matchmaker: Matchmaker | undefined;
-
     public get matchmaker(): Matchmaker {
         return (this._matchmaker ??= new Matchmaker(this._options));
     }
-
-    protected _portal: Portal | undefined;
 
     public get portal(): Portal {
         return (this._portal ??= new Portal(this._options));

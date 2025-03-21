@@ -41,7 +41,7 @@ export const UniversalRegion: core.serialization.Schema<
 ]);
 
 export declare namespace UniversalRegion {
-    type Raw =
+    export type Raw =
         | "unknown"
         | "local"
         | "amsterdam"

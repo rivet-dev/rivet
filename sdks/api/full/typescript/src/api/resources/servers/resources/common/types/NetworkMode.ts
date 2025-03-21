@@ -3,7 +3,6 @@
  */
 
 export type NetworkMode = "bridge" | "host";
-
 export const NetworkMode = {
     Bridge: "bridge",
     Host: "host",

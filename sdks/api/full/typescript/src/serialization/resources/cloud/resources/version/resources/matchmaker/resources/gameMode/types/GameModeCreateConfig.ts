@@ -19,12 +19,12 @@ export const GameModeCreateConfig: core.serialization.ObjectSchema<
     enablePrivate: core.serialization.property("enable_private", core.serialization.boolean().optional()),
     maxLobbiesPerIdentity: core.serialization.property(
         "max_lobbies_per_identity",
-        core.serialization.number().optional()
+        core.serialization.number().optional(),
     ),
 });
 
 export declare namespace GameModeCreateConfig {
-    interface Raw {
+    export interface Raw {
         enabled: boolean;
         identity_requirement?: GameModeIdentityRequirement.Raw | null;
         verification?: GameModeVerificationConfig.Raw | null;

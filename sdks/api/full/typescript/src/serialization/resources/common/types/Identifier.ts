@@ -10,5 +10,5 @@ export const Identifier: core.serialization.Schema<serializers.Identifier.Raw, R
     core.serialization.string();
 
 export declare namespace Identifier {
-    type Raw = string;
+    export type Raw = string;
 }

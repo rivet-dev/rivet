@@ -16,7 +16,7 @@ export const ValidateGameNamespaceTokenDevelopmentRequest: core.serialization.Ob
 });
 
 export declare namespace ValidateGameNamespaceTokenDevelopmentRequest {
-    interface Raw {
+    export interface Raw {
         hostname: string;
         lobby_ports: LobbyGroupRuntimeDockerPort.Raw[];
     }

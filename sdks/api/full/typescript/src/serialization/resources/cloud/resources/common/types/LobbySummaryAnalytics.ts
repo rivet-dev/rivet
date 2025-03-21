@@ -28,7 +28,7 @@ export const LobbySummaryAnalytics: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbySummaryAnalytics {
-    interface Raw {
+    export interface Raw {
         lobby_id: string;
         lobby_group_id: string;
         lobby_group_name_id: string;

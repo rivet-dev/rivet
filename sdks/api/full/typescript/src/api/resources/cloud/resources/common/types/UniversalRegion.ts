@@ -34,7 +34,6 @@ export type UniversalRegion =
     | "miami"
     | "jakarta"
     | "los_angeles";
-
 export const UniversalRegion = {
     Unknown: "unknown",
     Local: "local",

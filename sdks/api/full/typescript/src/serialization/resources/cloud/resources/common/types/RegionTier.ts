@@ -19,7 +19,7 @@ export const RegionTier: core.serialization.ObjectSchema<serializers.cloud.Regio
     });
 
 export declare namespace RegionTier {
-    interface Raw {
+    export interface Raw {
         tier_name_id: string;
         rivet_cores_numerator: number;
         rivet_cores_denominator: number;

@@ -12,5 +12,5 @@ export const GuardRouting: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace GuardRouting {
-    interface Raw {}
+    export interface Raw {}
 }

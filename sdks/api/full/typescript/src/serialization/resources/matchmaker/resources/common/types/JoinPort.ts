@@ -17,7 +17,7 @@ export const JoinPort: core.serialization.ObjectSchema<serializers.matchmaker.Jo
     });
 
 export declare namespace JoinPort {
-    interface Raw {
+    export interface Raw {
         host?: string | null;
         hostname: string;
         port?: number | null;

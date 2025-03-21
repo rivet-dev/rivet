@@ -19,7 +19,7 @@ export const GameModeActions: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeActions {
-    interface Raw {
+    export interface Raw {
         find?: GameModeFindConfig.Raw | null;
         join?: GameModeJoinConfig.Raw | null;
         create?: GameModeCreateConfig.Raw | null;

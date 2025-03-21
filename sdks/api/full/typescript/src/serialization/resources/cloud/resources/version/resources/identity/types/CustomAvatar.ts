@@ -14,7 +14,7 @@ export const CustomAvatar: core.serialization.ObjectSchema<
 });
 
 export declare namespace CustomAvatar {
-    interface Raw {
+    export interface Raw {
         upload_id: string;
     }
 }

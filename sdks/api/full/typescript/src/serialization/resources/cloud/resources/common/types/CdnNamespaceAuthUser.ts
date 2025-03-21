@@ -14,7 +14,7 @@ export const CdnNamespaceAuthUser: core.serialization.ObjectSchema<
 });
 
 export declare namespace CdnNamespaceAuthUser {
-    interface Raw {
+    export interface Raw {
         user: string;
     }
 }

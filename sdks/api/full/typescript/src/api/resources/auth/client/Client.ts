@@ -8,38 +8,26 @@ import { Identity } from "../resources/identity/client/Client";
 import { Tokens } from "../resources/tokens/client/Client";
 
 export declare namespace Auth {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
-
-    interface RequestOptions {
-        /** The maximum time to wait for a response in seconds. */
-        timeoutInSeconds?: number;
-        /** The number of times to retry the request. Defaults to 2. */
-        maxRetries?: number;
-        /** A hook to abort the request. */
-        abortSignal?: AbortSignal;
-        /** Additional headers to include in the request. */
-        headers?: Record<string, string>;
-        /** Override the X-API-Version header */
-        xApiVersion?: "25.2.2";
-    }
 }
 
 export class Auth {
-    constructor(protected readonly _options: Auth.Options = {}) {}
-
     protected _identity: Identity | undefined;
+    protected _tokens: Tokens | undefined;
+
+    constructor(protected readonly _options: Auth.Options = {}) {}
 
     public get identity(): Identity {
         return (this._identity ??= new Identity(this._options));
     }
-
-    protected _tokens: Tokens | undefined;
 
     public get tokens(): Tokens {
         return (this._tokens ??= new Tokens(this._options));

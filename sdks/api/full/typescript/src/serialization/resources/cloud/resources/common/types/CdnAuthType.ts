@@ -10,5 +10,5 @@ export const CdnAuthType: core.serialization.Schema<serializers.cloud.CdnAuthTyp
     core.serialization.enum_(["none", "basic"]);
 
 export declare namespace CdnAuthType {
-    type Raw = "none" | "basic";
+    export type Raw = "none" | "basic";
 }

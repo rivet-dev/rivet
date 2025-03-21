@@ -15,7 +15,7 @@ export const ValidateGameNamespaceMatchmakerConfigResponse: core.serialization.O
 });
 
 export declare namespace ValidateGameNamespaceMatchmakerConfigResponse {
-    interface Raw {
+    export interface Raw {
         errors: ValidationError.Raw[];
     }
 }

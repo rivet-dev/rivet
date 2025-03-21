@@ -18,7 +18,7 @@ export const MatchmakerConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({
     gameModes: core.serialization.property(
         "game_modes",
-        core.serialization.record(core.serialization.string(), GameMode).optional()
+        core.serialization.record(core.serialization.string(), GameMode).optional(),
     ),
     captcha: Captcha.optional(),
     devHostname: core.serialization.property("dev_hostname", core.serialization.string().optional()),
@@ -33,7 +33,7 @@ export const MatchmakerConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace MatchmakerConfig {
-    interface Raw {
+    export interface Raw {
         game_modes?: Record<string, GameMode.Raw> | null;
         captcha?: Captcha.Raw | null;
         dev_hostname?: string | null;

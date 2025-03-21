@@ -20,7 +20,7 @@ export const StatFormatMethod: core.serialization.Schema<
 ]);
 
 export declare namespace StatFormatMethod {
-    type Raw =
+    export type Raw =
         | "integer"
         | "float_1"
         | "float_2"

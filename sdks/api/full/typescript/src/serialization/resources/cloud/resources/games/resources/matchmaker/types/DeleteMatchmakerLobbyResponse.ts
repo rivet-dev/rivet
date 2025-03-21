@@ -14,7 +14,7 @@ export const DeleteMatchmakerLobbyResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace DeleteMatchmakerLobbyResponse {
-    interface Raw {
+    export interface Raw {
         did_remove: boolean;
     }
 }

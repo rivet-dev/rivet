@@ -17,15 +17,17 @@ import { Tiers } from "../resources/tiers/client/Client";
 import { Uploads } from "../resources/uploads/client/Client";
 
 export declare namespace Cloud {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -40,7 +42,43 @@ export declare namespace Cloud {
 }
 
 export class Cloud {
+    protected _games: Games | undefined;
+    protected _auth: Auth | undefined;
+    protected _devices: Devices | undefined;
+    protected _groups: Groups | undefined;
+    protected _logs: Logs | undefined;
+    protected _tiers: Tiers | undefined;
+    protected _uploads: Uploads | undefined;
+
     constructor(protected readonly _options: Cloud.Options = {}) {}
+
+    public get games(): Games {
+        return (this._games ??= new Games(this._options));
+    }
+
+    public get auth(): Auth {
+        return (this._auth ??= new Auth(this._options));
+    }
+
+    public get devices(): Devices {
+        return (this._devices ??= new Devices(this._options));
+    }
+
+    public get groups(): Groups {
+        return (this._groups ??= new Groups(this._options));
+    }
+
+    public get logs(): Logs {
+        return (this._logs ??= new Logs(this._options));
+    }
+
+    public get tiers(): Tiers {
+        return (this._tiers ??= new Tiers(this._options));
+    }
+
+    public get uploads(): Uploads {
+        return (this._uploads ??= new Uploads(this._options));
+    }
 
     /**
      * Returns the basic information required to use the cloud APIs.
@@ -60,8 +98,10 @@ export class Cloud {
     public async bootstrap(requestOptions?: Cloud.RequestOptions): Promise<Rivet.cloud.BootstrapResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/cloud/bootstrap"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/cloud/bootstrap",
             ),
             method: "GET",
             headers: {
@@ -98,7 +138,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -108,7 +148,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -118,7 +158,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -128,7 +168,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -138,7 +178,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -148,7 +188,7 @@ export class Cloud {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -171,48 +211,6 @@ export class Cloud {
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _games: Games | undefined;
-
-    public get games(): Games {
-        return (this._games ??= new Games(this._options));
-    }
-
-    protected _auth: Auth | undefined;
-
-    public get auth(): Auth {
-        return (this._auth ??= new Auth(this._options));
-    }
-
-    protected _devices: Devices | undefined;
-
-    public get devices(): Devices {
-        return (this._devices ??= new Devices(this._options));
-    }
-
-    protected _groups: Groups | undefined;
-
-    public get groups(): Groups {
-        return (this._groups ??= new Groups(this._options));
-    }
-
-    protected _logs: Logs | undefined;
-
-    public get logs(): Logs {
-        return (this._logs ??= new Logs(this._options));
-    }
-
-    protected _tiers: Tiers | undefined;
-
-    public get tiers(): Tiers {
-        return (this._tiers ??= new Tiers(this._options));
-    }
-
-    protected _uploads: Uploads | undefined;
-
-    public get uploads(): Uploads {
-        return (this._uploads ??= new Uploads(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

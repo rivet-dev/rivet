@@ -7,7 +7,6 @@
  * How hard a captcha should be.
  */
 export type CaptchaHcaptchaLevel = "easy" | "moderate" | "difficult" | "always_on";
-
 export const CaptchaHcaptchaLevel = {
     Easy: "easy",
     Moderate: "moderate",

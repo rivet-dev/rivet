@@ -15,7 +15,7 @@ export const LeaderboardCategory: core.serialization.ObjectSchema<
 });
 
 export declare namespace LeaderboardCategory {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
     }
 }

@@ -14,7 +14,7 @@ export const MarkClientRegisteredRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace MarkClientRegisteredRequest {
-    interface Raw {
+    export interface Raw {
         server_id: string;
     }
 }

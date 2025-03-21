@@ -15,7 +15,7 @@ export const SvcMetrics: core.serialization.ObjectSchema<serializers.cloud.SvcMe
     });
 
 export declare namespace SvcMetrics {
-    interface Raw {
+    export interface Raw {
         job: string;
         cpu: number[];
         memory: number[];

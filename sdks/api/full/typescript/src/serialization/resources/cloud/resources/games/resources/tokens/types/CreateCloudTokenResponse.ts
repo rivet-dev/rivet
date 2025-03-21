@@ -14,7 +14,7 @@ export const CreateCloudTokenResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateCloudTokenResponse {
-    interface Raw {
+    export interface Raw {
         token: string;
     }
 }

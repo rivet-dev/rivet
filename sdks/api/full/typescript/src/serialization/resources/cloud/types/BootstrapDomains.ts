@@ -17,7 +17,7 @@ export const BootstrapDomains: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapDomains {
-    interface Raw {
+    export interface Raw {
         cdn?: string | null;
         job?: string | null;
         main?: string | null;

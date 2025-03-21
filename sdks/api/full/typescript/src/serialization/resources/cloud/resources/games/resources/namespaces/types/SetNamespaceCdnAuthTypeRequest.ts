@@ -15,7 +15,7 @@ export const SetNamespaceCdnAuthTypeRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace SetNamespaceCdnAuthTypeRequest {
-    interface Raw {
+    export interface Raw {
         auth_type: CdnAuthType.Raw;
     }
 }

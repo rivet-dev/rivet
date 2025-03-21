@@ -15,7 +15,7 @@ export const GetActorResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetActorResponse {
-    interface Raw {
+    export interface Raw {
         actor: Actor.Raw;
     }
 }

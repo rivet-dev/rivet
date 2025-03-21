@@ -16,7 +16,7 @@ export const CreateServerRuntimeRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateServerRuntimeRequest {
-    interface Raw {
+    export interface Raw {
         build: string;
         arguments?: string[] | null;
         environment?: Record<string, string> | null;

@@ -14,7 +14,7 @@ export const NotificationRegisterFirebaseService: core.serialization.ObjectSchem
 });
 
 export declare namespace NotificationRegisterFirebaseService {
-    interface Raw {
+    export interface Raw {
         access_key: string;
     }
 }

@@ -15,7 +15,7 @@ export const CustomHeadersMiddleware: core.serialization.ObjectSchema<
 });
 
 export declare namespace CustomHeadersMiddleware {
-    interface Raw {
+    export interface Raw {
         headers: Header.Raw[];
     }
 }

@@ -15,7 +15,7 @@ export const GetGameVersionByIdResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetGameVersionByIdResponse {
-    interface Raw {
+    export interface Raw {
         version: Full.Raw;
     }
 }

@@ -14,7 +14,7 @@ export const CreateServiceTokenResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateServiceTokenResponse {
-    interface Raw {
+    export interface Raw {
         token: string;
     }
 }

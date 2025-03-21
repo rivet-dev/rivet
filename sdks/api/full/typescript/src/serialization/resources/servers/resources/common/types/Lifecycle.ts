@@ -12,7 +12,7 @@ export const Lifecycle: core.serialization.ObjectSchema<serializers.servers.Life
     });
 
 export declare namespace Lifecycle {
-    interface Raw {
+    export interface Raw {
         kill_timeout?: number | null;
     }
 }

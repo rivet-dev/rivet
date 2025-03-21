@@ -12,5 +12,5 @@ export const BootstrapCluster: core.serialization.Schema<
 > = core.serialization.enum_(["enterprise", "oss"]);
 
 export declare namespace BootstrapCluster {
-    type Raw = "enterprise" | "oss";
+    export type Raw = "enterprise" | "oss";
 }

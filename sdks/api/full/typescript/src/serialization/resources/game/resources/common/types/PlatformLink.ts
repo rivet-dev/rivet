@@ -14,7 +14,7 @@ export const PlatformLink: core.serialization.ObjectSchema<serializers.game.Plat
     });
 
 export declare namespace PlatformLink {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
         url: string;
     }

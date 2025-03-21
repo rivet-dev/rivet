@@ -14,7 +14,7 @@ export const SetLobbyClosedRequest: core.serialization.Schema<
 });
 
 export declare namespace SetLobbyClosedRequest {
-    interface Raw {
+    export interface Raw {
         is_closed: boolean;
     }
 }

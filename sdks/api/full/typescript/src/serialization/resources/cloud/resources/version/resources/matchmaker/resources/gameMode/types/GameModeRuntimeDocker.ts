@@ -15,7 +15,7 @@ export const GameModeRuntimeDocker: core.serialization.ObjectSchema<
     dockerfile: core.serialization.string().optional(),
     buildArgs: core.serialization.property(
         "build_args",
-        core.serialization.record(core.serialization.string(), core.serialization.string()).optional()
+        core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     ),
     image: core.serialization.string().optional(),
     imageId: core.serialization.property("image_id", core.serialization.string().optional()),
@@ -26,7 +26,7 @@ export const GameModeRuntimeDocker: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeRuntimeDocker {
-    interface Raw {
+    export interface Raw {
         dockerfile?: string | null;
         build_args?: Record<string, string> | null;
         image?: string | null;

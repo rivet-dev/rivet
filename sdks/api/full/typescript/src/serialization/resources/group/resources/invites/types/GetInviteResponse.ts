@@ -15,7 +15,7 @@ export const GetInviteResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetInviteResponse {
-    interface Raw {
+    export interface Raw {
         group: Handle.Raw;
     }
 }

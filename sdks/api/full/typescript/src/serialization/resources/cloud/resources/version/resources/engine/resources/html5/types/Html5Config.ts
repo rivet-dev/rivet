@@ -12,5 +12,5 @@ export const Html5Config: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace Html5Config {
-    interface Raw {}
+    export interface Raw {}
 }

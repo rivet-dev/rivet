@@ -21,7 +21,7 @@ export const CustomAvatarSummary: core.serialization.ObjectSchema<
 });
 
 export declare namespace CustomAvatarSummary {
-    interface Raw {
+    export interface Raw {
         upload_id: string;
         display_name: DisplayName.Raw;
         create_ts: Timestamp.Raw;

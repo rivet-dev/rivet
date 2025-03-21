@@ -6,7 +6,6 @@
  * A value denoting the status of a CDN domain's verification status.
  */
 export type CdnNamespaceDomainVerificationStatus = "active" | "pending" | "failed";
-
 export const CdnNamespaceDomainVerificationStatus = {
     Active: "active",
     Pending: "pending",

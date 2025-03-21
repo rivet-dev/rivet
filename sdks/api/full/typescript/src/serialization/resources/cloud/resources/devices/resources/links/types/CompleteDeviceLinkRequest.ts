@@ -16,7 +16,7 @@ export const CompleteDeviceLinkRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CompleteDeviceLinkRequest {
-    interface Raw {
+    export interface Raw {
         device_link_token: Jwt.Raw;
         game_id: string;
     }

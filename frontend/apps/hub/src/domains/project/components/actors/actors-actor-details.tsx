@@ -90,7 +90,7 @@ export function ActorsActorDetails({
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab {...props} />
+								<ActorLogsTab {...props} {...data} />
 							</Suspense>
 						</TabsContent>
 						<TabsContent

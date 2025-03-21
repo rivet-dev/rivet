@@ -15,7 +15,7 @@ export const JoinPlayer: core.serialization.ObjectSchema<
 });
 
 export declare namespace JoinPlayer {
-    interface Raw {
+    export interface Raw {
         token: Jwt.Raw;
     }
 }

@@ -9,5 +9,5 @@ import * as core from "../../../../core";
 export const Email: core.serialization.Schema<serializers.Email.Raw, Rivet.Email> = core.serialization.string();
 
 export declare namespace Email {
-    type Raw = string;
+    export type Raw = string;
 }

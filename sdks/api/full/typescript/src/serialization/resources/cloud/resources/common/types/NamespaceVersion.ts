@@ -17,7 +17,7 @@ export const NamespaceVersion: core.serialization.ObjectSchema<
 });
 
 export declare namespace NamespaceVersion {
-    interface Raw {
+    export interface Raw {
         namespace_id: string;
         version_id: string;
         deploy_ts: Timestamp.Raw;

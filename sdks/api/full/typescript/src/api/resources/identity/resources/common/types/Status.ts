@@ -6,7 +6,6 @@
  * The current status of an identity. This helps players understand if another player is currently playing or has their game in the background.
  */
 export type Status = "online" | "away" | "offline";
-
 export const Status = {
     Online: "online",
     Away: "away",

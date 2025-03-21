@@ -15,7 +15,7 @@ export const JoinRequest: core.serialization.ObjectSchema<serializers.group.Join
     });
 
 export declare namespace JoinRequest {
-    interface Raw {
+    export interface Raw {
         identity: Handle.Raw;
         ts: Timestamp.Raw;
     }

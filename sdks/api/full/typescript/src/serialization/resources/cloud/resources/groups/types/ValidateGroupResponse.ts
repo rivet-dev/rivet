@@ -15,7 +15,7 @@ export const ValidateGroupResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateGroupResponse {
-    interface Raw {
+    export interface Raw {
         errors: ValidationError.Raw[];
     }
 }

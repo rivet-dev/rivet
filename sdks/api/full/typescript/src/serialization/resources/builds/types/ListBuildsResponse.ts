@@ -15,7 +15,7 @@ export const ListBuildsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListBuildsResponse {
-    interface Raw {
+    export interface Raw {
         builds: Build.Raw[];
     }
 }

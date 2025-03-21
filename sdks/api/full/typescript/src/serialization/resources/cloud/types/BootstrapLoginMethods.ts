@@ -15,7 +15,7 @@ export const BootstrapLoginMethods: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapLoginMethods {
-    interface Raw {
+    export interface Raw {
         email: boolean;
         access_token?: boolean | null;
     }

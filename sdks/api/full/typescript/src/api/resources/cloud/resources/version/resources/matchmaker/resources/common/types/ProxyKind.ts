@@ -10,7 +10,6 @@
  * ### Related - /docs/dynamic-servers/concepts/game-guard - cloud.version.matchmaker.PortProtocol
  */
 export type ProxyKind = "none" | "game_guard";
-
 export const ProxyKind = {
     None: "none",
     GameGuard: "game_guard",

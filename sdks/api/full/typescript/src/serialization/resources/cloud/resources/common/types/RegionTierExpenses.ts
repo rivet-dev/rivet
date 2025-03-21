@@ -19,7 +19,7 @@ export const RegionTierExpenses: core.serialization.ObjectSchema<
 });
 
 export declare namespace RegionTierExpenses {
-    interface Raw {
+    export interface Raw {
         namespace_id: string;
         region_id: string;
         tier_name_id: string;

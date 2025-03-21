@@ -12,5 +12,5 @@ export const PatchBuildTagsResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace PatchBuildTagsResponse {
-    interface Raw {}
+    export interface Raw {}
 }

@@ -16,7 +16,7 @@ export const GameModeRegion: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeRegion {
-    interface Raw {
+    export interface Raw {
         tier?: string | null;
         idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
     }

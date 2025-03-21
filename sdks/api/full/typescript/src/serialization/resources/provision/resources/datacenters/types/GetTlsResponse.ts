@@ -17,7 +17,7 @@ export const GetTlsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetTlsResponse {
-    interface Raw {
+    export interface Raw {
         job_cert_pem: string;
         job_private_key_pem: string;
         api_cert_pem: string;

@@ -6,7 +6,6 @@
  * The current publicity value for the given group.
  */
 export type Publicity = "open" | "closed";
-
 export const Publicity = {
     Open: "open",
     Closed: "closed",

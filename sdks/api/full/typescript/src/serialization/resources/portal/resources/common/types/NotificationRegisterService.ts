@@ -15,7 +15,7 @@ export const NotificationRegisterService: core.serialization.ObjectSchema<
 });
 
 export declare namespace NotificationRegisterService {
-    interface Raw {
+    export interface Raw {
         firebase?: NotificationRegisterFirebaseService.Raw | null;
     }
 }

@@ -15,7 +15,7 @@ export const CompleteEmailVerificationRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CompleteEmailVerificationRequest {
-    interface Raw {
+    export interface Raw {
         verification_id: string;
         code: string;
     }

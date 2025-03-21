@@ -14,7 +14,7 @@ export const UpdateGameNamespaceVersionRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpdateGameNamespaceVersionRequest {
-    interface Raw {
+    export interface Raw {
         version_id: string;
     }
 }

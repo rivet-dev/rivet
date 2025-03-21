@@ -18,7 +18,7 @@ export const GetActorLogsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetActorLogsResponse {
-    interface Raw {
+    export interface Raw {
         lines: string[];
         timestamps: Timestamp.Raw[];
         watch: WatchResponse.Raw;

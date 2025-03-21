@@ -46,7 +46,7 @@ export function HeaderLink({
 				) : undefined
 			}
 		>
-			<Link>
+			<Link to={props.to}>
 				{children}
 				{isCurrent && !isMobile ? (
 					<motion.div

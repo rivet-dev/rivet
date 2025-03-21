@@ -18,7 +18,7 @@ export const Summary: core.serialization.ObjectSchema<
 });
 
 export declare namespace Summary {
-    interface Raw {
+    export interface Raw {
         version_id: string;
         create_ts: Timestamp.Raw;
         display_name: DisplayName.Raw;

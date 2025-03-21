@@ -16,7 +16,6 @@
  * ### Related - cloud.version.matchmaker.GameModeRuntimeDockerPort - cloud.version.matchmaker.ProxyKind - /docs/dynamic-servers/concepts/game-guard - matchmaker.lobbies.find
  */
 export type PortProtocol = "http" | "https" | "tcp" | "tcp_tls" | "udp";
-
 export const PortProtocol = {
     Http: "http",
     Https: "https",

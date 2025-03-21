@@ -9,44 +9,31 @@ import { Servers } from "../resources/servers/client/Client";
 import { Tunnel } from "../resources/tunnel/client/Client";
 
 export declare namespace Provision {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
-
-    interface RequestOptions {
-        /** The maximum time to wait for a response in seconds. */
-        timeoutInSeconds?: number;
-        /** The number of times to retry the request. Defaults to 2. */
-        maxRetries?: number;
-        /** A hook to abort the request. */
-        abortSignal?: AbortSignal;
-        /** Additional headers to include in the request. */
-        headers?: Record<string, string>;
-        /** Override the X-API-Version header */
-        xApiVersion?: "25.2.2";
-    }
 }
 
 export class Provision {
-    constructor(protected readonly _options: Provision.Options = {}) {}
-
     protected _datacenters: Datacenters | undefined;
+    protected _servers: Servers | undefined;
+    protected _tunnel: Tunnel | undefined;
+
+    constructor(protected readonly _options: Provision.Options = {}) {}
 
     public get datacenters(): Datacenters {
         return (this._datacenters ??= new Datacenters(this._options));
     }
 
-    protected _servers: Servers | undefined;
-
     public get servers(): Servers {
         return (this._servers ??= new Servers(this._options));
     }
-
-    protected _tunnel: Tunnel | undefined;
 
     public get tunnel(): Tunnel {
         return (this._tunnel ??= new Tunnel(this._options));

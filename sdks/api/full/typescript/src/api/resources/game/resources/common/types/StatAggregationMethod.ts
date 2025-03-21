@@ -18,7 +18,6 @@ export type StatAggregationMethod =
     /**
      * Maximum value aggregation. */
     | "max";
-
 export const StatAggregationMethod = {
     Sum: "sum",
     Average: "average",

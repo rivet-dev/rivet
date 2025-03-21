@@ -14,7 +14,7 @@ export const Stat: core.serialization.ObjectSchema<serializers.game.Stat.Raw, Ri
     });
 
 export declare namespace Stat {
-    interface Raw {
+    export interface Raw {
         config: StatConfig.Raw;
         overall_value: number;
     }

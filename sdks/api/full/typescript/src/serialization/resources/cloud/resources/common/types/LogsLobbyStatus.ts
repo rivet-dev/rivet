@@ -17,7 +17,7 @@ export const LogsLobbyStatus: core.serialization.ObjectSchema<
 });
 
 export declare namespace LogsLobbyStatus {
-    interface Raw {
+    export interface Raw {
         running: EmptyObject.Raw;
         stopped?: LogsLobbyStatusStopped.Raw | null;
     }

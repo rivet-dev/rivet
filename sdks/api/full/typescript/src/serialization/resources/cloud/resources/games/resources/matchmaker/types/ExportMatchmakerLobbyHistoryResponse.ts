@@ -14,7 +14,7 @@ export const ExportMatchmakerLobbyHistoryResponse: core.serialization.ObjectSche
 });
 
 export declare namespace ExportMatchmakerLobbyHistoryResponse {
-    interface Raw {
+    export interface Raw {
         url: string;
     }
 }

@@ -14,7 +14,7 @@ export const CreateGameNamespaceTokenDevelopmentResponse: core.serialization.Obj
 });
 
 export declare namespace CreateGameNamespaceTokenDevelopmentResponse {
-    interface Raw {
+    export interface Raw {
         token: string;
     }
 }

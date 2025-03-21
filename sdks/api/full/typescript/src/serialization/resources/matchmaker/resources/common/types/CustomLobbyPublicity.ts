@@ -12,5 +12,5 @@ export const CustomLobbyPublicity: core.serialization.Schema<
 > = core.serialization.enum_(["public", "private"]);
 
 export declare namespace CustomLobbyPublicity {
-    type Raw = "public" | "private";
+    export type Raw = "public" | "private";
 }

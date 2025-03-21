@@ -20,7 +20,7 @@ export const SetupResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace SetupResponse {
-    interface Raw {
+    export interface Raw {
         identity_token: Jwt.Raw;
         identity_token_expire_ts: Timestamp.Raw;
         identity: Profile.Raw;

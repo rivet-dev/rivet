@@ -20,7 +20,7 @@ export const SvcPerf: core.serialization.ObjectSchema<serializers.cloud.SvcPerf.
     });
 
 export declare namespace SvcPerf {
-    interface Raw {
+    export interface Raw {
         svc_name: string;
         ts: Timestamp.Raw;
         duration: number;

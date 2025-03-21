@@ -217,7 +217,11 @@ function EnvironmentCdnRoute() {
 }
 
 const searchSchema = z.object({
-	modal: z.enum(["cdn-users", "cdn-domains"]).or(z.string()).optional(),
+	modal: z
+		.enum(["cdn-users", "cdn-domains"])
+		.or(z.string())
+		.optional()
+		.catch(undefined),
 });
 
 export const Route = createFileRoute(

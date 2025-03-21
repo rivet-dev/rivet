@@ -15,14 +15,14 @@ export const CdnConfig: core.serialization.ObjectSchema<
     buildOutput: core.serialization.property("build_output", core.serialization.string().optional()),
     buildEnv: core.serialization.property(
         "build_env",
-        core.serialization.record(core.serialization.string(), core.serialization.string()).optional()
+        core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     ),
     siteId: core.serialization.property("site_id", core.serialization.string().optional()),
     routes: core.serialization.list(Route).optional(),
 });
 
 export declare namespace CdnConfig {
-    interface Raw {
+    export interface Raw {
         build_command?: string | null;
         build_output?: string | null;
         build_env?: Record<string, string> | null;

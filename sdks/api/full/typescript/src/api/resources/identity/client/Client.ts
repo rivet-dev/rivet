@@ -12,15 +12,17 @@ import { Activities } from "../resources/activities/client/Client";
 import { Events } from "../resources/events/client/Client";
 
 export declare namespace Identity {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -35,7 +37,18 @@ export declare namespace Identity {
 }
 
 export class Identity {
+    protected _activities: Activities | undefined;
+    protected _events: Events | undefined;
+
     constructor(protected readonly _options: Identity.Options = {}) {}
+
+    public get activities(): Activities {
+        return (this._activities ??= new Activities(this._options));
+    }
+
+    public get events(): Events {
+        return (this._events ??= new Events(this._options));
+    }
 
     /**
      * Gets or creates an identity.
@@ -63,12 +76,14 @@ export class Identity {
      */
     public async setup(
         request: Rivet.identity.SetupRequest = {},
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.SetupResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities",
             ),
             method: "POST",
             headers: {
@@ -106,7 +121,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -116,7 +131,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -126,7 +141,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -136,7 +151,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -146,7 +161,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -156,7 +171,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -203,18 +218,20 @@ export class Identity {
     public async getProfile(
         identityId: string,
         request: Rivet.identity.GetProfileRequest = {},
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.GetProfileResponse> {
         const { watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/identity/identities/${encodeURIComponent(identityId)}/profile`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/identity/identities/${encodeURIComponent(identityId)}/profile`,
             ),
             method: "GET",
             headers: {
@@ -252,7 +269,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -262,7 +279,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -272,7 +289,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -282,7 +299,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -292,7 +309,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -302,7 +319,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -320,7 +337,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /identity/identities/{identity_id}/profile."
+                    "Timeout exceeded when calling GET /identity/identities/{identity_id}/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -349,18 +366,20 @@ export class Identity {
      */
     public async getSelfProfile(
         request: Rivet.identity.GetSelfProfileRequest = {},
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.GetProfileResponse> {
         const { watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/profile"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/profile",
             ),
             method: "GET",
             headers: {
@@ -398,7 +417,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -408,7 +427,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -418,7 +437,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -428,7 +447,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -438,7 +457,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -448,7 +467,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -466,7 +485,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /identity/identities/self/profile."
+                    "Timeout exceeded when calling GET /identity/identities/self/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -495,10 +514,10 @@ export class Identity {
      */
     public async getHandles(
         request: Rivet.identity.GetHandlesRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.GetHandlesResponse> {
         const { identityIds } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (Array.isArray(identityIds)) {
             _queryParams["identity_ids"] = identityIds.map((item) => item);
         } else {
@@ -507,8 +526,10 @@ export class Identity {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/batch/handle"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/batch/handle",
             ),
             method: "GET",
             headers: {
@@ -546,7 +567,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -556,7 +577,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -566,7 +587,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -576,7 +597,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -586,7 +607,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -596,7 +617,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -614,7 +635,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /identity/identities/batch/handle."
+                    "Timeout exceeded when calling GET /identity/identities/batch/handle.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -643,10 +664,10 @@ export class Identity {
      */
     public async getSummaries(
         request: Rivet.identity.GetSummariesRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.GetSummariesResponse> {
         const { identityIds } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (Array.isArray(identityIds)) {
             _queryParams["identity_ids"] = identityIds.map((item) => item);
         } else {
@@ -655,8 +676,10 @@ export class Identity {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/batch/summary"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/batch/summary",
             ),
             method: "GET",
             headers: {
@@ -694,7 +717,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -704,7 +727,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -714,7 +737,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -724,7 +747,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -734,7 +757,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -744,7 +767,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -762,7 +785,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /identity/identities/batch/summary."
+                    "Timeout exceeded when calling GET /identity/identities/batch/summary.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -793,12 +816,14 @@ export class Identity {
      */
     public async updateProfile(
         request: Rivet.identity.UpdateProfileRequest = {},
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/profile"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/profile",
             ),
             method: "POST",
             headers: {
@@ -830,7 +855,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -840,7 +865,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -850,7 +875,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -860,7 +885,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -870,7 +895,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -880,7 +905,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -898,7 +923,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/self/profile."
+                    "Timeout exceeded when calling POST /identity/identities/self/profile.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -929,12 +954,14 @@ export class Identity {
      */
     public async validateProfile(
         request: Rivet.identity.ValidateProfileRequest = {},
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/profile/validate"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/profile/validate",
             ),
             method: "POST",
             headers: {
@@ -966,7 +993,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -976,7 +1003,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -986,7 +1013,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -996,7 +1023,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1006,7 +1033,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1016,7 +1043,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1034,7 +1061,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/self/profile/validate."
+                    "Timeout exceeded when calling POST /identity/identities/self/profile/validate.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1071,12 +1098,14 @@ export class Identity {
      */
     public async setGameActivity(
         request: Rivet.identity.SetGameActivityRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/activity"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/activity",
             ),
             method: "POST",
             headers: {
@@ -1108,7 +1137,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1118,7 +1147,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1128,7 +1157,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1138,7 +1167,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1148,7 +1177,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1158,7 +1187,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1176,7 +1205,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/self/activity."
+                    "Timeout exceeded when calling POST /identity/identities/self/activity.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1203,8 +1232,10 @@ export class Identity {
     public async removeGameActivity(requestOptions?: Identity.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/activity"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/activity",
             ),
             method: "DELETE",
             headers: {
@@ -1235,7 +1266,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1245,7 +1276,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1255,7 +1286,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1265,7 +1296,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1275,7 +1306,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1285,7 +1316,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1303,7 +1334,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /identity/identities/self/activity."
+                    "Timeout exceeded when calling DELETE /identity/identities/self/activity.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1332,12 +1363,14 @@ export class Identity {
      */
     public async updateStatus(
         request: Rivet.identity.UpdateStatusRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/identities/self/status"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/identities/self/status",
             ),
             method: "POST",
             headers: {
@@ -1369,7 +1402,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1379,7 +1412,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1389,7 +1422,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1399,7 +1432,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1409,7 +1442,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1419,7 +1452,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1437,7 +1470,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/identities/self/status."
+                    "Timeout exceeded when calling POST /identity/identities/identities/self/status.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1468,12 +1501,14 @@ export class Identity {
      */
     public async prepareAvatarUpload(
         request: Rivet.identity.PrepareAvatarUploadRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<Rivet.identity.PrepareAvatarUploadResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/avatar-upload/prepare"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/avatar-upload/prepare",
             ),
             method: "POST",
             headers: {
@@ -1513,7 +1548,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1523,7 +1558,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1533,7 +1568,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1543,7 +1578,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1553,7 +1588,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1563,7 +1598,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1581,7 +1616,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/prepare."
+                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/prepare.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1609,8 +1644,10 @@ export class Identity {
     public async completeAvatarUpload(uploadId: string, requestOptions?: Identity.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/identity/identities/avatar-upload/${encodeURIComponent(uploadId)}/complete`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/identity/identities/avatar-upload/${encodeURIComponent(uploadId)}/complete`,
             ),
             method: "POST",
             headers: {
@@ -1641,7 +1678,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1651,7 +1688,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1661,7 +1698,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1671,7 +1708,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1681,7 +1718,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1691,7 +1728,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1709,7 +1746,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/{upload_id}/complete."
+                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/{upload_id}/complete.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1742,12 +1779,14 @@ export class Identity {
      */
     public async signupForBeta(
         request: Rivet.identity.SignupForBetaRequest,
-        requestOptions?: Identity.RequestOptions
+        requestOptions?: Identity.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/beta-signup"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/beta-signup",
             ),
             method: "POST",
             headers: {
@@ -1779,7 +1818,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1789,7 +1828,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1799,7 +1838,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1809,7 +1848,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1819,7 +1858,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1829,7 +1868,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1847,7 +1886,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/self/beta-signup."
+                    "Timeout exceeded when calling POST /identity/identities/self/beta-signup.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1872,8 +1911,10 @@ export class Identity {
     public async markDeletion(requestOptions?: Identity.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/delete-request"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/delete-request",
             ),
             method: "POST",
             headers: {
@@ -1904,7 +1945,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -1914,7 +1955,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -1924,7 +1965,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -1934,7 +1975,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -1944,7 +1985,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -1954,7 +1995,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1972,7 +2013,7 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /identity/identities/self/delete-request."
+                    "Timeout exceeded when calling POST /identity/identities/self/delete-request.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -1997,8 +2038,10 @@ export class Identity {
     public async unmarkDeletion(requestOptions?: Identity.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/identity/identities/self/delete-request"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/identity/identities/self/delete-request",
             ),
             method: "DELETE",
             headers: {
@@ -2029,7 +2072,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -2039,7 +2082,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -2049,7 +2092,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -2059,7 +2102,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -2069,7 +2112,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -2079,7 +2122,7 @@ export class Identity {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -2097,25 +2140,13 @@ export class Identity {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /identity/identities/self/delete-request."
+                    "Timeout exceeded when calling DELETE /identity/identities/self/delete-request.",
                 );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _activities: Activities | undefined;
-
-    public get activities(): Activities {
-        return (this._activities ??= new Activities(this._options));
-    }
-
-    protected _events: Events | undefined;
-
-    public get events(): Events {
-        return (this._events ??= new Events(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

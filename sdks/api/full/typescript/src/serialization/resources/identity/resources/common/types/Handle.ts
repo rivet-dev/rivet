@@ -20,7 +20,7 @@ export const Handle: core.serialization.ObjectSchema<serializers.identity.Handle
     });
 
 export declare namespace Handle {
-    interface Raw {
+    export interface Raw {
         identity_id: string;
         display_name: DisplayName.Raw;
         account_number: AccountNumber.Raw;

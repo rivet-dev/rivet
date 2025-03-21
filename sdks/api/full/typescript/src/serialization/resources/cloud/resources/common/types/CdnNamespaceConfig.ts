@@ -20,7 +20,7 @@ export const CdnNamespaceConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace CdnNamespaceConfig {
-    interface Raw {
+    export interface Raw {
         enable_domain_public_auth: boolean;
         domains: CdnNamespaceDomain.Raw[];
         auth_type: CdnAuthType.Raw;

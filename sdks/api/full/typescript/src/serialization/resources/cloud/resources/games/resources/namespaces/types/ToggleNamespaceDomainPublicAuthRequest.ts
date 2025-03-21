@@ -14,7 +14,7 @@ export const ToggleNamespaceDomainPublicAuthRequest: core.serialization.ObjectSc
 });
 
 export declare namespace ToggleNamespaceDomainPublicAuthRequest {
-    interface Raw {
+    export interface Raw {
         enabled: boolean;
     }
 }

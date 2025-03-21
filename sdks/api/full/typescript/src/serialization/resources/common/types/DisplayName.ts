@@ -10,5 +10,5 @@ export const DisplayName: core.serialization.Schema<serializers.DisplayName.Raw,
     core.serialization.string();
 
 export declare namespace DisplayName {
-    type Raw = string;
+    export type Raw = string;
 }

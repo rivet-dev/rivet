@@ -15,7 +15,7 @@ export const FindLobbyRequest: core.serialization.Schema<
     regions: core.serialization.list(core.serialization.string()).optional(),
     preventAutoCreateLobby: core.serialization.property(
         "prevent_auto_create_lobby",
-        core.serialization.boolean().optional()
+        core.serialization.boolean().optional(),
     ),
     tags: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxPlayers: core.serialization.property("max_players", core.serialization.number().optional()),
@@ -24,7 +24,7 @@ export const FindLobbyRequest: core.serialization.Schema<
 });
 
 export declare namespace FindLobbyRequest {
-    interface Raw {
+    export interface Raw {
         game_modes: string[];
         regions?: string[] | null;
         prevent_auto_create_lobby?: boolean | null;

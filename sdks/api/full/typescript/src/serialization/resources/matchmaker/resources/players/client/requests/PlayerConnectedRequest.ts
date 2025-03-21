@@ -14,7 +14,7 @@ export const PlayerConnectedRequest: core.serialization.Schema<
 });
 
 export declare namespace PlayerConnectedRequest {
-    interface Raw {
+    export interface Raw {
         player_token: string;
     }
 }

@@ -12,5 +12,5 @@ export const CdnNamespaceDomainVerificationStatus: core.serialization.Schema<
 > = core.serialization.enum_(["active", "pending", "failed"]);
 
 export declare namespace CdnNamespaceDomainVerificationStatus {
-    type Raw = "active" | "pending" | "failed";
+    export type Raw = "active" | "pending" | "failed";
 }

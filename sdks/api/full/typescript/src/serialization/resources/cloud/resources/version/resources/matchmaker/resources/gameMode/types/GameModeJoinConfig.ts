@@ -18,7 +18,7 @@ export const GameModeJoinConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeJoinConfig {
-    interface Raw {
+    export interface Raw {
         enabled: boolean;
         identity_requirement?: GameModeIdentityRequirement.Raw | null;
         verification?: GameModeVerificationConfig.Raw | null;

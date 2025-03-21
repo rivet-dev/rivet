@@ -21,12 +21,12 @@ export const CreateBuildRequest: core.serialization.ObjectSchema<
     compression: BuildCompression.optional(),
     prewarmDatacenters: core.serialization.property(
         "prewarm_datacenters",
-        core.serialization.list(core.serialization.string()).optional()
+        core.serialization.list(core.serialization.string()).optional(),
     ),
 });
 
 export declare namespace CreateBuildRequest {
-    interface Raw {
+    export interface Raw {
         name: string;
         image_tag: string;
         image_file: PrepareFile.Raw;

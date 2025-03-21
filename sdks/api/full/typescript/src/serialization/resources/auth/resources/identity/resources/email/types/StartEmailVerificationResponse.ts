@@ -14,7 +14,7 @@ export const StartEmailVerificationResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace StartEmailVerificationResponse {
-    interface Raw {
+    export interface Raw {
         verification_id: string;
     }
 }

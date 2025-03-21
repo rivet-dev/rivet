@@ -17,7 +17,7 @@ export const CompleteStatus: core.serialization.Schema<serializers.auth.Complete
     ]);
 
 export declare namespace CompleteStatus {
-    type Raw =
+    export type Raw =
         | "switch_identity"
         | "linked_account_added"
         | "already_complete"

@@ -22,7 +22,7 @@ export const RegionInfo: core.serialization.ObjectSchema<
 });
 
 export declare namespace RegionInfo {
-    interface Raw {
+    export interface Raw {
         region_id: Identifier.Raw;
         provider_display_name: DisplayName.Raw;
         region_display_name: DisplayName.Raw;

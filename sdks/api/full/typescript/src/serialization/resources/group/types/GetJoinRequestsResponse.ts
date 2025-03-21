@@ -18,7 +18,7 @@ export const GetJoinRequestsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetJoinRequestsResponse {
-    interface Raw {
+    export interface Raw {
         join_requests: JoinRequest.Raw[];
         anchor?: string | null;
         watch: WatchResponse.Raw;

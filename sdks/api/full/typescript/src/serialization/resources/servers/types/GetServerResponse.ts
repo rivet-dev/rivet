@@ -15,7 +15,7 @@ export const GetServerResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetServerResponse {
-    interface Raw {
+    export interface Raw {
         server: Server.Raw;
     }
 }

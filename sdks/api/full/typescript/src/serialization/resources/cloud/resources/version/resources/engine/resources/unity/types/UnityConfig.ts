@@ -12,5 +12,5 @@ export const UnityConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace UnityConfig {
-    interface Raw {}
+    export interface Raw {}
 }

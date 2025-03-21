@@ -54,11 +54,9 @@ export function usePatchActorBuildTagsMutation({
 			environmentNameId: string;
 			buildId: string;
 		} & Rivet.servers.PatchBuildTagsRequest) => {
-			console.log("mutating", request.tags);
-
 			// TODO: Cache this
 			// Get original build
-			const ogBuild = await rivetClient.actors.builds.get(buildId, {
+			const ogBuild = await rivetClient.builds.get(buildId, {
 				project: projectNameId,
 				environment: environmentNameId,
 			});
@@ -69,7 +67,7 @@ export function usePatchActorBuildTagsMutation({
 				(request.tags as Record<string, string> | undefined)
 					?.current === "true"
 			) {
-				const currentBuilds = await rivetClient.actors.builds.list({
+				const currentBuilds = await rivetClient.builds.list({
 					project: projectNameId,
 					environment: environmentNameId,
 					tagsJson: JSON.stringify({
@@ -77,9 +75,9 @@ export function usePatchActorBuildTagsMutation({
 						current: "true",
 					}),
 				});
-				console.log("updating builds", currentBuilds.builds);
+
 				for (const build of currentBuilds.builds) {
-					await rivetClient.actors.builds.patchTags(build.id, {
+					await rivetClient.builds.patchTags(build.id, {
 						project: projectNameId,
 						environment: environmentNameId,
 						body: {
@@ -92,7 +90,7 @@ export function usePatchActorBuildTagsMutation({
 			}
 
 			// Update tags
-			return await rivetClient.actors.builds.patchTags(buildId, {
+			return await rivetClient.builds.patchTags(buildId, {
 				project: projectNameId,
 				environment: environmentNameId,
 				body: request,
@@ -182,27 +180,24 @@ export function useCreateActorFromSdkMutation({
 			region: string;
 			parameters: unknown;
 		}) => {
-			const managerUrl = await queryClient.fetchQuery(
-				actorManagerUrlQueryOptions({
-					projectNameId,
-					environmentNameId,
-				}),
-			);
-
-			const { build } = await queryClient.fetchQuery(
-				actorBuildQueryOptions({
-					projectNameId,
-					environmentNameId,
-					buildId,
-				}),
-			);
-
-			const cl = new Client(managerUrl);
-
-			await cl.create({
-				parameters,
-				create: { tags: { name: build.tags.name || build.id }, region },
-			});
+			// const managerUrl = await queryClient.fetchQuery(
+			// 	actorManagerUrlQueryOptions({
+			// 		projectNameId,
+			// 		environmentNameId,
+			// 	}),
+			// );
+			// const { build } = await queryClient.fetchQuery(
+			// 	actorBuildQueryOptions({
+			// 		projectNameId,
+			// 		environmentNameId,
+			// 		buildId,
+			// 	}),
+			// );
+			// const cl = new Client(managerUrl);
+			// await cl.create({
+			// 	parameters,
+			// 	create: { tags: { name: build.tags.name || build.id }, region },
+			// });
 		},
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({

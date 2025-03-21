@@ -12,5 +12,5 @@ export const BootstrapAccess: core.serialization.Schema<
 > = core.serialization.enum_(["public", "private", "development"]);
 
 export declare namespace BootstrapAccess {
-    type Raw = "public" | "private" | "development";
+    export type Raw = "public" | "private" | "development";
 }

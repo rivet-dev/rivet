@@ -14,7 +14,7 @@ export const Datacenter: core.serialization.ObjectSchema<serializers.servers.Dat
     });
 
 export declare namespace Datacenter {
-    interface Raw {
+    export interface Raw {
         id: string;
         slug: string;
         name: string;

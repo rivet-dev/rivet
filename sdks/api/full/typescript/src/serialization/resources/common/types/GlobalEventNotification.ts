@@ -17,7 +17,7 @@ export const GlobalEventNotification: core.serialization.ObjectSchema<
 });
 
 export declare namespace GlobalEventNotification {
-    interface Raw {
+    export interface Raw {
         title: string;
         description: string;
         thumbnail_url: string;

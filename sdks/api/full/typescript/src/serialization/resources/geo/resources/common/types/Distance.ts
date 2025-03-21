@@ -13,7 +13,7 @@ export const Distance: core.serialization.ObjectSchema<serializers.geo.Distance.
     });
 
 export declare namespace Distance {
-    interface Raw {
+    export interface Raw {
         kilometers: number;
         miles: number;
     }

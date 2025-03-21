@@ -15,7 +15,7 @@ export const Network: core.serialization.ObjectSchema<serializers.servers.Networ
     });
 
 export declare namespace Network {
-    interface Raw {
+    export interface Raw {
         mode?: NetworkMode.Raw | null;
         ports: Record<string, Port.Raw>;
     }

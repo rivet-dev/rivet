@@ -15,7 +15,7 @@ export const CreateRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateRequest {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
     }
 }

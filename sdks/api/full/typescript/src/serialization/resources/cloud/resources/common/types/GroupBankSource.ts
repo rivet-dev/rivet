@@ -15,7 +15,7 @@ export const GroupBankSource: core.serialization.ObjectSchema<
 });
 
 export declare namespace GroupBankSource {
-    interface Raw {
+    export interface Raw {
         account_number: string;
         routing_number: string;
     }

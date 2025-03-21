@@ -15,7 +15,7 @@ export const GetAnalyticsMatchmakerLiveResponse: core.serialization.ObjectSchema
 });
 
 export declare namespace GetAnalyticsMatchmakerLiveResponse {
-    interface Raw {
+    export interface Raw {
         lobbies: LobbySummaryAnalytics.Raw[];
     }
 }

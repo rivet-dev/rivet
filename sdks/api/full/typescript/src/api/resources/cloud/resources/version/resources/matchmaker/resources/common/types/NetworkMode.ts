@@ -9,7 +9,6 @@
  * Read more about bridge vs host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).
  */
 export type NetworkMode = "bridge" | "host";
-
 export const NetworkMode = {
     Bridge: "bridge",
     Host: "host",

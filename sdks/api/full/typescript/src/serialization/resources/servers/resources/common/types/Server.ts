@@ -26,7 +26,7 @@ export const Server: core.serialization.ObjectSchema<serializers.servers.Server.
     });
 
 export declare namespace Server {
-    interface Raw {
+    export interface Raw {
         id: string;
         environment: string;
         datacenter: string;

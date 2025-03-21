@@ -13,7 +13,7 @@ export const Group: core.serialization.ObjectSchema<serializers.identity.Group.R
     });
 
 export declare namespace Group {
-    interface Raw {
+    export interface Raw {
         group: Handle.Raw;
     }
 }

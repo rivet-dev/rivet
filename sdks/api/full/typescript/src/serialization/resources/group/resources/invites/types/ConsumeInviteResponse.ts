@@ -14,7 +14,7 @@ export const ConsumeInviteResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ConsumeInviteResponse {
-    interface Raw {
+    export interface Raw {
         group_id?: string | null;
     }
 }

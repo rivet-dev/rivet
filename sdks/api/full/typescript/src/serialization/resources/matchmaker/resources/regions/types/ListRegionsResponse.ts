@@ -15,7 +15,7 @@ export const ListRegionsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListRegionsResponse {
-    interface Raw {
+    export interface Raw {
         regions: RegionInfo.Raw[];
     }
 }

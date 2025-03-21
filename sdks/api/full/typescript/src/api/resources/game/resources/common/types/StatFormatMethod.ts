@@ -27,7 +27,6 @@ export type StatFormatMethod =
     /**
      * A duration with hundredth-second precision (1d 2h 45m 21.46s). It is important to notice that this custom format is not a standard way to define Enums in OpenAPI and it will be not understood by the majority of tools that parse OpenAPI files. It is important to check with the tools or libraries that you are using to make sure they support this custom format. */
     | "duration_hundredth_second";
-
 export const StatFormatMethod = {
     Integer: "integer",
     Float1: "float_1",

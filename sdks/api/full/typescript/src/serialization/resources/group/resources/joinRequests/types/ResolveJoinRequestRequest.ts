@@ -14,7 +14,7 @@ export const ResolveJoinRequestRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ResolveJoinRequestRequest {
-    interface Raw {
+    export interface Raw {
         resolution?: boolean | null;
     }
 }

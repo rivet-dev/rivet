@@ -17,7 +17,7 @@ export const GetSummariesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetSummariesResponse {
-    interface Raw {
+    export interface Raw {
         identities: Summary.Raw[];
         watch: WatchResponse.Raw;
     }

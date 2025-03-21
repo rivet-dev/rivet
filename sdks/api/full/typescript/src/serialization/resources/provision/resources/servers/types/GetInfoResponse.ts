@@ -22,7 +22,7 @@ export const GetInfoResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetInfoResponse {
-    interface Raw {
+    export interface Raw {
         name: string;
         server_id: string;
         datacenter_id: string;

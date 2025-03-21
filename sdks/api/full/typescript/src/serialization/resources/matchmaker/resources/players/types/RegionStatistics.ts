@@ -14,7 +14,7 @@ export const RegionStatistics: core.serialization.ObjectSchema<
 });
 
 export declare namespace RegionStatistics {
-    interface Raw {
+    export interface Raw {
         player_count: number;
     }
 }

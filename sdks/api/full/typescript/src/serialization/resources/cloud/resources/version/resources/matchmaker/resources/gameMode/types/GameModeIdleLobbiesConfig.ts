@@ -15,7 +15,7 @@ export const GameModeIdleLobbiesConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeIdleLobbiesConfig {
-    interface Raw {
+    export interface Raw {
         min: number;
         max: number;
     }

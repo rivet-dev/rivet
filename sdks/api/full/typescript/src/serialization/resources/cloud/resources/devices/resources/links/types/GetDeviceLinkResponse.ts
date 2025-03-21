@@ -16,7 +16,7 @@ export const GetDeviceLinkResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetDeviceLinkResponse {
-    interface Raw {
+    export interface Raw {
         cloud_token?: string | null;
         watch: WatchResponse.Raw;
     }

@@ -14,7 +14,7 @@ export const ConfigHcaptcha: core.serialization.ObjectSchema<
 });
 
 export declare namespace ConfigHcaptcha {
-    interface Raw {
+    export interface Raw {
         client_response: string;
     }
 }

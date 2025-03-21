@@ -3,7 +3,6 @@
  */
 
 export type BootstrapAccess = "public" | "private" | "development";
-
 export const BootstrapAccess = {
     Public: "public",
     Private: "private",

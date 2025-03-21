@@ -17,7 +17,7 @@ export const BannedIdentity: core.serialization.ObjectSchema<
 });
 
 export declare namespace BannedIdentity {
-    interface Raw {
+    export interface Raw {
         identity: Handle.Raw;
         ban_ts: Timestamp.Raw;
     }

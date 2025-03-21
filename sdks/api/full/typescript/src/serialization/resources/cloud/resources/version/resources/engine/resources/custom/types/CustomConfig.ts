@@ -12,5 +12,5 @@ export const CustomConfig: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace CustomConfig {
-    interface Raw {}
+    export interface Raw {}
 }

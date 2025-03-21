@@ -14,7 +14,7 @@ export const BootstrapOrigins: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapOrigins {
-    interface Raw {
+    export interface Raw {
         hub: string;
     }
 }

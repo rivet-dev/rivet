@@ -17,7 +17,7 @@ export const LobbyGroupRegion: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroupRegion {
-    interface Raw {
+    export interface Raw {
         region_id: string;
         tier_name_id: string;
         idle_lobbies?: LobbyGroupIdleLobbiesConfig.Raw | null;

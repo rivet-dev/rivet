@@ -15,7 +15,7 @@ export const GetGameNamespaceVersionHistoryResponse: core.serialization.ObjectSc
 });
 
 export declare namespace GetGameNamespaceVersionHistoryResponse {
-    interface Raw {
+    export interface Raw {
         versions: NamespaceVersion.Raw[];
     }
 }

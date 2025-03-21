@@ -15,7 +15,7 @@ export const GameModeInfo: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeInfo {
-    interface Raw {
+    export interface Raw {
         game_mode_id: Identifier.Raw;
     }
 }

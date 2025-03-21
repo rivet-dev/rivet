@@ -10,5 +10,5 @@ export const Status: core.serialization.Schema<serializers.identity.Status.Raw, 
     core.serialization.enum_(["online", "away", "offline"]);
 
 export declare namespace Status {
-    type Raw = "online" | "away" | "offline";
+    export type Raw = "online" | "away" | "offline";
 }

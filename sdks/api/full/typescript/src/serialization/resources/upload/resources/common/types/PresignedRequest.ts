@@ -17,7 +17,7 @@ export const PresignedRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace PresignedRequest {
-    interface Raw {
+    export interface Raw {
         path: string;
         url: string;
         byte_offset: number;

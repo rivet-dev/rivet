@@ -79,10 +79,7 @@ export default function CreateGroupInviteDialogContent({
 					<GroupInviteForm.UsageCount />
 				</Flex>
 				<DialogFooter>
-					<GroupInviteForm.Submit
-						disablePristine={false}
-						type="submit"
-					>
+					<GroupInviteForm.Submit allowPristine type="submit">
 						Create
 					</GroupInviteForm.Submit>
 				</DialogFooter>

@@ -10,5 +10,5 @@ export const EndpointType: core.serialization.Schema<serializers.actors.Endpoint
     core.serialization.enum_(["hostname", "path"]);
 
 export declare namespace EndpointType {
-    type Raw = "hostname" | "path";
+    export type Raw = "hostname" | "path";
 }

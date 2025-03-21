@@ -12,5 +12,5 @@ export const GameModeIdentityRequirement: core.serialization.Schema<
 > = core.serialization.enum_(["none", "guest", "registered"]);
 
 export declare namespace GameModeIdentityRequirement {
-    type Raw = "none" | "guest" | "registered";
+    export type Raw = "none" | "guest" | "registered";
 }

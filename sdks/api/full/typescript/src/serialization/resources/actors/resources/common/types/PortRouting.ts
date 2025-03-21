@@ -17,7 +17,7 @@ export const PortRouting: core.serialization.ObjectSchema<
 });
 
 export declare namespace PortRouting {
-    interface Raw {
+    export interface Raw {
         guard?: GuardRouting.Raw | null;
         host?: HostRouting.Raw | null;
     }

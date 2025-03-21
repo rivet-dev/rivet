@@ -17,7 +17,7 @@ export const CreateServerNetworkRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateServerNetworkRequest {
-    interface Raw {
+    export interface Raw {
         mode?: NetworkMode.Raw | null;
         ports: Record<string, CreateServerPortRequest.Raw>;
     }

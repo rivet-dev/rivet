@@ -23,7 +23,7 @@ export const GameMode: core.serialization.ObjectSchema<
     taggable: core.serialization.boolean().optional(),
     allowDynamicMaxPlayers: core.serialization.property(
         "allow_dynamic_max_players",
-        core.serialization.boolean().optional()
+        core.serialization.boolean().optional(),
     ),
     actions: GameModeActions.optional(),
     tier: core.serialization.string().optional(),
@@ -31,7 +31,7 @@ export const GameMode: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameMode {
-    interface Raw {
+    export interface Raw {
         regions?: Record<string, GameModeRegion.Raw> | null;
         max_players?: number | null;
         max_players_direct?: number | null;

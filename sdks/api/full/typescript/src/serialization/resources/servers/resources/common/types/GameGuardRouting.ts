@@ -12,5 +12,5 @@ export const GameGuardRouting: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace GameGuardRouting {
-    interface Raw {}
+    export interface Raw {}
 }

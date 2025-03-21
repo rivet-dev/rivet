@@ -10,5 +10,5 @@ export const Publicity: core.serialization.Schema<serializers.group.Publicity.Ra
     core.serialization.enum_(["open", "closed"]);
 
 export declare namespace Publicity {
-    type Raw = "open" | "closed";
+    export type Raw = "open" | "closed";
 }

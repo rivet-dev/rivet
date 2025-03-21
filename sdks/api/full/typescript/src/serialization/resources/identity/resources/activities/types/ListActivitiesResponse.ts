@@ -22,7 +22,7 @@ export const ListActivitiesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListActivitiesResponse {
-    interface Raw {
+    export interface Raw {
         identities: Handle.Raw[];
         games: GameSummary.Raw[];
         suggested_groups: GroupSummary.Raw[];

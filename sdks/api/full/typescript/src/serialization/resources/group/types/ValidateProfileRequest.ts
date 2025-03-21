@@ -18,7 +18,7 @@ export const ValidateProfileRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateProfileRequest {
-    interface Raw {
+    export interface Raw {
         display_name?: DisplayName.Raw | null;
         bio?: DisplayName.Raw | null;
         publicity?: Publicity.Raw | null;

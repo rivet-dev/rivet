@@ -6,7 +6,6 @@
  * The type of cluster that the backend is currently running.
  */
 export type BootstrapCluster = "enterprise" | "oss";
-
 export const BootstrapCluster = {
     Enterprise: "enterprise",
     Oss: "oss",

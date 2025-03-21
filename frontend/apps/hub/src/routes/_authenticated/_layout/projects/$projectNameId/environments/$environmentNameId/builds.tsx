@@ -230,7 +230,7 @@ function RowSkeleton() {
 	);
 }
 
-interface ProjectBuildLatestButtonProps extends Rivet.actors.Build {
+interface ProjectBuildLatestButtonProps extends Rivet.builds.Build {
 	projectNameId: string;
 	environmentNameId: string;
 	projectId: string;

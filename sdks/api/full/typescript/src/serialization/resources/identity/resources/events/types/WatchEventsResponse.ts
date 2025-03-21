@@ -17,7 +17,7 @@ export const WatchEventsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace WatchEventsResponse {
-    interface Raw {
+    export interface Raw {
         events: GlobalEvent.Raw[];
         watch: WatchResponse.Raw;
     }

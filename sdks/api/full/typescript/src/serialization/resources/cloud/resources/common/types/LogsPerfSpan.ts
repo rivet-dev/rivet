@@ -18,7 +18,7 @@ export const LogsPerfSpan: core.serialization.ObjectSchema<
 });
 
 export declare namespace LogsPerfSpan {
-    interface Raw {
+    export interface Raw {
         label: string;
         start_ts: Timestamp.Raw;
         finish_ts?: Timestamp.Raw | null;

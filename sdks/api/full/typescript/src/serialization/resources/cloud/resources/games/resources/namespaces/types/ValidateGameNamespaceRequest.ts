@@ -16,7 +16,7 @@ export const ValidateGameNamespaceRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateGameNamespaceRequest {
-    interface Raw {
+    export interface Raw {
         display_name: DisplayName.Raw;
         name_id: string;
     }

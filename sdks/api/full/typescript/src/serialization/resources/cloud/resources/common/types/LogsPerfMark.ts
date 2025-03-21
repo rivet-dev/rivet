@@ -18,7 +18,7 @@ export const LogsPerfMark: core.serialization.ObjectSchema<
 });
 
 export declare namespace LogsPerfMark {
-    interface Raw {
+    export interface Raw {
         label: string;
         ts: Timestamp.Raw;
         ray_id?: string | null;

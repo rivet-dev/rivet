@@ -19,7 +19,7 @@ export const GameLobbyExpenses: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameLobbyExpenses {
-    interface Raw {
+    export interface Raw {
         game: Handle.Raw;
         namespaces: NamespaceSummary.Raw[];
         expenses: RegionTierExpenses.Raw[];

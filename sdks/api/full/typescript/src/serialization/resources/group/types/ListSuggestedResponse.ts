@@ -17,7 +17,7 @@ export const ListSuggestedResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListSuggestedResponse {
-    interface Raw {
+    export interface Raw {
         groups: GroupSummary.Raw[];
         watch: WatchResponse.Raw;
     }

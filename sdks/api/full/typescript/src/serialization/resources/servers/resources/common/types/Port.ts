@@ -18,7 +18,7 @@ export const Port: core.serialization.ObjectSchema<serializers.servers.Port.Raw,
     });
 
 export declare namespace Port {
-    interface Raw {
+    export interface Raw {
         protocol: PortProtocol.Raw;
         internal_port?: number | null;
         public_hostname?: string | null;

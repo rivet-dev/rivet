@@ -15,7 +15,7 @@ export const GetGameNamespaceByIdResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetGameNamespaceByIdResponse {
-    interface Raw {
+    export interface Raw {
         namespace: NamespaceFull.Raw;
     }
 }

@@ -10,15 +10,17 @@ import urlJoin from "url-join";
 import * as errors from "../../../../../../../../errors/index";
 
 export declare namespace Matchmaker {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -58,12 +60,14 @@ export class Matchmaker {
     public async exportMatchmakerLobbyHistory(
         gameId: string,
         request: Rivet.cloud.games.ExportMatchmakerLobbyHistoryRequest,
-        requestOptions?: Matchmaker.RequestOptions
+        requestOptions?: Matchmaker.RequestOptions,
     ): Promise<Rivet.cloud.games.ExportMatchmakerLobbyHistoryResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/export-history`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/export-history`,
             ),
             method: "POST",
             headers: {
@@ -103,7 +107,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -113,7 +117,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -123,7 +127,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -133,7 +137,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -143,7 +147,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -153,7 +157,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -171,7 +175,7 @@ export class Matchmaker {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/export-history."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/export-history.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -200,12 +204,14 @@ export class Matchmaker {
     public async deleteMatchmakerLobby(
         gameId: string,
         lobbyId: string,
-        requestOptions?: Matchmaker.RequestOptions
+        requestOptions?: Matchmaker.RequestOptions,
     ): Promise<Rivet.cloud.games.DeleteMatchmakerLobbyResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(lobbyId)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(lobbyId)}`,
             ),
             method: "DELETE",
             headers: {
@@ -242,7 +248,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -252,7 +258,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -262,7 +268,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -272,7 +278,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -282,7 +288,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -292,7 +298,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -310,7 +316,7 @@ export class Matchmaker {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}."
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -344,19 +350,23 @@ export class Matchmaker {
         gameId: string,
         lobbyId: string,
         request: Rivet.cloud.games.GetLobbyLogsRequest,
-        requestOptions?: Matchmaker.RequestOptions
+        requestOptions?: Matchmaker.RequestOptions,
     ): Promise<Rivet.cloud.games.GetLobbyLogsResponse> {
         const { stream, watchIndex } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        _queryParams["stream"] = stream;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["stream"] = serializers.cloud.games.LogStream.jsonOrThrow(stream, {
+            unrecognizedObjectKeys: "strip",
+        });
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(lobbyId)}/logs`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(lobbyId)}/logs`,
             ),
             method: "GET",
             headers: {
@@ -394,7 +404,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -404,7 +414,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -414,7 +424,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -424,7 +434,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -434,7 +444,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -444,7 +454,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -462,7 +472,7 @@ export class Matchmaker {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling GET /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs."
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -495,14 +505,14 @@ export class Matchmaker {
         gameId: string,
         lobbyId: string,
         request: Rivet.cloud.games.ExportLobbyLogsRequest,
-        requestOptions?: Matchmaker.RequestOptions
+        requestOptions?: Matchmaker.RequestOptions,
     ): Promise<Rivet.cloud.games.ExportLobbyLogsResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(
-                    lobbyId
-                )}/logs/export`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/cloud/games/${encodeURIComponent(gameId)}/matchmaker/lobbies/${encodeURIComponent(lobbyId)}/logs/export`,
             ),
             method: "POST",
             headers: {
@@ -542,7 +552,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -552,7 +562,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -562,7 +572,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -572,7 +582,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -582,7 +592,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -592,7 +602,7 @@ export class Matchmaker {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -610,7 +620,7 @@ export class Matchmaker {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export."
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export.",
                 );
             case "unknown":
                 throw new errors.RivetError({

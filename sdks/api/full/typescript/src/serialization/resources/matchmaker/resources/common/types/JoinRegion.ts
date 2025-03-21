@@ -17,7 +17,7 @@ export const JoinRegion: core.serialization.ObjectSchema<
 });
 
 export declare namespace JoinRegion {
-    interface Raw {
+    export interface Raw {
         region_id: Identifier.Raw;
         display_name: DisplayName.Raw;
     }

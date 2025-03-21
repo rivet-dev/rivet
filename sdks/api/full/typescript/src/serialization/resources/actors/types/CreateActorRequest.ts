@@ -25,7 +25,7 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateActorRequest {
-    interface Raw {
+    export interface Raw {
         region?: string | null;
         tags?: unknown;
         build?: string | null;

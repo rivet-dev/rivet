@@ -10,5 +10,5 @@ export const NetworkMode: core.serialization.Schema<serializers.servers.NetworkM
     core.serialization.enum_(["bridge", "host"]);
 
 export declare namespace NetworkMode {
-    type Raw = "bridge" | "host";
+    export type Raw = "bridge" | "host";
 }

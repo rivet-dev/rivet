@@ -3,7 +3,6 @@
  */
 
 export type EndpointType = "hostname" | "path";
-
 export const EndpointType = {
     Hostname: "hostname",
     Path: "path",

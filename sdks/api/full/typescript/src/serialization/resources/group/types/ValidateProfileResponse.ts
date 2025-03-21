@@ -15,7 +15,7 @@ export const ValidateProfileResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ValidateProfileResponse {
-    interface Raw {
+    export interface Raw {
         errors: ValidationError.Raw[];
     }
 }

@@ -15,7 +15,7 @@ export const BootstrapCaptcha: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapCaptcha {
-    interface Raw {
+    export interface Raw {
         turnstile?: BootstrapCaptchaTurnstile.Raw | null;
     }
 }

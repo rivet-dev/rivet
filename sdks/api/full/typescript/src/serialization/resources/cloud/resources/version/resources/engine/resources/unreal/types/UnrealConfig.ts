@@ -14,7 +14,7 @@ export const UnrealConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace UnrealConfig {
-    interface Raw {
+    export interface Raw {
         game_module: string;
     }
 }

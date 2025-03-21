@@ -14,7 +14,7 @@ export const CreateGameNamespaceResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateGameNamespaceResponse {
-    interface Raw {
+    export interface Raw {
         namespace_id: string;
     }
 }

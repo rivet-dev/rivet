@@ -18,7 +18,7 @@ export const Handle: core.serialization.ObjectSchema<serializers.game.Handle.Raw
     });
 
 export declare namespace Handle {
-    interface Raw {
+    export interface Raw {
         game_id: string;
         name_id: Identifier.Raw;
         display_name: DisplayName.Raw;

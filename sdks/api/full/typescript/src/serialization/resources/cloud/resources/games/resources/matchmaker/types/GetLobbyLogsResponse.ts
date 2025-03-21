@@ -17,7 +17,7 @@ export const GetLobbyLogsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetLobbyLogsResponse {
-    interface Raw {
+    export interface Raw {
         lines: string[];
         timestamps: string[];
         watch: WatchResponse.Raw;

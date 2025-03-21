@@ -12,5 +12,5 @@ export const BuildCompression: core.serialization.Schema<
 > = core.serialization.enum_(["none", "lz4"]);
 
 export declare namespace BuildCompression {
-    type Raw = "none" | "lz4";
+    export type Raw = "none" | "lz4";
 }

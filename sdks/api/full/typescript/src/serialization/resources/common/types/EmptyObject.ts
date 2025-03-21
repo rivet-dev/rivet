@@ -10,5 +10,5 @@ export const EmptyObject: core.serialization.ObjectSchema<serializers.EmptyObjec
     core.serialization.object({});
 
 export declare namespace EmptyObject {
-    interface Raw {}
+    export interface Raw {}
 }

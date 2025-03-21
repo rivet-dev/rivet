@@ -14,7 +14,7 @@ export const AuthAgentGameCloud: core.serialization.ObjectSchema<
 });
 
 export declare namespace AuthAgentGameCloud {
-    interface Raw {
+    export interface Raw {
         game_id: string;
     }
 }

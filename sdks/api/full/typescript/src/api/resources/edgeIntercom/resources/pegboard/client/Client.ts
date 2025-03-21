@@ -10,15 +10,17 @@ import urlJoin from "url-join";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Pegboard {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -55,12 +57,14 @@ export class Pegboard {
     public async prewarmImage(
         imageId: string,
         request: Rivet.edgeIntercom.pegboard.PrewarmImageRequest,
-        requestOptions?: Pegboard.RequestOptions
+        requestOptions?: Pegboard.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/pegboard/image/${encodeURIComponent(imageId)}/prewarm`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/pegboard/image/${encodeURIComponent(imageId)}/prewarm`,
             ),
             method: "POST",
             headers: {
@@ -94,7 +98,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -104,7 +108,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -114,7 +118,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -124,7 +128,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -134,7 +138,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -144,7 +148,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -162,7 +166,7 @@ export class Pegboard {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /pegboard/image/{image_id}/prewarm."
+                    "Timeout exceeded when calling POST /pegboard/image/{image_id}/prewarm.",
                 );
             case "unknown":
                 throw new errors.RivetError({
@@ -192,12 +196,14 @@ export class Pegboard {
     public async toggleClientDrain(
         clientId: string,
         request: Rivet.edgeIntercom.pegboard.ToggleClientDrainRequest,
-        requestOptions?: Pegboard.RequestOptions
+        requestOptions?: Pegboard.RequestOptions,
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/pegboard/client/${encodeURIComponent(clientId)}/toggle-drain`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/pegboard/client/${encodeURIComponent(clientId)}/toggle-drain`,
             ),
             method: "POST",
             headers: {
@@ -231,7 +237,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -241,7 +247,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -251,7 +257,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -261,7 +267,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -271,7 +277,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -281,7 +287,7 @@ export class Pegboard {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -299,7 +305,7 @@ export class Pegboard {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError(
-                    "Timeout exceeded when calling POST /pegboard/client/{client_id}/toggle-drain."
+                    "Timeout exceeded when calling POST /pegboard/client/{client_id}/toggle-drain.",
                 );
             case "unknown":
                 throw new errors.RivetError({

@@ -17,7 +17,7 @@ export const StartEmailVerificationRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace StartEmailVerificationRequest {
-    interface Raw {
+    export interface Raw {
         email: string;
         captcha?: Config.Raw | null;
         game_id?: string | null;

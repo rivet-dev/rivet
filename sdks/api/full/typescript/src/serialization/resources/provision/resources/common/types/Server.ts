@@ -17,7 +17,7 @@ export const Server: core.serialization.ObjectSchema<serializers.provision.Serve
     });
 
 export declare namespace Server {
-    interface Raw {
+    export interface Raw {
         server_id: string;
         datacenter_id: string;
         pool_type: PoolType.Raw;

@@ -15,7 +15,7 @@ export const GetRegionTiersResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetRegionTiersResponse {
-    interface Raw {
+    export interface Raw {
         tiers: RegionTier.Raw[];
     }
 }

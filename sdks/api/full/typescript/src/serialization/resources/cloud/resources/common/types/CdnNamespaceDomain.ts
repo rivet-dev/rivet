@@ -19,12 +19,12 @@ export const CdnNamespaceDomain: core.serialization.ObjectSchema<
     verificationMethod: core.serialization.property("verification_method", CdnNamespaceDomainVerificationMethod),
     verificationErrors: core.serialization.property(
         "verification_errors",
-        core.serialization.list(core.serialization.string())
+        core.serialization.list(core.serialization.string()),
     ),
 });
 
 export declare namespace CdnNamespaceDomain {
-    interface Raw {
+    export interface Raw {
         domain: string;
         create_ts: Timestamp.Raw;
         verification_status: CdnNamespaceDomainVerificationStatus.Raw;

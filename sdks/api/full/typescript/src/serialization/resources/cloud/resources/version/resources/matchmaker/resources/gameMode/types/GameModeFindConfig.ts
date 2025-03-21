@@ -18,7 +18,7 @@ export const GameModeFindConfig: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameModeFindConfig {
-    interface Raw {
+    export interface Raw {
         enabled: boolean;
         identity_requirement?: GameModeIdentityRequirement.Raw | null;
         verification?: GameModeVerificationConfig.Raw | null;

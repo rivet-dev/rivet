@@ -10,5 +10,5 @@ export const LogStream: core.serialization.Schema<serializers.servers.LogStream.
     core.serialization.enum_(["std_out", "std_err"]);
 
 export declare namespace LogStream {
-    type Raw = "std_out" | "std_err";
+    export type Raw = "std_out" | "std_err";
 }

@@ -27,7 +27,7 @@ export const GameFull: core.serialization.ObjectSchema<serializers.cloud.GameFul
     });
 
 export declare namespace GameFull {
-    interface Raw {
+    export interface Raw {
         game_id: string;
         create_ts: Timestamp.Raw;
         name_id: string;

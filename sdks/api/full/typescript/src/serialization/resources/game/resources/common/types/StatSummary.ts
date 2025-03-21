@@ -15,7 +15,7 @@ export const StatSummary: core.serialization.ObjectSchema<serializers.game.StatS
     });
 
 export declare namespace StatSummary {
-    interface Raw {
+    export interface Raw {
         game: Handle.Raw;
         stats: Stat.Raw[];
     }

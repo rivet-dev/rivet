@@ -15,7 +15,7 @@ export const ValidateGameNamespaceMatchmakerConfigRequest: core.serialization.Ob
 });
 
 export declare namespace ValidateGameNamespaceMatchmakerConfigRequest {
-    interface Raw {
+    export interface Raw {
         lobby_count_max: number;
         max_players: number;
     }

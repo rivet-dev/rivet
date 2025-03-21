@@ -21,7 +21,7 @@ export const LobbyInfo: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyInfo {
-    interface Raw {
+    export interface Raw {
         region_id: string;
         game_mode_id: string;
         lobby_id: string;

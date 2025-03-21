@@ -12,7 +12,6 @@ export type StatSortingMethod =
     /**
      * Ascending sorting. */
     | "asc";
-
 export const StatSortingMethod = {
     Desc: "desc",
     Asc: "asc",

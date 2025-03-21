@@ -14,7 +14,7 @@ export const AddNamespaceDomainRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace AddNamespaceDomainRequest {
-    interface Raw {
+    export interface Raw {
         domain: string;
     }
 }

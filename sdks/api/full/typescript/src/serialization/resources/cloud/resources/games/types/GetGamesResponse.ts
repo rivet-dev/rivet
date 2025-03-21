@@ -19,7 +19,7 @@ export const GetGamesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetGamesResponse {
-    interface Raw {
+    export interface Raw {
         games: GameSummary.Raw[];
         groups: GroupSummary.Raw[];
         watch: WatchResponse.Raw;

@@ -16,7 +16,7 @@ export const GameBannerUploadPrepareRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace GameBannerUploadPrepareRequest {
-    interface Raw {
+    export interface Raw {
         path: string;
         mime?: string | null;
         content_length: number;

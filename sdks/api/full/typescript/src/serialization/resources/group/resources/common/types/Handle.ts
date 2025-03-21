@@ -18,7 +18,7 @@ export const Handle: core.serialization.ObjectSchema<serializers.group.Handle.Ra
     });
 
 export declare namespace Handle {
-    interface Raw {
+    export interface Raw {
         group_id: string;
         display_name: DisplayName.Raw;
         avatar_url?: string | null;

@@ -18,7 +18,7 @@ export const Full: core.serialization.ObjectSchema<serializers.cloud.version.Ful
     });
 
 export declare namespace Full {
-    interface Raw {
+    export interface Raw {
         version_id: string;
         create_ts: Timestamp.Raw;
         display_name: DisplayName.Raw;

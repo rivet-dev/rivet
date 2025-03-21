@@ -10,5 +10,5 @@ export const AccountNumber: core.serialization.Schema<serializers.AccountNumber.
     core.serialization.number();
 
 export declare namespace AccountNumber {
-    type Raw = number;
+    export type Raw = number;
 }

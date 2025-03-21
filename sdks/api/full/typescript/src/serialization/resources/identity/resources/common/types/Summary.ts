@@ -23,7 +23,7 @@ export const Summary: core.serialization.ObjectSchema<serializers.identity.Summa
     });
 
 export declare namespace Summary {
-    interface Raw {
+    export interface Raw {
         identity_id: string;
         display_name: DisplayName.Raw;
         account_number: AccountNumber.Raw;

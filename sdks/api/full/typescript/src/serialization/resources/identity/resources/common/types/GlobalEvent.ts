@@ -19,7 +19,7 @@ export const GlobalEvent: core.serialization.ObjectSchema<
 });
 
 export declare namespace GlobalEvent {
-    interface Raw {
+    export interface Raw {
         ts: Timestamp.Raw;
         kind: GlobalEventKind.Raw;
         notification?: GlobalEventNotification.Raw | null;

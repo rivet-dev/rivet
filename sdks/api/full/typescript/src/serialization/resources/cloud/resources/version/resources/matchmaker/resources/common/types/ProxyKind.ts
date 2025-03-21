@@ -12,5 +12,5 @@ export const ProxyKind: core.serialization.Schema<
 > = core.serialization.enum_(["none", "game_guard"]);
 
 export declare namespace ProxyKind {
-    type Raw = "none" | "game_guard";
+    export type Raw = "none" | "game_guard";
 }

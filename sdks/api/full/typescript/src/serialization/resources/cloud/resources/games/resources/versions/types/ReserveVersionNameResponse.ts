@@ -15,7 +15,7 @@ export const ReserveVersionNameResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ReserveVersionNameResponse {
-    interface Raw {
+    export interface Raw {
         version_display_name: DisplayName.Raw;
     }
 }

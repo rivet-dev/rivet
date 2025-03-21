@@ -5,6 +5,7 @@ import {
 	Navigate,
 	Outlet,
 	createFileRoute,
+	retainSearchParams,
 	useLocation,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
@@ -37,6 +38,9 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated")({
 	validateSearch: zodValidator(searchSchema),
 	component: Authenticated,
+	search: {
+		middlewares: [retainSearchParams(["modal"])],
+	},
 });
 
 function Modals() {

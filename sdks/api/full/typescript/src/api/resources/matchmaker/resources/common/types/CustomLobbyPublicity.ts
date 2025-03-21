@@ -3,7 +3,6 @@
  */
 
 export type CustomLobbyPublicity = "public" | "private";
-
 export const CustomLobbyPublicity = {
     Public: "public",
     Private: "private",

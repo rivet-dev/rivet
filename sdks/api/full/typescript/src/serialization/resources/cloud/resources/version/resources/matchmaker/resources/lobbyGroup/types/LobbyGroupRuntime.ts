@@ -15,7 +15,7 @@ export const LobbyGroupRuntime: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroupRuntime {
-    interface Raw {
+    export interface Raw {
         docker?: LobbyGroupRuntimeDocker.Raw | null;
     }
 }

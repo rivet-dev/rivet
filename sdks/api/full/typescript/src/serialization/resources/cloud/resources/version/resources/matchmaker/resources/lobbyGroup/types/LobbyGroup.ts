@@ -21,7 +21,7 @@ export const LobbyGroup: core.serialization.ObjectSchema<
 });
 
 export declare namespace LobbyGroup {
-    interface Raw {
+    export interface Raw {
         name_id: string;
         regions: LobbyGroupRegion.Raw[];
         max_players_normal: number;

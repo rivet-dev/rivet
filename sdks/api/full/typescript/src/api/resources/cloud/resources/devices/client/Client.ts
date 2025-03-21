@@ -7,32 +7,21 @@ import * as core from "../../../../../../core";
 import { Links } from "../resources/links/client/Client";
 
 export declare namespace Devices {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.2.2";
         fetcher?: core.FetchFunction;
     }
-
-    interface RequestOptions {
-        /** The maximum time to wait for a response in seconds. */
-        timeoutInSeconds?: number;
-        /** The number of times to retry the request. Defaults to 2. */
-        maxRetries?: number;
-        /** A hook to abort the request. */
-        abortSignal?: AbortSignal;
-        /** Additional headers to include in the request. */
-        headers?: Record<string, string>;
-        /** Override the X-API-Version header */
-        xApiVersion?: "25.2.2";
-    }
 }
 
 export class Devices {
-    constructor(protected readonly _options: Devices.Options = {}) {}
-
     protected _links: Links | undefined;
+
+    constructor(protected readonly _options: Devices.Options = {}) {}
 
     public get links(): Links {
         return (this._links ??= new Links(this._options));

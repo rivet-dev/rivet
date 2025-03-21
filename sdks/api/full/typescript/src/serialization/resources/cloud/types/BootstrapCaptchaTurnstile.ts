@@ -14,7 +14,7 @@ export const BootstrapCaptchaTurnstile: core.serialization.ObjectSchema<
 });
 
 export declare namespace BootstrapCaptchaTurnstile {
-    interface Raw {
+    export interface Raw {
         site_key: string;
     }
 }

@@ -9,5 +9,5 @@ import * as core from "../../../../core";
 export const Bio: core.serialization.Schema<serializers.Bio.Raw, Rivet.Bio> = core.serialization.string();
 
 export declare namespace Bio {
-    type Raw = string;
+    export type Raw = string;
 }
