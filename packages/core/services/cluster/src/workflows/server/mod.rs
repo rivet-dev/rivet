@@ -184,6 +184,7 @@ async fn provision_server(
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 							PoolType::Fdb => linode::types::FirewallPreset::Fdb,
 							PoolType::Worker => linode::types::FirewallPreset::Worker,
+							PoolType::Nats => linode::types::FirewallPreset::Nats,
 						},
 						vlan_ip: Some(vlan_ip.ip()),
 						vlan_ip_net: Some(vlan_ip.ip_net()),
@@ -518,6 +519,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		PoolType::Ats => provision_config.pools.ats.vlan_addr_range(),
 		PoolType::Fdb => provision_config.pools.fdb.vlan_addr_range(),
 		PoolType::Worker => provision_config.pools.worker.vlan_addr_range(),
+		PoolType::Nats => provision_config.pools.nats.vlan_addr_range(),
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 
@@ -536,6 +538,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		PoolType::Ats => vec![PoolType::Ats as i32],
 		PoolType::Fdb => vec![PoolType::Fdb as i32],
 		PoolType::Worker => vec![PoolType::Worker as i32],
+		PoolType::Nats => vec![PoolType::Nats as i32],
 	};
 
 	let (network_idx,) = sql_fetch_one!(

@@ -27,6 +27,9 @@ pub enum Error {
 	#[error("build nats (io): {0}")]
 	BuildNatsIo(std::io::Error),
 
+	#[error("build nats (addresses): {0}")]
+	BuildNatsAddresses(anyhow::Error),
+
 	#[error("build redis: {0}")]
 	BuildRedis(redis::RedisError),
 

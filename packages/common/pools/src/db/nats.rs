@@ -1,6 +1,8 @@
-use rand::seq::SliceRandom;
-use rivet_config::Config;
 use std::str::FromStr;
+
+use anyhow::Context;
+use rivet_config::Config;
+use service_discovery::ServiceDiscovery;
 
 use crate::Error;
 
@@ -10,13 +12,27 @@ pub type NatsPool = async_nats::Client;
 pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Error> {
 	let nats = &config.server().map_err(Error::Global)?.nats;
 
-	// Randomize the URLs in order to randomize the node priority and load
-	// balance connections across nodes.
-	let mut shuffled_urls = nats.urls.clone();
-	shuffled_urls.shuffle(&mut rand::thread_rng());
+	let mut addrs = match &nats.addresses {
+		rivet_config::config::Addresses::Dynamic { fetch_endpoint } => {
+			let sd = ServiceDiscovery::new(fetch_endpoint.clone());
+
+			sd.fetch()
+				.await
+				.context("failed to fetch services")
+				.map_err(Error::BuildNatsAddresses)?
+				.into_iter()
+				.filter_map(|server| server.lan_ip)
+				.map(|lan_ip| format!("nats://{lan_ip}:{}", nats.port()))
+				.collect::<Vec<_>>()
+		}
+		rivet_config::config::Addresses::Static(addresses) => addresses
+			.into_iter()
+			.map(|addr| format!("nats://{addr}"))
+			.collect::<Vec<_>>(),
+	};
 
 	// Parse nodes
-	let server_addrs = shuffled_urls
+	let server_addrs = addrs
 		.iter()
 		.map(|url| async_nats::ServerAddr::from_str(url.as_ref()))
 		.collect::<Result<Vec<_>, _>>()
@@ -30,6 +46,7 @@ pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Erro
 	} else {
 		async_nats::ConnectOptions::new()
 	};
+
 	options = options
 		.client_capacity(256)
 		.subscription_capacity(8192)

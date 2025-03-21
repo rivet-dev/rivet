@@ -12,6 +12,7 @@ impl ApiFrom<models::ProvisionPoolType> for cluster::types::PoolType {
 			models::ProvisionPoolType::PegboardIsolate => cluster::types::PoolType::PegboardIsolate,
 			models::ProvisionPoolType::Fdb => cluster::types::PoolType::Fdb,
 			models::ProvisionPoolType::Worker => cluster::types::PoolType::Worker,
+			models::ProvisionPoolType::Nats => cluster::types::PoolType::Nats,
 		}
 	}
 }
@@ -26,6 +27,7 @@ impl ApiFrom<cluster::types::PoolType> for models::ProvisionPoolType {
 			cluster::types::PoolType::PegboardIsolate => models::ProvisionPoolType::PegboardIsolate,
 			cluster::types::PoolType::Fdb => models::ProvisionPoolType::Fdb,
 			cluster::types::PoolType::Worker => models::ProvisionPoolType::Worker,
+			cluster::types::PoolType::Nats => models::ProvisionPoolType::Nats,
 		}
 	}
 }

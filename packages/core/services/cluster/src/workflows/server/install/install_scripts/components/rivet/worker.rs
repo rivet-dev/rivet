@@ -7,7 +7,7 @@ use super::{
 	super::{
 		fdb::FDB_VERSION,
 		traefik::{
-			TUNNEL_CRDB_PORT, TUNNEL_NATS_PORT, TUNNEL_OTEL_PORT, TUNNEL_PROMETHEUS_PORT,
+			TUNNEL_CRDB_PORT, TUNNEL_OTEL_PORT, TUNNEL_PROMETHEUS_PORT,
 			TUNNEL_REDIS_EPHEMERAL_PORT, TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT,
 		},
 	},
@@ -120,7 +120,9 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				..Default::default()
 			}),
 			nats: Nats {
-				urls: vec![Url::parse(&format!("nats://127.0.0.1:{TUNNEL_NATS_PORT}"))?],
+				addresses: Addresses::Dynamic {
+					fetch_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}/provision/datacenters/___DATACENTER_ID___/servers?pools=nats"))?,
+				},
 				..server_config.nats.clone()
 			},
 			s3: S3 {

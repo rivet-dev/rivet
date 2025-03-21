@@ -190,7 +190,7 @@ pub async fn status(
 			})),
 			resources: match &query.build {
 				StatusQueryBuild::WsIsoalte => None,
-				StatusQueryBuild::WsContainer => Some(Box::new(models::ActorResources {
+				StatusQueryBuild::WsContainer => Some(Box::new(models::ActorsResources {
 					cpu: 100,
 					memory: 128,
 				})),

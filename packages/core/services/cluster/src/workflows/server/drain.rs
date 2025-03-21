@@ -50,7 +50,7 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 			})
 			.await?;
 		}
-		PoolType::Ats | PoolType::Fdb | PoolType::Worker => {}
+		PoolType::Ats | PoolType::Fdb | PoolType::Worker | PoolType::Nats => {}
 	}
 
 	Ok(())

@@ -10,6 +10,7 @@ types:
       - pegboard_isolate
       - fdb
       - worker
+      - nats
 
   Server:
     properties:

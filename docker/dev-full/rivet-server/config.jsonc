@@ -77,9 +77,11 @@
 			"secret_access_key": "admin"
 		},
 		"nats": {
-			"urls": [
-				"nats://nats:4222"
-			]
+			"addresses": {
+				"static": [
+					"nats:4222"
+				]
+			}
 		},
 		// IMPORTANT:
 		// - Generate your own JWT tokens before shipping to production as seen in the

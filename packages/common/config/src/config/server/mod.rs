@@ -14,6 +14,7 @@ pub mod default_ports {
 	pub use super::rivet::default_ports::*;
 
 	pub const FDB: u16 = 4500;
+	pub const NATS: u16 = 4222;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -393,7 +394,8 @@ pub enum CockroachDbUserRole {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Nats {
-	pub urls: Vec<Url>,
+	pub addresses: Addresses,
+	pub port: Option<u16>,
 	#[serde(default)]
 	pub username: Option<String>,
 	#[serde(default)]
@@ -403,10 +405,17 @@ pub struct Nats {
 impl Default for Nats {
 	fn default() -> Self {
 		Self {
-			urls: vec![Url::parse("nats://localhost:4222").unwrap()],
+			addresses: Addresses::Static(vec!["127.0.0.1:4222".to_string()]),
+			port: None,
 			username: None,
 			password: None,
 		}
+	}
+}
+
+impl Nats {
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(self::default_ports::NATS)
 	}
 }
 

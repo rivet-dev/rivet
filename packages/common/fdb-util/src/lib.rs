@@ -61,8 +61,14 @@ pub fn init(fdb_cluster_path: &Path) {
 	tokio::spawn(fdb_health_check(fdb_cluster_path.to_path_buf()));
 }
 
-async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
-	let db = handle(&fdb_cluster_path)?;
+async fn fdb_health_check(fdb_cluster_path: PathBuf) {
+	let db = match handle(&fdb_cluster_path) {
+		Ok(db) => db,
+		Err(err) => {
+			tracing::error!(?err, "failed to get fdb handle");
+			return;
+		}
+	};
 
 	loop {
 		let start_instant = Instant::now();
@@ -80,7 +86,9 @@ async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
 					.observe(dt);
 				metrics::FDB_MISSED_PING.with_label_values(&[]).set(0);
 
-				res?;
+				if let Err(err) = res {
+					tracing::error!(?err, "error checking fdb ping");
+				}
 			}
 			Err(_) => {
 				metrics::FDB_MISSED_PING.with_label_values(&[]).set(1);

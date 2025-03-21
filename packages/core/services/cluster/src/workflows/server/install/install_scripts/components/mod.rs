@@ -1,6 +1,7 @@
 use indoc::indoc;
 
 pub mod fdb;
+pub mod nats;
 pub mod nomad;
 pub mod ok_server;
 pub mod pegboard;

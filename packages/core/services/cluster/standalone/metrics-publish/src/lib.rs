@@ -131,6 +131,7 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 		PoolType::PegboardIsolate,
 		PoolType::Fdb,
 		PoolType::Worker,
+		PoolType::Nats,
 	]
 	.into_iter()
 	.map(|pool_type| {

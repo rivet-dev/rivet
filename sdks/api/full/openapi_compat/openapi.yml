@@ -13550,6 +13550,7 @@ components:
         - pegboard_isolate
         - fdb
         - worker
+        - nats
     ProvisionServer:
       type: object
       properties:

@@ -17,7 +17,6 @@ pub const TUNNEL_REDIS_PERSISTENT_PORT: u16 = 5042;
 pub const TUNNEL_CLICKHOUSE_PORT: u16 = 5043;
 pub const TUNNEL_CLICKHOUSE_NATIVE_PORT: u16 = 5044;
 pub const TUNNEL_S3_PORT: u16 = 5045;
-pub const TUNNEL_NATS_PORT: u16 = 5046;
 pub const TUNNEL_PROMETHEUS_PORT: u16 = 5047;
 pub const TUNNEL_OTEL_PORT: u16 = 5048;
 
@@ -69,10 +68,6 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 	TunnelService {
 		name: "s3",
 		port: TUNNEL_S3_PORT,
-	},
-	TunnelService {
-		name: "nats",
-		port: TUNNEL_NATS_PORT,
 	},
 	TunnelService {
 		name: "prometheus",

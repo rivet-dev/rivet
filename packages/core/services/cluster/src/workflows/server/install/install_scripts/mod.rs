@@ -72,6 +72,10 @@ pub async fn gen_install(
 		PoolType::Worker => {
 			script.push(components::rivet::worker::install(config).await?);
 		}
+		PoolType::Nats => {
+			script.push(components::docker::install());
+			script.push(components::nats::install(config)?);
+		}
 	}
 
 	// MARK: Common (post)
@@ -196,6 +200,9 @@ pub async fn gen_initialize(
 					scrape_interval: 15,
 				},
 			);
+		}
+		PoolType::Nats => {
+			script.push(components::nats::fetch_routes(config, server_token)?);
 		}
 	}
 

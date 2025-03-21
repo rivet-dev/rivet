@@ -18,6 +18,7 @@ pub enum FirewallPreset {
 	Ats,
 	Fdb,
 	Worker,
+	Nats,
 }
 
 impl FirewallPreset {
@@ -35,6 +36,7 @@ impl FirewallPreset {
 			FirewallPreset::Ats => provision_config.pools.ats.firewall_rules(),
 			FirewallPreset::Fdb => provision_config.pools.fdb.firewall_rules(),
 			FirewallPreset::Worker => provision_config.pools.worker.firewall_rules(),
+			FirewallPreset::Nats => provision_config.pools.nats.firewall_rules(),
 		})
 	}
 }
@@ -47,6 +49,7 @@ impl std::fmt::Display for FirewallPreset {
 			FirewallPreset::Ats => write!(f, "ats"),
 			FirewallPreset::Fdb => write!(f, "fdb"),
 			FirewallPreset::Worker => write!(f, "worker"),
+			FirewallPreset::Nats => write!(f, "nats"),
 		}
 	}
 }
