@@ -12,7 +12,7 @@ import {
 	Outlet,
 	createRootRouteWithContext,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/router-devtools";
+import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { usePostHog } from "posthog-js/react";
 import { useKonami } from "react-konami-code";

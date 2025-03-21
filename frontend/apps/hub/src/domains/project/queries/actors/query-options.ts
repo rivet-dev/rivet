@@ -30,6 +30,8 @@ export const projectActorsQueryOptions = ({
 			{ includeDestroyed, tags },
 		] as const,
 		refetchInterval: 5000,
+		staleTime: 0,
+		gcTime: 0,
 		initialPageParam: "",
 		queryFn: ({
 			signal: abortSignal,
@@ -150,6 +152,7 @@ export const actorQueryOptions = ({
 					(arg) => arg !== "",
 				),
 			},
+			tags: data.actor.tags as Record<string, string>,
 			endpoint: createActorEndpoint(data.actor.network),
 		}),
 	});

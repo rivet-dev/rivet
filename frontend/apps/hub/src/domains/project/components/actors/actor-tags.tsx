@@ -9,7 +9,7 @@ import { Icon, faTag } from "@rivet-gg/icons";
 import { type ReactNode, forwardRef } from "react";
 
 const BUILT_IN_TAGS = {
-	actors: ["name"],
+	actors: ["name", "framework", "framework-version"],
 	builds: ["name", "current"],
 };
 

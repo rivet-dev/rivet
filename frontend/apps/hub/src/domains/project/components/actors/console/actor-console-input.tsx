@@ -1,5 +1,4 @@
-import { Button, DocsSheet, ScrollArea } from "@rivet-gg/components";
-import { Icon, faBooks } from "@rivet-gg/icons";
+import { Button, ScrollArea } from "@rivet-gg/components";
 import { useRef } from "react";
 import { useActorRpcs, useActorWorker } from "../worker/actor-worker-context";
 import { ActorConsoleMessage } from "./actor-console-message";
@@ -24,15 +23,6 @@ export function ActorConsoleInput() {
 					/>
 				</ActorConsoleMessage>
 				<div className="flex items-center mt-1 pb-1">
-					<DocsSheet title="Console" path="docs/ui" showTooltip>
-						<Button
-							size="icon-xs"
-							variant="outline"
-							className="place-self-start ml-4 mr-3 "
-						>
-							<Icon icon={faBooks} />
-						</Button>
-					</DocsSheet>
 					<div className="flex flex-wrap gap-1">
 						{rpcs.map((rpc) => (
 							<Button

@@ -1,32 +1,28 @@
 import * as GroupCreateForm from "@/domains/group/forms/group-create-form";
 import { useGroupCreateMutation } from "@/domains/group/queries";
-import { BillingProvider } from "@/domains/project/components/billing/billing-context";
-import { BillingPlans } from "@/domains/project/components/billing/billing-plans";
 import * as GroupCreateProjectForm from "@/domains/project/forms/group-create-project-form";
 import {
 	projectsByGroupQueryOptions,
+	projectsQueryOptions,
 	useProjectCreateMutation,
 } from "@/domains/project/queries";
+import { queryClient } from "@/queries/global";
 import type { Rivet } from "@rivet-gg/api";
-import { Rivet as RivetEe } from "@rivet-gg/api-ee";
 import {
 	Card,
 	CardContent,
 	CardDescription,
 	CardHeader,
 	CardTitle,
-	Skeleton,
 } from "@rivet-gg/components";
 import * as Sentry from "@sentry/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Navigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Suspense, useState } from "react";
+import { useState } from "react";
 
 enum Step {
 	CreateGroup = 0,
 	CreateProject = 1,
-	ChoosePlan = 2,
 }
 
 interface IntroProps {
@@ -76,14 +72,31 @@ export function Intro({
 								name: initialProjectName ?? "",
 							}}
 							onSubmit={async (values) => {
-								await createProject({
+								const { gameId } = await createProject({
 									displayName: values.name,
 									nameId: values.slug,
 									developerGroupId:
 										createdGroupResponse?.groupId ||
 										data[0].groupId,
 								});
-								setStep(Step.ChoosePlan);
+
+								const { games } = await queryClient.fetchQuery(
+									projectsQueryOptions(),
+								);
+
+								const project = games.find(
+									(game) => game.gameId === gameId,
+								);
+
+								if (!project) {
+									Sentry.captureMessage(
+										"Project not found after creation",
+										"fatal",
+									);
+									return;
+								}
+
+								return onFinish?.(project);
 							}}
 						>
 							<CardHeader>
@@ -115,87 +128,6 @@ export function Intro({
 					</motion.div>
 				</motion.div>
 			</Card>
-		);
-	}
-
-	if (step === Step.ChoosePlan) {
-		if (!groupId || !project) {
-			// At this point those values should be defined, if not, we should redirect to the home page
-			// It's unlikely that this will happen, but it's better to be safe than sorry
-			Sentry.captureMessage(
-				"Group or project not defined in Intro component",
-				"fatal",
-			);
-			return <Navigate to="/" replace />;
-		}
-		return (
-			<Suspense
-				fallback={
-					<Card asChild>
-						<motion.div
-							layoutId="card"
-							key="choose-plan"
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-						>
-							<CardHeader>
-								<CardTitle>
-									<Skeleton className="h-6 w-24" />
-								</CardTitle>
-								<CardDescription>
-									<Skeleton className="h-4 w-48" />
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className="grid md:grid-cols-4 gap-4">
-									<Skeleton className="w-[250px] h-[445px]" />
-									<Skeleton className="w-[250px] h-[445px]" />
-									<Skeleton className="w-[250px] h-[445px]" />
-									<Skeleton className="w-[250px] h-[445px]" />
-								</div>
-							</CardContent>
-						</motion.div>
-					</Card>
-				}
-			>
-				<Card asChild>
-					<motion.div
-						layoutId="card"
-						key="choose-plan"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-					>
-						<CardHeader>
-							<CardTitle>Choose a Plan</CardTitle>
-							<CardDescription>
-								You've created a team! Now you can create
-								projects and invite teammates.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<BillingProvider
-								groupId={groupId}
-								projectId={project.gameId}
-							>
-								<BillingPlans
-									projectId={project.gameId}
-									onChoosePlan={() => {
-										return onFinish?.(project);
-									}}
-									config={{
-										[RivetEe.ee.billing.Plan.Trial]: {
-											cancelLabel: "Get Started",
-											onCancel: () => {
-												return onFinish?.(project);
-											},
-										},
-									}}
-								/>
-							</BillingProvider>
-						</CardContent>
-					</motion.div>
-				</Card>
-			</Suspense>
 		);
 	}
 

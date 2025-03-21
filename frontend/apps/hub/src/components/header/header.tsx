@@ -150,7 +150,13 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 							asChild
 							className="hidden md:inline-block border px-4 py-2 rounded-md"
 						>
-							<Link to="." search={{ modal: "feedback" }}>
+							<Link
+								to="."
+								search={(old) => ({
+									...old,
+									modal: "feedback",
+								})}
+							>
 								Feedback
 							</Link>
 						</NavItem>

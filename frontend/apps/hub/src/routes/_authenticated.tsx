@@ -52,7 +52,7 @@ function Modals() {
 
 	const { groupId, modal } = search;
 
-	const handleonOpenChange = (value: boolean) => {
+	const handleOnOpenChange = (value: boolean) => {
 		if (!value) {
 			navigate({ search: { modal: undefined } });
 		}
@@ -69,7 +69,7 @@ function Modals() {
 				}
 				dialogProps={{
 					open: modal === "create-project",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 			<CreateGroupDialog
@@ -81,7 +81,7 @@ function Modals() {
 				}
 				dialogProps={{
 					open: modal === "create-group",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 		</>

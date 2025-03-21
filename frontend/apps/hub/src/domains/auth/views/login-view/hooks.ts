@@ -73,10 +73,7 @@ export const useOtpFormSubmitHandler = ({
 					});
 				}
 				await refreshToken();
-				await queryClient.refetchQueries({
-					...selfProfileQueryOptions(),
-					exact: true,
-				});
+				await queryClient.invalidateQueries({ refetchType: "all" });
 				return onSuccess?.();
 			} catch (error) {
 				Sentry.captureException(error);
@@ -89,7 +86,7 @@ export const useOtpFormSubmitHandler = ({
 		[
 			mutateAsync,
 			onSuccess,
-			queryClient.refetchQueries,
+			queryClient.invalidateQueries,
 			refreshToken,
 			verificationId,
 		],
