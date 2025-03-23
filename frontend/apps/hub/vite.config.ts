@@ -65,6 +65,9 @@ export default defineConfig({
 			include: [/@rivet-gg\/components/, /node_modules/],
 		},
 	},
+	optimizeDeps: {
+		include: ["@fortawesome/*", "@rivet-gg/icons"],
+	},
 	worker: {
 		format: "es",
 	},
