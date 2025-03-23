@@ -1,0 +1,852 @@
+import tweetImg from "./tweet.png";
+import overviewImg from "./overview-diagram.png";
+import Link from "next/link";
+
+export const author = "nathan-flurry"
+export const published = "2025-03-23"
+export const category = "technical"
+export const keywords = ["durable-objects","actor-core","standard","w3c"]
+
+# Considering A W3C Standard For Stateful Serverless
+
+**We're Rivet, a new open-source, self-hostable serverless platform with a focus on Stateful Serverless. If you want to support our mission of building a production-ready and self-hostable serverless runtime, <Link href="https://github.com/rivet-gg/rivet" target="_blank">give us a star on GitHub</Link>!**
+
+Earlier today, I was <Link href="https://x.com/janwilmake/status/1903580372920590667" target="_blank">summoned</Link> by the wonderful <Link href="https://x.com/janwilmake" target="_blank">@janwilmake</Link> and <Link href="https://x.com/threepointone" target="_blank">@threepointone</Link> regarding my thoughts on a standard for stateful serverless.
+
+<Link href="https://x.com/janwilmake/status/1903580372920590667" target="_blank"><Image src={tweetImg} alt="threepointone tweet" /></Link>
+
+Having implemented a cloud-agnostic stateful serverless library called <Link href="https://github.com/rivet-gg/actor-core" target="_blank">ActorCore</Link>, I have a lot of experience with what's required to build a portable standard. And thus, I derailed my Saturday to write them down here.
+
+## What Is Stateful Serverless?
+
+Unless you're deep in to <Link href="https://developers.cloudflare.com/durable-objects/" target="_blank">Cloudflare Durable Objects</Link> or <Link href="https://rivet.gg/docs/javascript-runtime" target="_blank">Rivet Actors</Link>, there's a good chance you've never heard of "stateful serverless."
+
+**Stateful serverless** allows serverless functions to maintain state across multiple invocations. They're very similar to the **actor model** or **Web Workers (specifically `SharedWorker`) on the server**. The most popular implementation of this today is <Link href="https://developers.cloudflare.com/durable-objects/" target="_blank">Durable Objects</Link>.
+
+The adoption of stateful serverless is fairly new: Durable Objects was announced <Link href="https://blog.cloudflare.com/introducing-workers-durable-objects/" target="_blank">4.5 years ago</Link> and only recently saw widespread use over the past couple years.
+
+### Stateless Serverless (Functions) vs Stateful Serverless (Actors)
+
+**Stateless serverless** is what you'd normally think of when you hear **"serverless functions."** An example implementation on Cloudflare Workers would look like this:
+
+```typescript
+export default {
+  fetch(request, env) {
+    return new Response('Hello World!');
+  }
+}
+```
+
+On the other hand, **stateful serverless provides an infinitely running process with storage**. An example implementation on Cloudflare Workers would look like this:
+
+```typescript
+export class Counter extends DurableObject {
+  async increment() {
+    const storedCounter = await this.ctx.storage.get('counter') || 0;
+    await this.ctx.storage.put('counter', storedCounter + 1);
+  }
+}
+```
+
+### Primary Use Cases
+
+The primary use cases of stateful serverless are:
+
+* **Stateful Services**: Applications where maintaining state across interactions is critical. For example, **Collaborative Apps** with shared editing and automatic persistence.
+* **Realtime Systems**: Applications requiring fast, in-memory state modifications or push updates to connected clients. For example, **Multiplayer Games** with game rooms and player state.
+* **Long-Running Processes**: Tasks that execute over extended periods or in multiple steps. For example, **AI Agents** with ongoing conversations and stateful tool calls.
+* **Durability**: Processes that must survive crashes and restarts without data loss. For example, **Durable Execution** workflows that continue after system restarts.
+* **Horizontal Scalability**: Systems that need to scale by distributing load across many instances. For example, **Realtime Stream Processing** for stateful event handling.
+* **Local-First Architecture**: Systems that synchronize state between offline clients. For example, **Local-First Sync** between devices.
+
+Read more about stateful serverless <Link href="https://github.com/rivet-gg/actor-core" target="_blank">here</Link>.
+
+### Scope Of This Proposal
+
+For the purpose of this article, we'll assume **stateful serverless includes message passing & persistent storage**. This means we're not going to consider actor runtimes, such as Erlang/OTP, Akka, Orleans, Actix, and Swift Actors which do not include storage as a core component.
+
+## Why Should I Care?
+
+Even if you've never heard of stateful serverless, you're probably using a site on a daily basis that already relies on stateful serverless with technologies like Cloudflare Durable Objects.
+
+Similarly, a significant portion of these applications are powered by actor runtimes:
+
+- WhatsApp (notoriously acq for $19B with Erlang/OTP having only 35 engineers)
+- Discord
+- LinkedIn
+- Twitter/X
+- FoundationDB (powering Apple, Snowflake, DataDog)
+- Many, many more
+
+## Why Build A Web Standard?
+
+### Customers Wary Of Vendor-Lock
+
+In 2025, customers are **wary of vendor-locking themselves to cloud services**. It's common for vendor-locked providers to either shut down, turn out to be unreliable, or price gouge contracts because their customers cannot leave.
+
+Therefore, a standard allows all platforms offering stateful serverless to become a compelling offering. It's a rising tide: more competition means wider adoption and more customers.
+
+For example: though AWS is the leading cloud provider and pushes their own closed-source & non-standard software like DynamoDB & Lambda, **they still need to provide standard- and open-source-compatible software** like Redis (ElastiCache), Cassandra (Keyspace), Postgres/MySQL (Aurora) in order to remain an attractive offering for customers concerned about vendor lock.
+
+### Incentivize More Providers
+
+**A standard would incentivize more cloud providers to enter the stateful serverless space.** Currently, only Cloudflare, Rivet, and ActorCore offer this capability, leaving a massive opportunity for other serverless cloud providers to adopt stateful serverless. With a common standard, more frameworks & developers can adopt this model.
+
+## Today's Stateful Serverless Implementations
+
+### Cloudflare Durable Objects: The Incumbent
+
+Today, [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) are the incumbent of stateful serverless cloud providers.
+
+A Durable Object looks something like this:
+
+```typescript
+export class Counter extends DurableObject {
+  async fetch(request) {
+    let value = await this.ctx.storage.get("counter") || 0;
+    await this.ctx.storage.put("counter", value + 1);
+    return new Response(`Counter value: ${value + 1}`);
+  }
+}
+```
+
+### Rivet: Open-Source Serverless Infrastructure
+
+I'm the founder of Rivet and have a vested interest in seeing stateful serverless become a standard. Rivet provides an open-source stateful serverless platform that can be easily self-hosted.
+
+We also provide a handful of features in our runtime that don't make sense to be part of a standard, since the best W3C standards build on existing web standards:
+
+- [Docker containers for non-JavaScript applications](https://rivet.gg/docs/container-runtime)
+- [HTTP, UDP, and TCP support](https://rivet.gg/docs/networking)
+- [Advanced lifecycle management](https://rivet.gg/docs/durability)
+- [Actor tagging](https://rivet.gg/docs/api/actors/create) for advanced multi-tenant applications
+- [Upload builds via API](https://rivet.gg/docs/api/builds/prepare) for running sandboxed, user-generated applications
+- [Advanced control over actor upgrades](https://rivet.gg/docs/api/actors/upgrade-all) for companies with specific use cases
+- [Fine-grained control over where your actor is running](https://rivet.gg/docs/api/regions/list)
+- A developer-friendly REST API for managing Rivet Actors
+
+We encourage developers building on Rivet to use [ActorCore](https://github.com/rivet-gg/actor-core). However, we also provide a [low-level API](https://rivet.gg/docs/javascript-runtime) for defining actors:
+
+```typescript
+import type { ActorContext } from "@rivet-gg/actor";
+import * as http from "http";
+
+export default {
+  async start(ctx: ActorContext) {
+    // Get the port from environment variables or use a default
+    const port = parseInt(process.env.PORT_HTTP || "8080");
+    console.log(`HTTP server running on port ${port}`);
+    
+    // Create an HTTP server
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(`Hello from Rivet Actor ${ctx.metadata.actor.id} running in ${ctx.metadata.region.id}!`);
+    });
+    
+    // Start listening on the specified port
+    server.listen(port);
+    
+    // Keep the actor running until explicitly destroyed
+    await new Promise((resolve) => {});
+  }
+};
+```
+
+This should look familiar to anyone who has written code for other serverless platforms supporting the WinterTC ESM-style function.
+
+Unlike Durable Objects, Rivet's API design opts to lean in to Unix-like patterns such as using `SIGINT` signals, leveraging `process.exit`, and using environment variables.
+
+Check out the [source code on GitHub](https://github.com/rivet-gg/rivet).
+
+### ActorCore Framework: Stateful Serverless On Any Cloud
+
+At Rivet, we also manage a framework called [ActorCore](https://github.com/rivet-gg/actor-core) that provides a Durable Object-like experience on any cloud that provides _stateless_ serverless.
+
+An ActorCore Actor definition looks something like this:
+
+```typescript
+import { actor } from "actor-core";
+
+const chatRoom = actor({
+  state: { messages: [] },
+  actions: {
+    // receive an action call from the client
+    sendMessage: (c, username, message) => {
+      // save message to persistent storage
+      c.state.messages.push({ username, message });
+
+      // broadcast message to all clients
+      c.broadcast("newMessage", username, message);
+    },
+    // allow client to request message history
+    getMessages: (c) => c.state.messages
+  }
+});
+```
+
+Under the hood is where it gets interesting: ActorCore is intended to support as many platforms as possible and is **completely abstracted with drivers**. By doing so, ActorCore supports Rivet, Cloudflare Durable Objects, Bun, Node.js. Vercel, Supabase, Deno, and Lambda are coming in the near future.
+
+These drivers provide a **peek at what a standard might require**, since they're already abstracted to be platform-agnostic:
+
+**[ActorDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/actor/driver.ts#L12)**: Manages actor state, lifecycle, and persistence
+
+```typescript
+export interface ActorDriver {
+	kvGet(actorId: string, key: KvKey): Promise<KvValue | undefined>;
+	kvGetBatch(actorId: string, key: KvKey[]): Promise<(KvValue | undefined)[]>;
+	kvPut(actorId: string, key: KvKey, value: KvValue): Promise<void>;
+	kvPutBatch(actorId: string, key: [KvKey, KvValue][]): Promise<void>;
+	kvDelete(actorId: string, key: KvKey): Promise<void>;
+	kvDeleteBatch(actorId: string, key: KvKey[]): Promise<void>;
+	setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void>;
+}
+```
+
+**[ManagerDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/manager/driver.ts#L5)**: Handles actor discovery, routing, and scaling
+
+```typescript
+export interface ManagerDriver {
+	getForId(input: GetForIdInput): Promise<GetActorOutput | undefined>;
+	getWithTags(input: GetWithTagsInput): Promise<GetActorOutput | undefined>;
+	createActor(input: CreateActorInput): Promise<CreateActorOutput>;
+}
+
+export interface GetForIdInput<E extends Env = any> {
+	c?: HonoContext<E>;
+	baseUrl: string;
+	actorId: string;
+}
+
+export interface GetWithTagsInput<E extends Env = any> {
+	c?: HonoContext<E>;
+	baseUrl: string;
+	name: string;
+	tags: ActorTags;
+}
+
+export interface GetActorOutput<E extends Env = any> {
+	c?: HonoContext<E>;
+	endpoint: string;
+	name: string;
+	tags: ActorTags;
+}
+
+export interface CreateActorInput<E extends Env = any> {
+	c?: HonoContext<E>;
+	baseUrl: string;
+	name: string;
+	tags: ActorTags;
+	region?: string;
+}
+
+export interface CreateActorOutput {
+	endpoint: string;
+}
+```
+
+There is also a **[CoordinatedDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/topologies/coordinate/driver.ts#L29)** that provides support for implementing actors over peer-to-peer for platforms that don't natively support stateful serverless. This would not apply to an actor standard.
+
+Read more about [building your own ActorCore drivers](https://github.com/rivet-gg/actor-core/tree/main/docs).
+
+Check out the [source code on GitHub](https://github.com/rivet-gg/rivet).
+
+### Cloudflare Agents Framework: Moving Beyond Durable Objects
+
+The [Cloudflare Agents](https://developers.cloudflare.com/agents/) framework is for AI-powered agents to operate on the Durable Objects infrastructure.
+
+As stated in their [launch blog post](https://blog.cloudflare.com/build-ai-agents-on-cloudflare/):
+
+> Over the coming weeks, expect to see ... the ability to self-host agents on your own infrastructure.
+
+Purely theorizing: a standard for stateful serverless might provide the foundation for this.
+
+### Web Workers (`SharedWorker`): A Familiar W3C Standard
+
+You can think of stateful serverless like: `SharedWorker` in the cloud and with persistent storage.
+
+Though designed for client-side concurrency, Web Workers offer a programming model that closely resembles what we're discussing for server-side actors. The Web Workers API already has many of the core concepts needed for a stateful serverless standard:
+
+1. **Isolated Execution Context**: Each worker runs in its own isolated environment.
+2. **Message-Based Communication**: Workers communicate via structured message passing.
+3. **Structured Cloning**: Workers use structured cloning to transfer complex data types.
+
+Here's a comparison of how Web Workers operate versus a potential stateful serverless actor:
+
+```typescript
+// Web Worker (browser)
+// main.js 
+const worker = new Worker('worker.js');
+worker.postMessage({ type: 'INCREMENT', value: 5 });
+worker.onmessage = event => console.log('Counter:', event.data);
+
+// worker.js
+let counter = 0;
+self.onmessage = event => {
+  const { type, value } = event.data;
+  if (type === 'INCREMENT') {
+    counter += value;
+    self.postMessage(counter);
+  }
+};
+```
+
+The `onmessage` handler is very similar to the `fetch` handler in a Durable Object or Action in ActorCore.
+
+The key differences are:
+
+1. **Persistence**: Web Workers lose state when the page refreshes, while serverless actors maintain state between invocations.
+2. **Network Access**: Stateful serverless inherently supports network requests via fetch/WebSockets.
+3. **Lifecycle Management**: Serverless actors have advanced wake/sleep and scheduling capabilities.
+
+### Other Actor Runtimes: The Precursor To Stateful Serverless
+
+Runtimes like OTP (i.e. Erlang & Elixir & Gleam), Akka, Orleans, Actix, and Swift Actors all **lack built-in support for persisted state**. There are libraries that provide state for actors, but their models are significantly different than what we'll consider here. Additionally, we're focused on JavaScript since that's primary language for web standards.
+
+## Specification Goals
+
+For the purpose of this exploration, I'm going to **recommend sticking with web standards**, which is managed by the <Link href="https://www.w3.org/" target="_blank">W3C</Link> organization. Doing so allows us to **build on top of existing successful web standards**, such as <Link href="https://wintercg.org/" target="_blank">WinterCG</Link> and the <Link href="https://fetch.spec.whatwg.org/#request-class" target="_blank">fetch specification</Link> that are currently offered across almost all stateless serverless platforms already.
+
+The goals of this proposal should be to:
+
+- **Simplicity**: Implementing standards correctly is difficult, expensive, and highly error prone. Simpler is better.
+- **Build For Frameworks**: <Link href="https://hono.dev/" target="_blank">Hono</Link> and <Link href="https://itty.dev/itty-router/" target="_blank">itty-router</Link> already proved that frameworks are almost always used with serverless runtimes. Stateful serverless is already used widely with <Link href="https://www.partykit.io/" target="_blank">PartyKit</Link>, <Link href="https://github.com/rivet-gg/actor-core" target="_blank">ActorCore</Link>, <Link href="https://developers.cloudflare.com/agents/" target="_blank">Agents</Link>, and misc tools like <Link href="https://tinybase.org/" target="_blank">TinyBase</Link>. If possible, leave functionality up to frameworks to implement.
+- **Draw From <Link href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API" target="_blank">Web Workers</Link>**: Stateful serverless is very similar to Web Workers. Where possible refer to Web Workers to see what works well.
+
+### Classes vs Functions
+
+Durable Objects provides a class-based approach to stateful serverless (e.g. `class X extends DurableObject { ... }`). Rivet provides a functional approach (e.g. `export default { start () { ... } }`).
+
+Sticking to the WinterTC ESM-style makes sense. Additionally, it's similar to how Web Workers are already defined.
+
+
+### Alternative #1: Fetch-Based Communication
+
+This standard is a reach, since it's significantly different than anything any current stateful serverless platform implements today. The reason for this is for simplicity, portability, and consistency with existing standards.
+
+Both Rivet & Durable Objects use WinterTC-like `fetch` handlers to accept requests on Durable Objects/Rivet Actors. A more realistic spec would opt to use `fetch` handlers instead of `connect` and `onmessage` proposed later in this document.
+
+### Alternative #2: A CGI-Like Standard
+
+An alternative implementation is to consider something along the lines of [CGI](https://en.wikipedia.org/wiki/Common_Gateway_Interface) which provides a more Unix-like implementation of serverless functions & supports multiple languages. However, the industry has consolidated behind JavaScript & WebAssembly for serverless clouds because of the developer & cost efficiency. Additionally, CGI lacks many of the modern features that W3C specifications take into account for web standards. (Originally proposed by [Armin Ronacher](https://x.com/mitsuhiko).)
+
+## Overview Of The Standard
+
+<Image src={overviewImg} alt="Overview of architecture" />
+
+When referencing "actor," this is the same as a Durable Object and Rivet Actor. They likely won't be called actors in an actual implementation.
+
+### Creating, Initializing, & Addressing Actors
+
+**Current Implementation: Rivet & ActorCore**
+
+Rivet and ActorCore provide a powerful tagging system for organizing actors. This allows you to build more manageable multi-tenant applications with complex requirements. For example:
+
+Rivet allows you to create actors with the [`actors.create`](https://rivet.gg/docs/api/actors/create) endpoint. The API accepts environment variables to configure how the actor behaves.
+
+ActorCore allows passing tags to [`client.get({ /* tags */ })`](https://github.com/rivet-gg/actor-core/tree/main/packages/actor-core) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
+
+```typescript
+const client = createClient<App>("http://localhost:6420");
+const randomChannel = await client.chatRoom.get({ organization: "rivet", channel: "random" });
+```
+
+**Current Implementation: Durable Objects**
+
+To create a Durable Object on Cloudflare, you call the [`newUniqueId`](https://developers.cloudflare.com/durable-objects/api/namespace/#newuniqueid) method. This will give you a unique ID for a new actor.
+
+Cloudflare also provides a [`idFromName`](https://developers.cloudflare.com/durable-objects/api/namespace/#idfromname) method to get the ID of an actor from an arbitrary string. This ID is then used to resolve a Durable Object stub that you can send requests to. For example:
+
+```typescript
+const id = env.MY_DURABLE_OBJECT.idFromName("channel:rivet:random");
+const stub = env.MY_DURABLE_OBJECT.get(id);
+await stub.fetch(...);
+```
+
+Initializing actors on Cloudflare is initially odd: since Cloudflare doesn't have a concept of "created" or "destroyed." You have to manually set up your own RPC to set the initial state and call that right after creation. However, this implementation of not having state for an actor is simpler and leaves the functionality up to the framework.
+
+**Current Implementation: Web Workers**
+
+Web Workers does not need a dedicated naming API since it can just construct `SharedWorker` like: `new SharedWorker("worker.js")`.
+
+Web Workers do not accept any state on creation and require a similar mechanism to Cloudflare. However, this is likely because Web Workers do not persist the same way that actors do.
+
+**Proposal**
+
+The Cloudflare naming or Rivet tagging mechanisms are not required in a standard. For example, a proposal could provide _only_ a function like Rivet's [`actors.create`](https://rivet.gg/docs/api/actors/create) or Cloudflare's [`newUniqueId`](https://developers.cloudflare.com/durable-objects/api/namespace/#newuniqueid). Then the application developer is responsible for resolving actor IDs from their own input. ActorCore already does this for the Cloudflare Durable Objects adapter by using the global KV API.
+
+Constructing a `ServerlessWorker` object is intended to mimic the `SharedWorker` API closely. However, unlike `SharedWorker`, the script that's passed in does not dynamically download a script; the uploaded bundle to the server will already have a pre-built script at that path. (This script path part of the proposal needs a lot more thinking.)
+
+An example API could look like:
+
+```typescript server.js
+export default {
+	fetch(req) {
+		const workerId = createServerlessWorkerId();
+		const worker = new ServerlessWorker("./worker.js", workerId);
+		// ...
+	}
+}
+```
+
+To resolve with a custom name:
+
+```typescript server.js
+export default {
+	fetch(req) {
+		const workerId = kv.get("chat-room:random");  // `kv` is an imaginary database
+		const worker = new ServerlessWorker("./worker.js", workerId);
+		// ...
+	}
+}
+```
+
+### Terminating Actors
+
+**Current Implementation: Rivet**
+
+Rivet provides two ways to destroy an actor: use `process.exit(0)` or call [`actors.destroy`](https://rivet.gg/docs/api/actors/destroy) from the API.
+
+ActorCore will provide a `ctx.shutdown` method that delegates to `ActorDriver`, though is not currently implemented.
+
+**Current Implementation: Durable Objects**
+
+Cloudflare is a little odd when it comes to destroying. There is no concept of "created" or "destroyed" actor. To reset an actor, you clear the storage with [`deleteAll()`](https://developers.cloudflare.com/durable-objects/api/storage-api/#deleteall). While unintuitive, this leaves it up to the framework to implement.
+
+**Current Implementation: Web Workers**
+
+Web Workers's `SharedWorker` is automatically destroyed when all connections are closed. This is not relevant to stateful serverless.
+
+**Proposal**
+
+Add a `terminate` method on the actor itself, leave it up to the frameworks to implement destroying. For example:
+
+```typescript worker.js
+export default {
+	connect(event) {
+		self.terminate();
+	}
+}
+```
+
+### Request & Response
+
+**Current Implementation: Rivet**
+
+Both Rivet Actors & Durable Objects provide a way to serve requests to actors based on web standards.
+
+Rivet provides flexible networking infrastructure, including [UDP, TCP, and host networking](https://rivet.gg/docs/networking). To remain widely compatible, Rivet relies on the Deno implementation of the fetch handler with [`Deno.serve`](https://docs.deno.com/api/deno/~/Deno.serve). 
+
+**Current Implementation: Cloudflare**
+
+Durable Objects supports a similar [fetch handler](https://developers.cloudflare.com/durable-objects/best-practices/create-durable-object-stubs-and-send-requests/#invoking-the-fetch-handler), but also provides non-standard features like [RPC](https://developers.cloudflare.com/durable-objects/best-practices/create-durable-object-stubs-and-send-requests/).
+
+Both rely on different implementations for WebSockets, though this handled gracefully by libraries like [Hono's WebSocket helper](https://hono.dev/docs/helpers/websocket).
+
+There is a WinterTC proposal for a [Sockets API](https://github.com/wintercg/proposal-sockets-api), though I'm going to consider this out of the scope of this article since [Cloudflare's implementation](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/) is not currently supported on Durable Objects.
+
+**Current Implementation: Web Worker**
+
+However, Web Worker (`SharedWorker`) opts for using `onconnect` & `port.onmessage` like this:
+
+<CodeGroup>
+
+```typescript main.js
+const sharedWorker = new SharedWorker('sharedWorker.js');
+sharedWorker.port.postMessage({ action: 'greet', data: 'Hello from Tab' });
+sharedWorker.port.onmessage = function(event) {
+    console.log('Received response from SharedWorker:', event.data);
+};
+sharedWorker.port.start();
+```
+
+```typescript sharedWorker.js
+onconnect = (event) => {
+    const port = event.ports[0];
+
+    port.onmessage = (event) => {
+        const { action, data } = event.data;
+
+        if (action === 'greet') {
+            port.postMessage({ response: `SharedWorker received: ${data}` });
+        }
+    };
+};
+
+```
+</CodeGroup>
+
+**Proposal**
+
+This could go two ways: lean in to the existing [WinterTC for ESM-style handlers](https://github.com/wintercg/proposal-functions-api/tree/main) like Durable Objects and Rivet or opt for a simpler & portable interface like Web Workers.
+
+In my opinion, request/response should use ESM-style exports with the `SharedWorker` interface. This allows the simplicity of request/response & also enables full bidirectional streaming -- like a WebSocket but without the overhead.
+
+```typescript server.js
+export default {
+	fetch(conn) {
+		const workerId = createServerlessWorkerId();
+		const worker = new ServerlessWorker("./worker.js", workerId);
+		conn.port.postMessage({ action: 'greet', data: 'foo' });
+	}
+};
+```
+
+```typescript worker.js
+export default {
+	connect(conn) {
+		conn.onmessage = event => {
+			const { action, data } = event.data;
+
+			if (action === 'greet') {
+				conn.postMessage({ response: `Stateful serverless received: ${data}` });
+			}
+		};
+	}
+};
+```
+
+Coincidentally, this also feels very similar to socket.io whose API has proven itself as flexible & easy to understand.
+
+### Storage
+
+**Current Implementations: Rivet & Durable Objects & Deno**
+
+Both Rivet and Durable Objects support a raw KV interface to access data stored on the actor itself.
+
+While not specific to actors, Deno attempts to implement an [abstract KV interface](https://docs.deno.com/api/deno/~/Deno.Kv). However, this API is very opinionated to Deno Deploy and is by no means compatible across multiple clouds.
+
+**Why KV**
+
+Anything more (especially `IndexedDB`) is too complicated to expect cloud providers to implement correctly. `localStorage` has proven itself a formidable key-value store that's lasted the test of time.
+
+Frameworks can implement more advanced logic on top of key-value stores, just as they've done in the browser with `localStorage`.
+
+**Async**
+
+Regardless of what API this results in, it should be asynchronous. Cloudflare has gone as far as removing async code for their SQLite interface because they claim it's fast enough to not require an async context; the KV API could likely be made as simple as something like the browser's `localStorage` by making each key a synchronous get. However, platforms all implement KV differently, so this may not make sense. Additionally, it'd be impossible for compatibility layers to implement a KV API with an external medium.
+
+**Strings vs Structured Clone**
+
+`localStorage` currently only supports strings, which is what most developers are used to. 
+
+However, both Rivet & Cloudflare Workers support natively storing data types that implement [structured cloning](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm) which allows storing many types of data in a compact V8-compatible binary interface with high-performance serialization & deserialization.
+
+If structured cloning was a protocol defined earlier, `localStorage` would likely support it natively. Whatever storage mechanism is chosen should support structured cloning.
+
+**A Word On Complexity**
+
+W3C has a history of inventing incredibly complicated standards for storage that are both (a) hard to understand as developers and (b) difficult to implement as a platform.
+
+If you know how to use the [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) API from memory, consider me impressed.
+
+Additionally, the [Web SQL](https://developer.chrome.com/blog/deprecating-web-sql) was an alternative standard that was deprecated because of the complexity.
+
+Whatever the storage mechanism is, **keep it simple, easy to implement, and easy to understand**. Frameworks can always do the heavy lifting for you.
+
+**Consistency & Concurrency**
+
+If providing an async storage API, consistency & concurrency will be a concern. I guarantee you platforms will each implement this differently.
+
+This is a controversial opinion, but I believe that the default behavior should be the equivalent of Cloudflare's `ctx.storage.get(/* key*/, { allowConcurrency: true })` which allows concurrent operations to the same keys.
+
+**Input & Output Gates**
+
+Cloudflare Durable Objects provides the concept of [input & output gates](https://blog.cloudflare.com/durable-objects-easy-fast-correct-choose-three/#our-answer-make-it-automatic). This functionality can be implemented at the framework level, so this should not be included as part of the standard.
+
+Additionally, input & output gates do not work with WebSockets, which creates inconsistent behavior when using Durable Objects. For example, if migrating from using HTTP requests to WebSockets where each request is a message: your storage API is subtly going to no longer support output gates for each WebSocket message. (Please correct me if I'm misunderstanding this.)
+
+**Proposal**
+
+Provide a dead simple async structured clone-based KV API and let the platforms provide extra configs for concurrency. For example:
+
+```typescript worker.js
+export default {
+	connect(conn) {
+		conn.onmessage = async event => {
+			// Set a KV value from the input event
+			await storage.set(event.data.key, event.data.value);
+		};
+	}
+}
+```
+
+### Scheduling
+
+**Current Implementations**
+
+A core part of actors is to be able to run a function at an arbitrary timestamp.
+
+Cloudflare provides a simple `setAlarm` API that has a single alarm. If you already have an alarm, it will override that alarm. I like this API since it's significantly simpler than `setInterval` and `setTimeout` and lets frameworks provide more advanced APIs, such as CRONs.
+
+**Proposal**
+
+Provide an API similar to Cloudflare's [`setAlarm`](https://developers.cloudflare.com/durable-objects/api/storage-api/#setalarm). For example:
+
+```typescript worker.js
+// Set an alarm for 1 day
+setAlarm(Date.now() + 86_400 * 1000);
+
+export default {
+	alarm() {
+		console.log("It's been 1 day");
+	}
+}
+```
+
+### Sleeping & Upgrading & Host Migrations
+
+A core part of what makes actors phenomenal compared to something like [Kubernetes jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) or other container-based stateful workloads: actors can **automatically sleep when there are no active operations** and **wake upon either fetch or alarm**.
+
+However, this adds complexity when actors have tasks that need to run in the background.
+
+**Current Implementation: Rivet**
+
+Rivet works by providing a Unix-like `SIGINT` signal to the process when it plans to go to sleep. Your application is given time to clean up any work and exit gracefully when it's ready. This provides compatibility for a wide range of existing frameworks that implement the Node.js or Deno shutdown handler.
+
+**Current Implementation: Durable Objects**
+
+Durable Objects provides [`waitUntil`](https://developers.cloudflare.com/durable-objects/api/state/#waituntil). My understanding is this is effectively a noop since ([see note](https://developers.cloudflare.com/durable-objects/api/state/#waituntil)). However, I like the `waitUntil` API since it provides a JavaScript-y way of forcing the actor to stay awake.
+
+**Proposal**
+
+Provide an API similar to Durable Objects `waitUntil`. The provider can decide the maximum duration for this function. For example:
+
+```typescript worker.js
+async function doSomethingAsync() {
+	// ...
+}
+
+waitUntil(doSomethingAsync());
+```
+
+### Security Model
+
+A key benefit of building on existing WinterTC standards is inheriting its security model. The standard would leverage the same security boundaries that protect stateless serverless functions:
+
+1. **Gateway Pattern**: Stateful actors are only accessible through the stateless serverless fetch handler defined in WinterTC. This creates a protected gateway where all requests are authenticated and authorized before reaching any actor.
+
+2. **Isolation Boundaries**: Each actor runs in its own isolated environment, similar to Web Workers, preventing cross-actor data access without explicit communication channels.
+
+3. **No Direct Network Access**: Actors cannot be directly addressed from the public internet. All communication flows through the fetch handler, which can implement rate limiting, validation, and other security controls.
+
+4. **Permission Model**: The platform can implement permission scopes that restrict what actions each actor can perform, similar to how browser permissions work.
+
+This approach ensures that actors benefit from the robust security model already established for stateless serverless functions while adding the specific protections needed for stateful components.
+
+
+### Out Of Scope
+
+Items out of the scope for this spec:
+
+- **Supervisors**: Traditional actor runtimes use "supervisors" to automatically restart crashed actors. Assume that the actor will automatically log and disregard thrown errors, similar to service workers.
+- **SQLite Storage**: Many serious use cases of Durable Objects rely on SQLite. This is out of the scope for this web standard.
+- **Versioning**: Cloudflare and Rivet each have significantly different ways of implementing versioning. Rivet is more like AWS AMI, while Cloudflare uses a simpler but less flexible version history.
+- **Upgrades & Rolling Deploys**: Leave it up to the platform to decide what code is running. Under the hood, the Rivet implementation of this standard would automatically call [`actors.upgrade`](https://rivet.gg/docs/api/actors/upgrade)
+- **Logging**: Leave this up to the platform to decide how to ship logs.
+
+## Full Example
+
+This example demonstrates a full chat room implementation with storage & a test alarm.
+
+<CodeGroup>
+```typescript {{ "title": "chat-room.js" }}
+// This is the stateful serverless worker implementation
+// that maintains state between connections
+
+// Worker internal state
+let messages = [];
+let users = new Map();
+let roomInfo = {
+  name: "",
+  createdAt: 0,
+  messageCount: 0
+};
+
+// Setup alarm to clean up inactive users
+function scheduleExampleAlarm() {
+  // Set an alarm for 1 hour to clean up inactive users
+  setAlarm(Date.now() + 60 * 60 * 1000);
+}
+
+export default {
+  // Handle connections to this worker
+  connect(event) {
+    const port = event.ports[0];
+    
+    port.onmessage = async (event) => {
+      const { type, ...data } = event.data;
+      
+      // Process different message types
+      switch (type) {
+        case "INITIALIZE":
+          // Initialize the room
+          roomInfo.name = data.roomName;
+          roomInfo.createdAt = data.createdAt;
+          
+          // Save initial data to storage
+          await storage.set("roomInfo", roomInfo);
+          await storage.set("messages", messages);
+          
+          // Respond with confirmation
+          port.postMessage({
+            type: "INITIALIZED",
+            roomName: roomInfo.name,
+            createdAt: roomInfo.createdAt
+          });
+          
+          // Schedule first alarm
+          scheduleExampleAlarm();
+          break;
+          
+        case "MESSAGE":
+          // Store the incoming message
+          const message = {
+            content: data.content.text,
+            user: data.content.user,
+            timestamp: data.timestamp
+          };
+          
+          messages.push(message);
+          roomInfo.messageCount++;
+          
+          // Update user's last activity time
+          users.set(data.content.user, {
+            lastActive: Date.now()
+          });
+          
+          // Save to storage
+          await storage.set("messages", messages);
+          await storage.set("roomInfo", roomInfo);
+          await storage.set("users", Object.fromEntries(users));
+          
+          // Broadcast to all connected clients
+          port.postMessage({
+            type: "BROADCAST",
+            message: message
+          });
+          break;
+          
+        case "JOIN":
+          // Add user to the room
+          users.set(data.user, {
+            lastActive: Date.now(),
+            clientId: data.clientId
+          });
+          
+          // Save to storage
+          await storage.set("users", Object.fromEntries(users));
+          
+          // Notify others
+          port.postMessage({
+            type: "USER_JOINED",
+            user: data.user,
+            timestamp: Date.now(),
+            userCount: users.size
+          });
+          break;
+      }
+    };
+  },
+
+  // Handle alarm for maintenance tasks
+  alarm() {
+    console.log("Alarm triggered")
+    
+    // Schedule the next cleanup
+    scheduleExampleAlarm();
+  },
+}
+```
+
+```typescript {{ "title": "server.js" }}
+// Server that creates and communicates with stateful serverless workers
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    
+    // Create or get an existing worker based on the room name in the URL
+    const roomName = url.searchParams.get("room") || "default";
+    
+    // Create a deterministic worker ID from the room name
+    const workerId = await env.KV.get(`room:${roomName}`);
+    
+    if (!workerId) {
+        const newWorkerId = createServerlessWorkerId();
+        await env.KV.set(`room:${roomName}`, newWorkerId);  // FOR DEMO ONLY: This creates a race condition
+    }
+
+    // Connect to existing worker
+    const worker = new ServerlessWorker("./chat-room.js", workerId);
+    const port = worker.port;
+    
+    // Handle websocket upgrade requests
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (!upgradeHeader || upgradeHeader !== 'websocket') {
+      return new Response('Expected Upgrade: websocket', { status: 426 });
+    }
+
+    // Create a WebSocket pair
+    const webSocketPair = new WebSocketPair();
+    const client = webSocketPair[0];
+    const server = webSocketPair[1];
+    
+    // Connect the server WebSocket to the worker
+    server.addEventListener("message", (event) => {
+      port.postMessage({
+        type: "MESSAGE",
+        content: JSON.parse(event.data),
+        timestamp: Date.now()
+      });
+    });
+    
+    // Forward worker messages to the client
+    port.onmessage = (event) => {
+      server.send(JSON.stringify(event.data));
+    };
+    
+    // Handle initial connection
+    server.accept();
+    
+    // When the WebSocket connects, register the user
+    port.postMessage({
+      type: "JOIN",
+      user: url.searchParams.get("username") || "anonymous",
+      clientId: crypto.randomUUID()
+    });
+    
+    // Handle WebSocket close
+    server.addEventListener("close", () => {
+      // Clean up connection resources
+      port.close();
+    });
+    
+    // Return the client side of the WebSocket
+    return new Response(null, {
+      status: 101,
+      webSocket: client
+    });
+  }
+}
+```
+</CodeGroup>
+
+## Future Thought Required: Data Migrations
+
+WinterTC is great specification for stateless serverless since migrating providers is as simple as updating a DNS record.
+
+However, stateful serverless is significantly different since **this spec is effectively defining a database**, since actors have persistent storage. 
+
+If the whole point of defining a common specification for stateful serverless is to encourage companies to adopt new technologies, then they'll also need assurances on their ability to migrate between providers. For example, Postgres provides the ability to use <Link href="https://www.postgresql.org/docs/current/logical-replication.html" target="_blank">logical replication</Link> for live migrations and is used frequently.
+
+This is worth more discussion later.
+
+## Next Steps
+
+### Join The Conversation
+
+I've posted this article on <Link href="https://twitter.com/nathanflurry" target="_blank">X</Link> and <Link href="https://bsky.app/profile/rivet.gg" target="_blank">Bluesky</Link> so as many interested parties can engage as possible. The Rivet team is also responsive on <Link href="https://rivet.gg/discord" target="_blank">our Discord</Link>.
+
+### W3C Process & Working Group
+
+I am unfamiliar with the actual process of developing standards specifically for W3C. As a startup, we likely lack the resources required to get something like this pushed through alone. The full process is documented <Link href="https://www.w3.org/policies/process/" target="_blank">here</Link>.
+
