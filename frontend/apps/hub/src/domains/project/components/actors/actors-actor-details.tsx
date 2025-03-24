@@ -11,7 +11,7 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Suspense } from "react";
-import { actorQueryOptions } from "../../queries";
+import { actorQueryOptions, buildQueryOptions } from "../../queries";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
@@ -23,10 +23,11 @@ import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 import { ActorConsole } from "./console/actor-console";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
 import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
+import { useEnvironment } from "../../data/environment-context";
+import { useProject } from "../../data/project-context";
+import { toRecord } from "@/lib/utils";
 
 interface ActorsActorDetailsProps {
-	projectNameId: string;
-	environmentNameId: string;
 	actorId: string;
 	className?: string;
 	tab?: string;
@@ -37,18 +38,39 @@ export function ActorsActorDetails({
 	tab,
 	onTabChange,
 	className,
+	actorId,
 	...props
 }: ActorsActorDetailsProps) {
-	const { data } = useSuspenseQuery(actorQueryOptions(props));
+	const { nameId: projectNameId, gameId: projectId } = useProject();
+	const { nameId: environmentNameId, namespaceId: environmentId } =
+		useEnvironment();
 
-	const isActorCore = data?.tags?.framework === ACTOR_FRAMEWORK_TAG_VALUE;
+	const { data } = useSuspenseQuery(
+		actorQueryOptions({
+			projectNameId,
+			environmentNameId,
+			actorId,
+		}),
+	);
+	const { data: build } = useSuspenseQuery(
+		buildQueryOptions({
+			projectId,
+			environmentId,
+			buildId: data.runtime.build,
+		}),
+	);
+
+	const isActorCore =
+		toRecord(build?.tags).framework === ACTOR_FRAMEWORK_TAG_VALUE;
 
 	return (
 		<ActorDetailsSettingsProvider>
 			<ActorWorkerContextProvider
 				enabled={!data.destroyedAt && isActorCore}
 				endpoint={data.endpoint}
-				{...props}
+				projectNameId={projectNameId}
+				environmentNameId={environmentNameId}
+				actorId={actorId}
 			>
 				<div className="flex flex-col h-full flex-1 pt-2">
 					<Tabs
@@ -89,7 +111,11 @@ export function ActorsActorDetails({
 										className="text-sm h-auto"
 										{...data}
 									/>
-									<ActorStopButton {...data} {...props} />
+									<ActorStopButton
+										projectNameId={projectNameId}
+										environmentNameId={environmentNameId}
+										actorId={actorId}
+									/>
 								</Flex>
 							</motion.div>
 						</motion.div>
@@ -98,14 +124,23 @@ export function ActorsActorDetails({
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab {...props} {...data} />
+								<ActorLogsTab
+									projectNameId={projectNameId}
+									environmentNameId={environmentNameId}
+									actorId={actorId}
+									{...data}
+								/>
 							</Suspense>
 						</TabsContent>
 						<TabsContent
 							value="config"
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
-							<ActorConfigTab {...props} {...data} />
+							<ActorConfigTab
+								projectNameId={projectNameId}
+								environmentNameId={environmentNameId}
+								{...data}
+							/>
 						</TabsContent>
 						<TabsContent
 							value="connections"

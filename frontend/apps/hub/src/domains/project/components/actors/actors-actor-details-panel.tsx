@@ -32,8 +32,6 @@ export function ActorsActorDetailsPanel({
 		>
 			<ActorsActorDetails
 				tab={currentTab}
-				projectNameId={projectNameId}
-				environmentNameId={environmentNameId}
 				actorId={actorId}
 				onTabChange={(tab) => {
 					navigate({
