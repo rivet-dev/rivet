@@ -2,7 +2,7 @@ import { useAuth } from "@/domains/auth/contexts/auth";
 
 import { Skeleton, cn } from "@rivet-gg/components";
 import { ErrorBoundary } from "@sentry/react";
-import { useMatchRoute } from "@tanstack/react-router";
+import { useMatchRoute, useRouterState } from "@tanstack/react-router";
 import { Suspense, useContext } from "react";
 import { EnvironmentBreadcrumb } from "./environment-breadcrumb";
 import { GroupBreadcrumb } from "./group-breadcrumb";
@@ -51,6 +51,9 @@ function Content() {
 
 export function Breadcrumbs() {
 	const isMobile = useContext(MobileBreadcrumbsContext);
+	const pathname = useRouterState({
+		select: (state) => state.location.pathname,
+	});
 	return (
 		<div
 			className={cn(
@@ -60,6 +63,7 @@ export function Breadcrumbs() {
 			)}
 		>
 			<ErrorBoundary
+				key={pathname}
 				onError={(...args) => {
 					console.log(
 						"Error occurred while rendering breadcrumbs.",
