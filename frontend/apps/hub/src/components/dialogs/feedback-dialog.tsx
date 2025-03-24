@@ -2,13 +2,16 @@ import * as FeedbackForm from "@/forms/feedback-form";
 import type { DialogContentProps } from "@/hooks/use-dialog";
 import { FEEDBACK_FORM_ID } from "@/lib/data/constants";
 import {
+	Button,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	Flex,
+	Text,
 } from "@rivet-gg/components";
 
 import { usePostHog } from "posthog-js/react";
+import { useState } from "react";
 
 interface ContentProps extends DialogContentProps {
 	source?: string;
@@ -20,6 +23,27 @@ export default function FeedbackDialogContent({
 }: ContentProps) {
 	const posthog = usePostHog();
 
+	const [isSubmit, setIsSubmit] = useState(false);
+
+	if (isSubmit) {
+		return (
+			<>
+				<DialogHeader>
+					<DialogTitle>Feedback sent!</DialogTitle>
+				</DialogHeader>
+				<Text>
+					All submissions are read by humans, we appreciate your
+					feedback.
+				</Text>
+				<DialogFooter>
+					<Button variant="secondary" onClick={onClose}>
+						Close
+					</Button>
+				</DialogFooter>
+			</>
+		);
+	}
+
 	return (
 		<>
 			<FeedbackForm.Form
@@ -29,7 +53,7 @@ export default function FeedbackDialogContent({
 						$survey_id: FEEDBACK_FORM_ID,
 						$survey_response: `${values.type} from ${source}: ${values.feedback}`,
 					});
-					onClose?.();
+					setIsSubmit(true);
 				}}
 				defaultValues={{ type: "bug", feedback: "" }}
 			>
