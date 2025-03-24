@@ -10,6 +10,7 @@ import {
 	type ComponentProps,
 	type ComponentType,
 	lazy,
+	Suspense,
 	useCallback,
 	useMemo,
 	useState,
@@ -41,27 +42,29 @@ export const createDialogHook = <
 		const Content = useMemo(() => lazy(() => component), []);
 
 		return (
-			<Dialog {...dialogProps}>
-				<DialogContent
-					className={cn({
-						"max-w-2xl": opts.size === "lg",
-						"max-w-xl": opts.size === "md",
-					})}
-					onOpenAutoFocus={(e) => {
-						if (opts.autoFocus === false) {
-							return e.preventDefault();
-						}
-					}}
-				>
-					<VisuallyHidden>
-						<DialogTitle>Dynamic title</DialogTitle>
-					</VisuallyHidden>
-					<Content
-						{...props}
-						onClose={() => dialogProps?.onOpenChange?.(false)}
-					/>
-				</DialogContent>
-			</Dialog>
+			<Suspense>
+				<Dialog {...dialogProps}>
+					<DialogContent
+						className={cn({
+							"max-w-2xl": opts.size === "lg",
+							"max-w-xl": opts.size === "md",
+						})}
+						onOpenAutoFocus={(e) => {
+							if (opts.autoFocus === false) {
+								return e.preventDefault();
+							}
+						}}
+					>
+						<VisuallyHidden>
+							<DialogTitle>Dynamic title</DialogTitle>
+						</VisuallyHidden>
+						<Content
+							{...props}
+							onClose={() => dialogProps?.onOpenChange?.(false)}
+						/>
+					</DialogContent>
+				</Dialog>
+			</Suspense>
 		);
 	};
 
@@ -277,4 +280,8 @@ useDialog.EditBuildTags = createDialogHook(
 
 useDialog.CreateActor = createDialogHook(
 	import("@/domains/project/components/dialogs/create-actor-dialog"),
+);
+
+useDialog.GoToActor = createDialogHook(
+	import("@/domains/project/components/dialogs/go-to-actor-dialog"),
 );

@@ -17,6 +17,7 @@ import {
 	faJoystick,
 	faKey,
 	faLink,
+	faMagnifyingGlass,
 	faPuzzle,
 	faScroll,
 	faUserCog,
@@ -94,6 +95,19 @@ export function EnvironmentCommandPanelPage({
 				>
 					<Icon icon={faHammer} />
 					Builds
+				</CommandItem>
+				<CommandItem
+					keywords={["actor", "search", "go to", "go", "find"]}
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/actors",
+							params: { projectNameId, environmentNameId },
+							search: { modal: "go-to-actor" },
+						});
+					}}
+				>
+					<Icon icon={faMagnifyingGlass} />
+					Go to Actor
 				</CommandItem>
 				{backendModulesEnabled ? (
 					<GuardEnterprise>

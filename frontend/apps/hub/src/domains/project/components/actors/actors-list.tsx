@@ -4,6 +4,7 @@ import { projectActorsQueryOptions } from "../../queries";
 import { ActorsFiltersButton } from "./actors-filters-button";
 import { ActorsListRow } from "./actors-list-row";
 import { CreateActorButton } from "./create-actor-button";
+import { GoToActorButton } from "./go-to-actor-button";
 
 interface ActorsListProps {
 	projectNameId: string;
@@ -38,7 +39,10 @@ export function ActorsList({
 							showDestroyed={showDestroyed}
 							tags={tags}
 						/>
-						<CreateActorButton />
+						<div className="flex gap-1">
+							<GoToActorButton />
+							<CreateActorButton />
+						</div>
 					</div>
 					<div className="grid grid-cols-subgrid col-span-full  font-semibold text-sm px-1 pr-4">
 						<div />

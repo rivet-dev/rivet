@@ -1,19 +1,16 @@
 import { ErrorComponent } from "@/components/error-component";
 import {
-	EnvironmentContext,
 	EnvironmentContextProvider,
 	useEnvironment,
 } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
-import { projectQueryOptions } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
 import { guardUuids } from "@/lib/guards";
 import {
 	type ErrorComponentProps,
 	Outlet,
 	createFileRoute,
-	notFound,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -30,6 +27,7 @@ function Modals() {
 
 	const EditBuildTagsDialog = useDialog.EditBuildTags.Dialog;
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
+	const GoToActorDialog = useDialog.GoToActor.Dialog;
 
 	const handleOpenChange = (value: boolean) => {
 		if (!value) {
@@ -65,6 +63,14 @@ function Modals() {
 					onOpenChange: handleOpenChange,
 				}}
 			/>
+			<GoToActorDialog
+				environmentNameId={environmentNameId}
+				projectNameId={projectNameId}
+				dialogProps={{
+					open: modal === "go-to-actor",
+					onOpenChange: handleOpenChange,
+				}}
+			/>
 		</>
 	);
 }
@@ -84,7 +90,7 @@ function environmentIdRoute() {
 }
 const searchSchema = z.object({
 	modal: z
-		.enum(["database", "edit-tags", "create-actor"])
+		.enum(["database", "edit-tags", "create-actor", "go-to-actor"])
 		.or(z.string())
 		.optional(),
 	buildId: z.string().optional().catch(undefined),
