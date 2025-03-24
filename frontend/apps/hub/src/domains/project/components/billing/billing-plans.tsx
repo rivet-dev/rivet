@@ -13,6 +13,7 @@ import {
 	faHeadset,
 	faInfinity,
 	faLockA,
+	faPeopleGroup,
 	faRocketLaunch,
 	faServer,
 } from "@rivet-gg/icons";
@@ -74,7 +75,7 @@ export function BillingPlans({
 						{
 							name: (
 								<span>
-									50,000 Free Actors
+									$5.00 Free
 									<span className="text-xs text-muted-foreground font-normal ml-0.5">
 										/mo
 									</span>
@@ -110,7 +111,7 @@ export function BillingPlans({
 						{
 							name: (
 								<span>
-									200,000 Free Actors
+									$20 Free
 									<span className="text-xs text-muted-foreground font-normal ml-0.5">
 										/mo
 									</span>
@@ -124,6 +125,8 @@ export function BillingPlans({
 							icon: faCheckCircle,
 						},
 						{ name: "No Usage Limits", icon: faInfinity },
+
+						{ name: "Unlimited Seats", icon: faPeopleGroup },
 						{ name: "Email Support", icon: faEnvelope },
 					]}
 					{...config?.[RivetEe.ee.billing.Plan.Indie]}
@@ -151,7 +154,7 @@ export function BillingPlans({
 						{
 							name: (
 								<span>
-									200,000 Free Actors
+									$200 Free
 									<span className="text-xs text-muted-foreground font-normal ml-0.5">
 										/mo
 									</span>
@@ -161,13 +164,12 @@ export function BillingPlans({
 							icon: faGift,
 						},
 						{ name: "Everything in Pro", icon: faCheckCircle },
-						{ name: "No Usage Limits", icon: faInfinity },
-						{ name: "Advanced Support", icon: faHeadset },
 						{
 							name: "Dedicated Hardware",
 							icon: faServer,
 						},
 						{ name: "Custom Regions", icon: faGlobe },
+						{ name: "Advanced Support", icon: faHeadset },
 					]}
 					{...config?.[RivetEe.ee.billing.Plan.Studio]}
 				/>

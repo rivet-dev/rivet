@@ -1,3 +1,4 @@
+import { BillingPlans } from "@/domains/project/components/billing/billing-plans";
 import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
