@@ -1,4 +1,6 @@
 import { ProjectMatchmakerListLobbyPreview } from "@/domains/project/components/matchmaker/matchmaker-list-lobby-preview";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/matchmaker-layout";
 import { projectEnvironmentLogsLobbiesQueryOptions } from "@/domains/project/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@rivet-gg/components";
@@ -8,10 +10,9 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function MatchmakerLogsView() {
-	const {
-		environment: { namespaceId: environmentId },
-		project: { gameId: projectId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
+
 	const search = Route.useSearch();
 
 	const { data: lobbies } = useSuspenseQuery(

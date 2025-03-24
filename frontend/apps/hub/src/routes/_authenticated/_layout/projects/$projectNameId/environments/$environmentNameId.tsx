@@ -1,4 +1,10 @@
 import { ErrorComponent } from "@/components/error-component";
+import {
+	EnvironmentContext,
+	EnvironmentContextProvider,
+	useEnvironment,
+} from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { projectQueryOptions } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
@@ -14,10 +20,9 @@ import { z } from "zod";
 
 function Modals() {
 	const navigate = Route.useNavigate();
-	const {
-		project: { gameId: projectId, nameId: projectNameId },
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-	} = Route.useRouteContext();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
 	const { modal, buildId } = Route.useSearch();
 
 	const ConfirmOuterbaseConnectionDialog =
@@ -69,11 +74,12 @@ function EnvironmentErrorComponent(props: ErrorComponentProps) {
 }
 
 function environmentIdRoute() {
+	const { environmentNameId } = Route.useParams();
 	return (
-		<>
+		<EnvironmentContextProvider environmentNameId={environmentNameId}>
 			<Outlet />
 			<Modals />
-		</>
+		</EnvironmentContextProvider>
 	);
 }
 const searchSchema = z.object({
@@ -91,10 +97,7 @@ export const Route = createFileRoute(
 		matches,
 		location,
 		params: { projectNameId, environmentNameId },
-		context: {
-			queryClient,
-			project: { gameId: projectId },
-		},
+		context: { queryClient },
 	}) => {
 		await guardUuids({
 			queryClient,
@@ -102,26 +105,6 @@ export const Route = createFileRoute(
 			projectNameId,
 			environmentNameId,
 		});
-
-		const { game: project } = await queryClient.ensureQueryData(
-			projectQueryOptions(projectId),
-		);
-		const environment = project.namespaces.find(
-			(ns) => ns.nameId === environmentNameId,
-		);
-
-		if (!environment || !project) {
-			throw notFound();
-		}
-
-		return { environment };
-	},
-	loader: async ({ context: { project, environment } }) => {
-		if (!environment || !project) {
-			throw notFound();
-		}
-
-		return { environment };
 	},
 	component: environmentIdRoute,
 	errorComponent: EnvironmentErrorComponent,

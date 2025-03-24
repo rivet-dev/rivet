@@ -1,18 +1,18 @@
 import { ErrorComponent } from "@/components/error-component";
 import { BillingProvider } from "@/domains/project/components/billing/billing-context";
 import { BillingOverageWarning } from "@/domains/project/components/billing/billing-overage-warning";
+import {
+	ProjectContextProvider,
+	useProject,
+} from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
-import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
 import { guardUuids } from "@/lib/guards";
-import { ls } from "@/lib/ls";
-import { safeAsync } from "@rivet-gg/components";
 
 import {
 	type ErrorComponentProps,
 	Outlet,
 	createFileRoute,
-	notFound,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -27,14 +27,14 @@ function ProjectIdErrorComponent(props: ErrorComponentProps) {
 
 function Modals() {
 	const navigate = Route.useNavigate();
-	const { project } = Route.useRouteContext();
+	const project = useProject();
 	const { modal } = Route.useSearch();
 
 	const GenerateProjectCloudTokenDialog =
 		useDialog.GenerateProjectCloudToken.Dialog;
 	const CreateEnvironmentDialog = useDialog.CreateEnvironment.Dialog;
 
-	const handleonOpenChange = (value: boolean) => {
+	const handleOnOpenChange = (value: boolean) => {
 		if (!value) {
 			navigate({ search: { modal: undefined } });
 		}
@@ -46,14 +46,14 @@ function Modals() {
 				projectId={project.gameId}
 				dialogProps={{
 					open: modal === "cloud-token",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 			<CreateEnvironmentDialog
 				projectId={project.gameId}
 				dialogProps={{
 					open: modal === "create-environment",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 		</>
@@ -61,17 +61,16 @@ function Modals() {
 }
 
 function ProjectIdRoute() {
-	const {
-		project: { gameId, developer },
-	} = Route.useRouteContext();
-
+	const { projectNameId } = Route.useParams();
 	return (
 		<Layout.Root>
-			<BillingProvider projectId={gameId} groupId={developer.groupId}>
-				<BillingOverageWarning />
-				<Outlet />
-			</BillingProvider>
-			<Modals />
+			<ProjectContextProvider projectNameId={projectNameId}>
+				<BillingProvider>
+					<BillingOverageWarning />
+					<Outlet />
+				</BillingProvider>
+				<Modals />
+			</ProjectContextProvider>
 		</Layout.Root>
 	);
 }
@@ -102,18 +101,5 @@ export const Route = createFileRoute(
 			projectNameId,
 			environmentNameId: undefined,
 		});
-
-		const [response] = await safeAsync(
-			queryClient.fetchQuery(projectsByGroupQueryOptions()),
-		);
-		const project = response?.games.find((p) => p.nameId === projectNameId);
-
-		if (!project) {
-			throw notFound();
-		}
-
-		ls.recentTeam.set(auth, project.developer.groupId);
-
-		return { project };
 	},
 });

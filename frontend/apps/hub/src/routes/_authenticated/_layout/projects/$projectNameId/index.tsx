@@ -1,13 +1,14 @@
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { ProjectEnvironmentsView } from "@/domains/project/views/project-environments";
 import { createFileRoute } from "@tanstack/react-router";
 
 function ProjectIdRoute() {
-	const { project } = Route.useRouteContext();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
 	return (
 		<ProjectEnvironmentsView
-			projectId={project.gameId}
-			projectNameId={project.nameId}
+			projectId={projectId}
+			projectNameId={projectNameId}
 		/>
 	);
 }

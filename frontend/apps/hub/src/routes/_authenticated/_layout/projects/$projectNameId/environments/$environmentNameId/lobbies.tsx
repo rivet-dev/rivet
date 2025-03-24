@@ -1,21 +1,17 @@
 import { ErrorComponent } from "@/components/error-component";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/matchmaker-layout";
-import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 import { guardUuids } from "@/lib/guards";
-import { ls } from "@/lib/ls";
-import { safeAsync } from "@rivet-gg/components";
 import {
 	type ErrorComponentProps,
 	Outlet,
 	createFileRoute,
-	notFound,
 } from "@tanstack/react-router";
 
 function MatchmakerLayoutErrorComponent(props: ErrorComponentProps) {
-	const {
-		environment: { nameId: environmentNameId },
-		project: { nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { nameId: environmentNameId } = useEnvironment();
+	const { nameId: projectNameId } = useProject();
 
 	return (
 		<Layout.Root
@@ -28,10 +24,8 @@ function MatchmakerLayoutErrorComponent(props: ErrorComponentProps) {
 }
 
 function MatchmakerLayoutView() {
-	const {
-		environment: { nameId: environmentNameId },
-		project: { nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { nameId: environmentNameId } = useEnvironment();
+	const { nameId: projectNameId } = useProject();
 
 	return (
 		<Layout.Root
@@ -51,7 +45,7 @@ export const Route = createFileRoute(
 	pendingComponent: Layout.Root.Skeleton,
 	beforeLoad: async ({
 		location,
-		context: { queryClient, auth, environment },
+		context: { queryClient },
 		params: { projectNameId, environmentNameId },
 	}) => {
 		await guardUuids({
@@ -60,18 +54,5 @@ export const Route = createFileRoute(
 			projectNameId,
 			environmentNameId,
 		});
-
-		const [response] = await safeAsync(
-			queryClient.fetchQuery(projectsByGroupQueryOptions()),
-		);
-		const project = response?.games.find((p) => p.nameId === projectNameId);
-
-		if (!project) {
-			throw notFound();
-		}
-
-		ls.recentTeam.set(auth, project.developer.groupId);
-
-		return { project, environment };
 	},
 });

@@ -1,5 +1,7 @@
 import { GetStarted } from "@/components/get-started";
 import { ActorsListPreview } from "@/domains/project/components/actors/actors-list-preview";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import { actorBuildsCountQueryOptions } from "@/domains/project/queries";
 import { Icon, faActors } from "@rivet-gg/icons";
@@ -10,10 +12,8 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 function ProjectActorsRoute() {
-	const {
-		environment: { nameId: environmentNameId },
-		project: { nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { nameId: projectNameId } = useProject();
+	const { nameId: environmentNameId } = useEnvironment();
 	const { actorId, tags, showDestroyed } = Route.useSearch();
 	const tagsRecord = useMemo(() => Object.fromEntries(tags || []), [tags]);
 

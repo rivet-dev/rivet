@@ -1,5 +1,7 @@
 import { LobbySortSelect } from "@/domains/project/components/matchmaker/lobby-sort-select";
 import { ProjectMatchmakerListLobbyPreview } from "@/domains/project/components/matchmaker/matchmaker-list-lobby-preview";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/matchmaker-layout";
 import { projectEnvironmentLobbiesLiveQueryOptions } from "@/domains/project/queries";
 import {
@@ -16,10 +18,9 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 function MatchmakerLobbiesView() {
-	const {
-		environment: { namespaceId: environmentId },
-		project: { gameId: projectId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
+
 	const { sort, lobbyId } = Route.useSearch();
 
 	const navigate = useNavigate();

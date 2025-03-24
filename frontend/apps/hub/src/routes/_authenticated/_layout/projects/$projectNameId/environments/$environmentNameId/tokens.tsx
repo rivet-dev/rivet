@@ -1,3 +1,5 @@
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { projectMetadataQueryOptions } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
@@ -15,14 +17,15 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function EnvironmentTokensRoute() {
-	const { environment, project } = Route.useRouteContext();
+	const { gameId } = useProject();
+	const { namespaceId } = useEnvironment();
 
 	const {
 		data: { legacyLobbiesEnabled },
 	} = useSuspenseQuery(
 		projectMetadataQueryOptions({
-			projectId: project.gameId,
-			environmentId: environment.namespaceId,
+			projectId: gameId,
+			environmentId: namespaceId,
 		}),
 	);
 
@@ -39,7 +42,7 @@ function EnvironmentTokensRoute() {
 }
 
 function DevelopmentTokenCard() {
-	const { environment } = Route.useRouteContext();
+	const environment = useEnvironment();
 	return (
 		<DocsCard
 			title="Development token"
@@ -104,10 +107,9 @@ function ServiceTokenCard() {
 
 function Modals({ publicTokenEnabled }: { publicTokenEnabled: boolean }) {
 	const navigate = Route.useNavigate();
-	const {
-		project: { gameId: projectId },
-		environment: { namespaceId: environmentId },
-	} = Route.useRouteContext();
+	const { gameId: projectId } = useProject();
+	const { namespaceId: environmentId } = useEnvironment();
+
 	const { modal } = Route.useSearch();
 
 	const GenerateEnvironmentPublicTokenDialog =
@@ -115,7 +117,7 @@ function Modals({ publicTokenEnabled }: { publicTokenEnabled: boolean }) {
 	const GenerateProjectEnvServiceTokenDialog =
 		useDialog.GenerateProjectEnvServiceToken.Dialog;
 
-	const handleonOpenChange = (value: boolean) => {
+	const handleOnOpenChange = (value: boolean) => {
 		if (!value) {
 			navigate({ search: { modal: undefined } });
 		}
@@ -129,7 +131,7 @@ function Modals({ publicTokenEnabled }: { publicTokenEnabled: boolean }) {
 					environmentId={environmentId}
 					dialogProps={{
 						open: modal === "public-token",
-						onOpenChange: handleonOpenChange,
+						onOpenChange: handleOnOpenChange,
 					}}
 				/>
 			) : null}
@@ -138,7 +140,7 @@ function Modals({ publicTokenEnabled }: { publicTokenEnabled: boolean }) {
 				environmentId={environmentId}
 				dialogProps={{
 					open: modal === "service-token",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 		</>

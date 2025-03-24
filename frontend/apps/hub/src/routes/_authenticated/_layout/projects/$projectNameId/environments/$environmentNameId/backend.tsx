@@ -1,4 +1,6 @@
 import { ErrorComponent } from "@/components/error-component";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/backend-layout";
 import { guardEnterprise } from "@/lib/guards";
 import {
@@ -8,10 +10,9 @@ import {
 } from "@tanstack/react-router";
 
 function BackendLayoutErrorComponent(props: ErrorComponentProps) {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
 
 	return (
 		<Layout.Root
@@ -26,10 +27,9 @@ function BackendLayoutErrorComponent(props: ErrorComponentProps) {
 }
 
 function BackendLayoutView() {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
 
 	return (
 		<Layout.Root

@@ -1,6 +1,7 @@
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import {
 	projectEnvironmentQueryOptions,
-	projectQueryOptions,
 	useEnvironmentAuthTypeMutation,
 	useEnvironmentDomainPublicAuthMutation,
 } from "@/domains/project/queries";
@@ -15,7 +16,7 @@ import {
 	Switch,
 	Text,
 } from "@rivet-gg/components";
-import { useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -23,10 +24,9 @@ import { z } from "zod";
 function DomainBasedAuthOption() {
 	const { mutate, isPending } = useEnvironmentDomainPublicAuthMutation();
 
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
+
 	const {
 		data: { namespace: environment },
 	} = useSuspenseQuery(
@@ -58,10 +58,9 @@ function DomainBasedAuthOption() {
 function PasswordAuthOption() {
 	const { mutate, isPending } = useEnvironmentAuthTypeMutation();
 
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
+
 	const {
 		data: { namespace: environment },
 	} = useSuspenseQuery(
@@ -149,16 +148,14 @@ function CustomDomainsOption({
 
 function Modals() {
 	const navigate = Route.useNavigate();
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
 	const { modal } = Route.useSearch();
 
 	const ManageCdnAuthUsersDialog = useDialog.ManageCdnAuthUsers.Dialog;
 	const ManageCdnCustomDomains = useDialog.ManageCdnCustomDomains.Dialog;
 
-	const handleonOpenChange = (value: boolean) => {
+	const handleOnOpenChange = (value: boolean) => {
 		if (!value) {
 			navigate({ search: { modal: undefined } });
 		}
@@ -171,7 +168,7 @@ function Modals() {
 				environmentId={environmentId}
 				dialogProps={{
 					open: modal === "cdn-users",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 			<ManageCdnCustomDomains
@@ -179,7 +176,7 @@ function Modals() {
 				environmentId={environmentId}
 				dialogProps={{
 					open: modal === "cdn-domains",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 		</>
@@ -187,29 +184,16 @@ function Modals() {
 }
 
 function EnvironmentCdnRoute() {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
-	const [
-		{ data: project },
-		{
-			data: { namespace: environment },
-		},
-	] = useSuspenseQueries({
-		queries: [
-			projectQueryOptions(projectId),
-			projectEnvironmentQueryOptions({ projectId, environmentId }),
-		],
-	});
+	const { nameId: environmentNameId } = useEnvironment();
+	const { nameId: projectNameId } = useProject();
 
 	return (
 		<Grid columns={{ initial: "1", md: "2" }} gap="4" items="start">
 			<DomainBasedAuthOption />
 			<PasswordAuthOption />
 			<CustomDomainsOption
-				nameId={project.nameId}
-				namespaceNameId={environment.nameId}
+				nameId={projectNameId}
+				namespaceNameId={environmentNameId}
 			/>
 			<Modals />
 		</Grid>

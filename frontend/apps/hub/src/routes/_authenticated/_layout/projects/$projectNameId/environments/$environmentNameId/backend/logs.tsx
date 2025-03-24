@@ -1,5 +1,7 @@
 import { ErrorComponent } from "@/components/error-component";
 import { BackendListEventsPreview } from "@/domains/project/components/backend/backend-list-events-preview";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/backend-layout";
 import { projectBackendEnvEventsQueryOptions } from "@/domains/project/queries";
 import {
@@ -18,10 +20,8 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function ProjectBackendEnvironmentIdLogsRoute() {
-	const {
-		environment: { namespaceId: environmentId },
-		project: { gameId: projectId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
 	const { eventId } = Route.useSearch();
 
 	const { data } = useSuspenseQuery(

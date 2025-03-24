@@ -17,7 +17,11 @@ import {
 	useQueryClient,
 	useQueryErrorResetBoundary,
 } from "@tanstack/react-query";
-import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
+import {
+	type ErrorComponentProps,
+	isNotFound,
+	useRouter,
+} from "@tanstack/react-router";
 import { useEffect } from "react";
 import { NetworkIssueError } from "./network-issue-error";
 import { NotFoundComponent } from "./not-found-component";
@@ -31,6 +35,9 @@ export const ErrorComponent = ({
 	const queryErrorResetBoundary = useQueryErrorResetBoundary();
 
 	useEffect(() => {
+		if (isNotFound(error)) {
+			return;
+		}
 		console.dir(error);
 		if (error) {
 			Sentry.captureException(error);

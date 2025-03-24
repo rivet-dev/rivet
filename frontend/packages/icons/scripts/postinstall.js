@@ -121,10 +121,11 @@ fs.writeFileSync(join(sourceDir, "index.gen.js"), `${indexJsSource}`);
 
 let indexTsSource = dedent`
   ${banner}
-  import {FontAwesomeIcon, FontAwesomeIconProps } from "@fortawesome/react-fontawesome";
+  import { FontAwesomeIcon, FontAwesomeIconProps } from "@fortawesome/react-fontawesome";
   import { ComponentProps, createElement } from "react";
   export function Icon(props: Omit<ComponentProps<typeof FontAwesomeIcon>, 'icon'> & {icon: IconProp}) { return createElement(FontAwesomeIcon, props as FontAwesomeIconProps)}
   export type IconProp = string | { prefix: string; iconName: string } | [string, string];
+  ${indexJsSource.split("\n").slice(8).join("\n")}
 `;
 fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);
 

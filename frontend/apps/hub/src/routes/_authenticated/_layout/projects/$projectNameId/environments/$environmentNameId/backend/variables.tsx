@@ -1,12 +1,12 @@
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/backend-layout";
 import { ProjectBackendEnvironmentVariables } from "@/domains/project/views/environment-variables";
 import { createFileRoute } from "@tanstack/react-router";
 
 function ProjectBackendEnvironmentIdVariablesRoute() {
-	const {
-		environment: { namespaceId: environmentId },
-		project: { gameId: projectId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
 
 	return (
 		<ProjectBackendEnvironmentVariables

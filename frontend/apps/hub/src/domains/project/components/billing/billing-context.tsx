@@ -11,6 +11,7 @@ import {
 	projectBillingUsageQueryOptions,
 	projectQueryOptions,
 } from "../../queries";
+import { useProject } from "../../data/project-context";
 
 interface BillingContextValue {
 	project: Rivet.cloud.GameFull;
@@ -69,12 +70,16 @@ function BillingSubscriptionProvider({
 	);
 }
 
-interface BillingProviderProps {
+interface BillingProviderContentProps {
 	projectId: string;
 	groupId: string;
 	children?: ReactNode;
 }
-function Content({ projectId, groupId, children }: BillingProviderProps) {
+function Content({
+	projectId,
+	groupId,
+	children,
+}: BillingProviderContentProps) {
 	const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
 	const { data } = useSuspenseQuery(projectBillingQueryOptions(projectId));
 
@@ -92,11 +97,16 @@ function Content({ projectId, groupId, children }: BillingProviderProps) {
 	return children;
 }
 
-export const BillingProvider = ({
-	projectId,
-	groupId,
-	children,
-}: BillingProviderProps) => {
+interface BillingProviderProps {
+	children?: ReactNode;
+}
+
+export const BillingProvider = ({ children }: BillingProviderProps) => {
+	const {
+		gameId: projectId,
+		developer: { groupId },
+	} = useProject();
+
 	const { data } = useSuspenseQuery(clusterQueryOptions());
 
 	if (data === "oss") {

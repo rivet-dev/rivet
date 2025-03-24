@@ -1,12 +1,12 @@
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { EnvironmentVersions } from "@/domains/project/views/environment-versions";
 import { createFileRoute } from "@tanstack/react-router";
 
 function EnvironmentVersionsRoute() {
-	const {
-		project: { gameId: projectId, nameId: projectNameId },
-		environment: { namespaceId: environmentId },
-	} = Route.useRouteContext();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
+	const { namespaceId: environmentId } = useEnvironment();
 	return (
 		<EnvironmentVersions
 			projectId={projectId}

@@ -1,4 +1,6 @@
 import { BackendEnvironmentDatabaseLink } from "@/domains/project/components/backend/backend-environment-database-link";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import {
 	actorBuildsQueryOptions,
@@ -18,11 +20,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 
 function environmentIdRoute() {
-	const params = Route.useParams();
-	const {
-		environment: { namespaceId: environmentId },
-		project: { gameId: projectId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId } = useEnvironment();
+	const { gameId: projectId } = useProject();
+
 	const {
 		data: { legacyLobbiesEnabled, backendModulesEnabled },
 	} = useSuspenseQuery(
@@ -45,10 +45,10 @@ function environmentIdRoute() {
 }
 
 function BackendEndpointCard() {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
+
 	const { data } = useSuspenseQuery(
 		projectBackendQueryOptions({ projectId, environmentId }),
 	);
@@ -94,10 +94,9 @@ function BackendEndpointCard() {
 }
 
 function CurrentBuildCard() {
-	const {
-		environment: { nameId: environmentNameId },
-		project: { nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { nameId: environmentNameId } = useEnvironment();
+	const { nameId: projectNameId } = useProject();
+
 	const {
 		data: [build],
 	} = useSuspenseQuery(
@@ -143,10 +142,10 @@ function CurrentBuildCard() {
 }
 
 function CurrentVersionCard() {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
+
 	const {
 		data: { namespace: environment },
 	} = useSuspenseQuery(

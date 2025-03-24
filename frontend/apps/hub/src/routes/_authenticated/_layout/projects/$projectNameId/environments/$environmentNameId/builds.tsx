@@ -1,6 +1,8 @@
 import { ActorTags } from "@/domains/project/components/actors/actor-tags";
 import { ProjectBuildsTableActions } from "@/domains/project/components/project-builds-table-actions";
 import { TagsSelect } from "@/domains/project/components/tags-select";
+import { useEnvironment } from "@/domains/project/data/environment-context";
+import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import {
 	projectBuildsQueryOptions,
@@ -40,10 +42,9 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function ProjectBuildsRoute() {
-	const {
-		environment: { namespaceId: environmentId, nameId: environmentNameId },
-		project: { gameId: projectId, nameId: projectNameId },
-	} = Route.useRouteContext();
+	const { gameId: projectId, nameId: projectNameId } = useProject();
+	const { namespaceId: environmentId, nameId: environmentNameId } =
+		useEnvironment();
 
 	const search = Route.useSearch();
 	const tags = "tags" in search ? Object.fromEntries(search.tags || []) : {};
