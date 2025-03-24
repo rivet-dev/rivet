@@ -1,4 +1,3 @@
-import { ls } from "@/lib/ls";
 import { Button } from "@rivet-gg/components";
 import { Icon, faSidebar } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
@@ -6,16 +5,10 @@ import { useActorsLayout } from "./actors-layout-context";
 
 export function ActorsSidebarToggleButton() {
 	const { setFolded, isFolded } = useActorsLayout();
-
 	return (
 		<motion.div
 			layout
 			layoutId="actors-sidebar-toggle-button"
-			initial={
-				ls.actorsList.getFolded()
-					? { x: -30, opacity: 0, width: 0, margin: 0 }
-					: {}
-			}
 			animate={
 				isFolded ? {} : { x: -30, opacity: 0, width: 0, margin: 0 }
 			}
