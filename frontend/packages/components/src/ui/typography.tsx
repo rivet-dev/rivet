@@ -264,7 +264,7 @@ const DescriptionList = ({
 	return (
 		<Comp
 			className={cn(
-				"md:grid md:grid-cols-[minmax(auto,1fr)_minmax(auto,3fr)] gap-2",
+				"md:grid md:grid-cols-[minmax(auto,1fr)_minmax(auto,3fr)] gap-2 items-center",
 				className,
 				getCommonHelperClass(props),
 			)}

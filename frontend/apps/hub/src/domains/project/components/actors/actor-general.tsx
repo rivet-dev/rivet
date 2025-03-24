@@ -1,5 +1,5 @@
 import type { Rivet } from "@rivet-gg/api";
-import { ClickToCopy, Dd, Dl, Dt, Flex, cn } from "@rivet-gg/components";
+import { Dd, DiscreteCopyButton, Dl, Dt, Flex, cn } from "@rivet-gg/components";
 import { formatISO } from "date-fns";
 import { ActorRegion } from "./actor-region";
 import { ActorTags } from "./actor-tags";
@@ -39,9 +39,9 @@ export function ActorGeneral({
 					</Dd>
 					<Dt>ID</Dt>
 					<Dd className="text-mono">
-						<ClickToCopy value={id}>
-							<button type="button">{id.split("-")[0]}</button>
-						</ClickToCopy>
+						<DiscreteCopyButton size="xs" value={id}>
+							{id}
+						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Tags</Dt>
 					<Dd>
@@ -59,21 +59,21 @@ export function ActorGeneral({
 					</Dd>
 					<Dt>Created</Dt>
 					<Dd>
-						<ClickToCopy value={formatISO(createdAt)}>
-							<button type="button">
-								{formatISO(createdAt)}
-							</button>
-						</ClickToCopy>
+						<DiscreteCopyButton
+							size="xs"
+							value={formatISO(createdAt)}
+						>
+							{formatISO(createdAt)}
+						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Destroyed</Dt>
 					<Dd className={cn({ "text-muted-foreground": !destroyTs })}>
-						<ClickToCopy
+						<DiscreteCopyButton
+							size="xs"
 							value={destroyTs ? formatISO(destroyTs) : "n/a"}
 						>
-							<button type="button">
-								{destroyTs ? formatISO(destroyTs) : "n/a"}
-							</button>
-						</ClickToCopy>
+							{destroyTs ? formatISO(destroyTs) : "n/a"}
+						</DiscreteCopyButton>
 					</Dd>
 				</Dl>
 			</Flex>

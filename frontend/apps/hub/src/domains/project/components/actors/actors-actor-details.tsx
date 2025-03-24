@@ -22,6 +22,7 @@ import { ActorStopButton } from "./actor-stop-button";
 import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 import { ActorConsole } from "./console/actor-console";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
+import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
 
 interface ActorsActorDetailsProps {
 	projectNameId: string;
@@ -40,7 +41,7 @@ export function ActorsActorDetails({
 }: ActorsActorDetailsProps) {
 	const { data } = useSuspenseQuery(actorQueryOptions(props));
 
-	const isActorCore = data?.tags?.framework === "actor-core";
+	const isActorCore = data?.tags?.framework === ACTOR_FRAMEWORK_TAG_VALUE;
 
 	return (
 		<ActorDetailsSettingsProvider>

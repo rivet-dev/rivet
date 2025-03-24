@@ -1,5 +1,5 @@
 import {
-	CopyButton,
+	DiscreteCopyButton,
 	Slot,
 	Slottable,
 	WithTooltip,
@@ -12,6 +12,8 @@ const BUILT_IN_TAGS = {
 	actors: ["name", "framework", "framework-version"],
 	builds: ["name", "current"],
 };
+
+export const ACTOR_FRAMEWORK_TAG_VALUE = "actor-core";
 
 export const ActorTag = forwardRef<
 	HTMLSpanElement,
@@ -40,6 +42,7 @@ export function ActorTags({
 		<div
 			className={cn(
 				"flex flex-wrap gap-4 gap-y-2 empty:hidden text-muted-foreground text-xs font-mono",
+				truncate && "gap-1",
 				className,
 			)}
 		>
@@ -57,13 +60,16 @@ export function ActorTags({
 									key={key}
 									content={`${key}=${value}`}
 									trigger={
-										<CopyButton value={`${key}=${value}`}>
+										<DiscreteCopyButton
+											size="xs"
+											value={`${key}=${value}`}
+										>
 											<ActorTag className="flex-shrink-0 truncate max-w-52 cursor-pointer">
 												<button type="button">
 													{key}={value}
 												</button>
 											</ActorTag>
-										</CopyButton>
+										</DiscreteCopyButton>
 									}
 								/>
 							) : (
