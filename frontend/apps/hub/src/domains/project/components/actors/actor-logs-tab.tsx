@@ -29,14 +29,6 @@ export function ActorLogsTab(props: ActorLogsTabProps) {
 			<div className="border-b">
 				<div className="flex items-stretch px-2">
 					<div className="border-r flex flex-1">
-						<Button
-							size="icon-sm"
-							variant="outline"
-							className="place-self-center"
-							onClick={() => startTransition(() => setSearch(""))}
-						>
-							<Icon icon={faTrash} />
-						</Button>
 						<input
 							type="text"
 							className="bg-transparent outline-none px-2 text-xs placeholder:text-muted-foreground font-sans flex-1"
