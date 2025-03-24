@@ -18,7 +18,12 @@ import z from "zod";
 
 export const formSchema = z
 	.object({
-		name: z.string().max(25),
+		name: z
+			.string()
+			.max(25)
+			.refine((value) => value.trim() !== "" && value.trim() === value, {
+				message: "Name cannot be empty or contain whitespaces",
+			}),
 		slug: z.string().max(25).optional(),
 	})
 	.superRefine(async (arg, ctx) => {
