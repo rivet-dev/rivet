@@ -36,7 +36,7 @@ export function ActorStateTab({ disabled }: ActorStateTabProps) {
 	if (status.type === "unsupported") {
 		return (
 			<div className="flex-1 flex items-center justify-center h-full text-xs text-center">
-				State Preview is not supported for this Ator.
+				State Preview is not supported for this Actor.
 			</div>
 		);
 	}

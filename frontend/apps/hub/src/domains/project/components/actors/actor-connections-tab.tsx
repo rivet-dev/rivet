@@ -35,7 +35,7 @@ export function ActorConnectionsTab({ disabled }: ActorConnectionsTabProps) {
 	if (status.type === "unsupported") {
 		return (
 			<div className="flex-1 flex items-center justify-center h-full text-xs text-center">
-				Connections Preview is not supported for this Ator.
+				Connections Preview is not supported for this Actor.
 			</div>
 		);
 	}

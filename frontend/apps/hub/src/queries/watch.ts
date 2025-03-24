@@ -24,19 +24,19 @@ async function watch(query: Query) {
 	}
 
 	while (true) {
-		await query.promise;
-		const watchOptsParseResult = watchResponseFragment.safeParse(
-			query.state.data,
-		);
-
-		if (!watchOptsParseResult.success) {
-			// last query didn't have watch options, we should stop watching
-			break;
-		}
-
-		const watchOpts = watchOptsParseResult.data;
-
 		try {
+			await query.promise;
+			const watchOptsParseResult = watchResponseFragment.safeParse(
+				query.state.data,
+			);
+
+			if (!watchOptsParseResult.success) {
+				// last query didn't have watch options, we should stop watching
+				break;
+			}
+
+			const watchOpts = watchOptsParseResult.data;
+
 			const result = await queryClient.fetchQuery({
 				...query.options,
 				retry: 0,
