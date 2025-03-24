@@ -3,9 +3,7 @@ import type { Rivet } from "@rivet-gg/api";
 import { toast } from "@rivet-gg/components";
 import { useMutation } from "@tanstack/react-query";
 import {
-	actorBuildQueryOptions,
 	actorBuildsQueryOptions,
-	actorManagerUrlQueryOptions,
 	actorQueryOptions,
 	projectActorsQueryOptions,
 } from "./query-options";
@@ -22,6 +20,12 @@ export function useDestroyActorMutation() {
 				project: opts.projectNameId,
 			}),
 		onSuccess: async (_, { projectNameId, environmentNameId, actorId }) => {
+			const { queryKey: projectActorsQueryKey } =
+				projectActorsQueryOptions({
+					projectNameId: "<placeholder>",
+					environmentNameId: "<placeholder>",
+				});
+
 			await queryClient.invalidateQueries(
 				actorQueryOptions({
 					projectNameId,
@@ -30,10 +34,14 @@ export function useDestroyActorMutation() {
 				}),
 			);
 			await queryClient.invalidateQueries({
-				...projectActorsQueryOptions({
-					projectNameId,
-					environmentNameId,
-				}),
+				predicate: (query) => {
+					return query.queryKey.every((key, i) => {
+						return (
+							projectActorsQueryKey[i] === key ||
+							projectActorsQueryKey[i] === "<placeholder>"
+						);
+					});
+				},
 				refetchType: "all",
 			});
 		},

@@ -42,9 +42,7 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 		return JSON.stringify(state.value || "{}", null, 2);
 	}, [state.value]);
 
-	const isValid = isValidJson(value)
-		? JSON.parse(value)
-		: false;
+	const isValid = isValidJson(value) ? JSON.parse(value) : false;
 
 	return (
 		<>
