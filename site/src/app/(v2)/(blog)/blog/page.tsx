@@ -11,6 +11,7 @@ import { Icon, faRss } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 export const metadata: Metadata = {
 	title: "Blog - Rivet",
@@ -86,7 +87,10 @@ export default async function BlogPage() {
 	);
 
 	return (
-		<>
+		<div
+			className="mx-auto mt-20 w-full max-w-6xl px-8 md:mt-32"
+			style={{ "--header-height": "5rem" } as CSSProperties}
+		>
 			<div className="mt-8 flex w-full items-center justify-between">
 				<h1 className="text-6xl font-bold">Blog</h1>
 				<Button asChild startIcon={<Icon icon={faRss} />}>
@@ -110,6 +114,6 @@ export default async function BlogPage() {
 						<Article key={article.slug} {...article} />
 					))}
 			</div>
-		</>
+		</div>
 	);
 }

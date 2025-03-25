@@ -200,7 +200,7 @@ export function DocsTableOfContents({
 			className={cn(
 				className,
 				"lg:top-header pt-10 lg:pt-6",
-				"w-full lg:pointer-events-auto lg:sticky lg:block lg:max-w-aside lg:self-start lg:overflow-y-auto",
+				"w-full lg:pointer-events-auto lg:sticky lg:block lg:max-w-aside lg:self-start lg:overflow-y-auto lg:max-h-content",
 			)}
 		>
 			<div className="relative">

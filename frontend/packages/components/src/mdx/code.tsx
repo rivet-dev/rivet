@@ -102,17 +102,7 @@ export const pre = ({
 }: PreProps) => {
 	return (
 		<div className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
-			<div className="bg-background text-wrap p-2 text-sm">
-				<ScrollArea className="w-full">
-					{children
-						? cloneElement(children as ReactElement, {
-								escaped: true,
-							})
-						: null}
-				</ScrollArea>
-			</div>
-
-			<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
+			<div className="text-foreground flex items-center justify-between gap-2 border-b p-2 text-xs">
 				<div className="text-muted-foreground flex items-center gap-1">
 					{file ? (
 						<>
@@ -135,6 +125,15 @@ export const pre = ({
 					}
 					content="Copy code"
 				/>
+			</div>
+			<div className="bg-background text-wrap p-2 text-sm">
+				<ScrollArea className="w-full">
+					{children
+						? cloneElement(children as ReactElement, {
+								escaped: true,
+							})
+						: null}
+				</ScrollArea>
 			</div>
 		</div>
 	);

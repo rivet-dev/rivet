@@ -16,9 +16,11 @@ import {
 	faGithub,
 	faXTwitter,
 } from "@rivet-gg/icons";
+import clsx from "clsx";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 export async function generateMetadata({
 	params: { slug },
@@ -67,8 +69,15 @@ export default async function BlogPage({ params: { slug } }) {
 		image,
 	} = await loadArticle(slug.join("/"));
 
+	const isTechnical = category.name === "Technical";
+
 	return (
-		<>
+		<div
+			className={clsx("mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32", {
+				"max-w-[1440px]": isTechnical,
+			})}
+			style={{ "--header-height": "5rem" } as CSSProperties}
+		>
 			<ul className="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
 				<li>
 					<Link href="/blog">Blog</Link>
@@ -150,7 +159,13 @@ export default async function BlogPage({ params: { slug } }) {
 				</aside>
 				<Prose
 					as="article"
-					className="order-3 mt-4 w-full max-w-prose flex-shrink-0 lg:order-2"
+					className={clsx(
+						"order-3 mt-4 w-full flex-shrink-0 lg:order-2",
+						{
+							"xl:max-w-[1000px]": isTechnical,
+							"max-w-prose": !isTechnical,
+						},
+					)}
 				>
 					<Image
 						{...image}
@@ -164,7 +179,7 @@ export default async function BlogPage({ params: { slug } }) {
 					<DocsTableOfContents tableOfContents={tableOfContents} />
 				</aside>
 			</div>
-		</>
+		</div>
 	);
 }
 
