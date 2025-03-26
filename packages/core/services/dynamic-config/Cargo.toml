@@ -10,4 +10,4 @@ chirp-workflow.workspace = true
 indoc = "2.0.5"
 rivet-config.workspace = true
 rivet-operation.workspace = true
-tokio = "1.40.0"
+tokio.workspace = true

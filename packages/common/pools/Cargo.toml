@@ -25,7 +25,7 @@ rivet-metrics.workspace = true
 service-discovery.workspace = true
 tempfile = "3.13.0"
 thiserror = "1.0"
-tokio = { version = "1.40", features = ["tracing"] }
+tokio.workspace = true
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber.workspace = true

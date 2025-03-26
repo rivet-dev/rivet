@@ -15,7 +15,7 @@ prost = "0.10"
 rivet-connection.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
-tokio = { version = "1.40", features = ["full"] }
+tokio.workspace = true
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",

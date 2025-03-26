@@ -9,7 +9,7 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0"
 include_dir = "0.7.4"
-tokio = { version = "1.40.0", default-features = false, features = ["fs", "rt-multi-thread"] }
+tokio.workspace = true
 
 [build-dependencies]
 anyhow = "1.0"
@@ -18,5 +18,5 @@ merkle_hash = "3.7.0"
 deno-embed = { path = "../../common/deno-embed", features = ["ignore-override-target"] }
 sha2 = "0.10.8"
 tempfile = "3.13.0"
-tokio = { version = "1.40.0", default-features = false, features = ["fs", "rt-multi-thread"] }
+tokio.workspace = true
 walkdir = "2.5.0"

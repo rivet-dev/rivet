@@ -35,7 +35,7 @@ strum = "0.26.3"
 tabled = "0.17.0"
 tempfile = "3.13.0"
 thiserror = "1.0.64"
-tokio = { version = "1.40", features = ["full", "tracing"] }
+tokio.workspace = true
 tracing = "0.1"
 url = "2.4"
 uuid = "1.10.0"

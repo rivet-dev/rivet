@@ -82,11 +82,11 @@
         },
         "unstable": {
           "default": {
+            "minify": null,
             "analyze_result": null,
+            "esbuild_log_level": null,
             "compression": null,
             "dump_build": null,
-            "esbuild_log_level": null,
-            "minify": null,
             "no_bundler": null
           },
           "allOf": [

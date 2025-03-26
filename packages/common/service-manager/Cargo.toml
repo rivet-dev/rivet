@@ -16,6 +16,6 @@ rivet-metrics.workspace = true
 rivet-migrate.workspace = true
 rivet-pools.workspace = true
 s3-util.workspace = true
-tokio = { version = "1.40", features = ["full", "tracing"] }
+tokio.workspace = true
 tokio-cron-scheduler = "0.13.0"
 tracing = "0.1.40"

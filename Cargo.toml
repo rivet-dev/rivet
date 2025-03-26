@@ -17,9 +17,8 @@ json5 = "0.4.1"
 tracing = "0.1"
 
 [workspace.dependencies.tokio]
-version = "1.40.0"
-default-features = false
-features = ["full"]
+version = "1.44.0"
+features = ["full", "tracing"]
 
 [workspace.dependencies.nix]
 version = "0.27"

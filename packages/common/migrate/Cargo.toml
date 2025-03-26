@@ -14,7 +14,7 @@ rivet-config.workspace = true
 rivet-pools.workspace = true
 rivet-util.workspace = true
 tempfile = "3.13.0"
-tokio = { version = "1.40", features = ["full"] }
+tokio.workspace = true
 tracing = "0.1"
 url = "2.4"
 urlencoding = "2.1.3"

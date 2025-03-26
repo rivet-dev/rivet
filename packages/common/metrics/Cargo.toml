@@ -12,6 +12,6 @@ lazy_static = "1.4"
 prometheus = "0.13"
 rivet-config.workspace = true
 rivet-env.workspace = true
-tokio = "1.40.0"
+tokio.workspace = true
 tracing = "0.1"
 

@@ -10,7 +10,7 @@ chirp-client.workspace = true
 rivet-operation.workspace = true
 rivet-connection.workspace = true
 rivet-runtime.workspace = true
-tokio = { version = "1.40", features = ["full"] }
+tokio.workspace = true
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",

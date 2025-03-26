@@ -36,7 +36,7 @@ sha1 = "0.10.6"
 strum = { version = "0.24", features = ["derive"] }
 tar = "0.4.40"
 tempfile = "3.13.0"
-tokio = { version = "1.40.0", default-features = false, features = ["fs", "macros", "process", "rt", "io-util"] }
+tokio.workspace = true
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
 typed-path = "0.7.0"
 url = "2.5.0"

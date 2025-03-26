@@ -36,7 +36,7 @@ service-discovery.workspace = true
 sysinfo = "0.31.4" 
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { workspace = true, default-features = false, features = ["fs", "process", "macros", "rt", "rt-multi-thread"] }
+tokio.workspace = true
 tokio-tungstenite = "0.23.1"
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
 tracing-logfmt.workspace = true

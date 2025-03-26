@@ -14,7 +14,7 @@ hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 rivet-config.workspace = true
 rivet-env.workspace = true
 rivet-operation.workspace = true
-tokio = { version = "1.40" }
+tokio.workspace = true
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",

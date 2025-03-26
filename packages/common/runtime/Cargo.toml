@@ -6,11 +6,11 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-console-subscriber = "0.1"
+console-subscriber = "0.4"
 lazy_static = "1.4"
 rivet-metrics.workspace = true
 thiserror = "1.0"
-tokio = { version = "1.40", features = ["full", "tracing"] }
+tokio.workspace = true
 tracing = "0.1"
 tracing-core = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi", "registry", "env-filter"] }  # Used with attribute

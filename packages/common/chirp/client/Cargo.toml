@@ -19,7 +19,7 @@ rivet-pools.workspace = true
 rivet-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-tokio = { version = "1.40", features = ["full"] }
+tokio.workspace = true
 tokio-util = "0.7"
 tracing = "0.1"
 types-proto.workspace = true
