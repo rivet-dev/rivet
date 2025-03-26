@@ -199,6 +199,8 @@ pub struct Resources {
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ActorMetadata {
 	pub actor: ActorMetadataActor,
+	#[serde(default)]
+	pub network: Option<ActorMetadataNetwork>,
 	pub project: ActorMetadataProject,
 	pub environment: ActorMetadataEnvironment,
 	pub datacenter: ActorMetadataDatacenter,
@@ -211,6 +213,11 @@ pub struct ActorMetadataActor {
 	pub actor_id: Uuid,
 	pub tags: HashableMap<String, String>,
 	pub create_ts: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataNetwork {
+	pub ports: HashableMap<String, crate::types::Port>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]

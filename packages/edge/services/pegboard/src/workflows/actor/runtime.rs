@@ -13,11 +13,13 @@ use util::serde::AsHashableExt;
 
 use super::{
 	destroy::{self, KillCtx},
-	setup, Destroy, Input, Port, ACTOR_START_THRESHOLD_MS, BASE_RETRY_TIMEOUT_MS,
+	setup, Destroy, Input, ACTOR_START_THRESHOLD_MS, BASE_RETRY_TIMEOUT_MS,
 };
 use crate::{
-	keys, metrics, protocol,
-	types::{GameGuardProtocol, HostProtocol, NetworkMode, Routing},
+	keys, metrics,
+	ops::actor::get,
+	protocol,
+	types::{EndpointType, GameGuardProtocol, HostProtocol, NetworkMode, Port, Routing},
 	workflows::client::CLIENT_ELIGIBLE_THRESHOLD_MS,
 };
 
@@ -83,6 +85,109 @@ async fn update_client(ctx: &ActivityCtx, input: &UpdateClientInput) -> GlobalRe
 	.await?;
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct FetchPortsInput {
+	actor_id: Uuid,
+	endpoint_type: Option<EndpointType>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct FetchPortsOutput {
+	ports: Vec<FetchedPort>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct FetchedPort {
+	name: String,
+	port_number: Option<u16>,
+	port: Port,
+}
+
+#[activity(FetchPorts)]
+async fn fetch_ports(ctx: &ActivityCtx, input: &FetchPortsInput) -> GlobalResult<FetchPortsOutput> {
+	let pool = ctx.sqlite().await?;
+
+	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
+
+	let ((wan_hostname,), port_ingress_rows, port_host_rows, dc_res) = tokio::try_join!(
+		sql_fetch_one!(
+			[ctx, (Option<String>,), &pool]
+			"
+			SELECT client_wan_hostname
+			FROM state
+			",
+		),
+		sql_fetch_all!(
+			[ctx, get::PortIngress, &pool]
+			"
+			SELECT
+				port_name,
+				port_number,
+				ingress_port_number,
+				protocol
+			FROM ports_ingress
+			",
+		),
+		sql_fetch_all!(
+			[ctx, get::PortHost, &pool]
+			"
+			SELECT port_name, port_number, protocol
+			FROM ports_host
+			",
+		),
+		ctx.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![dc_id],
+		}),
+	)?;
+
+	let dc = unwrap!(dc_res.datacenters.first());
+
+	let endpoint_type = input.endpoint_type.unwrap_or_else(|| {
+		EndpointType::default_for_guard_public_hostname(&dc.guard_public_hostname)
+	});
+
+	let ports = port_ingress_rows
+		.into_iter()
+		.map(|row| {
+			let port = get::create_port_ingress(
+				input.actor_id,
+				true,
+				&row,
+				unwrap!(GameGuardProtocol::from_repr(row.protocol.try_into()?)),
+				endpoint_type,
+				&dc.guard_public_hostname,
+			)?;
+
+			Ok(FetchedPort {
+				name: row.port_name,
+				port_number: row.port_number.map(TryInto::try_into).transpose()?,
+				port,
+			})
+		})
+		.chain(port_host_rows.into_iter().map(|row| {
+			let port = get::create_port_host(
+				true,
+				wan_hostname.as_deref(),
+				&row,
+				// Placeholder, will be replaced in the isolate runner when building
+				// metadata
+				Some(&get::PortProxied {
+					port_name: String::new(),
+					source: 0,
+				}),
+			)?;
+
+			Ok(FetchedPort {
+				name: row.port_name,
+				port_number: row.port_number.map(TryInto::try_into).transpose()?,
+				port,
+			})
+		}))
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	Ok(FetchPortsOutput { ports })
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -500,7 +605,6 @@ pub async fn insert_ports_fdb(ctx: &ActivityCtx, input: &InsertPortsFdbInput) ->
 pub async fn spawn_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
-	network_ports: &util::serde::HashableMap<String, Port>,
 	actor_setup: &setup::ActorSetupCtx,
 	generation: u32,
 ) -> GlobalResult<Option<(Uuid, Uuid)>> {
@@ -529,11 +633,18 @@ pub async fn spawn_actor(
 		return Ok(None);
 	};
 
-	ctx.activity(UpdateClientInput {
-		client_id: res.client_id,
-		client_workflow_id: res.client_workflow_id,
-	})
-	.await?;
+	let (_, ports_res) = ctx
+		.join((
+			activity(UpdateClientInput {
+				client_id: res.client_id,
+				client_workflow_id: res.client_workflow_id,
+			}),
+			v(2).activity(FetchPortsInput {
+				actor_id: input.actor_id,
+				endpoint_type: input.endpoint_type,
+			}),
+		))
+		.await?;
 
 	let cluster_id = ctx.config().server()?.rivet.edge()?.cluster_id;
 
@@ -557,13 +668,14 @@ pub async fn spawn_actor(
 			},
 			root_user_enabled: input.root_user_enabled,
 			env: input.environment.as_hashable(),
-			ports: network_ports
+			ports: ports_res
+				.ports
 				.iter()
-				.map(|(port_name, port)| match port.routing {
-					Routing::GameGuard { protocol, .. } => (
-						crate::util::pegboard_normalize_port_name(port_name),
+				.map(|port| match port.port.routing {
+					Routing::GameGuard { protocol } => (
+						crate::util::pegboard_normalize_port_name(&port.name),
 						protocol::Port {
-							target: port.internal_port,
+							target: port.port_number,
 							protocol: match protocol {
 								GameGuardProtocol::Http
 								| GameGuardProtocol::Https
@@ -575,9 +687,9 @@ pub async fn spawn_actor(
 						},
 					),
 					Routing::Host { protocol } => (
-						crate::util::pegboard_normalize_port_name(port_name),
+						crate::util::pegboard_normalize_port_name(&port.name),
 						protocol::Port {
-							target: port.internal_port,
+							target: port.port_number,
 							protocol: match protocol {
 								HostProtocol::Tcp => protocol::TransportProtocol::Tcp,
 								HostProtocol::Udp => protocol::TransportProtocol::Udp,
@@ -598,6 +710,13 @@ pub async fn spawn_actor(
 					tags: input.tags.as_hashable(),
 					create_ts: ctx.ts(),
 				},
+				network: Some(protocol::ActorMetadataNetwork {
+					ports: ports_res
+						.ports
+						.into_iter()
+						.map(|port| (port.name, port.port))
+						.collect(),
+				}),
 				project: protocol::ActorMetadataProject {
 					project_id: actor_setup.meta.project_id,
 					slug: actor_setup.meta.project_slug.clone(),
@@ -627,7 +746,6 @@ pub async fn spawn_actor(
 pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
-	network_ports: &util::serde::HashableMap<String, Port>,
 	state: &mut State,
 	new_image_id: Option<Uuid>,
 ) -> GlobalResult<Option<Destroy>> {
@@ -641,13 +759,8 @@ pub async fn reschedule_actor(
 	})
 	.await?;
 
-	let actor_setup = setup::setup(
-		ctx,
-		&input,
-		&network_ports,
-		setup::SetupCtx::Reschedule { new_image_id },
-	)
-	.await?;
+	let actor_setup =
+		setup::setup(ctx, &input, setup::SetupCtx::Reschedule { new_image_id }).await?;
 
 	let next_generation = state.generation + 1;
 
@@ -656,7 +769,6 @@ pub async fn reschedule_actor(
 		.loope(RescheduleState::default(), |ctx, state| {
 			let input = input.clone();
 			let actor_setup = actor_setup.clone();
-			let network_ports = network_ports.clone();
 
 			async move {
 				// Determine next backoff sleep duration
@@ -688,9 +800,7 @@ pub async fn reschedule_actor(
 					}
 				}
 
-				if let Some(res) =
-					spawn_actor(ctx, &input, &network_ports, &actor_setup, next_generation).await?
-				{
+				if let Some(res) = spawn_actor(ctx, &input, &actor_setup, next_generation).await? {
 					Ok(Loop::Break(Ok(res)))
 				} else {
 					tracing::debug!(actor_id=?input.actor_id, "failed to reschedule actor, retrying");

@@ -7,6 +7,8 @@ export default {
 	async start(ctx: ActorContext) {
 		console.log("Isolate starting");
 
+		console.log("Metadata:", ctx.metadata);
+
 		// Test KV functionality
 		console.log("Starting KV API validation");
 		console.time("kv-test");

@@ -7,7 +7,7 @@ use util::serde::AsHashableExt;
 
 use crate::{
 	protocol,
-	types::{ActorLifecycle, ActorResources, NetworkMode, Routing},
+	types::{ActorLifecycle, ActorResources, EndpointType, NetworkMode, Routing},
 };
 
 pub mod destroy;
@@ -42,6 +42,7 @@ pub struct Input {
 	pub network_mode: NetworkMode,
 	pub environment: HashMap<String, String>,
 	pub network_ports: HashMap<String, Port>,
+	pub endpoint_type: Option<EndpointType>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -87,7 +88,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		})
 		.await?;
 
-	let res = setup::setup(ctx, input, &network_ports, setup::SetupCtx::Init).await;
+	let res = setup::setup(
+		ctx,
+		input,
+		setup::SetupCtx::Init {
+			network_ports: network_ports.clone(),
+		},
+	)
+	.await;
 	let initial_actor_setup = match ctx.catch_unrecoverable(res)? {
 		Ok(res) => res,
 		Err(err) => {
@@ -119,7 +127,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		.await?;
 
 	let Some((client_id, client_workflow_id)) =
-		runtime::spawn_actor(ctx, input, &network_ports, &initial_actor_setup, 0).await?
+		runtime::spawn_actor(ctx, input, &initial_actor_setup, 0).await?
 	else {
 		ctx.msg(Failed {
 			message: "Failed to allocate (no availability).".into(),
@@ -144,7 +152,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 			runtime::State::new(client_id, client_workflow_id),
 			|ctx, state| {
 				let input = input.clone();
-				let network_ports = network_ports.clone();
 
 				async move {
 					let sig = if let Some(drain_timeout_ts) = state.drain_timeout_ts {
@@ -169,8 +176,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							.await?;
 
 							if let Some(sig) =
-								runtime::reschedule_actor(ctx, &input, &network_ports, state, None)
-									.await?
+								runtime::reschedule_actor(ctx, &input, state, None).await?
 							{
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {
@@ -245,7 +251,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 									// Wait for Traefik to poll ports and update GG
 									ctx.activity(traefik::WaitForTraefikPollInput {
-										create_ts: ctx.ts(),
+										create_ts: ctx.create_ts(),
 									})
 									.await?;
 
@@ -306,15 +312,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 											.await?;
 										}
 
-										if runtime::reschedule_actor(
-											ctx,
-											&input,
-											&network_ports,
-											state,
-											None,
-										)
-										.await?
-										.is_some()
+										if runtime::reschedule_actor(ctx, &input, state, None)
+											.await?
+											.is_some()
 										{
 											// Destroyed early
 											return Ok(Loop::Break(runtime::StateRes {
@@ -369,14 +369,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							)
 							.await?;
 
-							if let Some(sig) = runtime::reschedule_actor(
-								ctx,
-								&input,
-								&network_ports,
-								state,
-								Some(sig.image_id),
-							)
-							.await?
+							if let Some(sig) =
+								runtime::reschedule_actor(ctx, &input, state, Some(sig.image_id))
+									.await?
 							{
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {

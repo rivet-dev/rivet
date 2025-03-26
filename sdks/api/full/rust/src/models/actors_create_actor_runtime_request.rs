@@ -12,10 +12,15 @@
 pub struct ActorsCreateActorRuntimeRequest {
 	#[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
 	pub environment: Option<::std::collections::HashMap<String, String>>,
+	#[serde(rename = "network", skip_serializing_if = "Option::is_none")]
+	pub network: Option<Box<crate::models::ActorsCreateActorRuntimeNetworkRequest>>,
 }
 
 impl ActorsCreateActorRuntimeRequest {
 	pub fn new() -> ActorsCreateActorRuntimeRequest {
-		ActorsCreateActorRuntimeRequest { environment: None }
+		ActorsCreateActorRuntimeRequest {
+			environment: None,
+			network: None,
+		}
 	}
 }

@@ -47,7 +47,7 @@ RUN \
     --mount=type=cache,target=/root/.cache,id=universal-user-cache \
     --mount=type=cache,target=/root/.npm,id=universal-user-npm \
     --mount=type=cache,target=/root/.yarn,id=universal-user-yarn \
-    RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
+    RUSTFLAGS="--cfg tokio_unstable" RIVET_BUILD_HUB=1 cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
     mkdir /app/dist/ && \
     cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 

@@ -473,8 +473,38 @@ func (c *CreateActorPortRequest) String() string {
 	return fmt.Sprintf("%#v", c)
 }
 
+type CreateActorRuntimeNetworkRequest struct {
+	EndpointType EndpointType `json:"endpoint_type,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (c *CreateActorRuntimeNetworkRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler CreateActorRuntimeNetworkRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*c = CreateActorRuntimeNetworkRequest(value)
+	c._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (c *CreateActorRuntimeNetworkRequest) String() string {
+	if len(c._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(c); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", c)
+}
+
 type CreateActorRuntimeRequest struct {
-	Environment map[string]string `json:"environment,omitempty"`
+	Environment map[string]string                 `json:"environment,omitempty"`
+	Network     *CreateActorRuntimeNetworkRequest `json:"network,omitempty"`
 
 	_rawJSON json.RawMessage
 }

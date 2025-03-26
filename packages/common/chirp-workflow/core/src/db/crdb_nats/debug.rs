@@ -69,6 +69,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				workflow_name,
 				COALESCE(tags, '{}'::JSONB) AS tags,
 				create_ts,
+				silence_ts,
 				input,
 				output,
 				error,
@@ -109,7 +110,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					cardinality(wake_signals) = 0 AND
 					wake_sub_workflow_id IS NULL
 				)) AND
-				(CASE WHEN $6 THEN silence_ts IS NULL ELSE silence_ts IS NOT NULL END)
+				(CASE WHEN $6 THEN silence_ts IS NOT NULL ELSE silence_ts IS NULL END)
 			"
 		)
 		.to_string();
@@ -196,6 +197,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					workflow_name,
 					COALESCE(tags, '{}'::JSONB) AS tags,
 					create_ts,
+					silence_ts,
 					input,
 					output,
 					error,

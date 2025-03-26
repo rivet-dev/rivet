@@ -20,7 +20,10 @@ import * as Rivet from "../../../../index";
  *                 "key": "value"
  *             },
  *             runtime: {
- *                 environment: {}
+ *                 environment: {},
+ *                 network: {
+ *                     endpointType: "hostname"
+ *                 }
  *             },
  *             network: {
  *                 mode: "bridge",

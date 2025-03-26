@@ -1,6 +1,7 @@
 export * from "./GetActorResponse";
 export * from "./CreateActorRequest";
 export * from "./CreateActorRuntimeRequest";
+export * from "./CreateActorRuntimeNetworkRequest";
 export * from "./CreateActorNetworkRequest";
 export * from "./CreateActorPortRequest";
 export * from "./CreateActorResponse";

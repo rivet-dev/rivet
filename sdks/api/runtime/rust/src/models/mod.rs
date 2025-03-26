@@ -8,6 +8,8 @@ pub mod actors_create_actor_request;
 pub use self::actors_create_actor_request::ActorsCreateActorRequest;
 pub mod actors_create_actor_response;
 pub use self::actors_create_actor_response::ActorsCreateActorResponse;
+pub mod actors_create_actor_runtime_network_request;
+pub use self::actors_create_actor_runtime_network_request::ActorsCreateActorRuntimeNetworkRequest;
 pub mod actors_create_actor_runtime_request;
 pub use self::actors_create_actor_runtime_request::ActorsCreateActorRuntimeRequest;
 pub mod actors_endpoint_type;

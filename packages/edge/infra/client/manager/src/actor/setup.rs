@@ -415,14 +415,18 @@ impl Actor {
 				memory: self.config.resources.memory,
 				memory_max: self.config.resources.memory_max,
 			},
-			// TODO:
 			ports: ports
-				.values()
-				.map(|port| actor_config::Port {
-					target: port.target,
-					protocol: port.protocol,
+				.iter()
+				.map(|(name, port)| {
+					(
+						name.clone(),
+						actor_config::Port {
+							target: port.target,
+							protocol: port.protocol,
+						},
+					)
 				})
-				.collect::<Vec<_>>(),
+				.collect(),
 			env: self.build_default_env(ctx, &ports),
 			metadata: self.config.metadata.clone(),
 			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),

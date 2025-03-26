@@ -194,7 +194,7 @@ pub async fn run_inner(
 			actor_config
 				.ports
 				.iter()
-				.map(|port| {
+				.map(|(_, port)| {
 					NetListenDescriptor::from_ipv4(
 						loopback,
 						Some(port.target),
@@ -282,7 +282,7 @@ pub async fn run_inner(
 				stdout: StdioPipe::file(stdout_writer),
 				stderr: StdioPipe::file(stderr_writer),
 			},
-			env: actor_config.env,
+			env: actor_config.env.clone(),
 			..Default::default()
 		},
 	)?;
@@ -308,11 +308,7 @@ pub async fn run_inner(
 					runtime_error(&mut stderr_writer2, &mut worker, err)?;
 				} else {
 					// Call `start`
-					match handle_entrypoint(
-						actor_config.metadata.deserialize()?,
-						&mut worker,
-						module_id,
-					) {
+					match handle_entrypoint(actor_config, &mut worker, module_id) {
 						Ok(()) => {
 							// Third step runs event loop until stopped. We do this even after an error in
 							// case a beforeunload event handler was registered.
@@ -407,7 +403,7 @@ pub async fn run_inner(
 
 // Reads the `start` function from the default export of index.js and calls it.
 fn handle_entrypoint(
-	actor_metadata: protocol::ActorMetadata,
+	actor_config: config::actor::Config,
 	worker: &mut MainWorker,
 	index_module_id: ModuleId,
 ) -> Result<()> {
@@ -464,7 +460,7 @@ fn handle_entrypoint(
 		.context("ns is object")?;
 
 	// Serialize metadata
-	let metadata = JsMetadata::from_actor(actor_metadata, scope)?;
+	let metadata = JsMetadata::from_actor(actor_config, scope)?;
 	let metadata = deno_core::serde_v8::to_v8(scope, metadata)?;
 
 	// Add metadata

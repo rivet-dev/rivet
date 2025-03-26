@@ -9,6 +9,7 @@ docs/ActorsCreateActorNetworkRequest.md
 docs/ActorsCreateActorPortRequest.md
 docs/ActorsCreateActorRequest.md
 docs/ActorsCreateActorResponse.md
+docs/ActorsCreateActorRuntimeNetworkRequest.md
 docs/ActorsCreateActorRuntimeRequest.md
 docs/ActorsEndpointType.md
 docs/ActorsGetActorLogsResponse.md
@@ -58,6 +59,7 @@ src/models/actors_create_actor_network_request.rs
 src/models/actors_create_actor_port_request.rs
 src/models/actors_create_actor_request.rs
 src/models/actors_create_actor_response.rs
+src/models/actors_create_actor_runtime_network_request.rs
 src/models/actors_create_actor_runtime_request.rs
 src/models/actors_endpoint_type.rs
 src/models/actors_get_actor_logs_response.rs

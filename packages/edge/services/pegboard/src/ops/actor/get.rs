@@ -19,6 +19,8 @@ struct ActorRow {
 	tags: sqlx::types::Json<HashMap<String, String>>,
 	resources_cpu_millicores: i64,
 	resources_memory_mib: i64,
+	selected_resources_cpu_millicores: Option<i64>,
+	selected_resources_memory_mib: Option<i64>,
 	lifecycle_kill_timeout_ms: i64,
 	lifecycle_durable: bool,
 	create_ts: i64,
@@ -33,23 +35,24 @@ struct ActorRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct PortIngress {
-	port_name: String,
-	port_number: Option<i64>,
+pub(crate) struct PortIngress {
+	pub(crate) port_name: String,
+	pub(crate) port_number: Option<i64>,
 	ingress_port_number: i64,
-	protocol: i64,
+	pub(crate) protocol: i64,
 }
 
 #[derive(sqlx::FromRow)]
-struct PortHost {
-	port_name: String,
-	protocol: i64,
+pub(crate) struct PortHost {
+	pub(crate) port_name: String,
+	pub(crate) port_number: Option<i64>,
+	pub(crate) protocol: i64,
 }
 
 #[derive(sqlx::FromRow)]
-struct PortProxied {
-	port_name: String,
-	source: i64,
+pub(crate) struct PortProxied {
+	pub(crate) port_name: String,
+	pub(crate) source: i64,
 }
 
 struct ActorData {
@@ -122,6 +125,8 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 						json(tags) AS tags,
 						resources_cpu_millicores,
 						resources_memory_mib,
+						selected_resources_cpu_millicores,
+						selected_resources_memory_mib,
 						lifecycle_kill_timeout_ms,
 						lifecycle_durable,
 						create_ts,
@@ -150,7 +155,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 				sql_fetch_all!(
 					[ctx, PortHost, pool]
 					"
-					SELECT port_name, protocol
+					SELECT port_name, port_number, protocol
 					FROM ports_host
 					",
 				),
@@ -187,12 +192,9 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 	let actors = actor_data
 		.iter()
 		.map(|s| {
-			let endpoint_type =
-				input
-					.endpoint_type
-					.unwrap_or(EndpointType::default_for_guard_public_hostname(
-						&dc.guard_public_hostname,
-					));
+			let endpoint_type = input.endpoint_type.unwrap_or_else(|| {
+				EndpointType::default_for_guard_public_hostname(&dc.guard_public_hostname)
+			});
 
 			let is_connectable = s.row.connectable_ts.is_some();
 			let wan_hostname = s.row.client_wan_hostname.clone();
@@ -239,8 +241,16 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 				env_id: s.row.env_id,
 				tags: s.row.tags.0.clone(),
 				resources: ActorResources {
-					cpu_millicores: s.row.resources_cpu_millicores.try_into()?,
-					memory_mib: s.row.resources_memory_mib.try_into()?,
+					cpu_millicores: s
+						.row
+						.selected_resources_cpu_millicores
+						.unwrap_or(s.row.resources_cpu_millicores)
+						.try_into()?,
+					memory_mib: s
+						.row
+						.selected_resources_memory_mib
+						.unwrap_or(s.row.resources_memory_mib)
+						.try_into()?,
 				},
 				lifecycle: ActorLifecycle {
 					kill_timeout_ms: s.row.lifecycle_kill_timeout_ms,
@@ -262,7 +272,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 	Ok(Output { actors })
 }
 
-fn create_port_ingress(
+pub(crate) fn create_port_ingress(
 	actor_id: Uuid,
 	is_connectable: bool,
 	port: &PortIngress,
@@ -293,7 +303,7 @@ fn create_port_ingress(
 	})
 }
 
-fn create_port_host(
+pub(crate) fn create_port_host(
 	is_connectable: bool,
 	wan_hostname: Option<&str>,
 	host_port: &PortHost,

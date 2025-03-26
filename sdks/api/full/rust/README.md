@@ -174,6 +174,7 @@ Class | Method | HTTP request | Description
  - [ActorsCreateActorPortRequest](docs/ActorsCreateActorPortRequest.md)
  - [ActorsCreateActorRequest](docs/ActorsCreateActorRequest.md)
  - [ActorsCreateActorResponse](docs/ActorsCreateActorResponse.md)
+ - [ActorsCreateActorRuntimeNetworkRequest](docs/ActorsCreateActorRuntimeNetworkRequest.md)
  - [ActorsCreateActorRuntimeRequest](docs/ActorsCreateActorRuntimeRequest.md)
  - [ActorsEndpointType](docs/ActorsEndpointType.md)
  - [ActorsGetActorLogsResponse](docs/ActorsGetActorLogsResponse.md)

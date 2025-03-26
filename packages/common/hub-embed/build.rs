@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		fs::remove_dir_all(out_dir)?;
 	}
 
-	if std::env::var("RIVET_SKIP_BUILD_HUB").is_err() {
+	if std::env::var("RIVET_BUILD_HUB").is_ok() {
 		// Build hub
 		let project_root = PathBuf::from(manifest_dir.clone()).join("../../..");
 		let hub_path = project_root.join("frontend/apps/hub");

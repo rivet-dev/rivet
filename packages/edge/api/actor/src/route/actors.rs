@@ -137,6 +137,13 @@ pub async fn create(
 	};
 
 	let actor_id = Uuid::new_v4();
+	let network = body.network.unwrap_or_default();
+	let endpoint_type = body
+		.runtime
+		.as_ref()
+		.and_then(|r| r.network.as_ref())
+		.map(|n| n.endpoint_type)
+		.map(ApiInto::api_into);
 
 	tracing::info!(?actor_id, ?tags, "creating actor with tags");
 
@@ -149,8 +156,6 @@ pub async fn create(
 	let mut destroy_sub = ctx
 		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
 		.await?;
-
-	let network = body.network.unwrap_or_default();
 
 	ctx.workflow(pegboard::workflows::actor::Input {
 		actor_id,
@@ -215,6 +220,7 @@ pub async fn create(
 				}
 			)))
 			.collect::<GlobalResult<HashMap<_, _>>>()),
+		endpoint_type,
 	})
 	.tag("actor_id", actor_id)
 	.dispatch()

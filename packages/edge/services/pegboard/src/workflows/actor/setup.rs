@@ -325,6 +325,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<i64
 		}
 	}
 
+	// TODO: Move this from an op to an activity, and move the sql queries after to their own activity
 	// Choose which port to assign for a job's ingress port.
 	// This is required because TCP and UDP do not have a `Host` header and thus cannot be re-routed by hostname.
 	//
@@ -513,8 +514,12 @@ async fn get_meta(ctx: &ActivityCtx, input: &GetMetaInput) -> GlobalResult<GetMe
 }
 
 pub enum SetupCtx {
-	Init,
-	Reschedule { new_image_id: Option<Uuid> },
+	Init {
+		network_ports: util::serde::HashableMap<String, Port>,
+	},
+	Reschedule {
+		new_image_id: Option<Uuid>,
+	},
 }
 
 #[derive(Clone)]
@@ -528,11 +533,10 @@ pub struct ActorSetupCtx {
 pub async fn setup(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
-	network_ports: &util::serde::HashableMap<String, Port>,
 	setup: SetupCtx,
 ) -> GlobalResult<ActorSetupCtx> {
-	let image_id = match &setup {
-		SetupCtx::Init => {
+	let image_id = match setup {
+		SetupCtx::Init { network_ports } => {
 			let tags = input.tags.as_hashable();
 			let create_ts = ctx
 				.activity(InsertDbInput {
@@ -545,7 +549,7 @@ pub async fn setup(
 					args: input.args.clone(),
 					network_mode: input.network_mode,
 					environment: input.environment.as_hashable(),
-					network_ports: network_ports.clone(),
+					network_ports,
 				})
 				.await?;
 
@@ -560,7 +564,7 @@ pub async fn setup(
 			input.image_id
 		}
 		SetupCtx::Reschedule { new_image_id } => {
-			if let Some(image_id) = *new_image_id {
+			if let Some(image_id) = new_image_id {
 				ctx.activity(runtime::UpdateImageInput { image_id }).await?;
 
 				image_id

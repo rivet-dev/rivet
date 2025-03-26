@@ -405,7 +405,10 @@ export class Actors {
      *                 "key": "value"
      *             },
      *             runtime: {
-     *                 environment: {}
+     *                 environment: {},
+     *                 network: {
+     *                     endpointType: "hostname"
+     *                 }
      *             },
      *             network: {
      *                 mode: "bridge",

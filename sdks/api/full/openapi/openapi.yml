@@ -9040,6 +9040,15 @@ components:
           type: object
           additionalProperties:
             type: string
+        network:
+          $ref: '#/components/schemas/ActorsCreateActorRuntimeNetworkRequest'
+    ActorsCreateActorRuntimeNetworkRequest:
+      type: object
+      properties:
+        endpoint_type:
+          $ref: '#/components/schemas/ActorsEndpointType'
+      required:
+        - endpoint_type
     ActorsCreateActorNetworkRequest:
       type: object
       properties:

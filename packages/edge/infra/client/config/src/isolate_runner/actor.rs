@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct Config {
 	pub resources: Resources,
-	pub ports: Vec<Port>,
+	pub ports: HashMap<String, Port>,
 	pub env: HashMap<String, String>,
 	pub metadata: protocol::Raw<protocol::ActorMetadata>,
 	pub vector_socket_addr: Option<String>,
