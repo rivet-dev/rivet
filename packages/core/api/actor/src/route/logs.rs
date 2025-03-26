@@ -67,6 +67,7 @@ pub async fn get_logs(
 			let dc = dc;
 
 			let config = Configuration {
+				client: rivet_pools::reqwest::client().await?,
 				base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
 				bearer_access_token: ctx.auth().api_token.clone(),
 				..Default::default()

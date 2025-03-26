@@ -34,6 +34,7 @@ url = "2.4"
 uuid = { version = "1", features = ["v4"] }
 scc = "2.3.3"
 tokio-native-tls = "0.3.1"
+reqwest = "0.11"
 
 [dependencies.sqlx]
 workspace = true

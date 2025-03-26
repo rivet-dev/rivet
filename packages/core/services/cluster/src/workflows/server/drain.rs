@@ -217,6 +217,7 @@ async fn drain_pegboard_client(
 	let token = unwrap!(token_res.token).token;
 
 	let config = Configuration {
+		client: rivet_pools::reqwest::client().await?,
 		base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc_name_id)?,
 		bearer_access_token: Some(token),
 		..Default::default()

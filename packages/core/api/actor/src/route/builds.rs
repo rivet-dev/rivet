@@ -495,6 +495,7 @@ pub async fn complete_build(
 				let token = token.clone();
 				async move {
 					let config = Configuration {
+						client: rivet_pools::reqwest::client().await?,
 						base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
 						bearer_access_token: Some(token),
 						..Default::default()

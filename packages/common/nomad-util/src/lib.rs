@@ -18,6 +18,8 @@ pub fn build_config(config: &rivet_config::Config) -> Result<Configuration, Noma
 		.url
 		.to_string();
 	let config = Configuration {
+		// TODO:
+		// client: rivet_pools::reqwest::client().await?,
 		base_path: format!("{}/v1", nomad_url.trim_end_matches('/')),
 		..Default::default()
 	};
@@ -36,6 +38,8 @@ pub fn new_build_config(
 		.url
 		.to_string();
 	let config = nomad_client_new::apis::configuration::Configuration {
+		// TODO:
+		// client: rivet_pools::reqwest::client().await?,
 		base_path: format!("{}/v1", nomad_url.trim_end_matches('/')),
 		..Default::default()
 	};

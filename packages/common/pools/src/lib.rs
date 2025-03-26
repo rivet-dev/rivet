@@ -3,6 +3,7 @@ mod error;
 pub mod metrics;
 mod pools;
 pub mod prelude;
+pub mod reqwest;
 pub mod utils;
 
 pub use crate::{
