@@ -10,7 +10,7 @@ use sqlx::{
 	sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 	ConnectOptions, Sqlite,
 };
-use std::io;
+use std::io::{self, Read, Write};
 use std::{
 	fmt::Debug,
 	path::{Path, PathBuf},
@@ -19,6 +19,7 @@ use std::{
 };
 use tokio::sync::{oneshot, OnceCell};
 use tokio::{
+	io::AsyncReadExt,
 	sync::{broadcast, Mutex},
 	time::Instant,
 };
@@ -362,10 +363,14 @@ impl SqlitePoolManager {
 			return Ok(false);
 		};
 
+		let start_instant = Instant::now();
+
 		// Process each database connection in parallel using stream
 		let db_data_to_snapshot = futures_util::stream::iter(keys_packed.iter().cloned())
 			.map(|key_packed| {
 				async move {
+					let hex_key = hex::encode(&**key_packed);
+
 					// Acquire the connection
 					//
 					// We don't lock the entry because we can't hold an scc lock in a multithreaded context.
@@ -383,7 +388,7 @@ impl SqlitePoolManager {
 						if ensure_exists {
 							bail!("attempting to snapshot database that's not loaded");
 						} else {
-							tracing::debug!(key=?hex::encode(&**key_packed), "skipping snapshot, database is not loaded");
+							tracing::debug!(key=?hex_key, "skipping snapshot, database is not loaded");
 							return GlobalResult::Ok(None);
 						}
 					};
@@ -396,8 +401,6 @@ impl SqlitePoolManager {
 					// Hold a lock to the connection so nobody else can modify the database while we snapshot
 					// it
 					let mut conn_raw = conn.conn.lock().await;
-
-					let hex_key = hex::encode(&**key_packed);
 
 					tracing::debug!(key=?hex_key, "snapshotting sqlite database");
 
@@ -439,18 +442,39 @@ impl SqlitePoolManager {
 						.execute(&mut *conn_raw)
 						.await?;
 
-					// TODO: Use a stream so as to not load entire DB into memory
-					// Read the database file
-					let data = tokio::fs::read(&conn.db_path).await.map_err(Error::Io)?;
+					// Stream the database file and compress it
+					let mut compressed_data = Vec::new();
+					let file = tokio::fs::File::open(&conn.db_path)
+						.await
+						.map_err(Error::Io)?;
+					let mut reader = tokio::io::BufReader::new(file);
+					let mut encoder = lz4_flex::frame::FrameEncoder::new(&mut compressed_data);
+
+					let mut buffer = [0u8; 16 * 1024]; // 16 KiB
+					loop {
+						let bytes_read = reader.read(&mut buffer).await.map_err(Error::Io)?;
+						if bytes_read == 0 {
+							break;
+						}
+						encoder
+							.write_all(&buffer[..bytes_read])
+							.map_err(Error::Io)?;
+					}
+					encoder.finish().map_err(Error::Lz4)?;
 
 					// 3 MiB
-					if data.len() > 3 * 1024 * 1024 * 1024 {
+					if compressed_data.len() > 3 * 1024 * 1024 {
 						metrics::SQLITE_LARGE_DB
 							.with_label_values(&[&hex_key])
-							.set(data.len().try_into().unwrap_or(i64::MAX));
+							.set(compressed_data.len().try_into().unwrap_or(i64::MAX));
 					}
 
-					Ok(Some((key_packed, Arc::new(data), current_state, prev_snapshotted_state)))
+					Ok(Some((
+						key_packed,
+						Arc::new(compressed_data),
+						current_state,
+						prev_snapshotted_state,
+					)))
 				}
 			})
 			.buffer_unordered(32)
@@ -474,10 +498,13 @@ impl SqlitePoolManager {
 					let db_data_subspace =
 						subspace.subspace(&keys::DbDataKey::new(key_packed.clone()));
 					tx.clear_subspace_range(&db_data_subspace);
+					let compressed_db_data_subspace =
+						subspace.subspace(&keys::CompressedDbDataKey::new(key_packed.clone()));
+					tx.clear_subspace_range(&compressed_db_data_subspace);
 
 					// Write chunks
 					for (idx, chunk) in data.chunks(CHUNK_SIZE).enumerate() {
-						let chunk_key = keys::DbDataChunkKey {
+						let chunk_key = keys::CompressedDbDataChunkKey {
 							db_name_segment: key_packed.clone(),
 							chunk: idx,
 						};
@@ -492,8 +519,23 @@ impl SqlitePoolManager {
 		})
 		.await?;
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		let total_data_size = db_data_to_snapshot
+			.iter()
+			.map(|(_, data, _, _)| data.len())
+			.sum::<usize>() as f64;
+
 		// Update state if write was successful
-		for (key_packed, _, current_state, prev_snapshotted_state) in db_data_to_snapshot {
+		for (key_packed, data, current_state, prev_snapshotted_state) in db_data_to_snapshot {
+			let hex_key = hex::encode(&**key_packed);
+
+			// Because this was batch processed we don't know the rate for each individual key, just estimate
+			// by calculating the size ratio
+			let ratio = data.len() as f64 / total_data_size;
+			metrics::SQLITE_UPLOAD_DB_RATE
+				.with_label_values(&[&hex_key])
+				.set(data.len() as f64 / (dt * ratio));
+
 			self.writer_pools
 				.update_async(&key_packed, |_, v| {
 					// Validate state
@@ -579,20 +621,24 @@ impl SqlitePoolManager {
 	/// Returns true if db exists, false if not.
 	#[tracing::instrument(name = "sqlite_read_from_fdb", skip_all)]
 	async fn read_from_fdb(&self, key_packed: KeyPacked, db_path: &Path) -> GlobalResult<bool> {
-		let db_data_subspace = self
-			.subspace
-			.subspace(&keys::DbDataKey::new(key_packed.clone()));
-
+		let hex_key = hex::encode(&*key_packed);
 		let fdb = unwrap!(self.fdb.as_ref());
+
+		let start_instant = Instant::now();
+
 		let (data, chunks) = fdb
 			.run(|tx, _mc| {
-				let db_data_subspace = db_data_subspace.clone();
+				let key_packed = key_packed.clone();
 				async move {
+					let compressed_db_data_subspace = self
+						.subspace
+						.subspace(&keys::CompressedDbDataKey::new(key_packed.clone()));
+
 					// Fetch all chunks
-					let mut data_stream = tx.get_ranges_keyvalues(
+					let mut compressed_data_stream = tx.get_ranges_keyvalues(
 						fdb::RangeOption {
 							mode: StreamingMode::WantAll,
-							..(&db_data_subspace).into()
+							..(&compressed_db_data_subspace).into()
 						},
 						SERIALIZABLE,
 					);
@@ -600,11 +646,13 @@ impl SqlitePoolManager {
 					// Aggregate data
 					let mut buf = Vec::new();
 					let mut chunk_count = 0;
-					while let Some(entry) = data_stream.try_next().await? {
+
+					let mut compressed_data_buf = Vec::new();
+					while let Some(entry) = compressed_data_stream.try_next().await? {
 						// Parse key
 						let key = self
 							.subspace
-							.unpack::<keys::DbDataChunkKey>(entry.key())
+							.unpack::<keys::CompressedDbDataChunkKey>(entry.key())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 						// Validate chunk
@@ -620,7 +668,51 @@ impl SqlitePoolManager {
 						chunk_count += 1;
 
 						// Write to buffer
-						buf.extend(entry.value());
+						compressed_data_buf.extend(entry.value());
+					}
+
+					// Decompress the data
+					let mut decoder = lz4_flex::frame::FrameDecoder::new(&compressed_data_buf[..]);
+					decoder
+						.read_to_end(&mut buf)
+						.map_err(Error::Io)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					// If there is no compressed data, read from the uncompressed data (backwards compatibility)
+					if chunk_count == 0 {
+						let db_data_subspace = self
+							.subspace
+							.subspace(&keys::DbDataKey::new(key_packed.clone()));
+						let mut data_stream = tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&db_data_subspace).into()
+							},
+							SERIALIZABLE,
+						);
+
+						while let Some(entry) = data_stream.try_next().await? {
+							// Parse key
+							let key = self
+								.subspace
+								.unpack::<keys::DbDataChunkKey>(entry.key())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+							// Validate chunk
+							if chunk_count != key.chunk {
+								return Err(FdbBindingError::CustomError(
+									SqliteFdbError::MismatchedChunk {
+										chunk_count,
+										key_idx: key.chunk,
+									}
+									.into(),
+								));
+							}
+							chunk_count += 1;
+
+							// Write to buffer
+							buf.extend(entry.value());
+						}
 					}
 
 					Ok((buf, chunk_count))
@@ -630,13 +722,19 @@ impl SqlitePoolManager {
 			.await?;
 
 		if chunks > 0 {
-			tracing::debug!(key=?hex::encode(&*key_packed), ?chunks, data_len = ?data.len(), "loaded database from fdb");
+			let data_len = data.len();
+			tracing::debug!(key=?hex_key, ?chunks, ?data_len, "loaded database from fdb");
 
 			tokio::fs::write(db_path, data).await.map_err(Error::Io)?;
 
+			let dt = start_instant.elapsed();
+			metrics::SQLITE_DOWNLOAD_DB_RATE
+				.with_label_values(&[&hex_key])
+				.set(data_len as f64 / dt.as_secs_f64());
+
 			Ok(true)
 		} else {
-			tracing::debug!(key=?hex::encode(&*key_packed), "db not found in fdb");
+			tracing::debug!(key=?hex_key, "db not found in fdb");
 
 			Ok(false)
 		}
@@ -781,7 +879,6 @@ impl SqliteConn {
 				.foreign_keys(true)
 				// Set synchronous mode to NORMAL for performance and data safety balance
 				.synchronous(SqliteSynchronous::Normal)
-				.journal_mode(SqliteJournalMode::Wal)
 				.connect()
 				.await
 		};

@@ -320,6 +320,7 @@ pub async fn create_deprecated(
 			})),
 			runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
 				environment: body.runtime.environment,
+				network: None,
 			})),
 			build: Some(body.runtime.build),
 			build_tags: None,

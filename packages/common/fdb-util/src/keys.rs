@@ -45,6 +45,7 @@ pub const CLIENTS_BY_REMAINING_MEM: usize = 43;
 pub const SQLITE: usize = 44;
 pub const INTERNAL: usize = 45;
 pub const METADATA: usize = 46;
+pub const COMPRESSED_DATA: usize = 47;
 
 // Directories with fdbrs must use string paths instead of tuples
 pub mod dir {

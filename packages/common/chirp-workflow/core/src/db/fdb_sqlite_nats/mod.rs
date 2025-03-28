@@ -205,18 +205,7 @@ impl Database for DatabaseFdbSqliteNats {
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error> {
 		// Start background flush handler task
 		let (flush_tx, flush_rx) = mpsc::unbounded_channel();
-		let pools2 = pools.clone();
-		tokio::spawn(async move {
-			if let Err(err) = flush_handler(pools2, flush_rx).await {
-				tracing::error!(
-					?err,
-					"fdb_sqlite_nats workflow driver flush handler task failed"
-				);
-
-				// Shut down entire runtime
-				rivet_runtime::shutdown().await;
-			}
-		});
+		tokio::spawn(flush_handler(pools.clone(), flush_rx));
 
 		Ok(Arc::new(DatabaseFdbSqliteNats {
 			pools,
@@ -3237,24 +3226,24 @@ enum WorkflowState {
 	Silenced,
 }
 
-async fn flush_handler(
-	pools: rivet_pools::Pools,
-	mut flush_rx: mpsc::UnboundedReceiver<Uuid>,
-) -> WorkflowResult<()> {
+async fn flush_handler(pools: rivet_pools::Pools, mut flush_rx: mpsc::UnboundedReceiver<Uuid>) {
 	while let Some(workflow_id) = flush_rx.recv().await {
 		tracing::debug!(?workflow_id, "flushing workflow");
 
-		pools
+		if let Err(err) = pools
 			.sqlite_manager()
 			.flush(vec![
 				sqlite::db_name_internal(workflow_id),
 				crate::db::sqlite_db_name_data(workflow_id),
 			])
-			.await?;
+			.await
+		{
+			// TODO: Somehow forward the error to the workflow so it can die
+			tracing::error!(?workflow_id, ?err, "failed to flush workflow databases");
+		}
 	}
 
 	// If the channel is closed that means the db driver instance was dropped which is not an error
-	Ok(())
 }
 
 fn value_to_str(v: &serde_json::Value) -> WorkflowResult<String> {

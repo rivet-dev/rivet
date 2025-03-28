@@ -22,10 +22,11 @@ pub enum SimpleTupleValue {
 	Uuid(Uuid),
 	String(String),
 	Bytes(Vec<u8>),
+	Unknown(Vec<u8>),
 }
 
 impl SimpleTupleValue {
-	fn parse(value: &str) -> Self {
+	fn parse_str(value: &str) -> Self {
 		if let Ok(v) = value.parse::<i64>() {
 			SimpleTupleValue::I64(v)
 		} else if let Ok(v) = value.parse::<u64>() {
@@ -72,6 +73,24 @@ impl fmt::Display for SimpleTupleValue {
 
 				Ok(())
 			}
+			SimpleTupleValue::Unknown(v) => {
+				let hex_string = if v.len() > 512 { &v[..512] } else { v }
+					.iter()
+					.map(|byte| format!("{:02x}", byte))
+					.collect::<String>();
+				write!(f, "{}", style(hex_string).red().dim().italic())?;
+
+				if v.len() > 512 {
+					write!(
+						f,
+						"{} {}",
+						style("...").red().dim().italic(),
+						style(format!("({} bytes)", v.len())).dim()
+					)?;
+				}
+
+				Ok(())
+			}
 		}
 	}
 }
@@ -88,7 +107,8 @@ impl TuplePack for SimpleTupleValue {
 			SimpleTupleValue::F64(v) => v.pack(w, tuple_depth),
 			SimpleTupleValue::Uuid(v) => v.pack(w, tuple_depth),
 			SimpleTupleValue::String(v) => v.pack(w, tuple_depth),
-			SimpleTupleValue::Bytes(v) => {
+			SimpleTupleValue::Bytes(v) => v.pack(w, tuple_depth),
+			SimpleTupleValue::Unknown(v) => {
 				w.write_all(v)?;
 				Ok(VersionstampOffset::None {
 					size: u32::try_from(v.len())
@@ -113,8 +133,11 @@ impl<'de> TupleUnpack<'de> for SimpleTupleValue {
 		} else if let Ok((input, v)) = <String>::unpack(input, tuple_depth) {
 			let v = SimpleTupleValue::String(v);
 			Ok((input, v))
+		} else if let Ok((input, v)) = <Vec<u8>>::unpack(input, tuple_depth) {
+			let v = SimpleTupleValue::Bytes(v);
+			Ok((input, v))
 		} else {
-			let v = SimpleTupleValue::Bytes(input.to_vec());
+			let v = SimpleTupleValue::Unknown(input.to_vec());
 			Ok((&input[0..0], v))
 		}
 	}
@@ -239,7 +262,7 @@ impl SimpleValue {
 				SimpleValue::Bytes(bytes)
 			}
 			Some(type_hint) => bail!("unknown type: `{type_hint}`"),
-			_ => SimpleTupleValue::parse(value).into(),
+			_ => SimpleTupleValue::parse_str(value).into(),
 		};
 
 		Ok(parsed_value)
@@ -305,7 +328,7 @@ impl From<SimpleTupleValue> for SimpleValue {
 			SimpleTupleValue::F64(v) => SimpleValue::F64(v),
 			SimpleTupleValue::Uuid(v) => SimpleValue::Uuid(v),
 			SimpleTupleValue::String(v) => SimpleValue::String(v),
-			SimpleTupleValue::Bytes(v) => SimpleValue::Bytes(v),
+			SimpleTupleValue::Bytes(v) | SimpleTupleValue::Unknown(v) => SimpleValue::Bytes(v),
 		}
 	}
 }
@@ -316,7 +339,7 @@ pub struct SimpleTupleSegment {
 }
 
 impl SimpleTupleSegment {
-	fn parse(prefix: Option<&str>, value: &str) -> Result<Self> {
+	fn parse_str(prefix: Option<&str>, value: &str) -> Result<Self> {
 		let parsed_value = match prefix {
 			Some("u64") => value
 				.parse::<u64>()
@@ -340,7 +363,7 @@ impl SimpleTupleSegment {
 			}
 			Some("str") => SimpleTupleValue::String(value.to_string()),
 			Some(prefix) => bail!("unknown type: `{prefix}`"),
-			_ => SimpleTupleValue::parse(value),
+			_ => SimpleTupleValue::parse_str(value),
 		};
 
 		Ok(SimpleTupleSegment {
@@ -422,11 +445,13 @@ impl SimpleTuple {
 						} else {
 							// Parse normal segment
 							normal_segment_encountered = true;
-							segments
-								.push(SimpleTupleSegment::parse(prefix.take(), segment.trim())?);
+							segments.push(SimpleTupleSegment::parse_str(
+								prefix.take(),
+								segment.trim(),
+							)?);
 						}
 					} else if start != 0 && i == start {
-						segments.push(SimpleTupleSegment::parse(prefix.take(), "")?);
+						segments.push(SimpleTupleSegment::parse_str(prefix.take(), "")?);
 					}
 
 					start = i + 1;

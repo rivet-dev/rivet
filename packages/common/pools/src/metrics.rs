@@ -71,4 +71,18 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	)
 	.unwrap();
+	pub static ref SQLITE_UPLOAD_DB_RATE: GaugeVec = register_gauge_vec_with_registry!(
+		"sqlite_upload_db_rate",
+		"Rate to read and upload to FDB an sqlite DB in bytes/s.",
+		&["key"],
+		*REGISTRY,
+	)
+	.unwrap();
+	pub static ref SQLITE_DOWNLOAD_DB_RATE: GaugeVec = register_gauge_vec_with_registry!(
+		"sqlite_download_db_rate",
+		"Rate to download and write to file an sqlite DB from FDB in bytes/s.",
+		&["key"],
+		*REGISTRY,
+	)
+	.unwrap();
 }

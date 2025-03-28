@@ -22,7 +22,10 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 		let _guard = otel::init_tracing_subscriber();
 
 		tokio::select! {
-			_ = notify.notified() => None,
+			_ = notify.notified() => {
+				tracing::info!("shutting down runtime");
+				None
+			},
 			res = f => Some(res),
 		}
 	});

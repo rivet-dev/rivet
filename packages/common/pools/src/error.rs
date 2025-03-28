@@ -62,4 +62,7 @@ pub enum Error {
 
 	#[error("{0}")]
 	Global(global_error::GlobalError),
+
+	#[error("lz4: {0}")]
+	Lz4(lz4_flex::frame::Error),
 }

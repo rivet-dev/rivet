@@ -20,6 +20,7 @@ hex.workspace = true
 hyper = { version = "0.14" }
 hyper-tls = { version = "0.5.0" }
 lazy_static = "1.4"
+lz4_flex = "0.11.3"
 rivet-config.workspace = true
 rivet-metrics.workspace = true
 service-discovery.workspace = true
