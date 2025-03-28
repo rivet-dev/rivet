@@ -1,8 +1,18 @@
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	time::{Duration, Instant},
+};
 
 use futures_util::StreamExt;
 use global_error::GlobalResult;
-use tokio::{task::JoinHandle, time::Duration};
+use tokio::{
+	signal::{
+		ctrl_c,
+		unix::{signal, Signal, SignalKind},
+	},
+	sync::watch,
+	task::JoinHandle,
+};
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -13,6 +23,8 @@ use crate::{
 
 /// How often to run internal tasks like updating ping, gc, and publishing metrics.
 const INTERNAL_INTERVAL: Duration = Duration::from_secs(20);
+/// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
+const SHUTDOWN_DURATION: Duration = Duration::from_secs(30);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -21,7 +33,7 @@ pub struct Worker {
 	worker_instance_id: Uuid,
 	registry: RegistryHandle,
 	db: DatabaseHandle,
-	running_workflows: HashMap<Uuid, JoinHandle<()>>,
+	running_workflows: HashMap<Uuid, WorkflowHandle>,
 }
 
 impl Worker {
@@ -62,6 +74,8 @@ impl Worker {
 		let mut internal_interval = tokio::time::interval(INTERNAL_INTERVAL);
 		internal_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+		let mut sigterm = signal(SignalKind::terminate()).expect("SIGTERM hook failed");
+
 		loop {
 			tokio::select! {
 				_ = tick_interval.tick() => {},
@@ -77,10 +91,85 @@ impl Worker {
 
 					tick_interval.reset();
 				},
+				_ = ctrl_c() => break,
+				_ = sigterm.recv() => break,
 			}
 
 			self.tick(&shared_client, &config, &pools, &cache).await?;
 		}
+
+		self.shutdown(sigterm).await;
+
+		Ok(())
+	}
+
+	async fn shutdown(mut self, mut sigterm: Signal) {
+		// Shutdown sequence
+		tracing::info!(
+			duration=?SHUTDOWN_DURATION,
+			remaining_workflows=?self.running_workflows.len(),
+			"starting worker shutdown"
+		);
+
+		let shutdown_start = Instant::now();
+
+		for (workflow_id, wf) in &self.running_workflows {
+			if wf.stop.send(()).is_err() {
+				tracing::warn!(?workflow_id, "stop channel closed");
+			}
+		}
+
+		let mut second_sigterm = false;
+		loop {
+			self.running_workflows
+				.retain(|_, wf| !wf.handle.is_finished());
+
+			// Shutdown complete
+			if self.running_workflows.is_empty() {
+				break;
+			}
+
+			if shutdown_start.elapsed() > SHUTDOWN_DURATION {
+				tracing::debug!("shutdown timed out");
+				break;
+			}
+
+			tokio::select! {
+				_ = ctrl_c() => {
+					if second_sigterm {
+						tracing::warn!("received third SIGTERM, aborting shutdown");
+						break;
+					}
+
+					tracing::warn!("received second SIGTERM");
+					second_sigterm = true;
+
+					continue;
+				}
+				_ = sigterm.recv() => {
+					if second_sigterm {
+						tracing::warn!("received third SIGTERM, aborting shutdown");
+						break;
+					}
+
+					tracing::warn!("received second SIGTERM");
+					second_sigterm = true;
+
+					continue;
+				}
+				_ = tokio::time::sleep(Duration::from_secs(2)) => {}
+			}
+		}
+
+		if self.running_workflows.is_empty() {
+			tracing::info!("all workflows evicted");
+		} else {
+			tracing::warn!(remaining_workflows=?self.running_workflows.len(), "not all workflows evicted");
+		}
+
+		tracing::info!("shutdown complete");
+
+		rivet_runtime::shutdown().await;
 	}
 
 	/// Query the database for new workflows and run them.
@@ -111,7 +200,7 @@ impl Worker {
 		// Remove join handles for completed workflows. This must happen after we pull workflows to ensure an
 		// accurate state of the current workflows
 		self.running_workflows
-			.retain(|_, handle| !handle.is_finished());
+			.retain(|_, wf| !wf.handle.is_finished());
 
 		for workflow in workflows {
 			let workflow_id = workflow.workflow_id;
@@ -120,6 +209,8 @@ impl Worker {
 				tracing::error!(?workflow_id, "workflow already running");
 				continue;
 			}
+
+			let (stop_tx, stop_rx) = watch::channel(());
 
 			let conn = utils::new_conn(
 				shared_client,
@@ -135,19 +226,26 @@ impl Worker {
 				config.clone(),
 				conn,
 				workflow,
+				stop_rx,
 			)
 			.await?;
 
 			let handle = tokio::task::spawn(
 				async move {
 					if let Err(err) = ctx.run().await {
-						tracing::error!(?err, "unhandled error");
+						tracing::error!(?err, "unhandled workflow error");
 					}
 				}
 				.in_current_span(),
 			);
 
-			self.running_workflows.insert(workflow_id, handle);
+			self.running_workflows.insert(
+				workflow_id,
+				WorkflowHandle {
+					stop: stop_tx,
+					handle,
+				},
+			);
 		}
 
 		Ok(())
@@ -184,4 +282,9 @@ impl Worker {
 			.in_current_span(),
 		);
 	}
+}
+
+struct WorkflowHandle {
+	stop: watch::Sender<()>,
+	handle: JoinHandle<()>,
 }

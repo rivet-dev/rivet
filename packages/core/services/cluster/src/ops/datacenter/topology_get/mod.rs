@@ -501,7 +501,7 @@ async fn fetch_server_metrics(
 			)
 			OR
 			label_replace(
-				# Selects the percent memory usage of a server
+				# Selects the memory usage of a server in bytes
 				max by (datacenter_id, pool_type, server_id) (
 					node_memory_Active_bytes{{
 						server_id=~"({server_ids})",

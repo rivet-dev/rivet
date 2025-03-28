@@ -7,7 +7,8 @@ mod otel;
 
 static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
 
-pub fn run<F: Future>(f: F) -> F::Output {
+/// Returns `None` if the runtime was shut down manually.
+pub fn run<F: Future>(f: F) -> Option<F::Output> {
 	let notify = Arc::new(Notify::new());
 	SHUTDOWN
 		.set(notify.clone())
@@ -21,16 +22,35 @@ pub fn run<F: Future>(f: F) -> F::Output {
 		let _guard = otel::init_tracing_subscriber();
 
 		tokio::select! {
-			_ = notify.notified() => panic!("global shutdown"),
-			res = f => res,
+			_ = notify.notified() => None,
+			res = f => Some(res),
 		}
 	});
 
 	output
 }
 
-pub fn shutdown() {
-	SHUTDOWN.get().expect("no runtime").notify_one();
+
+/// Shuts down the entire rivet runtime, if one is running. This future will never resolve.
+pub async fn shutdown() {
+	if let Some(shutdown) = SHUTDOWN.get() {
+		shutdown.notify_one();
+	} else {
+		tracing::error!("no runtime to shutdown");
+	};
+	
+	// Wait forever, the runtime should be shutting down
+	std::future::pending().await
+}
+
+/// Shuts down the entire rivet runtime, if one is running. Immediately panics afterwards.
+pub fn sync_shutdown() {
+	if let Some(shutdown) = SHUTDOWN.get() {
+		shutdown.notify_one();
+	} else {
+		tracing::error!("no runtime to shutdown");
+	};
+	
 	panic!("shutting down");
 }
 

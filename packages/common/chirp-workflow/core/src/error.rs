@@ -34,6 +34,9 @@ pub enum WorkflowError {
 	#[error("workflow not found")]
 	WorkflowNotFound,
 
+	#[error("workflow stopped")]
+	WorkflowStopped,
+
 	#[error("history diverged: {0}")]
 	HistoryDiverged(String),
 
@@ -195,6 +198,10 @@ pub enum WorkflowError {
 }
 
 impl WorkflowError {
+	pub(crate) fn wake_immediate(&self) -> bool {
+		matches!(self, WorkflowError::WorkflowStopped)
+	}
+
 	/// Returns the next deadline for a workflow to be woken up again based on the error.
 	pub(crate) fn deadline_ts(&self) -> Option<i64> {
 		match self {
@@ -231,12 +238,13 @@ impl WorkflowError {
 			| WorkflowError::NoSignalFound(_)
 			| WorkflowError::NoSignalFoundAndSleep(_, _)
 			| WorkflowError::SubWorkflowIncomplete(_)
-			| WorkflowError::Sleep(_) => true,
+			| WorkflowError::Sleep(_)
+			| WorkflowError::WorkflowStopped => true,
 			_ => false,
 		}
 	}
 
-	/// Any error that the workflow can try again on. Only used for printing.
+	/// Any error that the workflow can try again on a fixed number of times. Only used for printing.
 	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)

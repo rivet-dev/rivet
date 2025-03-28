@@ -214,7 +214,7 @@ impl Database for DatabaseFdbSqliteNats {
 				);
 
 				// Shut down entire runtime
-				rivet_runtime::shutdown();
+				rivet_runtime::shutdown().await;
 			}
 		});
 

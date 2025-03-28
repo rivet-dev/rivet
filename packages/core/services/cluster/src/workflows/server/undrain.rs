@@ -117,6 +117,7 @@ struct UndrainPegboardClientInput {
 }
 
 #[activity(UndrainPegboardClient)]
+#[max_retries = 15]
 async fn undrain_pegboard_client(
 	ctx: &ActivityCtx,
 	input: &UndrainPegboardClientInput,

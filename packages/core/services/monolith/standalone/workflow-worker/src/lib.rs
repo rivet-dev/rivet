@@ -19,6 +19,5 @@ pub async fn run_from_env(
 	let worker = Worker::new(reg.handle(), db);
 
 	// Start worker
-	worker.start(config, pools).await?;
-	bail!("worker exited unexpectedly");
+	worker.start(config, pools).await
 }

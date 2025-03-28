@@ -88,6 +88,8 @@ where
 
 	#[tracing::instrument(skip_all)]
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
+		self.ctx.check_stop().map_err(GlobalError::raw)?;
+
 		if let Some(err) = self.error {
 			return Err(err.into());
 		}
@@ -237,6 +239,8 @@ where
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
+		self.ctx.check_stop().map_err(GlobalError::raw)?;
+
 		if let Some(err) = self.error {
 			return Err(err.into());
 		}
@@ -288,6 +292,8 @@ where
 		&self,
 		sub_workflow_id: Uuid,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
+		self.ctx.check_stop().map_err(GlobalError::raw)?;
+
 		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, ?sub_workflow_id, "waiting for sub workflow");
 
 		let mut wake_sub = self.ctx.db().wake_sub().await?;

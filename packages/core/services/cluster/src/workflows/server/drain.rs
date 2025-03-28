@@ -168,6 +168,7 @@ struct DrainPegboardClientInput {
 }
 
 #[activity(DrainPegboardClient)]
+#[max_retries = 15]
 async fn drain_pegboard_client(
 	ctx: &ActivityCtx,
 	input: &DrainPegboardClientInput,

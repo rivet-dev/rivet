@@ -28,6 +28,7 @@ const client = new RivetClient({
 async function run() {
 	let actorId: string | undefined;
 	try {
+		console.time(`create actor`);
 		console.log("Creating actor", { region });
 		const { actor } = await client.actor.create({
 			project: RIVET_PROJECT,
@@ -54,15 +55,17 @@ async function run() {
 				},
 				...(BUILD_NAME === "ws-container"
 					? {
-							resources: {
-								cpu: 100,
-								memory: 100,
-							},
-						}
+						resources: {
+							cpu: 100,
+							memory: 100,
+						},
+					}
 					: {}),
 			},
 		});
 		actorId = actor.id;
+
+		console.timeEnd(`create actor`);
 
 		const port = actor.network.ports.http;
 
@@ -84,13 +87,13 @@ async function run() {
 		//}
 
 		// Retry loop for HTTP health check
-		console.time(`ready-${actorId}`);
+		console.time(`ready ${actorId}`);
 		while (true) {
 			try {
 				const response = await fetch(`${actorOrigin}/health`);
 				if (response.ok) {
 					console.log("Health check passed");
-					console.timeEnd(`ready-${actorId}`);
+					console.timeEnd(`ready ${actorId}`);
 					break;
 				} else {
 					console.error(

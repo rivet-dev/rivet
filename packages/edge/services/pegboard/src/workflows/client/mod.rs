@@ -99,46 +99,28 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								.await?;
 							}
 
-							// ctx.join((
-							// 	activity(InsertFdbInput {
-							// 		client_id,
-							// 		flavor,
-							// 		config,
-							// 		system,
-							// 	}),
-							// 	activity(UpdateMetricsInput { client_id, flavor }),
-							// ))
-							// .await?;
-							// TODO: some weird deadlock happens with ctx.join, will investigate later
-							ctx.activity(InsertFdbInput {
-								client_id,
-								flavor,
-								config,
-								system,
-							})
+							ctx.join((
+								activity(InsertFdbInput {
+									client_id,
+									flavor,
+									config,
+									system,
+								}),
+								activity(UpdateMetricsInput { client_id, flavor }),
+							))
 							.await?;
-							ctx.activity(UpdateMetricsInput { client_id, flavor })
-								.await?;
 						}
 						// Events are in order by index
 						protocol::ToServer::Events(events) => {
 							// Write to db
-							// ctx.join((
-							// 	activity(InsertEventsInput {
-							// 		client_id,
-							// 		events: events.clone(),
-							// 	}),
-							// 	activity(UpdateMetricsInput { client_id, flavor }),
-							// ))
-							// .await?;
-							// TODO: some weird deadlock happens with ctx.join, will investigate later
-							ctx.activity(InsertEventsInput {
-								client_id,
-								events: events.clone(),
-							})
+							ctx.join((
+								activity(InsertEventsInput {
+									client_id,
+									events: events.clone(),
+								}),
+								activity(UpdateMetricsInput { client_id, flavor }),
+							))
 							.await?;
-							ctx.activity(UpdateMetricsInput { client_id, flavor })
-								.await?;
 
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
@@ -644,21 +626,13 @@ pub async fn handle_commands(
 		.collect::<Result<Vec<_>, _>>()?;
 
 	// Write to db
-	// let (index, _) = ctx
-	// 	.join((
-	// 		activity(InsertCommandsInput {
-	// 			commands: raw_commands.clone(),
-	// 		}),
-	// 		activity(UpdateMetricsInput { client_id, flavor }),
-	// 	))
-	// 	.await?;
-	// TODO: some weird deadlock happens with ctx.join, will investigate later
-	let index = ctx
-		.activity(InsertCommandsInput {
-			commands: raw_commands.clone(),
-		})
-		.await?;
-	ctx.activity(UpdateMetricsInput { client_id, flavor })
+	let (index, _) = ctx
+		.join((
+			activity(InsertCommandsInput {
+				commands: raw_commands.clone(),
+			}),
+			activity(UpdateMetricsInput { client_id, flavor }),
+		))
 		.await?;
 
 	// Forward commands as a single message

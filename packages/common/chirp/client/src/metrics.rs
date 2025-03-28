@@ -37,7 +37,7 @@ async fn update_uptime_loop() {
 	loop {
 		tokio::select! {
 			_ = &mut ctrl_c => {
-				tracing::info!("stopping loop");
+				tracing::debug!("stopping loop");
 				break;
 			}
 			_ = interval.tick() => {

@@ -73,6 +73,8 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn send(self) -> GlobalResult<()> {
+		self.ctx.check_stop().map_err(GlobalError::raw)?;
+
 		if let Some(err) = self.error {
 			return Err(err.into());
 		}

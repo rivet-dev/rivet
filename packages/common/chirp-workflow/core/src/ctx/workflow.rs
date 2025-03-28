@@ -6,6 +6,7 @@ use std::{
 use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
+use tokio::sync::watch;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
@@ -69,6 +70,8 @@ pub struct WorkflowCtx {
 	loop_location: Option<Location>,
 
 	msg_ctx: MessageCtx,
+	/// Used to stop workflow execution by the worker.
+	stop: watch::Receiver<()>,
 }
 
 impl WorkflowCtx {
@@ -79,6 +82,7 @@ impl WorkflowCtx {
 		config: rivet_config::Config,
 		conn: rivet_connection::Connection,
 		data: PulledWorkflowData,
+		stop: watch::Receiver<()>,
 	) -> GlobalResult<Self> {
 		let msg_ctx = MessageCtx::new(&conn, data.ray_id).await?;
 		let event_history = Arc::new(data.events);
@@ -105,6 +109,7 @@ impl WorkflowCtx {
 			loop_location: None,
 
 			msg_ctx,
+			stop,
 		})
 	}
 
@@ -134,6 +139,9 @@ impl WorkflowCtx {
 	#[tracing::instrument(name = "workflow_ctx_run", skip_all)]
 	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
 		tracing::debug!(name=%self.name, id=%self.workflow_id, "running workflow");
+
+		// Check for stop before running
+		self.check_stop()?;
 
 		// Lookup workflow
 		let workflow = self.registry.get_workflow(&self.name)?;
@@ -176,8 +184,10 @@ impl WorkflowCtx {
 				}
 			}
 			Err(err) => {
+				let wake_immediate = err.wake_immediate();
+
 				// Retry the workflow if its recoverable
-				let deadline_ts = if let Some(deadline_ts) = err.deadline_ts() {
+				let wake_deadline_ts = if let Some(deadline_ts) = err.deadline_ts() {
 					Some(deadline_ts)
 				} else {
 					None
@@ -217,8 +227,8 @@ impl WorkflowCtx {
 						.commit_workflow(
 							self.workflow_id,
 							&self.name,
-							false,
-							deadline_ts,
+							wake_immediate,
+							wake_deadline_ts,
 							wake_signals,
 							wake_sub_workflow,
 							&err_str,
@@ -423,6 +433,7 @@ impl WorkflowCtx {
 			loop_location: self.loop_location.clone(),
 
 			msg_ctx: self.msg_ctx.clone(),
+			stop: self.stop.clone(),
 		}
 	}
 
@@ -433,6 +444,21 @@ impl WorkflowCtx {
 		self.cursor.inc();
 
 		branch
+	}
+
+	pub(crate) fn check_stop(&self) -> WorkflowResult<()> {
+		if self.stop.has_changed().unwrap_or(true) {
+			Err(WorkflowError::WorkflowStopped)
+		} else {
+			Ok(())
+		}
+	}
+
+	pub(crate) async fn wait_stop(&self) -> WorkflowResult<()> {
+		// We have to clone here because this function can't have a mutable reference to self. The state of
+		// the stop channel doesn't matter because it only ever receives one message
+		let _ = self.stop.clone().changed().await;
+		Err(WorkflowError::WorkflowStopped)
 	}
 }
 
@@ -459,6 +485,8 @@ impl WorkflowCtx {
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
 	{
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let event_id = EventId::new(I::Activity::NAME, &input);
 
 		let history_res = self
@@ -556,6 +584,8 @@ impl WorkflowCtx {
 	/// short circuit in the event of an error to make sure activity side effects are recorded.
 	#[tracing::instrument(skip_all)]
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		exec.execute(self).await
 	}
 
@@ -571,7 +601,7 @@ impl WorkflowCtx {
 					Ok(inner_err) => {
 						// Despite "history diverged" errors being unrecoverable, they should not have be returned
 						// by this function because the state of the history is already messed up and no new
-						// workflow items can be run.
+						// workflow items should be run.
 						if !inner_err.is_recoverable()
 							&& !matches!(*inner_err, WorkflowError::HistoryDiverged(_))
 						{
@@ -599,6 +629,8 @@ impl WorkflowCtx {
 	/// received, the workflow will be woken up and continue.
 	#[tracing::instrument(skip_all)]
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let history_res = self
 			.cursor
 			.compare_signal(self.version)
@@ -648,6 +680,7 @@ impl WorkflowCtx {
 				tokio::select! {
 					_ = wake_sub.next() => {},
 					_ = interval.tick() => {},
+					res = self.wait_stop() => res.map_err(GlobalError::raw)?,
 				}
 			}
 		};
@@ -664,6 +697,8 @@ impl WorkflowCtx {
 		&mut self,
 		listener: &T,
 	) -> GlobalResult<<T as CustomListener>::Output> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let history_res = self
 			.cursor
 			.compare_signal(self.version)
@@ -713,6 +748,7 @@ impl WorkflowCtx {
 				tokio::select! {
 					_ = wake_sub.next() => {},
 					_ = interval.tick() => {},
+					res = self.wait_stop() => res.map_err(GlobalError::raw)?,
 				}
 			}
 		};
@@ -756,6 +792,8 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let history_res = self
 			.cursor
 			.compare_loop(self.version)
@@ -806,6 +844,8 @@ impl WorkflowCtx {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "running loop");
 
 			loop {
+				self.check_stop().map_err(GlobalError::raw)?;
+
 				let start_instant = Instant::now();
 
 				// Create a new branch for each iteration of the loop at location {...loop location, iteration idx}
@@ -928,6 +968,8 @@ impl WorkflowCtx {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let history_res = self
 			.cursor
 			.compare_sleep(self.version)
@@ -969,7 +1011,10 @@ impl WorkflowCtx {
 		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			tokio::time::sleep(Duration::from_millis(duration.try_into()?)).await;
+			tokio::select! {
+				_ = tokio::time::sleep(Duration::from_millis(duration.try_into()?)) => {},
+				res = self.wait_stop() => res?,
+			}
 		}
 		// Workflow sleep
 		else {
@@ -1008,6 +1053,8 @@ impl WorkflowCtx {
 		&mut self,
 		time: impl TsToMillis,
 	) -> GlobalResult<Option<T>> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		let history_res = self
 			.cursor
 			.compare_sleep(self.version)
@@ -1122,6 +1169,7 @@ impl WorkflowCtx {
 						tokio::select! {
 							_ = wake_sub.next() => {},
 							_ = interval.tick() => {},
+							res = self.wait_stop() => res?,
 						}
 					}
 				})
@@ -1173,6 +1221,7 @@ impl WorkflowCtx {
 				tokio::select! {
 					_ = wake_sub.next() => {},
 					_ = interval.tick() => {},
+					res = self.wait_stop() => res.map_err(GlobalError::raw)?,
 				}
 			}
 		};
@@ -1205,6 +1254,8 @@ impl WorkflowCtx {
 	/// Represents a removed workflow step.
 	#[tracing::instrument(skip_all)]
 	pub async fn removed<T: Removed>(&mut self) -> GlobalResult<()> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		// Existing event
 		if self
 			.cursor
@@ -1242,6 +1293,8 @@ impl WorkflowCtx {
 	/// inserts a version check event.
 	#[tracing::instrument(skip_all)]
 	pub async fn check_version(&mut self, current_version: usize) -> GlobalResult<usize> {
+		self.check_stop().map_err(GlobalError::raw)?;
+
 		if current_version == 0 {
 			return Err(GlobalError::raw(WorkflowError::InvalidVersion(
 				"version for `check_version` must be greater than 0".into(),

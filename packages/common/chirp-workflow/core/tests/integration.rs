@@ -105,10 +105,7 @@ async fn fdb_sqlite_nats_driver() {
 	let worker = Worker::new(reg.clone(), db.clone());
 
 	// Start worker
-	tokio::select! {
-		res = worker.start(config.clone(), pools.clone()) => res.unwrap(),
-		res = tokio::signal::ctrl_c() => res.unwrap(),
-	}
+	worker.start(config.clone(), pools.clone()).await.unwrap()
 }
 
 mod def {

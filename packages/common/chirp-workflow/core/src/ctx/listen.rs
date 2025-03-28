@@ -10,7 +10,7 @@ use crate::{
 
 /// Indirection struct to prevent invalid implementations of listen traits.
 pub struct ListenCtx<'a> {
-	ctx: &'a mut WorkflowCtx,
+	ctx: &'a WorkflowCtx,
 	location: &'a Location,
 	// Used by certain db drivers to know when to update internal indexes for signal wake conditions
 	last_try: bool,
@@ -19,7 +19,7 @@ pub struct ListenCtx<'a> {
 }
 
 impl<'a> ListenCtx<'a> {
-	pub(crate) fn new(ctx: &'a mut WorkflowCtx, location: &'a Location) -> Self {
+	pub(crate) fn new(ctx: &'a WorkflowCtx, location: &'a Location) -> Self {
 		ListenCtx {
 			ctx,
 			location,
