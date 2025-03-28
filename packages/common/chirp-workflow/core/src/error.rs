@@ -189,6 +189,9 @@ pub enum WorkflowError {
 
 	#[error("migration failed: {0}")]
 	Migration(sqlx::Error),
+
+	#[error("flush channel closed")]
+	FlushChannelClosed,
 }
 
 impl WorkflowError {

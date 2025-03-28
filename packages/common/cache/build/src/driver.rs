@@ -370,12 +370,20 @@ impl moka::Expiry<String, ExpiringValue> for ValueExpiry {
 }
 
 /// In-memory cache driver implementation using the moka crate
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct InMemoryDriver {
 	service_name: String,
 	cache: Cache<String, ExpiringValue>,
 	/// In-memory rate limiting store - maps keys to hit counts with expiration
 	rate_limits: Cache<String, ExpiringValue>,
+}
+
+impl Debug for InMemoryDriver {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("InMemoryDriver")
+			.field("service_name", &self.service_name)
+			.finish()
+	}
 }
 
 impl InMemoryDriver {
@@ -391,7 +399,7 @@ impl InMemoryDriver {
 			.build();
 
 		Self {
-			service_name, // Kept for future expansion (e.g., namespacing keys by service)
+			service_name,
 			cache,
 			rate_limits,
 		}

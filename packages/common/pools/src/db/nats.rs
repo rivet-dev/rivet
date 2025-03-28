@@ -12,7 +12,7 @@ pub type NatsPool = async_nats::Client;
 pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Error> {
 	let nats = &config.server().map_err(Error::Global)?.nats;
 
-	let mut addrs = match &nats.addresses {
+	let addrs = match &nats.addresses {
 		rivet_config::config::Addresses::Dynamic { fetch_endpoint } => {
 			let sd = ServiceDiscovery::new(fetch_endpoint.clone());
 

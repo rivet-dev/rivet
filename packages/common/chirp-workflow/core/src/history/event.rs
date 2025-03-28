@@ -3,7 +3,7 @@ use std::{
 	ops::Deref,
 };
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use strum::FromRepr;
 use uuid::Uuid;
 
@@ -213,7 +213,7 @@ pub struct RemovedEvent {
 }
 
 /// Based on the name of the event and the hash of the input (if it has one).
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
 pub struct EventId {
 	pub name: String,
 	pub input_hash: u64,

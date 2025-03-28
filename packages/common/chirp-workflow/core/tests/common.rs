@@ -9,7 +9,7 @@ pub fn setup_tracing() {
 			.with(
 				tracing_logfmt::builder()
 					.layer()
-					.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+					.with_filter(tracing_subscriber::filter::LevelFilter::DEBUG),
 			)
 			.init();
 	});

@@ -3,7 +3,7 @@ use fdb_util::{prelude::*, SERIALIZABLE};
 use foundationdb::{self as fdb, options::StreamingMode, tuple::Subspace, FdbBindingError};
 use uuid::Uuid;
 
-use futures_util::TryStreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use global_error::{bail, ensure, ext::AssertionError, unwrap, GlobalResult};
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -275,24 +275,31 @@ impl SqlitePoolManager {
 		Ok(conn)
 	}
 
-	/// Evicts a database from the pool and snapshots it if needed
+	/// Evicts databases from the pool and snapshots them if needed
 	#[tracing::instrument(name = "sqlite_evict", skip_all)]
-	pub async fn evict(self: &Arc<Self>, key: impl TuplePack) -> Result<(), Error> {
-		let key_packed = Arc::new(key.pack_to_vec());
+	pub async fn evict<T: TuplePack>(self: &Arc<Self>, keys: Vec<T>) -> Result<(), Error> {
+		let keys_packed: Vec<KeyPacked> = keys
+			.into_iter()
+			.map(|key| Arc::new(key.pack_to_vec()))
+			.collect();
 
-		self.evict_with_key(&key_packed)
+		self.evict_with_key(&keys_packed)
 			.await
 			.map_err(Error::Global)?;
 
 		Ok(())
 	}
 
-	/// If the database is loaded, then force a snapshot, or wait for existing snapshot to finish
+	/// If the databases are loaded, then force a snapshot, or wait for existing snapshot to finish
 	/// writing.
 	#[tracing::instrument(name = "sqlite_flush", skip_all)]
-	pub async fn flush(self: &Arc<Self>, key: impl TuplePack) -> Result<(), Error> {
-		let key_packed = Arc::new(key.pack_to_vec());
-		self.snapshot_with_key(&key_packed, false)
+	pub async fn flush<T: TuplePack>(self: &Arc<Self>, keys: Vec<T>) -> Result<(), Error> {
+		let keys_packed: Vec<KeyPacked> = keys
+			.into_iter()
+			.map(|key| Arc::new(key.pack_to_vec()))
+			.collect();
+
+		self.snapshot_with_key(&keys_packed, false)
 			.await
 			.map_err(Error::Global)?;
 
@@ -304,24 +311,30 @@ impl SqlitePoolManager {
 impl SqlitePoolManager {
 	/// Inner implementation of database eviction that handles the actual removal from the pool
 	#[tracing::instrument(name = "sqlite_evict_with_key", skip_all)]
-	async fn evict_with_key(&self, key_packed: &KeyPacked) -> GlobalResult<()> {
-		tracing::debug!(key=?hex::encode(&**key_packed), "evicting sqlite database");
+	async fn evict_with_key(&self, keys_packed: &[KeyPacked]) -> GlobalResult<()> {
+		if keys_packed.is_empty() {
+			return Ok(());
+		}
 
-		// Attempt to snapshot before removing
-		self.snapshot_with_key(&key_packed, false).await?;
+		for key_packed in keys_packed {
+			tracing::debug!(key=?hex::encode(&**key_packed), "evicting sqlite database");
+		}
 
-		// Remove from the pools map
-		//
-		// Do this after snapshotting since we don't want remove the db if the snapshot failed. If
-		// the snapshot failed, it will attempt to snapshot again on GC.
-		self.writer_pools.remove_async(key_packed).await;
+		// Attempt to snapshot all databases in a single call
+		self.snapshot_with_key(keys_packed, false).await?;
 
-		// NOTE: The database file will be deleted when the SqliteEntry is dropped
+		// Remove all databases from the pools map
+		// Do this after snapshotting since we don't want to remove the db if the snapshot failed.
+		// If the snapshot failed, it will attempt to snapshot again on GC.
+		for key_packed in keys_packed {
+			self.writer_pools.remove_async(key_packed).await;
+			// NOTE: The database file will be deleted when the SqliteEntry is dropped
+		}
 
 		Ok(())
 	}
 
-	/// Snapshots the current state of a SQLite database to FDB.
+	/// Snapshots the current state of SQLite databases to FDB.
 	///
 	/// This will acquire an exclusive lock on the database to ensure consistency.
 	///
@@ -333,157 +346,144 @@ impl SqlitePoolManager {
 	/// We don't use the `.backup` command (or `sqlite3_backup_*`) because it still has some
 	/// overhead.
 	///
-	/// Returns `true` if wrote a snapshot.
+	/// Returns `true` if wrote at least one snapshot.
 	#[tracing::instrument(name = "sqlite_snapshot_with_key", skip_all)]
 	async fn snapshot_with_key(
 		&self,
-		key_packed: &KeyPacked,
+		keys_packed: &[KeyPacked],
 		ensure_exists: bool,
 	) -> GlobalResult<bool> {
+		if keys_packed.is_empty() {
+			return Ok(false);
+		}
+
 		// Only run if snapshotting required
 		let SqliteStorage::FoundationDb = self.storage else {
 			return Ok(false);
 		};
 
-		// Acquire the connection
-		//
-		// We don't lock the entry because we can't hold an scc lock in a multithreaded context.
-		// However, we hold the lock to the `SqliteConn.conn` which prevents concurrent snapshots
-		// that would cause conflict or out-of-order writes.
-		let (conn, prev_snapshotted_state) = if let Some(x) = self
-			.writer_pools
-			.read_async(key_packed, |_, v| {
-				(v.conn_once.get().cloned(), v.snapshotted_state.clone())
+		// Process each database connection in parallel using stream
+		let db_data_to_snapshot = futures_util::stream::iter(keys_packed.iter().cloned())
+			.map(|key_packed| {
+				async move {
+					// Acquire the connection
+					//
+					// We don't lock the entry because we can't hold an scc lock in a multithreaded context.
+					// However, we hold the lock to the `SqliteConn.conn` which prevents concurrent snapshots
+					// that would cause conflict or out-of-order writes.
+					let (conn, prev_snapshotted_state) = if let Some(x) = self
+						.writer_pools
+						.read_async(&key_packed, |_, v| {
+							(v.conn_once.get().cloned(), v.snapshotted_state.clone())
+						})
+						.await
+					{
+						x
+					} else {
+						if ensure_exists {
+							bail!("attempting to snapshot database that's not loaded");
+						} else {
+							tracing::debug!(key=?hex::encode(&**key_packed), "skipping snapshot, database is not loaded");
+							return GlobalResult::Ok(None);
+						}
+					};
+
+					let conn = match conn {
+						Some(conn) => conn,
+						None => return Ok(None), // Conn will be None if it has not been initiated yet
+					};
+
+					// Hold a lock to the connection so nobody else can modify the database while we snapshot
+					// it
+					let mut conn_raw = conn.conn.lock().await;
+
+					let hex_key = hex::encode(&**key_packed);
+
+					tracing::debug!(key=?hex_key, "snapshotting sqlite database");
+
+					// Get current state
+					let current_state = SqliteSnapshottedState {
+						total_changes: sqlx::query_scalar("SELECT total_changes()")
+							.fetch_one(&mut *conn_raw)
+							.await
+							.map_err(Error::BuildSqlx)?,
+						schema_version: sqlx::query_scalar("PRAGMA schema_version")
+							.fetch_one(&mut *conn_raw)
+							.await
+							.map_err(Error::BuildSqlx)?,
+					};
+
+					// Compare with last snapshot state
+					ensure!(
+						prev_snapshotted_state.total_changes <= current_state.total_changes,
+						"total_changes() went down"
+					);
+					ensure!(
+						prev_snapshotted_state.schema_version <= current_state.schema_version,
+						"schema_version() went down"
+					);
+					if prev_snapshotted_state == current_state {
+						tracing::debug!(key=?hex_key, "no changes detected, skipping sqlite database snapshot");
+						return Ok(None);
+					}
+
+					tracing::debug!(
+						key=?hex_key,
+						?prev_snapshotted_state,
+						?current_state,
+						"detected changes in sqlite database"
+					);
+
+					// Flush WAL journal
+					sqlx::query("PRAGMA wal_checkpoint(TRUNCATE);")
+						.execute(&mut *conn_raw)
+						.await?;
+
+					// TODO: Use a stream so as to not load entire DB into memory
+					// Read the database file
+					let data = tokio::fs::read(&conn.db_path).await.map_err(Error::Io)?;
+
+					// 3 MiB
+					if data.len() > 3 * 1024 * 1024 * 1024 {
+						metrics::SQLITE_LARGE_DB
+							.with_label_values(&[&hex_key])
+							.set(data.len().try_into().unwrap_or(i64::MAX));
+					}
+
+					Ok(Some((key_packed, Arc::new(data), current_state, prev_snapshotted_state)))
+				}
 			})
-			.await
-		{
-			x
-		} else {
-			if ensure_exists {
-				bail!("attempting to snapshot database that's not loaded");
-			} else {
-				tracing::debug!(key=?hex::encode(&**key_packed), "skipping snapshot, database is not loaded");
-				return Ok(false);
-			}
-		};
-		let conn = unwrap!(conn); // Conn will be None if has not been initiated yet
+			.buffer_unordered(32)
+			.try_filter_map(|result| async move { Ok(result) })
+			.try_collect::<Vec<_>>()
+			.await?;
 
-		// Hold a lock to the connection so nobody else can modify the database while we snapshot
-		// it
-		// HACK: Bug in Rust thinks this doesn't need to be mutable
-		#[warn(unused_mut)]
-		let mut conn_raw = conn.conn.lock().await;
-
-		tracing::debug!(key=?hex::encode(&**key_packed), "snapshotting sqlite database");
-
-		// NOTE: Incremental journaling mode flushes the journal after every transaction, so we
-		// never have to worry about flushing
-
-		// NOTE: Transactions are not required since we're using incremental journaling mode
-		//// Start an IMMEDIATE transaction to prevent other write transactions
-		//sqlx::query("BEGIN IMMEDIATE TRANSACTION;")
-		//	.execute(&mut *conn_raw)
-		//	.await?;
-
-		// Use a Result to track if we need to roll back
-		let snapshot_result = self
-			.snapshot_sqlite_db_inner(&*key_packed, &*conn, &mut *conn_raw, prev_snapshotted_state)
-			.await;
-
-		//// Always roll back the transaction since we only used it for consistent reading
-		//let rollback_result = sqlx::query("ROLLBACK;")
-		//	.execute(&mut *conn_raw)
-		//	.await
-		//	.map_err(Error::BuildSqlx);
-		//drop(conn_raw);
-
-		//if let Err(rollback_err) = &rollback_result {
-		//	tracing::error!(?rollback_err, "Failed to rollback transaction");
-		//}
-
-		// Return the snapshot result, not the rollback result
-		let wrote_snapshot = snapshot_result?;
-
-		Ok(wrote_snapshot)
-	}
-
-	/// Writes the database to storage. This is executed during an SQLite transaction that blocks
-	/// all other queries.
-	///
-	/// Returns `true` if total_changes() if changed.
-	#[tracing::instrument(skip_all)]
-	async fn snapshot_sqlite_db_inner(
-		&self,
-		key_packed: &KeyPacked,
-		conn: &SqliteConn,
-		conn_raw: &mut sqlx::SqliteConnection,
-		prev_snapshotted_state: SqliteSnapshottedState,
-	) -> GlobalResult<bool> {
-		let fdb = unwrap!(self.fdb.as_ref());
-		let hex_key = hex::encode(&**key_packed);
-
-		// Get current state
-		let current_state = SqliteSnapshottedState {
-			total_changes: sqlx::query_scalar("SELECT total_changes()")
-				.fetch_one(&mut *conn_raw)
-				.await
-				.map_err(Error::BuildSqlx)?,
-			schema_version: sqlx::query_scalar("PRAGMA schema_version")
-				.fetch_one(&mut *conn_raw)
-				.await
-				.map_err(Error::BuildSqlx)?,
-		};
-
-		// Compare with last snapshot state
-		ensure!(
-			prev_snapshotted_state.total_changes <= current_state.total_changes,
-			"total_changes() went down"
-		);
-		ensure!(
-			prev_snapshotted_state.schema_version <= current_state.schema_version,
-			"schema_version() went down"
-		);
-		if prev_snapshotted_state == current_state {
-			tracing::debug!(key=?hex_key, "no changes detected, skipping sqlite database snapshot");
+		// If no databases need to be snapshotted, return early
+		if db_data_to_snapshot.is_empty() {
 			return Ok(false);
 		}
 
-		tracing::debug!(
-			key=?hex_key,
-			?prev_snapshotted_state,
-			?current_state,
-			"detected changes in sqlite database"
-		);
-
-		// TODO: Use a stream so as to not load entire DB into memory
-		// Read the database file
-		let data = tokio::fs::read(&conn.db_path).await.map_err(Error::Io)?;
-
-		// 3 MiB
-		if data.len() > 3 * 1024 * 1024 * 1024 {
-			metrics::SQLITE_LARGE_DB
-				.with_label_values(&[&hex_key])
-				.set(data.len().try_into().unwrap_or(i64::MAX));
-		}
-
-		// Write to FDB
+		// Write to FDB in a single transaction
+		let fdb = unwrap!(self.fdb.as_ref());
 		fdb.run(|tx, _mc| {
-			let data = data.clone();
-			let key_packed = key_packed.clone();
+			let db_data_to_snapshot = db_data_to_snapshot.clone();
 			let subspace = self.subspace.clone();
 			async move {
-				// Clear previous data
-				let db_data_subspace = subspace.subspace(&keys::DbDataKey::new(key_packed.clone()));
-				tx.clear_subspace_range(&db_data_subspace);
+				for (key_packed, data, _, _) in &db_data_to_snapshot {
+					// Clear previous data
+					let db_data_subspace =
+						subspace.subspace(&keys::DbDataKey::new(key_packed.clone()));
+					tx.clear_subspace_range(&db_data_subspace);
 
-				// Write chunks
-				for (idx, chunk) in data.chunks(CHUNK_SIZE).enumerate() {
-					let chunk_key = keys::DbDataChunkKey {
-						db_name_segment: key_packed.clone(),
-						chunk: idx,
-					};
+					// Write chunks
+					for (idx, chunk) in data.chunks(CHUNK_SIZE).enumerate() {
+						let chunk_key = keys::DbDataChunkKey {
+							db_name_segment: key_packed.clone(),
+							chunk: idx,
+						};
 
-					tx.set(&subspace.pack(&chunk_key), chunk);
+						tx.set(&subspace.pack(&chunk_key), chunk);
+					}
 				}
 
 				Ok(())
@@ -493,21 +493,23 @@ impl SqlitePoolManager {
 		.await?;
 
 		// Update state if write was successful
-		self.writer_pools
-			.update_async(key_packed, |_, v| {
-				// Validate state
-				if v.snapshotted_state != prev_snapshotted_state {
-					tracing::error!(
-						current = ?v.snapshotted_state,
-						expected = ?prev_snapshotted_state,
-						"snapshotted state changed unexpectedly, indicating a potential race condition"
-					);
-				} else {
-					// Update snapshot
-					v.snapshotted_state = current_state;
-				}
-			})
-			.await;
+		for (key_packed, _, current_state, prev_snapshotted_state) in db_data_to_snapshot {
+			self.writer_pools
+				.update_async(&key_packed, |_, v| {
+					// Validate state
+					if v.snapshotted_state != prev_snapshotted_state {
+						tracing::error!(
+							current = ?v.snapshotted_state,
+							expected = ?prev_snapshotted_state,
+							"snapshotted state changed unexpectedly, indicating a potential race condition"
+						);
+					} else {
+						// Update snapshot
+						v.snapshotted_state = current_state;
+					}
+				})
+				.await;
+		}
 
 		Ok(true)
 	}
@@ -557,7 +559,7 @@ impl SqlitePoolManager {
 			// Evict each entry
 			let mut removed = 0;
 			for key in to_remove {
-				match self.evict_with_key(&key).await {
+				match self.evict_with_key(&[key.clone()]).await {
 					Ok(_) => {
 						removed += 1;
 					}
@@ -763,11 +765,9 @@ impl SqliteConn {
 				.foreign_keys(true)
 				// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
 				.auto_vacuum(SqliteAutoVacuum::Incremental)
-				// TODO (RVT-4618):
 				// Set synchronous mode to NORMAL for performance and data safety balance
-				// .synchronous(SqliteSynchronous::Normal)
-				.synchronous(SqliteSynchronous::Full)
-				.journal_mode(SqliteJournalMode::Truncate)
+				.synchronous(SqliteSynchronous::Normal)
+				.journal_mode(SqliteJournalMode::Wal)
 				.connect()
 				.await
 		} else {
@@ -779,11 +779,9 @@ impl SqliteConn {
 				.busy_timeout(Duration::from_secs(5))
 				// Enable foreign key constraint enforcement
 				.foreign_keys(true)
-				// TODO (RVT-4618):
 				// Set synchronous mode to NORMAL for performance and data safety balance
-				// .synchronous(SqliteSynchronous::Normal)
-				.synchronous(SqliteSynchronous::Full)
-				.journal_mode(SqliteJournalMode::Truncate)
+				.synchronous(SqliteSynchronous::Normal)
+				.journal_mode(SqliteJournalMode::Wal)
 				.connect()
 				.await
 		};
@@ -800,10 +798,6 @@ impl SqliteConn {
 				return Err(Error::BuildSqlx(err));
 			}
 		};
-
-		// TODO (RVT-4618):
-		// // Sqlx doesn't have a WAL2 option, enable it manually
-		// conn_raw.execute("PRAGMA journal_mode = WAL2;").await.map_err(Error::BuildSqlx)?;
 
 		tracing::debug!(?db_url, "sqlite connected");
 
@@ -839,12 +833,22 @@ impl SqliteConn {
 						}
 
 						if let Err(err) =
-							tokio::fs::remove_file(format!("{}-journal", db_path.display())).await
+							tokio::fs::remove_file(format!("{}-shm", db_path.display())).await
 						{
 							tracing::debug!(
 								?err,
 								?db_path,
-								"failed to remove temporary sqlite db journal file on drop"
+								"failed to remove temporary sqlite db shm file on drop"
+							);
+						}
+
+						if let Err(err) =
+							tokio::fs::remove_file(format!("{}-wal", db_path.display())).await
+						{
+							tracing::debug!(
+								?err,
+								?db_path,
+								"failed to remove temporary sqlite db wal file on drop"
 							);
 						}
 					}
@@ -870,7 +874,11 @@ impl SqliteConn {
 impl SqliteConn {
 	#[tracing::instrument(name = "sqlite_conn_snapshot", skip_all)]
 	pub async fn snapshot(&self) -> GlobalResult<bool> {
-		match self.manager.snapshot_with_key(&self.key_packed, true).await {
+		match self
+			.manager
+			.snapshot_with_key(&[self.key_packed.clone()], true)
+			.await
+		{
 			Ok(x) => Ok(x),
 			Err(err) => {
 				tracing::error!(

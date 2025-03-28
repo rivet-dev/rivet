@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
 /// Represents the location of an event in history.
-#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location(Box<[Coordinate]>);
 
 impl Location {
@@ -90,7 +91,7 @@ impl FromIterator<Coordinate> for Location {
 }
 
 /// Represents a position within a location.
-#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Coordinate(Box<[usize]>);
 
 impl Coordinate {
@@ -184,7 +185,7 @@ mod sqlx {
 			&self,
 			buf: &mut DB::ArgumentBuffer<'q>,
 		) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-			<serde_json::Value as sqlx::Encode<'q, DB>>::encode(serialize_location(self), buf)
+			<serde_json::Value as sqlx::Encode<'q, DB>>::encode(serialize_location(self)?, buf)
 		}
 	}
 
@@ -201,22 +202,8 @@ mod sqlx {
 		}
 	}
 
-	// TODO: Implement serde serialize and deserialize for `Location`
 	/// Convert location to json as `number[][]`.
-	fn serialize_location(location: &Location) -> serde_json::Value {
-		serde_json::Value::Array(
-			location
-				.as_ref()
-				.iter()
-				.map(|coord| {
-					serde_json::Value::Array(
-						coord
-							.iter()
-							.map(|x| serde_json::Value::Number((*x).into()))
-							.collect(),
-					)
-				})
-				.collect(),
-		)
+	fn serialize_location(location: &Location) -> Result<serde_json::Value, serde_json::Error> {
+		serde_json::to_value(location)
 	}
 }

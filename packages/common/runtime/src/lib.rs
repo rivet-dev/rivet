@@ -1,9 +1,18 @@
-use std::{env, future::Future, time::Duration};
+use std::{env, future::Future, sync::Arc, time::Duration};
+
+use tokio::sync::{Notify, OnceCell};
 
 mod metrics;
 mod otel;
 
+static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
+
 pub fn run<F: Future>(f: F) -> F::Output {
+	let notify = Arc::new(Notify::new());
+	SHUTDOWN
+		.set(notify.clone())
+		.expect("more than one runtime running");
+
 	// Build runtime
 	let mut rt_builder = build_tokio_runtime_builder();
 	let rt = rt_builder.build().expect("failed to build tokio runtime");
@@ -11,10 +20,18 @@ pub fn run<F: Future>(f: F) -> F::Output {
 		// Must be called from within a tokio context
 		let _guard = otel::init_tracing_subscriber();
 
-		f.await
+		tokio::select! {
+			_ = notify.notified() => panic!("global shutdown"),
+			res = f => res,
+		}
 	});
 
 	output
+}
+
+pub fn shutdown() {
+	SHUTDOWN.get().expect("no runtime").notify_one();
+	panic!("shutting down");
 }
 
 fn build_tokio_runtime_builder() -> tokio::runtime::Builder {

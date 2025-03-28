@@ -141,6 +141,20 @@ mod def {
 				let sig = ctx.listen_with_timeout::<MySignal>(5 * 1000).await?;
 				tracing::info!(?sig);
 
+				let start = std::time::Instant::now();
+
+				ctx.activity(TestActivityInput {
+					foo: "bar".to_string(),
+				})
+				.await?;
+
+				ctx.activity(TestActivityInput {
+					foo: "bar".to_string(),
+				})
+				.await?;
+
+				tracing::info!(dt=?start.elapsed(), "-------------");
+
 				Ok(Loop::<()>::Continue)
 			}
 			.boxed()

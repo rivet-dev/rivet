@@ -107,32 +107,24 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			let tags = serde_json::Value::Object(self.tags);
 			let tags2 = tags.clone();
 
-			let (msg, write) = tokio::join!(
-				async {
-					self.ctx
-						.db()
-						.commit_workflow_message_send_event(
-							self.ctx.workflow_id(),
-							&location,
-							self.version,
-							&tags,
-							M::NAME,
-							&body_val,
-							self.ctx.loop_location(),
-						)
-						.await
-				},
-				async {
-					if self.wait {
-						self.ctx.msg_ctx().message_wait(tags2, self.body).await
-					} else {
-						self.ctx.msg_ctx().message(tags2, self.body).await
-					}
-				},
-			);
+			self.ctx
+				.db()
+				.commit_workflow_message_send_event(
+					self.ctx.workflow_id(),
+					&location,
+					self.version,
+					&tags,
+					M::NAME,
+					&body_val,
+					self.ctx.loop_location(),
+				)
+				.await?;
 
-			msg.map_err(GlobalError::raw)?;
-			write.map_err(GlobalError::raw)?;
+			if self.wait {
+				self.ctx.msg_ctx().message_wait(tags2, self.body).await?;
+			} else {
+				self.ctx.msg_ctx().message(tags2, self.body).await?;
+			}
 
 			let dt = start_instant.elapsed().as_secs_f64();
 			metrics::MESSAGE_SEND_DURATION

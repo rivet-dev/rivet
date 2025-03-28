@@ -3,7 +3,7 @@
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-	logs::SdkLoggerProvider,
+	// logs::SdkLoggerProvider,
 	metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 	Resource,

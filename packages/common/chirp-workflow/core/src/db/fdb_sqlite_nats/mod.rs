@@ -21,6 +21,7 @@ use indoc::indoc;
 use rivet_pools::prelude::*;
 use serde_json::json;
 use sqlx::Acquire;
+use tokio::sync::mpsc;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
@@ -58,6 +59,7 @@ const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.fdb_sqlite_nats.worker.wake";
 pub struct DatabaseFdbSqliteNats {
 	pools: rivet_pools::Pools,
 	subspace: Subspace,
+	flush_tx: mpsc::UnboundedSender<Uuid>,
 }
 
 impl DatabaseFdbSqliteNats {
@@ -133,33 +135,24 @@ impl DatabaseFdbSqliteNats {
 	async fn evict_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
 		tracing::debug!(?workflow_id, "evicting workflow");
 
-		tokio::try_join!(
-			self.pools
-				.sqlite_manager()
-				.evict(sqlite::db_name_internal(workflow_id)),
-			self.pools
-				.sqlite_manager()
-				.evict(crate::db::sqlite_db_name_data(workflow_id)),
-		)?;
+		self.pools
+			.sqlite_manager()
+			.evict(vec![
+				sqlite::db_name_internal(workflow_id),
+				crate::db::sqlite_db_name_data(workflow_id),
+			])
+			.await?;
 
 		Ok(())
 	}
 
+	/// Notifies a background thread to flush the workflow's databases. Non-blocking.
 	/// Only needed for events that have side effects: activities, signals, messages, and workflows.
 	#[tracing::instrument(skip_all)]
-	async fn flush_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
-		tracing::debug!(?workflow_id, "flushing workflow");
-
-		tokio::try_join!(
-			self.pools
-				.sqlite_manager()
-				.flush(sqlite::db_name_internal(workflow_id)),
-			self.pools
-				.sqlite_manager()
-				.flush(crate::db::sqlite_db_name_data(workflow_id)),
-		)?;
-
-		Ok(())
+	fn flush_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
+		self.flush_tx
+			.send(workflow_id)
+			.map_err(|_| WorkflowError::FlushChannelClosed)
 	}
 }
 
@@ -210,9 +203,25 @@ impl DatabaseFdbSqliteNats {
 #[async_trait::async_trait]
 impl Database for DatabaseFdbSqliteNats {
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error> {
+		// Start background flush handler task
+		let (flush_tx, flush_rx) = mpsc::unbounded_channel();
+		let pools2 = pools.clone();
+		tokio::spawn(async move {
+			if let Err(err) = flush_handler(pools2, flush_rx).await {
+				tracing::error!(
+					?err,
+					"fdb_sqlite_nats workflow driver flush handler task failed"
+				);
+
+				// Shut down entire runtime
+				rivet_runtime::shutdown();
+			}
+		});
+
 		Ok(Arc::new(DatabaseFdbSqliteNats {
 			pools,
 			subspace: Subspace::all().subspace(&(RIVET, CHIRP_WORKFLOW, FDB_SQLITE_NATS)),
+			flush_tx,
 		}))
 	}
 
@@ -695,6 +704,9 @@ impl Database for DatabaseFdbSqliteNats {
 		input: &serde_json::value::RawValue,
 		unique: bool,
 	) -> WorkflowResult<Uuid> {
+		// TODO: Race condition if two unique dispatch_workflow calls are made at the same time. The txn
+		// inside of find_workflow should be split into find_workflow_inner and run in the same txn in this
+		// function
 		if unique {
 			let empty_tags = json!({});
 
@@ -961,9 +973,7 @@ impl Database for DatabaseFdbSqliteNats {
 							mode: StreamingMode::Iterator,
 							..(&workflow_by_name_and_tag_subspace).into()
 						},
-						// NOTE: This is not SERIALIZABLE because we don't want to conflict with
-						// `update_workflow_tags`
-						SNAPSHOT,
+						SERIALIZABLE,
 					);
 
 					loop {
@@ -2065,7 +2075,9 @@ impl Database for DatabaseFdbSqliteNats {
 				})
 				.await?;
 
-		self.flush_wf_sqlite(workflow_id).await?;
+		if signal.is_some() {
+			self.flush_wf_sqlite(workflow_id)?;
+		}
 
 		Ok(signal)
 	}
@@ -2338,7 +2350,14 @@ impl Database for DatabaseFdbSqliteNats {
 		})
 		.await?;
 
-		self.flush_wf_sqlite(from_workflow_id).await?;
+		// Block while flushing databases in order ensure listeners have the latest data
+		self.pools
+			.sqlite_manager()
+			.flush(vec![
+				sqlite::db_name_internal(from_workflow_id),
+				crate::db::sqlite_db_name_data(from_workflow_id),
+			])
+			.await?;
 
 		if let Err(err) = self
 			.publish_signal(ray_id, to_workflow_id, signal_id, signal_name, body)
@@ -2358,7 +2377,7 @@ impl Database for DatabaseFdbSqliteNats {
 			})
 			.await?;
 
-			self.flush_wf_sqlite(from_workflow_id).await?;
+			self.flush_wf_sqlite(from_workflow_id)?;
 
 			Err(err)
 		} else {
@@ -2431,7 +2450,14 @@ impl Database for DatabaseFdbSqliteNats {
 		})
 		.await?;
 
-		self.flush_wf_sqlite(workflow_id).await?;
+		// Block while flushing databases in order ensure sub workflow have the latest data
+		self.pools
+			.sqlite_manager()
+			.flush(vec![
+				sqlite::db_name_internal(workflow_id),
+				crate::db::sqlite_db_name_data(workflow_id),
+			])
+			.await?;
 
 		match self
 			.dispatch_workflow(
@@ -2460,7 +2486,7 @@ impl Database for DatabaseFdbSqliteNats {
 				})
 				.await?;
 
-				self.flush_wf_sqlite(workflow_id).await?;
+				self.flush_wf_sqlite(workflow_id)?;
 
 				Err(err)
 			}
@@ -2665,7 +2691,7 @@ impl Database for DatabaseFdbSqliteNats {
 			}
 		}
 
-		self.flush_wf_sqlite(workflow_id).await?;
+		self.flush_wf_sqlite(workflow_id)?;
 
 		Ok(())
 	}
@@ -2681,8 +2707,14 @@ impl Database for DatabaseFdbSqliteNats {
 		body: &serde_json::value::RawValue,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		// Flush database in order ensure subscribers to the snapshot will have the latest data
-		self.flush_wf_sqlite(from_workflow_id).await?;
+		// Block while flushing databases in order ensure subscribers will have the latest data
+		self.pools
+			.sqlite_manager()
+			.flush(vec![
+				sqlite::db_name_internal(from_workflow_id),
+				crate::db::sqlite_db_name_data(from_workflow_id),
+			])
+			.await?;
 
 		let pool = &self
 			.pools
@@ -2710,7 +2742,7 @@ impl Database for DatabaseFdbSqliteNats {
 		})
 		.await?;
 
-		self.flush_wf_sqlite(from_workflow_id).await?;
+		self.flush_wf_sqlite(from_workflow_id)?;
 
 		Ok(())
 	}
@@ -3203,6 +3235,26 @@ enum WorkflowState {
 	Sleeping,
 	Dead,
 	Silenced,
+}
+
+async fn flush_handler(
+	pools: rivet_pools::Pools,
+	mut flush_rx: mpsc::UnboundedReceiver<Uuid>,
+) -> WorkflowResult<()> {
+	while let Some(workflow_id) = flush_rx.recv().await {
+		tracing::debug!(?workflow_id, "flushing workflow");
+
+		pools
+			.sqlite_manager()
+			.flush(vec![
+				sqlite::db_name_internal(workflow_id),
+				crate::db::sqlite_db_name_data(workflow_id),
+			])
+			.await?;
+	}
+
+	// If the channel is closed that means the db driver instance was dropped which is not an error
+	Ok(())
 }
 
 fn value_to_str(v: &serde_json::Value) -> WorkflowResult<String> {

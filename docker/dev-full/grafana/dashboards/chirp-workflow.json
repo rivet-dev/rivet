@@ -1637,14 +1637,14 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum(increase(rivet_chirp_workflow_branch_upsert_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
+					"expr": "sum(increase(rivet_chirp_workflow_loop_iteration_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
 					"format": "heatmap",
 					"legendFormat": "{{le}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Branch Upsert Duration",
+			"title": "Loop Iteration Duration",
 			"tooltip": {
 				"show": true,
 				"showHistogram": true
@@ -1754,13 +1754,13 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum(irate(rivet_chirp_workflow_branch_upsert_duration_count{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (workflow_name)",
+					"expr": "sum(irate(rivet_chirp_workflow_loop_iteration_duration_count{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (workflow_name)",
 					"legendFormat": "{{workflow_name}}",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Branch Events Per Second",
+			"title": "Loop Events Per Second",
 			"type": "timeseries"
 		},
 		{

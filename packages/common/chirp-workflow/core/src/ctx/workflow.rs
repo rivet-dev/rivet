@@ -774,8 +774,6 @@ impl WorkflowCtx {
 					.map_err(WorkflowError::SerializeLoopOutput)
 					.map_err(GlobalError::raw)?;
 
-				let start_instant = Instant::now();
-
 				// Insert event before loop is run so the history is consistent
 				self.db
 					.upsert_workflow_loop_event(
@@ -789,11 +787,6 @@ impl WorkflowCtx {
 						self.loop_location(),
 					)
 					.await?;
-
-				let dt = start_instant.elapsed().as_secs_f64();
-				metrics::BRANCH_UPSERT_DURATION
-					.with_label_values(&[&self.name])
-					.observe(dt);
 
 				(0, state, None)
 			};
@@ -875,7 +868,7 @@ impl WorkflowCtx {
 							.map_err(GlobalError::raw)?;
 
 						let dt = start_instant.elapsed().as_secs_f64();
-						metrics::BRANCH_UPSERT_DURATION
+						metrics::LOOP_ITERATION_DURATION
 							.with_label_values(&[&self.name])
 							.observe(dt - dt2);
 					}
@@ -910,7 +903,7 @@ impl WorkflowCtx {
 							.map_err(GlobalError::raw)?;
 
 						let dt = start_instant.elapsed().as_secs_f64();
-						metrics::BRANCH_UPSERT_DURATION
+						metrics::LOOP_ITERATION_DURATION
 							.with_label_values(&[&self.name])
 							.observe(dt - dt2);
 
