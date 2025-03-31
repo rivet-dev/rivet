@@ -338,7 +338,7 @@ pub fn create_test_routing_fn(test_server: &TestServer) -> RoutingFn {
 			let target = RouteTarget {
 				actor_id,
 				server_id,
-				host: addr.ip(),
+				host: addr.ip().to_string(),
 				port: addr.port(),
 				path: path.to_string(),
 			};

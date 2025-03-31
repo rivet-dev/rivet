@@ -164,6 +164,7 @@ services:
         condition: service_started
     volumes:
       - ./rivet-guard/config.jsonc:/etc/rivet-server/config.jsonc:ro
+      - ./rivet-guard/tls/:/etc/rivet-server/tls/:ro
       - sqlite-data:/root/.local/share/rivet-sqlite:rw
     networks:
       - rivet-network

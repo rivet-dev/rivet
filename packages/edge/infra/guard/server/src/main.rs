@@ -1,14 +1,20 @@
 use chirp_workflow::prelude::*;
 use clap::Parser;
-use global_error::*;
-use rivet_guard_core::proxy_service::{
-    MaxInFlightConfig, MiddlewareConfig, MiddlewareResponse, RateLimitConfig,
-    RetryConfig, RoutingResponse, TimeoutConfig,
+use global_error::GlobalResult;
+use rivet_guard_core::{
+    proxy_service::{
+        MaxInFlightConfig, MiddlewareConfig, MiddlewareResponse, RateLimitConfig,
+        RetryConfig, TimeoutConfig,
+    },
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+};
 use tokio::signal;
 
 mod routing;
+mod tls;
 
 #[derive(Parser)]
 #[command(name = "Rivet", version, about)]
@@ -18,6 +24,10 @@ struct Cli {
 }
 
 fn main() -> GlobalResult<()> {
+    // Initialize with a default CryptoProvider for rustls
+    let provider = rustls::crypto::ring::default_provider();
+    provider.install_default().expect("Failed to install crypto provider");
+
     rivet_runtime::run(async { main_inner().await })?;
     Ok(())
 }
@@ -45,11 +55,21 @@ async fn main_inner() -> GlobalResult<()> {
 
     // Create a middleware function
     let middleware_fn = create_middleware_function(ctx.clone());
+    
+    // Create certificate resolver for TLS
+    let cert_resolver = tls::create_cert_resolver(&ctx).await?;
+    
+    // Print TLS configuration status
+    if let Some(_) = &cert_resolver {
+        tracing::info!("TLS certificate resolver configured");
+    } else {
+        tracing::info!("No TLS configuration found, HTTPS will not be enabled");
+    }
 
     // Start the server
     tracing::info!("starting proxy server");
     tokio::select! {
-        result = rivet_guard_core::run_server(config, routing_fn, middleware_fn) => {
+        result = rivet_guard_core::run_server(config, routing_fn, middleware_fn, cert_resolver) => {
             if let Err(e) = result {
                 tracing::error!("Server error: {}", e);
             }
@@ -72,8 +92,8 @@ fn create_middleware_function(
         + Send
         + Sync,
 > {
-    Arc::new(move |actor_id: &uuid::Uuid| {
-        let ctx = ctx.clone();
+    Arc::new(move |_actor_id: &uuid::Uuid| {
+        let _ctx = ctx.clone();
 
         Box::pin(async move {
             // In a real implementation, you would look up actor-specific middleware settings

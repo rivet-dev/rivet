@@ -1,4 +1,5 @@
 use crate::proxy_service::{ProxyServiceFactory, RoutingFn, MiddlewareFn};
+use crate::cert_resolver::{CertResolverFn, create_tls_config};
 use global_error::*;
 use hyper::service::service_fn;
 use std::fmt;
@@ -8,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
+use tokio_rustls::TlsAcceptor;
 use tracing::{error, info};
 
 // HACK: GlobalError does not conform to StdError required by hyper
@@ -25,11 +27,15 @@ impl fmt::Display for GlobalErrorWrapper {
 impl std::error::Error for GlobalErrorWrapper {}
 
 // Start the server
-pub async fn run_server(config: rivet_config::Config, routing_fn: RoutingFn, middleware_fn: MiddlewareFn) -> GlobalResult<()> {
+pub async fn run_server(
+	config: rivet_config::Config, 
+	routing_fn: RoutingFn, 
+	middleware_fn: MiddlewareFn,
+	cert_resolver_fn: Option<CertResolverFn>,
+) -> GlobalResult<()> {
 	// Configure servers for different ports
 	let guard_config = config.guard()?;
 	
-		
 	// Set up HTTP server
 	let http_addr: std::net::SocketAddr = ([0, 0, 0, 0], guard_config.http_port).into();
 	let http_factory = Arc::new(ProxyServiceFactory::new(
@@ -41,8 +47,8 @@ pub async fn run_server(config: rivet_config::Config, routing_fn: RoutingFn, mid
 	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 	
 	// Set up HTTPS server (if configured)
-	let (https_addr, https_factory, https_listener) = if let Some(https_config) = &guard_config.https {
-		let https_addr: std::net::SocketAddr = ([0, 0, 0, 0], https_config.port).into();
+	let (https_addr, https_factory, https_listener, https_acceptor) = if let Some(https) = &guard_config.https {
+		let https_addr: std::net::SocketAddr = ([0, 0, 0, 0], https.port).into();
 		let https_factory = Arc::new(ProxyServiceFactory::new(
 			config.clone(), 
 			routing_fn.clone(), 
@@ -51,12 +57,20 @@ pub async fn run_server(config: rivet_config::Config, routing_fn: RoutingFn, mid
 		));
 		let listener = tokio::net::TcpListener::bind(https_addr).await?;
 		
-		// TLS configuration would be handled here
-		// For now, we're just binding to the port
+		// Configure TLS if resolver function is provided
+		let acceptor = if let Some(resolver_fn) = cert_resolver_fn {
+			// Create a TLS server config using our certificate resolver
+			let server_config = create_tls_config(resolver_fn);
+			
+			Some(TlsAcceptor::from(Arc::new(server_config)))
+		} else {
+			info!("No TLS certificate resolver provided, HTTPS will not work properly");
+			None
+		};
 		
-		(Some(https_addr), Some(https_factory), Some(listener))
+		(Some(https_addr), Some(https_factory), Some(listener), acceptor)
 	} else {
-		(None, None, None)
+		(None, None, None, None)
 	};
 
 	// Set up server builder and graceful shutdown
@@ -69,12 +83,12 @@ pub async fn run_server(config: rivet_config::Config, routing_fn: RoutingFn, mid
 	let mut sigint = signal(SignalKind::interrupt())?;
 	let mut sigint = pin!(sigint.recv());
 
-		info!("HTTP server listening on {}", http_addr);
+	info!("HTTP server listening on {}", http_addr);
 	if let Some(addr) = &https_addr {
 		info!("HTTPS server listening on {}", addr);
 	}
 
-	// Helper function to process connections
+	// Helper function to process regular connections
 	async fn process_connection(
 		tcp_stream: tokio::net::TcpStream,
 		remote_addr: SocketAddr,
@@ -143,14 +157,58 @@ pub async fn run_server(config: rivet_config::Config, routing_fn: RoutingFn, mid
 					match conn {
 						Ok((tcp_stream, remote_addr)) => {
 							if let Some(factory) = &https_factory {
-								process_connection(
-									tcp_stream, 
-									remote_addr, 
-									factory.clone(), 
-									&server, 
-									&graceful,
-									"HTTPS".to_string()
-								).await;
+								// Check if we have a TLS acceptor
+								if let Some(acceptor) = &https_acceptor {
+									// Handle TLS connection
+									let https_factory_clone = factory.clone();
+									let acceptor_clone = acceptor.clone();
+									
+									// Accept TLS connection in a separate task to avoid ownership issues
+									tokio::spawn(async move {
+										match acceptor_clone.accept(tcp_stream).await {
+											Ok(tls_stream) => {
+												info!("TLS handshake successful for {}", remote_addr);
+												
+												// Create service for this connection
+												let io = hyper_util::rt::TokioIo::new(tls_stream);
+												let proxy_service = https_factory_clone.create_service(remote_addr);
+												
+												// Using service_fn to convert our function into a hyper service
+												let service = service_fn(move |req| {
+													let service_clone = proxy_service.clone();
+													async move {
+														service_clone.process(req).await.map_err(|err| GlobalErrorWrapper{err})
+													}
+												});
+												
+												// Create a new server for each connection
+												let conn_server = hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());
+												
+												// Serve the connection (no graceful shutdown in spawned task)
+												if let Err(err) = conn_server.serve_connection_with_upgrades(io, service).await {
+													error!("HTTPS connection error: {}", err);
+												}
+												
+												info!("HTTPS connection dropped: {}", remote_addr);
+											},
+											Err(e) => {
+												error!("TLS handshake failed for {}: {}", remote_addr, e);
+											}
+										}
+									});
+								} else {
+									// Fallback to non-TLS handling (useful for testing)
+									// In production, this would not secure the connection
+									error!("HTTPS port configured but no TLS acceptor available");
+									process_connection(
+										tcp_stream, 
+										remote_addr, 
+										factory.clone(), 
+										&server, 
+										&graceful,
+										"HTTPS (unsecured)".to_string()
+									).await;
+								}
 							}
 						},
 						Err(e) => {

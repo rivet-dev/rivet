@@ -1,6 +1,15 @@
 {
 	"guard": {
-		"http_port": 7080
+		"http_port": 7080,
+		"https": {
+			"port": 7443,
+			"tls": {
+				"actor_cert_path": "/etc/rivet-server/tls/job_cert.pem",
+				"actor_key_path": "/etc/rivet-server/tls/job_key.pem",
+				"api_cert_path": "/etc/rivet-server/tls/api_cert.pem",
+				"api_key_path": "/etc/rivet-server/tls/api_key.pem"
+			}
+		}
 	},
 	"server": {
 		"rivet": {

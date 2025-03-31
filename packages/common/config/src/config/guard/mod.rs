@@ -23,9 +23,8 @@ pub struct Https {
 #[serde(deny_unknown_fields)]
 #[derive(Default)]
 pub struct Tls {
-	pub cert_dir: PathBuf,
-	pub job_cert_path: PathBuf,
-	pub job_key_path: PathBuf,
+	pub actor_cert_path: PathBuf,
+	pub actor_key_path: PathBuf,
 	pub api_cert_path: PathBuf,
 	pub api_key_path: PathBuf,
 }
