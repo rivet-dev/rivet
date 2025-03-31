@@ -266,6 +266,7 @@ impl Opts {
 			build_tags: build_tags.map(|bt| Some(serde_json::json!(bt))),
 			runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
 				environment: env_vars,
+				network: None,
 			})),
 			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
 				mode: self.network_mode.as_ref().map(|mode| match mode {

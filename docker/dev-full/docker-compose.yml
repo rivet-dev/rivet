@@ -120,18 +120,25 @@ services:
       - rivet-network
 
   rivet-guard:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: rivet-guard
+    platform: linux/amd64
     restart: unless-stopped
-    image: traefik:v3.2.1
-    command: --configFile=/etc/rivet-guard/traefik.yaml
-    volumes:
-      - ./rivet-guard:/etc/rivet-guard:ro
+    command: /usr/bin/rivet-guard
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
+      # - RUST_LOG=debug,hyper=info
+    stop_grace_period: 0s
     ports:
       # HTTP
       - "7080:7080"
       # HTTPS
       - "7443:7443"
-      # Dashboard
-      - "9980:9980"
       # Enable TCP & UDP port ranges.
       #
       # Corresponds to `server.rivet.guard.min_ingress_port_tcp` and
@@ -143,8 +150,21 @@ services:
       # using host networking to 100.
       - "7500-7599:7500-7599"
     depends_on:
-      rivet-edge-server:
+      rivet-server:
         condition: service_healthy
+      cockroachdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      vector-server:
+        condition: service_started
+    volumes:
+      - ./rivet-guard/config.jsonc:/etc/rivet-server/config.jsonc:ro
+      - sqlite-data:/root/.local/share/rivet-sqlite:rw
     networks:
       - rivet-network
 

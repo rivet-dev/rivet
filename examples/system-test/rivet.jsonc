@@ -1,12 +1,10 @@
 {
 	"builds": {
 		"ws-isolate": {
-			"script": "src/isolate/main.ts",
-			"access": "private"
+			"script": "src/isolate/main.ts"
 		},
 		"ws-container": {
-			"dockerfile": "Dockerfile",
-			"access": "private"
+			"dockerfile": "Dockerfile"
 		}
 	}
 }

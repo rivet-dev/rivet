@@ -9,7 +9,7 @@ Runs a basic load test that:
 
 ## Usage
 
-This is intended to be used with `system-test` (in `examples/misc/system-test/`).
+This is intended to be used with `system-test` (in `examples/system-test/`).
 
 The build name is specified with `BUILD`.
 

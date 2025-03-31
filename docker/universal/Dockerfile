@@ -47,12 +47,12 @@ RUN \
     --mount=type=cache,target=/root/.cache,id=universal-user-cache \
     --mount=type=cache,target=/root/.npm,id=universal-user-npm \
     --mount=type=cache,target=/root/.yarn,id=universal-user-yarn \
-    RUSTFLAGS="--cfg tokio_unstable" RIVET_BUILD_HUB=1 cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
+    RUSTFLAGS="--cfg tokio_unstable" RIVET_BUILD_HUB=1 cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-guard --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
     mkdir /app/dist/ && \
-    cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
+    cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-guard target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
-# MARK: Server (Full)
-FROM debian:12.9-slim AS server-full
+# MARK: Server (full, base)
+FROM debian:12.9-slim AS server-full-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 # - Install curl for health checks
@@ -76,6 +76,9 @@ RUN apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+
+# MARK: Server (Full)
+FROM server-full-base AS server-full
 
 COPY --from=builder /app/dist/rivet-server /usr/bin/rivet-server
 
@@ -96,34 +99,18 @@ COPY --from=builder /app/dist/rivet-server /usr/bin/rivet-server
 CMD ["/usr/bin/rivet-server"]
 
 # MARK: Edge server
-FROM debian:12.1-slim AS edge-server
-
-ENV DEBIAN_FRONTEND=noninteractive
-# - Install curl for health checks
-# - Install go-migrate for running migrations
-# - Install database clients to be able to run `rivet db shell ...` (Redis, Postgres, ClickHouse)
-RUN apt-get update -y && \
-    apt-get install -y \
-    ca-certificates \
-    openssl \
-    curl \
-    redis-tools  \
-    postgresql-client \
-    gpg \
-    dirmngr && \
-    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
-    apt-get update -y && \
-    apt-get install -y clickhouse-client && \
-    (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz) && \
-    mv migrate /usr/local/bin/migrate && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+FROM server-full-base AS edge-server
 
 COPY --from=builder /app/dist/rivet-edge-server /usr/bin/rivet-edge-server
 
 CMD ["/usr/bin/rivet-edge-server"]
+
+# MARK: Rivet Guard
+FROM server-full-base AS rivet-guard
+
+COPY --from=builder /app/dist/rivet-guard /usr/bin/rivet-guard
+
+CMD ["/usr/bin/rivet-guard"]
 
 # MARK: Runner base
 FROM --platform=linux/amd64 debian:12.9-slim AS base-runner

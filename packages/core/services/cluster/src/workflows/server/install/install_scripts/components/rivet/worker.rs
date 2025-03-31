@@ -69,6 +69,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					cluster_id: Uuid::nil(),
 					datacenter_id: Uuid::nil(),
 					server_id: Uuid::nil(),
+					api_lan_address: None,
 					intercom_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"))?,
 					redirect_logs: Some(true),
 				}),
@@ -134,6 +135,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			linode: server_config.linode.clone(),
 			..Default::default()
 		}),
+		guard: None,
 	};
 	let mut edge_config_json = serde_json::to_value(&edge_config)?;
 

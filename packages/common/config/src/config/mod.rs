@@ -3,8 +3,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub mod server;
+pub mod guard;
 
 pub use server::*;
+pub use guard::*;
 
 // IMPORTANT:
 //
@@ -20,12 +22,16 @@ pub struct Root {
 	// the client config.
 	#[serde(default)]
 	pub server: Option<server::Server>,
+
+	#[serde(default)]
+	pub guard: Option<guard::Guard>,
 }
 
 impl Default for Root {
 	fn default() -> Self {
 		Self {
 			server: Some(server::Server::default()),
+			guard: None,
 		}
 	}
 }
@@ -33,5 +39,9 @@ impl Default for Root {
 impl Root {
 	pub fn server(&self) -> GlobalResult<&server::Server> {
 		Ok(unwrap_ref!(self.server, "missing server config"))
+	}
+
+	pub fn guard(&self) -> GlobalResult<&guard::Guard> {
+		Ok(unwrap_ref!(self.guard, "missing server config"))
 	}
 }

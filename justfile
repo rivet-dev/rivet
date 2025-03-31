@@ -84,11 +84,11 @@ actor-check: actor-compile-bridge
 
 [group('system')]
 system-test BUILD REGION="":
-	cd examples/misc/system-test && BUILD={{BUILD}} REGION={{REGION}} rivet shell --exec "yarn test"
+	cd examples/system-test && BUILD={{BUILD}} REGION={{REGION}} rivet shell --exec "yarn test"
 
 [group('system')]
 system-test-deploy:
-	cd examples/misc/system-test && yarn && rivet deploy
+	cd examples/system-test && yarn && rivet deploy
 
 alias gcs := graphite-create-submit
 

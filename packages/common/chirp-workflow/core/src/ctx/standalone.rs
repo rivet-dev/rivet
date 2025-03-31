@@ -245,6 +245,11 @@ impl StandaloneCtx {
 	}
 
 	#[tracing::instrument(skip_all)]
+	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
+		self.conn.fdb().await
+	}
+
+	#[tracing::instrument(skip_all)]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
 		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
 	}

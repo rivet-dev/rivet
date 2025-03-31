@@ -2,7 +2,11 @@ use global_error::prelude::*;
 use maplit::hashmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::IpAddr, path::PathBuf};
+use std::{
+	collections::HashMap,
+	net::{IpAddr, SocketAddr},
+	path::PathBuf,
+};
 use url::Url;
 use uuid::Uuid;
 
@@ -19,7 +23,13 @@ pub mod default_dev_cluster {
 	pub const CLUSTER_ID: Uuid = uuid!("11ca8960-acab-4963-909c-99d72af3e1cb");
 	pub const DATACENTER_ID: Uuid = uuid!("f288913c-735d-4188-bf9b-2fcf6eac7b9c");
 	pub const SERVER_ID: Uuid = uuid!("174aca2a-98b7-462c-9ad9-3835094a9a10");
-	pub const EDGE_API_URL: &str = "http://rivet-edge-server:8080";
+
+	// Routes via Rivet Guard instead of directly to edge server
+	pub const EDGE_API_URL: &str = "http://rivet-guard:7080";
+
+	// In dev, there are no servers to pull the addresses from. We need to have a fallback address.
+	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST: &str = "rivet-edge-server";
+pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT: u16 = 8080;
 }
 
 pub mod default_hosts {
@@ -256,6 +266,41 @@ impl Rivet {
 			.to_string())
 	}
 
+	/// Host to use for routing traffic from Rivet Guard to the edge.
+	///
+	/// If `None`, accepts all host.
+	///
+	/// If `Some`, then only accepts that host.
+	pub fn edge_api_routing_host(&self, dc_name_id: &str) -> GlobalResult<Option<String>> {
+		match self.auth.access_kind {
+			AccessKind::Development => Ok(None),
+			AccessKind::Public | AccessKind::Private => {
+				let domain_main = self.domain_main()?;
+				Ok(Some(format!("api.{dc_name_id}.{domain_main}")))
+			}
+		}
+	}
+
+	pub fn edge_api_fallback_addr_lan(&self) -> Option<(String, u16)> {
+		if let Some(edge) = &self.edge {
+			if let Some(lan_addr) = &edge.api_lan_address {
+				Some(lan_addr.clone())
+			} else {
+				match self.auth.access_kind {
+					AccessKind::Development => {
+						Some((
+							default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST.to_string(),
+							default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT
+						))
+					}
+					AccessKind::Public | AccessKind::Private => None,
+				}
+			}
+		} else {
+			None
+		}
+	}
+
 	pub fn billing(&self) -> GlobalResult<&Billing> {
 		Ok(unwrap_ref!(self.billing, "billing disabled"))
 	}
@@ -289,7 +334,7 @@ pub enum AccessKind {
 	/// automatically
 	///	  - This allows using Rivet without manually creating a new project/environment
 	/// - Project & environment fields will fallback to "default" if not provided
-	///   - This allows using Rivet with simplfied requests, like `POST /actors` without a query
+	///   - This allows using Rivet with simplified requests, like `POST /actors` without a query
 	/// - If no bearer token is provided, authentication will always succeed
 	///	  - This allows setting up development environments without manually creating tokens
 	Development,
@@ -762,6 +807,9 @@ pub struct Edge {
 	pub datacenter_id: Uuid,
 	pub server_id: Uuid,
 	pub intercom_endpoint: Url,
+	/// This API address will be used if there are no worker servers listed in the cluster package
+	#[serde(default)]
+	pub api_lan_address: Option<(String, u16)>,
 	#[serde(default)]
 	pub redirect_logs: Option<bool>,
 }
