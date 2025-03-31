@@ -116,7 +116,7 @@ pub async fn create_cert_resolver(
 		cert_path: Path::new(&tls_config.api_cert_path).into(),
 		key_path: Path::new(&tls_config.api_key_path).into(),
 	})?;
-	
+
 	// Load actor certificate
 	let actor_cert = load_certified_key(&CertificatePair {
 		name: "Actor",
@@ -148,30 +148,39 @@ pub async fn create_cert_resolver(
 	}
 
 	// Get the hostname regexes for actor routing with hostname-based endpoint type
-	let actor_hostname_regex_dynamic =
-		match build_actor_hostname_and_path_regex(EndpointType::Hostname, guard_hostname) {
-			Ok(Some((x, _))) => {
-				tracing::info!("Successfully built dynamic hostname actor routing regex");
-				Some(x)
-			},
-			Ok(None) => {
-				tracing::warn!("Could not build dynamic hostname actor routing regex - pattern will be skipped");
-				None
-			},
-			Err(e) => {
-				bail!("Failed to build dynamic hostname actor routing regex: {}", e);
-			}
-		};
+	let actor_hostname_regex_dynamic = match build_actor_hostname_and_path_regex(
+		EndpointType::Hostname,
+		guard_hostname,
+	) {
+		Ok(Some((x, _))) => {
+			tracing::info!("Successfully built dynamic hostname actor routing regex");
+			Some(x)
+		}
+		Ok(None) => {
+			tracing::warn!(
+				"Could not build dynamic hostname actor routing regex - pattern will be skipped"
+			);
+			None
+		}
+		Err(e) => {
+			bail!(
+				"Failed to build dynamic hostname actor routing regex: {}",
+				e
+			);
+		}
+	};
 	let actor_hostname_regex_static =
 		match build_actor_hostname_and_path_regex(EndpointType::Path, guard_hostname) {
 			Ok(Some((x, _))) => {
 				tracing::info!("Successfully built static path actor routing regex");
 				Some(x)
-			},
+			}
 			Ok(None) => {
-				tracing::warn!("Could not build static path actor routing regex - pattern will be skipped");
+				tracing::warn!(
+					"Could not build static path actor routing regex - pattern will be skipped"
+				);
 				None
-			},
+			}
 			Err(e) => {
 				bail!("Failed to build static path actor routing regex: {}", e);
 			}

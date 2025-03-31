@@ -64,9 +64,9 @@ pub async fn cluster_server_gg_dns_create(
 			let job_zone_id = job_zone_id.clone();
 
 			Box::pin(async move {
-				let record_id = match ctx.check_version(2).await? {
+				let record_id = match ctx.check_version(3).await? {
 					1 => None,
-					_latest => Some(
+					2 => Some(
 						ctx.activity(CreateDnsRecordInput {
 							record_name: format!("*.actor.{datacenter_id}.{domain_job}"),
 							public_ip,
@@ -74,6 +74,7 @@ pub async fn cluster_server_gg_dns_create(
 						})
 						.await?,
 					),
+					_latest => None,
 				};
 
 				Ok(record_id)
@@ -86,9 +87,9 @@ pub async fn cluster_server_gg_dns_create(
 			let main_zone_id = main_zone_id.clone();
 
 			Box::pin(async move {
-				let record_id = match ctx.check_version(3).await? {
+				let record_id = match ctx.check_version(4).await? {
 					1 | 2 => None,
-					_latest => Some(
+					3 => Some(
 						ctx.activity(CreateDnsRecordInput {
 							record_name: unwrap!(ctx
 								.config()
@@ -102,6 +103,7 @@ pub async fn cluster_server_gg_dns_create(
 						})
 						.await?,
 					),
+					_latest => None,
 				};
 
 				Ok(record_id)

@@ -348,7 +348,12 @@ async fn scale_servers(
 				.await?;
 			}
 		}
-		PoolType::Gg | PoolType::Ats | PoolType::Fdb | PoolType::Worker | PoolType::Nats => {
+		PoolType::Gg
+		| PoolType::Ats
+		| PoolType::Fdb
+		| PoolType::Worker
+		| PoolType::Nats
+		| PoolType::Guard => {
 			let installed_servers = active_servers.filter(|server| server.is_installed);
 			let installed_count = installed_servers.clone().count();
 

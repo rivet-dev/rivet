@@ -11,6 +11,7 @@ types:
       - fdb
       - worker
       - nats
+      - guard
 
   Server:
     properties:

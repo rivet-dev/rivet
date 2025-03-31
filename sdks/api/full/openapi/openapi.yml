@@ -13560,6 +13560,7 @@ components:
         - fdb
         - worker
         - nats
+        - guard
     ProvisionServer:
       type: object
       properties:

@@ -25,6 +25,9 @@ pub struct ClusterProvision {
 
 	// The URL for the rivet edge server binary.
 	pub edge_server_binary_url: Url,
+
+	// The URL for the rivet guard binary.
+	pub guard_binary_url: Url,
 }
 
 impl ClusterProvision {
@@ -44,6 +47,7 @@ pub struct ClusterPools {
 	pub fdb: ClusterPoolFdb,
 	pub worker: ClusterPoolWorker,
 	pub nats: ClusterPoolNats,
+	pub guard: ClusterPoolGuard,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -300,6 +304,88 @@ impl ClusterPoolNats {
 
 	pub fn firewall_rules(&self) -> Vec<FirewallRule> {
 		FirewallRule::base_rules()
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterPoolGuard {
+	pub autoscale_margin: u32,
+
+	#[schemars(with = "Option<String>")]
+	pub vlan_ip_net: Option<Ipv4Net>,
+	pub firewall_rules: Option<Vec<FirewallRule>>,
+}
+
+impl ClusterPoolGuard {
+	pub fn vlan_ip_net(&self) -> Ipv4Net {
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 26).unwrap()
+	}
+
+	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {
+		self.vlan_ip_net().hosts()
+	}
+
+	pub fn firewall_rules(&self, rg: &super::Guard) -> Vec<FirewallRule> {
+		[
+			FirewallRule::base_rules(),
+			vec![
+				// HTTP(S)
+				FirewallRule {
+					label: "http-tcp".into(),
+					ports: "80".into(),
+					protocol: "tcp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+				FirewallRule {
+					label: "http-udp".into(),
+					ports: "80".into(),
+					protocol: "udp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+				FirewallRule {
+					label: "https-tcp".into(),
+					ports: "443".into(),
+					protocol: "tcp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+				FirewallRule {
+					label: "https-udp".into(),
+					ports: "443".into(),
+					protocol: "udp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+				// Dynamic TCP
+				FirewallRule {
+					label: "dynamic-tcp".into(),
+					ports: format!(
+						"{}-{}",
+						rg.min_ingress_port_tcp(),
+						rg.max_ingress_port_tcp()
+					),
+					protocol: "tcp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+				// Dynamic UDP
+				FirewallRule {
+					label: "dynamic-udp".into(),
+					ports: format!(
+						"{}-{}",
+						rg.min_ingress_port_udp(),
+						rg.max_ingress_port_udp()
+					),
+					protocol: "udp".into(),
+					inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
+					inbound_ipv6_cidr: vec!["::/0".into()],
+				},
+			],
+		]
+		.concat()
 	}
 }
 

@@ -70,11 +70,15 @@ pub async fn gen_install(
 			script.push(components::fdb::install(initialize_immediately));
 		}
 		PoolType::Worker => {
-			script.push(components::rivet::worker::install(config).await?);
+			script.push(components::rivet::worker::install(config)?);
 		}
 		PoolType::Nats => {
 			script.push(components::docker::install());
 			script.push(components::nats::install(config)?);
+		}
+		PoolType::Guard => {
+			script.push(components::ok_server::install(initialize_immediately));
+			script.push(components::rivet::guard::install(config)?);
 		}
 	}
 
@@ -203,6 +207,14 @@ pub async fn gen_initialize(
 		}
 		PoolType::Nats => {
 			script.push(components::nats::fetch_routes(config, server_token)?);
+		}
+		PoolType::Guard => {
+			script.push(components::rivet::fetch_api_route(
+				server_token,
+				GG_TRAEFIK_INSTANCE_NAME,
+			)?);
+			script.push(components::rivet::guard::fetch_tls(server_token)?);
+			script.push(components::rivet::guard::configure(config)?);
 		}
 	}
 

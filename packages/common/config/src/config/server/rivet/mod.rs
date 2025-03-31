@@ -29,7 +29,7 @@ pub mod default_dev_cluster {
 
 	// In dev, there are no servers to pull the addresses from. We need to have a fallback address.
 	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST: &str = "rivet-edge-server";
-pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT: u16 = 8080;
+	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT: u16 = 8080;
 }
 
 pub mod default_hosts {
@@ -287,12 +287,10 @@ impl Rivet {
 				Some(lan_addr.clone())
 			} else {
 				match self.auth.access_kind {
-					AccessKind::Development => {
-						Some((
-							default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST.to_string(),
-							default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT
-						))
-					}
+					AccessKind::Development => Some((
+						default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST.to_string(),
+						default_dev_cluster::DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT,
+					)),
 					AccessKind::Public | AccessKind::Private => None,
 				}
 			}
@@ -811,5 +809,5 @@ pub struct Edge {
 	#[serde(default)]
 	pub api_lan_address: Option<(String, u16)>,
 	#[serde(default)]
-	pub redirect_logs: Option<bool>,
+	pub redirect_logs_dir: Option<PathBuf>,
 }

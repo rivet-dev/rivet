@@ -45,7 +45,10 @@ pub async fn build_ip_allowlist(
 	let servers_res = ctx
 		.op(cluster::ops::server::list::Input {
 			filter: cluster::types::Filter {
-				pool_types: Some(vec![cluster::types::PoolType::Gg]),
+				pool_types: Some(vec![
+					cluster::types::PoolType::Gg,
+					cluster::types::PoolType::Guard,
+				]),
 				..Default::default()
 			},
 			include_destroyed: false,

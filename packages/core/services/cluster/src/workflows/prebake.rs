@@ -44,7 +44,7 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
 							linode::types::FirewallPreset::Job
 						}
-						PoolType::Gg => linode::types::FirewallPreset::Gg,
+						PoolType::Gg | PoolType::Guard => linode::types::FirewallPreset::Gg,
 						PoolType::Ats => linode::types::FirewallPreset::Ats,
 						PoolType::Fdb => linode::types::FirewallPreset::Fdb,
 						PoolType::Worker => linode::types::FirewallPreset::Worker,

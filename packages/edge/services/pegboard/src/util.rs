@@ -65,9 +65,7 @@ pub fn build_actor_hostname_and_path_regex(
 			Ok(Some((hostname_regex, None)))
 		}
 
-		(EndpointType::Hostname, GuardPublicHostname::Static(_)) => {
-			Ok(None)
-		}
+		(EndpointType::Hostname, GuardPublicHostname::Static(_)) => Ok(None),
 
 		(EndpointType::Path, GuardPublicHostname::DnsParent(dns_parent)) => {
 			// This will not collide with host-based routing since server IDs are always UUIDs.
@@ -81,24 +79,21 @@ pub fn build_actor_hostname_and_path_regex(
 				r"^route\.actor\.{}$",
 				regex::escape(dns_parent.as_str())
 			))?;
-			
+
 			let path_regex = Regex::new(&format!(
 				r"^/(?P<actor_id>{UUID_PATTERN})-(?P<port_name>{PORT_NAME_PATTERN})(?:/.*)?$"
 			))?;
-			
+
 			Ok(Some((hostname_regex, Some(path_regex))))
-		},
+		}
 
 		(EndpointType::Path, GuardPublicHostname::Static(static_)) => {
-			let hostname_regex = Regex::new(&format!(
-				r"^{}$",
-				regex::escape(static_.as_str())
-			))?;
-			
+			let hostname_regex = Regex::new(&format!(r"^{}$", regex::escape(static_.as_str())))?;
+
 			let path_regex = Regex::new(&format!(
 				r"^/(?P<actor_id>{UUID_PATTERN})-(?P<port_name>{PORT_NAME_PATTERN})(?:/.*)?$"
 			))?;
-			
+
 			Ok(Some((hostname_regex, Some(path_regex))))
 		}
 	}
@@ -119,4 +114,3 @@ pub fn image_artifact_url_stub(
 pub fn pegboard_normalize_port_name(port_name: &str) -> String {
 	heck::SnakeCase::to_snake_case(port_name)
 }
-

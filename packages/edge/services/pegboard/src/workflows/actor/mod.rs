@@ -14,8 +14,6 @@ pub mod destroy;
 mod migrations;
 mod runtime;
 mod setup;
-mod traefik;
-pub use traefik::TraefikPoll;
 
 // A small amount of time to separate the completion of the drain to the deletion of the cluster server. We
 // want the drain to complete first.
@@ -249,11 +247,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 									))
 									.await?;
 
-									// Wait for Traefik to poll ports and update GG
-									ctx.activity(traefik::WaitForTraefikPollInput {
-										create_ts: ctx.create_ts(),
-									})
-									.await?;
+									// Old traefik timeout
+									ctx.removed::<Activity<WaitForTraefikPoll>>().await?;
 
 									let updated = ctx
 										.activity(runtime::SetConnectableInput {
@@ -483,3 +478,14 @@ join_signal!(Main {
 	Undrain,
 	Destroy,
 });
+
+// Stub definition
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct WaitForTraefikPollInput {}
+#[activity(WaitForTraefikPoll)]
+pub async fn wait_for_traefik_poll(
+	_ctx: &ActivityCtx,
+	_input: &WaitForTraefikPollInput,
+) -> GlobalResult<()> {
+	Ok(())
+}

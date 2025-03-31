@@ -61,7 +61,7 @@ pub async fn cluster_datacenter_location_get(
 }
 
 async fn query_dcs(ctx: OperationCtx, datacenter_ids: Vec<Uuid>) -> GlobalResult<Vec<Datacenter>> {
-	// NOTE: if there is no active GG node in a datacenter, we cannot retrieve its location
+	// NOTE: if there is no active guard node in a datacenter, we cannot retrieve its location
 	// Fetch the gg node public ip for each datacenter (there may be more than one, hence `DISTINCT`)
 	let server_rows = sql_fetch_all!(
 		[ctx, (Uuid, IpAddr)]
@@ -71,14 +71,14 @@ async fn query_dcs(ctx: OperationCtx, datacenter_ids: Vec<Uuid>) -> GlobalResult
 		FROM db_cluster.servers
 		WHERE
 			datacenter_id = ANY($1) AND
-			pool_type = $2 AND
+			pool_type = ANY($2) AND
 			public_ip IS NOT NULL AND
 			cloud_destroy_ts IS NULL
 		-- For consistency
 		ORDER BY public_ip DESC
 		",
 		&datacenter_ids,
-		PoolType::Gg as i64,
+		[PoolType::Gg as i64, PoolType::Guard as i64],
 	)
 	.await?;
 

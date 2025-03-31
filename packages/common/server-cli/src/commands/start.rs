@@ -1,4 +1,4 @@
-use std::{path::Path, time::Duration};
+use std::time::Duration;
 
 use anyhow::*;
 use clap::Parser;
@@ -48,16 +48,14 @@ impl Opts {
 		run_config: &RunConfig,
 	) -> Result<()> {
 		// Redirect logs if enabled on the edge
-		if config
+		if let Some(logs_dir) = config
 			.server()
 			.ok()
 			.and_then(|x| x.rivet.edge.as_ref())
-			.and_then(|x| x.redirect_logs)
-			.unwrap_or_default()
+			.and_then(|x| x.redirect_logs_dir.as_ref())
 		{
-			let logs_path = Path::new("/var/log/rivet-edge-server");
-			std::fs::create_dir_all(logs_path)?;
-			rivet_logs::Logs::new(logs_path.to_path_buf(), LOGS_RETENTION)
+			std::fs::create_dir_all(logs_dir)?;
+			rivet_logs::Logs::new(logs_dir.clone(), LOGS_RETENTION)
 				.start()
 				.await?;
 		}

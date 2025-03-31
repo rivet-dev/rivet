@@ -277,6 +277,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/deno@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "@types/deno@npm:2.2.0"
+  checksum: 10c0/cb45bbffe66a3008224a509c6bcb338921cc68b9045363f77ba5d84650d879b8fd4c810db24369a93fbce4a8e2855808bb141c0447feb47d911a7512ba374bde
+  languageName: node
+  linkType: hard
+
 "@types/node@npm:*, @types/node@npm:^22.13.9":
   version: 22.13.9
   resolution: "@types/node@npm:22.13.9"
@@ -1519,6 +1526,7 @@ __metadata:
     "@hono/node-ws": "npm:^1.1.0"
     "@rivet-gg/actor-core": "npm:^5.1.2"
     "@rivet-gg/api": "npm:^24.6.2"
+    "@types/deno": "npm:^2.2.0"
     "@types/node": "npm:^22.13.9"
     "@types/ws": "npm:^8.18.0"
     hono: "npm:^4.6.17"

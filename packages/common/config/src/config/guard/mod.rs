@@ -7,7 +7,7 @@ use std::path::PathBuf;
 #[serde(deny_unknown_fields)]
 #[derive(Default)]
 pub struct Guard {
-	pub http_port: u16, // Port for HTTP traffic
+	pub http_port: u16,       // Port for HTTP traffic
 	pub https: Option<Https>, // Optional HTTPS configuration
 }
 
@@ -15,8 +15,8 @@ pub struct Guard {
 #[serde(deny_unknown_fields)]
 #[derive(Default)]
 pub struct Https {
-	pub port: u16,      // Port for HTTPS traffic
-	pub tls: Tls,       // TLS configuration
+	pub port: u16, // Port for HTTPS traffic
+	pub tls: Tls,  // TLS configuration
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

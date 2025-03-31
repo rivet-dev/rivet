@@ -2,11 +2,11 @@ use global_error::prelude::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub mod server;
 pub mod guard;
+pub mod server;
 
-pub use server::*;
 pub use guard::*;
+pub use server::*;
 
 // IMPORTANT:
 //

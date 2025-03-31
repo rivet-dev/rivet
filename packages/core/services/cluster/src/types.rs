@@ -85,6 +85,7 @@ pub enum PoolType {
 	Fdb = 5,
 	Worker = 6,
 	Nats = 7,
+	Guard = 8,
 }
 
 impl std::fmt::Display for PoolType {
@@ -98,6 +99,7 @@ impl std::fmt::Display for PoolType {
 			PoolType::Fdb => write!(f, "fdb"),
 			PoolType::Worker => write!(f, "worker"),
 			PoolType::Nats => write!(f, "nats"),
+			PoolType::Guard => write!(f, "guard"),
 		}
 	}
 }

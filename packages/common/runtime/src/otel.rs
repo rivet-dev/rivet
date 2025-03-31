@@ -1,5 +1,6 @@
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 
+use console_subscriber;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
@@ -11,7 +12,6 @@ use opentelemetry_sdk::{
 use opentelemetry_semantic_conventions::{attribute::SERVICE_VERSION, SCHEMA_URL};
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
-use console_subscriber;
 
 fn resource() -> Resource {
 	Resource::builder()
@@ -118,7 +118,6 @@ pub fn init_tracing_subscriber() -> OtelGuard {
 	//let logger =
 	//	opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider)
 	//		.with_filter(filter_otel);
-
 
 	// Create env filter
 	let mut env_filter = EnvFilter::default()

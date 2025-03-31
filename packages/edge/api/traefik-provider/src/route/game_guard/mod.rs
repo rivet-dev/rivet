@@ -34,18 +34,6 @@ pub async fn config(
 
 	build_api(&ctx, &mut config).await?;
 
-	// Publish message when the request is complete
-	if let Some(latest_actor_create_ts) = latest_actor_create_ts {
-		let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
-		ctx.msg(pegboard::workflows::actor::TraefikPoll {
-			server_id: server,
-			latest_actor_create_ts,
-		})
-		.tag("datacenter_id", dc_id)
-		.send()
-		.await?;
-	}
-
 	tracing::debug!(
 		http_services = ?config.http.services.len(),
 		http_routers = config.http.routers.len(),

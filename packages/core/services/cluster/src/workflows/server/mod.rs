@@ -11,6 +11,8 @@ use std::{
 pub(crate) mod drain;
 pub(crate) mod gg_dns_create;
 pub(crate) mod gg_dns_delete;
+pub(crate) mod guard_dns_create;
+pub(crate) mod guard_dns_delete;
 pub(crate) mod install;
 pub(crate) mod undrain;
 
@@ -180,7 +182,7 @@ async fn provision_server(
 							PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
 								linode::types::FirewallPreset::Job
 							}
-							PoolType::Gg => linode::types::FirewallPreset::Gg,
+							PoolType::Gg | PoolType::Guard => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 							PoolType::Fdb => linode::types::FirewallPreset::Fdb,
 							PoolType::Worker => linode::types::FirewallPreset::Worker,
@@ -276,6 +278,13 @@ async fn provision_server(
 				.output()
 				.await?;
 			}
+			PoolType::Guard => {
+				ctx.workflow(guard_dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
 			// Update tags to include pegboard client_id (currently the same as the server_id)
 			PoolType::Pegboard | PoolType::PegboardIsolate => {
 				ctx.activity(UpdateTagsInput {
@@ -328,11 +337,25 @@ async fn lifecycle(
 				.output()
 				.await?;
 			}
+			PoolType::Guard => {
+				ctx.workflow(guard_dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
 			_ => unreachable!(),
 		},
 		Main::DnsDelete(_) => match input.pool_type {
 			PoolType::Gg => {
 				ctx.workflow(gg_dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			PoolType::Guard => {
+				ctx.workflow(guard_dns_delete::Input {
 					server_id: input.server_id,
 				})
 				.output()
@@ -520,6 +543,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		PoolType::Fdb => provision_config.pools.fdb.vlan_addr_range(),
 		PoolType::Worker => provision_config.pools.worker.vlan_addr_range(),
 		PoolType::Nats => provision_config.pools.nats.vlan_addr_range(),
+		PoolType::Guard => provision_config.pools.guard.vlan_addr_range(),
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 
@@ -534,7 +558,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 				PoolType::PegboardIsolate as i32,
 			]
 		}
-		PoolType::Gg => vec![PoolType::Gg as i32],
+		PoolType::Gg | PoolType::Guard => vec![PoolType::Gg as i32, PoolType::Guard as i32],
 		PoolType::Ats => vec![PoolType::Ats as i32],
 		PoolType::Fdb => vec![PoolType::Fdb as i32],
 		PoolType::Worker => vec![PoolType::Worker as i32],
@@ -916,6 +940,13 @@ async fn cleanup(
 		match input.pool_type {
 			PoolType::Gg => {
 				ctx.workflow(gg_dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			PoolType::Guard => {
+				ctx.workflow(guard_dns_delete::Input {
 					server_id: input.server_id,
 				})
 				.output()

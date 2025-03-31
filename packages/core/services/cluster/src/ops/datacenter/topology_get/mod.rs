@@ -200,7 +200,7 @@ pub async fn cluster_datacenter_topology_get(
 						PoolType::Gg
 							| PoolType::Ats | PoolType::PegboardIsolate
 							| PoolType::Fdb | PoolType::Worker
-							| PoolType::Nats
+							| PoolType::Nats | PoolType::Guard
 					)
 				})
 				.collect::<Vec<_>>();

@@ -27,6 +27,8 @@ pub enum ProvisionPoolType {
 	Worker,
 	#[serde(rename = "nats")]
 	Nats,
+	#[serde(rename = "guard")]
+	Guard,
 }
 
 impl ToString for ProvisionPoolType {
@@ -40,6 +42,7 @@ impl ToString for ProvisionPoolType {
 			Self::Fdb => String::from("fdb"),
 			Self::Worker => String::from("worker"),
 			Self::Nats => String::from("nats"),
+			Self::Guard => String::from("guard"),
 		}
 	}
 }

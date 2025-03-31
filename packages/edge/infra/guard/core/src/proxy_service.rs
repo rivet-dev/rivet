@@ -2,6 +2,7 @@
 use bytes::Bytes;
 use global_error::*;
 use http_body_util::{Empty, Full};
+use hyper::header::HeaderName;
 use hyper::body::Incoming as BodyIncoming;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
@@ -17,6 +18,8 @@ use uuid::Uuid;
 use rand;
 
 use crate::metrics;
+
+const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 
 // Routing types
 #[derive(Clone, Debug)]
@@ -404,7 +407,8 @@ impl ProxyService {
 			.and_then(|h| h.to_str().ok())
 			.unwrap_or("unknown");
 
-		let path = req.uri().path();
+		let path = req.uri().path_and_query().map(|x| x.to_string()).unwrap_or_else(|| req.uri().path().to_string());
+		let path = &path;
 		let method = req.method().clone();
 
 		// Resolve target
@@ -545,13 +549,13 @@ impl ProxyService {
 		}
 
 		// Add X-Forwarded-For header
-		if let Some(existing) = req_parts.headers.get(hyper::header::FORWARDED) {
+		if let Some(existing) = req_parts.headers.get(X_FORWARDED_FOR) {
 			if let Ok(forwarded) = existing.to_str() {
 				if !forwarded.contains(&self.remote_addr.ip().to_string()) {
 					headers.insert(
-						hyper::header::FORWARDED,
+						X_FORWARDED_FOR,
 						hyper::header::HeaderValue::from_str(&format!(
-							"{}, for={}",
+							"{}, {}",
 							forwarded,
 							self.remote_addr.ip()
 						))?,
@@ -560,8 +564,8 @@ impl ProxyService {
 			}
 		} else {
 			headers.insert(
-				hyper::header::FORWARDED,
-				hyper::header::HeaderValue::from_str(&format!("for={}", self.remote_addr.ip()))?,
+				X_FORWARDED_FOR,
+				hyper::header::HeaderValue::from_str(&self.remote_addr.ip().to_string())?,
 			);
 		}
 
@@ -639,13 +643,13 @@ impl ProxyService {
 				}
 
 				// Add X-Forwarded-For header
-				if let Some(existing) = req_parts.headers.get(hyper::header::FORWARDED) {
+				if let Some(existing) = req_parts.headers.get(X_FORWARDED_FOR) {
 					if let Ok(forwarded) = existing.to_str() {
 						if !forwarded.contains(&self.remote_addr.ip().to_string()) {
 							headers.insert(
-								hyper::header::FORWARDED,
+								X_FORWARDED_FOR,
 								hyper::header::HeaderValue::from_str(&format!(
-									"{}, for={}",
+									"{}, {}",
 									forwarded,
 									self.remote_addr.ip()
 								))?,
@@ -654,11 +658,9 @@ impl ProxyService {
 					}
 				} else {
 					headers.insert(
-						hyper::header::FORWARDED,
-						hyper::header::HeaderValue::from_str(&format!(
-							"for={}",
-							self.remote_addr.ip()
-						))?,
+						X_FORWARDED_FOR,
+						hyper::header::HeaderValue::from_str(&self.remote_addr.ip().to_string()
+						)?,
 					);
 				}
 
@@ -804,7 +806,7 @@ impl ProxyService {
 	//
 	//	// Add X-Forwarded-For header
 	//	headers.insert(
-	//		hyper::header::FORWARDED,
+	//		X_FORWARDED_FOR,
 	//		hyper::header::HeaderValue::from_str(&format!("for={}", self.remote_addr.ip()))?,
 	//	);
 	//

@@ -252,24 +252,12 @@ impl ApiFrom<Port> for models::ActorsPort {
 					value.public_port,
 					value.public_path.as_ref(),
 				) {
-					(
-						GameGuardProtocol::Http,
-						Some(hostname),
-						Some(80) | None,
-						path,
-					) => Some(format!(
-						"{protocol}://{hostname}{}",
-						util::format::OptDisplay(path)
-					)),
-					(
-						GameGuardProtocol::Https,
-						Some(hostname),
-						Some(443) | None,
-						path,
-					) => Some(format!(
-						"{protocol}://{hostname}{}",
-						util::format::OptDisplay(path)
-					)),
+					(GameGuardProtocol::Http, Some(hostname), Some(80) | None, path) => Some(
+						format!("{protocol}://{hostname}{}", util::format::OptDisplay(path)),
+					),
+					(GameGuardProtocol::Https, Some(hostname), Some(443) | None, path) => Some(
+						format!("{protocol}://{hostname}{}", util::format::OptDisplay(path)),
+					),
 					(
 						GameGuardProtocol::Http | GameGuardProtocol::Https,
 						Some(hostname),

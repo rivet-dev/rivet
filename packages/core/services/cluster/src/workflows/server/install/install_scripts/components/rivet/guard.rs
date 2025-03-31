@@ -17,10 +17,10 @@ use super::{
 pub fn install(config: &rivet_config::Config) -> GlobalResult<String> {
 	let provision_config = &config.server()?.rivet.provision()?;
 
-	Ok(include_str!("../../files/rivet_worker_install.sh")
+	Ok(include_str!("../../files/rivet_guard_install.sh")
 		.replace(
-			"__EDGE_SERVER_BINARY_URL__",
-			provision_config.edge_server_binary_url.as_ref(),
+			"__GUARD_BINARY_URL__",
+			provision_config.guard_binary_url.as_ref(),
 		)
 		.replace("__FDB_VERSION__", FDB_VERSION))
 }
@@ -29,27 +29,13 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 	let server_config = config.server()?;
 
 	use rivet_config::config::*;
-	let edge_config = Root {
+	let guard_config = Root {
 		server: Some(Server {
 			// TODO: Is this safe?
 			jwt: server_config.jwt.clone(),
 			tls: server_config.tls.clone(),
 			rivet: Rivet {
 				namespace: server_config.rivet.namespace.clone(),
-				clusters: Some({
-					let mut clusters = HashMap::new();
-
-					clusters.insert(
-						"rivet".into(),
-						Cluster {
-							// NOTE: Gets replaced by a template later
-							id: Uuid::nil(),
-							bootstrap_datacenters: HashMap::new(),
-						},
-					);
-
-					clusters
-				}),
 				auth: server_config.rivet.auth.clone(),
 				api_public: ApiPublic {
 					// NOTE: Templated later
@@ -72,8 +58,9 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					server_id: Uuid::nil(),
 					api_lan_address: None,
 					intercom_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"))?,
-					redirect_logs_dir: Some(PathBuf::from("/var/log/rivet-edge-server")),
+					redirect_logs_dir: Some(PathBuf::from("/var/log/rivet-guard")),
 				}),
+				status: server_config.rivet.status.clone(),
 				..Default::default()
 			},
 			cockroachdb: CockroachDb {
@@ -131,33 +118,51 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				endpoint_internal: Url::parse(&format!("http://127.0.0.1:{TUNNEL_S3_PORT}"))?,
 				..server_config.s3.clone()
 			},
-			ip_info: server_config.ip_info.clone(),
-			turnstile: server_config.turnstile.clone(),
-			linode: server_config.linode.clone(),
 			..Default::default()
 		}),
-		guard: None,
+		guard: Some(rivet_config::config::guard::Guard {
+			http_port: 80,
+			https: Some(Https {
+				port: 443,
+				tls: rivet_config::config::guard::Tls {
+					actor_cert_path: PathBuf::from("/etc/rivet-server/tls/actor_cert.pem"),
+					actor_key_path: PathBuf::from("/etc/rivet-server/tls/actor_key.pem"),
+					api_cert_path: PathBuf::from("/etc/rivet-server/tls/api_cert.pem"),
+					api_key_path: PathBuf::from("/etc/rivet-server/tls/api_key.pem"),				
+				}
+			}),
+		}),
 	};
-	let mut edge_config_json = serde_json::to_value(&edge_config)?;
+	let mut guard_config_json = serde_json::to_value(&guard_config)?;
 
 	// Add placeholders for templating
-	edge_config_json["server"]["rivet"]["default_cluster_id"] = "___CLUSTER_ID___".into();
-	edge_config_json["server"]["rivet"]["clusters"]["rivet"]["id"] = "___CLUSTER_ID___".into();
-	edge_config_json["server"]["rivet"]["edge"]["cluster_id"] = "___CLUSTER_ID___".into();
-	edge_config_json["server"]["rivet"]["edge"]["datacenter_id"] = "___DATACENTER_ID___".into();
-	edge_config_json["server"]["rivet"]["edge"]["server_id"] = "___SERVER_ID___".into();
+	guard_config_json["server"]["rivet"]["default_cluster_id"] = "___CLUSTER_ID___".into();
+	guard_config_json["server"]["rivet"]["edge"]["cluster_id"] = "___CLUSTER_ID___".into();
+	guard_config_json["server"]["rivet"]["edge"]["datacenter_id"] = "___DATACENTER_ID___".into();
+	guard_config_json["server"]["rivet"]["edge"]["server_id"] = "___SERVER_ID___".into();
 	// HACK: The url crate makes all url hostnames lowercase, revert that change
-	edge_config_json["server"]["rivet"]["api_public"]["public_origin"] = server_config
+	guard_config_json["server"]["rivet"]["api_public"]["public_origin"] = server_config
 		.rivet
 		.edge_api_url("___DATACENTER_NAME_ID___")?
 		.to_string()
 		.replace("___datacenter_name_id___", "___DATACENTER_NAME_ID___")
 		.into();
 
-	Ok(include_str!("../../files/rivet_worker_configure.sh")
+	Ok(include_str!("../../files/rivet_guard_configure.sh")
 		.replace(
-			"__RIVET_EDGE_CONFIG__",
-			&serde_json::to_string_pretty(&edge_config_json)?,
+			"__RIVET_GUARD_CONFIG__",
+			&serde_json::to_string_pretty(&guard_config_json)?,
 		)
 		.replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string()))
+}
+
+pub fn fetch_tls(server_token: &str) -> GlobalResult<String> {
+	let script = include_str!("../../files/rivet_fetch_rg_tls.sh")
+		.replace("__SERVER_TOKEN__", server_token)
+		.replace(
+			"__TUNNEL_API_EDGE_API__",
+			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
+		);
+
+	Ok(script)
 }

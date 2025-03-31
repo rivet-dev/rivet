@@ -1,5 +1,6 @@
 use chirp_workflow::prelude::*;
 
+pub mod guard;
 pub mod worker;
 
 pub const TUNNEL_API_EDGE_PORT: u16 = 5010;

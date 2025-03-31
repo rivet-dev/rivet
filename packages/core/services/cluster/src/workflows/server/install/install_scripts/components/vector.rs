@@ -173,6 +173,32 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 			let inputs = unwrap!(config_json["sinks"]["vector_sink"]["inputs"].as_array_mut());
 			inputs.push(json!("worker_add_meta"));
 		}
+		// Add guard logs
+		PoolType::Guard => {
+			config_json["sources"]["guard"] = json!({
+				"type": "file",
+				"include": ["/var/log/rivet-guard/*"]
+			});
+
+			config_json["transforms"]["guard_add_meta"] = json!({
+				"type": "remap",
+				"inputs": ["guard"],
+				"source": formatdoc!(
+					r#"
+					.source = "guard"
+
+					.server_id = "___SERVER_ID___"
+					.datacenter_id = "___DATACENTER_ID___"
+					.cluster_id = "___CLUSTER_ID___"
+					.pool_type = "{pool_type}"
+					.public_ip = "${{PUBLIC_IP}}"
+					"#
+				),
+			});
+
+			let inputs = unwrap!(config_json["sinks"]["vector_sink"]["inputs"].as_array_mut());
+			inputs.push(json!("guard_add_meta"));
+		}
 		_ => {}
 	}
 

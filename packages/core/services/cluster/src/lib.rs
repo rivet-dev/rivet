@@ -18,6 +18,8 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<server::drain::Workflow>()?;
 	registry.register_workflow::<server::gg_dns_create::Workflow>()?;
 	registry.register_workflow::<server::gg_dns_delete::Workflow>()?;
+	registry.register_workflow::<server::guard_dns_create::Workflow>()?;
+	registry.register_workflow::<server::guard_dns_delete::Workflow>()?;
 	registry.register_workflow::<server::install::Workflow>()?;
 	registry.register_workflow::<server::undrain::Workflow>()?;
 	registry.register_workflow::<server::Workflow>()?;
