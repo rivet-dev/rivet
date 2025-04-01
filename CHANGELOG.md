@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.3.0](https://github.com/rivet-gg/rivet/compare/v25.2.2...v25.3.0) (2025-03-31)
+
+
+### Features
+
+* implement rivet guard ([#2276](https://github.com/rivet-gg/rivet/issues/2276)) ([9d61c63](https://github.com/rivet-gg/rivet/commit/9d61c63c42f861b15aaa2943b7c88c68abca3fc3))
+* rg prod ([#2281](https://github.com/rivet-gg/rivet/issues/2281)) ([10aeaea](https://github.com/rivet-gg/rivet/commit/10aeaea348b34f0b2bf5815860da0decbd5f6e07))
+
+
+### Chores
+
+* add tls config to rivet guard ([#2279](https://github.com/rivet-gg/rivet/issues/2279)) ([bc0582f](https://github.com/rivet-gg/rivet/commit/bc0582f0da5241275bdfe5631c77cb0765977c5d))
+
 ## [25.2.2](https://github.com/rivet-gg/rivet/compare/v25.2.1...v25.2.2) (2025-03-28)
 
 
