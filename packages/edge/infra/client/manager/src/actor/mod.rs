@@ -139,23 +139,37 @@ impl Actor {
 			.await
 			.context("failed to create actor dir")?;
 
-		// Create fs mount
-		self.make_fs(&ctx).await?;
-
-		// Download artifact
-		self.download_image(&ctx).await?;
-
-		// Bind selected ports
-		let ports = self.bind_ports(ctx).await?;
+		// Determine ahead of time if we need to set up CNI network
+		let needs_cni_network = matches!(
+			self.config.image.kind,
+			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle
+		) && matches!(self.config.network_mode, protocol::NetworkMode::Bridge);
+		
+		// Parallelize two independent jobs:
+        //
+        // - `download_image` takes a long time to download. `download_image` is dependent on
+        //   `make_fs`
+        // - `setup_cni_network` takes a long time. `setup_cni_network` is dependent on
+        //   `bind_ports`.
+		let (_, ports) = tokio::try_join!(
+			async {
+				self.make_fs(&ctx).await?;
+				self.download_image(&ctx).await?;
+                Result::<(), anyhow::Error>::Ok(())
+			},
+			async {
+				let ports = self.bind_ports(ctx).await?;
+				if needs_cni_network {
+					self.setup_cni_network(&ctx, &ports).await?;
+				}
+				
+				Ok(ports)
+			}
+		)?;
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
 				self.setup_oci_bundle(&ctx, &ports).await?;
-
-				// Run CNI setup script
-				if let protocol::NetworkMode::Bridge = self.config.network_mode {
-					self.setup_cni_network(&ctx, &ports).await?;
-				}
 			}
 			protocol::ImageKind::JavaScript => self.setup_isolate(&ctx, &ports).await?,
 		}
