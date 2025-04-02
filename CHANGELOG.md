@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.3.1](https://github.com/rivet-gg/rivet/compare/v25.3.0...v25.3.1) (2025-04-02)
+
+
+### Features
+
+* add configurable minimum age for lost servers ([#2297](https://github.com/rivet-gg/rivet/issues/2297)) ([ccc3e41](https://github.com/rivet-gg/rivet/commit/ccc3e417e961e3800404ba7f753fd841f8ba52f7))
+
+
+### Bug Fixes
+
+* **cluster:** fix nats provisioned in wrong subnet ([#2296](https://github.com/rivet-gg/rivet/issues/2296)) ([ec4edcd](https://github.com/rivet-gg/rivet/commit/ec4edcdf27688aeadaac5e39133d5c9056543c7c))
+* **pegboard:** fix manager tests ([#2286](https://github.com/rivet-gg/rivet/issues/2286)) ([30e02e9](https://github.com/rivet-gg/rivet/commit/30e02e9528b0156fb65db66dd7075fa0c12b9494))
+
+
+### Performance Improvements
+
+* migrate to lz4 1.10.0 for parallelized decompression ([#2294](https://github.com/rivet-gg/rivet/issues/2294)) ([9eac08d](https://github.com/rivet-gg/rivet/commit/9eac08d1aec3111dc0c0139e21ceaa16b8ca716b))
+* **pegboard:** download & extract with raw unix pipes ([#2295](https://github.com/rivet-gg/rivet/issues/2295)) ([2eac7fc](https://github.com/rivet-gg/rivet/commit/2eac7fcdcf2950d96497fe40cf53e6c2927ff817))
+* **pegboard:** increase page size for passing data from downlaod to lz4 ([#2288](https://github.com/rivet-gg/rivet/issues/2288)) ([947b7f9](https://github.com/rivet-gg/rivet/commit/947b7f933b199e16be384928dc7882509677650a))
+* **pegboard:** parallelize download image & setup cni network ([#2287](https://github.com/rivet-gg/rivet/issues/2287)) ([6f8e6a6](https://github.com/rivet-gg/rivet/commit/6f8e6a6beb58155aeaaac19a4e24d81d1c1c04a6))
+* **pegboard:** parallelize writing configs under setup_oci_bundle ([#2289](https://github.com/rivet-gg/rivet/issues/2289)) ([c1011c5](https://github.com/rivet-gg/rivet/commit/c1011c5af6a8495fddcb635e4c93bb1a06e6773c))
+
+
+### Chores
+
+* add logging & duration metrics to pegboard setup ([#2291](https://github.com/rivet-gg/rivet/issues/2291)) ([3c04bec](https://github.com/rivet-gg/rivet/commit/3c04bec11670ab5d4b8d37123f1653f31af9310d))
+* add script to distribute lz4 binary ([#2293](https://github.com/rivet-gg/rivet/issues/2293)) ([601075a](https://github.com/rivet-gg/rivet/commit/601075a421850176e49d72c81003ff19e3098b21))
+* **api-actor:** don't attempt to contact edge dcs without worker nodes ([#2290](https://github.com/rivet-gg/rivet/issues/2290)) ([b124428](https://github.com/rivet-gg/rivet/commit/b124428ca787192518df42e1dc00fe0cce1fd7f0))
+* build edge binaries in release mode ([#2292](https://github.com/rivet-gg/rivet/issues/2292)) ([65ee768](https://github.com/rivet-gg/rivet/commit/65ee7681c819a048c8263c3c785f267432ce3dc0))
+* release 25.3.1 ([cdf53d3](https://github.com/rivet-gg/rivet/commit/cdf53d36f03d72c145373e1391645ca1ce98e8ab))
+
 ## [25.3.0](https://github.com/rivet-gg/rivet/compare/v25.2.2...v25.3.0) (2025-03-31)
 
 
