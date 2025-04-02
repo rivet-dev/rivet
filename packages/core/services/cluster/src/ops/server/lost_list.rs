@@ -22,6 +22,8 @@ struct Linode {
 #[derive(Debug)]
 pub struct Input {
 	pub filter: Filter,
+	/// Minimum age of servers to consider lost (in minutes, default: 720 [12 hours])
+	pub min_age: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -30,7 +32,7 @@ pub struct Output {
 }
 
 /// Fetches deleted servers directly from the cloud providers own APIs and returns existing servers older
-/// than 12 hours.
+/// than the specified minimum age (defaults to 720 minutes [12 hours]).
 #[operation]
 #[timeout = 300]
 pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
@@ -78,7 +80,7 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 			}
 			Provider::Linode => {
 				servers.extend(
-					run_for_linode_account(ctx, &input.filter, &api_token, &headers).await?,
+					run_for_linode_account(ctx, &input.filter, &api_token, &headers, input.min_age).await?,
 				);
 			}
 		}
@@ -92,6 +94,7 @@ async fn run_for_linode_account(
 	filter: &Filter,
 	api_token: &str,
 	headers: &header::HeaderMap,
+	min_age: Option<u64>,
 ) -> GlobalResult<Vec<Server>> {
 	// Build HTTP client
 	let client = client::Client::new_with_headers(api_token.to_string(), headers.clone()).await?;
@@ -110,12 +113,13 @@ async fn run_for_linode_account(
 	tracing::info!("{} servers in account", res.data.len());
 
 	let server_config = ctx.config().server()?;
+	let min_age_minutes = min_age.unwrap_or(720) as i64; // Default 720 minutes (12 hours)
 	let server_ids = res
 		.data
 		.into_iter()
-		// Filter out servers younger than 12 hours
+		// Filter out servers younger than min_age
 		.filter(|linode| {
-			linode.created.and_utc().timestamp_millis() < ctx.ts() - util::duration::hours(12)
+			linode.created.and_utc().timestamp_millis() < ctx.ts() - util::duration::minutes(min_age_minutes)
 		})
 		// Parse server ID from linode label
 		.filter_map(|linode| {

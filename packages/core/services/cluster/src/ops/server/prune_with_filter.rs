@@ -13,6 +13,8 @@ use crate::{
 #[derive(Debug)]
 pub struct Input {
 	pub filter: Filter,
+	/// Minimum age of servers to consider lost (in minutes, default: 720 [12 hours])
+	pub min_age: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -27,6 +29,7 @@ pub async fn cluster_server_prune_with_filter(
 	let servers_res = ctx
 		.op(crate::ops::server::lost_list::Input {
 			filter: input.filter.clone(),
+			min_age: input.min_age,
 		})
 		.await?;
 
