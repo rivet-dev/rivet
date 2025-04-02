@@ -369,38 +369,38 @@ impl Actor {
 			memory: self.config.resources.memory,
 			memory_max: self.config.resources.memory_max,
 		})?;
-		fs::write(oci_bundle_config_path, serde_json::to_vec(&config)?).await?;
-
-		// resolv.conf
-		//
+		// Parallelize file writes for better performance
+		// Prepare content for all files before writing
+		let config_json = serde_json::to_vec(&config)?;
+		
+		// resolv.conf content
 		// See also rivet-actor.conflist in packages/services/cluster/src/workflows/server/install/install_scripts/files/pegboard_configure.sh
-		fs::write(
-			actor_path.join("resolv.conf"),
-			indoc!(
-				"
-				nameserver 8.8.8.8
-				nameserver 8.8.4.4
-				nameserver 2001:4860:4860::8888
-				nameserver 2001:4860:4860::8844
-				options rotate
-				options edns0
-				options attempts:2
-				"
-			),
-		)
-		.await?;
-
-		// hosts
-		fs::write(
-			fs_path.join("hosts"),
-			indoc!(
-				"
-				127.0.0.1	localhost
-				::1			localhost ip6-localhost ip6-loopback
-				"
-			),
-		)
-		.await?;
+		let resolv_conf = indoc!(
+			"
+			nameserver 8.8.8.8
+			nameserver 8.8.4.4
+			nameserver 2001:4860:4860::8888
+			nameserver 2001:4860:4860::8844
+			options rotate
+			options edns0
+			options attempts:2
+			"
+		);
+		
+		// hosts file content
+		let hosts_content = indoc!(
+			"
+			127.0.0.1	localhost
+			::1			localhost ip6-localhost ip6-loopback
+			"
+		);
+		
+		// Write all files in parallel
+		tokio::try_join!(
+			fs::write(oci_bundle_config_path, config_json),
+			fs::write(actor_path.join("resolv.conf"), resolv_conf),
+			fs::write(fs_path.join("hosts"), hosts_content)
+		)?;
 
 		Ok(())
 	}
