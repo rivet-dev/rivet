@@ -8,7 +8,8 @@
 		"site",
 		"sdks/api/full/typescript",
 		"examples/*",
-		"tests/load"
+		"tests/load",
+		"scripts/lz4"
 	],
 	"scripts": {
 		"start": "npx turbo dev",
