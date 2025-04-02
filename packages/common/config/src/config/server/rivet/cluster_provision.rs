@@ -143,6 +143,7 @@ pub struct ClusterPoolGg {
 
 impl ClusterPoolGg {
 	pub fn vlan_ip_net(&self) -> Ipv4Net {
+		// Intentionally the same as Guard
 		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 26).unwrap()
 	}
 
@@ -295,7 +296,7 @@ pub struct ClusterPoolNats {
 
 impl ClusterPoolNats {
 	pub fn vlan_ip_net(&self) -> Ipv4Net {
-		Ipv4Net::new(Ipv4Addr::new(10, 1, 0, 0), 26).unwrap()
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 1, 64), 26).unwrap()
 	}
 
 	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {
