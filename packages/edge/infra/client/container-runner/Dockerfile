@@ -7,7 +7,7 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/target \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --bin rivet-container-runner && \
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-container-runner --release && \
 	mkdir -p /app/dist && \
 	mv /app/target/x86_64-unknown-linux-musl/release/rivet-container-runner /app/dist/rivet-container-runner
 

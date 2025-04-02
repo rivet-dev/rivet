@@ -18,9 +18,9 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/target \
 	# TODO: release is too slow
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-edge-server && \
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-edge-server --release && \
 	mkdir -p /app/dist && \
-	mv /app/target/x86_64-unknown-linux-gnu/debug/rivet-edge-server /app/dist/rivet-edge-server
+	mv /app/target/x86_64-unknown-linux-gnu/release/rivet-edge-server /app/dist/rivet-edge-server
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch
