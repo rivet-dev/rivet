@@ -79,6 +79,7 @@ async fn get_inner(
 	let mut futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 
@@ -386,6 +387,7 @@ pub async fn destroy(
 	let mut futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 
@@ -503,6 +505,7 @@ pub async fn upgrade(
 	let mut futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 
@@ -640,6 +643,7 @@ pub async fn upgrade_all(
 	let futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 
@@ -792,6 +796,7 @@ async fn list_actors_inner(
 	let futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 

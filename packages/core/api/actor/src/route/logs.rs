@@ -63,6 +63,7 @@ pub async fn get_logs(
 	let mut futures = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(&dc))
 		.map(|dc| async {
 			let dc = dc;
 

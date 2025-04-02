@@ -489,36 +489,41 @@ pub async fn complete_build(
 		)?;
 		let token = unwrap!(token_res.token).token;
 
-		let mut results = futures_util::stream::iter(datacenters_res.datacenters)
-			.map(|dc| {
-				let ctx = ctx.clone();
-				let token = token.clone();
-				async move {
-					let config = Configuration {
-						client: rivet_pools::reqwest::client().await?,
-						base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
-						bearer_access_token: Some(token),
-						..Default::default()
-					};
+		let mut results = futures_util::stream::iter(
+			datacenters_res
+				.datacenters
+				.into_iter()
+				.filter(|dc| crate::utils::filter_edge_dc(&dc)),
+		)
+		.map(|dc| {
+			let ctx = ctx.clone();
+			let token = token.clone();
+			async move {
+				let config = Configuration {
+					client: rivet_pools::reqwest::client().await?,
+					base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
+					bearer_access_token: Some(token),
+					..Default::default()
+				};
 
-					edge_intercom_pegboard_prewarm_image(
-						&config,
-						&build_id.to_string(),
-						models::EdgeIntercomPegboardPrewarmImageRequest {
-							image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
-								ctx.config(),
-								build.upload_id,
-								&build::utils::file_name(build.kind, build.compression),
-							)?,
-						},
-					)
-					.await
-					.map_err(Into::<GlobalError>::into)
-				}
-			})
-			.buffer_unordered(16)
-			.collect::<Vec<_>>()
-			.await;
+				edge_intercom_pegboard_prewarm_image(
+					&config,
+					&build_id.to_string(),
+					models::EdgeIntercomPegboardPrewarmImageRequest {
+						image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
+							ctx.config(),
+							build.upload_id,
+							&build::utils::file_name(build.kind, build.compression),
+						)?,
+					},
+				)
+				.await
+				.map_err(Into::<GlobalError>::into)
+			}
+		})
+		.buffer_unordered(16)
+		.collect::<Vec<_>>()
+		.await;
 
 		for res in &mut results {
 			if let Err(err) = res {

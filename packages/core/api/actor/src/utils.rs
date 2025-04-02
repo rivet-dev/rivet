@@ -1,4 +1,5 @@
 use api_helper::ctx::Ctx;
+use cluster::types::PoolType;
 use rivet_operation::prelude::*;
 
 use crate::{auth::Auth, route::GlobalQuery};
@@ -27,4 +28,16 @@ pub async fn build_global_query_compat(
 		project: Some(game.name_id.clone()),
 		environment: Some(ns.name_id.clone()),
 	})
+}
+
+/// Called to validate that a datacenter can be contacted.
+pub fn filter_edge_dc(dc: &cluster::types::Datacenter) -> bool {
+	// Validate that the dc has a worker & guard so it can be contacted
+	dc.pools
+		.iter()
+		.any(|x| x.pool_type == PoolType::Worker && x.desired_count > 0)
+		&& dc
+			.pools
+			.iter()
+			.any(|x| x.pool_type == PoolType::Guard && x.desired_count > 0)
 }
