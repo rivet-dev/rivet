@@ -72,6 +72,7 @@ pub async fn start_echo_actor(
 ) {
 	let cmd = protocol::Command::StartActor {
 		actor_id,
+		generation: 0,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
 				id: Uuid::nil(),
@@ -101,10 +102,6 @@ pub async fn start_echo_actor(
 				memory_max: 15 * 1024 * 1024,
 				disk: 15,
 			},
-			owner: protocol::ActorOwner::DynamicServer {
-				server_id: actor_id,
-				workflow_id: Uuid::new_v4(),
-			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
 				actor: protocol::ActorMetadataActor {
 					actor_id,
@@ -131,6 +128,7 @@ pub async fn start_echo_actor(
 				build: protocol::ActorMetadataBuild {
 					build_id: Uuid::nil(),
 				},
+				network: None,
 			})
 			.unwrap(),
 		}),
@@ -145,6 +143,7 @@ pub async fn start_js_echo_actor(
 ) {
 	let cmd = protocol::Command::StartActor {
 		actor_id,
+		generation: 0,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
 				id: Uuid::nil(),
@@ -172,10 +171,6 @@ pub async fn start_js_echo_actor(
 				memory_max: 15 * 1024 * 1024,
 				disk: 15,
 			},
-			owner: protocol::ActorOwner::DynamicServer {
-				server_id: actor_id,
-				workflow_id: Uuid::new_v4(),
-			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
 				actor: protocol::ActorMetadataActor {
 					actor_id,
@@ -202,6 +197,7 @@ pub async fn start_js_echo_actor(
 				build: protocol::ActorMetadataBuild {
 					build_id: Uuid::nil(),
 				},
+				network: None,
 			})
 			.unwrap(),
 		}),
@@ -262,8 +258,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			data_dir: Some(working_path.to_path_buf()),
 			cluster: Cluster {
 				client_id: Uuid::new_v4(),
-				datacenter_id: Uuid::new_v4(),
-				pegboard_endpoint: Url::parse("ws://127.0.0.1:5030").unwrap(),
+				ws_addresses: Addresses::Static(vec!["ws://127.0.0.1:5030".to_string()]),
 				// Not necessary for the test
 				api_endpoint: Url::parse("http://127.0.0.1").unwrap(),
 			},
@@ -328,11 +323,7 @@ pub async fn start_client(
 	url.set_port(Some(port)).unwrap();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &config.client.cluster.client_id.to_string())
-		.append_pair(
-			"datacenter_id",
-			&config.client.cluster.datacenter_id.to_string(),
-		);
+		.append_pair("client_id", &config.client.cluster.client_id.to_string());
 
 	tracing::info!("connecting to ws: {url}");
 
@@ -375,7 +366,7 @@ pub async fn build_binaries(gen_path: &Path) {
 		.arg("pegboard-echo-server")
 		.arg("-f")
 		.arg(pkg_path.join(format!("echo")).join("Dockerfile"))
-		.arg(pkg_path.join("..").join("..").join(".."))
+		.arg(pkg_path.join("..").join("..").join("..").join(".."))
 		.status()
 		.await
 		.unwrap();
@@ -431,7 +422,7 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 				.join(format!("{variant}-runner"))
 				.join("Dockerfile"),
 		)
-		.arg(pkg_path.join("..").join("..").join(".."))
+		.arg(pkg_path.join("..").join("..").join("..").join(".."))
 		.status()
 		.await
 		.unwrap();

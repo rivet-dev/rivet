@@ -846,7 +846,7 @@ impl Ctx {
 // Test bindings
 #[cfg(feature = "test")]
 impl Ctx {
-	pub fn actors(&self) -> &RwLock<HashMap<Uuid, Arc<Actor>>> {
+	pub fn actors(&self) -> &RwLock<HashMap<(Uuid, u32), Arc<Actor>>> {
 		&self.actors
 	}
 }
