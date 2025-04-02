@@ -15,6 +15,7 @@ use notify::{
 use pegboard::protocol;
 use pegboard_config::Config;
 use rand::{prelude::SliceRandom, SeedableRng};
+use rand_chacha::ChaCha12Rng;
 use sql::SqlitePoolExt;
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -259,6 +260,50 @@ pub fn now() -> i64 {
 		.expect("now doesn't fit in i64")
 }
 
+/// Generates a list of address URLs for a given build ID, with deterministic shuffling.
+/// 
+/// This function accepts a build ID and returns an array of URLs, including both
+/// the seeded shuffling and the fallback address (if provided).
+pub async fn get_image_addresses(
+	ctx: &Ctx,
+	image_id: Uuid,
+	image_artifact_url_stub: &str,
+	image_fallback_artifact_url: Option<&str>,
+) -> Result<Vec<String>> {
+	// Get hash from image id
+	let mut hasher = DefaultHasher::new();
+	hasher.write(image_id.as_bytes());
+	let hash = hasher.finish();
+
+	let mut rng = ChaCha12Rng::seed_from_u64(hash);
+
+	// Shuffle based on hash
+	let mut addresses = ctx
+		.pull_addr_handler
+		.addresses(ctx.config())
+		.await?
+		.iter()
+		.map(|addr| {
+			Ok(Url::parse(&format!("{addr}{}", image_artifact_url_stub))
+				.context("failed to build artifact url")?
+				.to_string())
+		})
+		.collect::<Result<Vec<_>>>()?;
+	addresses.shuffle(&mut rng);
+
+	// Add fallback url to the end if one is set
+	if let Some(fallback_artifact_url) = image_fallback_artifact_url {
+		addresses.push(fallback_artifact_url.to_string());
+	}
+
+	ensure!(
+		!addresses.is_empty(),
+		"no artifact urls available (no pull addresses nor fallback)"
+	);
+
+	Ok(addresses)
+}
+
 /// Creates an async file watcher.
 fn async_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
 	let (tx, rx) = channel(1);
@@ -315,36 +360,7 @@ pub async fn fetch_image_stream(
 	image_artifact_url_stub: &str,
 	image_fallback_artifact_url: Option<&str>,
 ) -> Result<impl Stream<Item = reqwest::Result<bytes::Bytes>>> {
-	// Get hash from image id
-	let mut hasher = DefaultHasher::new();
-	hasher.write(image_id.as_bytes());
-	let hash = hasher.finish();
-
-	let mut rng = rand_chacha::ChaCha12Rng::seed_from_u64(hash);
-
-	// Shuffle based on hash
-	let mut addresses = ctx
-		.pull_addr_handler
-		.addresses(ctx.config())
-		.await?
-		.iter()
-		.map(|addr| {
-			Ok(Url::parse(&format!("{addr}{}", image_artifact_url_stub))
-				.context("failed to build artifact url")?
-				.to_string())
-		})
-		.collect::<Result<Vec<_>>>()?;
-	addresses.shuffle(&mut rng);
-
-	// Add fallback url to the end if one is set
-	if let Some(fallback_artifact_url) = image_fallback_artifact_url {
-		addresses.push(fallback_artifact_url.to_string());
-	}
-
-	ensure!(
-		!addresses.is_empty(),
-		"no artifact urls available (no pull addresses nor fallback)"
-	);
+	let addresses = get_image_addresses(ctx, image_id, image_artifact_url_stub, image_fallback_artifact_url).await?;
 
 	let mut iter = addresses.into_iter();
 	while let Some(artifact_url) = iter.next() {
