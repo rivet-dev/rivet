@@ -130,11 +130,13 @@ impl Actor {
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
 	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up");
+		let setup_timer = std::time::Instant::now();
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up actor");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 
 		// Create actor working dir
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating actor working directory");
 		fs::create_dir(&actor_path)
 			.await
 			.context("failed to create actor dir")?;
@@ -151,6 +153,9 @@ impl Actor {
         //   `make_fs`
         // - `setup_cni_network` takes a long time. `setup_cni_network` is dependent on
         //   `bind_ports`.
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "starting parallel setup tasks");
+		let parallel_timer = std::time::Instant::now();
+		
 		let (_, ports) = tokio::try_join!(
 			async {
 				self.make_fs(&ctx).await?;
@@ -166,13 +171,27 @@ impl Actor {
 				Ok(ports)
 			}
 		)?;
+		
+		let parallel_duration = parallel_timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_PARALLEL_TASKS_DURATION.observe(parallel_duration);
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation, 
+			duration_seconds=parallel_duration, 
+			"parallel setup tasks completed"
+		);
 
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up runtime environment");
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
 				self.setup_oci_bundle(&ctx, &ports).await?;
 			}
 			protocol::ImageKind::JavaScript => self.setup_isolate(&ctx, &ports).await?,
 		}
+
+		let duration = setup_timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_TOTAL_DURATION.observe(duration);
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, duration_seconds=duration, "actor setup completed");
 
 		Ok(ports)
 	}

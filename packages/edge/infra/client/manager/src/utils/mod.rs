@@ -348,15 +348,23 @@ pub async fn fetch_image_stream(
 
 	let mut iter = addresses.into_iter();
 	while let Some(artifact_url) = iter.next() {
+		// Log the full URL we're attempting to download from
+		tracing::info!(?image_id, %artifact_url, "attempting to download image");
+		
 		match reqwest::get(&artifact_url)
 			.await
 			.and_then(|res| res.error_for_status())
 		{
-			Ok(res) => return Ok(res.bytes_stream()),
+			Ok(res) => {
+				tracing::info!(?image_id, %artifact_url, "successfully downloading image");
+				return Ok(res.bytes_stream());
+			},
 			Err(err) => {
 				tracing::warn!(
 					?image_id,
-					"failed to start download from {artifact_url}: {err}"
+					%artifact_url,
+					%err,
+					"failed to download image"
 				);
 			}
 		}
@@ -366,12 +374,15 @@ pub async fn fetch_image_stream(
 }
 
 pub async fn prewarm_image(ctx: &Ctx, image_id: Uuid, image_artifact_url_stub: &str) {
-	tracing::debug!(?image_id, "prewarming");
+	// Log full URL for prewarm operation
+	let prewarm_url = format!("{}/{}", image_artifact_url_stub, image_id);
+	tracing::info!(?image_id, %prewarm_url, "prewarming image");
 
 	match fetch_image_stream(ctx, image_id, image_artifact_url_stub, None).await {
-		Ok(_) => tracing::debug!(?image_id, "prewarm complete"),
+		Ok(_) => tracing::info!(?image_id, %prewarm_url, "prewarm complete"),
 		Err(_) => tracing::warn!(
 			?image_id,
+			%prewarm_url,
 			"prewarm failed, artifact url could not be resolved"
 		),
 	}

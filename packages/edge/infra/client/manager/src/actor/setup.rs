@@ -24,6 +24,7 @@ use crate::{ctx::Ctx, utils};
 
 impl Actor {
 	pub async fn make_fs(&self, ctx: &Ctx) -> Result<()> {
+		let timer = std::time::Instant::now();
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let fs_img_path = actor_path.join("fs.img");
 		let fs_path = actor_path.join("fs");
@@ -35,6 +36,7 @@ impl Actor {
 			.context("failed to create actor fs dir")?;
 
 		if ctx.config().runner.use_mounts() {
+			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating disk image");
 			// Create a zero-filled file
 			let fs_img = File::create(&fs_img_path)
 				.await
@@ -43,6 +45,7 @@ impl Actor {
 				.set_len(self.config.resources.disk as u64 * 1024 * 1024)
 				.await?;
 
+			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "formatting disk image");
 			// Format file as ext4
 			let cmd_out = Command::new("mkfs.ext4").arg(&fs_img_path).output().await?;
 
@@ -52,6 +55,7 @@ impl Actor {
 				std::str::from_utf8(&cmd_out.stderr)?
 			);
 
+			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "mounting disk image");
 			// Mount fs img as loop mount
 			let cmd_out = Command::new("mount")
 				.arg("-o")
@@ -68,15 +72,33 @@ impl Actor {
 			);
 		}
 
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_MAKE_FS_DURATION.observe(duration);
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, duration_seconds=duration, "fs creation completed");
+
 		Ok(())
 	}
 
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
+		let timer = std::time::Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "downloading artifact");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let fs_path = actor_path.join("fs");
 
+		// Log the primary and fallback URLs we're attempting to download from
+		let primary_url = format!("{}/{}", self.config.image.artifact_url_stub, self.config.image.id);
+		let fallback_url = self.config.image.fallback_artifact_url.as_deref().map(|url| format!("{}/{}", url, self.config.image.id));
+		
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation, 
+			image_id=?self.config.image.id,
+			primary_url=%primary_url,
+			fallback_url=?fallback_url,
+			"initiating image download"
+		);
+		
 		let mut stream = utils::fetch_image_stream(
 			ctx,
 			self.config.image.id,
@@ -94,7 +116,7 @@ impl Actor {
 						tracing::info!(
 							actor_id=?self.actor_id,
 							generation=?self.generation,
-							"saving artifact to file",
+							"saving uncompressed docker image to file",
 						);
 
 						let mut output_file = File::create(&docker_image_path).await?;
@@ -108,7 +130,7 @@ impl Actor {
 						tracing::info!(
 							actor_id=?self.actor_id,
 							generation=?self.generation,
-							"downloading and decompressing artifact",
+							"downloading and decompressing docker image",
 						);
 
 						// Spawn the lz4 process
@@ -154,7 +176,7 @@ impl Actor {
 						tracing::info!(
 							actor_id=?self.actor_id,
 							generation=?self.generation,
-							"downloading and unarchiving artifact",
+							"downloading and unarchiving uncompressed artifact",
 						);
 
 						// Spawn the tar process
@@ -169,7 +191,7 @@ impl Actor {
 						let mut tar_stdin = tar_child.stdin.take().context("tar stdin")?;
 
 						tokio::try_join!(
-							// Pipe the response body to lz4 stdin
+							// Pipe the response body to tar stdin
 							async move {
 								while let Some(chunk) = stream.next().await {
 									let data = chunk?;
@@ -273,6 +295,10 @@ impl Actor {
 			}
 		}
 
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_DOWNLOAD_IMAGE_DURATION.observe(duration);
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, duration_seconds=duration, "artifact download completed");
+
 		Ok(())
 	}
 
@@ -281,6 +307,7 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
+		let timer = std::time::Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up oci bundle");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
@@ -298,6 +325,7 @@ impl Actor {
 				generation=?self.generation,
 				"converting Docker image -> OCI image",
 			);
+			let conversion_start = std::time::Instant::now();
 			let cmd_out = Command::new("skopeo")
 				.arg("copy")
 				.arg(format!("docker-archive:{}", docker_image_path.display()))
@@ -309,6 +337,12 @@ impl Actor {
 				"failed `skopeo` command\n{}",
 				std::str::from_utf8(&cmd_out.stderr)?
 			);
+			tracing::info!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				duration_seconds=conversion_start.elapsed().as_secs_f64(),
+				"docker to OCI conversion completed",
+			);
 
 			// Allows us to run the bundle natively with runc
 			tracing::info!(
@@ -316,7 +350,7 @@ impl Actor {
 				generation=?self.generation,
 				"converting OCI image -> OCI bundle",
 			);
-
+			let unpack_start = std::time::Instant::now();
 			let cmd_out = Command::new("umoci")
 				.arg("unpack")
 				.arg("--image")
@@ -329,8 +363,19 @@ impl Actor {
 				"failed `umoci` command\n{}",
 				std::str::from_utf8(&cmd_out.stderr)?
 			);
+			tracing::info!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				duration_seconds=unpack_start.elapsed().as_secs_f64(),
+				"OCI image unpacking completed",
+			);
 
 			// Remove artifacts
+			tracing::info!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				"cleaning up temporary image artifacts",
+			);
 			tokio::try_join!(
 				fs::remove_file(&docker_image_path),
 				fs::remove_dir_all(&oci_image_path),
@@ -338,12 +383,22 @@ impl Actor {
 		}
 
 		// Read the config.json from the user-provided OCI bundle
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"reading OCI bundle configuration",
+		);
 		let oci_bundle_config_path = fs_path.join("config.json");
 		let user_config_json = fs::read_to_string(&oci_bundle_config_path).await?;
 		let user_config =
 			serde_json::from_str::<super::partial_oci_config::PartialOciConfig>(&user_config_json)?;
 
 		// Build env
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"building environment variables",
+		);
 		let env = user_config
 			.process
 			.env
@@ -358,6 +413,11 @@ impl Actor {
 		// Replace the config.json with a new config
 		//
 		// This config selectively uses parts from the user's OCI bundle in order to maintain security
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"generating OCI configuration",
+		);
 		let config = oci_config::config(oci_config::ConfigOpts {
 			actor_path: &actor_path,
 			netns_path: &netns_path,
@@ -396,11 +456,25 @@ impl Actor {
 		);
 		
 		// Write all files in parallel
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"writing configuration files",
+		);
 		tokio::try_join!(
 			fs::write(oci_bundle_config_path, config_json),
 			fs::write(actor_path.join("resolv.conf"), resolv_conf),
 			fs::write(fs_path.join("hosts"), hosts_content)
 		)?;
+
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_OCI_BUNDLE_DURATION.observe(duration);
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation,
+			duration_seconds=duration,
+			"OCI bundle setup completed"
+		);
 
 		Ok(())
 	}
@@ -410,8 +484,16 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
+		let timer = std::time::Instant::now();
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up isolate environment");
+		
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"generating isolate configuration"
+		);
 		let config = actor_config::Config {
 			resources: actor_config::Resources {
 				memory: self.config.resources.memory,
@@ -434,11 +516,25 @@ impl Actor {
 			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),
 		};
 
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"writing isolate configuration"
+		);
 		fs::write(
 			actor_path.join("config.json"),
 			&serde_json::to_vec(&config)?,
 		)
 		.await?;
+
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_ISOLATE_DURATION.observe(duration);
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation,
+			duration_seconds=duration,
+			"isolate setup completed"
+		);
 
 		Ok(())
 	}
@@ -449,12 +545,13 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
+		let timer = std::time::Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up cni network");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let netns_path = self.netns_path();
 
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "writing cni params");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "preparing cni port mappings");
 
 		let cni_port_mappings = ports
 			.iter()
@@ -476,6 +573,7 @@ impl Actor {
 		//
 		// See supported args:
 		// https://github.com/actord/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "generating and writing cni parameters");
 		let cni_params = json!({
 			"portMappings": cni_port_mappings,
 		});
@@ -492,7 +590,7 @@ impl Actor {
 		// https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/network_manager_linux.go#L119
 
 		// Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating network");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating network namespace");
 
 		let cni_network_name = &ctx.config().cni.network_name();
 		let cmd_out = Command::new("ip")
@@ -510,13 +608,8 @@ impl Actor {
 		tracing::info!(
 			actor_id=?self.actor_id,
 			generation=?self.generation,
-			"adding network {cni_network_name} to namespace {}",
-			netns_path.display(),
-		);
-		tracing::debug!(
-			"Adding network {} to namespace {}",
-			cni_network_name,
-			netns_path.display(),
+			cni_network_name=cni_network_name,
+			"adding network to namespace",
 		);
 		let cmd_out = Command::new("cnitool")
 			.arg("add")
@@ -534,6 +627,15 @@ impl Actor {
 			std::str::from_utf8(&cmd_out.stderr)?
 		);
 
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_CNI_NETWORK_DURATION.observe(duration);
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation,
+			duration_seconds=duration,
+			"cni network setup completed"
+		);
+
 		Ok(())
 	}
 
@@ -541,11 +643,22 @@ impl Actor {
 		&self,
 		ctx: &Ctx,
 	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
+		let timer = std::time::Instant::now();
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "binding ports");
+		
 		let (mut gg_ports, mut host_ports): (Vec<_>, Vec<_>) = self
 			.config
 			.ports
 			.iter()
 			.partition(|(_, port)| matches!(port.routing, protocol::PortRouting::GameGuard));
+
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation, 
+			gg_ports_count=gg_ports.len(), 
+			host_ports_count=host_ports.len(),
+			"partitioned ports for binding"
+		);
 
 		// TODO: Could combine these into one query
 		let (mut gg_port_rows, mut host_port_rows) = tokio::try_join!(
@@ -567,6 +680,12 @@ impl Actor {
 			),
 		)?;
 
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"sorting ports"
+		);
+		
 		// The SQL query returns a list of TCP ports then UDP ports. We sort the input ports here to match
 		// that order.
 		gg_ports.sort_by_key(|(_, port)| port.protocol);
@@ -575,6 +694,12 @@ impl Actor {
 		gg_port_rows.sort_by_key(|(_, protocol)| *protocol);
 		host_port_rows.sort_by_key(|(_, protocol)| *protocol);
 
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"mapping proxied ports"
+		);
+		
 		let proxied_ports =
 			gg_ports
 				.iter()
@@ -610,7 +735,17 @@ impl Actor {
 						)
 					},
 				))
-				.collect();
+				.collect::<protocol::HashableMap<_, _>>();
+
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_BIND_PORTS_DURATION.observe(duration);
+		tracing::info!(
+			actor_id=?self.actor_id, 
+			generation=?self.generation,
+			duration_seconds=duration,
+			ports_count=proxied_ports.len(),
+			"ports binding completed"
+		);
 
 		Ok(proxied_ports)
 	}
