@@ -39,8 +39,18 @@ pub mod docker {
 }
 
 pub mod lz4 {
+	use indoc::indoc;
+
 	pub fn install() -> String {
-		"apt-get install -y lz4".to_string()
+		// Don't use apt since we need v1.10.0 for multithreading support
+		indoc!(
+			r#"
+			echo 'Downloading lz4'
+			curl -L https://releases.rivet.gg/tools/lz4/1.10.0/debian11-amd64/lz4 -o /usr/local/bin/lz4
+			chmod +x /usr/local/bin/lz4
+			"#
+		)
+		.to_string()
 	}
 }
 
