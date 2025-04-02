@@ -232,7 +232,9 @@ impl Actor {
 							},
 							// Pipe lz4 stdout to tar stdin
 							async move {
-								let mut buffer = [0; 8192];
+								// Large buffer size (instead of system page size) reduces system
+								// calls
+								let mut buffer = [0; 65536];
 								loop {
 									let n = lz4_stdout.read(&mut buffer).await?;
 									if n == 0 {
