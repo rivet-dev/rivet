@@ -4389,6 +4389,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@scripts/lz4@workspace:scripts/lz4":
+  version: 0.0.0-use.local
+  resolution: "@scripts/lz4@workspace:scripts/lz4"
+  dependencies:
+    tsx: "npm:^4.19.3"
+    zx: "npm:^8.5.0"
+  languageName: unknown
+  linkType: soft
+
 "@sec-ant/readable-stream@npm:^0.4.1":
   version: 0.4.1
   resolution: "@sec-ant/readable-stream@npm:0.4.1"
@@ -15659,7 +15668,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsx@npm:^4.19.2, tsx@npm:^4.7.0":
+"tsx@npm:^4.19.2, tsx@npm:^4.19.3, tsx@npm:^4.7.0":
   version: 4.19.3
   resolution: "tsx@npm:4.19.3"
   dependencies:
@@ -16945,5 +16954,14 @@ __metadata:
   version: 2.0.4
   resolution: "zwitch@npm:2.0.4"
   checksum: 10c0/3c7830cdd3378667e058ffdb4cf2bb78ac5711214e2725900873accb23f3dfe5f9e7e5a06dcdc5f29605da976fc45c26d9a13ca334d6eea2245a15e77b8fc06e
+  languageName: node
+  linkType: hard
+
+"zx@npm:^8.5.0":
+  version: 8.5.0
+  resolution: "zx@npm:8.5.0"
+  bin:
+    zx: build/cli.js
+  checksum: 10c0/c3e150a5c20f71a90b1952bd610bd3ab0db4dec9f3aba9b866573ef815f43027ffeeaf180f5e635e06f446e4fd6b00bb17139dd17eac51d96b6179fe5194e1bc
   languageName: node
   linkType: hard
