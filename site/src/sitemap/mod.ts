@@ -67,6 +67,10 @@ export const sitemap = [
 						title: "Realtime Chat App",
 						href: "/guides/chat",
 					},
+					{
+						title: "Game Servers",
+						href: "/docs/solutions/game-servers",
+					},
 					//{
 					//	title: "Collaborative App with Y.js",
 					//	href: "/guides/yjs-nextjs",

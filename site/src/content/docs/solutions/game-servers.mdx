@@ -1,0 +1,878 @@
+# Multiplayer Game Servers
+
+Rivet provides a robust platform for deploying, scaling, and managing game servers globally.
+
+## Quickstart
+
+In this guide, we'll implement a simple game server on Rivet and create a backend API that manages server instances. This tutorial assumes you already have your own API server that will handle game logic and player management.
+
+Before starting, you'll need to choose a runtime for your game server. Rivet offers two options:
+
+- **[Container Runtime](/docs/container-runtime)**: For maximum flexibility, supports any language, ideal for complex game servers
+- **[JavaScript Runtime](/docs/javascript-runtime)**: For lightweight, fast-starting game servers using JavaScript/TypeScript
+
+### Step 1: Preparing your game server code
+
+We'll package your existing game server to run on Rivet. Depending on your chosen runtime, you'll need to create different files:
+
+<Tabs>
+<Tab title="Container Runtime">
+
+<Info title="Determining port to listen on">
+Your existing game server code (`server.js`) should read environment variables for port configuration. Read more [here](/docs/networking#environment-variable-naming).
+</Info>
+
+```dockerfile {{ "title": "Dockerfile" }}
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copy your game server files
+COPY package.json ./
+RUN npm install
+COPY server.js ./
+
+# Required: Create non-root user for security
+RUN addgroup -S rivet && \
+    adduser -S -G rivet rivet && \
+    chown -R rivet:rivet /app
+USER rivet
+
+# Start your game server
+CMD ["node", "server.js"]
+```
+</Tab>
+
+<Tab title="JavaScript Runtime">
+
+```javascript {{ "title": "src/index.ts" }}
+import type { ActorContext } from "@rivet-gg/actor";
+
+// Simple ping/pong WebSocket server
+export default {
+  async start(ctx: ActorContext) {
+    console.log("Game server starting");
+    
+    // Create minimal WebSocket server
+    Deno.serve((req) => {
+      if (req.headers.get("upgrade") !== "websocket") {
+        return new Response("Not a WebSocket connection");
+      }
+
+      const { socket, response } = Deno.upgradeWebSocket(req);
+      
+      socket.addEventListener("open", () => {
+        console.log("Client connected");
+      });
+      
+      socket.addEventListener("message", (event) => {
+        console.log(`Received: ${event.data}`);
+        
+        // Simple ping/pong response
+        if (event.data === "ping") {
+          socket.send("pong");
+        }
+      });
+      
+      return response;
+    });
+  }
+};
+```
+</Tab>
+
+</Tabs>
+
+### Step 2: Creating a Rivet configuration
+
+Create a minimal `rivet.json` configuration file that tells Rivet how to deploy your game server:
+
+<CodeGroup>
+```json {{ "title": "Container Runtime" }}
+{
+  "builds": {
+    "game-server": {
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
+```
+
+```json {{ "title": "JavaScript Runtime" }}
+{
+  "builds": {
+    "game-server": {
+      "script": "./src/index.ts"
+    }
+  }
+}
+```
+</CodeGroup>
+
+### Step 3: Deploying your game server
+
+Install the Rivet CLI [here](/docs/install). Then deploy your game server to Rivet using the CLI:
+
+```bash
+rivet deploy
+```
+
+<Note title="This will not create a server">
+This uploads your game server code to Rivet but doesn't start any instances yet. Your code is now available to be launched on-demand.
+</Note>
+
+### Step 4: Starting game server instances
+
+In your backend API, add code to start game server instances when needed.
+
+It's up to you when you choose to call `createGameServer`. Read more about different scaling patterns under [Scaling Methods](#scaling-methods).
+
+```typescript {{ "title": "api-server.js" }}
+import { RivetClient } from "@rivet-gg/api";
+
+// Initialize Rivet client with your API token from the dashboard
+const rivet = new RivetClient({
+  token: process.env.RIVET_TOKEN
+});
+
+// Function to create a new game server instance
+async function createGameServer(gameMode, mapName) {
+  const { actor } = await rivet.actors.create({
+    project: process.env.RIVET_PROJECT_ID,
+    environment: process.env.RIVET_ENVIRONMENT_ID,
+    body: {
+      // Identify this server with tags
+      tags: { 
+        name: "game-server",
+        mode: gameMode,
+        map: mapName
+      },
+      
+      // Reference your uploaded build
+      buildTags: { name: "game-server", current: "true" },
+      
+      // Network configuration for your server
+      network: {
+        ports: {
+          game: { protocol: "https" }
+        }
+      },
+
+      // IMPORTANT: Do not specify resources if using JavaScript runtime
+      resources: {
+        cpu: 1000,
+        memory: 1024
+      }
+    }
+  });
+  
+  return {
+    id: actor.id,
+    connectionUrl: actor.network.ports.game.url
+  };
+}
+```
+
+<Note title="Only call Rivet API from your backend">
+	The Rivet API requires a private _Service Token_ and should only be called from your backend. Do not make this service token public.
+</Note>
+
+### Step 5: Connecting players to your game server
+
+When players need to join a game, your backend API provides the WebSocket connection URL:
+
+```typescript {{ "title": "api-server.js" }}
+app.post('/join-game', async (req, res) => {
+  const { gameMode } = req.body;
+  
+  // Find servers matching the requested game mode
+  const { actors } = await rivet.actors.list({
+    project: process.env.RIVET_PROJECT_ID,
+    environment: process.env.RIVET_ENVIRONMENT_ID,
+    tagsJson: JSON.stringify({ 
+      name: "game-server",
+      mode: gameMode
+    })
+  });
+  
+  // Get the first available server
+  const server = actors[0];
+  
+  // Return WebSocket URL to the client
+  res.json({
+    connectionUrl: server.network.ports.game.url
+  });
+  
+});
+```
+
+<Note title="Caching server URLs">
+  We recommend storing the connection URL returned from `actors.create` instead of calling `actors.list` for every API call.
+</Note>
+
+### Step 6: Destroying servers once finished
+
+When a game finishes, clean up the server to avoid unnecessary costs:
+
+```typescript {{ "title": "api-server.js" }}
+async function destroyGameServer(serverId) {
+  await rivet.actors.destroy(serverId, {
+    project: process.env.RIVET_PROJECT_ID,
+    environment: process.env.RIVET_ENVIRONMENT_ID
+  });
+  console.log(`Game server ${serverId} destroyed`);
+}
+```
+
+## Global Regions
+
+Rivet's global edge network allows you to deploy game servers in multiple regions around the world, ensuring low latency for players regardless of their location.
+
+### Available Regions
+
+Rivet offers server deployments across multiple geographic regions. See the list of available regions [here](/docs/edge).
+
+To fetch the available regions dynamically, use:
+
+```typescript
+// List available regions programmatically
+async function getAvailableRegions() {
+  const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+  
+  const { regions } = await client.regions.list({});
+  
+  console.log("Available regions:");
+  for (const region of regions) {
+    console.log(`- ${region.id}: ${region.name}`);
+  }
+  
+  return regions;
+}
+```
+
+### Region Selection
+
+You can also use the recommendation API from the client to get the recommended region based on the player's IP:
+
+```typescript
+// Get the best region for a player
+async function getBestRegionForPlayer() {
+  const client = new RivetClient({});
+  
+  const { region } = await client.regions.recommend({});
+  
+  console.log(`Recommended region for player: ${region.id}`);
+  return region.id;
+}
+```
+
+## Scaling Methods
+
+Choose the scaling approach that best fits your game's architecture and player patterns:
+
+- **Static Server Fleet**: Best for games with predictable player counts and consistent traffic
+- **Dynamic Load-Based**: Ideal for games with variable player counts throughout the day
+- **On-Demand Lobby Creation**: Perfect for session-based games where matches have distinct lifetimes
+- **Custom Game Lobbies**: Suited for games where players create rooms with specific settings
+
+### Static Server Fleet
+
+This approach maintains a predetermined number of game servers running in each region. It uses `actors.list` to check for existing servers and automatically creates or destroys servers to maintain the desired count.
+
+- Ensures a consistent number of servers are available in each region
+- Servers are [durable](/docs/durability), meaning they automatically restart if they crash
+- Monitor these servers in the Rivet dashboard
+
+**Example**
+
+Use this script to maintain a fixed number of servers across specified regions:
+
+```typescript {{ "title": "manage-servers.js" }}
+// Define target server count per region
+const TARGET_SERVERS_BY_REGION = {
+  "atl": 2,  // Atlanta: 2 servers
+  "fra": 1,  // Frankfurt: 1 server
+  "syd": 2   // Sydney: 2 servers
+};
+
+// Maintains a fixed number of game servers across regions
+// This function is idempotent - running it multiple times will maintain the desired number of servers
+async function manageServers() {
+  const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+  const serverMap = { regions: {} };
+  
+  // Process each region
+  for (const [region, targetCount] of Object.entries(TARGET_SERVERS_BY_REGION)) {
+    serverMap.regions[region] = {};
+    
+    // Find existing servers in this region
+    const { actors } = await client.actors.list({
+      tagsJson: JSON.stringify({ 
+        name: "game-server",
+        region: region 
+      })
+    });
+    
+    const existingServers = actors.map(actor => ({
+      id: actor.id,
+      serverId: actor.tags.server_id,
+      region: actor.tags.region,
+      url: actor.network.ports.game.url
+    }));
+    
+    // Calculate how many servers to add or remove
+    const diff = targetCount - existingServers.length;
+    
+    if (diff > 0) {
+      // Need to create more servers
+      for (let i = 0; i < diff; i++) {
+        const serverId = `server-${region}-${existingServers.length + i}`;
+        
+        const { actor } = await client.actors.create({
+          project: process.env.RIVET_PROJECT_ID,
+          environment: process.env.RIVET_ENVIRONMENT_ID,
+          body: {
+            region: region,
+            tags: { 
+              name: "game-server",
+              server_id: serverId,
+              region: region
+            },
+            buildTags: { name: "game-server", current: "true" },
+            network: {
+              ports: {
+                game: { protocol: "https" }
+              }
+            },
+            resources: { cpu: 1000, memory: 1024 }
+          }
+        });
+        
+        // Add this server to our map
+        serverMap.regions[region][serverId] = {
+          url: actor.network.ports.game.url,
+          id: actor.id
+        };
+      }
+    } else if (diff < 0) {
+      // Need to remove some servers - take the oldest ones first
+      const serversToRemove = existingServers.slice(0, Math.abs(diff));
+      const serversToKeep = existingServers.slice(Math.abs(diff));
+      
+      // Add servers we're keeping to the map
+      for (const server of serversToKeep) {
+        serverMap.regions[region][server.serverId] = {
+          url: server.url,
+          id: server.id
+        };
+      }
+      
+      // Destroy the excess servers
+      for (const server of serversToRemove) {
+        await client.actors.destroy(server.id, {
+          project: process.env.RIVET_PROJECT_ID,
+          environment: process.env.RIVET_ENVIRONMENT_ID,
+        });
+      }
+    } else {
+      // We have exactly the right number of servers
+      for (const server of existingServers) {
+        serverMap.regions[region][server.serverId] = {
+          url: server.url,
+          id: server.id
+        };
+      }
+    }
+  }
+  
+  return serverMap;
+}
+```
+
+To run this with the credentials auto-populated, use:
+
+```sh
+rivet shell --exec 'node manage-servers.js'
+```
+
+This script will output a list of server connection URLs that you can copy & paste in your game's frontend to show a server list.
+
+### Dynamic Load-Based Scaling
+
+Scale your server fleet up or down based on demand from your backend.
+
+- Periodically check metrics (player count, server load) from your running servers
+- Call [`actors.create`](/docs/api/actors/create) to add servers when needed
+- Call [`actors.destroy`](/docs/api/actors/destroy) to remove underutilized servers
+- Implement custom scaling logic based on your game's patterns
+
+**Example: Periodic scaling with setInterval**
+
+In your own backend:
+
+```typescript {{ "title": "api-server.js" }}
+import { RivetClient } from '@rivet-gg/api';
+
+// Initialize the Rivet client
+const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+
+// Configuration
+const SCALING_CHECK_INTERVAL = 60000; // Check every minute
+const TARGET_PLAYER_PER_SERVER = 10;
+const MIN_SERVERS = 2;
+const MAX_SERVERS = 20;
+
+// Start the scaling loop
+console.log("Starting server scaling service...");
+setInterval(checkAndAdjustServerCapacity, SCALING_CHECK_INTERVAL);
+
+// Function to check and adjust server capacity
+async function checkAndAdjustServerCapacity() {
+  console.log("Running scaling check...");
+  
+  try {
+    // 1. Get current servers and their metrics
+    // See [actors.list](/docs/api/actors/list) for more filtering options
+    const { actors } = await client.actors.list({
+      tagsJson: JSON.stringify({ name: "game-server" })
+    });
+    
+    // 2. Query each server for player count
+    let totalPlayers = 0;
+    let activeServers = 0;
+    
+    for (const actor of actors) {
+      try {
+        const statsUrl = `${actor.network.ports.http.url}/stats`;
+        const response = await fetch(statsUrl);
+        const stats = await response.json();
+        
+        totalPlayers += stats.playerCount;
+        if (stats.playerCount > 0) activeServers++;
+      } catch (err) {
+        console.error(`Failed to get stats for server ${actor.id}`, err);
+      }
+    }
+    
+    // 3. Apply scaling logic
+    let targetServers = Math.max(
+      MIN_SERVERS,
+      Math.min(
+        MAX_SERVERS,
+        Math.ceil(totalPlayers / TARGET_PLAYER_PER_SERVER) + 1 // +1 for buffer
+      )
+    );
+    
+    // 4. Adjust server count
+    if (actors.length < targetServers) {
+      // Create additional servers
+      console.log(`Scaling up: ${actors.length} → ${targetServers} servers`);
+      for (let i = 0; i < targetServers - actors.length; i++) {
+        await client.actors.create({
+          body: {
+            tags: { 
+              name: "game-server",
+              server_id: `dynamic-${Date.now()}-${i}`
+            },
+            buildTags: { name: "game-server", current: "true" },
+            network: {
+              ports: {
+                game: { protocol: "https" }
+              }
+            },
+            resources: { cpu: 1000, memory: 1024 }
+          }
+        });
+      }
+    } else if (actors.length > targetServers) {
+	  // NOTE: You likely want to wait for the server to have 0 players before destroying
+      // Find empty servers to remove
+      const serversToRemove = actors.slice(0, actors.length - targetServers);
+      
+      if (serversToRemove.length > 0) {
+        console.log(`Scaling down: ${actors.length} → ${actors.length - serversToRemove.length} servers`);
+        
+        // Destroy unused servers
+        for (const server of serversToRemove) {
+          await client.actors.destroy(server.id, {
+            project: process.env.RIVET_PROJECT_ID,
+            environment: process.env.RIVET_ENVIRONMENT_ID,
+          });
+          console.log(`Destroyed empty server: ${server.id}`);
+        }
+      }
+    }
+    
+    // Log the current state
+    console.log(`Scaling check complete. ${activeServers}/${actors.length} servers active, ${totalPlayers} total players`);
+  } catch (error) {
+    console.error("Error in scaling check:", error);
+  }
+}
+```
+
+### On-Demand Lobby Creation
+
+Create game servers on-demand as players request to join lobbies.
+
+- Your lobby management service maintains a state of available lobbies
+- When a player requests to join, check for available space in existing lobbies
+- If no space is available, create a new server instance
+- Clean up servers once they're empty
+
+**Key Endpoints:**
+
+1. **Request to join lobby (called by client)**
+   - Check if there is space in existing lobbies
+   - If not, create a new actor (handle race conditions appropriately)
+   - Return connection information to the client
+
+2. **Player disconnected (called by lobby)**
+   - Remove player from lobby tracking
+   - Destroy lobby if empty after a grace period
+
+3. **Heartbeat/watchdog**
+   - Implement timeout mechanisms for players who connect but never join
+   - Clean up abandoned servers to prevent resource waste
+
+**Example: On-demand lobby system with Hono**
+
+```typescript
+import { Hono } from 'hono';
+import { RivetClient } from '@rivet-gg/api';
+
+const app = new Hono();
+const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+
+// In-memory lobby tracking (use a database for production)
+let lobbies = [];
+
+// Player requests to join a lobby
+app.post('/lobbies/join', async (c) => {
+  const { playerId } = await c.req.json();
+  
+  // Find a lobby with space
+  let lobby = lobbies.find(l => l.playerCount < l.maxPlayers);
+  
+  // Create a new lobby if none available
+  if (!lobby) {
+    // Create a new server actor
+    // See [actors.create](/docs/api/actors/create)
+    const { actor } = await client.actors.create({
+      body: {
+        tags: { 
+          name: "game-lobby",
+          created_at: Date.now().toString()
+        },
+        buildTags: { name: "game-server", current: "true" },
+        network: {
+          ports: {
+            game: { protocol: "https" }
+          }
+        },
+        resources: { cpu: 1000, memory: 1024 }
+      },
+    });
+    
+    // Track the new lobby
+    lobby = {
+      id: actor.id,
+      players: [],
+      maxPlayers: 8,
+      gameUrl: actor.network.ports.game.url,
+      createdAt: Date.now()
+    };
+    
+    lobbies.push(lobby);
+  }
+  
+  // Add player to lobby
+  lobby.players.push(playerId);
+  
+  // Return connection info to the player
+  return c.json({
+    lobbyId: lobby.id,
+    connectionInfo: {
+      gameUrl: lobby.gameUrl,
+    }
+  });
+});
+
+// Server reports player disconnection
+app.post('/lobbies/:lobbyId/player-disconnected', async (c) => {
+  const lobbyId = c.req.param('lobbyId');
+  const { playerId } = await c.req.json();
+  
+  const lobby = lobbies.find(l => l.id === lobbyId);
+  if (!lobby) return c.json({ error: "Lobby not found" }, 404);
+  
+  // Remove player
+  lobby.players = lobby.players.filter(id => id !== playerId);
+  
+  // Destroy empty lobby after a grace period
+  if (lobby.players.length === 0) {
+    setTimeout(async () => {
+      // Check again in case players joined during grace period
+      const currentLobby = lobbies.find(l => l.id === lobbyId);
+      if (currentLobby && currentLobby.players.length === 0) {
+        // Destroy the actor
+        await client.actors.destroy(lobbyId, {
+          project: process.env.RIVET_PROJECT_ID,
+          environment: process.env.RIVET_ENVIRONMENT_ID,
+        });
+        // Remove from tracking
+        lobbies = lobbies.filter(l => l.id !== lobbyId);
+      }
+    }, 5 * 60 * 1000); // 5 minute grace period
+  }
+  
+  return c.json({ success: true });
+});
+
+export default app;
+```
+
+### Custom Game Lobbies
+
+Create customized game servers on-demand with specific configurations.
+
+<Warning>
+  Always implement lobby creation in your trusted backend, never in client code.
+</Warning>
+
+- Create actors with specific configurations via environment variables
+- Customize CPU and memory resources for demanding game modes
+- Use tags for organizing and querying actors with [`actors.list`](/docs/api/actors/list)
+- Filter and monitor lobbies in the dashboard
+
+**Example: Custom lobby creation with Hono**
+
+```typescript
+import { Hono } from 'hono';
+import { RivetClient } from '@rivet-gg/api';
+
+const app = new Hono();
+const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+
+// Create a custom lobby with specific settings
+app.post('/lobbies/custom', async (c) => {
+  const { 
+    playerId,
+    gameMode,
+    mapName,
+    playerLimit,
+    isPrivate,
+    password
+  } = await c.req.json();
+  
+  // Validate inputs
+  if (!playerId || !gameMode || !mapName) {
+    return c.json({ error: "Missing required fields" }, 400);
+  }
+  
+  // Determine resources based on game mode
+  let cpu = 1000;
+  let memory = 1024;
+  
+  if (gameMode === "battle-royale") {
+    cpu = 2000;
+    memory = 2048;
+  }
+  
+  // Create the custom lobby actor
+  const { actor } = await client.actors.create({
+    body: {
+      tags: { 
+        name: "custom-lobby",
+        game_mode: gameMode,
+        map: mapName,
+        host_player: playerId,
+        is_private: isPrivate ? "true" : "false",
+        created_at: Date.now().toString()
+      },
+      buildTags: { name: "game-server", current: "true" },
+      network: {
+        ports: {
+          game: { protocol: "https" }
+        }
+      },
+      resources: { cpu, memory },
+      env: {
+        GAME_MODE: gameMode,
+        MAP_NAME: mapName,
+        PLAYER_LIMIT: playerLimit?.toString() || "8",
+        IS_PRIVATE: isPrivate ? "true" : "false", 
+        LOBBY_PASSWORD: password || ""
+      }
+    }
+  });
+  
+  // Return connection information
+  return c.json({
+    lobbyId: actor.id,
+    connectionInfo: {
+      gameUrl: actor.network.ports.game.url,
+    }
+  });
+});
+
+// List lobbies with filtering
+app.get('/lobbies', async (c) => {
+  const gameMode = c.req.query('gameMode');
+  const map = c.req.query('map');
+  const isPrivate = c.req.query('isPrivate');
+  
+  // Build tag filter
+  const tags = { name: "custom-lobby" };
+  if (gameMode) tags.game_mode = gameMode;
+  if (map) tags.map = map;
+  if (isPrivate) tags.is_private = isPrivate;
+  
+  // Query lobbies
+  const { actors } = await client.actors.list({
+    tagsJson: JSON.stringify(tags)
+  });
+  
+  // Transform response
+  const lobbies = actors.map(actor => ({
+    id: actor.id,
+    gameMode: actor.tags.game_mode,
+    map: actor.tags.map,
+    hostPlayer: actor.tags.host_player,
+    isPrivate: actor.tags.is_private === "true",
+    createdAt: parseInt(actor.tags.created_at)
+  }));
+  
+  return c.json({ lobbies });
+});
+
+export default app;
+```
+
+## Upgrading Servers
+
+Choose the upgrade approach that best fits your game's requirements:
+
+- **Default Behavior**: Best for development or games that can tolerate brief interruptions
+- **Targeted Upgrading**: Ideal for testing new versions on a subset of servers before full rollout
+- **Zero-Downtime Rolling**: Essential for production games where player sessions must be preserved
+
+### Default Behavior
+
+When you run `rivet deploy`, your game server code is uploaded and all running [durable](/docs/durability) actors are automatically upgraded:
+
+- When deploying a new version, actors receive a SIGTERM signal
+- They have a 30-second grace period to clean up and shutdown
+- New actors start automatically using the updated code
+- This is the simplest approach but will disconnect active players
+
+### Targeted Server Upgrading
+
+If you want more control over upgrading your servers, you can use targeted upgrades to selectively update specific servers:
+
+- Call [`actors.upgrade`](/docs/api/actors/upgrade) on specific actors
+- Useful for testing updates on a subset of servers
+- Allows controlled rollout of new versions
+- Can target empty or low-population servers first
+- Example: Upgrade only empty servers first
+- Validate new version behavior before full rollout
+
+**Example: Manual selective upgrading**
+
+```typescript
+import { RivetClient } from '@rivet-gg/api';
+
+async function upgradeEmptyServers() {
+  const client = new RivetClient({ token: process.env.RIVET_TOKEN });
+  
+  // List all game servers
+  const { actors } = await client.actors.list({
+    tagsJson: JSON.stringify({ name: "game-server" })
+  });
+  
+  // Check each server for player count
+  for (const actor of actors) {
+    try {
+      const statsUrl = `${actor.network.ports.http.url}/stats`;
+      const response = await fetch(statsUrl);
+      const stats = await response.json();
+      
+      // Upgrade servers with no players
+      if (stats.playerCount === 0) {
+        // See [actors.upgrade](/docs/api/actors/upgrade) for more options
+        await client.actors.upgrade(actor.id, {
+          project: process.env.RIVET_PROJECT_ID,
+          environment: process.env.RIVET_ENVIRONMENT_ID,
+        });
+        console.log(`Upgraded empty server: ${actor.id}`);
+      }
+    } catch (err) {
+      console.error(`Failed to check server ${actor.id}`, err);
+    }
+  }
+}
+```
+
+### Zero-Downtime Rolling Upgrades With Draining
+
+For production games, it's highly recommended to implement a system for routing new players to updated servers while allowing existing sessions to complete naturally:
+
+- Implement custom logic to gradually upgrade servers
+- Start sending new players to new server versions
+- Wait for old servers to naturally empty out as players finish their sessions
+- This approach preserves gameplay sessions on existing servers
+- Requires more complex implementation but provides the best player experience
+
+## Server Configuration Options
+
+When creating game servers with [`actors.create`](/docs/api/actors/create), you can configure:
+
+- **Network**: Define HTTPS/WSS ports, custom paths, and routing options
+  ```typescript
+  network: { ports: { game: { protocol: "https" } } }
+  ```
+
+- **Resources**: Customize CPU and memory allocation
+  ```typescript
+  resources: { cpu: 1000, memory: 1024 }
+  ```
+
+- **Environment Variables**: Configure server behavior via `process.env`
+  ```typescript
+  env: { MAX_PLAYERS: "16", MAP_ROTATION: "dust,nuke,inferno" }
+  ```
+
+- **Tags**: Add metadata for filtering and organization
+  ```typescript
+  tags: { mode: "ranked", region: "us-east" }
+  ```
+
+- **Lifecycle**: Set up [durability](/docs/durability) and idle timeouts
+  ```typescript
+  lifecycle: { durable: true, idle_timeout: 300 }
+  ```
+
+- **Build Selection**: Target specific versions of your server code
+  ```typescript
+  buildTags: { name: "game-server", current: "true" }
+  ```
+
+- **Region Selection**: Deploy to [specific regions](/docs/edge) for lower latency
+  ```typescript
+  region: "atl" // Atlanta
+  ```
+
+For detailed documentation, see:
+- [Actors Create API Reference](/docs/api/actors/create)
+- [JavaScript Runtime](/docs/javascript-runtime)
+- [Container Runtime](/docs/container-runtime)
+- [Configuration Reference](/docs/config)
+
+## Learning More
+
+For more comprehensive coverage of game server development with Rivet:
+
+- **[Rivet API Docs](/docs/api)** - Complete API reference for direct Rivet integration
+- **[Local Development](/docs/local-development)** - Setting up your local environment for development
+- **[Troubleshooting](/docs/troubleshooting)** - Common issues and their solutions
+

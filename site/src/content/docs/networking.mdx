@@ -103,6 +103,8 @@ app.listen(port, () => {
 
 ### TCP Game Server Example
 
+_TCP is only available on enterprise & self-hosted._
+
 #### Client (Creating the Actor)
 
 ```javascript
@@ -144,13 +146,13 @@ server.listen(port, () => {
 
 Rivet supports the following protocols for actor ports:
 
-| Protocol | Description | Recommendation |
-| -------- | ----------- | -------------- |
-| `https` | HTTPS and secure WebSocket traffic | Recommended for web applications |
-| `http` | Insecure HTTP or WebSocket traffic | Not recommended (use https instead) |
-| `tcp_tls` | Secure TCP sockets | Recommended for TCP connections |
-| `tcp` | TCP sockets | Not recommended (use tcp_tls instead) |
-| `udp` | UDP sockets | Use for real-time applications requiring UDP |
+| Protocol | Description | Recommendation | Enterprise & Self-Hosted Only |
+| -------- | ----------- | -------------- | --- |
+| `https` | HTTPS and secure WebSocket traffic | Recommended for web applications | --- |
+| `http` | Insecure HTTP or WebSocket traffic | Not recommended (use https instead) | --- |
+| `tcp_tls` | Secure TCP sockets | Recommended for TCP connections | --- |
+| `tcp` | TCP sockets | Not recommended (use tcp_tls instead) | X |
+| `udp` | UDP sockets | Use for real-time applications requiring UDP | X |
 
 
 ## SSL and TLS
