@@ -31,7 +31,6 @@ export async function viteShikiTransformer(){
 						"ini",
 						"js",
 						"json",
-						"json",
 						"powershell",
 						"ts",
 						"typescript",

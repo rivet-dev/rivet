@@ -171,7 +171,7 @@ const actorCustomTagsAtom = atom<{ keys: string[]; values: string[] }>(
 		});
 		set(actorCustomTagValues, (values) => {
 			const newValues = [...values];
-			const index = newValues.indexOf(value.key);
+			const index = newValues.indexOf(value.value);
 			if (index === -1) {
 				newValues.push(value.value);
 			}

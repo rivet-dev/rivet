@@ -33,7 +33,7 @@ const createConnection = ({
 		if (ws.readyState !== WebSocket.OPEN) {
 			ws.close();
 		}
-	}, 500);
+	}, 1500);
 
 	ws.addEventListener("open", () => {
 		onConnect?.();

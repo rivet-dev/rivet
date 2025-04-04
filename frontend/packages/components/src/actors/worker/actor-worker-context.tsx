@@ -34,7 +34,7 @@ interface ActorWorkerContextProviderProps {
 	children: ReactNode;
 }
 
-// FIMXE: rewrite with jotai
+// FIXME: rewrite with jotai
 export const ActorWorkerContextProvider = ({
 	children,
 	actor,

@@ -2,7 +2,9 @@
 set -euf
 
 CWD=$(pwd)
-git clone --depth=1 --branch 04-04-fix_inspector git@github.com:rivet-gg/actor-core.git ../actor-core
+if [ ! -d "../actor-core" ]; then
+    git clone --depth=1 --branch 04-04-fix_inspector git@github.com:rivet-gg/actor-core.git ../actor-core
+fi
 cd ../actor-core 
 yarn install
 yarn build
