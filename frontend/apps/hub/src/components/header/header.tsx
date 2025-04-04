@@ -97,7 +97,10 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 									<NavItem asChild>
 										<Link
 											to={"."}
-											search={{ modal: "feedback" }}
+											search={(old) => ({
+												...old,
+												modal: "feedback",
+											})}
 										>
 											Feedback
 										</Link>

@@ -12,6 +12,7 @@
 		"scripts/lz4"
 	],
 	"scripts": {
+		"preinstall": "test -d ../actor-core || (git clone --depth=1 --branch 04-04-fix_inspector git@github.com:rivet-gg/actor-core.git ../actor-core && cd ../actor-core && yarn install && yarn build)",
 		"start": "npx turbo dev",
 		"dev": "npx turbo dev",
 		"build": "npx turbo build",
@@ -19,10 +20,22 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@yarnpkg/plugin-exec": "^3.0.1",
 		"turbo": "^2.0.1"
 	},
 	"resolutions": {
 		"react": "^19",
-		"react-dom": "^19"
+		"react-dom": "^19",
+		"actor-core": "portal:../actor-core/packages/actor-core",
+		"@actor-core/cli": "portal:../actor-core/packages/actor-core-cli",
+		"create-actor": "portal:../actor-core/packages/create-actor",
+		"@actor-core/memory": "portal:../actor-core/packages/drivers/memory",
+		"@actor-core/redis": "portal:../actor-core/packages/drivers/redis",
+		"@actor-core/framework-base": "portal:../actor-core/packages/frameworks/framework-base",
+		"@actor-core/react": "portal:../actor-core/packages/frameworks/react",
+		"@actor-core/bun": "portal:../actor-core/packages/platforms/bun",
+		"@actor-core/cloudflare-workers": "portal:../actor-core/packages/platforms/cloudflare-workers",
+		"@actor-core/nodejs": "portal:../actor-core/packages/platforms/nodejs",
+		"@actor-core/rivet": "portal:../actor-core/packages/platforms/rivet"
 	}
 }

@@ -1,7 +1,7 @@
 import { Combobox } from "@rivet-gg/components";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { actorBuildTagsQueryOptions } from "../queries";
-import { ActorTag } from "./actors/actor-tags";
+import { ActorTag } from "@rivet-gg/components/actors";
 
 interface TagsSelectProps {
 	projectId: string;

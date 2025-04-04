@@ -1,0 +1,1 @@
+bunx @actor-core/cli@latest dev

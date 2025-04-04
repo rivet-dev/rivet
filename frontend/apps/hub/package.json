@@ -38,6 +38,7 @@
 		"esast-util-from-js": "^2.0.1",
 		"file-saver": "^2.0.5",
 		"framer-motion": "^11.2.11",
+		"jotai": "^2.12.2",
 		"lodash": "^4.17.21",
 		"posthog-js": "^1.144.2",
 		"react": "^19.0.0",

@@ -3,8 +3,11 @@ import { NotFoundComponent } from "@/components/not-found-component";
 import type { AuthContext } from "@/domains/auth/contexts/auth";
 import { useDialog } from "@/hooks/use-dialog";
 import * as Layout from "@/layouts/root";
-import { FEEDBACK_FORM_ID } from "@/lib/data/constants";
-import { FullscreenLoading, Page } from "@rivet-gg/components";
+import {
+	FEEDBACK_FORM_ID,
+	FullscreenLoading,
+	Page,
+} from "@rivet-gg/components";
 import { PageLayout } from "@rivet-gg/components/layout";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -27,13 +30,15 @@ function Modals() {
 	const FeedbackDialog = useDialog.Feedback.Dialog;
 	const SecretDialog = useDialog.Secret.Dialog;
 
-	useKonami(() => navigate({ search: { modal: "secret" } }));
+	useKonami(() =>
+		navigate({ search: (old) => ({ ...old, modal: "secret" }) }),
+	);
 
 	const { modal, utm_source } = search;
 
-	const handleonOpenChange = (value: boolean) => {
+	const handleOnOpenChange = (value: boolean) => {
 		if (!value) {
-			navigate({ search: { modal: undefined } });
+			navigate({ search: (old) => ({ ...old, modal: undefined }) });
 		} else {
 			posthog.capture("survey shown", { $survey_id: FEEDBACK_FORM_ID });
 		}
@@ -45,13 +50,13 @@ function Modals() {
 				source={utm_source}
 				dialogProps={{
 					open: modal === "feedback",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 			<SecretDialog
 				dialogProps={{
 					open: modal === "secret",
-					onOpenChange: handleonOpenChange,
+					onOpenChange: handleOnOpenChange,
 				}}
 			/>
 		</>

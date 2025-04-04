@@ -7,10 +7,12 @@ import { getConfig, timing, toast } from "@rivet-gg/components";
 import { broadcastQueryClient } from "@tanstack/query-broadcast-client-experimental";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import {
+	type DefaultError,
 	MutationCache,
 	MutationObserver,
 	QueryCache,
 	QueryClient,
+	type UseMutationOptions,
 } from "@tanstack/react-query";
 import superjson from "superjson";
 import { watchBlockingQueries } from "./watch";
@@ -158,3 +160,14 @@ broadcastQueryClient({
 	queryClient,
 	broadcastChannel: "rivet-gg-hub",
 });
+
+export function mutationOptions<
+	TData = unknown,
+	TError = DefaultError,
+	TVariables = void,
+	TContext = unknown,
+>(
+	options: UseMutationOptions<TData, TError, TVariables, TContext>,
+): UseMutationOptions<TData, TError, TVariables, TContext> {
+	return options;
+}

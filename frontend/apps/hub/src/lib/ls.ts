@@ -1,30 +1,8 @@
 import type { AuthContext } from "@/domains/auth/contexts/auth";
-
-type LSKey =
-	| `rivet-lastteam-${string}`
-	| "rivet-token"
-	| "actors-list-preview-width"
-	| "actors-list-preview-folded";
+import { ls as commonLs } from "@rivet-gg/components";
 
 export const ls = {
-	set: (key: LSKey, value: unknown) => {
-		localStorage.setItem(key, JSON.stringify(value));
-	},
-	get: (key: LSKey) => {
-		const value = localStorage.getItem(key);
-		try {
-			return value ? JSON.parse(value) : null;
-		} catch {
-			return null;
-		}
-	},
-	remove: (key: LSKey) => {
-		localStorage.removeItem(key);
-	},
-	clear: () => {
-		localStorage.clear();
-	},
-
+	...commonLs,
 	recentTeam: {
 		get: (auth: AuthContext) => {
 			return ls.get(
@@ -40,13 +18,5 @@ export const ls = {
 		remove: (auth: AuthContext) => {
 			ls.remove(`rivet-lastteam-${auth.profile?.identity.identityId}`);
 		},
-	},
-	actorsList: {
-		set: (width: number, folded: boolean) => {
-			ls.set("actors-list-preview-width", width);
-			ls.set("actors-list-preview-folded", folded);
-		},
-		getWidth: () => ls.get("actors-list-preview-width"),
-		getFolded: () => ls.get("actors-list-preview-folded"),
 	},
 };

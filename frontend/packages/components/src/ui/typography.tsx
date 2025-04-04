@@ -34,9 +34,9 @@ const H2 = ({ className, asChild, ...props }: TypographyElementProps<"h2">) => {
 	return (
 		<Comp
 			className={cn(
-				className,
 				"scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0",
 				getCommonHelperClass(props),
+				className,
 			)}
 			{...omitCommonHelperProps(props)}
 		/>

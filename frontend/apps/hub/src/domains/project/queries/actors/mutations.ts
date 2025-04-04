@@ -1,4 +1,4 @@
-import { queryClient, rivetClient } from "@/queries/global";
+import { mutationOptions, queryClient, rivetClient } from "@/queries/global";
 import type { Rivet } from "@rivet-gg/api";
 import { toast } from "@rivet-gg/components";
 import { useMutation } from "@tanstack/react-query";
@@ -8,8 +8,8 @@ import {
 	projectActorsQueryOptions,
 } from "./query-options";
 
-export function useDestroyActorMutation() {
-	return useMutation({
+export function destroyActorMutationOptions() {
+	return mutationOptions({
 		mutationFn: (opts: {
 			projectNameId: string;
 			environmentNameId: string;

@@ -1,5 +1,5 @@
+import { ShimmerLine } from "@rivet-gg/components";
 import { useRouterState } from "@tanstack/react-router";
-import { ShimmerLine } from "../shimmer-line";
 
 export function HeaderRouteLoader() {
 	const isLoading = useRouterState({

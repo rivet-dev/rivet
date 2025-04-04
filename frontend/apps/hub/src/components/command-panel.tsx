@@ -6,6 +6,7 @@ import {
 	CommandList,
 	CommandLoading,
 	Kbd,
+	ShimmerLine,
 	cn,
 } from "@rivet-gg/components";
 import { useIsFetching } from "@tanstack/react-query";
@@ -27,7 +28,6 @@ import { EnvironmentCommandPanelPage } from "./command-panel/command-panel-page/
 import { GroupCommandPanelPage } from "./command-panel/command-panel-page/group-command-panel-page";
 import { IndexCommandPanelPage } from "./command-panel/command-panel-page/index-command-panel-page";
 import { ProjectCommandPanelPage } from "./command-panel/command-panel-page/project-command-panel-page";
-import { ShimmerLine } from "./shimmer-line";
 
 export function CommandPanel() {
 	const [isOpen, setOpen] = useState(false);

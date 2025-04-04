@@ -41,7 +41,7 @@ export function DocsSheet({
 					<SheetTitle>{title}</SheetTitle>
 					<Text className="text-xs">
 						<Link
-							href={`https://rivet.gg/${path}?utm_source=hub&embed=true#${hash}`}
+							href={path.startsWith("http") ? path : `https://rivet.gg/${path}?utm_source=hub&embed=true#${hash}`}
 							target="_blank"
 							rel="noopener noreferrer"
 						>
@@ -52,7 +52,7 @@ export function DocsSheet({
 						<div>
 							<iframe
 								className="w-full h-screen border-t"
-								src={`https://rivet.gg/${path}?embed=true#${hash}`}
+								src={path.startsWith("http") ? path : `https://rivet.gg/${path}?embed=true#${hash}`}
 								title={title}
 							/>
 						</div>

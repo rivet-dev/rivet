@@ -97,21 +97,3 @@ export function RestOnRouteChange(props: ErrorComponentProps) {
 		});
 	}, [router]);
 }
-
-export function assertNonNullable<V>(v: V): asserts v is Exclude<V, null> {
-	if (!v) {
-		throw new Error(`${v} is null`);
-	}
-}
-
-export function endWithSlash(url: string) {
-	return url.endsWith("/") ? url : `${url}/`;
-}
-
-export function toRecord(value: unknown) {
-	if (typeof value === "object" && value !== null) {
-		return value as Record<string, unknown>;
-	}
-
-	return {};
-}

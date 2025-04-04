@@ -1,0 +1,148 @@
+import {
+	type ReactNode,
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useState,
+	useSyncExternalStore,
+} from "react";
+import { ActorWorkerContainer } from "./actor-worker-container";
+import { assertNonNullable } from "../../lib/utils";
+import type { Actor, ActorAtom } from "../actor-context";
+import { selectAtom } from "jotai/utils";
+import { useAtomValue } from "jotai";
+
+export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
+	null,
+);
+
+export const useActorWorker = () => {
+	const value = useContext(ActorWorkerContext);
+	assertNonNullable(value);
+	return value;
+};
+
+const selector = (a: Actor) => ({
+	actorId: a.id,
+	endpoint: a.endpoint,
+	enabled: !a.destroyedAt && a.endpoint !== null && a.startedAt !== null,
+});
+
+interface ActorWorkerContextProviderProps {
+	actor: ActorAtom;
+	children: ReactNode;
+}
+
+// FIMXE: rewrite with jotai
+export const ActorWorkerContextProvider = ({
+	children,
+	actor,
+}: ActorWorkerContextProviderProps) => {
+	const { actorId, endpoint, enabled } = useAtomValue(
+		selectAtom(actor, selector),
+	);
+
+	const [container] = useState<ActorWorkerContainer>(
+		() => new ActorWorkerContainer(),
+	);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: we want to create worker on each of those props change
+	useEffect(() => {
+		const ctrl = new AbortController();
+
+		if (enabled && endpoint) {
+			container.init({
+				actorId,
+				endpoint,
+				signal: ctrl.signal,
+			});
+		}
+
+		return () => {
+			ctrl.abort();
+			container.terminate();
+		};
+	}, [actorId, endpoint, enabled]);
+
+	return (
+		<ActorWorkerContext.Provider value={container}>
+			{children}
+		</ActorWorkerContext.Provider>
+	);
+};
+
+export function useActorReplCommands() {
+	const container = useActorWorker();
+	return useSyncExternalStore(
+		useCallback(
+			(cb) => {
+				return container.subscribe(cb);
+			},
+			[container],
+		),
+		useCallback(() => {
+			return container.getCommands();
+		}, [container]),
+	);
+}
+
+export function useActorWorkerStatus() {
+	const container = useActorWorker();
+	return useSyncExternalStore(
+		useCallback(
+			(cb) => {
+				return container.subscribe(cb);
+			},
+			[container],
+		),
+		useCallback(() => {
+			return container.getStatus();
+		}, [container]),
+	);
+}
+
+export function useActorRpcs() {
+	const container = useActorWorker();
+	return useSyncExternalStore(
+		useCallback(
+			(cb) => {
+				return container.subscribe(cb);
+			},
+			[container],
+		),
+		useCallback(() => {
+			return container.getRpcs();
+		}, [container]),
+	);
+}
+
+export function useActorState() {
+	const container = useActorWorker();
+	return useSyncExternalStore(
+		useCallback(
+			(cb) => {
+				return container.subscribe(cb);
+			},
+			[container],
+		),
+		useCallback(() => {
+			return container.getState();
+		}, [container]),
+	);
+}
+
+export function useActorConnections() {
+	const container = useActorWorker();
+	return useSyncExternalStore(
+		useCallback(
+			(cb) => {
+				return container.subscribe(cb);
+			},
+			[container],
+		),
+		useCallback(() => {
+			return container.getConnections();
+		}, [container]),
+	);
+}

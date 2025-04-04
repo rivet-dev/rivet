@@ -442,7 +442,7 @@ export const actorRegionQueryOptions = ({
 	});
 };
 
-const createActorEndpoint = (
+export const createActorEndpoint = (
 	network: Rivet.actors.Network,
 ): string | undefined => {
 	try {

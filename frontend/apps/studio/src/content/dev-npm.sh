@@ -1,0 +1,1 @@
+npx @actor-core/cli@latest dev

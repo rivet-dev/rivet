@@ -26,8 +26,6 @@ function Modals() {
 		useDialog.ConfirmOuterbaseConnection.Dialog;
 
 	const EditBuildTagsDialog = useDialog.EditBuildTags.Dialog;
-	const CreateActorDialog = useDialog.CreateActor.Dialog;
-	const GoToActorDialog = useDialog.GoToActor.Dialog;
 
 	const handleOpenChange = (value: boolean) => {
 		if (!value) {
@@ -52,22 +50,6 @@ function Modals() {
 				projectNameId={projectNameId}
 				dialogProps={{
 					open: modal === "edit-tags",
-					onOpenChange: handleOpenChange,
-				}}
-			/>
-			<CreateActorDialog
-				environmentNameId={environmentNameId}
-				projectNameId={projectNameId}
-				dialogProps={{
-					open: modal === "create-actor",
-					onOpenChange: handleOpenChange,
-				}}
-			/>
-			<GoToActorDialog
-				environmentNameId={environmentNameId}
-				projectNameId={projectNameId}
-				dialogProps={{
-					open: modal === "go-to-actor",
 					onOpenChange: handleOpenChange,
 				}}
 			/>

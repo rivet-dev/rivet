@@ -257,7 +257,7 @@ useDialog.ConfirmAccountDeletion = createDialogHook(
 );
 
 useDialog.Feedback = createDialogHook(
-	import("@//components/dialogs/feedback-dialog"),
+	import("@rivet-gg/components/dialogs/feedback-dialog"),
 );
 
 useDialog.Secret = createDialogHook(
@@ -279,9 +279,9 @@ useDialog.EditBuildTags = createDialogHook(
 );
 
 useDialog.CreateActor = createDialogHook(
-	import("@/domains/project/components/dialogs/create-actor-dialog"),
+	import("@rivet-gg/components/actors/dialogs/create-actor-dialog"),
 );
 
 useDialog.GoToActor = createDialogHook(
-	import("@/domains/project/components/dialogs/go-to-actor-dialog"),
+	import("@rivet-gg/components/actors/dialogs/go-to-actor-dialog"),
 );

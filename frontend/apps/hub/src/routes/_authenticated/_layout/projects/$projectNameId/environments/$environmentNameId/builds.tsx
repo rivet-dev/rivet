@@ -1,4 +1,3 @@
-import { ActorTags } from "@/domains/project/components/actors/actor-tags";
 import { ProjectBuildsTableActions } from "@/domains/project/components/project-builds-table-actions";
 import { TagsSelect } from "@/domains/project/components/tags-select";
 import { useEnvironment } from "@/domains/project/data/environment-context";
@@ -29,6 +28,7 @@ import {
 	Text,
 	WithTooltip,
 } from "@rivet-gg/components";
+import { ActorTags } from "@rivet-gg/components/actors";
 import { Icon, faCheckCircle, faInfoCircle, faRefresh } from "@rivet-gg/icons";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";

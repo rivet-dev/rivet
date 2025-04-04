@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
 import { HeaderProgress } from "./header-progress";
 import { NavItem } from "./nav-item";
 
+export { NavItem };
+
 interface HeaderProps {
 	className?: string;
 	mobileBreadcrumbs?: ReactNode;

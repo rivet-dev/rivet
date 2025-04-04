@@ -1,11 +1,11 @@
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { App } from "./app";
+import { App, router } from "./app";
 import "./index.css";
-import { initThirdPartyProviders } from "./components/third-party-providers";
 import { rivetClient } from "./queries/global";
+import { initThirdPartyProviders } from "@rivet-gg/components";
 
-initThirdPartyProviders();
+initThirdPartyProviders(router, import.meta.env.DEV);
 
 rivetClient.cloud
 	.bootstrap()

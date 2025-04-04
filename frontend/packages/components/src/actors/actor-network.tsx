@@ -1,0 +1,96 @@
+import {
+	Button,
+	Dd,
+	DiscreteCopyButton,
+	Dl,
+	DocsSheet,
+	Dt,
+	Flex,
+} from "@rivet-gg/components";
+import { Icon, faBooks } from "@rivet-gg/icons";
+import { ActorObjectInspector } from "./console/actor-inspector";
+import { Fragment } from "react";
+import type { Actor, ActorAtom } from "./actor-context";
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+
+const selector = (a: Actor) => a.network?.ports;
+
+export interface ActorNetworkProps {
+	actor: ActorAtom;
+}
+
+export function ActorNetwork({ actor }: ActorNetworkProps) {
+	const ports = useAtomValue(selectAtom(actor, selector));
+	if (!ports) {
+		return null;
+	}
+
+	return (
+		<div className="px-4 mt-4 ">
+			<div className="flex gap-1 items-center mb-2">
+				<h3 className=" font-semibold">Network</h3>
+				<DocsSheet title="Networking" path="docs/networking">
+					<Button
+						variant="outline"
+						size="sm"
+						startIcon={<Icon icon={faBooks} />}
+					>
+						Documentation
+					</Button>
+				</DocsSheet>
+			</div>
+			<div className="text-xs">
+				<Flex gap="2" direction="col" className="text-xs">
+					<Dl className="items-start">
+						<Dt>Ports</Dt>
+						<Dd>
+							{Object.entries(ports).map(([name, port]) => (
+								<Fragment key={name}>
+									{name}{" "}
+									<Dl className="mb-2 mt-2">
+										<Dt>Port</Dt>
+										<Dd>
+											<DiscreteCopyButton
+												size="xs"
+												value={String(port.port || "")}
+											>
+												{port.port}
+											</DiscreteCopyButton>
+										</Dd>
+										<Dt>Hostname</Dt>
+										<Dd>
+											<DiscreteCopyButton
+												size="xs"
+												className="max-w-full min-w-0"
+												value={port.hostname || ""}
+											>
+												{port.hostname}
+											</DiscreteCopyButton>
+										</Dd>
+										{port.url ? (
+											<>
+												{" "}
+												<Dt>URL</Dt>
+												<Dd>
+													<DiscreteCopyButton
+														size="xs"
+														className="max-w-full min-w-0"
+														value={port.url || ""}
+													>
+														{port.url}
+													</DiscreteCopyButton>
+												</Dd>
+											</>
+										) : null}
+									</Dl>
+									<ActorObjectInspector data={port} />
+								</Fragment>
+							))}
+						</Dd>
+					</Dl>
+				</Flex>
+			</div>
+		</div>
+	);
+}

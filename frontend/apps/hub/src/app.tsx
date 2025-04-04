@@ -1,6 +1,7 @@
 import {
 	ConfigProvider,
 	FullscreenLoading,
+	ThirdPartyProviders,
 	Toaster,
 	TooltipProvider,
 	getConfig,
@@ -16,7 +17,6 @@ import {
 } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { LayoutedErrorComponent } from "./components/error-component";
-import { ThirdPartyProviders } from "./components/third-party-providers";
 import { AuthProvider, useAuth } from "./domains/auth/contexts/auth";
 import { routeMasks } from "./lib/route-masks";
 import { queryClient, queryClientPersister } from "./queries/global";
