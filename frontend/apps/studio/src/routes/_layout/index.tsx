@@ -22,6 +22,7 @@ import {
 import { currentActorIdAtom } from "@rivet-gg/components/actors";
 import {
 	Icon,
+	faChrome,
 	faBrave,
 	faReact,
 	faRust,
@@ -89,13 +90,13 @@ function RouteComponent() {
 					<H1>Rivet Studio</H1>
 					<Card className="max-w-md w-full mb-6 mt-8">
 						<CardHeader>
-							<CardTitle>Get Started with ActorCore</CardTitle>
+							<CardTitle>Getting Started</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<p>
-								Get started with one of our quick start guides.
+								Get started with one of our quick start guides:
 							</p>
-							<div className="flex-1 flex flex-col gap-2 mt-2">
+							<div className="flex-1 flex flex-col gap-2 mt-4">
 								<div className="flex flex-row justify-stretch items-center gap-2">
 									<DocsSheet
 										path="https://actorcore.org/frameworks/react"
@@ -139,12 +140,12 @@ function RouteComponent() {
 					</Card>
 					<Card className="max-w-md w-full my-6">
 						<CardHeader>
-							<CardTitle>Connect to ActorCore</CardTitle>
+							<CardTitle>Connect to Project</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<p>
 								Connect Rivet Studio to your ActorCore project,
-								using the following command.
+								using the following command:
 							</p>
 
 							<CodeGroup>
@@ -186,8 +187,11 @@ function RouteComponent() {
 						</CardHeader>
 						<CardContent>
 							<p>
-								Make sure that your browser allow access to
-								localhost. Some browsers like{" "}
+								Rivet Studio works best in{" "}
+								<Strong>
+									<Icon icon={faChrome} /> Chrome
+								</Strong>
+								. Some browsers like{" "}
 								<Strong>
 									<Icon icon={faSafari} /> Safari
 								</Strong>{" "}
@@ -195,18 +199,26 @@ function RouteComponent() {
 								<Strong>
 									<Icon icon={faBrave} /> Brave
 								</Strong>{" "}
-								block access by default.
+								block access to localhost by default.
 							</p>
 						</CardContent>
 						<CardFooter>
 							<p className="text-muted-foreground text-sm">
-								Need help? Join the{" "}
+								Having issues? Join the{" "}
 								<Link
 									href="https://rivet.gg/discord"
 									target="_blank"
 									rel="noopener noreferrer"
 								>
 									Rivet Discord
+								</Link>{" "}
+								or{" "}
+								<Link
+									href="https://github.com/rivet-gg/rivet/issues"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									file a GitHub Issue
 								</Link>
 								.
 							</p>

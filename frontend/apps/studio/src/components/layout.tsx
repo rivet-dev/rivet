@@ -48,7 +48,7 @@ const Header = () => {
 						</a>
 					</NavItem>
 					<DocsSheet
-						path={"https://actorcore.org/concepts/overview"}
+						path={"https://actorcore.org/overview"}
 						title="Documentation"
 					>
 						<NavItem className="cursor-pointer">
