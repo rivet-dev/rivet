@@ -94,7 +94,7 @@ function EmptyState() {
 							</SmallText>
 							<div className="flex gap-2">
 								<DocsSheet
-									path="docs/quickstart/react"
+									path="https://actorcore.org/frameworks/react"
 									title="React Quick Start"
 								>
 									<Button
@@ -106,7 +106,7 @@ function EmptyState() {
 									</Button>
 								</DocsSheet>
 								<DocsSheet
-									path="docs/quickstart/typescript"
+									path="https://actorcore.org/clients/javascript"
 									title="TypeScript Quick Start"
 								>
 									<Button
@@ -118,7 +118,7 @@ function EmptyState() {
 									</Button>
 								</DocsSheet>
 								<DocsSheet
-									path="docs/quickstart/typescript"
+									path="https://actorcore.org/clients/rust"
 									title="Rust Quick Start"
 								>
 									<Button
