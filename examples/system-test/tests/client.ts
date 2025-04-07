@@ -55,11 +55,11 @@ async function run() {
 				},
 				...(BUILD_NAME === "ws-container"
 					? {
-						resources: {
-							cpu: 100,
-							memory: 100,
-						},
-					}
+							resources: {
+								cpu: 100,
+								memory: 100,
+							},
+						}
 					: {}),
 			},
 		});
@@ -128,8 +128,14 @@ async function run() {
 				ws.send(JSON.stringify(["ping", 123]));
 			};
 
-			ws.onclose = () => {
-				console.log("WebSocket connection closed");
+			ws.onclose = (ev) => {
+				if (ev.wasClean) {
+					console.log("WebSocket connection closed");
+				} else {
+					reject(
+						`WebSocket did not close cleanly: ${ev.reason} ${ev.code}`,
+					);
+				}
 			};
 
 			ws.onerror = (err) => {
