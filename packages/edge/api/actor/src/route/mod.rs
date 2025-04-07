@@ -51,7 +51,7 @@ define_router! {
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
-						{ count: 60_000, bucket: duration::minutes(1) },
+						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -61,7 +61,7 @@ define_router! {
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
-						{ count: 1_000, bucket: duration::minutes(1) },
+						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -74,7 +74,7 @@ define_router! {
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
-						{ count: 1_000, bucket: duration::minutes(1) },
+						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -109,7 +109,7 @@ define_router! {
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
-						{ count: 1_000, bucket: duration::minutes(1) },
+						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
 			),

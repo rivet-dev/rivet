@@ -10708,6 +10708,7 @@ dependencies = [
  "rivet-api",
  "rivet-convert",
  "rivet-logs",
+ "rustls 0.23.25",
  "serde",
  "serde_json",
  "service-discovery",
