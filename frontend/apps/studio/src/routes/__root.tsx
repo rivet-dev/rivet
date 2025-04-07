@@ -1,8 +1,5 @@
-import {
-	FEEDBACK_FORM_ID,
-	FullscreenLoading,
-	useDialog,
-} from "@rivet-gg/components";
+import { FEEDBACK_FORM_ID, FullscreenLoading } from "@rivet-gg/components";
+
 import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { zodValidator } from "@tanstack/zod-adapter";
@@ -10,6 +7,7 @@ import { usePostHog } from "posthog-js/react";
 import { z } from "zod";
 import * as Layout from "@/components/layout";
 import { Suspense } from "react";
+import { useDialog } from "@rivet-gg/components/actors";
 
 function Modals() {
 	const search = Route.useSearch();

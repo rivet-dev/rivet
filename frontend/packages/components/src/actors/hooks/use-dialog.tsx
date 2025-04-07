@@ -7,7 +7,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { Dialog, DialogContent, type DialogProps } from "../ui/dialog";
+import { Dialog, DialogContent, type DialogProps } from "../../ui/dialog";
 
 export interface DialogContentProps {
 	onClose?: () => void;
@@ -151,11 +151,9 @@ export const createDataDialogHook = <
 
 export function useDialog() {}
 
-useDialog.GoToActor = createDialogHook(
-	import("../actors/dialogs/go-to-actor-dialog"),
-);
+useDialog.GoToActor = createDialogHook(import("../dialogs/go-to-actor-dialog"));
 
-useDialog.Feedback = createDialogHook(import("../dialogs/feedback-dialog"));
+useDialog.Feedback = createDialogHook(import("../../dialogs/feedback-dialog"));
 useDialog.CreateActor = createDialogHook(
-	import("../actors/dialogs/create-actor-dialog"),
+	import("../dialogs/create-actor-dialog"),
 );
