@@ -489,11 +489,19 @@ pub async fn complete_build(
 		)?;
 		let token = unwrap!(token_res.token).token;
 
+		// Filter the datacenters that can be contacted
+		let filtered_datacenters = datacenters_res
+			.datacenters
+			.into_iter()
+			.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+			.collect::<Vec<_>>();
+
+		if filtered_datacenters.is_empty() {
+			bail!("no valid datacenters with worker and guard pools");
+		}
+
 		let mut results = futures_util::stream::iter(
-			datacenters_res
-				.datacenters
-				.into_iter()
-				.filter(|dc| crate::utils::filter_edge_dc(&dc)),
+			filtered_datacenters,
 		)
 		.map(|dc| {
 			let ctx = ctx.clone();
@@ -532,7 +540,7 @@ pub async fn complete_build(
 		}
 
 		// Error only if all prewarm requests failed
-		if results.iter().all(|res| res.is_err()) {
+		if !results.is_empty() && results.iter().all(|res| res.is_err()) {
 			return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
 		}
 	}

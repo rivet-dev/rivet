@@ -31,13 +31,24 @@ pub async fn build_global_query_compat(
 }
 
 /// Called to validate that a datacenter can be contacted.
-pub fn filter_edge_dc(dc: &cluster::types::Datacenter) -> bool {
-	// Validate that the dc has a worker & guard so it can be contacted
-	dc.pools
-		.iter()
-		.any(|x| x.pool_type == PoolType::Worker && x.desired_count > 0)
-		&& dc
+///
+/// If there is no worker & guard nodes in this dc, the dc is probably shut down.
+pub fn filter_edge_dc(
+	config: &rivet_config::Config,
+	dc: &cluster::types::Datacenter,
+) -> GlobalResult<bool> {
+	if config.server()?.rivet.has_multiple_server_types() {
+		// Validate that the dc has a worker & guard so it can be contacted
+		Ok(dc
 			.pools
 			.iter()
-			.any(|x| x.pool_type == PoolType::Guard && x.desired_count > 0)
+			.any(|x| x.pool_type == PoolType::Worker && x.desired_count > 0)
+			&& dc
+				.pools
+				.iter()
+				.any(|x| x.pool_type == PoolType::Guard && x.desired_count > 0))
+	} else {
+		// All DC are valid
+		Ok(true)
+	}
 }

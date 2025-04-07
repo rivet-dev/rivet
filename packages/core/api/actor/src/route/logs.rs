@@ -59,11 +59,20 @@ pub async fn get_logs(
 		})
 		.await?;
 
-	// Query every datacenter for the given actor
-	let mut futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter for the given actor
+	let mut futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 

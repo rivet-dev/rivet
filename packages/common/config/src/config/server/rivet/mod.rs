@@ -214,6 +214,15 @@ impl Rivet {
 		}
 	}
 
+	/// If there are multipe types of servers in a cluster. This affects how fan-out requests are
+	/// sent to servers.
+	pub fn has_multiple_server_types(&self) -> bool {
+		match self.auth.access_kind {
+			AccessKind::Development => false,
+			AccessKind::Public | AccessKind::Private => true,
+		}
+	}
+
 	pub fn provision(&self) -> GlobalResult<&cluster_provision::ClusterProvision> {
 		Ok(unwrap_ref!(self.provision, "provision disabled"))
 	}

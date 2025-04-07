@@ -75,11 +75,20 @@ async fn get_inner(
 		})
 		.await?;
 
-	// Query every datacenter for the given actor
-	let mut futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter for the given actor
+	let mut futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 
@@ -383,11 +392,20 @@ pub async fn destroy(
 		})
 		.await?;
 
-	// Query every datacenter
-	let mut futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter
+	let mut futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 
@@ -501,11 +519,20 @@ pub async fn upgrade(
 		})
 		.await?;
 
-	// Query every datacenter
-	let mut futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter
+	let mut futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 
@@ -639,11 +666,20 @@ pub async fn upgrade_all(
 		})
 		.await?;
 
-	// Query every datacenter
-	let futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter
+	let futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 
@@ -792,11 +828,20 @@ async fn list_actors_inner(
 		})
 		.await?;
 
-	// Query every datacenter
-	let futures = dcs_res
+	// Filter the datacenters that can be contacted
+	let filtered_datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(&dc))
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_datacenters.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
+	// Query every datacenter
+	let futures = filtered_datacenters
+		.into_iter()
 		.map(|dc| async {
 			let dc = dc;
 
@@ -865,7 +910,7 @@ async fn list_actors_inner(
 	}
 
 	// Error only if all requests failed
-	if results.iter().all(|res| res.is_err()) {
+	if !results.is_empty() && results.iter().all(|res| res.is_err()) {
 		return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
 	}
 
