@@ -37,6 +37,7 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
+rustls = "0.23.25"
 
 [dev-dependencies]
 portpicker = "0.1.1"

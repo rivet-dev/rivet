@@ -8,6 +8,9 @@ export interface Config {
 	vus: number;
 	duration: string;
 	rampUpDuration: string;
+	disableHealthcheck?: boolean;
+	disableWebsocket?: boolean;
+	disableSleep?: boolean;
 }
 
 export interface Actor {

@@ -44,6 +44,12 @@ const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+	// Initialize with a default CryptoProvider for rustls
+	let provider = rustls::crypto::ring::default_provider();
+	provider
+		.install_default()
+		.expect("Failed to install crypto provider");
+
 	init_tracing();
 
 	let working_path = std::env::args()

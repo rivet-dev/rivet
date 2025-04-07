@@ -16,11 +16,11 @@ The build name is specified with `BUILD`.
 **Test Isolates**
 
 ```
-BUILD=ws-isolate k6-run actor-lifecycle
+BUILD=ws-isolate just k6-run actor-lifecycle
 ```
 
 **Test Container**
 
 ```
-BUILD=ws-container k6-run actor-lifecycle
+BUILD=ws-container just k6-run actor-lifecycle
 ```

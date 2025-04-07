@@ -24,6 +24,8 @@ export const options = {
 };
 
 export default function () {
+	const start = Date.now();
+
 	let actorId: string | undefined;
 	try {
 		console.log("creating actor");
@@ -38,20 +40,32 @@ export default function () {
 		const port = actor.network.ports.http;
 		const actorOrigin = port.url;
 
-		// Wait for health check
-		const isHealthy = waitForHealth(`${actorOrigin}/health`);
-		if (!isHealthy) fail("actor did not become healthy");
+		// Wait for health check if not disabled
+		if (!CONFIG.disableHealthcheck) {
+			const isHealthy = waitForHealth(`${actorOrigin}/health`);
+			if (!isHealthy) fail("actor did not become healthy");
+		}
 
-		// Test WebSocket
-		const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
-		testWebSocket(wsUrl);
-
-		console.log(`sleeping`);
-		sleep(60);
+		// // Test WebSocket if not disabled
+		// if (!CONFIG.disableWebsocket) {
+		// 	const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
+		// 	testWebSocket(wsUrl);
+		// }
+		//
+		// // Sleep if not disabled
+		// if (!CONFIG.disableSleep) {
+		// 	const sleepDuration = (start + 60_000 - Date.now()) / 1000;
+		// 	console.log(`sleeping for ${sleepDuration}s`);
+		// 	sleep(sleepDuration);
+		// }
 	} finally {
 		// Cleanup
 		if (actorId) {
 			destroyActor(CONFIG, actorId);
 		}
 	}
+
+	const sleepDuration = (start + 60_000 - Date.now()) / 1000;
+	console.log(`sleeping for ${sleepDuration}s`);
+	sleep(sleepDuration);
 }

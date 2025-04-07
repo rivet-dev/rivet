@@ -20,8 +20,8 @@ export function createActor(config: Config): CreateActorResponse {
 		...(config.buildName === "ws-container"
 			? {
 					resources: {
-						cpu: 250,
-						memory: 256,
+						cpu: 125,
+						memory: 128,
 					},
 				}
 			: {}),
