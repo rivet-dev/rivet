@@ -1,3 +1,4 @@
+// Copy the original file with required fixes
 use global_error::*;
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -145,8 +146,10 @@ impl TestServer {
 						}
 					});
 
+					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
+						.with_upgrades()  // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -281,8 +284,10 @@ impl TestServer {
 						}
 					});
 
+					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
+						.with_upgrades()  // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -373,8 +378,10 @@ impl TestServer {
 						}
 					});
 
+					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
+						.with_upgrades()  // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -577,8 +584,10 @@ pub async fn start_guard_with_middleware(
 						}
 					});
 
+					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
+						.with_upgrades()  // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);

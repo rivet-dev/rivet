@@ -288,7 +288,7 @@
           ]
         },
         {
-          "description": "Anyone can access the cluster without authorization.\n\nIf enabled: - A default project with slug \"default\" & environment with slug \"default\" will be created automatically - This allows using Rivet without manually creating a new project/environment - Project & environment fields will fallback to \"default\" if not provided - This allows using Rivet with simplfied requests, like `POST /actors` without a query - If no bearer token is provided, authentication will always succeed - This allows setting up development environments without manually creating tokens",
+          "description": "Anyone can access the cluster without authorization.\n\nIf enabled: - A default project with slug \"default\" & environment with slug \"default\" will be created automatically - This allows using Rivet without manually creating a new project/environment - Project & environment fields will fallback to \"default\" if not provided - This allows using Rivet with simplified requests, like `POST /actors` without a query - If no bearer token is provided, authentication will always succeed - This allows setting up development environments without manually creating tokens",
           "type": "string",
           "enum": [
             "development"
@@ -663,6 +663,29 @@
       },
       "additionalProperties": false
     },
+    "ClusterPoolGuard": {
+      "type": "object",
+      "required": [
+        "autoscale_margin"
+      ],
+      "properties": {
+        "autoscale_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          }
+        },
+        "vlan_ip_net": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "ClusterPoolJob": {
       "type": "object",
       "required": [
@@ -778,6 +801,7 @@
         "ats",
         "fdb",
         "gg",
+        "guard",
         "job",
         "nats",
         "pegboard",
@@ -792,6 +816,9 @@
         },
         "gg": {
           "$ref": "#/definitions/ClusterPoolGg"
+        },
+        "guard": {
+          "$ref": "#/definitions/ClusterPoolGuard"
         },
         "job": {
           "$ref": "#/definitions/ClusterPoolJob"
@@ -813,6 +840,7 @@
       "required": [
         "container_runner_binary_url",
         "edge_server_binary_url",
+        "guard_binary_url",
         "isolate_runner_binary_url",
         "manager_binary_url",
         "pools"
@@ -824,6 +852,10 @@
           "format": "uri"
         },
         "edge_server_binary_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "guard_binary_url": {
           "type": "string",
           "format": "uri"
         },
@@ -1065,6 +1097,23 @@
         "server_id"
       ],
       "properties": {
+        "api_lan_address": {
+          "description": "This API address will be used if there are no worker servers listed in the cluster package",
+          "default": null,
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
         "cluster_id": {
           "type": "string",
           "format": "uuid"
@@ -1077,9 +1126,9 @@
           "type": "string",
           "format": "uri"
         },
-        "redirect_logs": {
+        "redirect_logs_dir": {
           "default": null,
-          "type": "boolean"
+          "type": "string"
         },
         "server_id": {
           "type": "string",
