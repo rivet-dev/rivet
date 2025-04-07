@@ -51,12 +51,20 @@ dev-shell:
 	{{docker_compose}} exec -it rivet-shell /bin/bash
 
 [group('dev')]
+dev-edge-shell:
+	{{docker_compose}} exec -it rivet-edge-shell /bin/bash
+
+[group('dev')]
 dev-exec CONTAINER:
 	{{docker_compose}} exec -it {{CONTAINER}} /bin/bash
 
 [group('dev')]
 dev-cmd *ARGS:
 	{{docker_compose}} exec -it rivet-server rivet-server {{ARGS}}
+
+[group('dev')]
+dev-edge-cmd *ARGS:
+	{{docker_compose}} exec -it rivet-edge-server rivet-edge-server {{ARGS}}
 
 [group('dev')]
 dev-down:
