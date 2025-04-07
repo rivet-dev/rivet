@@ -18,6 +18,7 @@ import { Icon, faPencil } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VALID_SECTIONS, buildFullPath, buildPathComponents } from "./util";
+import { Comments } from "@/components/Comments";
 
 interface Param {
 	section: string;
@@ -124,6 +125,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 						Suggest changes to this page
 					</a>
 				</Button>
+				<Comments />
 			</main>
 			<aside className="-order-1 mx-auto w-full min-w-0 max-w-3xl flex-shrink-0 pb-4 pl-4 md:order-none xl:mx-0">
 				<DocsTableOfContents

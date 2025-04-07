@@ -1,4 +1,5 @@
 import { ArticleSocials } from "@/components/ArticleSocials";
+import { Comments } from "@/components/Comments";
 import { DocsTableOfContents } from "@/components/DocsTableOfContents";
 import { Prose } from "@/components/Prose";
 import {
@@ -7,7 +8,7 @@ import {
 	loadArticles,
 } from "@/lib/article";
 import { formatTimestamp } from "@/lib/formatDate";
-import { Avatar, AvatarFallback, AvatarImage } from "@rivet-gg/components";
+import { Avatar, AvatarFallback, AvatarImage, cn } from "@rivet-gg/components";
 import { Icon, faCalendarDay, faChevronRight } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -116,6 +117,7 @@ export default async function BlogPage({ params: { slug } }) {
 					<DocsTableOfContents tableOfContents={tableOfContents} />
 				</aside>
 			</div>
+			<Comments className={cn("mx-auto w-full mb-8 max-w-prose")} />
 		</>
 	);
 }

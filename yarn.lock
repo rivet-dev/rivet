@@ -1981,6 +1981,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@giscus/react@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "@giscus/react@npm:3.1.0"
+  dependencies:
+    giscus: "npm:^1.6.0"
+  peerDependencies:
+    react: ^16 || ^17 || ^18 || ^19
+    react-dom: ^16 || ^17 || ^18 || ^19
+  checksum: 10c0/1347b3a729917a7c134dbf38ff4e15189d37447db3453dfbcb0a76b58f6044a32040d197a0744a093682bcefea14e27b8167dfe30f55d79f3f415054092104c9
+  languageName: node
+  linkType: hard
+
 "@headlessui/react@npm:^1.7.13":
   version: 1.7.19
   resolution: "@headlessui/react@npm:1.7.19"
@@ -9915,6 +9927,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"giscus@npm:^1.6.0":
+  version: 1.6.0
+  resolution: "giscus@npm:1.6.0"
+  dependencies:
+    lit: "npm:^3.2.1"
+  checksum: 10c0/2dc96e45591b38bbf8db7c9a0efbb25f598e57522cd90ca0cad23d573f88f5adbe4411c0c4cf61231f6dca57531d6fe4fbbcd12be78681cba3aa218eb4584e11
+  languageName: node
+  linkType: hard
+
 "github-buttons@npm:^2.22.0":
   version: 2.29.1
   resolution: "github-buttons@npm:2.29.1"
@@ -11276,7 +11297,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lit@npm:^3":
+"lit@npm:^3, lit@npm:^3.2.1":
   version: 3.2.1
   resolution: "lit@npm:3.2.1"
   dependencies:
@@ -14606,6 +14627,7 @@ __metadata:
     "@fortawesome/free-brands-svg-icons": "npm:^6.5.2"
     "@fortawesome/free-solid-svg-icons": "npm:^6.5.2"
     "@fortawesome/react-fontawesome": "npm:^0.2.2"
+    "@giscus/react": "npm:^3.1.0"
     "@headlessui/react": "npm:^1.7.13"
     "@heroicons/react": "npm:^2.0.18"
     "@inquirer/prompts": "npm:^6.0.1"

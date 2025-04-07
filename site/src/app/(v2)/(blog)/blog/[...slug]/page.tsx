@@ -1,4 +1,5 @@
 import { ArticleSocials } from "@/components/ArticleSocials";
+import { Comments } from "@/components/Comments";
 import { DocsTableOfContents } from "@/components/DocsTableOfContents";
 import { Prose } from "@/components/Prose";
 import {
@@ -72,114 +73,134 @@ export default async function BlogPage({ params: { slug } }) {
 	const isTechnical = category.name === "Technical";
 
 	return (
-		<div
-			className={clsx("mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32", {
-				"max-w-[1440px]": isTechnical,
-			})}
-			style={{ "--header-height": "5rem" } as CSSProperties}
-		>
-			<ul className="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
-				<li>
-					<Link href="/blog">Blog</Link>
-				</li>
-				<li className="h-2.5">
-					<Icon
-						className="block h-full w-auto"
-						icon={faChevronRight}
-					/>
-				</li>
-				<li>{category.name}</li>
-				<li className="h-2.5">
-					<Icon
-						className="block h-full w-auto"
-						icon={faChevronRight}
-					/>
-				</li>
-				<li className="text-foreground font-semibold">{title}</li>
-			</ul>
-			<div className="flex flex-col gap-4 pb-6 lg:flex-row">
-				<aside className="order-1 mt-2 flex min-w-0 max-w-xs flex-1 flex-col gap-2">
-					<div className="top-header sticky pt-2">
-						<p className="mb-2 text-sm font-semibold">Posted by</p>
-						<div className="mb-4 flex items-center gap-2">
-							<Avatar className="mt-1 size-14">
-								<AvatarFallback>{author[0]}</AvatarFallback>
-								<AvatarImage {...author.avatar} alt={author} />
-							</Avatar>
-							<div className="flex flex-col">
-								<h3 className="font-bold">{author.name}</h3>
-								<p className="text-muted-foreground text-sm">
-									{author.role}
-								</p>
-								<p className="flex gap-2 text-xs text-muted-foreground mt-1">
-									{author.socials?.twitter || author.url ? (
-										<a
-											href={
-												author.socials?.twitter ||
-												author.url
-											}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											<Icon icon={faXTwitter} />
-										</a>
-									) : null}
-									{author.socials?.bluesky ? (
-										<a
-											href={author.socials.bluesky}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											<Icon icon={faBluesky} />
-										</a>
-									) : null}
-									{author.socials?.github ? (
-										<a
-											href={author.socials.github}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											<Icon icon={faGithub} />
-										</a>
-									) : null}
-								</p>
+		<>
+			<div
+				className={clsx(
+					"mx-auto mt-20 w-full max-w-6xl px-4 md:mt-32",
+					{
+						"max-w-[1440px]": isTechnical,
+					},
+				)}
+				style={{ "--header-height": "5rem" } as CSSProperties}
+			>
+				<ul className="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
+					<li>
+						<Link href="/blog">Blog</Link>
+					</li>
+					<li className="h-2.5">
+						<Icon
+							className="block h-full w-auto"
+							icon={faChevronRight}
+						/>
+					</li>
+					<li>{category.name}</li>
+					<li className="h-2.5">
+						<Icon
+							className="block h-full w-auto"
+							icon={faChevronRight}
+						/>
+					</li>
+					<li className="text-foreground font-semibold">{title}</li>
+				</ul>
+				<div className="flex flex-col gap-4 pb-6 lg:flex-row">
+					<aside className="order-1 mt-2 flex min-w-0 max-w-xs flex-1 flex-col gap-2">
+						<div className="top-header sticky pt-2">
+							<p className="mb-2 text-sm font-semibold">
+								Posted by
+							</p>
+							<div className="mb-4 flex items-center gap-2">
+								<Avatar className="mt-1 size-14">
+									<AvatarFallback>{author[0]}</AvatarFallback>
+									<AvatarImage
+										{...author.avatar}
+										alt={author}
+									/>
+								</Avatar>
+								<div className="flex flex-col">
+									<h3 className="font-bold">{author.name}</h3>
+									<p className="text-muted-foreground text-sm">
+										{author.role}
+									</p>
+									<p className="flex gap-2 text-xs text-muted-foreground mt-1">
+										{author.socials?.twitter ||
+										author.url ? (
+											<a
+												href={
+													author.socials?.twitter ||
+													author.url
+												}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												<Icon icon={faXTwitter} />
+											</a>
+										) : null}
+										{author.socials?.bluesky ? (
+											<a
+												href={author.socials.bluesky}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												<Icon icon={faBluesky} />
+											</a>
+										) : null}
+										{author.socials?.github ? (
+											<a
+												href={author.socials.github}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												<Icon icon={faGithub} />
+											</a>
+										) : null}
+									</p>
+								</div>
 							</div>
+							<div className="text-muted-foreground mb-6 flex items-center gap-2 text-sm">
+								<Icon icon={faCalendarDay} />
+								<time className="text-sm">
+									{formatTimestamp(published)}
+								</time>
+							</div>
+							<p className="mb-2 hidden text-sm font-semibold lg:block">
+								Other articles
+							</p>
+							<OtherArticles slug={slug[0]} />
 						</div>
-						<div className="text-muted-foreground mb-6 flex items-center gap-2 text-sm">
-							<Icon icon={faCalendarDay} />
-							<time className="text-sm">
-								{formatTimestamp(published)}
-							</time>
-						</div>
-						<p className="mb-2 hidden text-sm font-semibold lg:block">
-							Other articles
-						</p>
-						<OtherArticles slug={slug[0]} />
-					</div>
-				</aside>
-				<Prose
-					as="article"
-					className={clsx(
-						"order-3 mt-4 w-full flex-shrink-0 lg:order-2",
-						{
-							"xl:max-w-[1000px]": isTechnical,
-							"max-w-prose": !isTechnical,
-						},
-					)}
-				>
-					<Image
-						{...image}
-						alt="Promo Image"
-						className="rounded-sm border"
-					/>
-					<Content />
-					<ArticleSocials title={title} />
-				</Prose>
-				<aside className="order-2 min-w-0 max-w-xs flex-1 lg:order-3">
-					<DocsTableOfContents tableOfContents={tableOfContents} />
-				</aside>
+					</aside>
+					<Prose
+						as="article"
+						className={clsx(
+							"order-3 mt-4 w-full flex-shrink-0 lg:order-2",
+							{
+								"xl:max-w-[1000px]": isTechnical,
+								"max-w-prose": !isTechnical,
+							},
+						)}
+					>
+						<Image
+							{...image}
+							alt="Promo Image"
+							className="rounded-sm border"
+						/>
+						<Content />
+						<ArticleSocials title={title} />
+					</Prose>
+					<aside className="order-2 min-w-0 max-w-xs flex-1 lg:order-3">
+						<DocsTableOfContents
+							tableOfContents={tableOfContents}
+						/>
+					</aside>
+				</div>
 			</div>
-		</div>
+
+			<Comments
+				className={clsx("mx-auto w-full mb-8", {
+					"xl:max-w-[1000px]": isTechnical,
+					"max-w-prose": !isTechnical,
+				})}
+			/>
+		</>
 	);
 }
 
