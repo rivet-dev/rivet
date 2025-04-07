@@ -24,7 +24,7 @@ const Main = ({ children }: RootProps) => {
 
 const VisibleInFull = ({ children }: PropsWithChildren) => {
 	return (
-		<div className="relative min-h-screen grid grid-rows-[auto,1fr]">
+		<div className="relative min-h-screen max-h-screen grid grid-rows-[auto,1fr]">
 			{children}
 		</div>
 	);
