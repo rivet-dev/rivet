@@ -111,6 +111,62 @@ const createConsole = (id: string) => {
 
 let init: null | ({ ws: WebSocket; url: URL } & InspectData) = null;
 
+async function connect(endpoint: string) {
+	const url = new URL("inspect", endWithSlash(endpoint));
+	const ws = new WebSocket(url);
+
+	await waitForOpen(ws);
+
+	ws.send(
+		JSON.stringify({
+			type: "info",
+		} satisfies ToServer),
+	);
+
+	const { type: _, ...info } = await waitForMessage(ws, "info");
+	init = { ...info, ws, url: new URL(endpoint) };
+
+	ws.addEventListener("message", (event) => {
+		try {
+			const data = ToClientSchema.parse(JSON.parse(event.data));
+
+			if (data.type === "info") {
+				return respond({
+					type: "inspect",
+					data: {
+						...data,
+					},
+				});
+			}
+			if (data.type === "error") {
+				return respond({
+					type: "error",
+					data: data.message,
+				});
+			}
+		} catch (error) {
+			console.warn("Malformed message", event.data, error);
+			return;
+		}
+	});
+
+	ws.addEventListener("close", () => {
+		respond({
+			type: "lost-connection",
+		});
+		setTimeout(() => {
+			connect(endpoint);
+		}, 500);
+	});
+
+	respond({
+		type: "ready",
+		data: {
+			...info,
+		},
+	});
+}
+
 addEventListener("message", async (event) => {
 	const { success, data } = MessageSchema.safeParse(event.data);
 
@@ -128,50 +184,14 @@ addEventListener("message", async (event) => {
 		}
 
 		try {
-			const url = new URL("inspect", endWithSlash(data.endpoint));
-			const ws = new WebSocket(url);
+			await Promise.race([
+				connect(data.endpoint),
+				wait(5000).then(() => {
+					throw new Error("Timeout");
+				}),
+			]);
 
-			await waitForOpen(ws);
-
-			ws.send(
-				JSON.stringify({
-					type: "info",
-				} satisfies ToServer),
-			);
-
-			const { type: _, ...info } = await waitForMessage(ws, "info");
-			init = { ...info, ws, url: new URL(data.endpoint) };
-
-			ws.addEventListener("message", (event) => {
-				try {
-					const data = ToClientSchema.parse(JSON.parse(event.data));
-
-					if (data.type === "info") {
-						return respond({
-							type: "inspect",
-							data: {
-								...data,
-							},
-						});
-					}
-					if (data.type === "error") {
-						return respond({
-							type: "error",
-							data: data.message,
-						});
-					}
-				} catch (error) {
-					console.warn("Malformed message", event.data, error);
-					return;
-				}
-			});
-
-			return respond({
-				type: "ready",
-				data: {
-					...info,
-				},
-			});
+			return;
 		} catch (e) {
 			return respond({
 				type: "error",

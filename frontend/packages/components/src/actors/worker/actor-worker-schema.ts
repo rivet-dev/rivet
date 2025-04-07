@@ -78,6 +78,9 @@ export const ResponseSchema = z.discriminatedUnion("type", [
 		type: z.literal("inspect"),
 		data: InspectDataSchema,
 	}),
+	z.object({
+		type: z.literal("lost-connection"),
+	}),
 ]);
 
 export type Response = z.infer<typeof ResponseSchema>;

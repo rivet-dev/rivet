@@ -48,7 +48,12 @@ export const ActorsActorDetails = memo(
 
 		return (
 			<ActorDetailsSettingsProvider>
-				<ActorWorkerContextProvider actor={actor}>
+				<ActorWorkerContextProvider
+					actor={actor}
+					notifyOnReconnect={actorFeatures?.includes(
+						ActorFeature.InspectReconnectNotification,
+					)}
+				>
 					<div className="flex flex-col h-full flex-1 pt-2">
 						<Tabs
 							value={tab || (supportsState ? "state" : "logs")}

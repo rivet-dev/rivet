@@ -12,6 +12,7 @@ export enum ActorFeature {
 	Console = "console",
 	Runtime = "runtime",
 	Durability = "durability",
+	InspectReconnectNotification = "inspect_reconnect_notification",
 }
 
 export type Actor = Omit<
@@ -254,6 +255,7 @@ const commonActorFeatures = [
 	ActorFeature.Config,
 	ActorFeature.Runtime,
 	ActorFeature.Durability,
+	ActorFeature.InspectReconnectNotification,
 ];
 
 export const currentActorFeaturesAtom = atom((get) => {
@@ -272,6 +274,7 @@ export const currentActorFeaturesAtom = atom((get) => {
 				ActorFeature.Connections,
 				ActorFeature.State,
 				ActorFeature.Console,
+				ActorFeature.InspectReconnectNotification,
 			];
 		}
 		return commonActorFeatures;

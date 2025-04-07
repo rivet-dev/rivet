@@ -9,6 +9,7 @@ import {
 	ResponseSchema,
 	type SetStateMessage,
 } from "./actor-worker-schema";
+import { toast } from "sonner";
 
 export type ReplCommand = {
 	logs: Log[];
@@ -48,6 +49,10 @@ export class ActorWorkerContainer {
 		actorId: string;
 	} | null = null;
 
+	#opts: {
+		notifyOnReconnect?: boolean;
+	} | null = null;
+
 	#listeners: (() => void)[] = [];
 	#worker: Worker | undefined;
 
@@ -56,14 +61,17 @@ export class ActorWorkerContainer {
 		actorId,
 		endpoint,
 		signal,
+		notifyOnReconnect,
 	}: {
 		actorId: string;
 		endpoint: string;
 		signal: AbortSignal;
+		notifyOnReconnect?: boolean;
 	}) {
 		this.terminate();
 
 		this.#meta = { actorId };
+		this.#opts = { notifyOnReconnect };
 		this.#state.status = { type: "pending" };
 		this.#update();
 		try {
@@ -120,6 +128,7 @@ export class ActorWorkerContainer {
 			value: undefined,
 		};
 		this.#meta = null;
+		this.#opts = null;
 		this.#state.connections = [];
 		this.#update();
 	}
@@ -283,6 +292,11 @@ export class ActorWorkerContainer {
 		}
 
 		if (msg.type === "ready") {
+			if (this.#opts?.notifyOnReconnect) {
+				toast.success("Connected to Actor", {
+					id: "ac-ws-reconnect",
+				});
+			}
 			this.#state.status = { type: "ready" };
 		}
 
@@ -293,6 +307,15 @@ export class ActorWorkerContainer {
 				value: msg.data.state.value || {},
 			};
 			this.#state.connections = [...msg.data.connections];
+			this.#update();
+		}
+
+		if (msg.type === "lost-connection") {
+			this.#state.status = { type: "pending" };
+
+			if (this.#opts?.notifyOnReconnect) {
+				toast.loading("Reconnecting...", { id: "ac-ws-reconnect" });
+			}
 			this.#update();
 		}
 	}

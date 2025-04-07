@@ -32,12 +32,14 @@ const selector = (a: Actor) => ({
 interface ActorWorkerContextProviderProps {
 	actor: ActorAtom;
 	children: ReactNode;
+	notifyOnReconnect?: boolean;
 }
 
 // FIXME: rewrite with jotai
 export const ActorWorkerContextProvider = ({
 	children,
 	actor,
+	notifyOnReconnect,
 }: ActorWorkerContextProviderProps) => {
 	const { actorId, endpoint, enabled } = useAtomValue(
 		selectAtom(actor, selector),
@@ -55,6 +57,7 @@ export const ActorWorkerContextProvider = ({
 			container.init({
 				actorId,
 				endpoint,
+				notifyOnReconnect,
 				signal: ctrl.signal,
 			});
 		}
