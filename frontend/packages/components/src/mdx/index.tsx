@@ -173,7 +173,7 @@ export const Warning = ({
 }: { title?: string; children: ReactNode }) => {
 	return (
 		<Alert variant="warning" className="my-4">
-			<AlertTitle className="flex items-center">
+			<AlertTitle className="flex items-center text-foreground">
 				<Icon
 					icon={faExclamationTriangle}
 					className="mr-2 text-warning"
@@ -193,7 +193,7 @@ export const Tip = ({
 }: { title?: string; children: ReactNode }) => {
 	return (
 		<Alert className="my-4">
-			<AlertTitle className="flex items-center">
+			<AlertTitle className="flex items-center text-foreground">
 				<Icon icon={faLightbulbOn} className="mr-2 text-primary" />
 				{title}
 			</AlertTitle>
@@ -210,7 +210,7 @@ export const Info = ({
 }: { title?: string; children: ReactNode }) => {
 	return (
 		<Alert className="my-4">
-			<AlertTitle className="flex items-center">
+			<AlertTitle className="flex items-center text-foreground">
 				<Icon icon={faInfoCircle} className="mr-2" />
 				{title}
 			</AlertTitle>
@@ -227,7 +227,7 @@ export const Note = ({
 }: { title?: string; children: ReactNode }) => {
 	return (
 		<Alert className="my-4">
-			<AlertTitle className="prose-invert flex items-center [&_p]:first-of-type:my-0">
+			<AlertTitle className="prose-invert flex items-center text-foreground [&_p]:first-of-type:my-0">
 				<Icon icon={faInfoCircle} className="mr-2" />
 				{title}
 			</AlertTitle>

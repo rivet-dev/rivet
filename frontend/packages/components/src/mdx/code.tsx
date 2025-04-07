@@ -53,23 +53,41 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 			)}
 		>
 			<Tabs defaultValue={getChildIdx(children[0])}>
-				<ScrollArea
-					className="w-full"
-					viewportProps={{ className: "[&>div]:!table" }}
-				>
-					<TabsList>
-						{Children.map(children, (child) => {
-							const idx = getChildIdx(child);
-							return (
-								<TabsTrigger key={idx} value={idx}>
-									{child.props.title ||
-										languageNames[child.props.language] ||
-										"Code"}
-								</TabsTrigger>
-							);
-						})}
-					</TabsList>
-				</ScrollArea>
+				<div className="flex gap-1 border-b pr-2">
+					<ScrollArea
+						className="w-full"
+						viewportProps={{ className: "[&>div]:!table" }}
+					>
+						<TabsList className="border-b-0">
+							{Children.map(children, (child) => {
+								const idx = getChildIdx(child);
+								return (
+									<TabsTrigger key={idx} value={idx}>
+										{child.props.title ||
+											languageNames[
+												child.props.language
+											] ||
+											"Code"}
+									</TabsTrigger>
+								);
+							})}
+						</TabsList>
+					</ScrollArea>
+					<WithTooltip
+						trigger={
+							<CopyCodeTrigger>
+								<Button
+									size="icon-sm"
+									className="text-foreground"
+									variant="ghost"
+								>
+									<Icon icon={faCopy} />
+								</Button>
+							</CopyCodeTrigger>
+						}
+						content="Copy code"
+					/>
+				</div>
 				{Children.map(children, (child) => {
 					const idx = getChildIdx(child);
 					return (
@@ -102,30 +120,32 @@ export const pre = ({
 }: PreProps) => {
 	return (
 		<div className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
-			<div className="text-foreground flex items-center justify-between gap-2 border-b p-2 text-xs">
-				<div className="text-muted-foreground flex items-center gap-1">
-					{file ? (
-						<>
-							<Icon icon={faFile} className="block" />
-							<span>{file}</span>
-						</>
-					) : isInGroup ? null : (
-						<Badge variant="outline">
-							{title || languageNames[language || "cpp"]}
-						</Badge>
-					)}
+			{!file && isInGroup ? null : (
+				<div className="text-foreground flex items-center justify-between gap-2 border-b p-2 text-xs">
+					<div className="text-muted-foreground flex items-center gap-1">
+						{file ? (
+							<>
+								<Icon icon={faFile} className="block" />
+								<span>{file}</span>
+							</>
+						) : isInGroup ? null : (
+							<Badge variant="outline">
+								{title || languageNames[language || "cpp"]}
+							</Badge>
+						)}
+					</div>
+					<WithTooltip
+						trigger={
+							<CopyCodeTrigger>
+								<Button size="icon-sm" variant="ghost">
+									<Icon icon={faCopy} />
+								</Button>
+							</CopyCodeTrigger>
+						}
+						content="Copy code"
+					/>
 				</div>
-				<WithTooltip
-					trigger={
-						<CopyCodeTrigger>
-							<Button size="icon-sm" variant="ghost">
-								<Icon icon={faCopy} />
-							</Button>
-						</CopyCodeTrigger>
-					}
-					content="Copy code"
-				/>
-			</div>
+			)}
 			<div className="bg-background text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
 					{children

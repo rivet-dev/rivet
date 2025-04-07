@@ -1,17 +1,26 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import type { MouseEventHandler, PropsWithChildren } from "react";
+import {
+	forwardRef,
+	type MouseEventHandler,
+	type PropsWithChildren,
+} from "react";
 import { toast } from "sonner";
 
-export function CopyCodeTrigger({ children }: PropsWithChildren) {
-	const handleClick: MouseEventHandler = (event) => {
-		const code =
-			event.currentTarget.parentNode?.parentNode?.querySelector(
-				".code",
-			)?.innerText;
-		navigator.clipboard.writeText(code);
-		toast.success("Copied to clipboard");
-	};
-	return <Slot onClick={handleClick}>{children}</Slot>;
-}
+export const CopyCodeTrigger = forwardRef<HTMLElement, PropsWithChildren>(
+	({ children }, ref) => {
+		const handleClick: MouseEventHandler = (event) => {
+			const code =
+				event.currentTarget.closest<HTMLDivElement>(".code")?.innerText;
+
+			if (!code) {
+				toast.error("No code to copy");
+				return;
+			}
+			navigator.clipboard.writeText(code);
+			toast.success("Copied to clipboard");
+		};
+		return <Slot onClick={handleClick}>{children}</Slot>;
+	},
+);
