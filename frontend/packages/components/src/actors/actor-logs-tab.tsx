@@ -1,11 +1,4 @@
-import {
-	Button,
-	DocsSheet,
-	LogsView,
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@rivet-gg/components";
-import { Icon, faBooks } from "@rivet-gg/icons";
+import { LogsView, ToggleGroup, ToggleGroupItem } from "@rivet-gg/components";
 import { startTransition, useState } from "react";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorDownloadLogsButton } from "./actor-download-logs-button";
@@ -67,15 +60,6 @@ export function ActorLogsTab({ actor }: ActorLogsTabProps) {
 							errors
 						</ToggleGroupItem>
 					</ToggleGroup>
-					<DocsSheet title="Logging" path="docs/logging" showTooltip>
-						<Button
-							size="icon-sm"
-							variant="outline"
-							className="place-self-center ml-2 "
-						>
-							<Icon icon={faBooks} />
-						</Button>
-					</DocsSheet>
 					<ActorDownloadLogsButton
 						actor={actor}
 						typeFilter={logsFilter}

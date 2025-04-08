@@ -1,5 +1,4 @@
-import { Button, DocsSheet, LiveBadge, ScrollArea } from "@rivet-gg/components";
-import { Icon, faBooks } from "@rivet-gg/icons";
+import { LiveBadge, ScrollArea } from "@rivet-gg/components";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import {
 	useActorConnections,
@@ -51,15 +50,6 @@ export function ActorConnectionsTab({ actor }: ActorConnectionsTabProps) {
 		<ScrollArea className="flex-1 w-full min-h-0 h-full">
 			<div className="flex  justify-between items-center gap-1 border-b sticky top-0 p-2 bg-card z-[1]">
 				<LiveBadge />
-				<DocsSheet title="Connections" path="docs/connections">
-					<Button
-						variant="outline"
-						size="sm"
-						startIcon={<Icon icon={faBooks} />}
-					>
-						Documentation
-					</Button>
-				</DocsSheet>
 			</div>
 			<div className="p-2">
 				<ActorObjectInspector

@@ -1,16 +1,10 @@
-import {
-	Badge,
-	Button,
-	DocsSheet,
-	LiveBadge,
-	WithTooltip,
-} from "@rivet-gg/components";
+import { Badge, Button, LiveBadge, WithTooltip } from "@rivet-gg/components";
 import {
 	type CodeMirrorRef,
 	EditorView,
 	JsonCode,
 } from "@rivet-gg/components/code-mirror";
-import { Icon, faBooks, faRotateLeft, faSave } from "@rivet-gg/icons";
+import { Icon, faRotateLeft, faSave } from "@rivet-gg/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
 import { ActorStateChangeIndicator } from "./actor-state-change-indicator";
@@ -103,15 +97,6 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 							</Button>
 						}
 					/>
-					<DocsSheet title="State" path="docs/state">
-						<Button
-							variant="outline"
-							size="sm"
-							startIcon={<Icon icon={faBooks} />}
-						>
-							Documentation
-						</Button>
-					</DocsSheet>
 				</div>
 			</div>
 			<div className="flex flex-1 min-h-0 w-full">
