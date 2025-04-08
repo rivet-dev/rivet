@@ -121,7 +121,7 @@ rivet deploy
 This uploads your game server code to Rivet but doesn't start any instances yet. Your code is now available to be launched on-demand.
 </Note>
 
-### Step 4: Starting game server instances
+### Step 4 (optional): Starting game server instances with a backend API
 
 In your backend API, add code to start game server instances when needed.
 
@@ -177,7 +177,7 @@ async function createGameServer(gameMode, mapName) {
 	The Rivet API requires a private _Service Token_ and should only be called from your backend. Do not make this service token public.
 </Note>
 
-### Step 5: Connecting players to your game server
+### Step 5 (optional): Connecting players to your game server
 
 When players need to join a game, your backend API provides the WebSocket connection URL:
 
@@ -210,7 +210,7 @@ app.post('/join-game', async (req, res) => {
   We recommend storing the connection URL returned from `actors.create` instead of calling `actors.list` for every API call.
 </Note>
 
-### Step 6: Destroying servers once finished
+### Step 6 (optional): Destroying servers once finished
 
 When a game finishes, clean up the server to avoid unnecessary costs:
 
@@ -288,6 +288,8 @@ This approach maintains a predetermined number of game servers running in each r
 Use this script to maintain a fixed number of servers across specified regions:
 
 ```typescript {{ "title": "manage-servers.js" }}
+import { writeFileSync } from 'fs';
+
 // Define target server count per region
 const TARGET_SERVERS_BY_REGION = {
   "atl": 2,  // Atlanta: 2 servers
@@ -319,14 +321,21 @@ async function manageServers() {
       region: actor.tags.region,
       url: actor.network.ports.game.url
     }));
-    
+
+    // Print existing server URLs
+    existingServers.forEach(server => {
+      console.log(`Existing server: ${server.serverId} - ${server.url}`);
+    });
+
     // Calculate how many servers to add or remove
     const diff = targetCount - existingServers.length;
+    console.log(`Need to ${diff > 0 ? 'add' : 'remove'} ${Math.abs(diff)} servers`);
     
     if (diff > 0) {
       // Need to create more servers
       for (let i = 0; i < diff; i++) {
         const serverId = `server-${region}-${existingServers.length + i}`;
+        console.log(`Creating new server: ${serverId}`);
         
         const { actor } = await client.actors.create({
           project: process.env.RIVET_PROJECT_ID,
@@ -343,10 +352,15 @@ async function manageServers() {
               ports: {
                 game: { protocol: "https" }
               }
+            }
             },
-            resources: { cpu: 1000, memory: 1024 }
-          }
+            lifecycle: { 
+              durable: true,
+              idle_timeout: 300  // 5 minutes idle timeout
+            } 
         });
+        
+        console.log(`Created server ${serverId} with URL: ${actor.network.ports.game.url}`);
         
         // Add this server to our map
         serverMap.regions[region][serverId] = {
@@ -361,6 +375,7 @@ async function manageServers() {
       
       // Add servers we're keeping to the map
       for (const server of serversToKeep) {
+        console.log(`Keeping server: ${server.serverId} - ${server.url}`);
         serverMap.regions[region][server.serverId] = {
           url: server.url,
           id: server.id
@@ -369,6 +384,7 @@ async function manageServers() {
       
       // Destroy the excess servers
       for (const server of serversToRemove) {
+        console.log(`Removing server: ${server.serverId}`);
         await client.actors.destroy(server.id, {
           project: process.env.RIVET_PROJECT_ID,
           environment: process.env.RIVET_ENVIRONMENT_ID,
@@ -377,6 +393,7 @@ async function manageServers() {
     } else {
       // We have exactly the right number of servers
       for (const server of existingServers) {
+        console.log(`Keeping existing server: ${server.serverId} - ${server.url}`);
         serverMap.regions[region][server.serverId] = {
           url: server.url,
           id: server.id
@@ -387,6 +404,14 @@ async function manageServers() {
   
   return serverMap;
 }
+
+// This script will output a list of server connection URLs that you can copy & paste in your game's frontend to show a server list
+async function main() {
+  const serverMap = await manageServers();
+  writeFileSync('server-map.json', JSON.stringify(serverMap, null, 2));
+  console.log(`Server map saved to server-map.json`);
+}
+
 ```
 
 To run this with the credentials auto-populated, use:
