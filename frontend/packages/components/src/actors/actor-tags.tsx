@@ -9,8 +9,8 @@ import { Icon, faTag } from "@rivet-gg/icons";
 import { type ReactNode, forwardRef } from "react";
 
 const BUILT_IN_TAGS = {
-	actors: ["name", "framework", "framework-version"],
-	builds: ["name", "current"],
+	actors: ["framework", "framework-version"],
+	builds: ["current"],
 };
 
 export const ACTOR_FRAMEWORK_TAG_VALUE = "actor-core";

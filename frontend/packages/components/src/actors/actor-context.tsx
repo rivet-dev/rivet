@@ -11,7 +11,6 @@ export enum ActorFeature {
 	State = "state",
 	Console = "console",
 	Runtime = "runtime",
-	Durability = "durability",
 	InspectReconnectNotification = "inspect_reconnect_notification",
 }
 
@@ -57,7 +56,7 @@ export type DestroyActorAtom = Atom<DestroyActor>;
 export type CreateActor = {
 	create: (values: {
 		endpoint: string;
-		name: string;
+		id: string;
 		tags: Record<string, string>;
 		region?: string;
 		params?: Record<string, unknown>;
@@ -254,7 +253,6 @@ const commonActorFeatures = [
 	ActorFeature.Logs,
 	ActorFeature.Config,
 	ActorFeature.Runtime,
-	ActorFeature.Durability,
 	ActorFeature.InspectReconnectNotification,
 ];
 
@@ -268,7 +266,11 @@ export const currentActorFeaturesAtom = atom((get) => {
 
 	// actors from hub
 	if (!actor.features) {
-		if (toRecord(actor.tags).framework === ACTOR_FRAMEWORK_TAG_VALUE) {
+		const tags = toRecord(actor.tags);
+		if (tags.framework === ACTOR_FRAMEWORK_TAG_VALUE) {
+			if (tags.name === "manager") {
+				return commonActorFeatures;
+			}
 			return [
 				...commonActorFeatures,
 				ActorFeature.Connections,

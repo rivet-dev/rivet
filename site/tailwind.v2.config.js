@@ -27,7 +27,8 @@ module.exports = {
             '--tw-prose-invert-th-borders': 'hsl(var(--border))',
             '--tw-prose-invert-td-borders': 'hsl(var(--border))',
             code: {
-              fontSize: theme('fontSize.base')[0]
+              fontSize: 'inherit',
+              fontWeight: 'inherit'
             },
             'code::before': {
               content: 'none'

@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { ActorBuild } from "./actor-build";
 import { ActorObjectInspector } from "./console/actor-inspector";
-import { Icon, faBooks } from "@rivet-gg/icons";
 import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
 import {
 	ActorFeature,
@@ -15,8 +14,6 @@ import { Dd, Dl, Dt } from "../ui/typography";
 import { Flex } from "../ui/flex";
 import { formatDuration } from "../lib/formatter";
 import { toRecord } from "../lib/utils";
-import { DocsSheet } from "../docs-sheet";
-import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import equal from "fast-deep-equal";
 
@@ -52,7 +49,7 @@ export function ActorRuntime({ actor }: ActorRuntimeProps) {
 								{formatDuration(lifecycle.killTimeout || 0)}
 							</Dd>
 							{toRecord(tags).framework !==
-							ACTOR_FRAMEWORK_TAG_VALUE ? (
+								ACTOR_FRAMEWORK_TAG_VALUE && resources ? (
 								<>
 									<Dt>Resources</Dt>
 									<Dd>
@@ -73,6 +70,9 @@ export function ActorRuntime({ actor }: ActorRuntimeProps) {
 									data={runtime.environment}
 								/>
 							</Dd>
+
+							<Dt>Durable</Dt>
+							<Dd>{lifecycle.durable ? "Yes" : "No"}</Dd>
 						</Dl>
 					</Flex>
 				</div>
@@ -83,34 +83,6 @@ export function ActorRuntime({ actor }: ActorRuntimeProps) {
 			>
 				<ActorBuild actor={actor} />
 			</Suspense>
-			{features.includes(ActorFeature.Durability) && lifecycle ? (
-				<div className="px-4 mt-4 mb-4 ">
-					<div className="flex gap-1 items-center mb-2">
-						<h3 className=" font-semibold">
-							Durability & Rescheduling
-						</h3>
-						<DocsSheet
-							title="Durability & Rescheduling"
-							path="docs/durability"
-						>
-							<Button
-								variant="outline"
-								size="sm"
-								startIcon={<Icon icon={faBooks} />}
-							>
-								Documentation
-							</Button>
-						</DocsSheet>
-					</div>
-
-					<Flex gap="2" direction="col" className="text-xs">
-						<Dl>
-							<Dt>Durable?</Dt>
-							<Dd>{lifecycle.durable ? "Yes" : "No"}</Dd>
-						</Dl>
-					</Flex>
-				</div>
-			) : null}
 		</>
 	);
 }

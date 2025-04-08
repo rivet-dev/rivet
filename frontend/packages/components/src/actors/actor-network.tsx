@@ -49,6 +49,15 @@ export function ActorNetwork({ actor }: ActorNetworkProps) {
 								<Fragment key={name}>
 									{name}{" "}
 									<Dl className="mb-2 mt-2">
+										<Dt>Protocol</Dt>
+										<Dd>
+											<DiscreteCopyButton
+												size="xs"
+												value={port.protocol || ""}
+											>
+												{port.protocol}
+											</DiscreteCopyButton>
+										</Dd>
 										<Dt>Port</Dt>
 										<Dd>
 											<DiscreteCopyButton
@@ -70,7 +79,6 @@ export function ActorNetwork({ actor }: ActorNetworkProps) {
 										</Dd>
 										{port.url ? (
 											<>
-												{" "}
 												<Dt>URL</Dt>
 												<Dd>
 													<DiscreteCopyButton
@@ -83,8 +91,29 @@ export function ActorNetwork({ actor }: ActorNetworkProps) {
 												</Dd>
 											</>
 										) : null}
+
+										{port.routing?.host ? (
+											<>
+												<Dt>Host Routing</Dt>
+												<Dd>
+													<DiscreteCopyButton
+														size="xs"
+														className="max-w-full min-w-0"
+														value={JSON.stringify(
+															port.routing.host,
+														)}
+													>
+														<ActorObjectInspector
+															value={
+																port.routing
+																	.host
+															}
+														/>
+													</DiscreteCopyButton>
+												</Dd>
+											</>
+										) : null}
 									</Dl>
-									<ActorObjectInspector data={port} />
 								</Fragment>
 							))}
 						</Dd>

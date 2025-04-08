@@ -84,7 +84,7 @@ function Tags({ actor }: { actor: ActorAtom }) {
 						className="flex-nowrap empty:block overflow-hidden"
 						truncate={false}
 						tags={tags}
-						excludeBuiltIn="builds"
+						excludeBuiltIn="actors"
 					/>
 				</div>
 			}
@@ -92,6 +92,7 @@ function Tags({ actor }: { actor: ActorAtom }) {
 				<>
 					<p className="pb-2 font-bold text-xs">Tags</p>
 					<ActorTags
+						excludeBuiltIn="actors"
 						className="empty:block"
 						truncate={false}
 						tags={tags}

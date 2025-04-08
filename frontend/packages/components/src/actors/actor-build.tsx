@@ -25,12 +25,6 @@ export function ActorBuild({ actor }: ActorBuildProps) {
 			</div>
 			<Flex gap="2" direction="col" className="text-xs">
 				<Dl>
-					<Dt>Name</Dt>
-					<Dd>
-						<DiscreteCopyButton size="xs" value={data.name}>
-							{data.name}
-						</DiscreteCopyButton>
-					</Dd>
 					<Dt>ID</Dt>
 					<Dd>
 						<DiscreteCopyButton size="xs" value={data.id}>

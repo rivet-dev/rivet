@@ -10,6 +10,7 @@ import {
 	type SetStateMessage,
 } from "./actor-worker-schema";
 import { toast } from "sonner";
+import { ls } from "../../lib/utils";
 
 export type ReplCommand = {
 	logs: Log[];
@@ -152,6 +153,7 @@ export class ActorWorkerContainer {
 		this.#worker.postMessage({
 			type: "init",
 			...data,
+			token: ls.get("rivet-token")?.token,
 		} satisfies InitMessage);
 	}
 

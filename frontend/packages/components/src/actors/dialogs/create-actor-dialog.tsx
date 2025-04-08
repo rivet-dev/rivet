@@ -1,5 +1,4 @@
 import * as ActorCreateForm from "../form/actor-create-form";
-import type { DialogContentProps } from "../../hooks";
 import {
 	DialogDescription,
 	DialogFooter,
@@ -9,6 +8,7 @@ import {
 import { Flex } from "../../ui/flex";
 import { useAtomValue } from "jotai";
 import { createActorAtom } from "../actor-context";
+import type { DialogContentProps } from "../hooks";
 
 interface ContentProps extends DialogContentProps {}
 
@@ -24,7 +24,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					}
 					await create({
 						endpoint,
-						name: values.buildId,
+						id: values.buildId,
 						tags: Object.fromEntries(
 							values.tags.map((tag) => [tag.key, tag.value]),
 						),

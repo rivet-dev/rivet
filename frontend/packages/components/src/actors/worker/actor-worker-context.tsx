@@ -12,6 +12,7 @@ import { assertNonNullable } from "../../lib/utils";
 import type { Actor, ActorAtom } from "../actor-context";
 import { selectAtom } from "jotai/utils";
 import { useAtomValue } from "jotai";
+import { toast } from "sonner";
 
 export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
 	null,
@@ -60,6 +61,8 @@ export const ActorWorkerContextProvider = ({
 				notifyOnReconnect,
 				signal: ctrl.signal,
 			});
+		} else {
+			toast.dismiss("ac-ws-reconnect");
 		}
 
 		return () => {

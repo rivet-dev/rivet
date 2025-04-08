@@ -111,8 +111,13 @@ const createConsole = (id: string) => {
 
 let init: null | ({ ws: WebSocket; url: URL } & InspectData) = null;
 
-async function connect(endpoint: string) {
+async function connect(endpoint: string, opts?: { token?: string }) {
 	const url = new URL("inspect", endWithSlash(endpoint));
+
+	if (opts?.token) {
+		url.searchParams.set("token", opts.token);
+	}
+
 	const ws = new WebSocket(url);
 
 	await waitForOpen(ws);
@@ -155,7 +160,7 @@ async function connect(endpoint: string) {
 			type: "lost-connection",
 		});
 		setTimeout(() => {
-			connect(endpoint);
+			connect(endpoint, opts);
 		}, 500);
 	});
 
@@ -168,9 +173,10 @@ async function connect(endpoint: string) {
 }
 
 addEventListener("message", async (event) => {
-	const { success, data } = MessageSchema.safeParse(event.data);
+	const { success, error, data } = MessageSchema.safeParse(event.data);
 
 	if (!success) {
+		console.error("Malformed message", event.data, error);
 		return;
 	}
 
@@ -185,7 +191,7 @@ addEventListener("message", async (event) => {
 
 		try {
 			await Promise.race([
-				connect(data.endpoint),
+				connect(data.endpoint, data.token ? { token: data.token } : {}),
 				wait(5000).then(() => {
 					throw new Error("Timeout");
 				}),

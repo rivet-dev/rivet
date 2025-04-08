@@ -149,8 +149,6 @@ function Content() {
 				isFetchingNextPage: query.isFetchingNextPage,
 			});
 			if (query.status === "success" && query.data) {
-				const actors = query.data;
-
 				store.set(actorsAtom, (actors) => {
 					return query.data.map((actor) => {
 						const existing = actors.find((a) => a.id === actor.id);
@@ -176,6 +174,17 @@ function Content() {
 								queryClient,
 								destroyActorMutationOptions(),
 							);
+
+							set({
+								destroy: async () => {
+									await mutObserver.mutate({
+										projectNameId,
+										environmentNameId,
+										actorId: actor.id,
+									});
+								},
+								isDestroying: false,
+							});
 
 							mutObserver.subscribe((mutation) => {
 								set({
@@ -327,18 +336,22 @@ function Content() {
 		const mutationObserver = new MutationObserver(queryClient, {
 			mutationFn: (data: {
 				endpoint: string;
-				name: string;
+				id: string;
 				tags: Record<string, string>;
 				region?: string;
 				params?: Record<string, unknown>;
 			}) => {
 				const client = createClient(data.endpoint);
 
-				return client.create(data.name, {
+				const build = store
+					.get(actorBuildsAtom)
+					.find((build) => build.id === data.id);
+
+				return client.create(build?.tags.name || "", {
 					params: data.params,
 					create: {
 						tags: data.tags,
-						region: data.region,
+						region: data.region || undefined,
 					},
 				});
 			},
@@ -357,12 +370,17 @@ function Content() {
 			store.set(createActorAtom, (old) => {
 				return {
 					...old,
-					endpoint: manager
+					endpoint: manager?.network
 						? createActorEndpoint(manager.network) || null
 						: null,
 				};
 			});
 		});
+
+		store.set(createActorAtom, (old) => ({
+			...old,
+			create: mutationObserver.mutate,
+		}));
 
 		const unsub = mutationObserver.subscribe((mutation) => {
 			store.set(createActorAtom, (old) => ({

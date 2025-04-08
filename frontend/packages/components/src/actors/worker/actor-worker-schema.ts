@@ -16,6 +16,7 @@ const InitMessageSchema = z.object({
 	type: z.literal("init"),
 	endpoint: z.string(),
 	actorId: z.string(),
+	token: z.string().optional(),
 });
 
 const SetStateMessageSchema = z.object({

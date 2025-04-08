@@ -129,7 +129,7 @@ export const connectionEffect = atomEffect((get, set) => {
 						async create(values) {
 							const client = createClient(managerEndpoint);
 
-							return client.create(values.name, {
+							return client.create(values.id, {
 								params: values.params,
 								create: {
 									tags: values.tags,
