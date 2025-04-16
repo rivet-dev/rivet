@@ -73,17 +73,17 @@ export function EnvTokenClient() {
 
 			<ul>
 				<li>
-					<Link href="/docs/general/concepts/handling-game-tokens">
+					<Link href="https://rivet.gg/docs/tokens">
 						Handling game tokens
 					</Link>
 				</li>
 				<li>
-					<Link href="/docs/general/concepts/dev-tokens">
+					<Link href="https://rivet.gg/docs/tokens">
 						Development tokens
 					</Link>
 				</li>
 				<li>
-					<Link href="/docs/general/concepts/token-types#namespace-public">
+					<Link href="https://rivet.gg/docs/tokens">
 						Public tokens
 					</Link>
 				</li>
@@ -106,12 +106,12 @@ export function EnvTokenServer() {
 
 			<ul>
 				<li>
-					<Link href="/docs/general/concepts/handling-game-tokens">
+					<Link href="https://rivet.gg/docs/tokens">
 						Handling game tokens
 					</Link>
 				</li>
 				<li>
-					<Link href="/docs/general/concepts/dev-tokens">
+					<Link href="https://rivet.gg/docs/tokens">
 						Development tokens
 					</Link>
 				</li>

@@ -47,7 +47,7 @@ function DevelopmentTokenCard() {
 	return (
 		<DocsCard
 			title="Development token"
-			href="https://rivet.gg/docs/general/concepts/dev-tokens"
+			href="https://rivet.gg/docs/tokens"
 		>
 			<Text>
 				Development tokens are built to let you develop your project on
@@ -66,7 +66,7 @@ function PublicTokenCard() {
 		<>
 			<DocsCard
 				title="Public token"
-				href="https://rivet.gg/docs/general/concepts/handling-project-tokens#public-environment-tokens"
+				href="https://rivet.gg/docs/tokens"
 				footer={
 					<Button asChild>
 						<Link to="." search={{ modal: "public-token" }}>

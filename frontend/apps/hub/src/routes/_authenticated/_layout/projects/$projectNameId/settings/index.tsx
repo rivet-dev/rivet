@@ -6,7 +6,7 @@ function CloudTokenCard() {
 		<>
 			<DocsCard
 				title="Cloud token"
-				href="https://rivet.gg/docs/general/concepts/token-types#cloud"
+				href="https://rivet.gg/docs/tokens"
 				footer={
 					<Button asChild>
 						<Link to="." search={{ modal: "cloud-token" }}>
