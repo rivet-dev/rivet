@@ -2,7 +2,7 @@ import fs from 'fs';
 
 let backendPath = '../rivet';
 
-let errorsPath = 'src/docs/general/errors';
+let errorsPath = 'src/docs/errors.mdx';
 
 export async function generateErrors() {
   let errorPages = [];
@@ -63,7 +63,7 @@ export async function generateErrors() {
   }
 
   fs.writeFileSync(
-    'src/docs/general/errors.mdx',
+		errorPages,
     `# Errors \n${errorPages.map(({ doc }) => doc).join('\n\n')}`
   );
 
