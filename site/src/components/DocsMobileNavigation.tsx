@@ -10,7 +10,7 @@ function CoreNavigation() {}
 
 const links = [
 	{ href: "/docs", label: "Docs" },
-	{ href: "/product", label: "Product" },
+	//{ href: "/product", label: "Product" },
 	{ href: "/changelog", label: "Changelog" },
 	{ href: "/pricing", label: "Pricing" },
 ];
