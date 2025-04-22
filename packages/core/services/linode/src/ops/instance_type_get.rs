@@ -19,11 +19,11 @@ pub struct Output {
 pub async fn linode_instance_type_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	// Get hardware stats from linode and cache
 	let instance_types_res = ctx
-	.cache()
-	.ttl(util::duration::days(1))
-	.fetch_one_json("instance_types2", "linode", {
-		move |mut cache, key| {
-			async move {
+		.cache()
+		.ttl(util::duration::days(1))
+		.fetch_one_json("instance_types2", "linode", {
+			move |mut cache, key| {
+				async move {
 					// Build HTTP client
 					let client = client::Client::new(ctx.config(), None).await?;
 					let api_res = api::list_instance_types(&client).await?;

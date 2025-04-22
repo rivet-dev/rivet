@@ -261,7 +261,9 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::ClickHouse,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/service-log/db/service-log"),
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../services/service-log/db/service-log"
+			),
 			db_name: "db_service_log",
 		},
 	];

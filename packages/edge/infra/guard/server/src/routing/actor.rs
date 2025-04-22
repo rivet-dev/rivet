@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chirp_workflow::prelude::*;
 use cluster::types::GuardPublicHostname;
 use fdb_util::{FormalKey, SNAPSHOT};
@@ -172,34 +174,61 @@ async fn find_actor(
 	dc_id: Uuid,
 	path_to_forward: String,
 ) -> GlobalResult<Option<RouteTarget>> {
-	// Fetch ports
-	let proxied_ports = ctx
+	let actor_exists = ctx
 		.fdb()
 		.await?
 		.run(|tx, _mc| async move {
-			// NOTE: This is not SERIALIZABLE because we don't want to conflict with port updates
-			// and its not important if its slightly stale
-			let proxied_ports_key = pegboard::keys::actor::ProxiedPortsKey::new(*actor_id);
-			let raw = tx
-				.get(
-					&pegboard::keys::subspace().pack(&proxied_ports_key),
-					SNAPSHOT,
-				)
-				.await?;
-			if let Some(raw) = raw {
-				Ok(Some(proxied_ports_key.deserialize(&raw).map_err(|x| {
-					fdb::FdbBindingError::CustomError(x.into())
-				})?))
-			} else {
-				Ok(None)
-			}
+			let create_ts_key = pegboard::keys::actor::CreateTsKey::new(*actor_id);
+			let exists = tx
+				.get(&pegboard::keys::subspace().pack(&create_ts_key), SNAPSHOT)
+				.await?
+				.is_some();
+
+			Ok(exists)
 		})
 		.await?;
 
-	let Some(proxied_ports) = proxied_ports else {
-		// TODO: Check if actor exists
-		// TODO: Return error actor not found or not running
+	if !actor_exists {
 		return Ok(None);
+	}
+
+	// Create subs before checking for proxied ports
+	let mut ready_sub = ctx
+		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
+		.await?;
+	let mut fail_sub = ctx
+		.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id))
+		.await?;
+	let mut destroy_sub = ctx
+		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
+		.await?;
+
+	let proxied_ports = if let Some(proxied_ports) = fetch_proxied_ports(ctx, actor_id).await? {
+		proxied_ports
+	} else {
+		// Wait for ready, fail, or destroy
+		tokio::select! {
+			res = ready_sub.next() => { res?; },
+			res = fail_sub.next() => {
+				let msg = res?;
+				bail_with!(ACTOR_FAILED_TO_CREATE, error = msg.message);
+			}
+			res = destroy_sub.next() => {
+				res?;
+				bail_with!(ACTOR_FAILED_TO_CREATE, error = "Actor failed before reaching a ready state.");
+			}
+			// Ready timeout
+			_ = tokio::time::sleep(Duration::from_secs(15)) => {
+				return Ok(None);
+			}
+		}
+
+		// Fetch again after ready
+		let Some(proxied_ports) = fetch_proxied_ports(ctx, actor_id).await? else {
+			return Ok(None);
+		};
+
+		proxied_ports
 	};
 
 	// Find the port
@@ -217,4 +246,33 @@ async fn find_actor(
 		port: proxied_port.source,
 		path: path_to_forward,
 	}))
+}
+
+async fn fetch_proxied_ports(
+	ctx: &StandaloneCtx,
+	actor_id: &Uuid,
+) -> GlobalResult<Option<Vec<pegboard::keys::actor::ProxiedPort>>> {
+	// Fetch ports
+	ctx.fdb()
+		.await?
+		.run(|tx, _mc| async move {
+			let proxied_ports_key = pegboard::keys::actor::ProxiedPortsKey::new(*actor_id);
+			let raw = tx
+				.get(
+					&pegboard::keys::subspace().pack(&proxied_ports_key),
+					// NOTE: This is not SERIALIZABLE because we don't want to conflict with port updates
+					// and its not important if its slightly stale
+					SNAPSHOT,
+				)
+				.await?;
+			if let Some(raw) = raw {
+				Ok(Some(proxied_ports_key.deserialize(&raw).map_err(|x| {
+					fdb::FdbBindingError::CustomError(x.into())
+				})?))
+			} else {
+				Ok(None)
+			}
+		})
+		.await
+		.map_err(Into::into)
 }

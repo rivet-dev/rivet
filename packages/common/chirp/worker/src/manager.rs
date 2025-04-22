@@ -280,7 +280,7 @@ where
 		}
 	}
 
-	#[tracing::instrument(level="debug", skip(self, redis_chirp_conn))]
+	#[tracing::instrument(level = "debug", skip(self, redis_chirp_conn))]
 	async fn pull_redis_stream_msgs(
 		self: Arc<Self>,
 		redis_chirp_conn: &mut RedisPool,

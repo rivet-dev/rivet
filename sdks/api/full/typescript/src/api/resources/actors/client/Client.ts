@@ -412,7 +412,8 @@ export class Actors {
      *             },
      *             network: {
      *                 mode: "bridge",
-     *                 ports: {}
+     *                 ports: {},
+     *                 waitReady: true
      *             },
      *             resources: {
      *                 cpu: 1,

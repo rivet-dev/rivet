@@ -7,4 +7,5 @@ import * as Rivet from "../../../index";
 export interface CreateActorNetworkRequest {
     mode?: Rivet.actors.NetworkMode;
     ports?: Record<string, Rivet.actors.CreateActorPortRequest>;
+    waitReady?: boolean;
 }

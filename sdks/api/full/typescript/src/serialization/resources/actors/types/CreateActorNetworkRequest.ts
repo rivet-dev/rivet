@@ -14,11 +14,13 @@ export const CreateActorNetworkRequest: core.serialization.ObjectSchema<
 > = core.serialization.object({
     mode: NetworkMode.optional(),
     ports: core.serialization.record(core.serialization.string(), CreateActorPortRequest).optional(),
+    waitReady: core.serialization.property("wait_ready", core.serialization.boolean().optional()),
 });
 
 export declare namespace CreateActorNetworkRequest {
     export interface Raw {
         mode?: NetworkMode.Raw | null;
         ports?: Record<string, CreateActorPortRequest.Raw> | null;
+        wait_ready?: boolean | null;
     }
 }

@@ -207,7 +207,6 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 						port.port_name.clone(),
 						create_port_ingress(
 							s.actor_id,
-							is_connectable,
 							port,
 							unwrap!(GameGuardProtocol::from_repr(port.protocol.try_into()?)),
 							endpoint_type,
@@ -274,31 +273,24 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 
 pub(crate) fn create_port_ingress(
 	actor_id: Uuid,
-	is_connectable: bool,
 	port: &PortIngress,
 	protocol: GameGuardProtocol,
 	endpoint_type: EndpointType,
 	guard_public_hostname: &cluster::types::GuardPublicHostname,
 ) -> GlobalResult<Port> {
-	let (public_hostname, public_port, public_path) = if is_connectable {
-		let (hostname, path) = crate::util::build_actor_hostname_and_path(
-			actor_id,
-			&port.port_name,
-			protocol,
-			endpoint_type,
-			guard_public_hostname,
-		)?;
-		let port = port.ingress_port_number.try_into()?;
-		(Some(hostname), Some(port), path)
-	} else {
-		(None, None, None)
-	};
+	let (hostname, path) = crate::util::build_actor_hostname_and_path(
+		actor_id,
+		&port.port_name,
+		protocol,
+		endpoint_type,
+		guard_public_hostname,
+	)?;
 
 	Ok(Port {
 		internal_port: port.port_number.map(TryInto::try_into).transpose()?,
-		public_hostname,
-		public_port,
-		public_path,
+		public_hostname: Some(hostname),
+		public_port: Some(port.ingress_port_number.try_into()?),
+		public_path: path,
 		routing: Routing::GameGuard { protocol },
 	})
 }

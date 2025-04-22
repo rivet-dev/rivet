@@ -9058,6 +9058,8 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/ActorsCreateActorPortRequest'
+        wait_ready:
+          type: boolean
     ActorsCreateActorPortRequest:
       type: object
       properties:

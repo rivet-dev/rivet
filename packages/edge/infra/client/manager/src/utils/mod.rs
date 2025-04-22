@@ -261,7 +261,7 @@ pub fn now() -> i64 {
 }
 
 /// Generates a list of address URLs for a given build ID, with deterministic shuffling.
-/// 
+///
 /// This function accepts a build ID and returns an array of URLs, including both
 /// the seeded shuffling and the fallback address (if provided).
 pub async fn get_image_addresses(
@@ -360,13 +360,19 @@ pub async fn fetch_image_stream(
 	image_artifact_url_stub: &str,
 	image_fallback_artifact_url: Option<&str>,
 ) -> Result<impl Stream<Item = reqwest::Result<bytes::Bytes>>> {
-	let addresses = get_image_addresses(ctx, image_id, image_artifact_url_stub, image_fallback_artifact_url).await?;
+	let addresses = get_image_addresses(
+		ctx,
+		image_id,
+		image_artifact_url_stub,
+		image_fallback_artifact_url,
+	)
+	.await?;
 
 	let mut iter = addresses.into_iter();
 	while let Some(artifact_url) = iter.next() {
 		// Log the full URL we're attempting to download from
 		tracing::info!(?image_id, %artifact_url, "attempting to download image");
-		
+
 		match reqwest::get(&artifact_url)
 			.await
 			.and_then(|res| res.error_for_status())
@@ -374,7 +380,7 @@ pub async fn fetch_image_stream(
 			Ok(res) => {
 				tracing::info!(?image_id, %artifact_url, "successfully downloading image");
 				return Ok(res.bytes_stream());
-			},
+			}
 			Err(err) => {
 				tracing::warn!(
 					?image_id,

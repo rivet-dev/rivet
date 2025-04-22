@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use rivet_api::models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -149,6 +149,15 @@ pub async fn create(
 
 	tracing::info!(?actor_id, ?tags, "creating actor with tags");
 
+	let create_fut = if network.wait_ready.unwrap_or_default() {
+		std::future::pending().boxed()
+	} else {
+		let mut create_sub = ctx
+			.subscribe::<pegboard::workflows::actor::CreateComplete>(("actor_id", actor_id))
+			.await?;
+
+		async move { create_sub.next().await }.boxed()
+	};
 	let mut ready_sub = ctx
 		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
 		.await?;
@@ -228,8 +237,9 @@ pub async fn create(
 	.dispatch()
 	.await?;
 
-	// Wait for ready, fail, or destroy
+	// Wait for create/ready, fail, or destroy
 	tokio::select! {
+		res = create_fut => { res?; },
 		res = ready_sub.next() => { res?; },
 		res = fail_sub.next() => {
 			let msg = res?;

@@ -89,11 +89,12 @@ impl Actor {
 
 		// Get addresses using the shared utility function
 		let addresses = crate::utils::get_image_addresses(
-			ctx, 
-			self.config.image.id, 
-			&self.config.image.artifact_url_stub, 
-			self.config.image.fallback_artifact_url.as_deref()
-		).await?;
+			ctx,
+			self.config.image.id,
+			&self.config.image.artifact_url_stub,
+			self.config.image.fallback_artifact_url.as_deref(),
+		)
+		.await?;
 
 		// Log the URLs we're attempting to download from
 		tracing::info!(
@@ -125,11 +126,7 @@ impl Actor {
 					);
 
 					// Use curl to download directly to file
-					format!(
-						"curl -sSfL '{}' -o '{}'",
-						url,
-						docker_image_path.display()
-					)
+					format!("curl -sSfL '{}' -o '{}'", url, docker_image_path.display())
 				}
 
 				// Docker image with LZ4 compression
@@ -161,11 +158,7 @@ impl Actor {
 					);
 
 					// Use curl piped to tar for extraction
-					format!(
-						"curl -sSfL '{}' | tar -x -C '{}'",
-						url,
-						fs_path.display()
-					)
+					format!("curl -sSfL '{}' | tar -x -C '{}'", url, fs_path.display())
 				}
 
 				// OCI Bundle or JavaScript with LZ4 compression

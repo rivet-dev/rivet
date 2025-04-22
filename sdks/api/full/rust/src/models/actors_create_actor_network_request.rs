@@ -15,6 +15,8 @@ pub struct ActorsCreateActorNetworkRequest {
 	#[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
 	pub ports:
 		Option<::std::collections::HashMap<String, crate::models::ActorsCreateActorPortRequest>>,
+	#[serde(rename = "wait_ready", skip_serializing_if = "Option::is_none")]
+	pub wait_ready: Option<bool>,
 }
 
 impl ActorsCreateActorNetworkRequest {
@@ -22,6 +24,7 @@ impl ActorsCreateActorNetworkRequest {
 		ActorsCreateActorNetworkRequest {
 			mode: None,
 			ports: None,
+			wait_ready: None,
 		}
 	}
 }

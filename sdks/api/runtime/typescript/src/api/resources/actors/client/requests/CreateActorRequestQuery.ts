@@ -27,7 +27,8 @@ import * as Rivet from "../../../../index";
  *             },
  *             network: {
  *                 mode: "bridge",
- *                 ports: {}
+ *                 ports: {},
+ *                 waitReady: true
  *             },
  *             resources: {
  *                 cpu: 1,

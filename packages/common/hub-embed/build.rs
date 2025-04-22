@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let project_root = PathBuf::from(manifest_dir.clone()).join("../../..");
 	let hub_path = project_root.join("frontend/apps/hub");
-	
+
 	// Build hub
 	if std::env::var("RIVET_BUILD_HUB").map_or(false, |x| x == "1") {
 		// Check if yarn is installed
@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
 		assert!(output.status.success(), "hub build failed");
 	}
-	
+
 	// Copy dist directory to out_dir
 	let dist_path = hub_path.join("dist");
 	fs_extra::dir::copy(

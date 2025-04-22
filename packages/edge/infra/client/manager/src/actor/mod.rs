@@ -142,42 +142,43 @@ impl Actor {
 			.context("failed to create actor dir")?;
 
 		// Determine ahead of time if we need to set up CNI network
-		let needs_cni_network = matches!(
-			self.config.image.kind,
-			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle
-		) && matches!(self.config.network_mode, protocol::NetworkMode::Bridge);
-		
+		let needs_cni_network =
+			matches!(
+				self.config.image.kind,
+				protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle
+			) && matches!(self.config.network_mode, protocol::NetworkMode::Bridge);
+
 		// Parallelize two independent jobs:
-        //
-        // - `download_image` takes a long time to download. `download_image` is dependent on
-        //   `make_fs`
-        // - `setup_cni_network` takes a long time. `setup_cni_network` is dependent on
-        //   `bind_ports`.
+		//
+		// - `download_image` takes a long time to download. `download_image` is dependent on
+		//   `make_fs`
+		// - `setup_cni_network` takes a long time. `setup_cni_network` is dependent on
+		//   `bind_ports`.
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "starting parallel setup tasks");
 		let parallel_timer = std::time::Instant::now();
-		
+
 		let (_, ports) = tokio::try_join!(
 			async {
 				self.make_fs(&ctx).await?;
 				self.download_image(&ctx).await?;
-                Result::<(), anyhow::Error>::Ok(())
+				Result::<(), anyhow::Error>::Ok(())
 			},
 			async {
 				let ports = self.bind_ports(ctx).await?;
 				if needs_cni_network {
 					self.setup_cni_network(&ctx, &ports).await?;
 				}
-				
+
 				Ok(ports)
 			}
 		)?;
-		
+
 		let parallel_duration = parallel_timer.elapsed().as_secs_f64();
 		crate::metrics::SETUP_PARALLEL_TASKS_DURATION.observe(parallel_duration);
 		tracing::info!(
-			actor_id=?self.actor_id, 
-			generation=?self.generation, 
-			duration_seconds=parallel_duration, 
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			duration_seconds=parallel_duration,
 			"parallel setup tasks completed"
 		);
 

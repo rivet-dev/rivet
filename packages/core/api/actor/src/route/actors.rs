@@ -327,6 +327,7 @@ pub async fn create_deprecated(
 						})
 						.collect(),
 				),
+				wait_ready: None,
 			})),
 			resources: Some(Box::new(models::ActorsResources {
 				cpu: body.resources.cpu,

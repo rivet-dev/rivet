@@ -413,8 +413,9 @@ func (r *Runtime) String() string {
 }
 
 type CreateActorNetworkRequest struct {
-	Mode  *NetworkMode                       `json:"mode,omitempty"`
-	Ports map[string]*CreateActorPortRequest `json:"ports,omitempty"`
+	Mode      *NetworkMode                       `json:"mode,omitempty"`
+	Ports     map[string]*CreateActorPortRequest `json:"ports,omitempty"`
+	WaitReady *bool                              `json:"wait_ready,omitempty"`
 
 	_rawJSON json.RawMessage
 }

@@ -135,6 +135,7 @@ types:
     properties:
       mode: optional<localCommons.NetworkMode>
       ports: optional<map<string, CreateActorPortRequest>>
+      wait_ready: optional<boolean>
 
   CreateActorPortRequest:
     properties:

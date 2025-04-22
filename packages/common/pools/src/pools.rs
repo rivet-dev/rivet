@@ -201,7 +201,7 @@ impl Pools {
 		&self.0.sqlite
 	}
 
-	#[tracing::instrument(level="debug", skip_all)]
+	#[tracing::instrument(level = "debug", skip_all)]
 	async fn record_metrics_loop(self, token: CancellationToken) {
 		let cancelled = token.cancelled();
 		tokio::pin!(cancelled);

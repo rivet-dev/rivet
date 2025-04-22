@@ -36,7 +36,7 @@ pub async fn run_standalone(config: rivet_config::Config) -> GlobalResult<()> {
 	Ok(())
 }
 
-#[tracing::instrument(level="debug", skip_all)]
+#[tracing::instrument(level = "debug", skip_all)]
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 	let encoder = TextEncoder::new();
 

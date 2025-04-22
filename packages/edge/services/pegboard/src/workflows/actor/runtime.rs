@@ -153,7 +153,6 @@ async fn fetch_ports(ctx: &ActivityCtx, input: &FetchPortsInput) -> GlobalResult
 		.map(|row| {
 			let port = get::create_port_ingress(
 				input.actor_id,
-				true,
 				&row,
 				unwrap!(GameGuardProtocol::from_repr(row.protocol.try_into()?)),
 				endpoint_type,
