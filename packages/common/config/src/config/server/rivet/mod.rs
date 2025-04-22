@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
 	collections::HashMap,
-	net::{IpAddr, SocketAddr},
+	net::IpAddr,
 	path::PathBuf,
 };
 use url::Url;

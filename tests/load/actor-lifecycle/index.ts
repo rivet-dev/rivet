@@ -28,13 +28,14 @@ export default function () {
 
 	let actorId: string | undefined;
 	try {
+		let start = Date.now();
 		console.log("creating actor");
 
 		// Create actor
 		const { actor } = createActor(CONFIG);
 		actorId = actor.id;
 
-		console.log(`created actor ${actorId}`);
+		console.log(`created actor ${actorId} ${Date.now() - start}ms`);
 
 		// Get endpoint info
 		const port = actor.network.ports.http;
@@ -65,7 +66,7 @@ export default function () {
 		}
 	}
 
-	const sleepDuration = (start + 60_000 - Date.now()) / 1000;
-	console.log(`sleeping for ${sleepDuration}s`);
-	sleep(sleepDuration);
+	// const sleepDuration = (start + 60_000 - Date.now()) / 1000;
+	// console.log(`sleeping for ${sleepDuration}s`);
+	// sleep(sleepDuration);
 }

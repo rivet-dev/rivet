@@ -24,9 +24,8 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 56,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -44,7 +43,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
       },
       "fieldConfig": {
         "defaults": {
@@ -52,11 +51,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -65,6 +66,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 0,
             "pointSize": 5,
@@ -114,10 +116,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -167,13 +171,12 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-              "database": "otel",
               "table": "otel_traces"
             }
           },
           "pluginVersion": "4.0.6",
           "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND $__timeFilter(Timestamp)\r\n  AND ServiceName IN (${serviceName:singlequote})\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
+          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
           "refId": "A"
         }
       ],
@@ -183,7 +186,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
       },
       "description": "",
       "fieldConfig": {
@@ -192,11 +195,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -205,6 +210,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -255,10 +261,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -308,13 +316,12 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-              "database": "otel",
               "table": "otel_traces"
             }
           },
           "pluginVersion": "4.0.6",
           "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  quantile(0.99)(Duration)/1000000 AS p99\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND $__timeFilter(Timestamp)\r\n  AND ( Timestamp  >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${serviceName:singlequote})\r\n  AND ServiceName != 'loadgenerator'\r\nGROUP BY time, ServiceName\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
+          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  quantile(0.99)(Duration)/1000000 AS p99\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ( Timestamp  >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\nGROUP BY time, ServiceName\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
           "refId": "A"
         }
       ],
@@ -324,7 +331,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
       },
       "description": "",
       "fieldConfig": {
@@ -333,11 +340,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "bars",
             "fillOpacity": 24,
             "gradientMode": "none",
@@ -346,6 +355,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -395,11 +405,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "9.4.1",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -449,13 +460,12 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-              "database": "otel",
               "table": "otel_traces"
             }
           },
           "pluginVersion": "4.0.6",
           "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND $__timeFilter(Timestamp)\r\n  AND ServiceName IN (${serviceName:singlequote})\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
+          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
           "refId": "A"
         }
       ],
@@ -465,7 +475,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
       },
       "fieldConfig": {
         "defaults": {
@@ -484,8 +494,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -506,7 +515,7 @@
                 "value": [
                   {
                     "title": "__value.raw",
-                    "url": "/d/8klBUGfVk/otel-traces?${__url_time_range}﻿&﻿${serviceName:queryparam}﻿&var-trace_id=${__value.raw}"
+                    "url": "/d/8klBUGfVk/otel-traces?${__url_time_range}﻿&﻿${service_name:queryparam}﻿&var-trace_id=${__value.raw}"
                   }
                 ]
               }
@@ -520,7 +529,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 184
+                "value": 129
               },
               {
                 "id": "links",
@@ -628,12 +637,12 @@
           }
         ]
       },
-      "pluginVersion": "10.0.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
             "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse-traces"
+            "uid": "clickhouse"
           },
           "editorType": "sql",
           "format": 1,
@@ -662,13 +671,12 @@
               "mode": "list",
               "orderBy": [],
               "queryType": "table",
-              "database": "otel",
               "table": "otel_traces"
             }
           },
-          "pluginVersion": "4.0.6",
+          "pluginVersion": "4.8.2",
           "queryType": "table",
-          "rawSql": "SELECT\r\n  min(Timestamp) as timestamp,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${serviceName:singlequote})\r\n  AND ServiceName != 'loadgenerator'\r\n  AND $__timeFilter(Timestamp)\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
+          "rawSql": "SELECT\r\n  min(Timestamp) as Ts,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  argMin(SpanName, Timestamp) as `Span Name`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
           "refId": "A"
         }
       ],
@@ -678,7 +686,11 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       },
       "gridPos": {
         "h": 15,
@@ -687,6 +699,15 @@
         "y": 28
       },
       "id": 6,
+      "options": {
+        "spanFilters": {
+          "criticalPathOnly": false,
+          "matchesOnly": false,
+          "serviceNameOperator": "=",
+          "spanNameOperator": "="
+        }
+      },
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "builderOptions": {
@@ -785,7 +806,6 @@
               }
             ],
             "queryType": "traces",
-            "database": "otel",
             "table": "otel_traces"
           },
           "datasource": {
@@ -806,7 +826,7 @@
           },
           "pluginVersion": "4.0.6",
           "queryType": "traces",
-          "rawSql": "WITH '${trace_id}' as trace_id, (SELECT min(Start) FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_start, (SELECT max(End) + 1 FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_end SELECT \"TraceId\" as traceID, \"SpanId\" as spanID, \"ParentSpanId\" as parentSpanID, \"ServiceName\" as serviceName, \"SpanName\" as operationName, \"Timestamp\" as startTime, multiply(\"Duration\", 0.000001) as duration, arrayMap(key -> map('key', key, 'value',\"SpanAttributes\"[key]), mapKeys(\"SpanAttributes\")) as tags, arrayMap(key -> map('key', key, 'value',\"ResourceAttributes\"[key]), mapKeys(\"ResourceAttributes\")) as serviceTags FROM \"otel\".\"otel_traces\" WHERE traceID = trace_id AND startTime >= trace_start AND startTime <= trace_end AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime ) AND ( Duration > 0 ) ORDER BY Timestamp DESC, Duration DESC LIMIT 1000",
+          "rawSql": "WITH '${trace_id}' as trace_id, (SELECT min(Start) FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_start, (SELECT max(End) + 1 FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_end SELECT \"TraceId\" as traceID, \"SpanId\" as spanID, \"ParentSpanId\" as parentSpanID, \"ServiceName\" as serviceName, \"SpanName\" as operationName, \"Timestamp\" as startTime, multiply(\"Duration\", 0.000001) as duration, arrayMap(key -> map('key', key, 'value',\"SpanAttributes\"[key]), mapKeys(\"SpanAttributes\")) as tags, arrayMap(key -> map('key', key, 'value',\"ResourceAttributes\"[key]), mapKeys(\"ResourceAttributes\")) as serviceTags FROM \"otel\".\"otel_traces\" WHERE traceID = trace_id AND startTime >= trace_start AND startTime <= trace_end AND ( Duration > 0 ) ORDER BY Timestamp DESC, Duration DESC LIMIT 1000",
           "refId": "A"
         }
       ],
@@ -829,7 +849,11 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${datasource}"
+        "uid": "clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -840,6 +864,7 @@
       "id": 11,
       "options": {
         "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
         "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
@@ -848,6 +873,7 @@
         "sortOrder": "Descending",
         "wrapLogMessage": false
       },
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "builderOptions": {
@@ -878,12 +904,11 @@
             "mode": "list",
             "orderBy": [],
             "queryType": "logs",
-            "database": "otel",
             "table": "otel_logs"
           },
           "datasource": {
             "type": "grafana-clickhouse-datasource",
-            "uid": "${datasource}"
+            "uid": "clickhouse"
           },
           "editorType": "builder",
           "format": 2,
@@ -896,35 +921,28 @@
       "type": "logs"
     }
   ],
+  "preload": false,
   "refresh": "",
-  "revision": 1,
-  "schemaVersion": 38,
-  "style": "dark",
+  "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
-          "selected": false,
           "text": "ClickHouse",
           "value": "ClickHouse"
         },
-        "hide": 0,
         "includeAll": false,
         "label": "ClickHouse instance",
-        "multi": false,
         "name": "datasource",
         "options": [],
         "query": "grafana-clickhouse-datasource",
-        "queryValue": "",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "type": "datasource"
       },
       {
         "current": {
-          "selected": true,
           "text": [
             "All"
           ],
@@ -934,45 +952,113 @@
         },
         "datasource": {
           "type": "grafana-clickhouse-datasource",
-          "uid": "${datasource}"
+          "uid": "clickhouse"
         },
         "definition": "SELECT DISTINCT ServiceName FROM otel.otel_traces",
-        "hide": 0,
         "includeAll": true,
         "label": "Service Name",
         "multi": true,
-        "name": "serviceName",
+        "name": "service_name",
         "options": [],
         "query": "SELECT DISTINCT ServiceName FROM otel.otel_traces",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       },
       {
-        "allValue": "ALL",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
         "datasource": {
           "type": "grafana-clickhouse-datasource",
-          "uid": "${datasource}"
+          "uid": "clickhouse"
         },
         "definition": "SELECT DISTINCT TraceId FROM otel.otel_traces WHERE ParentSpanId = '' LIMIT 100",
-        "hide": 0,
         "includeAll": true,
-        "label": "Trace Id",
-        "multi": false,
+        "label": "Trace ID",
         "name": "trace_id",
         "options": [],
         "query": "SELECT DISTINCT TraceId FROM otel.otel_traces WHERE ParentSpanId = '' LIMIT 100",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "definition": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "description": "",
+        "includeAll": true,
+        "label": "Span",
+        "multi": true,
+        "name": "span_name",
+        "options": [],
+        "query": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "allValue": "'All'",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "definition": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "description": "",
+        "includeAll": true,
+        "label": "Ray ID",
+        "multi": true,
+        "name": "ray_id",
+        "options": [],
+        "query": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "allValue": "'All'",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "definition": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "description": "",
+        "includeAll": true,
+        "label": "Workflow ID",
+        "multi": true,
+        "name": "workflow_id",
+        "options": [],
+        "query": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
+        "refresh": 1,
+        "regex": "",
         "type": "query"
       }
     ]
@@ -982,9 +1068,9 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
-  "title": "Simple ClickHouse OTel Dashboard",
+  "timezone": "America/Los_Angeles",
+  "title": "Traces",
   "uid": "8klBUGfVk",
-  "version": 1,
+  "version": 5,
   "weekStart": ""
 }

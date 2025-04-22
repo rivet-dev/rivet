@@ -12,7 +12,11 @@ use pegboard_config::Config;
 use rand::seq::{IteratorRandom, SliceRandom};
 use service_discovery::ServiceDiscovery;
 use sqlx::sqlite::SqlitePool;
-use tokio::{fs, runtime::Runtime};
+use tokio::{
+	fs,
+	runtime::{Builder, Runtime},
+};
+use tracing_subscriber::prelude::*;
 use url::Url;
 
 mod actor;
@@ -34,16 +38,18 @@ struct Init {
 }
 
 fn main() -> Result<()> {
+	init_tracing();
+
 	let init = { Runtime::new()?.block_on(init())? };
 	let mut first = true;
 
 	// Retry loop
 	loop {
-		let rt = rivet_runtime::rt();
+		let rt = Builder::new_multi_thread().enable_all().build()?;
 
-		match rivet_runtime::run_with_rt(&rt, run(init.clone(), first)) {
-			Some(Ok(_)) => return Ok(()),
-			Some(Err(err)) => {
+		match rt.block_on(run(init.clone(), first)) {
+			Ok(_) => return Ok(()),
+			Err(err) => {
 				// Only restart if its a `RuntimeError`
 				let runtime_err = err.downcast::<ctx::RuntimeError>()?;
 
@@ -52,7 +58,6 @@ fn main() -> Result<()> {
 				// Destroy entire runtime to kill any background threads
 				rt.shutdown_background();
 			}
-			None => break Ok(()),
 		}
 
 		first = false;
@@ -227,4 +232,14 @@ async fn build_ws_url(config: &Config) -> Result<Url> {
 		.append_pair("flavor", &config.client.runner.flavor.to_string());
 
 	Ok(url)
+}
+
+fn init_tracing() {
+	tracing_subscriber::registry()
+		.with(
+			tracing_logfmt::builder()
+				.layer()
+				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+		)
+		.init();
 }

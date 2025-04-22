@@ -7,7 +7,7 @@ use hyper::{
 };
 use prometheus::{Encoder, TextEncoder};
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "debug", skip_all)]
 pub async fn run_standalone(port: u16) -> anyhow::Result<()> {
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
@@ -21,7 +21,7 @@ pub async fn run_standalone(port: u16) -> anyhow::Result<()> {
 		.map_err(Into::into)
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "debug", skip_all)]
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 	let encoder = TextEncoder::new();
 

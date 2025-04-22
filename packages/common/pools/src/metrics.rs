@@ -24,14 +24,14 @@ lazy_static::lazy_static! {
 	).unwrap();
 	pub static ref SQL_QUERY_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"sql_query_duration",
-		"Total number of queries.",
+		"Total duration of sql query.",
 		&["action", "context_name", "location"],
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 	pub static ref SQL_ACQUIRE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"sql_acquire_duration",
-		"Total number of queries.",
+		"Total duration to acquire an sql connection.",
 		&["action", "context_name", "location"],
 		BUCKETS.to_vec(),
 		*REGISTRY,

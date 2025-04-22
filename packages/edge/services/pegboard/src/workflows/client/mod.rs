@@ -155,6 +155,9 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								}
 							}
 						}
+						protocol::ToServer::AckCommands { last_command_idx } => {
+							ctx.activity(AckCommandsInput { last_command_idx }).await?;
+						},
 					}
 				}
 				Some(Main::Command(command)) => {
@@ -514,7 +517,7 @@ async fn process_init(
 ) -> GlobalResult<ProcessInitOutput> {
 	let pool = &ctx.sqlite().await?;
 
-	let ((last_event_idx,), commands) = tokio::try_join!(
+	let ((last_event_idx,), commands, _) = tokio::try_join!(
 		sql_fetch_one!(
 			[ctx, (i64,), pool]
 			"
@@ -535,6 +538,17 @@ async fn process_init(
 			",
 			input.last_command_idx,
 		),
+		// TODO: Added while sqlite flushing system is in place. As the database grows, flushes get slower
+		// and slower.
+		sql_execute!(
+			[ctx, pool]
+			"
+			DELETE
+			FROM commands
+			WHERE idx <= ?
+			",
+			input.last_command_idx,
+		),
 	)?;
 
 	Ok(ProcessInitOutput {
@@ -549,6 +563,34 @@ async fn process_init(
 			})
 			.collect::<GlobalResult<_>>()?,
 	})
+}
+
+
+// TODO: Added while sqlite flushing system is in place. As the database grows, flushes get slower
+// and slower.
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct AckCommandsInput {
+	last_command_idx: i64,
+}
+
+#[activity(AckCommands)]
+async fn ack_commands(
+	ctx: &ActivityCtx,
+	input: &AckCommandsInput,
+) -> GlobalResult<()> {
+	let pool = &ctx.sqlite().await?;
+	
+	sql_execute!(
+		[ctx, pool]
+		"
+		DELETE
+		FROM commands
+		WHERE idx <= ?
+		",
+		input.last_command_idx,
+	).await?;
+
+	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -582,27 +624,29 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 	)
 	.await?;
 
-	// TODO: Parallelize
-	for event in &input.events {
-		let res = sql_execute!(
-			[ctx, @tx &mut tx]
-			"
-			INSERT INTO events (idx, payload, ack_ts)
-			VALUES (?, jsonb(?), ?)
-			ON CONFLICT (idx) DO NOTHING
-			",
-			event.index,
-			&event.inner,
-			util::timestamp::now(),
-		)
-		.await?;
+	// TODO: Disabled while sqlite flushing system is in place. As the database grows, flushes get slower and
+	// slower.
+	// // TODO: Parallelize
+	// for event in &input.events {
+	// 	let res = sql_execute!(
+	// 		[ctx, @tx &mut tx]
+	// 		"
+	// 		INSERT INTO events (idx, payload, ack_ts)
+	// 		VALUES (?, jsonb(?), ?)
+	// 		ON CONFLICT (idx) DO NOTHING
+	// 		",
+	// 		event.index,
+	// 		&event.inner,
+	// 		util::timestamp::now(),
+	// 	)
+	// 	.await?;
 
-		if res.rows_affected() == 0 {
-			metrics::CLIENT_DUPLICATE_EVENT
-				.with_label_values(&[&input.client_id.to_string(), &event.index.to_string()])
-				.inc();
-		}
-	}
+	// 	if res.rows_affected() == 0 {
+	// 		metrics::CLIENT_DUPLICATE_EVENT
+	// 			.with_label_values(&[&input.client_id.to_string(), &event.index.to_string()])
+	// 			.inc();
+	// 	}
+	// }
 
 	tx.commit().await?;
 

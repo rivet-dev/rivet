@@ -48,6 +48,7 @@ RUN \
     --mount=type=cache,target=/root/.npm,id=universal-user-npm \
     --mount=type=cache,target=/root/.yarn,id=universal-user-yarn \
     RUSTFLAGS="--cfg tokio_unstable" RIVET_BUILD_HUB=0 cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-guard --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
+    # cargo install --locked tokio-console && \
     mkdir /app/dist/ && \
     cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-guard target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
@@ -101,7 +102,7 @@ CMD ["/usr/bin/rivet-server"]
 # MARK: Edge server
 FROM server-full-base AS edge-server
 
-COPY --from=builder /app/dist/rivet-edge-server /usr/bin/rivet-edge-server
+COPY --from=builder /app/dist/rivet-edge-server /usr/bin
 
 CMD ["/usr/bin/rivet-edge-server"]
 
@@ -116,13 +117,13 @@ CMD ["/usr/bin/rivet-guard"]
 FROM --platform=linux/amd64 debian:12.9-slim AS base-runner
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
-    apt-get install -y ca-certificates openssl curl && \
+    apt-get install -y ca-certificates openssl curl tini && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # MARK: Runner (Full)
 FROM --platform=linux/amd64 base-runner AS client-full
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-runner /app/dist/rivet-container-runner /usr/local/bin/
-ENTRYPOINT ["rivet-client"]
+ENTRYPOINT ["/usr/bin/tini", "--", "rivet-client"]
 
 # MARK: Runner (Isolate V8)
 FROM --platform=linux/amd64 base-runner AS isolate-v8-runner

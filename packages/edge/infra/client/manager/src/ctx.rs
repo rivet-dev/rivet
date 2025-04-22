@@ -44,6 +44,7 @@ use crate::{
 };
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
+const ACK_INTERVAL: Duration = Duration::from_secs(60 * 5);
 
 #[derive(thiserror::Error, Debug)]
 pub enum RuntimeError {
@@ -260,9 +261,35 @@ impl Ctx {
 			}
 		});
 
+		// Start ack thread to acknowledge commands for the client workflow.
+		// TODO: This is a temporary addition that allows the client workflow to permanently delete command
+		// rows to reduce DB size.
+		let self2 = self.clone();
+		let ack_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+			loop {
+				tokio::time::sleep(ACK_INTERVAL).await;
+
+				let (last_command_idx,) = utils::sql::query(|| async {
+					sqlx::query_as::<_, (i64,)>(indoc!(
+						"
+						SELECT last_command_idx FROM state
+						",
+					))
+					.fetch_one(&mut *self2.sql().await?)
+					.await
+				})
+				.await?;
+
+				self2
+					.send_packet(protocol::ToServer::AckCommands { last_command_idx })
+					.await?;
+			}
+		});
+
 		tokio::try_join!(
 			async { runner_socket.await? },
 			async { ping_thread.await? },
+			async { ack_thread.await? },
 			self.receive_messages(rx),
 		)?;
 

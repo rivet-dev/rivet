@@ -36,19 +36,19 @@ pub fn create_routing_function(
 				let dc = unwrap!(dc_res.datacenters.first());
 
 				// Try to route to actor
-				if let Ok(Some(routing_result)) =
-					actor::route_actor_request(&ctx, host, path, dc_id).await
-				{
-					return Ok(RoutingResponse::Ok(routing_result));
+				match actor::route_actor_request(&ctx, host, path, dc_id).await {
+					Ok(Some(routing_result)) => return Ok(RoutingResponse::Ok(routing_result)),
+					Ok(None) => {}
+					Err(err) => tracing::debug!(?err),
 				}
 
 				// Try to route to API
 				//
 				// IMPORTANT: Route this last, since in dev this will match all hostnames
-				if let Ok(Some(routing_result)) =
-					api::route_api_request(&ctx, host, path, &dc.name_id, dc_id).await
-				{
-					return Ok(RoutingResponse::Ok(routing_result));
+				match api::route_api_request(&ctx, host, path, &dc.name_id, dc_id).await {
+					Ok(Some(routing_result)) => return Ok(RoutingResponse::Ok(routing_result)),
+					Ok(None) => {}
+					Err(err) => tracing::debug!(?err),
 				}
 
 				// No matching route found

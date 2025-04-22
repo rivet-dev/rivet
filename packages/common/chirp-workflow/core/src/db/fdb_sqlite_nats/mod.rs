@@ -2360,10 +2360,13 @@ impl Database for DatabaseFdbSqliteNats {
 		// Block while flushing databases in order ensure listeners have the latest data
 		self.pools
 			.sqlite_manager()
-			.flush(vec![
-				sqlite::db_name_internal(from_workflow_id),
-				crate::db::sqlite_db_name_data(from_workflow_id),
-			])
+			.flush(
+				vec![
+					sqlite::db_name_internal(from_workflow_id),
+					crate::db::sqlite_db_name_data(from_workflow_id),
+				],
+				false,
+			)
 			.await?;
 
 		if let Err(err) = self
@@ -2460,10 +2463,13 @@ impl Database for DatabaseFdbSqliteNats {
 		// Block while flushing databases in order ensure sub workflow have the latest data
 		self.pools
 			.sqlite_manager()
-			.flush(vec![
-				sqlite::db_name_internal(workflow_id),
-				crate::db::sqlite_db_name_data(workflow_id),
-			])
+			.flush(
+				vec![
+					sqlite::db_name_internal(workflow_id),
+					crate::db::sqlite_db_name_data(workflow_id),
+				],
+				false,
+			)
 			.await?;
 
 		match self
@@ -2718,10 +2724,13 @@ impl Database for DatabaseFdbSqliteNats {
 		// Block while flushing databases in order ensure subscribers will have the latest data
 		self.pools
 			.sqlite_manager()
-			.flush(vec![
-				sqlite::db_name_internal(from_workflow_id),
-				crate::db::sqlite_db_name_data(from_workflow_id),
-			])
+			.flush(
+				vec![
+					sqlite::db_name_internal(from_workflow_id),
+					crate::db::sqlite_db_name_data(from_workflow_id),
+				],
+				false,
+			)
 			.await?;
 
 		let pool = &self
@@ -3251,10 +3260,13 @@ async fn flush_handler(pools: rivet_pools::Pools, mut flush_rx: mpsc::UnboundedR
 
 		if let Err(err) = pools
 			.sqlite_manager()
-			.flush(vec![
-				sqlite::db_name_internal(workflow_id),
-				crate::db::sqlite_db_name_data(workflow_id),
-			])
+			.flush(
+				vec![
+					sqlite::db_name_internal(workflow_id),
+					crate::db::sqlite_db_name_data(workflow_id),
+				],
+				true,
+			)
 			.await
 		{
 			// TODO: Somehow forward the error to the workflow so it can die

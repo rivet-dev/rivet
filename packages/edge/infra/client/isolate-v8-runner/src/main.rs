@@ -19,7 +19,6 @@ use tokio::{
 	sync::{mpsc, watch, RwLock},
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
-use tracing_subscriber::prelude::*;
 use utils::FdbPool;
 use uuid::Uuid;
 
@@ -53,8 +52,6 @@ async fn main_inner() -> Result<()> {
 	provider
 		.install_default()
 		.expect("Failed to install crypto provider");
-
-	init_tracing();
 
 	let working_path = std::env::args()
 		.skip(1)
@@ -336,14 +333,4 @@ fn cleanup_thread(
 		Err(_) => fatal_tx.send(()).expect("receiver cannot be dropped"),
 		_ => {}
 	}
-}
-
-fn init_tracing() {
-	tracing_subscriber::registry()
-		.with(
-			tracing_logfmt::builder()
-				.layer()
-				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
-		)
-		.init();
 }

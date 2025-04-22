@@ -206,6 +206,8 @@ async fn find_actor(
 	let proxied_ports = if let Some(proxied_ports) = fetch_proxied_ports(ctx, actor_id).await? {
 		proxied_ports
 	} else {
+		tracing::info!(?actor_id, "waiting for actor to become ready");
+
 		// Wait for ready, fail, or destroy
 		tokio::select! {
 			res = ready_sub.next() => { res?; },
@@ -230,6 +232,8 @@ async fn find_actor(
 
 		proxied_ports
 	};
+
+	tracing::info!(?actor_id, "actor ready");
 
 	// Find the port
 	let Some(proxied_port) = proxied_ports.iter().find(|pp| pp.port_name == port_name) else {

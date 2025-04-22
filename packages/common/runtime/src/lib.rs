@@ -9,15 +9,15 @@ static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
 
 /// Returns `None` if the runtime was shut down manually.
 pub fn run<F: Future>(f: F) -> Option<F::Output> {
-	let notify = Arc::new(Notify::new());
-	SHUTDOWN
-		.set(notify.clone())
-		.expect("more than one runtime running");
-
 	// Build runtime
 	let mut rt_builder = build_tokio_runtime_builder();
 	let rt = rt_builder.build().expect("failed to build tokio runtime");
 	let output = rt.block_on(async move {
+		let notify = SHUTDOWN
+			.get_or_init(|| std::future::ready(Arc::new(Notify::new())))
+			.await
+			.clone();
+
 		// Must be called from within a tokio context
 		let _guard = otel::init_tracing_subscriber();
 
@@ -31,37 +31,6 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 	});
 
 	output
-}
-
-/// Advanced use function. Prefer `run`.
-/// Returns `None` if the runtime was shut down manually.
-pub fn run_with_rt<F: Future>(rt: &tokio::runtime::Runtime, f: F) -> Option<F::Output> {
-	let notify = Arc::new(Notify::new());
-	SHUTDOWN
-		.set(notify.clone())
-		.expect("more than one runtime running");
-
-	// Build runtime
-	let output = rt.block_on(async move {
-		// Must be called from within a tokio context
-		let _guard = otel::init_tracing_subscriber();
-
-		tokio::select! {
-			_ = notify.notified() => {
-				tracing::info!("shutting down runtime");
-				None
-			},
-			res = f => Some(res),
-		}
-	});
-
-	output
-}
-
-/// Advanced use function. Prefer `run`.
-pub fn rt() -> tokio::runtime::Runtime {
-	let mut rt_builder = build_tokio_runtime_builder();
-	rt_builder.build().expect("failed to build tokio runtime")
 }
 
 /// Shuts down the entire rivet runtime, if one is running. This future will never resolve.
@@ -97,6 +66,58 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	rt_builder.on_thread_stop(move || {
 		metrics::TOKIO_THREAD_COUNT.dec();
 	});
+
+	if env::var("TOKIO_RUNTIME_METRICS").is_ok() {
+		rt_builder.on_before_task_poll(|_| {
+			let metrics = tokio::runtime::Handle::current().metrics();
+			let buckets = metrics.poll_time_histogram_num_buckets();
+
+			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
+
+			for worker in 0..metrics.num_workers() {
+				metrics::TOKIO_WORKER_OVERFLOW_COUNT
+					.with_label_values(&[&worker.to_string()])
+					.set(metrics.worker_overflow_count(worker) as i64);
+				metrics::TOKIO_WORKER_LOCAL_QUEUE_DEPTH
+					.with_label_values(&[&worker.to_string()])
+					.set(metrics.worker_local_queue_depth(worker) as i64);
+
+				use rivet_metrics::prometheus::core::Metric;
+				// Has some sort of internal lock, must read data before loop
+				let prom_buckets = {
+					metrics::TOKIO_TASK_POLL_DURATION
+						.metric()
+						.get_histogram()
+						.get_bucket()
+						.iter()
+						.map(|bucket| bucket.get_cumulative_count())
+						.collect::<Vec<_>>()
+				};
+
+				for (bucket, prom_bucket_count) in (0..buckets).zip(prom_buckets) {
+					let range = metrics.poll_time_histogram_bucket_range(bucket);
+					let count = metrics.poll_time_histogram_bucket_count(worker, bucket);
+					let diff = count.saturating_sub(prom_bucket_count);
+
+					for _ in 0..diff {
+						metrics::TOKIO_TASK_POLL_DURATION.observe(range.start.as_secs_f64());
+					}
+				}
+			}
+		});
+		
+		rt_builder.metrics_poll_time_histogram_configuration(
+			tokio::runtime::HistogramConfiguration::log(
+				tokio::runtime::LogHistogram::builder()
+					.min_value(Duration::from_micros(20))
+					.max_value(Duration::from_millis(32))
+					.precision_exact(0)
+					.max_buckets(20)
+					.unwrap(),
+			),
+		);
+		rt_builder.enable_metrics_poll_time_histogram();
+	}
 
 	if let Ok(thread_stack_size) = env::var("TOKIO_THREAD_STACK_SIZE") {
 		rt_builder.thread_stack_size(thread_stack_size.parse().unwrap());

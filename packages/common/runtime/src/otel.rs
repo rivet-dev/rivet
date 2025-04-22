@@ -89,7 +89,7 @@ fn init_meter_provider() -> SdkMeterProvider {
 }
 
 // TODO: Ugly function
-// Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
+/// Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing.
 pub fn init_tracing_subscriber() -> Option<OtelGuard> {
 	let registry = tracing_subscriber::registry();
 
