@@ -27,7 +27,7 @@ pub struct StatusQuery {
 #[derive(Debug, Serialize, Deserialize)]
 enum StatusQueryBuild {
 	#[serde(rename = "ws-isolate")]
-	WsIsoalte,
+	WsIsolate,
 	#[serde(rename = "ws-container")]
 	WsContainer,
 }
@@ -35,12 +35,13 @@ enum StatusQueryBuild {
 impl StatusQueryBuild {
 	fn build_name(&self) -> &str {
 		match self {
-			StatusQueryBuild::WsIsoalte => "ws-isolate",
+			StatusQueryBuild::WsIsolate => "ws-isolate",
 			StatusQueryBuild::WsContainer => "ws-container",
 		}
 	}
 }
 
+#[tracing::instrument(skip_all, fields(?query))]
 pub async fn status(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
@@ -189,7 +190,7 @@ pub async fn status(
 				..Default::default()
 			})),
 			resources: match &query.build {
-				StatusQueryBuild::WsIsoalte => None,
+				StatusQueryBuild::WsIsolate => None,
 				StatusQueryBuild::WsContainer => Some(Box::new(models::ActorsResources {
 					cpu: 100,
 					memory: 128,
@@ -201,8 +202,12 @@ pub async fn status(
 		Some(&system_test_env),
 		None,
 	)
+	.instrument(tracing::info_span!("actor create request"))
 	.await?;
 	let actor_id = res.actor.id;
+
+	tracing::info!(?actor_id, "created actor");
+
 	let port = unwrap!(res.actor.network.ports.get("http"), "missing http protocol");
 
 	let protocol = match port.protocol {

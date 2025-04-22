@@ -33,6 +33,37 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 	output
 }
 
+/// Advanced use function. Prefer `run`.
+/// Returns `None` if the runtime was shut down manually.
+pub fn run_with_rt<F: Future>(rt: &tokio::runtime::Runtime, f: F) -> Option<F::Output> {
+	let notify = Arc::new(Notify::new());
+	SHUTDOWN
+		.set(notify.clone())
+		.expect("more than one runtime running");
+
+	// Build runtime
+	let output = rt.block_on(async move {
+		// Must be called from within a tokio context
+		let _guard = otel::init_tracing_subscriber();
+
+		tokio::select! {
+			_ = notify.notified() => {
+				tracing::info!("shutting down runtime");
+				None
+			},
+			res = f => Some(res),
+		}
+	});
+
+	output
+}
+
+/// Advanced use function. Prefer `run`.
+pub fn rt() -> tokio::runtime::Runtime {
+	let mut rt_builder = build_tokio_runtime_builder();
+	rt_builder.build().expect("failed to build tokio runtime")
+}
+
 /// Shuts down the entire rivet runtime, if one is running. This future will never resolve.
 pub async fn shutdown() {
 	if let Some(shutdown) = SHUTDOWN.get() {

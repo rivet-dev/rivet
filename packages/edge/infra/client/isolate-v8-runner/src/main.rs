@@ -42,8 +42,12 @@ const PING_INTERVAL: Duration = Duration::from_secs(1);
 // 7 day logs retention
 const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+	rivet_runtime::run(main_inner()).transpose()?;
+	Ok(())
+}
+
+async fn main_inner() -> Result<()> {
 	// Initialize with a default CryptoProvider for rustls
 	let provider = rustls::crypto::ring::default_provider();
 	provider

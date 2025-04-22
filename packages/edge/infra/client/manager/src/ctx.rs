@@ -176,7 +176,7 @@ impl Ctx {
 
 	pub async fn run(
 		self: &Arc<Self>,
-		rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
 		// Rebuild isolate runner from db before starting runner socket
 		self.rebuild_isolate_runner().await?;
@@ -222,20 +222,6 @@ impl Ctx {
 			}
 		});
 
-		// Start ping thread
-		let self2 = self.clone();
-		let ping_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
-			loop {
-				tokio::time::sleep(PING_INTERVAL).await;
-				self2
-					.tx
-					.lock()
-					.await
-					.send(Message::Ping(Vec::new()))
-					.await?;
-			}
-		});
-
 		// Send init packet
 		{
 			let (last_command_idx, last_workflow_id) = utils::sql::query(|| async {
@@ -258,11 +244,90 @@ impl Ctx {
 			.await?;
 		}
 
+		self.receive_init(&mut rx).await?;
+
+		// Start ping thread after init packet is received because ping denotes this client as "ready"
+		let self2 = self.clone();
+		let ping_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+			loop {
+				tokio::time::sleep(PING_INTERVAL).await;
+				self2
+					.tx
+					.lock()
+					.await
+					.send(Message::Ping(Vec::new()))
+					.await?;
+			}
+		});
+
 		tokio::try_join!(
 			async { runner_socket.await? },
 			async { ping_thread.await? },
 			self.receive_messages(rx),
 		)?;
+
+		Ok(())
+	}
+
+	async fn receive_init(
+		self: &Arc<Self>,
+		rx: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+	) -> Result<()> {
+		// Ignore events until we receive an init packet. This is safe because init packets contain
+		// information allowing them to resynchronize the client and server
+		loop {
+			if let Some(msg) = rx.next().await {
+				match msg.map_err(RuntimeError::SocketFailed)? {
+					Message::Binary(buf) => {
+						metrics::PACKET_RECV_TOTAL.with_label_values(&[]).inc();
+
+						let packet = protocol::ToClient::deserialize(&buf)?;
+
+						if let protocol::ToClient::Init {
+							last_event_idx,
+							workflow_id,
+						} = packet
+						{
+							// Reset all state if workflow id changed
+							self.reset(workflow_id).await?;
+
+							// Send out all missed events
+							self.rebroadcast(last_event_idx).await?;
+
+							// Rebuild state only after the init packet is received and processed so that we
+							// don't emit any new events before the missed events are rebroadcast
+							self.rebuild(workflow_id).await?;
+
+							break;
+						} else {
+							tracing::debug!(
+								?packet,
+								"did not receive init as first packet, ignoring"
+							);
+						}
+					}
+					Message::Close(Some(close_frame)) => {
+						return Err(RuntimeError::SocketClosed(
+							close_frame.code,
+							close_frame.reason.to_string(),
+						)
+						.into())
+					}
+					Message::Close(None) => {
+						return Err(RuntimeError::SocketClosed(
+							CloseCode::Abnormal,
+							"no close frame".to_string(),
+						)
+						.into())
+					}
+					msg => {
+						tracing::warn!(?msg, "unexpected init message, ignoring");
+					}
+				}
+			} else {
+				return Err(RuntimeError::StreamClosed.into());
+			}
+		}
 
 		Ok(())
 	}
@@ -308,19 +373,9 @@ impl Ctx {
 		tracing::debug!(?packet, "received packet");
 
 		match packet {
-			protocol::ToClient::Init {
-				last_event_idx,
-				workflow_id,
-			} => {
-				// Reset all state if workflow id changed
-				self.reset(workflow_id).await?;
-
-				// Send out all missed events
-				self.rebroadcast(last_event_idx).await?;
-
-				// Rebuild state only after the init packet is received and processed so that we don't emit
-				// any new events before the missed events are rebroadcast
-				self.rebuild(workflow_id).await?;
+			protocol::ToClient::Init { .. } => {
+				metrics::SECOND_INIT.with_label_values(&[]).inc();
+				bail!("unexpected second init packet");
 			}
 			protocol::ToClient::Commands(commands) => {
 				for command in commands {
@@ -699,6 +754,7 @@ impl Ctx {
 			return Ok(());
 		}
 
+		// NOTE: We don't use the event sender here because it is not set up before `.rebuild` is called
 		self.send_packet(protocol::ToServer::Events(events)).await
 	}
 

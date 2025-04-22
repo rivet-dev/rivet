@@ -44,6 +44,13 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 
+	pub static ref SECOND_INIT: IntCounterVec = register_int_counter_vec_with_registry!(
+		"second_init",
+		"Total number of second init packets encountered.",
+		&[],
+		*REGISTRY,
+	).unwrap();
+
 	// Actor setup step duration metrics
 	pub static ref SETUP_TOTAL_DURATION: Histogram = register_histogram_with_registry!(
 		"actor_setup_total_duration_seconds",

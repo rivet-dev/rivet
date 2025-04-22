@@ -90,8 +90,6 @@ impl Actor {
 		})
 		.await?;
 
-		tracing::debug!(actor_id=?self.actor_id, generation=?self.generation, "start query ran");
-
 		ctx.event(protocol::Event::ActorStateUpdate {
 			actor_id: self.actor_id,
 			generation: self.generation,

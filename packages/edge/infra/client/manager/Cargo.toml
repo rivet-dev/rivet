@@ -19,6 +19,7 @@ bytes = "1.0"
 futures-util = { version = "0.3" }
 hyper = { version = "0.14", features = ["server", "http1", "tcp", "stream"] }
 indoc = "2.0"
+json5.workspace = true
 lazy_static = "1.4"
 nix.workspace = true
 notify = { version = "6.1.1", default-features = false, features = ["serde", "fsevent-sys"] }
@@ -29,6 +30,7 @@ rand = "0.8"
 rand_chacha = "0.3.1"
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls", "json"] }
 rivet-logs.workspace = true
+rivet-runtime.workspace = true
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 serde_yaml = "0.9.34"
@@ -36,15 +38,14 @@ service-discovery.workspace = true
 sysinfo = "0.31.4" 
 tempfile = "3.2"
 thiserror = "1.0"
-tokio.workspace = true
 tokio-tungstenite = "0.23.1"
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
+tokio.workspace = true
 tracing-logfmt.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
-json5.workspace = true
 
 [dependencies.sqlx]
 workspace = true

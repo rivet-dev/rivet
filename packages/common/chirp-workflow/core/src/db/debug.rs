@@ -184,6 +184,7 @@ pub struct SignalData {
 	pub tags: Option<serde_json::Value>,
 	pub workflow_id: Option<Uuid>,
 	pub create_ts: i64,
+	pub ack_ts: Option<i64>,
 	pub body: serde_json::Value,
 	pub state: SignalState,
 }

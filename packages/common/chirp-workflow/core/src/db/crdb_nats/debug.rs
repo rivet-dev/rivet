@@ -855,6 +855,7 @@ impl From<SignalRow> for SignalData {
 			tags: row.tags,
 			workflow_id: row.workflow_id,
 			create_ts: row.create_ts,
+			ack_ts: row.ack_ts,
 			body: row.body,
 			state,
 		}

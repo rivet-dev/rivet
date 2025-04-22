@@ -29,7 +29,7 @@ fn main() -> GlobalResult<()> {
 		.install_default()
 		.expect("Failed to install crypto provider");
 
-	rivet_runtime::run(async { main_inner().await }).transpose()?;
+	rivet_runtime::run(main_inner()).transpose()?;
 	Ok(())
 }
 

@@ -290,9 +290,19 @@ impl DatabaseFdbSqliteNats {
 				None
 			};
 
+			let ack_ts = if let Some(ack_ts_entry) = ack_ts_entry {
+				Some(
+					ack_ts_key
+						.deserialize(&ack_ts_entry)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				)
+			} else {
+				None
+			};
+
 			let state = if silence_ts_entry.is_some() {
 				SignalState::Silenced
-			} else if ack_ts_entry.is_some() {
+			} else if ack_ts.is_some() {
 				SignalState::Acked
 			} else {
 				SignalState::Pending
@@ -304,6 +314,7 @@ impl DatabaseFdbSqliteNats {
 				tags: None,
 				workflow_id,
 				create_ts,
+				ack_ts,
 				body: serde_json::from_str(body.get())
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 				state,

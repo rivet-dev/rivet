@@ -30,6 +30,16 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
+			if let Some(ack_ts) = signal.ack_ts {
+				let datetime = Local
+					.timestamp_millis_opt(ack_ts)
+					.single()
+					.context("invalid ts")?;
+				let date = datetime.format("%Y-%m-%d %H:%M:%S");
+
+				println!("  {} {}", style("ack'd at").bold(), style(date).magenta());
+			}
+
 			println!(
 				"  {} {}",
 				style("state").bold(),
