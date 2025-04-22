@@ -6,6 +6,7 @@ use indoc::indoc;
 use rivet_pools::prelude::*;
 use sqlx::Acquire;
 use uuid::Uuid;
+use tracing::Instrument;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},

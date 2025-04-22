@@ -34,6 +34,7 @@ pub use thiserror;
 pub use tokio;
 #[doc(hidden)]
 pub use tracing;
+pub use tracing::Instrument;
 pub use types_proto::{self, rivet as proto, rivet::common};
 
 pub use crate::OperationContext;

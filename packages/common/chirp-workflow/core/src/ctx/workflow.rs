@@ -136,7 +136,7 @@ impl WorkflowCtx {
 		}
 	}
 
-	#[tracing::instrument(name = "workflow", skip_all, fields(parent_trace_id, workflow_id=%self.workflow_id, workflow_name=%self.name, ray_id=%self.ray_id))]
+	#[tracing::instrument(name="workflow", skip_all, fields(parent_trace_id, workflow_id=%self.workflow_id, workflow_name=%self.name, ray_id=%self.ray_id))]
 	pub(crate) async fn run(mut self, parent_trace_id: opentelemetry::TraceId) -> WorkflowResult<()> {
 		tracing::Span::current().record("parent_trace_id", parent_trace_id.to_string());
 

@@ -5,17 +5,17 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Server,
 };
+use opentelemetry::{trace::TraceContextExt, KeyValue};
+use opentelemetry_semantic_conventions::attribute::{HTTP_REQUEST_METHOD, URL_PATH};
 use std::{
 	convert::Infallible,
 	future::Future,
 	net::{IpAddr, SocketAddr},
 	time::Instant,
 };
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-use opentelemetry::trace::TraceContextExt;
 use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
-use opentelemetry_semantic_conventions::attribute::{URL_PATH, HTTP_REQUEST_METHOD};
 
 #[tracing::instrument(skip_all)]
 pub async fn start<T: 'static, Fut>(
@@ -76,13 +76,21 @@ where
 				// NOTE: Parent is none so that a new trace is created
 				parent: None,
 				"http_request",
+				method=%req.method(),
 				uri=%req.uri(),
 				%ray_id,
 				parent_trace_id=%current_trace_id,
+
 			);
-			req_span.record("foo", "bar");
-			req_span.record(HTTP_REQUEST_METHOD, req.method().to_string());
-			req_span.record(URL_PATH, req.uri().path().to_string());
+			// TODO: attributes don't show up
+			// req_span
+			// 	.context()
+			// 	.span()
+			// 	.set_attribute(KeyValue::new(HTTP_REQUEST_METHOD, req.method().to_string()));
+			// req_span
+			// 	.context()
+			// 	.span()
+			// 	.set_attribute(KeyValue::new(URL_PATH, req.uri().path().to_string()));
 
 			async move {
 				let method = req.method().clone();

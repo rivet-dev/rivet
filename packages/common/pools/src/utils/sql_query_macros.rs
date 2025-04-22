@@ -149,6 +149,7 @@ macro_rules! __sql_query {
 
 			res
 		}
+		.instrument(tracing::info_span!("sql_query"))
 	};
 	([$ctx:expr, @tx $tx:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
@@ -165,6 +166,7 @@ macro_rules! __sql_query {
 
 			res
 		}
+		.instrument(tracing::info_span!("sql_query"))
 	};
 	([$ctx:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query!([$ctx, &$ctx.crdb().await?] $sql, $($bind),*)
@@ -194,6 +196,7 @@ macro_rules! __sql_query_as {
 
 			res
 		}
+		.instrument(tracing::info_span!("sql_query_as"))
 	};
 	([$ctx:expr, $rv:ty, $action:ident, @tx $tx:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
@@ -210,6 +213,7 @@ macro_rules! __sql_query_as {
 
 			res
 		}
+		.instrument(tracing::info_span!("sql_query_as"))
 	};
 	([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, $action, &$ctx.crdb().await?] $sql, $($bind),*)

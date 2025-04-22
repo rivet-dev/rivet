@@ -12,8 +12,8 @@ use std::{
 	ops::Deref,
 	result::Result::{Err, Ok},
 };
-use tracing::Instrument as _;
 use uuid::Uuid;
+use tracing::Instrument;
 
 use super::{
 	keys,

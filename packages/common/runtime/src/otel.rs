@@ -4,7 +4,6 @@ use console_subscriber;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
-	// logs::SdkLoggerProvider,
 	metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 	Resource,
@@ -89,27 +88,10 @@ fn init_meter_provider() -> SdkMeterProvider {
 	meter_provider
 }
 
-// TODO: This causes the runtime to hang, unsure why
-//fn init_logger_provider() -> SdkLoggerProvider {
-//	let exporter = opentelemetry_otlp::LogExporter::builder()
-//		.with_tonic()
-//		.with_protocol(opentelemetry_otlp::Protocol::Grpc)
-//		.with_endpoint(otel_endpoint())
-//		.build()
-//		.unwrap();
-//
-//	SdkLoggerProvider::builder()
-//		.with_resource(resource())
-//		//.with_batch_exporter(exporter)
-//		.with_simple_exporter(exporter)
-//		.build()
-//}
-
 // TODO: Ugly function
 // Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
 pub fn init_tracing_subscriber() -> Option<OtelGuard> {
 	let registry = tracing_subscriber::registry();
-	//let logger_provider = init_logger_provider();
 
 	// Check if otel is enabled
 	let enable_otel = std::env::var("RIVET_OTEL_ENABLED").map_or(false, |x| x == "1");
@@ -173,7 +155,6 @@ pub fn init_tracing_subscriber() -> Option<OtelGuard> {
 pub struct OtelGuard {
 	tracer_provider: SdkTracerProvider,
 	meter_provider: SdkMeterProvider,
-	//logger_provider: SdkLoggerProvider,
 }
 
 impl Drop for OtelGuard {
@@ -184,9 +165,6 @@ impl Drop for OtelGuard {
 		if let Err(err) = self.meter_provider.shutdown() {
 			eprintln!("{err:?}");
 		}
-		//if let Err(err) = self.logger_provider.shutdown() {
-		//	eprintln!("{err:?}");
-		//}
 	}
 }
 

@@ -215,7 +215,7 @@ impl EndpointRouter {
 					Ok(body.into())
 				}
 
-				#[tracing::instrument(level="debug", name = "router_handle", skip_all)]
+				#[tracing::instrument(level="debug", name = "router_handle", skip_all, fields(method=?request.method(), uri=?request.uri()))]
 				pub async fn handle(
 					shared_client: chirp_client::SharedClientHandle,
 					config: rivet_config::Config,
@@ -225,7 +225,7 @@ impl EndpointRouter {
 					mut request: Request<Body>,
 					mut response: http::response::Builder,
 				) -> Result<Response<Body>, http::Error> {
-					tracing::debug!(method=?request.method(), uri=?request.uri(), "received request");
+					tracing::debug!("received request");
 
 					// Create router config for complex nested routers
 					let mut router_config = match api_helper::macro_util::__RouterConfig::new(&config, request.uri()) {

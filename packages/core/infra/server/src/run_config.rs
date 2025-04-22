@@ -259,6 +259,11 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/job-log/db/log"),
 			db_name: "db_job_log",
 		},
+		SqlService {
+			kind: SqlServiceKind::ClickHouse,
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/service-log/db/service-log"),
+			db_name: "db_service_log",
+		},
 	];
 
 	let s3_buckets = vec![

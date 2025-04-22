@@ -4,6 +4,7 @@ use anyhow::*;
 use indoc::indoc;
 use rivet_pools::prelude::*;
 use uuid::Uuid;
+use tracing::Instrument;
 
 use super::DatabaseCrdbNats;
 use crate::{

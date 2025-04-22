@@ -73,7 +73,6 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 			const NAME: &'static str = #fn_name;
 
-			#[tracing::instrument(name="workflow_run", skip_all, fields(workflow_name=#fn_name))]
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
 			}
@@ -130,7 +129,6 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 			const MAX_RETRIES: usize = #max_retries;
 			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
-			#[tracing::instrument(name="activity_run", skip_all, fields(activity_name=#fn_name))]
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
 			}
@@ -188,7 +186,6 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 			const NAME: &'static str = #fn_name;
 			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
-			#[tracing::instrument(name="operation_run", skip_all, fields(operation_name=#fn_name))]
 			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> GlobalResult<Self::Output> {
 				#fn_body
 			}
@@ -335,7 +332,6 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 		#[async_trait::async_trait]
 		impl chirp_workflow::listen::Listen for #ident {
-			#[tracing::instrument(skip_all, fields(t=std::any::type_name::<Self>()))]
 			async fn listen(ctx: &mut chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[<Self as chirp_workflow::signal::Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, &row.body)

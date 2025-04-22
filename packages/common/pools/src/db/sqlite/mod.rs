@@ -128,7 +128,7 @@ impl SqliteWriterEntry {
 		}
 	}
 
-	#[tracing::instrument(name = "sqlite_writer_conn", skip_all)]
+	#[tracing::instrument(name="sqlite_writer_conn", skip_all)]
 	async fn conn(&self) -> Result<&SqliteConnHandle, Error> {
 		self.conn_once
 			.get_or_try_init(|| {
@@ -177,7 +177,7 @@ pub struct SqlitePoolManager {
 
 // MARK: Public methods
 impl SqlitePoolManager {
-	#[tracing::instrument(name = "sqlite_pool_manager_new", skip_all)]
+	#[tracing::instrument(name="sqlite_pool_manager_new", skip_all)]
 	pub async fn new(fdb: Option<FdbPool>) -> Result<SqlitePoolManagerHandle, Error> {
 		let (shutdown, _) = broadcast::channel(1);
 		let shutdown_rx = shutdown.subscribe();
@@ -221,7 +221,7 @@ impl SqlitePoolManager {
 	///
 	/// IMPORTANT: Do not hold a reference to this value for an extended period of time. We use
 	/// this function call to determine when to GC a pool.
-	#[tracing::instrument(name = "sqlite_get", skip_all)]
+	#[tracing::instrument(name="sqlite_get", skip_all)]
 	pub async fn get(
 		self: &Arc<Self>,
 		key: impl TuplePack + Debug,
@@ -277,7 +277,7 @@ impl SqlitePoolManager {
 	}
 
 	/// Evicts databases from the pool and snapshots them if needed
-	#[tracing::instrument(name = "sqlite_evict", skip_all)]
+	#[tracing::instrument(name="sqlite_evict", skip_all)]
 	pub async fn evict<T: TuplePack>(self: &Arc<Self>, keys: Vec<T>) -> Result<(), Error> {
 		let keys_packed: Vec<KeyPacked> = keys
 			.into_iter()
@@ -293,7 +293,7 @@ impl SqlitePoolManager {
 
 	/// If the databases are loaded, then force a snapshot, or wait for existing snapshot to finish
 	/// writing.
-	#[tracing::instrument(name = "sqlite_flush", skip_all)]
+	#[tracing::instrument(name="sqlite_flush", skip_all)]
 	pub async fn flush<T: TuplePack>(self: &Arc<Self>, keys: Vec<T>) -> Result<(), Error> {
 		let keys_packed: Vec<KeyPacked> = keys
 			.into_iter()
@@ -311,7 +311,7 @@ impl SqlitePoolManager {
 // MARK: Private helpers
 impl SqlitePoolManager {
 	/// Inner implementation of database eviction that handles the actual removal from the pool
-	#[tracing::instrument(name = "sqlite_evict_with_key", skip_all)]
+	#[tracing::instrument(name="sqlite_evict_with_key", skip_all)]
 	async fn evict_with_key(&self, keys_packed: &[KeyPacked]) -> GlobalResult<()> {
 		if keys_packed.is_empty() {
 			return Ok(());
@@ -348,7 +348,7 @@ impl SqlitePoolManager {
 	/// overhead.
 	///
 	/// Returns `true` if wrote at least one snapshot.
-	#[tracing::instrument(name = "sqlite_snapshot_with_key", skip_all)]
+	#[tracing::instrument(name="sqlite_snapshot_with_key", skip_all)]
 	async fn snapshot_with_key(
 		&self,
 		keys_packed: &[KeyPacked],
@@ -619,7 +619,7 @@ impl SqlitePoolManager {
 // MARK: FDB Helpers
 impl SqlitePoolManager {
 	/// Returns true if db exists, false if not.
-	#[tracing::instrument(name = "sqlite_read_from_fdb", skip_all)]
+	#[tracing::instrument(name="sqlite_read_from_fdb", skip_all)]
 	async fn read_from_fdb(&self, key_packed: KeyPacked, db_path: &Path) -> GlobalResult<bool> {
 		let hex_key = hex::encode(&*key_packed);
 		let fdb = unwrap!(self.fdb.as_ref());
@@ -761,7 +761,7 @@ pub struct SqliteConn {
 }
 
 impl SqliteConn {
-	#[tracing::instrument(name = "sqlite_conn_connect", skip_all)]
+	#[tracing::instrument(name="sqlite_conn_connect", skip_all)]
 	async fn connect(
 		key_packed: KeyPacked,
 		conn_type: SqliteConnType,
@@ -969,7 +969,7 @@ impl SqliteConn {
 }
 
 impl SqliteConn {
-	#[tracing::instrument(name = "sqlite_conn_snapshot", skip_all)]
+	#[tracing::instrument(name="sqlite_conn_snapshot", skip_all)]
 	pub async fn snapshot(&self) -> GlobalResult<bool> {
 		match self
 			.manager
@@ -995,14 +995,14 @@ impl SqliteConn {
 		self.conn.try_lock().ok()
 	}
 
-	#[tracing::instrument(name = "sqlite_acquire", skip_all)]
+	#[tracing::instrument(name="sqlite_acquire", skip_all)]
 	pub async fn acquire(
 		&self,
 	) -> Result<tokio::sync::MutexGuard<'_, sqlx::SqliteConnection>, sqlx::Error> {
 		Ok(self.conn.lock().await)
 	}
 
-	#[tracing::instrument(name = "sqlite_conn", skip_all)]
+	#[tracing::instrument(name="sqlite_conn", skip_all)]
 	pub async fn conn(
 		&self,
 	) -> Result<tokio::sync::MutexGuard<'_, sqlx::SqliteConnection>, sqlx::Error> {

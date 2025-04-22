@@ -53,6 +53,7 @@ pub use serde_json;
 pub use tokio;
 #[doc(hidden)]
 pub use tracing;
+pub use tracing::Instrument;
 
 // External libraries for tests
 #[doc(hidden)]

@@ -166,7 +166,7 @@ impl Handle {
 
 				let socket = guard.as_mut().expect("should exist");
 				let buf = serde_json::to_vec(packet)?;
-				socket.send(Message::Binary(buf)).await?;
+				socket.send(Message::Binary(buf)).await.context("failed to send packet to socket")?;
 			}
 		}
 
