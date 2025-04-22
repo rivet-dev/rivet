@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use rustls::{ServerConfig, sign::CertifiedKey};
 use rustls::server::{ClientHello, ResolvesServerCert};
-use tracing::{error, debug};
+use rustls::{sign::CertifiedKey, ServerConfig};
+use std::sync::Arc;
+use tracing::{debug, error};
 
 /// Type signature for a function that resolves a TLS certificate based on the server name
 pub type CertResolverFn = Arc<
@@ -16,18 +16,16 @@ pub(crate) struct CertResolver {
 }
 
 impl std::fmt::Debug for CertResolver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CertResolver")
-            .field("resolver_fn", &"<function>")
-            .finish()
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("CertResolver")
+			.field("resolver_fn", &"<function>")
+			.finish()
+	}
 }
 
 impl CertResolver {
 	pub fn new(resolver_fn: CertResolverFn) -> Self {
-		Self {
-			resolver_fn,
-		}
+		Self { resolver_fn }
 	}
 }
 
@@ -36,7 +34,7 @@ impl ResolvesServerCert for CertResolver {
 		// Extract the server name if available
 		if let Some(server_name) = client_hello.server_name() {
 			debug!("SNI server name requested: {}", server_name);
-			
+
 			// Call the resolver function with the server name directly
 			let resolver_fn = &self.resolver_fn;
 			match (resolver_fn)(server_name) {
@@ -57,12 +55,8 @@ impl ResolvesServerCert for CertResolver {
 	}
 }
 
-pub fn create_tls_config(
-    resolver_fn: CertResolverFn,
-) -> ServerConfig {
-    ServerConfig::builder()
-        .with_no_client_auth()
-        .with_cert_resolver(Arc::new(CertResolver::new(
-            resolver_fn
-        )))
+pub fn create_tls_config(resolver_fn: CertResolverFn) -> ServerConfig {
+	ServerConfig::builder()
+		.with_no_client_auth()
+		.with_cert_resolver(Arc::new(CertResolver::new(resolver_fn)))
 }

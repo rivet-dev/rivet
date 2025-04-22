@@ -9,14 +9,12 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use common::{
-	create_test_config, create_test_routing_fn, create_test_middleware_fn,
-	init_tracing, make_request, make_request_with_body,
-	start_guard, start_guard_with_middleware, TestServer,
+	create_test_config, create_test_middleware_fn, create_test_routing_fn, init_tracing,
+	make_request, make_request_with_body, start_guard, start_guard_with_middleware, TestServer,
 };
 use rivet_guard_core::proxy_service::{
-    RouteTarget, RoutingResult, RoutingResponse, RoutingTimeout,
-    MiddlewareConfig, MiddlewareResponse, RateLimitConfig, MaxInFlightConfig, 
-    RetryConfig, TimeoutConfig
+	MaxInFlightConfig, MiddlewareConfig, MiddlewareResponse, RateLimitConfig, RetryConfig,
+	RouteTarget, RoutingResponse, RoutingResult, RoutingTimeout, TimeoutConfig,
 };
 
 #[tokio::test]
@@ -28,7 +26,7 @@ async fn test_basic_proxy_functionality() {
 	let routing_fn = create_test_routing_fn(&test_server);
 
 	// Start guard with default config
-	let config = create_test_config(|_|{});
+	let config = create_test_config(|_| {});
 	let (guard_addr, _shutdown) = start_guard(config, routing_fn).await;
 
 	// Make a request to the guard server
@@ -77,7 +75,7 @@ async fn test_proxy_forwards_headers() {
 	.await;
 
 	let routing_fn = create_test_routing_fn(&test_server);
-	let config = create_test_config(|_|{});
+	let config = create_test_config(|_| {});
 	let (guard_addr, _shutdown) = start_guard(config, routing_fn).await;
 
 	// Create a request with custom headers
@@ -117,30 +115,32 @@ async fn test_rate_limiting() {
 	// Set up a test server
 	let test_server = TestServer::new().await;
 	let test_server_addr = test_server.addr;
-	
+
 	// Use consistent actor/server IDs for testing
 	let actor_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
 	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
-	
-	// Create routing function that returns consistent actor ID
-	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			let route_target = RouteTarget {
-				actor_id: Some(actor_id),
-				server_id: Some(server_id),
-				host: test_server_addr.ip(),
-				port: test_server_addr.port(),
-				path: path.to_string(),
-			};
 
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![route_target],
-				timeout: RoutingTimeout {
-					routing_timeout: 5,
-				},
-			}))
-		})
-	});
+	// Create routing function that returns consistent actor ID
+	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				let route_target = RouteTarget {
+					actor_id: Some(actor_id),
+					server_id: Some(server_id),
+					host: test_server_addr.ip(),
+					port: test_server_addr.port(),
+					path: path.to_string(),
+				};
+
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![route_target],
+					timeout: RoutingTimeout { routing_timeout: 5 },
+				}))
+			})
+		},
+	);
 
 	// Create custom middleware function with very limited rate limit
 	let middleware_fn = create_test_middleware_fn(|config| {
@@ -154,7 +154,8 @@ async fn test_rate_limiting() {
 	// Create a config with default settings
 	let config = create_test_config(|_| {});
 
-	let (guard_addr, _shutdown) = start_guard_with_middleware(config, routing_fn, middleware_fn).await;
+	let (guard_addr, _shutdown) =
+		start_guard_with_middleware(config, routing_fn, middleware_fn).await;
 	let uri = format!("http://{}/test-rate-limit", guard_addr);
 
 	// First request should go through
@@ -194,22 +195,24 @@ async fn test_max_in_flight_requests() {
 	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 
 	let test_server_addr = test_server.addr;
-	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![RouteTarget {
-					actor_id: Some(actor_id),
-					server_id: Some(server_id),
-					host: test_server_addr.ip(),
-					port: test_server_addr.port(),
-					path: path.to_string(),
-				}],
-				timeout: RoutingTimeout {
-					routing_timeout: 5,
-				},
-			}))
-		})
-	});
+	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![RouteTarget {
+						actor_id: Some(actor_id),
+						server_id: Some(server_id),
+						host: test_server_addr.ip(),
+						port: test_server_addr.port(),
+						path: path.to_string(),
+					}],
+					timeout: RoutingTimeout { routing_timeout: 5 },
+				}))
+			})
+		},
+	);
 
 	// Create custom middleware function with very limited max in-flight
 	let middleware_fn = create_test_middleware_fn(|config| {
@@ -222,7 +225,8 @@ async fn test_max_in_flight_requests() {
 	// Create a config with default settings
 	let config = create_test_config(|_| {});
 
-	let (guard_addr, _shutdown) = start_guard_with_middleware(config, routing_fn, middleware_fn).await;
+	let (guard_addr, _shutdown) =
+		start_guard_with_middleware(config, routing_fn, middleware_fn).await;
 	let uri = format!("http://{}/test-in-flight", guard_addr);
 
 	// Launch first two requests which should succeed
@@ -251,28 +255,30 @@ async fn test_timeout_handling() {
 
 	// Setup a test server that takes too long
 	let test_server = TestServer::with_delay(3000).await; // 3 seconds delay
-	
+
 	// Create a custom routing function that returns a dedicated actor ID
 	let test_server_addr = test_server.addr;
 	let actor_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap();
 	let server_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
-	
-	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![RouteTarget {
-					actor_id: Some(actor_id),
-					server_id: Some(server_id),
-					host: test_server_addr.ip(),
-					port: test_server_addr.port(),
-					path: path.to_string(),
-				}],
-				timeout: RoutingTimeout {
-					routing_timeout: 5,
-				},
-			}))
-		})
-	});
+
+	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![RouteTarget {
+						actor_id: Some(actor_id),
+						server_id: Some(server_id),
+						host: test_server_addr.ip(),
+						port: test_server_addr.port(),
+						path: path.to_string(),
+					}],
+					timeout: RoutingTimeout { routing_timeout: 5 },
+				}))
+			})
+		},
+	);
 
 	// Create a custom middleware function with a very short request timeout
 	let middleware_fn = create_test_middleware_fn(|config| {
@@ -285,7 +291,8 @@ async fn test_timeout_handling() {
 	// Create a config with default settings
 	let config = create_test_config(|_| {});
 
-	let (guard_addr, _shutdown) = start_guard_with_middleware(config, routing_fn, middleware_fn).await;
+	let (guard_addr, _shutdown) =
+		start_guard_with_middleware(config, routing_fn, middleware_fn).await;
 	let uri = format!("http://{}/test-timeout", guard_addr);
 
 	// Make a request that should time out
@@ -315,22 +322,24 @@ async fn test_retry_functionality() {
 	drop(listener);
 
 	// Create a routing function that points to our port
-	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![RouteTarget {
-					actor_id: Some(Uuid::new_v4()),
-					server_id: Some(Uuid::new_v4()),
-					host: server_addr.ip(),
-					port: server_addr.port(),
-					path: path.to_string(),
-				}],
-				timeout: RoutingTimeout {
-					routing_timeout: 5,
-				},
-			}))
-		})
-	});
+	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![RouteTarget {
+						actor_id: Some(Uuid::new_v4()),
+						server_id: Some(Uuid::new_v4()),
+						host: server_addr.ip(),
+						port: server_addr.port(),
+						path: path.to_string(),
+					}],
+					timeout: RoutingTimeout { routing_timeout: 5 },
+				}))
+			})
+		},
+	);
 
 	// Create a middleware function with specific retry settings
 	// Use longer interval to give us time to start the server
@@ -338,10 +347,10 @@ async fn test_retry_functionality() {
 	let middleware_fn = create_test_middleware_fn(move |config| {
 		// Configure retry settings for this test
 		config.retry = RetryConfig {
-			max_attempts: 3,                // 3 retry attempts
+			max_attempts: 3,                    // 3 retry attempts
 			initial_interval: initial_interval, // 500ms initial interval with exponential backoff
 		};
-		
+
 		// Set a very short timeout so retries happen faster
 		config.timeout = TimeoutConfig {
 			request_timeout: 1, // 1 second timeout
@@ -362,11 +371,18 @@ async fn test_retry_functionality() {
 
 	// Print timing information
 	println!("Initial interval: {}ms", initial_interval);
-	println!("Backoff after first attempt: {:?}", backoff_after_first_attempt);
-	println!("Backoff after second attempt: {:?}", backoff_after_second_attempt);
+	println!(
+		"Backoff after first attempt: {:?}",
+		backoff_after_first_attempt
+	);
+	println!(
+		"Backoff after second attempt: {:?}",
+		backoff_after_second_attempt
+	);
 	println!("Server start delay: {:?}", server_start_delay);
 
-	let (guard_addr, _shutdown) = start_guard_with_middleware(config, routing_fn, middleware_fn).await;
+	let (guard_addr, _shutdown) =
+		start_guard_with_middleware(config, routing_fn, middleware_fn).await;
 	let uri = format!("http://{}/test-retry", guard_addr);
 
 	// Start the server after calculated delay
@@ -415,7 +431,7 @@ async fn test_retry_functionality() {
 
 	// Print actual duration for informational purposes
 	println!("Actual request duration: {:?}", request_duration);
-	
+
 	// Don't verify exact timing as it can be flaky in CI environments
 	// Just verify that we got a successful response
 }
@@ -475,30 +491,32 @@ async fn test_different_path_routing() {
 
 	// Create a routing function that routes based on path prefix
 	let test_server_addr = test_server.addr;
-	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			let actor_id = if path.starts_with("/api") {
-				Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap()
-			} else if path.starts_with("/app") {
-				Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()
-			} else {
-				Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap()
-			};
+	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				let actor_id = if path.starts_with("/api") {
+					Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap()
+				} else if path.starts_with("/app") {
+					Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap()
+				} else {
+					Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap()
+				};
 
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![RouteTarget {
-					actor_id: Some(actor_id),
-					server_id: Some(Uuid::new_v4()),
-					host: test_server_addr.ip(),
-					port: test_server_addr.port(),
-					path: path.to_string(),
-				}],
-				timeout: RoutingTimeout {
-					routing_timeout: 5,
-				},
-			}))
-		})
-	});
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![RouteTarget {
+						actor_id: Some(actor_id),
+						server_id: Some(Uuid::new_v4()),
+						host: test_server_addr.ip(),
+						port: test_server_addr.port(),
+						path: path.to_string(),
+					}],
+					timeout: RoutingTimeout { routing_timeout: 5 },
+				}))
+			})
+		},
+	);
 
 	let config = create_test_config(|_| {});
 	let (guard_addr, _shutdown) = start_guard(config, routing_fn).await;
@@ -549,7 +567,7 @@ async fn test_post_requests_with_bodies() {
 
 	let routing_fn = create_test_routing_fn(&test_server);
 
-	// Create a config with default settings 
+	// Create a config with default settings
 	let config = create_test_config(|_| {});
 
 	let (guard_addr, _shutdown) = start_guard(config, routing_fn).await;

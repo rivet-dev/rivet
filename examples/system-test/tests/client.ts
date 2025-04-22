@@ -55,11 +55,11 @@ async function run() {
 				},
 				...(BUILD_NAME === "ws-container"
 					? {
-							resources: {
-								cpu: 100,
-								memory: 100,
-							},
-						}
+						resources: {
+							cpu: 100,
+							memory: 100,
+						},
+					}
 					: {}),
 			},
 		});

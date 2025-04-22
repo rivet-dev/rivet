@@ -19,6 +19,7 @@
 **/dist/
 **/node_modules/
 **/target
+!frontend/apps/hub/dist
 
 # Site
 site/public/rss/

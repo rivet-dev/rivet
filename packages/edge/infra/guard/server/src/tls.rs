@@ -148,27 +148,25 @@ pub async fn create_cert_resolver(
 	}
 
 	// Get the hostname regexes for actor routing with hostname-based endpoint type
-	let actor_hostname_regex_dynamic = match build_actor_hostname_and_path_regex(
-		EndpointType::Hostname,
-		guard_hostname,
-	) {
-		Ok(Some((x, _))) => {
-			tracing::info!("Successfully built dynamic hostname actor routing regex");
-			Some(x)
-		}
-		Ok(None) => {
-			tracing::warn!(
+	let actor_hostname_regex_dynamic =
+		match build_actor_hostname_and_path_regex(EndpointType::Hostname, guard_hostname) {
+			Ok(Some((x, _))) => {
+				tracing::info!("Successfully built dynamic hostname actor routing regex");
+				Some(x)
+			}
+			Ok(None) => {
+				tracing::warn!(
 				"Could not build dynamic hostname actor routing regex - pattern will be skipped"
 			);
-			None
-		}
-		Err(e) => {
-			bail!(
-				"Failed to build dynamic hostname actor routing regex: {}",
-				e
-			);
-		}
-	};
+				None
+			}
+			Err(e) => {
+				bail!(
+					"Failed to build dynamic hostname actor routing regex: {}",
+					e
+				);
+			}
+		};
 	let actor_hostname_regex_static =
 		match build_actor_hostname_and_path_regex(EndpointType::Path, guard_hostname) {
 			Ok(Some((x, _))) => {

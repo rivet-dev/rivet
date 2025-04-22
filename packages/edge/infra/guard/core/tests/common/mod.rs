@@ -6,12 +6,12 @@ use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use rivet_guard_core::{
-    GlobalErrorWrapper, 
-    proxy_service::{
-        RouteTarget, RoutingFn, RoutingResult, RoutingResponse, RoutingTimeout,
-        MiddlewareFn, MiddlewareConfig, MiddlewareResponse, 
-        RateLimitConfig, MaxInFlightConfig, RetryConfig, TimeoutConfig
-    }
+	proxy_service::{
+		MaxInFlightConfig, MiddlewareConfig, MiddlewareFn, MiddlewareResponse, RateLimitConfig,
+		RetryConfig, RouteTarget, RoutingFn, RoutingResponse, RoutingResult, RoutingTimeout,
+		TimeoutConfig,
+	},
+	GlobalErrorWrapper,
 };
 use std::collections::HashMap;
 use std::future::Future;
@@ -149,7 +149,7 @@ impl TestServer {
 					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
-						.with_upgrades()  // Added this critical line
+						.with_upgrades() // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -287,7 +287,7 @@ impl TestServer {
 					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
-						.with_upgrades()  // Added this critical line
+						.with_upgrades() // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -303,7 +303,7 @@ impl TestServer {
 			handle: Some(handle),
 		}
 	}
-	
+
 	// Create a TestServer with a specific server address and custom handler
 	pub async fn with_handler_and_addr<F, Fut>(addr: SocketAddr, handler: F) -> Self
 	where
@@ -381,7 +381,7 @@ impl TestServer {
 					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
-						.with_upgrades()  // Added this critical line
+						.with_upgrades() // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
@@ -428,28 +428,32 @@ impl Drop for TestServer {
 pub fn create_test_routing_fn(test_server: &TestServer) -> RoutingFn {
 	let addr = test_server.addr;
 
-	Arc::new(move |_hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
-		Box::pin(async move {
-			let actor_id = Some(Uuid::new_v4());
-			let server_id = Some(Uuid::new_v4());
+	Arc::new(
+		move |_hostname: &str,
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
+			Box::pin(async move {
+				let actor_id = Some(Uuid::new_v4());
+				let server_id = Some(Uuid::new_v4());
 
-			// Create a single target for simplicity in tests
-			let target = RouteTarget {
-				actor_id,
-				server_id,
-				host: addr.ip().to_string(),
-				port: addr.port(),
-				path: path.to_string(),
-			};
+				// Create a single target for simplicity in tests
+				let target = RouteTarget {
+					actor_id,
+					server_id,
+					host: addr.ip().to_string(),
+					port: addr.port(),
+					path: path.to_string(),
+				};
 
-			Ok(RoutingResponse::Ok(RoutingResult {
-				targets: vec![target],
-				timeout: RoutingTimeout {
-					routing_timeout: 5, // 5 seconds for routing timeout
-				},
-			}))
-		})
-	})
+				Ok(RoutingResponse::Ok(RoutingResult {
+					targets: vec![target],
+					timeout: RoutingTimeout {
+						routing_timeout: 5, // 5 seconds for routing timeout
+					},
+				}))
+			})
+		},
+	)
 }
 
 // Create a default configuration for testing
@@ -470,39 +474,39 @@ pub fn create_test_config(
 
 // Create a test middleware function with customization
 pub fn create_test_middleware_fn(
-    mutate: impl Fn(&mut MiddlewareConfig) + Send + Sync + 'static
+	mutate: impl Fn(&mut MiddlewareConfig) + Send + Sync + 'static,
 ) -> MiddlewareFn {
-    // Clone the mutate function to avoid lifetime issues
-    let mutate = Arc::new(mutate);
-    
-    Arc::new(move |_actor_id: &Uuid| {
-        let mutate_clone = mutate.clone();
-        Box::pin(async move {
-            // Create the default middleware config
-            let mut middleware_config = MiddlewareConfig {
-                rate_limit: RateLimitConfig {
-                    requests: 100, // 100 requests
-                    period: 60,    // per 60 seconds
-                },
-                max_in_flight: MaxInFlightConfig {
-                    amount: 10,    // 10 concurrent requests
-                },
-                retry: RetryConfig {
-                    max_attempts: 3,      // 3 retry attempts
-                    initial_interval: 50, // 50ms initial interval
-                },
-                timeout: TimeoutConfig {
-                    request_timeout: 2,   // 2 seconds for requests
-                },
-            };
-            
-            // Apply the mutation
-            mutate_clone(&mut middleware_config);
-            
-            // Return the modified middleware config
-            Ok(MiddlewareResponse::Ok(middleware_config))
-        })
-    })
+	// Clone the mutate function to avoid lifetime issues
+	let mutate = Arc::new(mutate);
+
+	Arc::new(move |_actor_id: &Uuid| {
+		let mutate_clone = mutate.clone();
+		Box::pin(async move {
+			// Create the default middleware config
+			let mut middleware_config = MiddlewareConfig {
+				rate_limit: RateLimitConfig {
+					requests: 100, // 100 requests
+					period: 60,    // per 60 seconds
+				},
+				max_in_flight: MaxInFlightConfig {
+					amount: 10, // 10 concurrent requests
+				},
+				retry: RetryConfig {
+					max_attempts: 3,      // 3 retry attempts
+					initial_interval: 50, // 50ms initial interval
+				},
+				timeout: TimeoutConfig {
+					request_timeout: 2, // 2 seconds for requests
+				},
+			};
+
+			// Apply the mutation
+			mutate_clone(&mut middleware_config);
+
+			// Return the modified middleware config
+			Ok(MiddlewareResponse::Ok(middleware_config))
+		})
+	})
 }
 
 // Helper to start rivet-guard with a custom config and middleware
@@ -514,7 +518,7 @@ pub async fn start_guard(
 	let middleware_fn = create_test_middleware_fn(|_config| {
 		// Default middleware uses the values in create_test_middleware_fn
 	});
-	
+
 	start_guard_with_middleware(config, routing_fn, middleware_fn).await
 }
 
@@ -587,7 +591,7 @@ pub async fn start_guard_with_middleware(
 					// IMPORTANT: Use with_upgrades() for WebSocket handling
 					if let Err(err) = hyper::server::conn::http1::Builder::new()
 						.serve_connection(io, service)
-						.with_upgrades()  // Added this critical line
+						.with_upgrades() // Added this critical line
 						.await
 					{
 						eprintln!("Error serving connection: {:?}", err);
