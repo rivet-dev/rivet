@@ -17,9 +17,9 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/target \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-isolate-v8-runner --release && \
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-isolate-v8-runner && \
 	mkdir -p /app/dist && \
-	mv /app/target/x86_64-unknown-linux-gnu/release/rivet-isolate-v8-runner /app/dist/rivet-isolate-v8-runner
+	mv /app/target/x86_64-unknown-linux-gnu/debug/rivet-isolate-v8-runner /app/dist/rivet-isolate-v8-runner
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch

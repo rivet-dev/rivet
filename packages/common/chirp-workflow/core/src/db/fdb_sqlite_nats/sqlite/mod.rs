@@ -5,8 +5,8 @@ use include_dir::{include_dir, Dir, File};
 use indoc::indoc;
 use rivet_pools::prelude::*;
 use sqlx::Acquire;
-use uuid::Uuid;
 use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},

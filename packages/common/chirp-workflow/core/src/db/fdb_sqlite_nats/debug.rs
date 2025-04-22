@@ -12,8 +12,8 @@ use std::{
 	ops::Deref,
 	result::Result::{Err, Ok},
 };
-use uuid::Uuid;
 use tracing::Instrument;
+use uuid::Uuid;
 
 use super::{
 	keys,
@@ -458,8 +458,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(workflows)
 				}
-				.instrument(tracing::info_span!("find_workflows_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("find_workflows_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -713,8 +714,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("wake_workflows_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("wake_workflows_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -977,9 +979,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 			.fdb()?
 			.run(|tx, _mc| {
 				let signal_ids = signal_ids.clone();
-				async move { self.get_signals_inner(signal_ids, &tx).await }
-					.instrument(tracing::info_span!("get_signals_tx"))
+				async move { self.get_signals_inner(signal_ids, &tx).await }.in_current_span()
 			})
+			.instrument(tracing::info_span!("get_signals_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -1098,8 +1100,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(signals)
 				}
-				.instrument(tracing::info_span!("find_signals_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("find_signals_tx"))
 			.await
 			.map_err(Into::into)
 	}

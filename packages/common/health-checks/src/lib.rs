@@ -168,7 +168,7 @@ mod status {
 	}
 
 	pub mod essential {
-		use tracing::Instrument as _;
+		use tracing::Instrument;
 
 		use super::{Status, StatusResponse};
 

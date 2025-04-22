@@ -7,8 +7,10 @@ use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::watch;
-use tracing::Instrument as _;
+use opentelemetry::trace::SpanContext;
+use tracing::Instrument;
 use uuid::Uuid;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{
 	activity::{Activity, ActivityInput},
@@ -136,9 +138,12 @@ impl WorkflowCtx {
 		}
 	}
 
-	#[tracing::instrument(name="workflow", skip_all, fields(parent_trace_id, workflow_id=%self.workflow_id, workflow_name=%self.name, ray_id=%self.ray_id))]
-	pub(crate) async fn run(mut self, parent_trace_id: opentelemetry::TraceId) -> WorkflowResult<()> {
-		tracing::Span::current().record("parent_trace_id", parent_trace_id.to_string());
+	#[tracing::instrument(name="workflow", skip_all, fields(workflow_id=%self.workflow_id, workflow_name=%self.name, ray_id=%self.ray_id))]
+	pub(crate) async fn run(
+		mut self,
+		parent_span_ctx: SpanContext,
+	) -> WorkflowResult<()> {
+		tracing::Span::current().add_link(parent_span_ctx);
 
 		tracing::debug!("running workflow");
 
@@ -875,7 +880,7 @@ impl WorkflowCtx {
 							)
 							.await?;
 					}
-	
+
 					let start_instant2 = Instant::now();
 
 					// Run loop

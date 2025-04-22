@@ -1,5 +1,5 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
-use tracing::Instrument as _;
+use tracing::Instrument;
 
 use futures_util::FutureExt;
 use global_error::GlobalError;

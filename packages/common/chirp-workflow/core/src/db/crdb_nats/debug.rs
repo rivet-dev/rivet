@@ -3,8 +3,8 @@ use std::result::Result::{Err, Ok};
 use anyhow::*;
 use indoc::indoc;
 use rivet_pools::prelude::*;
-use uuid::Uuid;
 use tracing::Instrument;
+use uuid::Uuid;
 
 use super::DatabaseCrdbNats;
 use crate::{

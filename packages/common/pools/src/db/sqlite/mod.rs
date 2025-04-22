@@ -23,7 +23,7 @@ use tokio::{
 	sync::{broadcast, Mutex},
 	time::Instant,
 };
-use tracing::Instrument as _;
+use tracing::Instrument;
 
 use crate::{metrics, Error, FdbPool};
 

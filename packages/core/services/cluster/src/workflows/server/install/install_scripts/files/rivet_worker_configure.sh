@@ -15,12 +15,15 @@ After=network-online.target
 ConditionPathExists=/etc/rivet-server/
 
 [Service]
+# OTeL env vars
 Environment="RIVET_OTEL_ENABLED=1"
 Environment="RIVET_OTEL_ENDPOINT=http://127.0.0.1:__OTEL_PORT__"
+Environment="RIVET_OTEL_SAMPLER_RATIO=__OTEL_SAMPLER_RATIO__"
 Environment="RIVET_SERVICE_NAME=rivet-edge"
 Environment="RIVET_CLUSTER_ID=___CLUSTER_ID___"
 Environment="RIVET_DATACENTER_ID=___DATACENTER_ID___"
 Environment="RIVET_SERVER_ID=___SERVER_ID___"
+
 ExecStart=/usr/local/bin/rivet-edge-server start --skip-provision
 Restart=always
 RestartSec=2

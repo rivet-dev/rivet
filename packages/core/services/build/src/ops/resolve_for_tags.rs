@@ -18,7 +18,7 @@ pub struct Output {
 }
 
 #[operation]
-pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn build_resolve_for_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let tags_str = serde_json::to_string(&input.tags)?;
 
 	let builds = if input.bypass_cache {

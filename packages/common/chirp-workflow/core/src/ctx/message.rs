@@ -430,7 +430,7 @@ where
 	/// Waits for the next message in the subscription.
 	///
 	/// This future can be safely dropped.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(name="message_next", skip_all, fields(message = M::NAME))]
 	pub async fn next(&mut self) -> WorkflowResult<NatsMessage<M>> {
 		tracing::debug!("waiting for message");
 

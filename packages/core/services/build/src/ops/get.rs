@@ -53,7 +53,7 @@ impl TryInto<types::Build> for BuildRow {
 }
 
 #[operation]
-pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn build_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let builds = ctx
 		.cache()
 		.fetch_all_json("build", input.build_ids.clone(), {

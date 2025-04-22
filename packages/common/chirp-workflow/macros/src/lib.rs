@@ -437,8 +437,9 @@ pub fn workflow_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 				chirp_workflow::prelude::tracing::Instrument::instrument(
 					async move {
 						// Build context
-						let ctx = chirp_workflow::prelude::TestCtx::from_env(stringify!(#test_ident))
-							.await;
+						let ctx = chirp_workflow::prelude::TestCtx::from_env::<chirp_workflow::db::DatabaseCrdbNats>(
+							stringify!(#test_ident), false
+						).await;
 
 						// Run test
 						tracing::info!("test starting");

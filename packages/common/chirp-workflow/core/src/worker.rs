@@ -5,7 +5,6 @@ use std::{
 
 use futures_util::StreamExt;
 use global_error::GlobalResult;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 use opentelemetry::trace::TraceContextExt;
 use tokio::{
 	signal::{
@@ -16,6 +15,7 @@ use tokio::{
 	task::JoinHandle,
 };
 use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
 use crate::{
@@ -230,16 +230,16 @@ impl Worker {
 			)
 			.await?;
 
-			let current_trace_id = tracing::Span::current()
+			let current_span_ctx = tracing::Span::current()
 				.context()
 				.span()
 				.span_context()
-				.trace_id();
+				.clone();
 
 			let handle = tokio::task::spawn(
 				// NOTE: No .in_current_span() because we want this to be a separate trace
 				async move {
-					if let Err(err) = ctx.run(current_trace_id).await {
+					if let Err(err) = ctx.run(current_span_ctx).await {
 						tracing::error!(?err, "unhandled workflow error");
 					}
 				},

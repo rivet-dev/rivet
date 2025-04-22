@@ -5,8 +5,11 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Server,
 };
-use opentelemetry::{trace::TraceContextExt, KeyValue};
-use opentelemetry_semantic_conventions::attribute::{HTTP_REQUEST_METHOD, URL_PATH};
+use opentelemetry::{
+	trace::TraceContextExt,
+	// KeyValue,
+};
+// use opentelemetry_semantic_conventions::attribute::{HTTP_REQUEST_METHOD, URL_PATH};
 use std::{
 	convert::Infallible,
 	future::Future,
@@ -64,11 +67,11 @@ where
 			// Add the SocketAddr as an extension to the request
 			req.extensions_mut().insert(remote_addr);
 
-			let current_trace_id = tracing::Span::current()
+			let current_span_ctx = tracing::Span::current()
 				.context()
 				.span()
 				.span_context()
-				.trace_id();
+				.clone();
 
 			// Handle request
 			let ray_id = Uuid::new_v4();
@@ -79,9 +82,8 @@ where
 				method=%req.method(),
 				uri=%req.uri(),
 				%ray_id,
-				parent_trace_id=%current_trace_id,
-
 			);
+			req_span.add_link(current_span_ctx);
 			// TODO: attributes don't show up
 			// req_span
 			// 	.context()

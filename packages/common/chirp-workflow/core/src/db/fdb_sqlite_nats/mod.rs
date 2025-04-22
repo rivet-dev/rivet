@@ -22,7 +22,7 @@ use rivet_pools::prelude::*;
 use serde_json::json;
 use sqlx::Acquire;
 use tokio::sync::mpsc;
-use tracing::Instrument as _;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::{Database, PulledWorkflowData, SignalData, WorkflowData};
@@ -346,8 +346,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok((lost_worker_instance_ids, expired_workflow_count))
 				}
-				.instrument(tracing::info_span!("clear_expired_leases_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("clear_expired_leases_tx"))
 			.await?;
 
 		if expired_workflow_count != 0 {
@@ -405,8 +406,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(lock_expired)
 				}
-				.instrument(tracing::info_span!("acquire_lock_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("acquire_lock_tx"))
 			.await?;
 
 		if acquired_lock {
@@ -612,8 +614,9 @@ impl Database for DatabaseFdbSqliteNats {
 							pending_signal_count,
 						))
 					}
-					.instrument(tracing::info_span!("publish_metrics_tx"))
+					.in_current_span()
 				})
+				.instrument(tracing::info_span!("publish_metrics_tx"))
 				.await?;
 
 			for (workflow_name, counts) in other_workflow_counts {
@@ -650,8 +653,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 						Ok(())
 					}
-					.instrument(tracing::info_span!("clear_lock_tx"))
+					.in_current_span()
 				})
+				.instrument(tracing::info_span!("clear_lock_tx"))
 				.await?;
 		}
 
@@ -676,8 +680,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("update_worker_ping_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("update_worker_ping_tx"))
 			.await?;
 
 		Ok(())
@@ -839,8 +844,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("dispatch_workflow_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("dispatch_workflow_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -907,8 +913,9 @@ impl Database for DatabaseFdbSqliteNats {
 						}))
 					}
 				}
-				.instrument(tracing::info_span!("get_workflow_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("get_workflow_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -994,8 +1001,9 @@ impl Database for DatabaseFdbSqliteNats {
 						}
 					}
 				}
-				.instrument(tracing::info_span!("find_workflow_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("find_workflow_tx"))
 			.await?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1143,12 +1151,13 @@ impl Database for DatabaseFdbSqliteNats {
 									Ok(Some((workflow_id, workflow_name, wake_deadline_ts)))
 								}
 							}
-							.instrument(tracing::trace_span!("map_to_leased_workflows"))
+							.in_current_span()
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(1024)
 						.try_filter_map(|x| std::future::ready(Ok(x)))
 						.try_collect::<Vec<_>>()
+						.instrument(tracing::trace_span!("map_to_leased_workflows"))
 						.await?;
 
 					// TODO: Split this txn into two after checking leases here?
@@ -1244,15 +1253,17 @@ impl Database for DatabaseFdbSqliteNats {
 									wake_deadline_ts,
 								})
 							}
-							.instrument(tracing::trace_span!("map_to_partial_workflow"))
+							.in_current_span()
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(512)
 						.try_collect::<Vec<_>>()
+						.instrument(tracing::trace_span!("map_to_partial_workflow"))
 						.await
 				}
-				.instrument(tracing::info_span!("pull_workflows_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("pull_workflows_tx"))
 			.await?;
 
 		let worker_instance_id_str = worker_instance_id.to_string();
@@ -1492,10 +1503,11 @@ impl Database for DatabaseFdbSqliteNats {
 						events: sqlite::build_history(events)?,
 					})
 				}
-				.instrument(tracing::trace_span!("map_to_pulled_workflows"))
+				.in_current_span()
 			})
 			.buffer_unordered(512)
 			.try_collect()
+			.instrument(tracing::trace_span!("map_to_pulled_workflows"))
 			.await?;
 
 		let dt2 = start_instant2.elapsed().as_secs_f64();
@@ -1677,8 +1689,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("complete_workflows_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("complete_workflows_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -1825,8 +1838,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("commit_workflow_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("commit_workflow_tx"))
 			.await?;
 
 		// Wake worker again if the deadline is before the next tick
@@ -1921,9 +1935,10 @@ impl Database for DatabaseFdbSqliteNats {
 											Ok(None)
 										}
 									}
-									.instrument(tracing::trace_span!("map_signals"))
+									.in_current_span()
 								}),
 							)
+							.instrument(tracing::trace_span!("map_signals"))
 							.await?;
 
 							// Sort by ts
@@ -2060,8 +2075,9 @@ impl Database for DatabaseFdbSqliteNats {
 							Ok(None)
 						}
 					}
-					.instrument(tracing::info_span!("pull_next_signal_tx"))
+					.in_current_span()
 				})
+				.instrument(tracing::info_span!("pull_next_signal_tx"))
 				.await?;
 
 		if signal.is_some() {
@@ -2150,8 +2166,9 @@ impl Database for DatabaseFdbSqliteNats {
 						}))
 					}
 				}
-				.instrument(tracing::info_span!("get_sub_workflow_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("get_sub_workflow_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -2277,8 +2294,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("publish_signal_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("publish_signal_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -2571,8 +2589,9 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("update_workflow_tags_tx"))
+				.in_current_span()
 			})
+			.instrument(tracing::info_span!("update_workflow_tags_tx"))
 			.await?;
 
 		Ok(())

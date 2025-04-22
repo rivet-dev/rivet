@@ -80,7 +80,8 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 			}
 			Provider::Linode => {
 				servers.extend(
-					run_for_linode_account(ctx, &input.filter, &api_token, &headers, input.min_age).await?,
+					run_for_linode_account(ctx, &input.filter, &api_token, &headers, input.min_age)
+						.await?,
 				);
 			}
 		}
@@ -119,7 +120,8 @@ async fn run_for_linode_account(
 		.into_iter()
 		// Filter out servers younger than min_age
 		.filter(|linode| {
-			linode.created.and_utc().timestamp_millis() < ctx.ts() - util::duration::minutes(min_age_minutes)
+			linode.created.and_utc().timestamp_millis()
+				< ctx.ts() - util::duration::minutes(min_age_minutes)
 		})
 		// Parse server ID from linode label
 		.filter_map(|linode| {

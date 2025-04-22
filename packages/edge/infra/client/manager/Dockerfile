@@ -17,9 +17,9 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/target \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-client --release && \
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --target x86_64-unknown-linux-gnu --bin rivet-client && \
 	mkdir -p /app/dist && \
-	mv /app/target/x86_64-unknown-linux-gnu/release/rivet-client /app/dist/rivet-client
+	mv /app/target/x86_64-unknown-linux-gnu/debug/rivet-client /app/dist/rivet-client
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch

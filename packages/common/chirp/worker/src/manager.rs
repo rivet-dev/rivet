@@ -764,6 +764,7 @@ where
 	}
 
 	#[tracing::instrument(
+		level = "debug"
 		skip_all,
 		fields(
 			worker_name = %req.op_ctx.name(),
