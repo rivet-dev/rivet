@@ -232,8 +232,6 @@ impl SqlitePoolManager {
 			let entry = pinned.get_or_insert_with(key_packed.clone(), || {
 				did_insert = true;
 
-				tracing::info!("add writer pool");
-
 				// NOTE: Database will be loaded lazily on first call of `.conn()`. This is not
 				// for performance, this is because we need it to be a `OnceCell` in order to
 				// use it with the async hashmap.
@@ -851,7 +849,10 @@ impl SqlitePoolInner {
 		};
 
 		// Create pool
-		let res = pool_opts.connect_with(opts).await;
+		let res = pool_opts
+			.connect_with(opts)
+			.instrument(tracing::info_span!("sqlite_connect"))
+			.await;
 
 		let pool = match res {
 			Ok(x) => x,

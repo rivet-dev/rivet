@@ -16,7 +16,7 @@ ConditionPathExists=/etc/rivet-server/
 
 [Service]
 # OTeL env vars
-Environment="RIVET_OTEL_ENABLED=1"
+Environment="RIVET_OTEL_ENABLED=__OTEL_ENABLED__"
 Environment="RIVET_OTEL_ENDPOINT=http://127.0.0.1:__OTEL_PORT__"
 Environment="RIVET_OTEL_SAMPLER_RATIO=__OTEL_SAMPLER_RATIO__"
 Environment="RIVET_SERVICE_NAME=rivet-edge"

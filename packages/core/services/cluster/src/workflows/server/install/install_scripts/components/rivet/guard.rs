@@ -148,12 +148,20 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		.replace("___datacenter_name_id___", "___DATACENTER_NAME_ID___")
 		.into();
 
+	let otel_enabled = std::env::var("RIVET_OTEL_ENABLED").unwrap_or("0".to_string());
+	let otel_sampler_ratio = std::env::var("RIVET_OTEL_SAMPLER_RATIO")
+		.ok()
+		.and_then(|s| s.parse::<f64>().ok())
+		.unwrap_or(0.001);
+	
 	Ok(include_str!("../../files/rivet_guard_configure.sh")
 		.replace(
 			"__RIVET_GUARD_CONFIG__",
 			&serde_json::to_string_pretty(&guard_config_json)?,
 		)
-		.replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string()))
+		.replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string())
+		.replace("__OTEL_ENABLED__", &otel_enabled.to_string())
+		.replace("__OTEL_SAMPLER_RATIO__", &otel_sampler_ratio.to_string()))
 }
 
 pub fn fetch_tls(server_token: &str) -> GlobalResult<String> {

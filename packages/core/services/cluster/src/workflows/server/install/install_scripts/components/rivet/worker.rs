@@ -154,6 +154,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		.replace("___datacenter_name_id___", "___DATACENTER_NAME_ID___")
 		.into();
 
+	let otel_enabled = std::env::var("RIVET_OTEL_ENABLED").unwrap_or("0".to_string());
 	let otel_sampler_ratio = std::env::var("RIVET_OTEL_SAMPLER_RATIO")
 		.ok()
 		.and_then(|s| s.parse::<f64>().ok())
@@ -165,5 +166,6 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			&serde_json::to_string_pretty(&edge_config_json)?,
 		)
 		.replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string())
+		.replace("__OTEL_ENABLED__", &otel_enabled.to_string())
 		.replace("__OTEL_SAMPLER_RATIO__", &otel_sampler_ratio.to_string()))
 }
