@@ -75,7 +75,7 @@ pub struct WorkflowCtx {
 }
 
 impl WorkflowCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(workflow_id=%data.workflow_id, workflow_name=%data.workflow_name, ray_id=%data.ray_id))]
 	pub async fn new(
 		registry: RegistryHandle,
 		db: DatabaseHandle,
@@ -136,9 +136,11 @@ impl WorkflowCtx {
 		}
 	}
 
-	#[tracing::instrument(name = "workflow_ctx_run", skip_all)]
-	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
-		tracing::debug!(name=%self.name, id=%self.workflow_id, "running workflow");
+	#[tracing::instrument(name = "workflow", skip_all, fields(parent_trace_id, workflow_id=%self.workflow_id, workflow_name=%self.name, ray_id=%self.ray_id))]
+	pub(crate) async fn run(mut self, parent_trace_id: opentelemetry::TraceId) -> WorkflowResult<()> {
+		tracing::Span::current().record("parent_trace_id", parent_trace_id.to_string());
+
+		tracing::debug!("running workflow");
 
 		// Check for stop before running
 		self.check_stop()?;
@@ -158,7 +160,7 @@ impl WorkflowCtx {
 
 		match res {
 			Ok(output) => {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, "workflow completed");
+				tracing::debug!("workflow completed");
 
 				let mut retries = 0;
 				let mut interval = tokio::time::interval(DB_ACTION_RETRY);
@@ -202,9 +204,9 @@ impl WorkflowCtx {
 				let wake_sub_workflow = err.sub_workflow();
 
 				if err.is_recoverable() && !err.is_retryable() {
-					tracing::debug!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
+					tracing::debug!(?err, "workflow sleeping");
 				} else {
-					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
+					tracing::error!(?err, "workflow error");
 
 					metrics::WORKFLOW_ERRORS
 						.with_label_values(&[&self.name, err.to_string().as_str()])
@@ -251,7 +253,7 @@ impl WorkflowCtx {
 	}
 
 	/// Run then handle the result of an activity.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(activity_name=%A::NAME, %location))]
 	async fn run_activity<A: Activity>(
 		&mut self,
 		input: &A::Input,
@@ -259,7 +261,7 @@ impl WorkflowCtx {
 		location: &Location,
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
-		tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "running activity");
+		tracing::debug!("running activity");
 
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
@@ -283,7 +285,7 @@ impl WorkflowCtx {
 
 		match res {
 			Ok(Ok(output)) => {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "activity success");
+				tracing::debug!("activity success");
 
 				// Write output
 				let input_val = serde_json::value::to_raw_value(input)
@@ -310,7 +312,7 @@ impl WorkflowCtx {
 				Ok(output)
 			}
 			Ok(Err(err)) => {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, ?err, "activity error");
+				tracing::debug!(?err, "activity error");
 
 				let err_str = err.to_string();
 				let input_val = serde_json::value::to_raw_value(input)
@@ -342,7 +344,7 @@ impl WorkflowCtx {
 				Err(WorkflowError::ActivityFailure(err, 0))
 			}
 			Err(err) => {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "activity timeout");
+				tracing::debug!("activity timeout");
 
 				let err_str = err.to_string();
 				let input_val = serde_json::value::to_raw_value(input)
@@ -381,7 +383,7 @@ impl WorkflowCtx {
 		self.custom_branch(self.input.clone(), self.version).await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(version))]
 	pub(crate) async fn custom_branch(
 		&mut self,
 		input: Arc<Box<serde_json::value::RawValue>>,
@@ -476,7 +478,7 @@ impl WorkflowCtx {
 	}
 
 	/// Run activity. Will replay on failure.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(activity_name=%I::Activity::NAME))]
 	pub async fn activity<I>(
 		&mut self,
 		input: I,
@@ -497,7 +499,7 @@ impl WorkflowCtx {
 
 		// Activity was ran before
 		let output = if let HistoryResult::Event(activity) = history_res {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
+			tracing::debug!("replaying activity");
 
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
@@ -509,12 +511,7 @@ impl WorkflowCtx {
 
 				// Backoff
 				if let Some(wake_deadline_ts) = self.wake_deadline_ts {
-					tracing::debug!(
-						name=%self.name,
-						id=%self.workflow_id,
-						activity_name=%I::Activity::NAME,
-						"sleeping for activity backoff"
-					);
+					tracing::debug!("sleeping for activity backoff");
 
 					let duration = (u64::try_from(wake_deadline_ts)?)
 						.saturating_sub(u64::try_from(rivet_util::timestamp::now())?);
@@ -591,6 +588,7 @@ impl WorkflowCtx {
 
 	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
 	/// Should always be used when trying to handle activity errors manually.
+	#[tracing::instrument(skip_all)]
 	pub fn catch_unrecoverable<T>(
 		&mut self,
 		res: GlobalResult<T>,
@@ -627,7 +625,7 @@ impl WorkflowCtx {
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
 		self.check_stop().map_err(GlobalError::raw)?;
 
@@ -640,8 +638,6 @@ impl WorkflowCtx {
 		// Signal received before
 		let signal = if let HistoryResult::Event(signal) = history_res {
 			tracing::debug!(
-				name=%self.name,
-				id=%self.workflow_id,
 				signal_name=%signal.name,
 				"replaying signal"
 			);
@@ -650,7 +646,7 @@ impl WorkflowCtx {
 		}
 		// Listen for new signal
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
+			tracing::debug!("listening for signal");
 
 			let mut wake_sub = self.db.wake_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
@@ -665,7 +661,7 @@ impl WorkflowCtx {
 			loop {
 				ctx.reset(retries == 0);
 
-				match T::listen(&mut ctx).await {
+				match T::listen(&mut ctx).in_current_span().await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries == 0 {
@@ -692,7 +688,7 @@ impl WorkflowCtx {
 	}
 
 	/// Execute a custom listener.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn custom_listener<T: CustomListener>(
 		&mut self,
 		listener: &T,
@@ -708,8 +704,6 @@ impl WorkflowCtx {
 		// Signal received before
 		let signal = if let HistoryResult::Event(signal) = history_res {
 			tracing::debug!(
-				name=%self.name,
-				id=%self.workflow_id,
 				signal_name=%signal.name,
 				"replaying signal",
 			);
@@ -718,7 +712,7 @@ impl WorkflowCtx {
 		}
 		// Listen for new signal
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
+			tracing::debug!("listening for signal");
 
 			let mut wake_sub = self.db.wake_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
@@ -733,7 +727,7 @@ impl WorkflowCtx {
 			loop {
 				ctx.reset(retries == 0);
 
-				match listener.listen(&mut ctx).await {
+				match listener.listen(&mut ctx).in_current_span().await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries == 0 {
@@ -771,7 +765,9 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		self.loop_inner((), |ctx, _| cb(ctx)).await
+		self.loop_inner((), |ctx, _| cb(ctx))
+			.in_current_span()
+			.await
 	}
 
 	/// Runs workflow steps in a loop with state.
@@ -782,10 +778,9 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		self.loop_inner(state, cb).await
+		self.loop_inner(state, cb).in_current_span().await
 	}
 
-	#[tracing::instrument(skip_all)]
 	async fn loop_inner<S, F, T>(&mut self, state: S, mut cb: F) -> GlobalResult<T>
 	where
 		S: Serialize + DeserializeOwned,
@@ -835,13 +830,13 @@ impl WorkflowCtx {
 
 		// Loop complete
 		let output = if let Some(output) = output {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying loop output");
+			tracing::debug!("replaying loop output");
 
 			output
 		}
 		// Run loop
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "running loop");
+			tracing::debug!("running loop");
 
 			loop {
 				self.check_stop().map_err(GlobalError::raw)?;
@@ -861,94 +856,97 @@ impl WorkflowCtx {
 				// Set branch loop location to the current loop
 				iteration_branch.loop_location = Some(loop_location.clone());
 
-				// Insert event if iteration is not a replay
-				if !loop_branch
-					.cursor
-					.compare_loop_branch(iteration)
-					.map_err(GlobalError::raw)?
-				{
-					self.db
-						.commit_workflow_branch_event(
-							self.workflow_id,
-							iteration_branch.cursor.root(),
-							self.version,
-							Some(&loop_location),
-						)
-						.await?;
+				let i = iteration;
+
+				// Async block for instrumentation purposes
+				let (dt2, res) = async {
+					// Insert event if iteration is not a replay
+					if !loop_branch
+						.cursor
+						.compare_loop_branch(iteration)
+						.map_err(GlobalError::raw)?
+					{
+						self.db
+							.commit_workflow_branch_event(
+								self.workflow_id,
+								iteration_branch.cursor.root(),
+								self.version,
+								Some(&loop_location),
+							)
+							.await?;
+					}
+	
+					let start_instant2 = Instant::now();
+
+					// Run loop
+					match cb(&mut iteration_branch, &mut state).await? {
+						Loop::Continue => {
+							let dt2 = start_instant2.elapsed().as_secs_f64();
+							iteration += 1;
+
+							let state_val = serde_json::value::to_raw_value(&state)
+								.map_err(WorkflowError::SerializeLoopOutput)
+								.map_err(GlobalError::raw)?;
+
+							self.db
+								.upsert_workflow_loop_event(
+									self.workflow_id,
+									&self.name,
+									&loop_location,
+									self.version,
+									iteration,
+									&state_val,
+									None,
+									self.loop_location(),
+								)
+								.await?;
+
+							GlobalResult::Ok((dt2, None))
+						}
+						Loop::Break(res) => {
+							let dt2 = start_instant2.elapsed().as_secs_f64();
+							iteration += 1;
+
+							let state_val = serde_json::value::to_raw_value(&state)
+								.map_err(WorkflowError::SerializeLoopOutput)
+								.map_err(GlobalError::raw)?;
+							let output_val = serde_json::value::to_raw_value(&res)
+								.map_err(WorkflowError::SerializeLoopOutput)
+								.map_err(GlobalError::raw)?;
+
+							self.db
+								.upsert_workflow_loop_event(
+									self.workflow_id,
+									&self.name,
+									&loop_location,
+									self.version,
+									iteration,
+									&state_val,
+									Some(&output_val),
+									self.loop_location(),
+								)
+								.await?;
+
+							Ok((dt2, Some(res)))
+						}
+					}
 				}
+				.instrument(tracing::info_span!("iteration", iteration=%i))
+				.await?;
 
-				// Run loop
-				let start_instant2 = Instant::now();
-				match cb(&mut iteration_branch, &mut state).await? {
-					Loop::Continue => {
-						let dt2 = start_instant2.elapsed().as_secs_f64();
-						iteration += 1;
+				// Validate no leftover events
+				iteration_branch
+					.cursor
+					.check_clear()
+					.map_err(GlobalError::raw)?;
 
-						let state_val = serde_json::value::to_raw_value(&state)
-							.map_err(WorkflowError::SerializeLoopOutput)
-							.map_err(GlobalError::raw)?;
+				let dt = start_instant.elapsed().as_secs_f64();
+				metrics::LOOP_ITERATION_DURATION
+					.with_label_values(&[&self.name])
+					.observe(dt - dt2);
 
-						self.db
-							.upsert_workflow_loop_event(
-								self.workflow_id,
-								&self.name,
-								&loop_location,
-								self.version,
-								iteration,
-								&state_val,
-								None,
-								self.loop_location(),
-							)
-							.await?;
-
-						// Validate no leftover events
-						iteration_branch
-							.cursor
-							.check_clear()
-							.map_err(GlobalError::raw)?;
-
-						let dt = start_instant.elapsed().as_secs_f64();
-						metrics::LOOP_ITERATION_DURATION
-							.with_label_values(&[&self.name])
-							.observe(dt - dt2);
-					}
-					Loop::Break(res) => {
-						let dt2 = start_instant2.elapsed().as_secs_f64();
-						iteration += 1;
-
-						let state_val = serde_json::value::to_raw_value(&state)
-							.map_err(WorkflowError::SerializeLoopOutput)
-							.map_err(GlobalError::raw)?;
-						let output_val = serde_json::value::to_raw_value(&res)
-							.map_err(WorkflowError::SerializeLoopOutput)
-							.map_err(GlobalError::raw)?;
-
-						self.db
-							.upsert_workflow_loop_event(
-								self.workflow_id,
-								&self.name,
-								&loop_location,
-								self.version,
-								iteration,
-								&state_val,
-								Some(&output_val),
-								self.loop_location(),
-							)
-							.await?;
-
-						// Validate no leftover events
-						iteration_branch
-							.cursor
-							.check_clear()
-							.map_err(GlobalError::raw)?;
-
-						let dt = start_instant.elapsed().as_secs_f64();
-						metrics::LOOP_ITERATION_DURATION
-							.with_label_values(&[&self.name])
-							.observe(dt - dt2);
-
-						break res;
-					}
+				if let Some(res) = res {
+					break res;
 				}
 			}
 		};
@@ -966,7 +964,7 @@ impl WorkflowCtx {
 		self.sleep_until(ts as i64).await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(duration))]
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
 		self.check_stop().map_err(GlobalError::raw)?;
 
@@ -978,7 +976,7 @@ impl WorkflowCtx {
 
 		// Slept before
 		let (deadline_ts, replay) = if let HistoryResult::Event(sleep) = history_res {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
+			tracing::debug!("replaying sleep");
 
 			(sleep.deadline_ts, true)
 		}
@@ -1000,16 +998,17 @@ impl WorkflowCtx {
 		};
 
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
+		tracing::Span::current().record("duration", &duration);
 
 		// No-op
 		if duration <= 0 {
 			if !replay && duration < -50 {
-				tracing::warn!(name=%self.name, id=%self.workflow_id, %duration, "tried to sleep for a negative duration");
+				tracing::warn!(%duration, "tried to sleep for a negative duration");
 			}
 		}
 		// Sleep in memory if duration is shorter than the worker tick
 		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+			tracing::debug!(%deadline_ts, "sleeping in memory");
 
 			tokio::select! {
 				_ = tokio::time::sleep(Duration::from_millis(duration.try_into()?)) => {},
@@ -1018,7 +1017,7 @@ impl WorkflowCtx {
 		}
 		// Workflow sleep
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
+			tracing::debug!(%deadline_ts, "sleeping");
 
 			return Err(GlobalError::raw(WorkflowError::Sleep(deadline_ts)));
 		}
@@ -1032,7 +1031,7 @@ impl WorkflowCtx {
 	/// Listens for a signal with a timeout. Returns `None` if the timeout is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen_with_timeout<T: Listen>(
 		&mut self,
 		duration: impl DurationToMillis,
@@ -1048,7 +1047,7 @@ impl WorkflowCtx {
 	/// Listens for a signal until the given timestamp. Returns `None` if the timestamp is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>(), duration))]
 	pub async fn listen_until<T: Listen>(
 		&mut self,
 		time: impl TsToMillis,
@@ -1064,7 +1063,7 @@ impl WorkflowCtx {
 
 		// Slept before
 		let (deadline_ts, state) = if let HistoryResult::Event(sleep) = history_res {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
+			tracing::debug!("replaying sleep");
 
 			(sleep.deadline_ts, sleep.state)
 		}
@@ -1098,8 +1097,6 @@ impl WorkflowCtx {
 
 			if let HistoryResult::Event(signal) = history_res {
 				tracing::debug!(
-					name=%self.name,
-					id=%self.workflow_id,
 					signal_name=%signal.name,
 					"replaying signal",
 				);
@@ -1122,6 +1119,7 @@ impl WorkflowCtx {
 		// Location of the signal event (comes after the sleep event)
 		let signal_location = self.cursor.current_location_for(&history_res2);
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
+		tracing::Span::current().record("duration", &duration);
 
 		// Duration is now 0, timeout is over
 		let signal = if duration <= 0 {
@@ -1129,7 +1127,7 @@ impl WorkflowCtx {
 			if matches!(state, SleepState::Normal) {
 				let mut ctx = ListenCtx::new(self, &signal_location);
 
-				match T::listen(&mut ctx).await {
+				match T::listen(&mut ctx).in_current_span().await {
 					Ok(x) => Some(x),
 					Err(WorkflowError::NoSignalFound(_)) => None,
 					Err(err) => return Err(GlobalError::raw(err)),
@@ -1140,12 +1138,12 @@ impl WorkflowCtx {
 		}
 		// Sleep in memory if duration is shorter than the worker tick
 		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+			tracing::debug!(%deadline_ts, "sleeping in memory");
 
 			let res = tokio::time::timeout(
 				Duration::from_millis(duration.try_into()?),
 				(async {
-					tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+					tracing::debug!("listening for signal with timeout");
 
 					let mut wake_sub = self.db.wake_sub().await?;
 					let mut interval = tokio::time::interval(self.db.signal_poll_interval());
@@ -1159,7 +1157,7 @@ impl WorkflowCtx {
 					loop {
 						ctx.reset(false);
 
-						match T::listen(&mut ctx).await {
+						match T::listen(&mut ctx).in_current_span().await {
 							// Retry
 							Err(WorkflowError::NoSignalFound(_)) => {}
 							x => return x,
@@ -1180,7 +1178,7 @@ impl WorkflowCtx {
 			match res {
 				Ok(res) => Some(res.map_err(GlobalError::raw)?),
 				Err(_) => {
-					tracing::debug!(name=%self.name, id=%self.workflow_id, "timed out listening for signal");
+					tracing::debug!("timed out listening for signal");
 
 					None
 				}
@@ -1188,7 +1186,7 @@ impl WorkflowCtx {
 		}
 		// Workflow sleep for long durations
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+			tracing::debug!("listening for signal with timeout");
 
 			let mut wake_sub = self.db.wake_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
@@ -1203,7 +1201,7 @@ impl WorkflowCtx {
 			loop {
 				ctx.reset(retries == 0);
 
-				match T::listen(&mut ctx).await {
+				match T::listen(&mut ctx).in_current_span().await {
 					Ok(res) => break Some(res),
 					Err(WorkflowError::NoSignalFound(signals)) => {
 						if retries == 0 {
@@ -1252,7 +1250,7 @@ impl WorkflowCtx {
 	}
 
 	/// Represents a removed workflow step.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn removed<T: Removed>(&mut self) -> GlobalResult<()> {
 		self.check_stop().map_err(GlobalError::raw)?;
 
@@ -1262,15 +1260,11 @@ impl WorkflowCtx {
 			.compare_removed::<T>()
 			.map_err(GlobalError::raw)?
 		{
-			tracing::debug!(
-				name=%self.name,
-				id=%self.workflow_id,
-				"skipping removed step",
-			);
+			tracing::debug!("skipping removed step",);
 		}
 		// New "removed" event
 		else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting removed step");
+			tracing::debug!("inserting removed step");
 
 			self.db
 				.commit_workflow_removed_event(
@@ -1291,7 +1285,7 @@ impl WorkflowCtx {
 
 	/// Returns the version of the current event in history. If no event exists, returns `current_version` and
 	/// inserts a version check event.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(current_version))]
 	pub async fn check_version(&mut self, current_version: usize) -> GlobalResult<usize> {
 		self.check_stop().map_err(GlobalError::raw)?;
 
@@ -1306,11 +1300,11 @@ impl WorkflowCtx {
 			.compare_version_check()
 			.map_err(GlobalError::raw)?
 		{
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "checking existing version");
+			tracing::debug!("checking existing version");
 
 			(is_version_check, step_version)
 		} else {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting version check");
+			tracing::debug!("inserting version check");
 
 			self.db
 				.commit_workflow_version_check_event(

@@ -71,7 +71,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		self
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message_name=M::NAME))]
 	pub async fn send(self) -> GlobalResult<()> {
 		self.ctx.check_stop().map_err(GlobalError::raw)?;
 
@@ -94,11 +94,11 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 
 		// Message sent before
 		if let HistoryResult::Event(_) = history_res {
-			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, "replaying message dispatch");
+			tracing::debug!("replaying message dispatch");
 		}
 		// Send message
 		else {
-			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, tags=?self.tags, "dispatching message");
+			tracing::debug!(tags=?self.tags, "dispatching message");
 
 			let start_instant = Instant::now();
 

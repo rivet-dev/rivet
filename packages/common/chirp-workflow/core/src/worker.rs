@@ -5,6 +5,8 @@ use std::{
 
 use futures_util::StreamExt;
 use global_error::GlobalResult;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::TraceContextExt;
 use tokio::{
 	signal::{
 		ctrl_c,
@@ -52,14 +54,13 @@ impl Worker {
 	}
 
 	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(worker_instance_id=%self.worker_instance_id))]
 	pub async fn start(
 		mut self,
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 	) -> GlobalResult<()> {
 		tracing::debug!(
-			worker_instance_id = ?self.worker_instance_id,
 			registered_workflows = ?self.registry.size(),
 			"started worker instance",
 		);
@@ -103,6 +104,7 @@ impl Worker {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut sigterm: Signal) {
 		// Shutdown sequence
 		tracing::info!(
@@ -181,8 +183,6 @@ impl Worker {
 		pools: &rivet_pools::Pools,
 		cache: &rivet_cache::Cache,
 	) -> GlobalResult<()> {
-		tracing::trace!("tick");
-
 		// Create filter from registered workflow names
 		let filter = self
 			.registry
@@ -230,13 +230,19 @@ impl Worker {
 			)
 			.await?;
 
+			let current_trace_id = tracing::Span::current()
+				.context()
+				.span()
+				.span_context()
+				.trace_id();
+
 			let handle = tokio::task::spawn(
+				// NOTE: No .in_current_span() because we want this to be a separate trace
 				async move {
-					if let Err(err) = ctx.run().await {
+					if let Err(err) = ctx.run(current_trace_id).await {
 						tracing::error!(?err, "unhandled workflow error");
 					}
-				}
-				.in_current_span(),
+				},
 			);
 
 			self.running_workflows.insert(

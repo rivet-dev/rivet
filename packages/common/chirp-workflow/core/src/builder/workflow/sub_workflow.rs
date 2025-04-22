@@ -3,6 +3,7 @@ use std::{fmt::Display, marker::PhantomData, sync::Arc, time::Instant};
 use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -113,12 +114,13 @@ where
 			tags,
 			self.unique,
 		)
+		.in_current_span()
 		.await
 		.map_err(GlobalError::raw)
 	}
 
 	// This doesn't have a self parameter because self.tags was already moved (see above)
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(sub_workflow_name=I::Workflow::NAME, sub_workflow_id, unique))]
 	async fn dispatch_workflow_inner(
 		ctx: &mut WorkflowCtx,
 		version: usize,
@@ -137,13 +139,7 @@ where
 
 		// Signal received before
 		let id = if let HistoryResult::Event(sub_workflow) = history_res {
-			tracing::debug!(
-				name=%ctx.name(),
-				id=%ctx.workflow_id(),
-				sub_workflow_name=%sub_workflow.name,
-				sub_workflow_id=%sub_workflow.sub_workflow_id,
-				"replaying workflow dispatch"
-			);
+			tracing::debug!("replaying workflow dispatch");
 
 			sub_workflow.sub_workflow_id
 		}
@@ -154,24 +150,9 @@ where
 			let start_instant = Instant::now();
 
 			if unique {
-				tracing::debug!(
-					name=%ctx.name(),
-					id=%ctx.workflow_id(),
-					%sub_workflow_name,
-					?tags,
-					?input,
-					"dispatching unique sub workflow"
-				);
+				tracing::debug!(?tags, ?input, "dispatching unique sub workflow");
 			} else {
-				tracing::debug!(
-					name=%ctx.name(),
-					id=%ctx.workflow_id(),
-					%sub_workflow_name,
-					%sub_workflow_id,
-					?tags,
-					?input,
-					"dispatching sub workflow"
-				);
+				tracing::debug!(?tags, ?input, "dispatching sub workflow");
 			}
 
 			// Serialize input
@@ -196,23 +177,9 @@ where
 
 			if unique {
 				if sub_workflow_id == actual_sub_workflow_id {
-					tracing::debug!(
-						name=%ctx.name(),
-						id=%ctx.workflow_id(),
-						%sub_workflow_name,
-						%sub_workflow_id,
-						?tags,
-						"dispatched unique sub workflow"
-					);
+					tracing::debug!(?tags, "dispatched unique sub workflow");
 				} else {
-					tracing::debug!(
-						name=%ctx.name(),
-						id=%ctx.workflow_id(),
-						%sub_workflow_name,
-						sub_workflow_id=%actual_sub_workflow_id,
-						?tags,
-						"unique sub workflow already exists"
-					);
+					tracing::debug!(?tags, "unique sub workflow already exists");
 				}
 			}
 
@@ -229,13 +196,15 @@ where
 			sub_workflow_id
 		};
 
+		tracing::Span::current().record("sub_workflow_id", id.to_string());
+
 		// Move to next event
 		ctx.cursor_mut().update(&location);
 
 		Ok(id)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(name="sub_workflow", skip_all, fields(sub_workflow_name=I::Workflow::NAME))]
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
@@ -257,7 +226,7 @@ where
 
 		let input = self.repr.as_input()?;
 
-		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
+		tracing::debug!("running sub workflow");
 
 		// Err for version mismatch
 		self.ctx
@@ -287,14 +256,14 @@ where
 
 	/// Wait for another workflow's response. If no response was found after polling the database, this
 	/// workflow will go to sleep until the sub workflow completes.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(sub_workflow_name=I::Workflow::NAME))]
 	async fn wait_for_workflow(
 		&self,
 		sub_workflow_id: Uuid,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
 		self.ctx.check_stop().map_err(GlobalError::raw)?;
 
-		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, ?sub_workflow_id, "waiting for sub workflow");
+		tracing::debug!("waiting for sub workflow");
 
 		let mut wake_sub = self.ctx.db().wake_sub().await?;
 		let mut retries = self.ctx.db().max_sub_workflow_poll_retries();
@@ -338,7 +307,7 @@ where
 	}
 
 	// TODO: Currently not supported in workflows because it is not idempotent. Requires a history step
-	// #[tracing::instrument(skip_all)]
+	// #[tracing::instrument(skip_all, fields(sub_workflow_name=I::Workflow::NAME))]
 	// pub async fn get(self) -> GlobalResult<Option<WorkflowData>> {
 	// 	let db = self.db.clone();
 	// 	let workflow_id = self.repr.as_workflow_id()?;

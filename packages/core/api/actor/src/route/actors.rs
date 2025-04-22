@@ -13,6 +13,7 @@ use rivet_api::{
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
+use tracing::Instrument;
 
 use crate::{
 	auth::{Auth, CheckOpts, CheckOutput},
@@ -29,6 +30,7 @@ pub struct GlobalEndpointTypeQuery {
 }
 
 // MARK: GET /actors/{}
+#[tracing::instrument(skip_all)]
 pub async fn get(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -121,7 +123,7 @@ async fn get_inner(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					_ => bail!("unknown error"),
+					err => bail!("unknown error: {err:?}"),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -192,6 +194,7 @@ pub async fn get_deprecated(
 }
 
 // MARK: POST /actors
+#[tracing::instrument(skip_all)]
 pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::ActorsCreateActorRequest,
@@ -233,6 +236,7 @@ pub async fn create(
 		query.global.environment.as_deref(),
 		query.endpoint_type,
 	)
+	.instrument(tracing::info_span!("proxy request"))
 	.await
 	{
 		Ok(res) => Ok(res),
@@ -246,7 +250,7 @@ pub async fn create(
 				.http_status(content.status)
 				.message(body.message)
 				.build()),
-			_ => bail!("unknown error"),
+			err => bail!("unknown error: {err:?}"),
 		},
 		Err(err) => bail!("request error: {err:?}"),
 	}
@@ -356,6 +360,7 @@ pub struct DeleteQuery {
 	override_kill_timeout: Option<i64>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn destroy(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -425,6 +430,7 @@ pub async fn destroy(
 				query.global.environment.as_deref(),
 				query.override_kill_timeout,
 			)
+			.instrument(tracing::info_span!("proxy request"))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -438,7 +444,7 @@ pub async fn destroy(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					_ => bail!("unknown error"),
+					err => bail!("unknown error: {err:?}"),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -482,6 +488,7 @@ pub async fn destroy_deprecated(
 }
 
 // MARK: POST /actors/{}/upgrade
+#[tracing::instrument(skip_all)]
 pub async fn upgrade(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -552,6 +559,7 @@ pub async fn upgrade(
 				query.project.as_deref(),
 				query.environment.as_deref(),
 			)
+			.instrument(tracing::info_span!("proxy request"))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -565,7 +573,7 @@ pub async fn upgrade(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					_ => bail!("unknown error"),
+					err => bail!("unknown error: {err:?}"),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -590,6 +598,7 @@ pub async fn upgrade(
 }
 
 // MARK: POST /actors/upgrade
+#[tracing::instrument(skip_all)]
 pub async fn upgrade_all(
 	ctx: Ctx<Auth>,
 	body: models::ActorsUpgradeAllActorsRequest,
@@ -698,6 +707,7 @@ pub async fn upgrade_all(
 				query.project.as_deref(),
 				query.environment.as_deref(),
 			)
+			.instrument(tracing::info_span!("proxy request"))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -711,7 +721,7 @@ pub async fn upgrade_all(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					_ => bail!("unknown error"),
+					err => bail!("unknown error: {err:?}"),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -737,6 +747,7 @@ pub struct ListQuery {
 	cursor: Option<String>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn list_actors(
 	ctx: Ctx<Auth>,
 	watch_index: WatchIndexQuery,
@@ -863,7 +874,8 @@ async fn list_actors_inner(
 					query.tags_json.as_deref(),
 					query.include_destroyed,
 					query.cursor.as_deref(),
-				),
+				)
+				.instrument(tracing::info_span!("proxy request")),
 			)
 			.await;
 
@@ -883,7 +895,7 @@ async fn list_actors_inner(
 								.message(body.message)
 								.build())
 						}
-						_ => bail!("unknown error"),
+						err => bail!("unknown error: {err:?}"),
 					},
 					Err(err) => bail!("request error: {err:?}"),
 				},
@@ -1088,6 +1100,7 @@ fn legacy_convert_actor_to_server(
 	})
 }
 
+#[tracing::instrument(skip_all)]
 async fn resolve_dc(
 	ctx: &Ctx<Auth>,
 	cluster_id: Uuid,

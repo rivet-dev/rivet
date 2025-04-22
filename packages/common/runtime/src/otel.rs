@@ -14,13 +14,24 @@ use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 fn resource() -> Resource {
-	Resource::builder()
+	let mut resource = Resource::builder()
 		.with_service_name(rivet_env::service_name())
 		.with_schema_url(
 			[KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION"))],
 			SCHEMA_URL,
-		)
-		.build()
+		);
+
+	if let Ok(v) = std::env::var("RIVET_CLUSTER_ID") {
+		resource = resource.with_attribute(KeyValue::new("cluster_id", v));
+	}
+	if let Ok(v) = std::env::var("RIVET_DATACENTER_ID") {
+		resource = resource.with_attribute(KeyValue::new("datacenter_id", v));
+	}
+	if let Ok(v) = std::env::var("RIVET_SERVER_ID") {
+		resource = resource.with_attribute(KeyValue::new("server_id", v));
+	}
+
+	resource.build()
 }
 
 fn otel_endpoint() -> String {
@@ -38,7 +49,10 @@ fn init_tracer_provider() -> SdkTracerProvider {
 	SdkTracerProvider::builder()
 		// Customize sampling strategy
 		.with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
-			1.0,
+			std::env::var("RIVET_OTEL_SAMPLER_RATIO")
+				.ok()
+				.and_then(|s| s.parse::<f64>().ok())
+				.unwrap_or(0.001),
 		))))
 		// If export trace to AWS X-Ray, you can use XrayIdGenerator
 		.with_id_generator(RandomIdGenerator::default())
@@ -91,116 +105,107 @@ fn init_meter_provider() -> SdkMeterProvider {
 //		.build()
 //}
 
+// TODO: Ugly function
 // Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
-pub fn init_tracing_subscriber() -> OtelGuard {
-	//let tracer_provider = init_tracer_provider();
-	//let meter_provider = init_meter_provider();
+pub fn init_tracing_subscriber() -> Option<OtelGuard> {
+	let registry = tracing_subscriber::registry();
 	//let logger_provider = init_logger_provider();
 
-	//let tracer = tracer_provider.tracer("tracing-otel-subscriber");
-
-	// For the OpenTelemetry layer, add a tracing filter to filter events from
-	// OpenTelemetry and its dependent crates (opentelemetry-otlp uses crates
-	// like reqwest/tonic etc.) from being sent back to OTel itself, thus
-	// preventing infinite telemetry generation. The filter levels are set as
-	// follows:
-	// - Allow `info` level and above by default.
-	// - Restrict `opentelemetry`, `hyper`, `tonic`, and `reqwest` completely.
-	// Note: This will also drop events from crates like `tonic` etc. even when
-	// they are used outside the OTLP Exporter. For more details, see:
-	// https://github.com/open-telemetry/opentelemetry-rust/issues/761
-	//let filter_otel = EnvFilter::new("info")
-	//	.add_directive("hyper=off".parse().unwrap())
-	//	.add_directive("opentelemetry=off".parse().unwrap())
-	//	.add_directive("tonic=off".parse().unwrap())
-	//	.add_directive("h2=off".parse().unwrap())
-	//	.add_directive("reqwest=off".parse().unwrap());
-	//let logger =
-	//	opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&logger_provider)
-	//		.with_filter(filter_otel);
-
-	// Create env filter
-	let mut env_filter = EnvFilter::default()
-		// Default filter
-		.add_directive("info".parse().unwrap())
-		// Disable verbose logs
-		.add_directive("tokio_cron_scheduler=warn".parse().unwrap());
-
-	if let Ok(filter) = std::env::var("RUST_LOG") {
-		for s in filter.split(',').filter(|x| !x.is_empty()) {
-			env_filter = env_filter.add_directive(s.parse().expect("invalid env filter"));
-		}
-	}
+	// Check if otel is enabled
+	let enable_otel = std::env::var("RIVET_OTEL_ENABLED").map_or(false, |x| x == "1");
 
 	// Check if tokio console is enabled
 	let enable_tokio_console = std::env::var("TOKIO_CONSOLE_ENABLE").map_or(false, |x| x == "1");
 
-	if enable_tokio_console {
-		let console_layer = console_subscriber::ConsoleLayer::builder()
-			.with_default_env()
-			.spawn();
-
-		// Create logfmt logger
-		let logfmt_layer = tracing_logfmt::builder()
-			.with_span_name(std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"))
-			.with_span_path(std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"))
-			.with_target(std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"))
-			.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
-			.with_module_path(std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"))
-			.with_ansi_color(std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"))
-			.layer()
-			.with_filter(env_filter);
-
-		tracing_subscriber::registry()
-			.with(console_layer)
-			//.with(OpenTelemetryLayer::new(tracer))
-			//.with(MetricsLayer::new(meter_provider.clone()))
-			//.with(logger)
-			.with(logfmt_layer)
-			.init();
-	} else {
-		// Create logfmt logger
-		let logfmt_layer = tracing_logfmt::builder()
-			.with_span_name(std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"))
-			.with_span_path(std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"))
-			.with_target(std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"))
-			.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
-			.with_module_path(std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"))
-			.with_ansi_color(std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"))
-			.layer()
-			.with_filter(env_filter);
-
-		tracing_subscriber::registry()
-			//.with(OpenTelemetryLayer::new(tracer))
-			//.with(MetricsLayer::new(meter_provider.clone()))
-			//.with(logger)
-			.with(logfmt_layer)
-			.init();
+	// This macro exists because .layer() has weird type semantics
+	macro_rules! logfmt_layer {
+		() => {
+			tracing_logfmt::builder()
+				.with_span_name(std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"))
+				.with_span_path(std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"))
+				.with_target(std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"))
+				.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
+				.with_module_path(std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"))
+				.with_ansi_color(std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"))
+				.layer()
+				.with_filter(env_filter("RUST_LOG"))
+		};
 	}
 
-	OtelGuard {
-		//tracer_provider,
-		//meter_provider,
-		//logger_provider,
+	if enable_otel {
+		let tracer_provider = init_tracer_provider();
+		let meter_provider = init_meter_provider();
+		let tracer = tracer_provider.tracer("tracing-otel-subscriber");
+
+		let registry = registry
+			.with(OpenTelemetryLayer::new(tracer).with_filter(env_filter("RUST_TRACE")))
+			.with(MetricsLayer::new(meter_provider.clone()).with_filter(env_filter("RUST_TRACE")));
+
+		if enable_tokio_console {
+			let console_layer = console_subscriber::ConsoleLayer::builder()
+				.with_default_env()
+				.spawn();
+
+			registry.with(console_layer).with(logfmt_layer!()).init();
+		} else {
+			registry.with(logfmt_layer!()).init();
+		}
+
+		Some(OtelGuard {
+			tracer_provider,
+			meter_provider,
+		})
+	} else {
+		if enable_tokio_console {
+			let console_layer = console_subscriber::ConsoleLayer::builder()
+				.with_default_env()
+				.spawn();
+
+			registry.with(console_layer).with(logfmt_layer!()).init();
+		} else {
+			registry.with(logfmt_layer!()).init();
+		}
+
+		None
 	}
 }
 
 pub struct OtelGuard {
-	//tracer_provider: SdkTracerProvider,
-	//meter_provider: SdkMeterProvider,
+	tracer_provider: SdkTracerProvider,
+	meter_provider: SdkMeterProvider,
 	//logger_provider: SdkLoggerProvider,
 }
 
 impl Drop for OtelGuard {
 	fn drop(&mut self) {
-		//if let Err(err) = self.tracer_provider.shutdown() {
-		//	eprintln!("{err:?}");
-		//}
-		//if let Err(err) = self.meter_provider.shutdown() {
-		//	eprintln!("{err:?}");
-		//}
+		if let Err(err) = self.tracer_provider.shutdown() {
+			eprintln!("{err:?}");
+		}
+		if let Err(err) = self.meter_provider.shutdown() {
+			eprintln!("{err:?}");
+		}
 		//if let Err(err) = self.logger_provider.shutdown() {
 		//	eprintln!("{err:?}");
 		//}
 	}
+}
+
+fn env_filter(env_var: &str) -> EnvFilter {
+	// Create env filter
+	let mut env_filter = EnvFilter::default()
+		// Default filter
+		.add_directive("info".parse().unwrap())
+		// Disable verbose logs
+		.add_directive("tokio_cron_scheduler=warn".parse().unwrap())
+		.add_directive("tokio=warn".parse().unwrap())
+		.add_directive("hyper=warn".parse().unwrap())
+		.add_directive("h2=warn".parse().unwrap());
+
+	if let Ok(filter) = std::env::var(env_var) {
+		for s in filter.split(',').filter(|x| !x.is_empty()) {
+			env_filter = env_filter.add_directive(s.parse().expect("invalid env filter"));
+		}
+	}
+
+	env_filter
 }

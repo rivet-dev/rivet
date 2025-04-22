@@ -1,6 +1,7 @@
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -36,7 +37,7 @@ pub struct OperationCtx {
 }
 
 impl OperationCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%ray_id, req_id, from_workflow, name))]
 	pub async fn new(
 		db: DatabaseHandle,
 		config: &rivet_config::Config,
@@ -61,6 +62,8 @@ impl OperationCtx {
 			(),
 		);
 		op_ctx.from_workflow = from_workflow;
+
+		tracing::Span::current().record("req_id", req_id.to_string());
 
 		let msg_ctx = MessageCtx::new(&conn, ray_id).await?;
 
@@ -96,12 +99,14 @@ impl OperationCtx {
 	}
 
 	/// Finds the first incomplete workflow with the given tags.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, ret(Debug), fields(workflow_name=W::NAME))]
 	pub async fn find_workflow<W: Workflow>(
 		&self,
 		tags: impl AsTags,
 	) -> GlobalResult<Option<Uuid>> {
-		common::find_workflow::<W>(&self.db, tags).await
+		common::find_workflow::<W>(&self.db, tags)
+			.in_current_span()
+			.await
 	}
 
 	/// Creates a signal builder.
@@ -115,7 +120,7 @@ impl OperationCtx {
 		)
 	}
 
-	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+	#[tracing::instrument(skip_all, fields(operation_name=I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -133,6 +138,7 @@ impl OperationCtx {
 			self.op_ctx.from_workflow,
 			input,
 		)
+		.in_current_span()
 		.await
 	}
 
@@ -141,29 +147,31 @@ impl OperationCtx {
 		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.subscribe::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.tail_read::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,
@@ -174,6 +182,7 @@ impl OperationCtx {
 	{
 		self.msg_ctx
 			.tail_anchor::<M>(tags, anchor)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
@@ -262,7 +271,7 @@ impl OperationCtx {
 		self.conn.fdb().await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
 		common::sqlite_for_workflow(
 			&self.db,
@@ -270,6 +279,7 @@ impl OperationCtx {
 			workflow_id,
 			!self.op_ctx.from_workflow,
 		)
+		.in_current_span()
 		.await
 	}
 

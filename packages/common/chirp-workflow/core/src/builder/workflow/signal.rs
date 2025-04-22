@@ -84,7 +84,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		self
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(signal_name=T::NAME, signal_id))]
 	pub async fn send(self) -> GlobalResult<Uuid> {
 		self.ctx.check_stop().map_err(GlobalError::raw)?;
 
@@ -107,13 +107,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 		// Signal sent before
 		let signal_id = if let HistoryResult::Event(signal) = history_res {
-			tracing::debug!(
-				name=%self.ctx.name(),
-				id=%self.ctx.workflow_id(),
-				signal_name=%signal.name,
-				signal_id=%signal.signal_id,
-				"replaying signal dispatch",
-			);
+			tracing::debug!("replaying signal dispatch",);
 
 			signal.signal_id
 		}
@@ -134,11 +128,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 			) {
 				(Some(workflow_name), None, _) => {
 					tracing::debug!(
-						name=%self.ctx.name(),
-						id=%self.ctx.workflow_id(),
-						signal_name=%T::NAME,
 						to_workflow_name=%workflow_name,
-						%signal_id,
 						"dispatching signal via workflow name and tags"
 					);
 
@@ -168,11 +158,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 				}
 				(None, Some(workflow_id), true) => {
 					tracing::debug!(
-						name=%self.ctx.name(),
-						id=%self.ctx.workflow_id(),
-						signal_name=%T::NAME,
 						to_workflow_id=%workflow_id,
-						%signal_id,
 						"dispatching signal via workflow id"
 					);
 
@@ -194,11 +180,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 				}
 				(None, None, false) => {
 					tracing::debug!(
-						name=%self.ctx.name(),
-						id=%self.ctx.workflow_id(),
-						signal_name=%T::NAME,
 						tags=?self.tags,
-						%signal_id,
 						"dispatching tagged signal"
 					);
 
@@ -248,6 +230,8 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 			signal_id
 		};
+
+		tracing::Span::current().record("signal_id", signal_id.to_string());
 
 		// Move to next event
 		self.ctx.cursor_mut().update(&location);

@@ -64,13 +64,13 @@ impl<M: Message> MessageBuilder<M> {
 		self
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message_name=M::NAME))]
 	pub async fn send(self) -> GlobalResult<()> {
 		if let Some(err) = self.error {
 			return Err(err.into());
 		}
 
-		tracing::debug!(msg_name=%M::NAME, tags=?self.tags, "dispatching message");
+		tracing::debug!(tags=?self.tags, "dispatching message");
 
 		let start_instant = Instant::now();
 

@@ -33,7 +33,6 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 	output
 }
 
-
 /// Shuts down the entire rivet runtime, if one is running. This future will never resolve.
 pub async fn shutdown() {
 	if let Some(shutdown) = SHUTDOWN.get() {
@@ -41,7 +40,7 @@ pub async fn shutdown() {
 	} else {
 		tracing::error!("no runtime to shutdown");
 	};
-	
+
 	// Wait forever, the runtime should be shutting down
 	std::future::pending().await
 }
@@ -53,7 +52,7 @@ pub fn sync_shutdown() {
 	} else {
 		tracing::error!("no runtime to shutdown");
 	};
-	
+
 	panic!("shutting down");
 }
 

@@ -429,7 +429,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id, %workflow_name, unique))]
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -502,7 +502,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(actual_workflow_id)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
 		sql_fetch_optional!(
 			[self, WorkflowRow]
@@ -526,10 +526,10 @@ impl Database for DatabaseCrdbNats {
 		.map(|row| row.map(Into::into))
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_name))]
 	async fn find_workflow(
 		&self,
-		_workflow_name: &str,
+		workflow_name: &str,
 		_tags: &serde_json::Value,
 	) -> WorkflowResult<Option<Uuid>> {
 		unimplemented!();
@@ -1323,7 +1323,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%sub_workflow_id, %sub_workflow_name, unique))]
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,

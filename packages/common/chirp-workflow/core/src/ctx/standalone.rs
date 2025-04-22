@@ -1,6 +1,7 @@
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -36,7 +37,7 @@ pub struct StandaloneCtx {
 }
 
 impl StandaloneCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(name, ray_id, req_id))]
 	pub async fn new(
 		db: DatabaseHandle,
 		config: rivet_config::Config,
@@ -46,6 +47,10 @@ impl StandaloneCtx {
 		let req_id = Uuid::new_v4();
 		let ray_id = Uuid::new_v4();
 		let ts = rivet_util::timestamp::now();
+
+		let span = tracing::Span::current();
+		span.record("req_id", req_id.to_string());
+		span.record("ray_id", ray_id.to_string());
 
 		let op_ctx = rivet_operation::OperationContext::new(
 			name.to_string(),
@@ -93,7 +98,7 @@ impl StandaloneCtx {
 		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body, false)
 	}
 
-	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+	#[tracing::instrument(skip_all, fields(operation_name=I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -111,6 +116,7 @@ impl StandaloneCtx {
 			false,
 			input,
 		)
+		.in_current_span()
 		.await
 	}
 
@@ -119,29 +125,31 @@ impl StandaloneCtx {
 		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.subscribe::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.tail_read::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,
@@ -152,6 +160,7 @@ impl StandaloneCtx {
 	{
 		self.msg_ctx
 			.tail_anchor::<M>(tags, anchor)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
@@ -249,9 +258,11 @@ impl StandaloneCtx {
 		self.conn.fdb().await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
-		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true)
+			.in_current_span()
+			.await
 	}
 
 	// Backwards compatibility

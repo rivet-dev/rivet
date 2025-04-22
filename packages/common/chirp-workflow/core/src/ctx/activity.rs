@@ -1,5 +1,6 @@
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -33,7 +34,7 @@ pub struct ActivityCtx {
 }
 
 impl ActivityCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(activity_name=%name))]
 	pub async fn new(
 		workflow_id: Uuid,
 		workflow_name: String,
@@ -78,7 +79,7 @@ impl ActivityCtx {
 }
 
 impl ActivityCtx {
-	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+	#[tracing::instrument(skip_all, fields(operation_name=I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -96,11 +97,10 @@ impl ActivityCtx {
 			true,
 			input,
 		)
+		.in_current_span()
 		.await
 	}
 
-	// TODO: Theres nothing preventing this from being able to be called from the workflow ctx also, but for
-	// now its only in the activity ctx so it isn't called again during workflow retries
 	#[tracing::instrument(skip_all)]
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
@@ -111,33 +111,35 @@ impl ActivityCtx {
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.subscribe::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.tail_read::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,
@@ -148,6 +150,7 @@ impl ActivityCtx {
 	{
 		self.msg_ctx
 			.tail_anchor::<M>(tags, anchor)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
@@ -248,9 +251,11 @@ impl ActivityCtx {
 			.await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
-		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true)
+			.in_current_span()
+			.await
 	}
 
 	// Backwards compatibility

@@ -5,6 +5,7 @@ use rivet_config::{
 };
 use rivet_pools::prelude::*;
 use serde::Serialize;
+use tracing::Instrument;
 use url::Url;
 use uuid::Uuid;
 
@@ -40,7 +41,7 @@ pub struct TestCtx {
 }
 
 impl TestCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument]
 	pub async fn from_env<DB: Database + Sync + 'static>(
 		test_name: &str,
 		no_config: bool,
@@ -142,7 +143,7 @@ impl TestCtx {
 		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body, false)
 	}
 
-	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+	#[tracing::instrument(skip_all, fields(operation_name=I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
 		input: I,
@@ -160,6 +161,7 @@ impl TestCtx {
 			false,
 			input,
 		)
+		.in_current_span()
 		.await
 	}
 
@@ -167,30 +169,32 @@ impl TestCtx {
 		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.subscribe::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
-	pub async fn tail_read<M, T>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
+	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
 		self.msg_ctx
 			.tail_read::<M>(tags)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
 
-	#[tracing::instrument(skip_all)]
-	pub async fn tail_anchor<M, T>(
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
+	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,
 		anchor: &TailAnchor,
@@ -200,6 +204,7 @@ impl TestCtx {
 	{
 		self.msg_ctx
 			.tail_anchor::<M>(tags, anchor)
+			.in_current_span()
 			.await
 			.map_err(GlobalError::raw)
 	}
@@ -291,9 +296,11 @@ impl TestCtx {
 		self.conn.clickhouse().await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
-		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true)
+			.in_current_span()
+			.await
 	}
 
 	// Backwards compatibility

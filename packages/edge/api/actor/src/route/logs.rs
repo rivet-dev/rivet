@@ -23,6 +23,7 @@ pub struct GetActorLogsQuery {
 	pub stream: models::CloudGamesLogStream,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,

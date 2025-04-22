@@ -68,6 +68,7 @@ impl Auth {
 	/// If in development mode:
 	/// - The project & env will fallback to "default" if not provided
 	/// - The auth token will always pass
+	#[tracing::instrument(skip_all)]
 	pub async fn check(
 		&self,
 		ctx: &OperationContext<()>,

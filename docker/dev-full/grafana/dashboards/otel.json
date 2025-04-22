@@ -167,7 +167,7 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-			  "database": "otel",
+              "database": "otel",
               "table": "otel_traces"
             }
           },
@@ -308,7 +308,7 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-			  "database": "otel",
+              "database": "otel",
               "table": "otel_traces"
             }
           },
@@ -449,7 +449,7 @@
               "mode": "trend",
               "orderBy": [],
               "queryType": "timeseries",
-			  "database": "otel",
+              "database": "otel",
               "table": "otel_traces"
             }
           },
@@ -662,13 +662,13 @@
               "mode": "list",
               "orderBy": [],
               "queryType": "table",
-			  "database": "otel",
+              "database": "otel",
               "table": "otel_traces"
             }
           },
           "pluginVersion": "4.0.6",
           "queryType": "table",
-          "rawSql": "SELECT\r\n  min(Timestamp) as timestamp,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ServiceName IN (${serviceName:singlequote})\r\n  AND ServiceName != 'loadgenerator'\r\n  AND $__timeFilter(Timestamp)\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
+          "rawSql": "SELECT\r\n  min(Timestamp) as timestamp,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${serviceName:singlequote})\r\n  AND ServiceName != 'loadgenerator'\r\n  AND $__timeFilter(Timestamp)\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
           "refId": "A"
         }
       ],
@@ -785,7 +785,7 @@
               }
             ],
             "queryType": "traces",
-			"database": "otel",
+            "database": "otel",
             "table": "otel_traces"
           },
           "datasource": {
@@ -878,7 +878,7 @@
             "mode": "list",
             "orderBy": [],
             "queryType": "logs",
-			"database": "otel",
+            "database": "otel",
             "table": "otel_logs"
           },
           "datasource": {

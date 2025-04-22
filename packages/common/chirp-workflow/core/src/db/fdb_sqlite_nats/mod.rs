@@ -683,7 +683,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id, %workflow_name, unique))]
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -848,7 +848,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(workflow_id)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
 		self.pools
 			.fdb()?
@@ -916,7 +916,7 @@ impl Database for DatabaseFdbSqliteNats {
 	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
 	/// lowest uuid value (interpreted as u128) because its in a KV store. There is no way to get any other
 	/// workflow besides the first.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%workflow_name))]
 	async fn find_workflow(
 		&self,
 		workflow_name: &str,
@@ -2390,7 +2390,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Err(WorkflowError::TaggedSignalsDisabled)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%sub_workflow_id, %sub_workflow_name, unique))]
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,

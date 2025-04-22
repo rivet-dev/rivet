@@ -6,6 +6,7 @@ use rivet_api::{
 };
 use rivet_operation::prelude::*;
 use serde::Deserialize;
+use tracing::Instrument;
 
 use crate::{
 	auth::{Auth, CheckOpts, CheckOutput},
@@ -22,6 +23,7 @@ pub struct GetActorLogsQuery {
 	pub stream: models::ActorsLogStream,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
 	server_id: Uuid,
@@ -93,6 +95,7 @@ pub async fn get_logs(
 				query.global.environment.as_deref(),
 				watch_index.watch_index.as_deref(),
 			)
+			.instrument(tracing::info_span!("proxy request"))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -106,7 +109,7 @@ pub async fn get_logs(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					_ => bail!("unknown error"),
+					err => bail!("unknown error: {err:?}"),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}

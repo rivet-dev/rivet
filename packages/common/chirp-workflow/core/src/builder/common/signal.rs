@@ -82,7 +82,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		self
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(signal_name=T::NAME, signal_id))]
 	pub async fn send(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -90,6 +90,8 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 
 		let signal_id = Uuid::new_v4();
 		let start_instant = Instant::now();
+
+		tracing::Span::current().record("signal_id", signal_id.to_string());
 
 		// Serialize input
 		let input_val = serde_json::value::to_raw_value(&self.body)
@@ -103,7 +105,6 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		) {
 			(Some(workflow_name), None, _) => {
 				tracing::debug!(
-					signal_name=%T::NAME,
 					to_workflow_name=%workflow_name,
 					tags=?self.tags,
 					%signal_id,
@@ -123,7 +124,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 					.map_err(GlobalError::raw)?;
 			}
 			(None, Some(workflow_id), true) => {
-				tracing::debug!(signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal via workflow id");
+				tracing::debug!(to_workflow_id=%workflow_id, %signal_id, "dispatching signal via workflow id");
 
 				self.db
 					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, &input_val)
@@ -131,7 +132,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 					.map_err(GlobalError::raw)?;
 			}
 			(None, None, false) => {
-				tracing::debug!(signal_name=%T::NAME, tags=?self.tags, %signal_id, "dispatching tagged signal");
+				tracing::debug!(tags=?self.tags, %signal_id, "dispatching tagged signal");
 
 				self.db
 					.publish_tagged_signal(

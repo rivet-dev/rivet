@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 use global_error::prelude::*;
 use serde::Serialize;
+use tracing::Instrument;
 
 use crate::{
 	builder::{common as builder, WorkflowRepr},
@@ -67,7 +68,7 @@ pub async fn msg<M: Message, B: Debug + Clone>(
 	Ok(builder::message::MessageBuilder::new(msg_ctx, body))
 }
 
-#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+#[tracing::instrument(skip_all, fields(operation_name=I::Operation::NAME))]
 pub async fn op<I, B>(
 	ctx: &rivet_operation::OperationContext<B>,
 	input: I,
@@ -87,6 +88,7 @@ where
 		ctx.from_workflow(),
 		input,
 	)
+	.in_current_span()
 	.await
 }
 

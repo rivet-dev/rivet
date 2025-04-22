@@ -2,6 +2,7 @@ use std::{fmt::Display, marker::PhantomData, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
@@ -83,7 +84,7 @@ where
 		self
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(workflow_name=I::Workflow::NAME, workflow_id, unique=self.unique))]
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -99,20 +100,9 @@ where
 		let tags = if no_tags { None } else { Some(&tags) };
 
 		if self.unique {
-			tracing::debug!(
-				%workflow_name,
-				?tags,
-				?input,
-				"dispatching unique workflow"
-			);
+			tracing::debug!(?tags, ?input, "dispatching unique workflow");
 		} else {
-			tracing::debug!(
-				%workflow_name,
-				%workflow_id,
-				?tags,
-				?input,
-				"dispatching workflow"
-			);
+			tracing::debug!(?tags, ?input, "dispatching workflow");
 		}
 
 		// Serialize input
@@ -133,21 +123,13 @@ where
 			.await
 			.map_err(GlobalError::raw)?;
 
+		tracing::Span::current().record("workflow_id", actual_workflow_id.to_string());
+
 		if self.unique {
 			if workflow_id == actual_workflow_id {
-				tracing::debug!(
-					%workflow_name,
-					%workflow_id,
-					?tags,
-					"dispatched unique workflow"
-				);
+				tracing::debug!(?tags, "dispatched unique workflow");
 			} else {
-				tracing::debug!(
-					%workflow_name,
-					workflow_id=%actual_workflow_id,
-					?tags,
-					"unique workflow already exists"
-				);
+				tracing::debug!(?tags, "unique workflow already exists");
 			}
 		}
 
@@ -164,7 +146,7 @@ where
 		Ok(actual_workflow_id)
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(name="workflow", skip_all, fields(workflow_name=I::Workflow::NAME))]
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
@@ -182,10 +164,12 @@ where
 			self.dispatch().await?
 		};
 
-		common::wait_for_workflow_output::<I::Workflow>(&db, workflow_id).await
+		common::wait_for_workflow_output::<I::Workflow>(&db, workflow_id)
+			.in_current_span()
+			.await
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(workflow_name=I::Workflow::NAME))]
 	pub async fn get(self) -> GlobalResult<Option<WorkflowData>> {
 		let db = self.db.clone();
 		let workflow_id = self.repr.as_workflow_id()?;

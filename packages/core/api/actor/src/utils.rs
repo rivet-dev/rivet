@@ -5,6 +5,7 @@ use rivet_operation::prelude::*;
 use crate::{auth::Auth, route::GlobalQuery};
 
 /// Converts the legacy UUID-based routing for games & ns to the slug-based routing.
+#[tracing::instrument(skip_all)]
 pub async fn build_global_query_compat(
 	ctx: &Ctx<Auth>,
 	project_id: Uuid,

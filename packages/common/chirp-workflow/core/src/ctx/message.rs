@@ -34,7 +34,7 @@ pub struct MessageCtx {
 }
 
 impl MessageCtx {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(%ray_id))]
 	pub async fn new(conn: &rivet_connection::Connection, ray_id: Uuid) -> WorkflowResult<Self> {
 		Ok(MessageCtx {
 			nats: conn.nats().await?,
@@ -56,7 +56,7 @@ impl MessageCtx {
 	/// finish publishing. This is done since there are very few cases where a
 	/// service should need to wait or fail if a message does not publish
 	/// successfully.
-	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
+	#[tracing::instrument(skip_all, fields(message=M::NAME))]
 	pub async fn message<M>(
 		&self,
 		tags: impl AsTags + 'static,
@@ -91,7 +91,7 @@ impl MessageCtx {
 	/// This is useful in scenarios where we need to publish a large amount of
 	/// messages at once so we put the messages in a queue instead of submitting
 	/// a large number of tasks to Tokio at once.
-	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
+	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn message_wait<M>(&self, tags: impl AsTags, message_body: M) -> WorkflowResult<()>
 	where
 		M: Message,
@@ -229,7 +229,7 @@ impl MessageCtx {
 // MARK: Subscriptions
 impl MessageCtx {
 	/// Listens for Chirp workflow messages globally on NATS.
-	#[tracing::instrument(level = "debug", err, skip_all)]
+	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> WorkflowResult<SubscriptionHandle<M>>
 	where
 		M: Message,
@@ -238,11 +238,12 @@ impl MessageCtx {
 			tags: tags.as_tags()?,
 			flush_nats: true,
 		})
+		.in_current_span()
 		.await
 	}
 
 	/// Listens for Chirp workflow messages globally on NATS.
-	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
+	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn subscribe_opt<M>(
 		&self,
 		opts: SubscribeOpts,
@@ -272,7 +273,7 @@ impl MessageCtx {
 	}
 
 	/// Reads the tail message of a stream without waiting for a message.
-	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
+	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn tail_read<M>(&self, tags: impl AsTags) -> WorkflowResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
@@ -316,7 +317,7 @@ impl MessageCtx {
 	/// 	}
 	/// );
 	/// ```
-	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
+	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,

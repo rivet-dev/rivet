@@ -30,14 +30,14 @@ impl<M> NatsMessage<M>
 where
 	M: Message,
 {
-	#[tracing::instrument(skip(buf))]
+	#[tracing::instrument(skip_all)]
 	pub(crate) fn deserialize(buf: &[u8]) -> WorkflowResult<Self> {
 		let message_wrapper = Self::deserialize_wrapper(buf)?;
 
 		Self::deserialize_from_wrapper(message_wrapper)
 	}
 
-	#[tracing::instrument(skip(wrapper))]
+	#[tracing::instrument(skip_all)]
 	pub(crate) fn deserialize_from_wrapper(
 		wrapper: NatsMessageWrapper<'_>,
 	) -> WorkflowResult<Self> {
@@ -54,7 +54,7 @@ where
 	}
 
 	// Only returns the message wrapper
-	#[tracing::instrument(skip(buf))]
+	#[tracing::instrument(skip_all)]
 	pub(crate) fn deserialize_wrapper<'a>(buf: &'a [u8]) -> WorkflowResult<NatsMessageWrapper<'a>> {
 		serde_json::from_slice(buf).map_err(WorkflowError::DeserializeMessage)
 	}

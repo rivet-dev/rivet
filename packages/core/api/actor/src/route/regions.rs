@@ -12,6 +12,7 @@ use crate::{
 use super::GlobalQuery;
 
 // MARK: GET /regions
+#[tracing::instrument(skip_all)]
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
@@ -128,6 +129,7 @@ pub struct RecommendQuery {
 	long: Option<f64>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn recommend(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,

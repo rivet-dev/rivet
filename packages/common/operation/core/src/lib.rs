@@ -78,7 +78,7 @@ where
 	}
 
 	/// Calls the given operation. Use the `op!` macro instead of calling this directly.
-	#[tracing::instrument(err, skip_all, fields(operation = O::NAME))]
+	#[tracing::instrument(err, skip_all, fields(operation_name=O::NAME))]
 	pub async fn call<O: Operation>(&self, body: O::Request) -> GlobalResult<O::Response> {
 		tracing::debug!(?body, "operation call");
 

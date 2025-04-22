@@ -24,6 +24,7 @@ use crate::{
 use super::GlobalQuery;
 
 // MARK: GET /builds/{}
+#[tracing::instrument(skip_all)]
 pub async fn get(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
@@ -100,6 +101,7 @@ pub struct ListQuery {
 	tags_json: Option<String>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
@@ -205,6 +207,7 @@ pub async fn list_deprecated(
 }
 
 // MARK: PATCH /builds/{}/tags
+#[tracing::instrument(skip_all)]
 pub async fn patch_tags(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
@@ -304,6 +307,7 @@ pub async fn patch_tags_deprecated(
 }
 
 // MARK: POST /builds/prepare
+#[tracing::instrument(skip_all)]
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	body: models::BuildsPrepareBuildRequest,
@@ -417,6 +421,7 @@ pub async fn create_build_deprecated(
 }
 
 // MARK: POST /builds/{}/complete
+#[tracing::instrument(skip_all)]
 pub async fn complete_build(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
@@ -500,38 +505,36 @@ pub async fn complete_build(
 			bail!("no valid datacenters with worker and guard pools");
 		}
 
-		let mut results = futures_util::stream::iter(
-			filtered_datacenters,
-		)
-		.map(|dc| {
-			let ctx = ctx.clone();
-			let token = token.clone();
-			async move {
-				let config = Configuration {
-					client: rivet_pools::reqwest::client().await?,
-					base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
-					bearer_access_token: Some(token),
-					..Default::default()
-				};
+		let mut results = futures_util::stream::iter(filtered_datacenters)
+			.map(|dc| {
+				let ctx = ctx.clone();
+				let token = token.clone();
+				async move {
+					let config = Configuration {
+						client: rivet_pools::reqwest::client().await?,
+						base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
+						bearer_access_token: Some(token),
+						..Default::default()
+					};
 
-				edge_intercom_pegboard_prewarm_image(
-					&config,
-					&build_id.to_string(),
-					models::EdgeIntercomPegboardPrewarmImageRequest {
-						image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
-							ctx.config(),
-							build.upload_id,
-							&build::utils::file_name(build.kind, build.compression),
-						)?,
-					},
-				)
-				.await
-				.map_err(Into::<GlobalError>::into)
-			}
-		})
-		.buffer_unordered(16)
-		.collect::<Vec<_>>()
-		.await;
+					edge_intercom_pegboard_prewarm_image(
+						&config,
+						&build_id.to_string(),
+						models::EdgeIntercomPegboardPrewarmImageRequest {
+							image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
+								ctx.config(),
+								build.upload_id,
+								&build::utils::file_name(build.kind, build.compression),
+							)?,
+						},
+					)
+					.await
+					.map_err(Into::<GlobalError>::into)
+				}
+			})
+			.buffer_unordered(16)
+			.collect::<Vec<_>>()
+			.await;
 
 		for res in &mut results {
 			if let Err(err) = res {

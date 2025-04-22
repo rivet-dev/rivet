@@ -98,6 +98,7 @@ impl Connection {
 		self.pools.fdb()
 	}
 
+	#[tracing::instrument(skip_all, fields(?key, read_only))]
 	pub async fn sqlite(
 		&self,
 		key: impl TuplePack + Debug,

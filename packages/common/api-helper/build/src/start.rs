@@ -11,8 +11,11 @@ use std::{
 	net::{IpAddr, SocketAddr},
 	time::Instant,
 };
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::TraceContextExt;
 use tracing::Instrument;
 use uuid::Uuid;
+use opentelemetry_semantic_conventions::attribute::{URL_PATH, HTTP_REQUEST_METHOD};
 
 #[tracing::instrument(skip_all)]
 pub async fn start<T: 'static, Fut>(
@@ -61,9 +64,26 @@ where
 			// Add the SocketAddr as an extension to the request
 			req.extensions_mut().insert(remote_addr);
 
+			let current_trace_id = tracing::Span::current()
+				.context()
+				.span()
+				.span_context()
+				.trace_id();
+
 			// Handle request
 			let ray_id = Uuid::new_v4();
-			let req_span = tracing::info_span!("http_request", method = %req.method(), uri = %req.uri(), %ray_id);
+			let req_span = tracing::info_span!(
+				// NOTE: Parent is none so that a new trace is created
+				parent: None,
+				"http_request",
+				uri=%req.uri(),
+				%ray_id,
+				parent_trace_id=%current_trace_id,
+			);
+			req_span.record("foo", "bar");
+			req_span.record(HTTP_REQUEST_METHOD, req.method().to_string());
+			req_span.record(URL_PATH, req.uri().path().to_string());
+
 			async move {
 				let method = req.method().clone();
 				let uri = req.uri().clone();
@@ -167,7 +187,7 @@ where
 		});
 
 		// Return the service to hyper
-		async move { Ok::<_, Infallible>(service) }
+		async move { Ok::<_, Infallible>(service) }.in_current_span()
 	});
 
 	let addr = SocketAddr::from((host, port));

@@ -189,7 +189,7 @@ impl EndpointRouter {
 			pub struct Router;
 			impl Router {
 				#[doc(hidden)]
-				#[tracing::instrument(name = "router_matcher", skip_all)]
+				#[tracing::instrument(level="debug", name = "router_matcher", skip_all)]
 				pub async fn __inner(
 					shared_client: chirp_client::SharedClientHandle,
 					config: rivet_config::Config,
@@ -215,7 +215,7 @@ impl EndpointRouter {
 					Ok(body.into())
 				}
 
-				#[tracing::instrument(name = "router_handle", skip_all)]
+				#[tracing::instrument(level="debug", name = "router_handle", skip_all)]
 				pub async fn handle(
 					shared_client: chirp_client::SharedClientHandle,
 					config: rivet_config::Config,

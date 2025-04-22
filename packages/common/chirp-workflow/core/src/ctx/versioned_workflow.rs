@@ -1,5 +1,6 @@
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
+use tracing::Instrument;
 
 use crate::{
 	activity::{Activity, ActivityInput},
@@ -85,7 +86,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 
 	/// Run activity. Will replay on failure.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(activity_name=%I::Activity::NAME))]
 	pub async fn activity<I>(
 		&mut self,
 		input: I,
@@ -94,14 +95,18 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
 	{
-		wrap!(self, "activity", { self.inner.activity(input).await })
+		wrap!(self, "activity", {
+			self.inner.activity(input).in_current_span().await
+		})
 	}
 
 	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously. This does not
 	/// short circuit in the event of an error to make sure activity side effects are recorded.
 	#[tracing::instrument(skip_all)]
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
-		wrap!(self, "join", { exec.execute(self.inner).await })
+		wrap!(self, "join", {
+			exec.execute(self.inner).in_current_span().await
+		})
 	}
 
 	/// Creates a signal builder.
@@ -111,19 +116,21 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
-		wrap!(self, "listen", { self.inner.listen::<T>().await })
+		wrap!(self, "listen", {
+			self.inner.listen::<T>().in_current_span().await
+		})
 	}
 
 	/// Execute a custom listener.
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn custom_listener<T: CustomListener>(
 		&mut self,
 		listener: &T,
 	) -> GlobalResult<<T as CustomListener>::Output> {
 		wrap!(self, "listen", {
-			self.inner.custom_listener(listener).await
+			self.inner.custom_listener(listener).in_current_span().await
 		})
 	}
 
@@ -140,26 +147,45 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		F: for<'b> FnMut(&'b mut WorkflowCtx) -> AsyncResult<'b, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		wrap!(self, "loop", { self.inner.repeat(cb).await })
+		wrap!(self, "loop", {
+			self.inner.repeat(cb).in_current_span().await
+		})
 	}
 
 	#[tracing::instrument(skip_all)]
 	pub async fn sleep(&mut self, duration: impl DurationToMillis) -> GlobalResult<()> {
-		wrap!(self, "sleep", { self.inner.sleep(duration).await })
+		wrap!(self, "sleep", {
+			self.inner.sleep(duration).in_current_span().await
+		})
 	}
 
 	#[tracing::instrument(skip_all)]
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
-		wrap!(self, "sleep", { self.inner.sleep_until(time).await })
+		wrap!(self, "sleep", {
+			self.inner.sleep_until(time).in_current_span().await
+		})
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
 	pub async fn listen_with_timeout<T: Listen>(
 		&mut self,
 		duration: impl DurationToMillis,
 	) -> GlobalResult<Option<T>> {
 		wrap!(self, "listen with timeout", {
-			self.inner.listen_with_timeout::<T>(duration).await
+			self.inner
+				.listen_with_timeout::<T>(duration)
+				.in_current_span()
+				.await
+		})
+	}
+
+	#[tracing::instrument(skip_all, fields(t=std::any::type_name::<T>()))]
+	pub async fn listen_until<T: Listen>(
+		&mut self,
+		time: impl TsToMillis,
+	) -> GlobalResult<Option<T>> {
+		wrap!(self, "listen until", {
+			self.inner.listen_until::<T>(time).in_current_span().await
 		})
 	}
 }

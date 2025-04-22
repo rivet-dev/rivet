@@ -169,6 +169,7 @@ impl Pools {
 		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
 	}
 
+	#[tracing::instrument(skip_all, fields(?key, read_only))]
 	pub async fn sqlite(
 		&self,
 		key: impl TuplePack + Debug,
@@ -187,6 +188,7 @@ impl Pools {
 		.await
 	}
 
+	#[tracing::instrument(level = "debug", skip_all)]
 	pub async fn sqlite_with_conn_type(
 		&self,
 		key: impl TuplePack + Debug,
@@ -199,7 +201,7 @@ impl Pools {
 		&self.0.sqlite
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(level="debug", skip_all)]
 	async fn record_metrics_loop(self, token: CancellationToken) {
 		let cancelled = token.cancelled();
 		tokio::pin!(cancelled);

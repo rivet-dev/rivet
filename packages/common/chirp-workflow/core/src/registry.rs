@@ -91,7 +91,7 @@ impl Registry {
 
 						Ok(output_val)
 					}
-					.instrument(tracing::info_span!("serde_workflow"))
+					.in_current_span()
 					.boxed()
 				},
 			}),

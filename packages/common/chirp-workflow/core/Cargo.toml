@@ -21,6 +21,7 @@ indoc = "2.0.5"
 itertools = "0.14.0"
 lazy_static = "1.4"
 md5 = "0.7.0"
+opentelemetry = { version = "0.28", features = ["trace", "metrics", "logs"] }
 prost = "0.12.4"
 prost-types = "0.12.4"
 rivet-cache.workspace = true
@@ -41,6 +42,7 @@ tokio-util = "0.7"
 tracing = "0.1.40"
 tracing-logfmt.workspace = true
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-opentelemetry = "0.29"
 url = "2.2.2"
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 

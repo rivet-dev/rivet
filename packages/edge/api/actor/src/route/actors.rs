@@ -23,6 +23,7 @@ pub struct GlobalEndpointTypeQuery {
 }
 
 // MARK: GET /actors/{}
+#[tracing::instrument(skip_all)]
 pub async fn get(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -77,6 +78,7 @@ async fn get_inner(
 }
 
 // MARK: POST /actors
+#[tracing::instrument(skip_all)]
 pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::ActorsCreateActorRequest,
@@ -268,6 +270,7 @@ pub struct DeleteQuery {
 	override_kill_timeout: Option<i64>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn destroy(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -324,6 +327,7 @@ pub async fn destroy(
 }
 
 // MARK: POST /actors/{}/upgrade
+#[tracing::instrument(skip_all)]
 pub async fn upgrade(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -374,6 +378,7 @@ pub async fn upgrade(
 }
 
 // MARK: POST /actors/upgrade
+#[tracing::instrument(skip_all)]
 pub async fn upgrade_all(
 	ctx: Ctx<Auth>,
 	body: models::ActorsUpgradeAllActorsRequest,
@@ -511,6 +516,7 @@ pub struct ListQuery {
 	cursor: Option<String>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn list_actors(
 	ctx: Ctx<Auth>,
 	watch_index: WatchIndexQuery,
@@ -599,6 +605,7 @@ async fn list_actors_inner(
 	})
 }
 
+#[tracing::instrument(skip_all, fields(%game_id, %env_id, ?build_id, bypass_cache))]
 async fn resolve_build(
 	ctx: &Ctx<Auth>,
 	game_id: Uuid,
