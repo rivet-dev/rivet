@@ -6699,9 +6699,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"actor-core@portal:../../actor-core/packages/actor-core::locator=rivet%40workspace%3A.":
+"actor-core@portal:../actor-core/packages/actor-core::locator=rivet%40workspace%3A.":
   version: 0.0.0-use.local
-  resolution: "actor-core@portal:../../actor-core/packages/actor-core::locator=rivet%40workspace%3A."
+  resolution: "actor-core@portal:../actor-core/packages/actor-core::locator=rivet%40workspace%3A."
   dependencies:
     cbor-x: "npm:^1.6.0"
     hono: "npm:^4.7.0"
