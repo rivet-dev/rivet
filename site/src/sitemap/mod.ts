@@ -54,60 +54,42 @@ export const sitemap = [
 			{
 				title: "Getting Started", // See https://supabase.com/docs/guides/auth/quickstarts/nextjs
 				pages: [
+					//{
+					//	title: "TypeScript",
+					//	href: "/docs/quickstart/typescript",
+					//	icon: faTs,
+					//},
 					{
-						title: "TypeScript",
-						href: "/docs/quickstart/typescript",
-						icon: faTs,
+						title: "JavaScript Runtime",
+						href: "/docs/javascript-runtime",
+						icon: faJs,
+					},
+					{
+						title: "Container Runtime",
+						href: "/docs/container-runtime",
+						icon: faDocker,
 					},
 				],
 			},
 			{
-				title: "Guides",
+				title: "Runtime",
+				//icon: faSquareTerminal,
 				pages: [
 					{
-						title: "Realtime Chat App",
-						href: "/guides/chat",
+						title: "Networking",
+						href: "/docs/networking",
+						icon: faNetworkWired,
 					},
 					{
-						title: "Game Servers",
-						href: "/docs/solutions/game-servers",
+						title: "Environment Variables",
+						href: "/docs/environment-variables",
+						icon: faLeaf,
 					},
-					//{
-					//	title: "Collaborative App with Y.js",
-					//	href: "/guides/yjs-nextjs",
-					//},
-					//{
-					//	title: "AI Agent with AI SDK",
-					//	href: "/guides/ai-agent-ai-sdk",
-					//},
-					//{
-					//	title: "Multiplayer Game with Three.js",
-					//	href: "/guides/multiplayer-threejs",
-					//},
-					//{
-					//	title: "Durable Execution",
-					//	href: "/guides/durable-execution",
-					//},
-					//{
-					//	title: "Stateful Stream Processing with Kafka",
-					//	href: "/guides/stream-processing-kafka",
-					//},
-					//{
-					//	title: "Local-First Sync with TinyBase",
-					//	href: "/guides/local-first-sync-tinybase",
-					//},
-					//{
-					//	title: "Sandboxed Code Execution for Python",
-					//	href: "/guides/sandboxed-code-python",
-					//},
-					//{
-					//	title: "Sandboxed Code Execution for TypeScript",
-					//	href: "/guides/sandboxed-code-typescript",
-					//},
-					//{
-					//	title: "Authenticating using Supabase Auth",
-					//	href: "/guides/authenticate-supabase-auth",
-					//},
+					{
+						title: "Durability & Rescheduling",
+						href: "/docs/durability",
+						icon: faRecycle,
+					},
 				],
 			},
 			{
@@ -156,48 +138,65 @@ export const sitemap = [
 				],
 			},
 			{
+				title: "Use Cases",
+				pages: [
+					//{
+					//	title: "Realtime Chat App",
+					//	href: "/guides/chat",
+					//},
+					{
+						title: "Game Servers",
+						href: "/docs/solutions/game-servers",
+					},
+					//{
+					//	title: "Collaborative App with Y.js",
+					//	href: "/guides/yjs-nextjs",
+					//},
+					//{
+					//	title: "AI Agent with AI SDK",
+					//	href: "/guides/ai-agent-ai-sdk",
+					//},
+					//{
+					//	title: "Multiplayer Game with Three.js",
+					//	href: "/guides/multiplayer-threejs",
+					//},
+					//{
+					//	title: "Durable Execution",
+					//	href: "/guides/durable-execution",
+					//},
+					//{
+					//	title: "Stateful Stream Processing with Kafka",
+					//	href: "/guides/stream-processing-kafka",
+					//},
+					//{
+					//	title: "Local-First Sync with TinyBase",
+					//	href: "/guides/local-first-sync-tinybase",
+					//},
+					//{
+					//	title: "Sandboxed Code Execution for Python",
+					//	href: "/guides/sandboxed-code-python",
+					//},
+					//{
+					//	title: "Sandboxed Code Execution for TypeScript",
+					//	href: "/guides/sandboxed-code-typescript",
+					//},
+					//{
+					//	title: "Authenticating using Supabase Auth",
+					//	href: "/guides/authenticate-supabase-auth",
+					//},
+				],
+			},
+			{
 				title: "Advanced",
 				pages: [
 					{
-						title: "Runtime",
-						icon: faSquareTerminal,
-						collapsible: true,
-						pages: [
-							{
-								title: "JavaScript Runtime",
-								href: "/docs/javascript-runtime",
-								icon: faJs,
-							},
-							{
-								title: "Container Runtime",
-								href: "/docs/container-runtime",
-								icon: faDocker,
-							},
-							{
-								title: "Networking",
-								href: "/docs/networking",
-								icon: faNetworkWired,
-							},
-							{
-								title: "Environment Variables",
-								href: "/docs/environment-variables",
-								icon: faLeaf,
-							},
-							{
-								title: "Durability & Rescheduling",
-								href: "/docs/durability",
-								icon: faRecycle,
-							},
-							{
-								title: "Limitations",
-								href: "/docs/limitations",
-								icon: faRuler,
-							},
-						],
+						title: "Limitations",
+						href: "/docs/limitations",
+						//icon: faRuler,
 					},
 					{
 						title: "Self-Hosting",
-						icon: faServer,
+						//icon: faServer,
 						collapsible: true,
 						pages: [
 							{
