@@ -21,6 +21,7 @@ import {
     faDocker,
     faCircleNodes,
     faKey,
+	faCodePullRequest,
     faLeaf,
 } from "@rivet-gg/icons";
 
@@ -121,6 +122,11 @@ export const sitemap = [
 						title: "CLI",
 						href: "/docs/cli",
 						icon: faSquareTerminal,
+					},
+					{
+						title: "CI/CD",
+						href: "/docs/continuous-delivery",
+						icon: faCodePullRequest,
 					},
 					{
 						title: "Tokens",

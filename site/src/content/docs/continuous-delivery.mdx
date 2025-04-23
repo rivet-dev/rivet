@@ -1,0 +1,162 @@
+# Continuous Integration & Delivery
+
+Automating deployments to Rivet with GitHub Actions allows you to seamlessly deploy your application whenever you push changes to your repository. This guide will walk you through setting up continuous delivery for your Rivet project.
+
+## Setup
+
+### Step 1: Prepare Your Application
+
+Before setting up continuous delivery, you need a working Rivet application:
+
+1. Set up your application using one of the following guides:
+   - [JavaScript Runtime](/docs/javascript-runtime) - For JavaScript applications
+   - [Container Runtime](/docs/container-runtime) - For Docker containers
+
+2. Make sure you have a working `rivet.json` configuration file in your project
+
+3. Test your deployment locally to verify everything works:
+   ```sh
+   rivet deploy
+   ```
+
+### Step 2: Generate a Rivet Cloud Token
+
+To authenticate your GitHub Actions workflow with Rivet:
+
+1. Go to your Rivet Dashboard
+2. Navigate to your project > Settings
+3. Under the "Cloud Token" section, click "Generate", and copy the generated token
+
+Next, add the token to GitHub Actions Secrets:
+
+1. In your GitHub repository, go to Settings > Secrets and variables > Actions
+2. Click "New repository secret"
+3. Set the name to `RIVET_CLOUD_TOKEN`
+4. Paste your Rivet Cloud Token as the value
+5. Click "Add secret"
+
+For more information on Rivet tokens, see the [Tokens documentation](/docs/tokens).
+
+### Step 3: Create GitHub Actions Workflow
+
+Create a `.github/workflows` directory in your repository if it doesn't already exist, then add a `deploy.yml` file with the following content:
+
+```yaml {{ "title": ".github/workflows/deploy.yml" }}
+name: Deploy
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      # Check out the repository code
+      - uses: actions/checkout@v4
+          
+      # Install the Rivet CLI with pinned version to avoid breaking changes
+      - name: Install Rivet CLI
+        env:
+          RIVET_CLI_VERSION: 25.2.2
+        run: curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
+        
+      # Deploy to a Rivet environment matching the branch name
+      - name: Deploy to environment
+        env:
+          RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
+        run: rivet deploy --environment ${{ github.ref_name }} --extra-tags 'commit=${{ github.sha }}'
+```
+
+### Step 4: Push Changes to Your Repository
+
+Now that your workflow is set up, it's time to test it:
+
+```sh
+git add .
+git commit -m "Add GitHub Actions workflow for Rivet deployment"
+git push origin my-branch
+```
+
+The workflow will automatically deploy your application to an environment with the same name as your branch. 
+
+### Environment Mapping
+
+By default, the workflow deploys to environments matching the branch name:
+
+- `prod` branch → `prod` environment
+- `staging` branch → `staging` environment
+
+You can create additional environments in the Rivet Dashboard to match your branch strategy.
+
+### Step 5: Verify Deployment
+
+After pushing your changes:
+
+1. Navigate to your GitHub repository and click the "Actions" tab
+2. Find the latest workflow run and check its status
+3. In the Rivet Dashboard, go to your project's environment
+4. Under the "Builds" tab, you should see your latest deployment with the commit SHA included in the tags
+
+## Tips
+
+### Selective Branch Deployment
+
+If you only want to deploy specific branches, modify the workflow trigger:
+
+```yaml
+on:
+  push:
+    branches:
+      - prod
+      - staging
+```
+
+### Custom Environment Mapping
+
+To deploy to specific environments regardless of branch name:
+
+```yaml
+- name: Deploy to production
+  if: github.ref == 'refs/heads/main'
+  env:
+    RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
+  run: rivet deploy --environment prod --extra-tags 'commit=${{ github.sha }}'
+
+- name: Deploy to staging
+  if: github.ref != 'refs/heads/main'
+  env:
+    RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
+  run: rivet deploy --environment staging --extra-tags 'commit=${{ github.sha }}'
+```
+
+### Using the Latest Build in Your Application
+
+The Rivet CLI automatically adds a `current=true` tag to the most recent successful build. You can use this tag to always reference the latest build when creating actors:
+
+```typescript
+import { RivetClient } from "@rivet-gg/api";
+
+const client = new RivetClient({ token: process.env.RIVET_SERVICE_TOKEN });
+
+// Create an actor using the latest build (with 'current=true' tag)
+const { actor } = await client.actors.create({
+  project: "your-project-id",
+  environment: "your-environment-id",
+  body: {
+    // Identify this specific actor instance
+    tags: { service: "my-app" },
+    
+    // Use the 'current' tag to always get the latest build
+    buildTags: { 
+      name: "my-app", 
+      current: "true" 
+    },
+    
+    // ..etc...
+  }
+});
+```
+
+This approach ensures your application always uses the most recent build deployed through your CI/CD pipeline.
