@@ -49,6 +49,10 @@ USER rivet
 CMD ["node", "server.js"]
 ```
 
+<Note title="Ports & environment variables will be passed via the Rivet API">
+	We'll pass the prots & env vars used in the Dockerfile in _Step 3_. Read more in the API docs for [actors.create](/docs/api/actors/create).
+</Note>
+
 ### Step 2: Deploying a container
 
 Specify the Dockerfile in your `rivet.json`:
