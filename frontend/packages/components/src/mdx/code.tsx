@@ -51,6 +51,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 				"code-group group my-4 rounded-md border pt-2",
 				className,
 			)}
+			data-code-group
 		>
 			<Tabs defaultValue={getChildIdx(children[0])}>
 				<div className="flex gap-1 border-b pr-2">
@@ -119,15 +120,18 @@ export const pre = ({
 	isInGroup,
 }: PreProps) => {
 	return (
-		<div className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
+		<div
+			className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none"
+			data-code-group
+		>
 			{!file && isInGroup ? null : (
 				<div className="text-foreground flex items-center justify-between gap-2 border-b p-2 text-xs">
 					<div className="text-muted-foreground flex items-center gap-1">
 						{file ? (
-							<>
-								<Icon icon={faFile} className="block" />
+							<Badge variant="outline">
+								<Icon icon={faFile} className="mr-1" />
 								<span>{file}</span>
-							</>
+							</Badge>
 						) : isInGroup ? null : (
 							<Badge variant="outline">
 								{title || languageNames[language || "cpp"]}

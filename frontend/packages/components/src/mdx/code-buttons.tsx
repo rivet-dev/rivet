@@ -11,8 +11,12 @@ import { toast } from "sonner";
 export const CopyCodeTrigger = forwardRef<HTMLElement, PropsWithChildren>(
 	({ children }, ref) => {
 		const handleClick: MouseEventHandler = (event) => {
+			const codeGroup = event.currentTarget.closest("[data-code-group]");
+
 			const code =
-				event.currentTarget.closest<HTMLDivElement>(".code")?.innerText;
+				codeGroup?.querySelector("[data-state=active] .code")
+					?.textContent ||
+				codeGroup?.querySelector(".code")?.textContent;
 
 			if (!code) {
 				toast.error("No code to copy");
