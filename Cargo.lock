@@ -973,6 +973,8 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.31",
  "lazy_static",
+ "opentelemetry 0.28.0",
+ "opentelemetry-semantic-conventions 0.28.0",
  "prost 0.10.4",
  "regex",
  "reqwest 0.12.12",
@@ -994,6 +996,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "types-proto",
  "url",
@@ -3145,6 +3148,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "md5",
+ "opentelemetry 0.28.0",
  "prost 0.12.6",
  "prost-types 0.12.6",
  "rand 0.8.5",
@@ -3167,6 +3171,7 @@ dependencies = [
  "tokio-util 0.7.12",
  "tracing",
  "tracing-logfmt",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
  "uuid",
@@ -10487,6 +10492,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "papaya"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6827e3fc394523c21d4464d02c0bb1c19966ea4a58a9844ad6d746214179d2bc"
+dependencies = [
+ "equivalent",
+ "seize",
+]
+
+[[package]]
 name = "papergrid"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10708,6 +10723,7 @@ dependencies = [
  "rivet-api",
  "rivet-convert",
  "rivet-logs",
+ "rivet-runtime",
  "rustls 0.23.25",
  "serde",
  "serde_json",
@@ -12681,11 +12697,11 @@ dependencies = [
  "hyper-tls 0.5.0",
  "lazy_static",
  "lz4_flex",
+ "papaya",
  "redis",
  "reqwest 0.11.27",
  "rivet-config",
  "rivet-metrics",
- "scc",
  "service-discovery",
  "sqlx",
  "tempfile",
@@ -13444,15 +13460,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea091f6cac2595aa38993f04f4ee692ed43757035c36e67c180b6828356385b1"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "schannel"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13542,12 +13549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdd"
-version = "3.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07779b9b918cc05650cb30f404d4d7835d26df37c235eded8a6832e2fb82cca"
-
-[[package]]
 name = "sealed"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13609,6 +13610,16 @@ checksum = "fa39c7303dc58b5543c94d22c1766b0d31f2ee58306363ea622b10bbc075eaa2"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seize"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4b8d813387d566f627f3ea1b914c068aac94c40ae27ec43f5f33bde65abefe7"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
