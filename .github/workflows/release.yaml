@@ -55,10 +55,11 @@ jobs:
         env:
           # Required to authenticate with Git
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: './rivet'
         run: |
           # Configure Git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           # Install Deno
           curl -fsSL https://deno.land/x/install/install.sh | sh
@@ -70,12 +71,12 @@ jobs:
           EOF
 
           # Install dependencies
-          cd ./rivet && yarn install --immutable
+          yarn install --immutable
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              cd ./rivet && ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
           else
-              cd ./rivet && ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
           fi
 
 
