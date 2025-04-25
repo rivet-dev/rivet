@@ -131,6 +131,10 @@ jobs:
           CC_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang
           CXX_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang++
           MACOSX_DEPLOYMENT_TARGET: "10.7"
+          # Use RUSTFLAGS to skip building aws-lc-rs when targeting macOS
+          # CARGO_FEATURE_RUSTLS_NATIVE_CERTS: 0
+          # CARGO_RUSTLS_NATIVE_CERTS: 0
+          # RUSTFLAGS: "--cfg tokio_unstable ${{ contains(matrix.platform, 'apple-darwin') && '--cfg tokio_unstable --cfg rustls_native_certs --cfg aws_lc_rs' || '' }}"
 
           # Expose token for pulling GH artifacts
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
