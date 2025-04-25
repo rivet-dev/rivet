@@ -17,7 +17,7 @@ export const Build: core.serialization.ObjectSchema<serializers.builds.Build.Raw
     });
 
 export declare namespace Build {
-    interface Raw {
+    export interface Raw {
         id: string;
         name: string;
         created_at: Timestamp.Raw;

@@ -14,7 +14,7 @@ export const UpgradeAllActorsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpgradeAllActorsResponse {
-    interface Raw {
+    export interface Raw {
         count: number;
     }
 }

@@ -3,7 +3,6 @@
  */
 
 export type PortProtocol = "http" | "https" | "tcp" | "tcp_tls" | "udp";
-
 export const PortProtocol = {
     Http: "http",
     Https: "https",

@@ -18,7 +18,7 @@ export const CreateActorNetworkRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateActorNetworkRequest {
-    interface Raw {
+    export interface Raw {
         mode?: NetworkMode.Raw | null;
         ports?: Record<string, CreateActorPortRequest.Raw> | null;
         wait_ready?: boolean | null;

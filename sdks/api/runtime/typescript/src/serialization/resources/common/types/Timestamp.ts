@@ -10,5 +10,5 @@ export const Timestamp: core.serialization.Schema<serializers.Timestamp.Raw, Riv
     core.serialization.date();
 
 export declare namespace Timestamp {
-    type Raw = string;
+    export type Raw = string;
 }

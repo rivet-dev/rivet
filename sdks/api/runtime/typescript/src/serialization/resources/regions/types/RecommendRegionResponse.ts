@@ -15,7 +15,7 @@ export const RecommendRegionResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace RecommendRegionResponse {
-    interface Raw {
+    export interface Raw {
         region: Region.Raw;
     }
 }

@@ -12,5 +12,5 @@ export const DeleteRouteResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace DeleteRouteResponse {
-    interface Raw {}
+    export interface Raw {}
 }

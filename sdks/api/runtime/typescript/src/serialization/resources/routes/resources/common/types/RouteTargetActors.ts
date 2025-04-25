@@ -12,12 +12,12 @@ export const RouteTargetActors: core.serialization.ObjectSchema<
 > = core.serialization.object({
     selectorTags: core.serialization.property(
         "selector_tags",
-        core.serialization.record(core.serialization.string(), core.serialization.string())
+        core.serialization.record(core.serialization.string(), core.serialization.string()),
     ),
 });
 
 export declare namespace RouteTargetActors {
-    interface Raw {
+    export interface Raw {
         selector_tags: Record<string, string>;
     }
 }

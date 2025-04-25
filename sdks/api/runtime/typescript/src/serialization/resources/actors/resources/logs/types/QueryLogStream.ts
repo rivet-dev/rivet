@@ -12,5 +12,5 @@ export const QueryLogStream: core.serialization.Schema<
 > = core.serialization.enum_(["std_out", "std_err", "all"]);
 
 export declare namespace QueryLogStream {
-    type Raw = "std_out" | "std_err" | "all";
+    export type Raw = "std_out" | "std_err" | "all";
 }

@@ -21,7 +21,7 @@ export const Route: core.serialization.ObjectSchema<serializers.routes.Route.Raw
     });
 
 export declare namespace Route {
-    interface Raw {
+    export interface Raw {
         id: string;
         created_at: Timestamp.Raw;
         updated_at: Timestamp.Raw;

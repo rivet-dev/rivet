@@ -15,7 +15,7 @@ export const GetBuildResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace GetBuildResponse {
-    interface Raw {
+    export interface Raw {
         build: Build.Raw;
     }
 }

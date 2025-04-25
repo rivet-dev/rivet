@@ -10,7 +10,7 @@ groups:
           location: local-file-system
           path: ../runtime/openapi
       - name: fernapi/fern-typescript-node-sdk
-        version: 0.42.7
+        version: 0.49.3
         ir-version: v53
         output:
           location: local-file-system

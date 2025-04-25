@@ -10,15 +10,17 @@ import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 
 export declare namespace Routes {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.4.0";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -56,10 +58,10 @@ export class Routes {
      */
     public async list(
         request: Rivet.routes.ListRoutesQuery = {},
-        requestOptions?: Routes.RequestOptions
+        requestOptions?: Routes.RequestOptions,
     ): Promise<Rivet.routes.ListRoutesResponse> {
         const { project, environment } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -70,8 +72,10 @@ export class Routes {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/routes"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/routes",
             ),
             method: "GET",
             headers: {
@@ -109,7 +113,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -119,7 +123,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -129,7 +133,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -139,7 +143,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -149,7 +153,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -159,7 +163,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -218,10 +222,10 @@ export class Routes {
     public async update(
         id: string,
         request: Rivet.routes.UpdateRouteQuery,
-        requestOptions?: Routes.RequestOptions
+        requestOptions?: Routes.RequestOptions,
     ): Promise<Rivet.routes.UpdateRouteResponse> {
         const { project, environment, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -232,8 +236,10 @@ export class Routes {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/routes/${encodeURIComponent(id)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/routes/${encodeURIComponent(id)}`,
             ),
             method: "PUT",
             headers: {
@@ -272,7 +278,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -282,7 +288,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -292,7 +298,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -302,7 +308,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -312,7 +318,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -322,7 +328,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -370,10 +376,10 @@ export class Routes {
     public async delete(
         id: string,
         request: Rivet.routes.DeleteRouteQuery = {},
-        requestOptions?: Routes.RequestOptions
+        requestOptions?: Routes.RequestOptions,
     ): Promise<Rivet.routes.DeleteRouteResponse> {
         const { project, environment } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -384,8 +390,10 @@ export class Routes {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/routes/${encodeURIComponent(id)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/routes/${encodeURIComponent(id)}`,
             ),
             method: "DELETE",
             headers: {
@@ -423,7 +431,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -433,7 +441,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -443,7 +451,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -453,7 +461,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -463,7 +471,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -473,7 +481,7 @@ export class Routes {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({

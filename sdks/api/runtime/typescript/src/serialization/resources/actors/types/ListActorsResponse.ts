@@ -17,7 +17,7 @@ export const ListActorsResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListActorsResponse {
-    interface Raw {
+    export interface Raw {
         actors: Actor.Raw[];
         pagination: Pagination.Raw;
     }

@@ -10,5 +10,5 @@ export const PortProtocol: core.serialization.Schema<serializers.actors.PortProt
     core.serialization.enum_(["http", "https", "tcp", "tcp_tls", "udp"]);
 
 export declare namespace PortProtocol {
-    type Raw = "http" | "https" | "tcp" | "tcp_tls" | "udp";
+    export type Raw = "http" | "https" | "tcp" | "tcp_tls" | "udp";
 }

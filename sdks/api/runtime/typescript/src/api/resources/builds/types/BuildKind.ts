@@ -12,7 +12,6 @@ export type BuildKind =
     /**
      * A JavaScript file. */
     | "javascript";
-
 export const BuildKind = {
     DockerImage: "docker_image",
     OciBundle: "oci_bundle",

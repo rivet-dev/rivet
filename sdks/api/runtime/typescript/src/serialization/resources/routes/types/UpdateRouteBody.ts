@@ -19,7 +19,7 @@ export const UpdateRouteBody: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpdateRouteBody {
-    interface Raw {
+    export interface Raw {
         hostname: string;
         path: string;
         strip_prefix: boolean;

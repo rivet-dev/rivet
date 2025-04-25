@@ -5,21 +5,23 @@
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
-import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
+import urlJoin from "url-join";
 import * as errors from "../../../../errors/index";
 import { Logs } from "../resources/logs/client/Client";
 
 export declare namespace Actors {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.4.0";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -34,7 +36,13 @@ export declare namespace Actors {
 }
 
 export class Actors {
+    protected _logs: Logs | undefined;
+
     constructor(protected readonly _options: Actors.Options = {}) {}
+
+    public get logs(): Logs {
+        return (this._logs ??= new Logs(this._options));
+    }
 
     /**
      * Gets a dynamic actor.
@@ -60,10 +68,10 @@ export class Actors {
     public async get(
         actor: string,
         request: Rivet.actors.ListActorsRequestQuery = {},
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.GetActorResponse> {
         const { project, environment, endpointType } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -73,13 +81,17 @@ export class Actors {
         }
 
         if (endpointType != null) {
-            _queryParams["endpoint_type"] = endpointType;
+            _queryParams["endpoint_type"] = serializers.actors.EndpointType.jsonOrThrow(endpointType, {
+                unrecognizedObjectKeys: "strip",
+            });
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actor)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/actors/${encodeURIComponent(actor)}`,
             ),
             method: "GET",
             headers: {
@@ -117,7 +129,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -127,7 +139,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -137,7 +149,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -147,7 +159,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -157,7 +169,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -167,7 +179,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -217,10 +229,10 @@ export class Actors {
      */
     public async list(
         request: Rivet.actors.GetActorsRequestQuery = {},
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.ListActorsResponse> {
         const { project, environment, endpointType, tagsJson, includeDestroyed, cursor } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -230,7 +242,9 @@ export class Actors {
         }
 
         if (endpointType != null) {
-            _queryParams["endpoint_type"] = endpointType;
+            _queryParams["endpoint_type"] = serializers.actors.EndpointType.jsonOrThrow(endpointType, {
+                unrecognizedObjectKeys: "strip",
+            });
         }
 
         if (tagsJson != null) {
@@ -247,8 +261,10 @@ export class Actors {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/actors"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/actors",
             ),
             method: "GET",
             headers: {
@@ -286,7 +302,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -296,7 +312,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -306,7 +322,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -316,7 +332,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -326,7 +342,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -336,7 +352,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -412,10 +428,10 @@ export class Actors {
      */
     public async create(
         request: Rivet.actors.CreateActorRequestQuery,
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.CreateActorResponse> {
         const { project, environment, endpointType, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -425,13 +441,17 @@ export class Actors {
         }
 
         if (endpointType != null) {
-            _queryParams["endpoint_type"] = endpointType;
+            _queryParams["endpoint_type"] = serializers.actors.EndpointType.jsonOrThrow(endpointType, {
+                unrecognizedObjectKeys: "strip",
+            });
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/actors"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/actors",
             ),
             method: "POST",
             headers: {
@@ -470,7 +490,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -480,7 +500,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -490,7 +510,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -500,7 +520,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -510,7 +530,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -520,7 +540,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -569,10 +589,10 @@ export class Actors {
     public async destroy(
         actor: string,
         request: Rivet.actors.DestroyActorRequestQuery = {},
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.DestroyActorResponse> {
         const { project, environment, overrideKillTimeout } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -587,8 +607,10 @@ export class Actors {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actor)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/actors/${encodeURIComponent(actor)}`,
             ),
             method: "DELETE",
             headers: {
@@ -626,7 +648,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -636,7 +658,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -646,7 +668,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -656,7 +678,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -666,7 +688,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -676,7 +698,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -730,10 +752,10 @@ export class Actors {
     public async upgrade(
         actor: string,
         request: Rivet.actors.UpgradeActorRequestQuery,
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.UpgradeActorResponse> {
         const { project, environment, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -744,8 +766,10 @@ export class Actors {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actor)}/upgrade`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/actors/${encodeURIComponent(actor)}/upgrade`,
             ),
             method: "POST",
             headers: {
@@ -784,7 +808,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -794,7 +818,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -804,7 +828,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -814,7 +838,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -824,7 +848,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -834,7 +858,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -889,10 +913,10 @@ export class Actors {
      */
     public async upgradeAll(
         request: Rivet.actors.UpgradeAllActorsRequestQuery,
-        requestOptions?: Actors.RequestOptions
+        requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.UpgradeAllActorsResponse> {
         const { project, environment, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -903,8 +927,10 @@ export class Actors {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/actors/upgrade"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/actors/upgrade",
             ),
             method: "POST",
             headers: {
@@ -943,7 +969,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -953,7 +979,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -963,7 +989,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -973,7 +999,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -983,7 +1009,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -993,7 +1019,7 @@ export class Actors {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -1016,12 +1042,6 @@ export class Actors {
                     message: _response.error.errorMessage,
                 });
         }
-    }
-
-    protected _logs: Logs | undefined;
-
-    public get logs(): Logs {
-        return (this._logs ??= new Logs(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

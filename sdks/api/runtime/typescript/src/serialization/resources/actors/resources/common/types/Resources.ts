@@ -13,7 +13,7 @@ export const Resources: core.serialization.ObjectSchema<serializers.actors.Resou
     });
 
 export declare namespace Resources {
-    interface Raw {
+    export interface Raw {
         cpu: number;
         memory: number;
     }

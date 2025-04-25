@@ -10,15 +10,17 @@ import { Regions } from "./api/resources/regions/client/Client";
 import { Routes } from "./api/resources/routes/client/Client";
 
 export declare namespace RivetClient {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.4.0";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -33,27 +35,24 @@ export declare namespace RivetClient {
 }
 
 export class RivetClient {
-    constructor(protected readonly _options: RivetClient.Options = {}) {}
-
     protected _actors: Actors | undefined;
+    protected _builds: Builds | undefined;
+    protected _regions: Regions | undefined;
+    protected _routes: Routes | undefined;
+
+    constructor(protected readonly _options: RivetClient.Options = {}) {}
 
     public get actors(): Actors {
         return (this._actors ??= new Actors(this._options));
     }
 
-    protected _builds: Builds | undefined;
-
     public get builds(): Builds {
         return (this._builds ??= new Builds(this._options));
     }
 
-    protected _regions: Regions | undefined;
-
     public get regions(): Regions {
         return (this._regions ??= new Regions(this._options));
     }
-
-    protected _routes: Routes | undefined;
 
     public get routes(): Routes {
         return (this._routes ??= new Routes(this._options));

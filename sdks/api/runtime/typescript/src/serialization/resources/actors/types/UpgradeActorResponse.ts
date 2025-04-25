@@ -12,5 +12,5 @@ export const UpgradeActorResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace UpgradeActorResponse {
-    interface Raw {}
+    export interface Raw {}
 }

@@ -15,7 +15,7 @@ export const RouteTarget: core.serialization.ObjectSchema<
 });
 
 export declare namespace RouteTarget {
-    interface Raw {
+    export interface Raw {
         actors?: RouteTargetActors.Raw | null;
     }
 }

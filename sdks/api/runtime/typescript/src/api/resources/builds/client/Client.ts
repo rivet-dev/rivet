@@ -10,15 +10,17 @@ import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 
 export declare namespace Builds {
-    interface Options {
+    export interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
+        /** Specify a custom URL to connect the client to. */
+        baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
         xApiVersion?: "25.4.0";
         fetcher?: core.FetchFunction;
     }
 
-    interface RequestOptions {
+    export interface RequestOptions {
         /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
         /** The number of times to retry the request. Defaults to 2. */
@@ -58,10 +60,10 @@ export class Builds {
     public async get(
         build: string,
         request: Rivet.builds.GetBuildRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.builds.GetBuildResponse> {
         const { project, environment } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -72,8 +74,10 @@ export class Builds {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(build)}`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/builds/${encodeURIComponent(build)}`,
             ),
             method: "GET",
             headers: {
@@ -111,7 +115,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -121,7 +125,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -131,7 +135,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -141,7 +145,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -151,7 +155,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -161,7 +165,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -208,10 +212,10 @@ export class Builds {
      */
     public async list(
         request: Rivet.builds.ListBuildsRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.builds.ListBuildsResponse> {
         const { project, environment, tagsJson } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -226,8 +230,10 @@ export class Builds {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/builds"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/builds",
             ),
             method: "GET",
             headers: {
@@ -265,7 +271,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -275,7 +281,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -285,7 +291,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -295,7 +301,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -305,7 +311,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -315,7 +321,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -367,10 +373,10 @@ export class Builds {
     public async patchTags(
         build: string,
         request: Rivet.builds.PatchBuildTagsRequestQuery,
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.builds.PatchBuildTagsResponse> {
         const { project, environment, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -381,8 +387,10 @@ export class Builds {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(build)}/tags`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/builds/${encodeURIComponent(build)}/tags`,
             ),
             method: "PATCH",
             headers: {
@@ -421,7 +429,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -431,7 +439,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -441,7 +449,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -451,7 +459,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -461,7 +469,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -471,7 +479,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -527,10 +535,10 @@ export class Builds {
      */
     public async prepare(
         request: Rivet.builds.PrepareBuildRequestQuery,
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<Rivet.builds.PrepareBuildResponse> {
         const { project, environment, body: _body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -541,8 +549,10 @@ export class Builds {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/builds/prepare"
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/builds/prepare",
             ),
             method: "POST",
             headers: {
@@ -581,7 +591,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -591,7 +601,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -601,7 +611,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -611,7 +621,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -621,7 +631,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -631,7 +641,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({
@@ -679,10 +689,10 @@ export class Builds {
     public async complete(
         build: string,
         request: Rivet.builds.CompleteBuildRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
+        requestOptions?: Builds.RequestOptions,
     ): Promise<void> {
         const { project, environment } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
         }
@@ -693,8 +703,10 @@ export class Builds {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(build)}/complete`
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                `/builds/${encodeURIComponent(build)}/complete`,
             ),
             method: "POST",
             headers: {
@@ -726,7 +738,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 429:
                     throw new Rivet.RateLimitError(
@@ -736,7 +748,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 403:
                     throw new Rivet.ForbiddenError(
@@ -746,7 +758,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 408:
                     throw new Rivet.UnauthorizedError(
@@ -756,7 +768,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 404:
                     throw new Rivet.NotFoundError(
@@ -766,7 +778,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 case 400:
                     throw new Rivet.BadRequestError(
@@ -776,7 +788,7 @@ export class Builds {
                             allowUnrecognizedEnumValues: true,
                             skipValidation: true,
                             breadcrumbsPrefix: ["response"],
-                        })
+                        }),
                     );
                 default:
                     throw new errors.RivetError({

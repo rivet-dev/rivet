@@ -3,7 +3,6 @@
  */
 
 export type QueryLogStream = "std_out" | "std_err" | "all";
-
 export const QueryLogStream = {
     StdOut: "std_out",
     StdErr: "std_err",

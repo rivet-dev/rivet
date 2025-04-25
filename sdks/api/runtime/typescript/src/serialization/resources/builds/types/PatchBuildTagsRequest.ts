@@ -13,12 +13,12 @@ export const PatchBuildTagsRequest: core.serialization.ObjectSchema<
     tags: core.serialization.unknown(),
     exclusiveTags: core.serialization.property(
         "exclusive_tags",
-        core.serialization.list(core.serialization.string()).optional()
+        core.serialization.list(core.serialization.string()).optional(),
     ),
 });
 
 export declare namespace PatchBuildTagsRequest {
-    interface Raw {
+    export interface Raw {
         tags?: unknown;
         exclusive_tags?: string[] | null;
     }

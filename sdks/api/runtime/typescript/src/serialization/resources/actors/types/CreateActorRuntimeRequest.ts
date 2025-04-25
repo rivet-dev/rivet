@@ -16,7 +16,7 @@ export const CreateActorRuntimeRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace CreateActorRuntimeRequest {
-    interface Raw {
+    export interface Raw {
         environment?: Record<string, string> | null;
         network?: CreateActorRuntimeNetworkRequest.Raw | null;
     }

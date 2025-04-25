@@ -15,7 +15,7 @@ export const UpgradeActorRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace UpgradeActorRequest {
-    interface Raw {
+    export interface Raw {
         build?: string | null;
         build_tags?: unknown | null;
     }

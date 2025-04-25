@@ -6,6 +6,7 @@
 		"frontend/apps/*",
 		"frontend/packages/*",
 		"site",
+		"sdks/api/runtime/typescript",
 		"sdks/api/full/typescript",
 		"examples/*",
 		"tests/load",

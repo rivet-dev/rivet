@@ -15,7 +15,7 @@ export const ListRoutesResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace ListRoutesResponse {
-    interface Raw {
+    export interface Raw {
         routes: Route.Raw[];
     }
 }

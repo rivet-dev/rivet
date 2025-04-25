@@ -12,5 +12,5 @@ export const UpdateRouteResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({});
 
 export declare namespace UpdateRouteResponse {
-    interface Raw {}
+    export interface Raw {}
 }

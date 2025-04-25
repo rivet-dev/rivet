@@ -20,7 +20,7 @@ export const PrepareBuildRequest: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareBuildRequest {
-    interface Raw {
+    export interface Raw {
         image_tag?: string | null;
         image_file: PrepareFile.Raw;
         kind?: BuildKind.Raw | null;

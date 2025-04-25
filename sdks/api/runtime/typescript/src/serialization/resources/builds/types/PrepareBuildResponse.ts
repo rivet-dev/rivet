@@ -16,7 +16,7 @@ export const PrepareBuildResponse: core.serialization.ObjectSchema<
 });
 
 export declare namespace PrepareBuildResponse {
-    interface Raw {
+    export interface Raw {
         build: string;
         presigned_requests: PresignedRequest.Raw[];
     }

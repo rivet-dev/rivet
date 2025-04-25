@@ -12,7 +12,7 @@ export const WatchResponse: core.serialization.ObjectSchema<serializers.WatchRes
     });
 
 export declare namespace WatchResponse {
-    interface Raw {
+    export interface Raw {
         index: string;
     }
 }

@@ -10,5 +10,5 @@ export const BuildKind: core.serialization.Schema<serializers.builds.BuildKind.R
     core.serialization.enum_(["docker_image", "oci_bundle", "javascript"]);
 
 export declare namespace BuildKind {
-    type Raw = "docker_image" | "oci_bundle" | "javascript";
+    export type Raw = "docker_image" | "oci_bundle" | "javascript";
 }
