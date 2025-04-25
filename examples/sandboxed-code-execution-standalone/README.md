@@ -1,4 +1,4 @@
-# JS Upload Script
+# Sandboxed Code Execution Standalone
 
 This demo uploads a script to Rivet and runs an actor from it.
 
