@@ -27,7 +27,7 @@ export async function main() {
     for (let method in SPEC.paths[pathName]) {
       let specPath = SPEC.paths[pathName][method];
 
-      if (!/^(actors|builds|regions)_/.test(specPath.operationId)) continue;
+      if (!/^(actors|builds|regions|routes)_/.test(specPath.operationId)) continue;
 
       console.log('Registering', method, pathName);
 

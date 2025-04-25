@@ -1,0 +1,148 @@
+# Rivet Functions
+
+Rivet Functions allows you to deploy serverless functions that can handle HTTP requests. You can write your functions and package them in containers.
+
+## What are functions good for?
+
+- **API Endpoints**: Building lightweight, scalable REST or GraphQL APIs. For example, **CRUD Operations** for your application's data layer.
+- **Webhook Handlers**: Processing events from third-party services. For example, **Payment Processing** with Stripe or PayPal integration.
+- **Authentication Services**: Managing user identity and access control. For example, **OAuth Flows** or custom authentication systems.
+
+## Quickstart
+
+### 1. Set up your project
+
+Let's create a simple Node.js HTTP server project:
+
+```bash
+# Create project
+mkdir my-rivet-function
+cd my-rivet-function
+
+# Setup NPM
+npm init -y
+npm install hono
+```
+
+Add the following files: 
+
+<CodeGroup>
+
+```json {{ "title": "rivet.json" }}
+{
+  "functions": {
+    "hello-world": {
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
+```
+
+```javascript {{ "title": "index.js" }}
+const { Hono } = require('hono');
+const { serve } = require('hono/node-server');
+const app = new Hono();
+const port = process.env.PORT_HTTP || 8080;
+
+app.get('/', (c) => {
+  return c.text('Hello from Rivet Functions!');
+});
+
+app.get('/api/data', (c) => {
+  return c.json({
+    message: 'This is data from your Rivet Function',
+    timestamp: new Date().toISOString()
+  });
+});
+
+console.log(`Server running on port ${port}`);
+serve({
+  fetch: app.fetch,
+  port
+});
+```
+
+```dockerfile {{ "title": "Dockerfile" }}
+FROM node:18-alpine
+
+RUN addgroup -S rivet && adduser -S rivet -G rivet
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+RUN chown -R rivet:rivet /app
+USER rivet
+
+EXPOSE 8080
+
+CMD ["node", "index.js"]
+```
+
+</CodeGroup>
+
+See [Containers documentation](/docs/containers) for more information on writing code for the Rivet platform.
+
+### 2. Deploy your function
+
+```bash
+rivet deploy
+```
+
+You will be prompted to configure a route on the first run. You can use the recommended route or configure it later in the dashboard under the _Functions_ tab.
+
+### 3. Test your function
+
+Visit your function at the configured URL. You can monitor the logs in the _Logs_ tab of the Rivet Dashboard.
+
+## Configuration Options
+
+### Basic Configuration
+
+| Option | Description |
+|--------|-------------|
+| `path` | The URL path to route requests to (cannot end with `/`) |
+| `route_subpaths` | When true, routes requests to this path and all nested subpaths to this function |
+| `strip_prefix` | When true, removes the configured path prefix from the request URL before forwarding to your function |
+| `resources.cpu` | CPU allocation for the function (defaults to 1) |
+| `resources.memory` | Memory allocation in MB (defaults to 1024) |
+| `networking.internal_port` | The port your function listens on within the container |
+
+#### Example: route_subpaths
+
+When `route_subpaths` is `true`:
+- Function with path `/api` will handle requests to `/api`, `/api/users`, `/api/products`, and any other path starting with `/api`
+
+When `route_subpaths` is `false`:
+- Function with path `/api` will only handle requests to the exact path `/api` and nothing else
+
+#### Example: strip_prefix
+
+When `strip_prefix` is `true`:
+- Request to `/api/users` will be forwarded to your function as just `/users` (the `/api` prefix is removed)
+
+When `strip_prefix` is `false`:
+- Request to `/api/users` will be forwarded to your function with the full path `/api/users` intact
+
+See the [Configuration Reference](/docs/config) for the complete configuration options.
+
+When you make changes to your routes, the `rivet deploy` command will prompt you before applying these changes to how your requests get routed.
+
+## Routes (Advanced)
+
+Routes configure how incoming HTTP traffic gets directed to the specific function workers that handle requests. They define the mapping between public URLs and your deployed functions. Routes can be manually configured in the Functions tab of the Rivet Dashboard.
+
+### Hostnames
+
+Each route has a unique hostname (URL), and these hostnames cannot be shared across multiple environments.
+
+### Path Matching
+
+Routing priority is determined by path length with longest paths matching first. You can layer multiple paths to create sophisticated routing patterns.
+
+### Programmatic Creation
+
+Routes can be created programmatically via the Rivet API with [`routes.update`](/docs/api/routes/update).
+

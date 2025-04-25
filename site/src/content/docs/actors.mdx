@@ -1,14 +1,21 @@
-# JavaScript Runtime
+# Rivet Actors
 
-The Rivet JavaScript runtime is built on lightweight JavaScript containers called V8 isolates, providing a high-performance, secure environment for your actor code.
-
-It's designed to be widely compatible with Node.js and NPM dependencies, making it easy to use familiar libraries and tools.
+Rivet Actors allows you to deploy resilient, stateful services that maintain their state between requests. Use them for websocket servers, game backends, real-time collaboration services, and more.
 
 <Tip title="Get Started Faster With ActorCore">
   For getting started quickly using JavaScript, we recommend trying [ActorCore](https://actorcore.org) – our full-stack framework for working with Rivet Actors.
 </Tip>
 
-## Basic Setup
+## What are actors good for?
+
+- **Stateful Services**: Applications where maintaining state across interactions is critical. For example, **Collaborative Apps** with shared editing and automatic persistence.
+- **Realtime Systems**: Applications requiring fast, in-memory state modifications or push updates to connected clients. For example, **Multiplayer Games** with game rooms and player state.
+- **Long-Running Processes**: Tasks that execute over extended periods or in multiple steps. For example, **AI Agents** with ongoing conversations and stateful tool calls.
+- **Durability**: Processes that must survive crashes and restarts without data loss. For example, **Durable Execution** workflows that continue after system restarts.
+- **Horizontal Scalability**: Systems that need to scale by distributing load across many instances. For example, **Realtime Stream Processing** for stateful event handling.
+- **Local-First Architecture**: Systems that synchronize state between offline clients. For example, **Local-First Sync** between devices.
+
+## Quickstart
 
 ### Step 1: Writing an actor
 
@@ -26,22 +33,20 @@ Every actor must export a default object with an async `start` function. Here's 
 
 ```ts {{"file": "src/index.ts"}}
 import type { ActorContext } from "@rivet-gg/actor";
-import * as http from "http";
+import { Hono } from "hono";
 
 export default {
   async start(ctx: ActorContext) {
-    // Get the port from environment variables or use a default
-    const port = parseInt(process.env.PORT_HTTP || "8080");
+    const port = parseInt(Deno.env.get("PORT_HTTP") || "8080");
     console.log(`HTTP server running on port ${port}`);
     
-    // Create an HTTP server
-    const server = http.createServer((req, res) => {
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end(`Hello from Rivet Actor ${ctx.metadata.actor.id} running in ${ctx.metadata.region.id}!`);
+    const app = new Hono();
+    
+    app.get("/", (c) => {
+      return c.text(`Hello from Rivet Actor ${ctx.metadata.actor.id} running in ${ctx.metadata.region.id}!`);
     });
     
-    // Start listening on the specified port
-    server.listen(port);
+    Deno.serve({ port }, app.fetch);
     
     // Keep the actor running until explicitly destroyed
     await new Promise((resolve) => {});
@@ -50,8 +55,8 @@ export default {
 ```
 
 What this code does:
-- Sets up a simple HTTP server using Node.js's built-in http module
-- Creates a response that includes the actor ID and region information
+- Creates a simple HTTP server using Hono with Deno
+- Sets up a route that returns the actor ID and region information
 - Keeps the actor running indefinitely by returning a promise that never resolves
 
 <Tip title="Using classes">
@@ -74,7 +79,7 @@ Specify the script in your `rivet.json`:
 
 ```json {{ "title": "rivet.json" }}
 {
-  "builds": {
+  "actors": {
     "my-actor": {
       "script": "./src/index.ts"
     }

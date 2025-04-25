@@ -4,3 +4,5 @@
 /docs/html5/* https://opengamebackend.org/game-engines/html5 302
 /docs/custom/* https://opengamebackend.org/game-engines/html5 302
 /modules/* https://opengamebackend.org/modules 302
+/docs/javascript-runtime /docs/actors 302
+/docs/container-runtime /docs/containers 302

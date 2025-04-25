@@ -9,8 +9,9 @@ Automating deployments to Rivet with GitHub Actions allows you to seamlessly dep
 Before setting up continuous delivery, you need a working Rivet application:
 
 1. Set up your application using one of the following guides:
-   - [JavaScript Runtime](/docs/javascript-runtime) - For JavaScript applications
-   - [Container Runtime](/docs/container-runtime) - For Docker containers
+   - [Actors](/docs/actors)
+   - [Containers](/docs/containers)
+   - [Functions](/docs/functions)
 
 2. Make sure you have a working `rivet.json` configuration file in your project
 
@@ -97,7 +98,7 @@ After pushing your changes:
 1. Navigate to your GitHub repository and click the "Actions" tab
 2. Find the latest workflow run and check its status
 3. In the Rivet Dashboard, go to your project's environment
-4. Under the "Builds" tab, you should see your latest deployment with the commit SHA included in the tags
+4. Under the "Versions" tab, you should see your latest deployment with the commit SHA included in the tags
 
 ## Tips
 

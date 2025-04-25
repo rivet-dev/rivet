@@ -8,8 +8,8 @@ In this guide, we'll implement a simple game server on Rivet and create a backen
 
 Before starting, you'll need to choose a runtime for your game server. Rivet offers two options:
 
-- **[Container Runtime](/docs/container-runtime)**: For maximum flexibility, supports any language, ideal for complex game servers
-- **[JavaScript Runtime](/docs/javascript-runtime)**: For lightweight, fast-starting game servers using JavaScript/TypeScript
+- **[Actors](/docs/actors)**: For lightweight, fast-starting game servers using JavaScript/TypeScript
+- **[Containers](/docs/container)**: For maximum flexibility, supports any language, ideal for complex game servers
 
 ### Step 1: Preparing your game server code
 
@@ -88,21 +88,21 @@ export default {
 Create a minimal `rivet.json` configuration file that tells Rivet how to deploy your game server:
 
 <CodeGroup>
-```json {{ "title": "Container Runtime" }}
+```json {{ "title": "Actors" }}
 {
-  "builds": {
+  "actors": {
     "game-server": {
-      "dockerfile": "Dockerfile"
+      "script": "./src/index.ts"
     }
   }
 }
 ```
 
-```json {{ "title": "JavaScript Runtime" }}
+```json {{ "title": "Containers" }}
 {
-  "builds": {
+  "containers": {
     "game-server": {
-      "script": "./src/index.ts"
+      "dockerfile": "Dockerfile"
     }
   }
 }
@@ -889,8 +889,8 @@ When creating game servers with [`actors.create`](/docs/api/actors/create), you 
 
 For detailed documentation, see:
 - [Actors Create API Reference](/docs/api/actors/create)
-- [JavaScript Runtime](/docs/javascript-runtime)
-- [Container Runtime](/docs/container-runtime)
+- [Actors](/docs/actors)
+- [Containers](/docs/containers)
 - [Configuration Reference](/docs/config)
 
 ## Learning More

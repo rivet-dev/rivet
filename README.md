@@ -72,7 +72,7 @@ iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
 
 ### Quickstart (TypeScript)
 
-_See the [full quickstart guide](https://rivet.gg/docs/quickstart/typescript) for a comprehensive walkthrough._
+_See the [full quickstart guide](https://rivet.gg/docs/actors) for a comprehensive walkthrough._
 
 **Step 1: Create Actor**
 

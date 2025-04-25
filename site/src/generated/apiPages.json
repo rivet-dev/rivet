@@ -69,6 +69,21 @@
       "title": "regions.recommend",
       "href": "/docs/api/regions/recommend",
       "sortingKey": "/regions/recommend get"
+    },
+    {
+      "title": "routes.list",
+      "href": "/docs/api/routes/list",
+      "sortingKey": "/routes get"
+    },
+    {
+      "title": "routes.delete",
+      "href": "/docs/api/routes/delete",
+      "sortingKey": "/routes/{id} delete"
+    },
+    {
+      "title": "routes.update",
+      "href": "/docs/api/routes/update",
+      "sortingKey": "/routes/{id} put"
     }
   ]
 }

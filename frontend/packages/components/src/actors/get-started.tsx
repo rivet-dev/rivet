@@ -1,4 +1,4 @@
-import { Icon, faTs } from "@rivet-gg/icons";
+import { Icon, faTs, faFunction, faServer, faActors } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import type { ComponentProps } from "react";
 import { Button } from "../ui/button";
@@ -15,8 +15,20 @@ export function ActorsResources() {
 				</CardHeader>
 				<CardContent className="grid md:grid-cols-2 gap-4">
 					<ExampleLink
-						href="docs/quickstart/typescript"
-						title="TypeScript"
+						href="docs/actors"
+						title="Rivet Actors"
+						size="md"
+						icon={faActors}
+					/>
+					<ExampleLink
+						href="docs/containers"
+						title="Rivet Containers"
+						size="md"
+						icon={faServer}
+					/>
+					<ExampleLink
+						href="docs/functions"
+						title="Rivet Functions"
 						size="md"
 						icon={faTs}
 					/>

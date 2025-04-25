@@ -17,12 +17,14 @@ import {
 	faRuler,
 	faTerminal,
 	faSquareTerminal,
-    faJs,
-    faDocker,
-    faCircleNodes,
-    faKey,
+	faJs,
+	faDocker,
+	faCircleNodes,
+	faKey,
 	faCodePullRequest,
-    faLeaf,
+	faLeaf,
+	faFunction,
+    faActors,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -52,22 +54,40 @@ export const sitemap = [
 				icon: faDownload,
 			},
 			{
-				title: "Getting Started", // See https://supabase.com/docs/guides/auth/quickstarts/nextjs
+				title: "Getting Started",
 				pages: [
 					//{
-					//	title: "TypeScript",
-					//	href: "/docs/quickstart/typescript",
-					//	icon: faTs,
+					//	title: "Actors & Containers",
+					//	href: "/docs/functions",
+					//	icon: faActors,
+					//	collapsible: true,
+					//	pages: [
+					//		{
+					//			title: "JavaScript",
+					//			href: "/docs/javascript-runtime",
+					//			icon: faJs,
+					//		},
+					//		{
+					//			title: "Docker",
+					//			href: "/docs/container-runtime",
+					//			icon: faDocker,
+					//		},
+					//	]
 					//},
 					{
-						title: "JavaScript Runtime",
-						href: "/docs/javascript-runtime",
-						icon: faJs,
+						title: "Actors",
+						href: "/docs/actors",
+						icon: faActors,
 					},
 					{
-						title: "Container Runtime",
-						href: "/docs/container-runtime",
-						icon: faDocker,
+						title: "Containers",
+						href: "/docs/containers",
+						icon: faServer,
+					},
+					{
+						title: "Functions",
+						href: "/docs/functions",
+						icon: faFunction,
 					},
 				],
 			},
