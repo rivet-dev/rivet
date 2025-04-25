@@ -119,7 +119,7 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 							-- Toggle for case sensitivity without regex
 							CASE 
 								WHEN ? THEN position(message, ?) > 0
-								ELSE position(lower(message), lower(?)) > 0
+								ELSE positionCaseInsensitive(message, ?) > 0
 							END
 					END
 				)
@@ -152,7 +152,7 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 		.bind(regex_text)
 		.bind(case_sensitive)
 		.bind(search_text)
-		.bind(search_text)
+		.bind(search_text.to_lowercase())
 		// Limit
 		.bind(input.count);
 
