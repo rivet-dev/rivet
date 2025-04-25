@@ -71,7 +71,7 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 	let apply_search = !search_text.is_empty();
 	let enable_regex = input.search_enable_regex.unwrap_or(false);
 	let case_sensitive = input.search_case_sensitive.unwrap_or(false);
-	
+
 	// Pre-format the regex strings with or without case sensitivity
 	let regex_text = if case_sensitive {
 		search_text.to_string()
@@ -171,7 +171,8 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 					"invalid actor log entry uuid"
 				),
 			})
-		}).collect::<GlobalResult<Vec<_>>>()?;
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(Output { entries })
 }

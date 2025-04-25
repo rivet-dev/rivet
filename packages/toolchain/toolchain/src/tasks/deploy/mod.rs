@@ -5,7 +5,11 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::{config, paths, tasks::build_publish, util::task::{self, Task as _}};
+use crate::{
+	config, paths,
+	tasks::build_publish,
+	util::task::{self, Task as _},
+};
 
 #[derive(Deserialize)]
 pub struct Input {

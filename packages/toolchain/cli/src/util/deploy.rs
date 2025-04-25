@@ -154,7 +154,8 @@ async fn setup_function_routes(
 			if matching_route.path != function.path() {
 				changes.push(format!(
 					"Path: '{}' → '{}'",
-					matching_route.path, function.path()
+					matching_route.path,
+					function.path()
 				));
 			}
 			if matching_route.route_subpaths != config_route_subpaths {

@@ -63,7 +63,7 @@ pub async fn get_logs(
 
 	// Filter to only valid actors for this game/env
 	let valid_actor_ids = assert::actor_for_env(&ctx, &actor_ids, game_id, env_id, None).await?;
-	
+
 	// Exit early if no valid actors
 	if valid_actor_ids.is_empty() {
 		return Err(GlobalError::bad_request_builder("NO_VALID_ACTOR_IDS")
@@ -73,7 +73,7 @@ pub async fn get_logs(
 
 	// Use only the valid actor IDs from now on
 	let actor_ids = valid_actor_ids;
-	
+
 	// Determine stream type(s)
 	let stream_types = match query.stream {
 		models::ActorsQueryLogStream::StdOut => vec![pegboard::types::LogsStreamType::StdOut],

@@ -12,7 +12,6 @@ use reqwest;
 
 use super::{configuration, Error};
 use crate::apis::ResponseContent;
-use crate::models::ActorsQueryLogStream;
 
 /// struct for typed errors of method [`actors_logs_get`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,7 +29,7 @@ pub enum ActorsLogsGetError {
 /// Returns the logs for a given actor.
 pub async fn actors_logs_get(
 	configuration: &configuration::Configuration,
-	stream: ActorsQueryLogStream,
+	stream: crate::models::ActorsQueryLogStream,
 	actor_ids_json: &str,
 	project: Option<&str>,
 	environment: Option<&str>,

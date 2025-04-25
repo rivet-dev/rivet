@@ -15,7 +15,7 @@ export declare namespace Provision {
         baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.2.2";
+        xApiVersion?: "25.4.0";
         fetcher?: core.FetchFunction;
     }
 }

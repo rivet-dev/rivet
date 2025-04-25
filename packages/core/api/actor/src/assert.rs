@@ -34,43 +34,43 @@ struct ActorValidationData {
 
 // Implement Redis serialization traits for ActorValidationData
 impl ToRedisArgs for ActorValidationData {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + redis::RedisWrite,
-    {
-        // Format: "is_valid:game_name_id:env_name_id"
-        let serialized = format!(
-            "{}:{}:{}",
-            if self.is_valid { "1" } else { "0" },
-            self.game_name_id,
-            self.env_name_id
-        );
-        serialized.write_redis_args(out);
-    }
+	fn write_redis_args<W>(&self, out: &mut W)
+	where
+		W: ?Sized + redis::RedisWrite,
+	{
+		// Format: "is_valid:game_name_id:env_name_id"
+		let serialized = format!(
+			"{}:{}:{}",
+			if self.is_valid { "1" } else { "0" },
+			self.game_name_id,
+			self.env_name_id
+		);
+		serialized.write_redis_args(out);
+	}
 }
 
 impl FromRedisValue for ActorValidationData {
-    fn from_redis_value(v: &Value) -> RedisResult<Self> {
-        let s: String = redis::from_redis_value(v)?;
-        let parts: Vec<&str> = s.split(':').collect();
-        
-        if parts.len() < 3 {
-            return Err(redis::RedisError::from((
-                redis::ErrorKind::TypeError,
-                "Invalid ActorValidationData format",
-            )));
-        }
-        
-        let is_valid = parts[0] == "1";
-        let game_name_id = parts[1].to_string();
-        let env_name_id = parts[2].to_string();
-        
-        Ok(ActorValidationData {
-            is_valid,
-            game_name_id,
-            env_name_id,
-        })
-    }
+	fn from_redis_value(v: &Value) -> RedisResult<Self> {
+		let s: String = redis::from_redis_value(v)?;
+		let parts: Vec<&str> = s.split(':').collect();
+
+		if parts.len() < 3 {
+			return Err(redis::RedisError::from((
+				redis::ErrorKind::TypeError,
+				"Invalid ActorValidationData format",
+			)));
+		}
+
+		let is_valid = parts[0] == "1";
+		let game_name_id = parts[1].to_string();
+		let env_name_id = parts[2].to_string();
+
+		Ok(ActorValidationData {
+			is_valid,
+			game_name_id,
+			env_name_id,
+		})
+	}
 }
 
 /// Cache key for actor validation
@@ -85,13 +85,13 @@ struct ActorValidationCacheKey {
 
 // Implement CacheKey trait for ActorValidationCacheKey
 impl CacheKey for ActorValidationCacheKey {
-    fn cache_key(&self) -> String {
-        format!("actor:{}:{}:{}", self.game_id, self.env_id, self.actor_id)
-    }
+	fn cache_key(&self) -> String {
+		format!("actor:{}:{}:{}", self.game_id, self.env_id, self.actor_id)
+	}
 
-    fn simple_cache_key(&self) -> String {
-        self.cache_key()
-    }
+	fn simple_cache_key(&self) -> String {
+		self.cache_key()
+	}
 }
 
 /// Returns a list of valid actor IDs that belong to the given environment and game.
@@ -188,10 +188,10 @@ pub async fn actor_for_env(
 				let ctx = ctx.clone();
 				let game_name_id = game_name_id.clone();
 				let env_name_id = env_name_id.clone();
-				
+
 				async move {
 					// We don't need to track game/env pairs since they should all be the same
-                    // in a given call, but we could verify it if needed
+					// in a given call, but we could verify it if needed
 					let _game_env_pairs = keys_to_fetch
 						.iter()
 						.map(|key| (key.game_id, key.env_id))
@@ -202,7 +202,7 @@ pub async fn actor_for_env(
 						.iter()
 						.map(|key| key.actor_id)
 						.collect::<Vec<_>>();
-					
+
 					if actor_ids_to_validate.is_empty() {
 						return Ok(cache);
 					}
@@ -265,7 +265,9 @@ pub async fn actor_for_env(
 					let filtered_datacenters = dcs_res
 						.datacenters
 						.into_iter()
-						.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+						.filter(|dc| {
+							crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false)
+						})
 						.collect::<Vec<_>>();
 
 					if filtered_datacenters.is_empty() {
@@ -275,62 +277,68 @@ pub async fn actor_for_env(
 
 					// Track validation results for each actor
 					let validation_results = Arc::new(Mutex::new(HashMap::<Uuid, bool>::new()));
-					
+
 					// Create a stream of all datacenter + actor_id combinations
-					let mut validation_tasks = stream::iter(filtered_datacenters.into_iter().flat_map(|dc| {
-						let dc_clone = dc.clone();
-						let ids = actor_ids_to_validate.clone();
-						ids.into_iter().map(move |actor_id| (dc_clone.clone(), actor_id))
-					}))
-					.map(|(dc, actor_id)| {
-						let validation_results = validation_results.clone();
-						let game_name_id = game_name_id.clone();
-						let env_name_id = env_name_id.clone();
-						
-						async move {
-							// Skip this task if actor already validated
-							{
-								let map = validation_results.lock().await;
-								if map.get(&actor_id).map_or(false, |&v| v) {
-									return GlobalResult::Ok(());
+					let mut validation_tasks =
+						stream::iter(filtered_datacenters.into_iter().flat_map(|dc| {
+							let dc_clone = dc.clone();
+							let ids = actor_ids_to_validate.clone();
+							ids.into_iter()
+								.map(move |actor_id| (dc_clone.clone(), actor_id))
+						}))
+						.map(|(dc, actor_id)| {
+							let validation_results = validation_results.clone();
+							let game_name_id = game_name_id.clone();
+							let env_name_id = env_name_id.clone();
+
+							async move {
+								// Skip this task if actor already validated
+								{
+									let map = validation_results.lock().await;
+									if map.get(&actor_id).map_or(false, |&v| v) {
+										return GlobalResult::Ok(());
+									}
 								}
+
+								let config = Configuration {
+									client: rivet_pools::reqwest::client().await?,
+									base_path: ctx
+										.config()
+										.server()?
+										.rivet
+										.edge_api_url_str(&dc.name_id)?,
+									bearer_access_token: ctx.auth().api_token.clone(),
+									..Default::default()
+								};
+
+								// Pass the request to the edge api with project and environment name_ids
+								match actors_get(
+									&config,
+									&actor_id.to_string(),
+									Some(&game_name_id),
+									Some(&env_name_id),
+									None, // endpoint_type
+								)
+								.await
+								{
+									Ok(_) => {
+										// Actor exists and belongs to this game/env
+										let mut map = validation_results.lock().await;
+										map.insert(actor_id, true);
+									}
+									Err(err) => {
+										tracing::debug!(?err, ?actor_id, "Actor validation failed");
+										// Only mark as invalid if not already validated
+										let mut map = validation_results.lock().await;
+										map.entry(actor_id).or_insert(false);
+									}
+								};
+
+								GlobalResult::Ok(())
 							}
-
-							let config = Configuration {
-								client: rivet_pools::reqwest::client().await?,
-								base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
-								bearer_access_token: ctx.auth().api_token.clone(),
-								..Default::default()
-							};
-
-							// Pass the request to the edge api with project and environment name_ids
-							match actors_get(
-								&config,
-								&actor_id.to_string(),
-								Some(&game_name_id),
-								Some(&env_name_id),
-								None, // endpoint_type
-							)
-							.await
-							{
-								Ok(_) => {
-									// Actor exists and belongs to this game/env
-									let mut map = validation_results.lock().await;
-									map.insert(actor_id, true);
-								}
-								Err(err) => {
-									tracing::debug!(?err, ?actor_id, "Actor validation failed");
-									// Only mark as invalid if not already validated
-									let mut map = validation_results.lock().await;
-									map.entry(actor_id).or_insert(false);
-								}
-							};
-							
-							GlobalResult::Ok(())
-						}
-						.boxed()
-					})
-					.buffer_unordered(16); // Process up to 16 concurrent validation requests
+							.boxed()
+						})
+						.buffer_unordered(16); // Process up to 16 concurrent validation requests
 
 					// Process results (just consume the stream)
 					while let Some(_) = validation_tasks.next().await {}
@@ -340,8 +348,11 @@ pub async fn actor_for_env(
 
 					// Resolve cache entries
 					for key in keys_to_fetch {
-						let is_valid = validation_results.get(&key.actor_id).copied().unwrap_or(false);
-						
+						let is_valid = validation_results
+							.get(&key.actor_id)
+							.copied()
+							.unwrap_or(false);
+
 						// Add to cache
 						cache.resolve(
 							&key,
@@ -368,18 +379,20 @@ pub async fn actor_for_env(
 				env_id,
 				actor_id,
 			};
-			
+
 			// Check if the actor is valid in the cache results
 			actor_validation_results
 				.iter()
 				.find(|(k, _)| *k == cache_key)
-				.and_then(|(_, data)| {
-					if data.is_valid {
-						Some(actor_id)
-					} else {
-						None
-					}
-				})
+				.and_then(
+					|(_, data)| {
+						if data.is_valid {
+							Some(actor_id)
+						} else {
+							None
+						}
+					},
+				)
 		})
 		.collect::<Vec<_>>();
 

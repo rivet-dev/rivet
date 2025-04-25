@@ -205,14 +205,14 @@ pub async fn recommend(
 			..Default::default()
 		})
 		.await?;
-		
+
 		if recommend_res.regions.is_empty() {
 			bail!("no regions found");
 		}
-		
+
 		let region = unwrap!(recommend_res.regions.first());
 		let datacenter_id = unwrap_ref!(region.region_id).as_uuid();
-		
+
 		// Find the datacenter in our filtered list
 		filtered_dcs
 			.iter()

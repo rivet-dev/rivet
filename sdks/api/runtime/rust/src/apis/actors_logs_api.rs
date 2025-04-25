@@ -30,7 +30,7 @@ pub enum ActorsLogsGetError {
 
 
 /// Returns the logs for a given actor.
-pub async fn actors_logs_get(configuration: &configuration::Configuration, stream: ActorsQueryLogStream, actor_ids_json: &str, project: Option<&str>, environment: Option<&str>, search_text: Option<&str>, search_case_sensitive: Option<bool>, search_enable_regex: Option<bool>, watch_index: Option<&str>) -> Result<crate::models::ActorsGetActorLogsResponse, Error<ActorsLogsGetError>> {
+pub async fn actors_logs_get(configuration: &configuration::Configuration, stream: crate::models::ActorsQueryLogStream, actor_ids_json: &str, project: Option<&str>, environment: Option<&str>, search_text: Option<&str>, search_case_sensitive: Option<bool>, search_enable_regex: Option<bool>, watch_index: Option<&str>) -> Result<crate::models::ActorsGetActorLogsResponse, Error<ActorsLogsGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
