@@ -9,6 +9,7 @@ import {
 	FormMessage,
 } from "../../ui/form";
 import { Input } from "../../ui/input";
+import { useActorsView } from "../actors-view-context-provider";
 
 export const formSchema = z.object({
 	actorId: z.string().nonempty("Actor ID is required").uuid(),
@@ -25,13 +26,14 @@ export { Form, Submit };
 
 export const ActorId = () => {
 	const { control } = useFormContext<FormValues>();
+	const { copy } = useActorsView();
 	return (
 		<FormField
 			control={control}
 			name="actorId"
 			render={({ field }) => (
 				<FormItem>
-					<FormLabel>Actor ID</FormLabel>
+					<FormLabel>{copy.actorId}</FormLabel>
 					<FormControl>
 						<Input
 							{...field}

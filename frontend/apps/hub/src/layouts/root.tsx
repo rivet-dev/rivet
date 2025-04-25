@@ -23,7 +23,7 @@ const Root = ({ children }: RootProps) => {
 
 const Main = ({ children }: RootProps) => {
 	return (
-		<main className="bg-background flex flex-1 flex-col h-full min-h-0 relative">
+		<main className="bg-background flex flex-1 flex-col h-full min-h-0 relative min-w-0">
 			{children}
 		</main>
 	);
@@ -37,8 +37,10 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 				"min-h-screen grid grid-rows-[auto,1fr]":
 					layout === "full" ||
 					layout === "onboarding" ||
-					layout === "actors",
+					layout === "actors" ||
+					layout === "v2",
 				contents: layout === "compact",
+				"max-h-screen": layout === "v2",
 			})}
 		>
 			{children}
@@ -56,7 +58,7 @@ const Header = () => {
 const Footer = () => {
 	const layout = usePageLayout();
 
-	if (layout === "actors") {
+	if (["actors", "v2"].includes(layout)) {
 		return null;
 	}
 	return (

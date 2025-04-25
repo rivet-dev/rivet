@@ -68,6 +68,9 @@ export * from "./ui/combobox";
 export * from "./ui/picture";
 export * from "./ui/toggle-group";
 export * from "./ui/kbd";
+export * from "./ui/checkbox";
+export { default as Filters } from "./ui/filters";
+export * from "./ui/filters";
 export * from "./lib/utils";
 export * from "./lib/filesize";
 export * from "./lib/timing";
@@ -82,6 +85,8 @@ export * from "./hooks";
 export * from "./lib/emoji";
 export * from "./third-party-providers";
 export * from "./lib/constants";
+export * from "./lib/table";
+export * from "./lib/logfmt";
 export * as styleHelpers from "./ui/helpers/index";
 export { toast } from "sonner";
 

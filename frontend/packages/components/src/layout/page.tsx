@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 interface PageLayoutProps {
 	children: ReactNode;
-	layout?: "compact" | "full" | "onboarding" | "actors";
+	layout?: "compact" | "full" | "onboarding" | "actors" | "v2";
 }
 
 const PageLayout = ({ children, layout = "compact" }: PageLayoutProps) => (
@@ -14,6 +14,7 @@ const PageLayout = ({ children, layout = "compact" }: PageLayoutProps) => (
 				layout === "full" ||
 				layout === "onboarding" ||
 				layout === "actors",
+			"w-full h-full": layout === "v2",
 		})}
 	>
 		{children}
@@ -30,6 +31,7 @@ const PageLayoutSkeleton = ({
 					container: layout === "compact",
 					"px-8 w-full h-full":
 						layout === "full" || layout === "actors",
+					"px-4 w-full h-full": layout === "v2",
 				},
 				"pt-4",
 			)}

@@ -7,6 +7,7 @@ import {
 import {
 	type ComponentPropsWithoutRef,
 	type FunctionComponent,
+	type ReactNode,
 	type RefObject,
 	useImperativeHandle,
 } from "react";
@@ -34,6 +35,7 @@ interface VirtualScrollAreaProps<TItem extends Record<string, any>>
 	virtualizerRef?: RefObject<Virtualizer<HTMLDivElement, Element>>;
 	viewportRef?: RefObject<HTMLDivElement>;
 	scrollerProps?: ComponentPropsWithoutRef<"div">;
+	children?: ReactNode;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: we don't care about the type of the row
@@ -45,6 +47,7 @@ export function VirtualScrollArea<TItem extends Record<string, any>>({
 	virtualizerRef,
 	viewportRef,
 	scrollerProps,
+	children,
 	...rowVirtualizerOptions
 }: VirtualScrollAreaProps<TItem>) {
 	const rowVirtualizer = useVirtualizer({
@@ -53,6 +56,8 @@ export function VirtualScrollArea<TItem extends Record<string, any>>({
 	});
 
 	useImperativeHandle(virtualizerRef, () => rowVirtualizer, [rowVirtualizer]);
+
+	const totalSize = rowVirtualizer.getTotalSize();
 
 	return (
 		<ScrollArea
@@ -64,9 +69,10 @@ export function VirtualScrollArea<TItem extends Record<string, any>>({
 				{...scrollerProps}
 				className={cn("relative w-full", scrollerProps?.className)}
 				style={{
-					height: `${rowVirtualizer.getTotalSize()}px`,
+					height: totalSize === 0 ? "100%" : `${totalSize}px`,
 				}}
 			>
+				{children}
 				{rowVirtualizer.getVirtualItems().map((virtualItem) => (
 					<Row
 						key={virtualItem.key}

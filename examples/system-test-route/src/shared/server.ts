@@ -21,6 +21,10 @@ export function createAndStartServer(
 	setInterval(() => {
 		tickIndex++;
 		console.log("Tick", tickIndex);
+		console.log(
+			JSON.stringify({ level: "info", message: "tick", tickIndex }),
+		);
+		console.log(`level=info message=tick tickIndex=${tickIndex}`);
 	}, 1000);
 
 	// Get port from environment
@@ -37,14 +41,16 @@ export function createAndStartServer(
 	const app = new Hono();
 
 	app.get("/health", (c) => c.text("ok"));
-	
+
 	// Add a catch-all route to handle any other path (for testing routeSubpaths)
 	app.all("*", (c) => {
-		console.log(`Received request to ${c.req.url} from ${c.req.header("x-forwarded-for") || "unknown"}`);
-		return c.json({ 
-			actorId, 
+		console.log(
+			`Received request to ${c.req.url} from ${c.req.header("x-forwarded-for") || "unknown"}`,
+		);
+		return c.json({
+			actorId,
 			path: c.req.path,
-			query: c.req.query()
+			query: c.req.query(),
 		});
 	});
 

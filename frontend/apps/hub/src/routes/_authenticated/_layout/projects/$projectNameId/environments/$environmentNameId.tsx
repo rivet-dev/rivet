@@ -6,6 +6,7 @@ import {
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { useDialog } from "@/hooks/use-dialog";
+import { usePageLayout } from "@/lib/compute-page-layout";
 import { guardUuids } from "@/lib/guards";
 import {
 	type ErrorComponentProps,
@@ -58,6 +59,17 @@ function Modals() {
 }
 
 function EnvironmentErrorComponent(props: ErrorComponentProps) {
+	const layout = usePageLayout();
+
+	if (layout === "v2") {
+		return (
+			<div className="p-4">
+				<div className="max-w-5xl mx-auto">
+					<ErrorComponent {...props} />
+				</div>
+			</div>
+		);
+	}
 	return <ErrorComponent {...props} />;
 }
 

@@ -1,4 +1,4 @@
-import { computePageLayout } from "@/lib/compute-page-layout";
+import { computePageLayout, usePageLayout } from "@/lib/compute-page-layout";
 import { Page, Skeleton } from "@rivet-gg/components";
 import { useMatches } from "@tanstack/react-router";
 import type { PropsWithChildren, ReactNode } from "react";
@@ -12,7 +12,18 @@ function ProjectPage({ children }: ProjectPageProps) {
 	return <Page layout={computePageLayout(matches)}>{children}</Page>;
 }
 
-ProjectPage.Skeleton = Page.Skeleton;
+ProjectPage.Skeleton = () => {
+	const layout = usePageLayout();
+	if (layout === "v2") {
+		return (
+			<div className="p-4">
+				<Page.Skeleton />
+			</div>
+		);
+	}
+
+	return <Page.Skeleton />;
+};
 
 function Content({ children }: PropsWithChildren) {
 	return <>{children}</>;

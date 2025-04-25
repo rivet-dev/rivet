@@ -1,7 +1,8 @@
 import * as GoToActorForm from "../form/go-to-actor-form";
-import type { DialogContentProps } from "../../hooks";
+import type { DialogContentProps } from "../hooks";
 import { DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
 import { Button } from "../../ui/button";
+import { useActorsView } from "../actors-view-context-provider";
 
 interface ContentProps extends DialogContentProps {
 	onSubmit?: (actorId: string) => void;
@@ -11,6 +12,7 @@ export default function GoToActorDialogContent({
 	onClose,
 	onSubmit,
 }: ContentProps) {
+	const { copy } = useActorsView();
 	return (
 		<GoToActorForm.Form
 			defaultValues={{ actorId: "" }}
@@ -19,7 +21,7 @@ export default function GoToActorDialogContent({
 			}}
 		>
 			<DialogHeader>
-				<DialogTitle>Go to Actor</DialogTitle>
+				<DialogTitle>{copy.goToActor}</DialogTitle>
 			</DialogHeader>
 			<GoToActorForm.ActorId />
 			<DialogFooter>

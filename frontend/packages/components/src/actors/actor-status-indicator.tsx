@@ -29,15 +29,22 @@ export function getActorStatus(
 	return "unknown";
 }
 
+export const AtomizedActorStatusIndicator = ({
+	actor,
+}: {
+	actor: ActorAtom;
+}) => {
+	const status = useAtomValue(selectAtom(actor, selector));
+	return <ActorStatusIndicator status={status} />;
+};
+
 const selector = ({ status }: Actor) => status;
 
 interface ActorStatusIndicatorProps {
-	actor: ActorAtom;
+	status: ReturnType<typeof getActorStatus>;
 }
 
-export const ActorStatusIndicator = ({ actor }: ActorStatusIndicatorProps) => {
-	const status = useAtomValue(selectAtom(actor, selector));
-
+export const ActorStatusIndicator = ({ status }: ActorStatusIndicatorProps) => {
 	if (status === "running") {
 		return <Ping variant="success" className="relative right-auto" />;
 	}

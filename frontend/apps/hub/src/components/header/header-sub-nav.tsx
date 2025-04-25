@@ -1,7 +1,11 @@
 import { useAuth } from "@/domains/auth/contexts/auth";
 import { Skeleton, cn } from "@rivet-gg/components";
 import { ErrorBoundary } from "@sentry/react";
-import { useMatchRoute } from "@tanstack/react-router";
+import {
+	useMatches,
+	useMatchRoute,
+	useRouterState,
+} from "@tanstack/react-router";
 import { Suspense, useContext } from "react";
 import { MobileBreadcrumbsContext } from "../breadcrumbs/mobile-breadcrumbs";
 import { HeaderEnvironmentLinks } from "./links/header-environment-links";
@@ -9,11 +13,15 @@ import { HeaderGroupLinks } from "./links/header-group-links";
 import { HeaderProjectLinks } from "./links/header-project-links";
 
 function Content() {
+	const allMatches = useMatches();
+
+	const v2Envs = allMatches.find((match) => match.id.includes("/_v2/"));
+
 	const matchRoute = useMatchRoute();
 
 	const { profile } = useAuth();
 
-	if (!profile?.identity.isRegistered) {
+	if (!profile?.identity.isRegistered || v2Envs) {
 		return null;
 	}
 

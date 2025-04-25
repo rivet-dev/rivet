@@ -6,6 +6,7 @@ import {
 	actorBuildsCountAtom,
 	actorManagerEndpointAtom,
 } from "./actor-context";
+import { useActorsView } from "./actors-view-context-provider";
 
 export function CreateActorButton(props: ButtonProps) {
 	const navigate = useNavigate();
@@ -13,6 +14,8 @@ export function CreateActorButton(props: ButtonProps) {
 	const builds = useAtomValue(actorBuildsCountAtom);
 
 	const canCreate = builds > 0 && endpoint;
+
+	const { copy, requiresManager } = useActorsView();
 
 	return (
 		<WithTooltip
@@ -34,16 +37,18 @@ export function CreateActorButton(props: ButtonProps) {
 						startIcon={<Icon icon={faPlus} />}
 						{...props}
 					>
-						Create Actor
+						{copy.createActor}
 					</Button>
 				</div>
 			}
 			content={
 				builds <= 0
 					? "No builds found, please deploy a build first."
-					: endpoint
-						? "Create new Actor using simple form."
-						: "No Actor Manager found, please deploy a build first."
+					: !requiresManager
+						? copy.createActorUsingForm
+						: endpoint
+							? copy.createActorUsingForm
+							: "No Actor Manager found, please deploy a build first."
 			}
 		/>
 	);

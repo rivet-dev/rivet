@@ -1,10 +1,13 @@
 import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
-import { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api";
+import { safe, logfmt, type LogFmtValue, toRecord } from "@rivet-gg/components";
+import { getActorStatus } from "@rivet-gg/components/actors";
 import {
 	type InfiniteData,
 	infiniteQueryOptions,
+	keepPreviousData,
 	queryOptions,
 } from "@tanstack/react-query";
 import { uniqueId } from "lodash";
@@ -158,6 +161,21 @@ export const actorQueryOptions = ({
 	});
 };
 
+export const actorStatusQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	actorId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	actorId: string;
+}) => {
+	return queryOptions({
+		...actorQueryOptions({ projectNameId, environmentNameId, actorId }),
+		select: (data) => getActorStatus(data.actor),
+	});
+};
+
 export const actorDestroyedAtQueryOptions = ({
 	projectNameId,
 	environmentNameId,
@@ -185,7 +203,7 @@ export const actorLogsQueryOptions = (
 		projectNameId: string;
 		environmentNameId: string;
 		actorId: string;
-		stream: Rivet.actors.LogStream;
+		stream: Rivet.actors.QueryLogStream;
 	},
 	opts: { refetchInterval?: number } = {},
 ) => {
@@ -200,18 +218,18 @@ export const actorLogsQueryOptions = (
 			actorId,
 			"logs",
 			stream,
-		],
+		] as const,
 		queryFn: async ({
 			signal: abortSignal,
 			meta,
 			queryKey: [, project, , environment, , actorId, , stream],
 		}) => {
 			const response = await rivetClient.actors.logs.get(
-				actorId,
 				{
 					project,
 					environment,
-					stream: stream as Rivet.actors.LogStream,
+					stream,
+					actorIdsJson: JSON.stringify([actorId]),
 					watchIndex: getMetaWatchIndex(meta),
 				},
 				{ abortSignal },
@@ -243,7 +261,7 @@ export const actorErrorsQueryOptions = ({
 			projectNameId,
 			environmentNameId,
 			actorId,
-			stream: Rivet.actors.LogStream.StdErr,
+			stream: "std_err",
 		}),
 		select: (data) => data.lines.length > 0,
 	});
@@ -269,15 +287,7 @@ export const actorBuildsQueryOptions = ({
 		] as const,
 		refetchInterval: 2000,
 		queryFn: ({
-			queryKey: [
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
-				_,
-				project,
-				__,
-				environment,
-				___,
-				tagsJson,
-			],
+			queryKey: [, project, , environment, , tagsJson],
 			signal: abortSignal,
 		}) =>
 			rivetClient.builds.list(
@@ -520,5 +530,172 @@ export const actorBuildsCountQueryOptions = ({
 		...actorBuildsQueryOptions({ projectNameId, environmentNameId }),
 		select: (data) => data.builds.length,
 		notifyOnChangeProps: ["data"],
+	});
+};
+
+export interface FunctionInvoke {
+	id: string;
+	isFormatted: boolean;
+	actorId: string;
+	actorName: string;
+	actorTags: Record<string, unknown>;
+	regionId: string;
+	timestamp: Date;
+	level: string;
+	line: string;
+	message: string;
+	properties: Record<string, LogFmtValue>;
+}
+
+export const logsAggregatedQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	search,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	search?: { text?: string; caseSensitive?: boolean; enableRegex?: boolean };
+}) => {
+	return queryOptions({
+		refetchInterval: 5000,
+		placeholderData: keepPreviousData,
+		queryKey: [
+			"project",
+			projectNameId,
+			"environment",
+			environmentNameId,
+			"logs",
+			search,
+		] as const,
+		queryFn: async ({
+			signal: abortSignal,
+			client,
+			queryKey: [_, project, __, environment, ___, search],
+		}) => {
+			const actors = await client.fetchInfiniteQuery({
+				...projectActorsQueryOptions({
+					projectNameId: project,
+					environmentNameId: environment,
+					includeDestroyed: true,
+					tags: {},
+				}),
+				pages: 10,
+			});
+
+			const allActors = actors.pages.flatMap((page) => page.actors || []);
+
+			const actorsMap = new Map<string, Rivet.actors.Actor>();
+			for (const actor of allActors) {
+				actorsMap.set(actor.id, actor);
+			}
+
+			const logs = await rivetClient.actors.logs.get(
+				{
+					stream: "all",
+					project,
+					environment,
+					searchText: search?.text,
+					searchCaseSensitive: search?.caseSensitive,
+					searchEnableRegex: search?.enableRegex,
+					actorIdsJson: JSON.stringify(allActors.map((a) => a.id)),
+				},
+				{ abortSignal },
+			);
+
+			const parsed = logs.lines.map((line, idx) => {
+				const actorIdx = logs.actorIndices[idx];
+				const actorId = logs.actorIds[actorIdx];
+				const timestamp = logs.timestamps[idx];
+				const stream = logs.streams[idx];
+				const raw = window.atob(line);
+				const fmt = safe(logfmt.parse)(raw)[0];
+				const json = safe(JSON.parse)(raw)[0];
+				const formatted = json || fmt;
+				const {
+					level = stream === 1 ? "error" : "info",
+					msg,
+					...properties
+				} = formatted || {};
+				const isFormatDefined =
+					(fmt?.level || json) && Object.keys(formatted).length > 0;
+				const actor = actorsMap.get(actorId);
+				return {
+					id: `${actorId}-${timestamp}-${idx}`,
+					level: level,
+					isFormatted: isFormatDefined,
+					actorId: actorId,
+					actorName:
+						(toRecord(actor?.tags).name as string) ||
+						actorId.split("-")[0],
+					actorTags: toRecord(actor?.tags),
+					regionId: actor?.region || "local",
+					timestamp,
+					line: raw,
+					message: isFormatDefined ? (msg as string) : "",
+					properties: isFormatDefined ? properties : {},
+				} satisfies FunctionInvoke;
+			});
+
+			return parsed.toReversed();
+		},
+	});
+};
+
+export interface Route {
+	id: string;
+	hostname: string;
+	pathPrefix: string;
+	selector: Record<string, string>;
+	createdAt: Date;
+}
+
+export const routesQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+}) => {
+	return queryOptions({
+		queryKey: [
+			"project",
+			projectNameId,
+			"environment",
+			environmentNameId,
+			"routes",
+		],
+		queryFn: async ({
+			signal: abortSignal,
+			queryKey: [_, project, __, environment],
+		}) => {
+			return rivetClient.routes.list(
+				{
+					project,
+					environment,
+				},
+				{ abortSignal },
+			);
+		},
+		select: (data) => data.routes,
+	});
+};
+
+export const routeQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	routeId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	routeId: string;
+}) => {
+	return queryOptions({
+		...routesQueryOptions({
+			projectNameId,
+			environmentNameId,
+		}),
+		select: (data) => {
+			return data.routes.find((route) => route.id === routeId);
+		},
 	});
 };

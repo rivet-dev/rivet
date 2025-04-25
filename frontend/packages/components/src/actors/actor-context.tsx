@@ -34,6 +34,7 @@ export type Actor = Omit<
 };
 
 export type Logs = {
+	status?: string;
 	lines: string[];
 	timestamps: string[];
 	ids: string[];

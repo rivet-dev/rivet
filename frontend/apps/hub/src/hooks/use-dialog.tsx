@@ -285,3 +285,11 @@ useDialog.CreateActor = createDialogHook(
 useDialog.GoToActor = createDialogHook(
 	import("@rivet-gg/components/actors/dialogs/go-to-actor-dialog"),
 );
+
+useDialog.EditRoute = createDialogHook(
+	import("@/domains/project/components/dialogs/edit-route-dialog"),
+);
+
+useDialog.CreateRoute = createDialogHook(
+	import("@/domains/project/components/dialogs/create-route-dialog"),
+);

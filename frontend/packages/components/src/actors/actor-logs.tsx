@@ -111,6 +111,16 @@ export const ActorLogs = memo(
 			);
 		}
 
+		if (logs.status === "pending" || errors.status === "pending") {
+			return (
+				<div className="w-full flex-1 min-h-0">
+					<ActorConsoleMessage variant="debug">
+						Loading logs...
+					</ActorConsoleMessage>
+				</div>
+			);
+		}
+
 		if (combined.length === 0) {
 			// if (!isStdOutSuccess || !isStdErrSuccess) {
 			// 	return (

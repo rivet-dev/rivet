@@ -12,6 +12,7 @@ import {
 	filteredActorsCountAtom,
 } from "./actor-context";
 import { faReact, faRust, faTs, Icon } from "@rivet-gg/icons";
+import { useActorsView } from "./actors-view-context-provider";
 
 export function ActorsList() {
 	return (
@@ -25,13 +26,13 @@ export function ActorsList() {
 							<CreateActorButton />
 						</div>
 					</div>
-					<div className="grid grid-cols-subgrid col-span-full  font-semibold text-sm px-1 pr-4">
+					<div className="grid grid-cols-subgrid col-span-full font-semibold text-sm px-1 pr-4 min-h-[42px] items-center">
 						<div />
-						<div className="pb-3 pt-3">Region</div>
-						<div className="pb-3 pt-3">ID</div>
-						<div className="pb-3 pt-3">Tags</div>
-						<div className="pb-3 pt-3">Created</div>
-						<div className="pb-3 pt-3">Destroyed</div>
+						<div>Region</div>
+						<div>ID</div>
+						<div>Tags</div>
+						<div>Created</div>
+						<div>Destroyed</div>
 					</div>
 				</div>
 				<List />
@@ -78,13 +79,15 @@ function EmptyState() {
 	const count = useAtomValue(filteredActorsCountAtom);
 	const filtersCount = useAtomValue(actorFiltersCountAtom);
 	const setFilters = useSetAtom(actorFiltersAtom);
+	const { copy } = useActorsView();
+
 	return (
 		<div className=" col-span-full my-4 flex flex-col items-center gap-2 justify-center">
 			{count === 0 ? (
 				filtersCount === 0 ? (
 					<div className="gap-2 flex flex-col items-center justify-center">
 						<SmallText className="text-center">
-							No actors found.
+							{copy.noActorsFound}
 						</SmallText>
 						<div className="mt-4 flex flex-col gap-2 items-center justify-center">
 							<CreateActorButton variant="outline" />{" "}
