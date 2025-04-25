@@ -57,6 +57,6 @@ async function runEsbuild({ platform, target, format, entryPoint, outfile }) {
             // matches up with tsconfig paths
             "@rivet-gg/api": "./src",
         },
-		external: ['node-fetch'],
+		external: ['node-fetch', 'js-base64', 'qs', 'url-join', 'form-data', 'readable-stream'],
     }).catch(() => process.exit(1));
 }
