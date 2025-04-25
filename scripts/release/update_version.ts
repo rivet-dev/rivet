@@ -12,11 +12,6 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `[workspace.package]\nversion = "${opts.version}"`,
 		},
 		{
-			path: "sdks/actor/*/package.json",
-			find: /"version": ".*"/,
-			replace: `"version": "${opts.version}"`,
-		},
-		{
 			path: "frontend/packages/*/package.json",
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
