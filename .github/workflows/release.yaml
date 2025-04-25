@@ -33,9 +33,17 @@ jobs:
       # Allows JSR to authenticate with GitHub
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout rivet
+        uses: actions/checkout@v4
         with:
           lfs: 'true'
+          path: './rivet'
+          
+      - name: Checkout actor-core
+        uses: actions/checkout@v4
+        with:
+          repository: 'rivet-gg/actor-core'
+          path: './actor-core'
 
       - uses: actions/setup-node@v4
         with:
@@ -62,12 +70,12 @@ jobs:
           EOF
 
           # Install dependencies
-          yarn install --immutable
+          cd ./rivet && yarn install --immutable
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+              cd ./rivet && ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+              cd ./rivet && ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
           fi
 
 
