@@ -8,7 +8,6 @@ import (
 	json "encoding/json"
 	errors "errors"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	io "io"
 	http "net/http"
 	url "net/url"
@@ -36,12 +35,12 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Returns the logs for a given actor.
-func (c *Client) Get(ctx context.Context, actor uuid.UUID, request *actors.GetActorLogsRequestQuery) (*actors.GetActorLogsResponse, error) {
+func (c *Client) Get(ctx context.Context, request *actors.GetActorLogsRequestQuery) (*actors.GetActorLogsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/logs", actor)
+	endpointURL := baseURL + "/" + "actors/logs"
 
 	queryParams := make(url.Values)
 	if request.Project != nil {
@@ -51,6 +50,16 @@ func (c *Client) Get(ctx context.Context, actor uuid.UUID, request *actors.GetAc
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
 	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
+	queryParams.Add("actor_ids_json", fmt.Sprintf("%v", request.ActorIdsJson))
+	if request.SearchText != nil {
+		queryParams.Add("search_text", fmt.Sprintf("%v", *request.SearchText))
+	}
+	if request.SearchCaseSensitive != nil {
+		queryParams.Add("search_case_sensitive", fmt.Sprintf("%v", *request.SearchCaseSensitive))
+	}
+	if request.SearchEnableRegex != nil {
+		queryParams.Add("search_enable_regex", fmt.Sprintf("%v", *request.SearchEnableRegex))
+	}
 	if request.WatchIndex != nil {
 		queryParams.Add("watch_index", fmt.Sprintf("%v", *request.WatchIndex))
 	}

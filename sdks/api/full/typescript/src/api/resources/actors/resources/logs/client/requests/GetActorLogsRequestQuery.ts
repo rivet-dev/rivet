@@ -10,13 +10,21 @@ import * as Rivet from "../../../../../../index";
  *         project: "string",
  *         environment: "string",
  *         stream: "std_out",
+ *         actorIdsJson: "string",
+ *         searchText: "string",
+ *         searchCaseSensitive: true,
+ *         searchEnableRegex: true,
  *         watchIndex: "string"
  *     }
  */
 export interface GetActorLogsRequestQuery {
     project?: string;
     environment?: string;
-    stream: Rivet.actors.LogStream;
+    stream: Rivet.actors.QueryLogStream;
+    actorIdsJson: string;
+    searchText?: string;
+    searchCaseSensitive?: boolean;
+    searchEnableRegex?: boolean;
     /**
      * A query parameter denoting the requests watch index.
      */

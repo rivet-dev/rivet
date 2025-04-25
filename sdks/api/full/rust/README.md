@@ -31,7 +31,7 @@ Class | Method | HTTP request | Description
 *ActorsApi* | [**actors_list**](docs/ActorsApi.md#actors_list) | **GET** /actors | 
 *ActorsApi* | [**actors_upgrade**](docs/ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
 *ActorsApi* | [**actors_upgrade_all**](docs/ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
-*ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/{actor}/logs | 
+*ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/logs | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
@@ -154,6 +154,9 @@ Class | Method | HTTP request | Description
 *ProvisionTunnelApi* | [**provision_tunnel_get_tls**](docs/ProvisionTunnelApi.md#provision_tunnel_get_tls) | **GET** /tunnel/tls | 
 *RegionsApi* | [**regions_list**](docs/RegionsApi.md#regions_list) | **GET** /regions | 
 *RegionsApi* | [**regions_recommend**](docs/RegionsApi.md#regions_recommend) | **GET** /regions/recommend | 
+*RoutesApi* | [**routes_delete**](docs/RoutesApi.md#routes_delete) | **DELETE** /routes/{id} | 
+*RoutesApi* | [**routes_list**](docs/RoutesApi.md#routes_list) | **GET** /routes | 
+*RoutesApi* | [**routes_update**](docs/RoutesApi.md#routes_update) | **PUT** /routes/{id} | 
 *ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
 *ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
 *ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
@@ -181,12 +184,12 @@ Class | Method | HTTP request | Description
  - [ActorsGetActorResponse](docs/ActorsGetActorResponse.md)
  - [ActorsLifecycle](docs/ActorsLifecycle.md)
  - [ActorsListActorsResponse](docs/ActorsListActorsResponse.md)
- - [ActorsLogStream](docs/ActorsLogStream.md)
  - [ActorsNetwork](docs/ActorsNetwork.md)
  - [ActorsNetworkMode](docs/ActorsNetworkMode.md)
  - [ActorsPort](docs/ActorsPort.md)
  - [ActorsPortProtocol](docs/ActorsPortProtocol.md)
  - [ActorsPortRouting](docs/ActorsPortRouting.md)
+ - [ActorsQueryLogStream](docs/ActorsQueryLogStream.md)
  - [ActorsResources](docs/ActorsResources.md)
  - [ActorsRuntime](docs/ActorsRuntime.md)
  - [ActorsUpgradeActorRequest](docs/ActorsUpgradeActorRequest.md)
@@ -472,6 +475,11 @@ Class | Method | HTTP request | Description
  - [RegionsListRegionsResponse](docs/RegionsListRegionsResponse.md)
  - [RegionsRecommendRegionResponse](docs/RegionsRecommendRegionResponse.md)
  - [RegionsRegion](docs/RegionsRegion.md)
+ - [RoutesListRoutesResponse](docs/RoutesListRoutesResponse.md)
+ - [RoutesRoute](docs/RoutesRoute.md)
+ - [RoutesRouteTarget](docs/RoutesRouteTarget.md)
+ - [RoutesRouteTargetActors](docs/RoutesRouteTargetActors.md)
+ - [RoutesUpdateRouteBody](docs/RoutesUpdateRouteBody.md)
  - [ServersBuild](docs/ServersBuild.md)
  - [ServersBuildCompression](docs/ServersBuildCompression.md)
  - [ServersBuildKind](docs/ServersBuildKind.md)

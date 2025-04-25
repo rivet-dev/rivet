@@ -2,11 +2,7 @@ use global_error::prelude::*;
 use maplit::hashmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{
-	collections::HashMap,
-	net::IpAddr,
-	path::PathBuf,
-};
+use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 use url::Url;
 use uuid::Uuid;
 
@@ -240,6 +236,23 @@ impl Rivet {
 			self.dns().ok().and_then(|dns| dns.domain_job.as_ref()),
 			"unable to get dns.domain_job to build actor hostname. configure dns or switch to host networking."
 		);
+
+		Ok(domain_job)
+	}
+
+	/// Provides a fallback domain of `rivet-job.local` for use with routing.
+	///
+	/// Helpful for testing locally.
+	pub fn domain_job_for_routes(&self) -> GlobalResult<&str> {
+		let domain_job = match self.domain_job() {
+			Ok(x) => x,
+			Err(err) => match self.auth.access_kind {
+				AccessKind::Development => "rivet-job.local",
+				AccessKind::Public | AccessKind::Private => {
+					return Err(err);
+				}
+			},
+		};
 
 		Ok(domain_job)
 	}

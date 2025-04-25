@@ -11,7 +11,9 @@ use hyper_tungstenite;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use rand;
+use serde_json;
 use std::{
+	borrow::Cow,
 	collections::HashMap,
 	net::SocketAddr,
 	sync::Arc,
@@ -41,15 +43,51 @@ pub struct RoutingTimeout {
 }
 
 #[derive(Clone, Debug)]
-pub struct RoutingResult {
+pub struct RouteConfig {
 	pub targets: Vec<RouteTarget>,
 	pub timeout: RoutingTimeout,
 }
 
 #[derive(Clone, Debug)]
-pub enum RoutingResponse {
-	Ok(RoutingResult),
-	NotFound,
+pub enum RoutingOutput {
+	/// Return the data to route to.
+	Route(RouteConfig),
+	/// Return a custom response.
+	Response(StructuredResponse),
+}
+
+#[derive(Clone, Debug)]
+pub struct StructuredResponse {
+	pub status: StatusCode,
+	pub message: Cow<'static, str>,
+	pub docs: Option<Cow<'static, str>>,
+}
+
+impl StructuredResponse {
+	pub fn build_response(&self) -> GlobalResult<Response<Full<Bytes>>> {
+		let mut body = HashMap::new();
+		body.insert("message", self.message.clone().into_owned());
+
+		if let Some(docs) = &self.docs {
+			body.insert("docs", docs.clone().into_owned());
+		}
+
+		let body_json = serde_json::to_string(&body)?;
+		let bytes = Bytes::from(body_json);
+
+		let response = Response::builder()
+			.status(self.status)
+			.header(hyper::header::CONTENT_TYPE, "application/json")
+			.body(Full::new(bytes))?;
+
+		Ok(response)
+	}
+}
+
+#[derive(Clone, Debug)]
+enum ResolveRouteOutput {
+	Target(RouteTarget),
+	Response(StructuredResponse),
 }
 
 /// Enum defining the type of port the request came in on
@@ -64,7 +102,7 @@ pub type RoutingFn = Arc<
 			&'a str,
 			&'a str,
 			PortType,
-		) -> futures::future::BoxFuture<'a, GlobalResult<RoutingResponse>>
+		) -> futures::future::BoxFuture<'a, GlobalResult<RoutingOutput>>
 		+ Send
 		+ Sync,
 >;
@@ -113,7 +151,7 @@ pub type MiddlewareFn = Arc<
 
 // Cache for routing results
 struct RouteCache {
-	cache: HashMap<(String, String), RoutingResult>,
+	cache: HashMap<(String, String), RouteConfig>,
 }
 
 impl RouteCache {
@@ -123,11 +161,11 @@ impl RouteCache {
 		}
 	}
 
-	fn get(&self, hostname: &str, path: &str) -> Option<&RoutingResult> {
+	fn get(&self, hostname: &str, path: &str) -> Option<&RouteConfig> {
 		self.cache.get(&(hostname.to_owned(), path.to_owned()))
 	}
 
-	fn insert(&mut self, hostname: String, path: String, result: RoutingResult) {
+	fn insert(&mut self, hostname: String, path: String, result: RouteConfig) {
 		self.cache.insert((hostname, path), result);
 	}
 
@@ -233,9 +271,16 @@ impl ProxyState {
 		path: &str,
 		port_type: PortType,
 		ignore_cache: bool,
-	) -> GlobalResult<RouteTarget> {
+	) -> GlobalResult<ResolveRouteOutput> {
 		// Extract just the hostname, stripping the port if present
 		let hostname_only = hostname.split(':').next().unwrap_or(hostname);
+
+		tracing::debug!(
+			hostname = %hostname_only,
+			path = %path,
+			port_type = ?port_type,
+			"Resolving route for request"
+		);
 
 		// Check cache first
 		let mut cache = self.route_cache.lock().await;
@@ -244,13 +289,21 @@ impl ProxyState {
 			if let Some(result) = cache.get(hostname_only, path) {
 				// Choose a random target from the cached targets
 				if let Some(target) = choose_random_target(&result.targets) {
-					return Ok(target.clone());
+					return Ok(ResolveRouteOutput::Target(target.clone()));
 				}
 			}
 		}
 
 		// Not in cache, call routing function with a default timeout
 		let default_timeout = Duration::from_secs(5); // Default 5 seconds
+
+		tracing::debug!(
+			hostname = %hostname_only,
+			path = %path,
+			cache_hit = false,
+			timeout_seconds = default_timeout.as_secs(),
+			"Cache miss, calling routing function"
+		);
 		let routing_result = timeout(
 			default_timeout,
 			(self.routing_fn)(hostname_only, path, port_type),
@@ -258,43 +311,73 @@ impl ProxyState {
 		.await;
 
 		// Handle timeout and routing errors
-		let result = match routing_result {
+		match routing_result {
 			Ok(result) => match result? {
-				RoutingResponse::Ok(result) => result,
-				RoutingResponse::NotFound => bail!(
-					"Route not found for hostname: {}, path: {}",
-					hostname_only,
-					path
-				),
+				RoutingOutput::Route(result) => {
+					tracing::debug!(
+						hostname = %hostname_only,
+						path = %path,
+						targets_count = result.targets.len(),
+						timeout_secs = result.timeout.routing_timeout,
+						"Received routing result"
+					);
+
+					// Cache the result
+					cache.insert(hostname_only.to_owned(), path.to_owned(), result.clone());
+					tracing::debug!("Added route to cache");
+
+					// Choose a random target
+					if let Some(target) = choose_random_target(&result.targets) {
+						tracing::debug!(
+							hostname = %hostname_only,
+							path = %path,
+							target_host = %target.host,
+							target_port = target.port,
+							target_path = %target.path,
+							actor_id = ?target.actor_id,
+							server_id = ?target.server_id,
+							"Selected target for request"
+						);
+						Ok(ResolveRouteOutput::Target(target.clone()))
+					} else {
+						tracing::warn!(
+							hostname = %hostname_only,
+							path = %path,
+							"No route targets available from result"
+						);
+						Ok(ResolveRouteOutput::Response(StructuredResponse {
+							status: StatusCode::BAD_GATEWAY,
+							message: Cow::Borrowed("No route targets available"),
+							docs: None,
+						}))
+					}
+				}
+				RoutingOutput::Response(response) => {
+					tracing::debug!(
+						hostname = %hostname_only,
+						path = %path,
+						status = ?response.status,
+						"Routing returned custom response"
+					);
+					Ok(ResolveRouteOutput::Response(response))
+				}
 			},
 			Err(_) => {
-				bail!(
-					"Routing function timed out after {}s",
-					default_timeout.as_secs()
+				tracing::warn!(
+					hostname = %hostname_only,
+					path = %path,
+					timeout_seconds = default_timeout.as_secs(),
+					"Routing function timed out"
 				);
+				Ok(ResolveRouteOutput::Response(StructuredResponse {
+					status: StatusCode::GATEWAY_TIMEOUT,
+					message: Cow::Owned(format!(
+						"Routing function timed out after {}s",
+						default_timeout.as_secs()
+					)),
+					docs: None,
+				}))
 			}
-		};
-
-		// Make sure we have at least one target
-		if result.targets.is_empty() {
-			bail!(
-				"No route targets available for hostname: {}, path: {}",
-				hostname_only,
-				path
-			);
-		}
-
-		// Insert into cache
-		cache.insert(hostname_only.to_owned(), path.to_owned(), result.clone());
-
-		// Choose a random target from the available targets
-		match choose_random_target(&result.targets) {
-			Some(target) => Ok(target.clone()),
-			None => bail!(
-				"Failed to choose a route target for hostname: {}, path: {}",
-				hostname_only,
-				path
-			),
 		}
 	}
 
@@ -462,7 +545,11 @@ impl ProxyService {
 			.resolve_route(host, &path, self.state.port_type.clone(), false)
 			.await
 		{
-			Ok(target) => target,
+			Ok(ResolveRouteOutput::Target(target)) => target,
+			Ok(ResolveRouteOutput::Response(response)) => {
+				// Return the custom response
+				return response.build_response();
+			}
 			Err(e) => {
 				error!("Routing error: {}", e);
 				return Ok(Response::builder()
@@ -722,7 +809,10 @@ impl ProxyService {
 							);
 
 							target = match new_target {
-								Ok(target) => target,
+								Ok(ResolveRouteOutput::Target(target)) => target,
+								Ok(ResolveRouteOutput::Response(response)) => {
+									return response.build_response()
+								}
 								Err(e) => {
 									error!("Routing error: {}", e);
 									return Ok(Response::builder()
@@ -1487,7 +1577,87 @@ impl ProxyService {
 impl ProxyService {
 	// Process an individual request
 	pub async fn process(&self, req: Request<BodyIncoming>) -> GlobalResult<Response<Full<Bytes>>> {
-		self.handle_request(req).await
+		// Extract request information for logging before consuming the request
+		let host = req
+			.headers()
+			.get(hyper::header::HOST)
+			.and_then(|h| h.to_str().ok())
+			.unwrap_or("unknown")
+			.to_string();
+		let uri_string = req.uri().to_string();
+		let path = req
+			.uri()
+			.path_and_query()
+			.map(|x| x.to_string())
+			.unwrap_or_else(|| req.uri().path().to_string());
+		let method = req.method().clone();
+		let request_id = Uuid::new_v4();
+		let user_agent = req
+			.headers()
+			.get(hyper::header::USER_AGENT)
+			.and_then(|h| h.to_str().ok())
+			.map(|s| s.to_string());
+
+		// Debug log request information with structured fields (Apache-like access log)
+		debug!(
+			request_id = %request_id,
+			method = %method,
+			path = %path,
+			host = %host,
+			remote_addr = %self.remote_addr,
+			uri = %uri_string,
+			protocol = ?self.state.port_type,
+			user_agent = ?user_agent,
+			"Request received"
+		);
+
+		let start_time = Instant::now();
+
+		// Process the request
+		let result = self.handle_request(req).await;
+
+		// Log response information
+		let duration_ms = start_time.elapsed().as_millis();
+
+		match &result {
+			Ok(response) => {
+				let status = response.status().as_u16();
+				let content_length = response
+					.headers()
+					.get(hyper::header::CONTENT_LENGTH)
+					.and_then(|h| h.to_str().ok())
+					.and_then(|s| s.parse::<usize>().ok())
+					.unwrap_or(0);
+
+				// Log information about the completed request
+				debug!(
+					request_id = %request_id,
+					method = %method,
+					path = %path,
+					host = %host,
+					remote_addr = %self.remote_addr,
+					status = %status,
+					duration_ms = %duration_ms,
+					content_length = %content_length,
+					"Request completed"
+				);
+			}
+			Err(e) => {
+				// Log error information
+				debug!(
+					request_id = %request_id,
+					method = %method,
+					path = %path,
+					host = %host,
+					remote_addr = %self.remote_addr,
+					duration_ms = %duration_ms,
+					error = %e,
+					"Request failed"
+				);
+			}
+		}
+
+		result
 	}
 }
 

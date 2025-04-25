@@ -1,9 +1,7 @@
 mod common;
 
 use regex::Regex;
-use rivet_guard_core::proxy_service::{
-	RouteTarget, RoutingResponse, RoutingResult, RoutingTimeout,
-};
+use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingResponse, RoutingTimeout};
 use rivet_guard_core::types::{EndpointType, GameGuardProtocol};
 use rivet_guard_core::util::{build_actor_hostname_and_path, build_actor_hostname_and_path_regex};
 

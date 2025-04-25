@@ -57,7 +57,9 @@ pub enum ToServer {
 		system: crate::system_info::SystemInfo,
 	},
 	Events(Vec<EventWrapper>),
-	AckCommands { last_command_idx: i64 },
+	AckCommands {
+		last_command_idx: i64,
+	},
 }
 
 impl ToServer {

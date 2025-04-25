@@ -8,6 +8,7 @@ import (
 	buildsclient "sdk/builds/client"
 	core "sdk/core"
 	regionsclient "sdk/regions/client"
+	routesclient "sdk/routes/client"
 )
 
 type Client struct {
@@ -18,6 +19,7 @@ type Client struct {
 	Actors  *actorsclient.Client
 	Builds  *buildsclient.Client
 	Regions *regionsclient.Client
+	Routes  *routesclient.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -32,5 +34,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Actors:  actorsclient.NewClient(opts...),
 		Builds:  buildsclient.NewClient(opts...),
 		Regions: regionsclient.NewClient(opts...),
+		Routes:  routesclient.NewClient(opts...),
 	}
 }

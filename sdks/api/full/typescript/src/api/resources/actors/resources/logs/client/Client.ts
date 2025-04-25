@@ -40,7 +40,6 @@ export class Logs {
     /**
      * Returns the logs for a given actor.
      *
-     * @param {string} actor
      * @param {Rivet.actors.GetActorLogsRequestQuery} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -52,19 +51,31 @@ export class Logs {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actors.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actors.logs.get({
      *         project: "string",
      *         environment: "string",
      *         stream: "std_out",
+     *         actorIdsJson: "string",
+     *         searchText: "string",
+     *         searchCaseSensitive: true,
+     *         searchEnableRegex: true,
      *         watchIndex: "string"
      *     })
      */
     public async get(
-        actor: string,
         request: Rivet.actors.GetActorLogsRequestQuery,
         requestOptions?: Logs.RequestOptions,
     ): Promise<Rivet.actors.GetActorLogsResponse> {
-        const { project, environment, stream, watchIndex } = request;
+        const {
+            project,
+            environment,
+            stream,
+            actorIdsJson,
+            searchText,
+            searchCaseSensitive,
+            searchEnableRegex,
+            watchIndex,
+        } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
@@ -74,7 +85,22 @@ export class Logs {
             _queryParams["environment"] = environment;
         }
 
-        _queryParams["stream"] = serializers.actors.LogStream.jsonOrThrow(stream, { unrecognizedObjectKeys: "strip" });
+        _queryParams["stream"] = serializers.actors.QueryLogStream.jsonOrThrow(stream, {
+            unrecognizedObjectKeys: "strip",
+        });
+        _queryParams["actor_ids_json"] = actorIdsJson;
+        if (searchText != null) {
+            _queryParams["search_text"] = searchText;
+        }
+
+        if (searchCaseSensitive != null) {
+            _queryParams["search_case_sensitive"] = searchCaseSensitive.toString();
+        }
+
+        if (searchEnableRegex != null) {
+            _queryParams["search_enable_regex"] = searchEnableRegex.toString();
+        }
+
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
@@ -84,7 +110,7 @@ export class Logs {
                 (await core.Supplier.get(this._options.baseUrl)) ??
                     (await core.Supplier.get(this._options.environment)) ??
                     environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actor)}/logs`,
+                "/actors/logs",
             ),
             method: "GET",
             headers: {
@@ -189,7 +215,7 @@ export class Logs {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/{actor}/logs.");
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/logs.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

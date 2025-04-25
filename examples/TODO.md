@@ -1,8 +1,0 @@
-- Cursors (wip)
-- Chat app (wip)
-- Discord activity (wip)
-- AI agent (not started)
-- Sandboxed user code (not started)
-- Local-first sync (not started)
-- Collaborative document (Yjs) (not started)
-- Authentication (Supabase) (not started)

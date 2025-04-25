@@ -105,7 +105,7 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 				}
 			}
 		});
-		
+
 		rt_builder.metrics_poll_time_histogram_configuration(
 			tokio::runtime::HistogramConfiguration::log(
 				tokio::runtime::LogHistogram::builder()

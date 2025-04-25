@@ -1,0 +1,12 @@
+{
+	"functions": {
+		"http-isolate": {
+			"script": "src/isolate/main.ts",
+			"path": "/isolate"
+		},
+		"http-container": {
+			"dockerfile": "Dockerfile",
+			"path": "/container"
+		}
+	}
+}

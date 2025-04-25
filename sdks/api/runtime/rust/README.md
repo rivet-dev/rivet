@@ -31,7 +31,7 @@ Class | Method | HTTP request | Description
 *ActorsApi* | [**actors_list**](docs/ActorsApi.md#actors_list) | **GET** /actors | 
 *ActorsApi* | [**actors_upgrade**](docs/ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
 *ActorsApi* | [**actors_upgrade_all**](docs/ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
-*ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/{actor}/logs | 
+*ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/logs | 
 *BuildsApi* | [**builds_complete**](docs/BuildsApi.md#builds_complete) | **POST** /builds/{build}/complete | 
 *BuildsApi* | [**builds_get**](docs/BuildsApi.md#builds_get) | **GET** /builds/{build} | 
 *BuildsApi* | [**builds_list**](docs/BuildsApi.md#builds_list) | **GET** /builds | 
@@ -39,6 +39,9 @@ Class | Method | HTTP request | Description
 *BuildsApi* | [**builds_prepare**](docs/BuildsApi.md#builds_prepare) | **POST** /builds/prepare | 
 *RegionsApi* | [**regions_list**](docs/RegionsApi.md#regions_list) | **GET** /regions | 
 *RegionsApi* | [**regions_recommend**](docs/RegionsApi.md#regions_recommend) | **GET** /regions/recommend | 
+*RoutesApi* | [**routes_delete**](docs/RoutesApi.md#routes_delete) | **DELETE** /routes/{id} | 
+*RoutesApi* | [**routes_list**](docs/RoutesApi.md#routes_list) | **GET** /routes | 
+*RoutesApi* | [**routes_update**](docs/RoutesApi.md#routes_update) | **PUT** /routes/{id} | 
 
 
 ## Documentation For Models
@@ -55,12 +58,12 @@ Class | Method | HTTP request | Description
  - [ActorsGetActorResponse](docs/ActorsGetActorResponse.md)
  - [ActorsLifecycle](docs/ActorsLifecycle.md)
  - [ActorsListActorsResponse](docs/ActorsListActorsResponse.md)
- - [ActorsLogStream](docs/ActorsLogStream.md)
  - [ActorsNetwork](docs/ActorsNetwork.md)
  - [ActorsNetworkMode](docs/ActorsNetworkMode.md)
  - [ActorsPort](docs/ActorsPort.md)
  - [ActorsPortProtocol](docs/ActorsPortProtocol.md)
  - [ActorsPortRouting](docs/ActorsPortRouting.md)
+ - [ActorsQueryLogStream](docs/ActorsQueryLogStream.md)
  - [ActorsResources](docs/ActorsResources.md)
  - [ActorsRuntime](docs/ActorsRuntime.md)
  - [ActorsUpgradeActorRequest](docs/ActorsUpgradeActorRequest.md)
@@ -79,6 +82,11 @@ Class | Method | HTTP request | Description
  - [RegionsListRegionsResponse](docs/RegionsListRegionsResponse.md)
  - [RegionsRecommendRegionResponse](docs/RegionsRecommendRegionResponse.md)
  - [RegionsRegion](docs/RegionsRegion.md)
+ - [RoutesListRoutesResponse](docs/RoutesListRoutesResponse.md)
+ - [RoutesRoute](docs/RoutesRoute.md)
+ - [RoutesRouteTarget](docs/RoutesRouteTarget.md)
+ - [RoutesRouteTargetActors](docs/RoutesRouteTargetActors.md)
+ - [RoutesUpdateRouteBody](docs/RoutesUpdateRouteBody.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [WatchResponse](docs/WatchResponse.md)

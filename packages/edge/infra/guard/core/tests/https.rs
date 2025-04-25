@@ -176,19 +176,19 @@ async fn test_https_with_tls() {
 	let api_cert_for_resolver = api_cert.clone();
 	let job_cert_for_resolver = job_cert.clone();
 	let cert_resolver_fn: rivet_guard_core::CertResolverFn = Arc::new(move |hostname: &str| -> Result<Arc<CertifiedKey>, Box<dyn std::error::Error + Send + Sync>> {
-		let api_cert = api_cert_for_resolver.clone();
-		let job_cert = job_cert_for_resolver.clone();
-
-		// Select certificate based on domain
-		if hostname.ends_with("microgravity.io") {
-			Ok(job_cert)
-		} else if hostname.ends_with("gameinc.io") {
-			Ok(api_cert)
-		} else {
-			let err_msg = format!("No certificate found for hostname: {}", hostname);
-			Err(err_msg.into())
-		}
-	});
+        let api_cert = api_cert_for_resolver.clone();
+        let job_cert = job_cert_for_resolver.clone();
+        
+        // Select certificate based on domain
+        if hostname.ends_with("microgravity.io") {
+            Ok(job_cert)
+        } else if hostname.ends_with("gameinc.io") {
+            Ok(api_cert)
+        } else {
+            let err_msg = format!("No certificate found for hostname: {}", hostname);
+            Err(err_msg.into())
+        }
+    });
 
 	// Create routing function that routes to our test server
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn =

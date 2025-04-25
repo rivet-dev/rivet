@@ -152,6 +152,7 @@ pub mod provision_datacenters_api;
 pub mod provision_servers_api;
 pub mod provision_tunnel_api;
 pub mod regions_api;
+pub mod routes_api;
 pub mod servers_api;
 pub mod servers_builds_api;
 pub mod servers_datacenters_api;

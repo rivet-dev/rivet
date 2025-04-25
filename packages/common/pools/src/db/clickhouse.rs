@@ -21,6 +21,12 @@ pub fn setup(config: Config) -> Result<Option<ClickHousePool>, Error> {
 
 		// Build ClickHouse client
 		let mut client = clickhouse::Client::with_http_client(http_client)
+			.with_option("max_execution_time", "10")
+			.with_option("max_memory_usage", "100000000") // Limit memory usage to 100MB
+			.with_option("max_rows_to_read", "10000") // Limit to 10k rows for log queries
+			.with_option("max_bytes_to_read", "10000000") // Limit to 10MB of data
+			.with_option("regexp_max_matches_per_row", "10") // Prevent against DDoS
+			.with_option("timeout_before_checking_execution_speed", "1") // Check speed after 1 second
 			.with_url(clickhouse.http_url.to_string())
 			.with_user(&clickhouse.username);
 		if let Some(password) = &clickhouse.password {

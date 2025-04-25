@@ -195,6 +195,7 @@ impl Opts {
 
 			// Deploy server
 			let deploy_build_ids = crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
+				ctx: &ctx,
 				environment: &env,
 				filter_tags: None,
 				build_tags: Some(build_tags),
@@ -274,6 +275,7 @@ impl Opts {
 					NetworkMode::Host => models::ActorsNetworkMode::Host,
 				}),
 				ports,
+				wait_ready: Some(false),
 			})),
 			resources,
 			lifecycle: Some(Box::new(models::ActorsLifecycle {

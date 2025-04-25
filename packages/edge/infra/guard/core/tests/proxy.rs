@@ -14,7 +14,7 @@ use common::{
 };
 use rivet_guard_core::proxy_service::{
 	MaxInFlightConfig, MiddlewareConfig, MiddlewareResponse, RateLimitConfig, RetryConfig,
-	RouteTarget, RoutingResponse, RoutingResult, RoutingTimeout, TimeoutConfig,
+	RouteConfig, RouteTarget, RoutingResponse, RoutingTimeout, TimeoutConfig,
 };
 
 #[tokio::test]
@@ -134,7 +134,7 @@ async fn test_rate_limiting() {
 					path: path.to_string(),
 				};
 
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![route_target],
 					timeout: RoutingTimeout { routing_timeout: 5 },
 				}))
@@ -200,7 +200,7 @@ async fn test_max_in_flight_requests() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),
@@ -266,7 +266,7 @@ async fn test_timeout_handling() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),
@@ -327,7 +327,7 @@ async fn test_retry_functionality() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(Uuid::new_v4()),
 						server_id: Some(Uuid::new_v4()),
@@ -504,7 +504,7 @@ async fn test_different_path_routing() {
 					Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap()
 				};
 
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(Uuid::new_v4()),

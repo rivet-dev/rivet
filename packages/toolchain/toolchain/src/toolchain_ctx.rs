@@ -33,7 +33,6 @@ pub struct CtxInner {
 	pub bootstrap: rivet_api::models::CloudBootstrapResponse,
 
 	pub openapi_config_cloud: apis::configuration::Configuration,
-	pub openapi_config_actor: apis::configuration::Configuration,
 }
 
 static TOOLCHAIN_CTX: OnceCell<ToolchainCtx> = OnceCell::const_new();
@@ -113,15 +112,6 @@ pub async fn init(api_endpoint: String, cloud_token: String) -> Result<Toolchain
 		..Default::default()
 	};
 
-	// Create OpenAPI config for actor API
-	let openapi_config_actor = apis::configuration::Configuration {
-		base_path: api_endpoint.clone(),
-		bearer_access_token: Some(cloud_token.clone()),
-		user_agent: Some(user_agent()),
-		client,
-		..Default::default()
-	};
-
 	// Make requests
 	let (inspect_response, bootstrap_response): (
 		rivet_api::models::CloudInspectResponse,
@@ -163,6 +153,5 @@ pub async fn init(api_endpoint: String, cloud_token: String) -> Result<Toolchain
 		project: *project_res.game,
 		bootstrap: bootstrap_response,
 		openapi_config_cloud,
-		openapi_config_actor,
 	}))
 }

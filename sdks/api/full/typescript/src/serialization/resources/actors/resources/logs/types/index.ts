@@ -1,2 +1,2 @@
 export * from "./GetActorLogsResponse";
-export * from "./LogStream";
+export * from "./QueryLogStream";

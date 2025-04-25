@@ -1,14 +1,14 @@
-use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use futures_util::StreamExt;
-use rivet_api::{
-	apis::{actors_logs_api, configuration::Configuration},
-	models,
+use api_helper::{
+	anchor::{WatchIndexQuery, WatchResponse},
+	ctx::Ctx,
 };
+use rivet_api::models;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
-use tracing::Instrument;
+use std::time::Duration;
 
 use crate::{
+	assert,
 	auth::{Auth, CheckOpts, CheckOutput},
 	utils::build_global_query_compat,
 };
@@ -20,17 +20,23 @@ use super::GlobalQuery;
 pub struct GetActorLogsQuery {
 	#[serde(flatten)]
 	pub global: GlobalQuery,
-	pub stream: models::ActorsLogStream,
+	pub stream: models::ActorsQueryLogStream,
+	pub actor_ids_json: String,
+	#[serde(default)]
+	pub search_text: Option<String>,
+	#[serde(default)]
+	pub search_case_sensitive: Option<bool>,
+	#[serde(default)]
+	pub search_enable_regex: Option<bool>,
 }
 
 #[tracing::instrument(skip_all)]
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
-	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
 ) -> GlobalResult<models::ActorsGetActorLogsResponse> {
-	let CheckOutput { game_id, .. } = ctx
+	let CheckOutput { game_id, env_id } = ctx
 		.auth()
 		.check(
 			ctx.op_ctx(),
@@ -42,95 +48,167 @@ pub async fn get_logs(
 		)
 		.await?;
 
-	// Fetch all datacenters
-	let clusters_res = ctx
-		.op(cluster::ops::get_for_game::Input {
-			game_ids: vec![game_id],
-		})
-		.await?;
-	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
-	let dc_list_res = ctx
-		.op(cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster_id],
-		})
-		.await?;
-	let cluster = unwrap!(dc_list_res.clusters.into_iter().next());
-	let dcs_res = ctx
-		.op(cluster::ops::datacenter::get::Input {
-			datacenter_ids: cluster.datacenter_ids,
-		})
-		.await?;
+	// Parse actor IDs from the JSON string
+	let actor_ids: Vec<Uuid> = serde_json::from_str(&query.actor_ids_json).map_err(|_| {
+		GlobalError::bad_request_builder("INVALID_ACTOR_IDS")
+			.message("Invalid actor_ids_json format".to_string())
+			.build()
+	})?;
 
-	// Filter the datacenters that can be contacted
-	let filtered_datacenters = dcs_res
-		.datacenters
-		.into_iter()
-		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
-		.collect::<Vec<_>>();
-
-	if filtered_datacenters.is_empty() {
-		bail!("no valid datacenters with worker and guard pools");
+	if actor_ids.is_empty() {
+		return Err(GlobalError::bad_request_builder("NO_ACTOR_IDS")
+			.message("No actor IDs provided".to_string())
+			.build());
 	}
 
-	// Query every datacenter for the given actor
-	let mut futures = filtered_datacenters
-		.into_iter()
-		.map(|dc| async {
-			let dc = dc;
+	// Filter to only valid actors for this game/env
+	let valid_actor_ids = assert::actor_for_env(&ctx, &actor_ids, game_id, env_id, None).await?;
+	
+	// Exit early if no valid actors
+	if valid_actor_ids.is_empty() {
+		return Err(GlobalError::bad_request_builder("NO_VALID_ACTOR_IDS")
+			.message("No valid actor IDs found for this game/environment".to_string())
+			.build());
+	}
 
-			let config = Configuration {
-				client: rivet_pools::reqwest::client().await?,
-				base_path: ctx.config().server()?.rivet.edge_api_url_str(&dc.name_id)?,
-				bearer_access_token: ctx.auth().api_token.clone(),
-				..Default::default()
-			};
+	// Use only the valid actor IDs from now on
+	let actor_ids = valid_actor_ids;
+	
+	// Determine stream type(s)
+	let stream_types = match query.stream {
+		models::ActorsQueryLogStream::StdOut => vec![pegboard::types::LogsStreamType::StdOut],
+		models::ActorsQueryLogStream::StdErr => vec![pegboard::types::LogsStreamType::StdErr],
+		models::ActorsQueryLogStream::All => vec![
+			pegboard::types::LogsStreamType::StdOut,
+			pegboard::types::LogsStreamType::StdErr,
+		],
+	};
 
-			// Pass the request to the edge api
-			use actors_logs_api::ActorsLogsGetError::*;
-			match actors_logs_api::actors_logs_get(
-				&config,
-				&server_id.to_string(),
-				query.stream,
-				query.global.project.as_deref(),
-				query.global.environment.as_deref(),
-				watch_index.watch_index.as_deref(),
-			)
-			.instrument(tracing::info_span!("proxy request"))
-			.await
-			{
-				Ok(res) => Ok(res),
-				Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
-					Some(Status400(body))
-					| Some(Status403(body))
-					| Some(Status404(body))
-					| Some(Status408(body))
-					| Some(Status429(body))
-					| Some(Status500(body)) => Err(GlobalError::bad_request_builder(&body.code)
-						.http_status(content.status)
-						.message(body.message)
-						.build()),
-					err => bail!("unknown error: {err:?}"),
-				},
-				Err(err) => bail!("request error: {err:?}"),
+	// Timestamp to start the query at
+	let before_nts = util::timestamp::now() * 1_000_000;
+
+	// Handle anchor
+	let logs_res = if let Some(anchor) = watch_index.as_i64()? {
+		let query_start = tokio::time::Instant::now();
+		let stream_types_clone = stream_types.clone(); // Clone here to use in the loop
+		let actor_ids_clone = actor_ids.clone(); // Clone here to use in the loop
+
+		// Poll for new logs
+		let logs_res = loop {
+			// Read logs after the timestamp
+			//
+			// We read descending in order to get at most 256 of the most recent logs. If we used
+			// asc, we would be paginating through all the logs which would likely fall behind
+			// actual stream and strain the database.
+			//
+			// We return fewer logs than the non-anchor request since this will be called
+			// frequently and should not return a significant amount of logs.
+			let logs_res = ctx
+				.op(pegboard::ops::actor::log::read::Input {
+					actor_ids: actor_ids_clone.clone(),
+					stream_types: stream_types_clone.clone(),
+					count: 64,
+					order_by: pegboard::ops::actor::log::read::Order::Desc,
+					query: pegboard::ops::actor::log::read::Query::AfterNts(anchor),
+					search_text: query.search_text.clone(),
+					search_case_sensitive: query.search_case_sensitive,
+					search_enable_regex: query.search_enable_regex,
+				})
+				.await?;
+
+			// Return logs
+			if !logs_res.entries.is_empty() {
+				break logs_res;
 			}
+
+			// Timeout cleanly
+			if query_start.elapsed().as_millis() > util::watch::DEFAULT_TIMEOUT as u128 {
+				break pegboard::ops::actor::log::read::Output {
+					entries: Vec::new(),
+				};
+			}
+
+			// Throttle request
+			//
+			// We don't use `tokio::time::interval` because if the request takes longer than 500
+			// ms, we'll enter a tight loop of requests.
+			tokio::time::sleep(Duration::from_millis(1000)).await;
+		};
+
+		// Since we're using watch, we don't want this request to return immediately if there's new
+		// results. Add an artificial timeout in order to prevent a tight loop if there's a high
+		// log frequency.
+		tokio::time::sleep_until(query_start + Duration::from_secs(1)).await;
+
+		logs_res
+	} else {
+		// Read most recent logs
+
+		ctx.op(pegboard::ops::actor::log::read::Input {
+			actor_ids: actor_ids.clone(),
+			stream_types: stream_types.clone(),
+			count: 256,
+			order_by: pegboard::ops::actor::log::read::Order::Desc,
+			query: pegboard::ops::actor::log::read::Query::BeforeNts(before_nts),
+			search_text: query.search_text.clone(),
+			search_case_sensitive: query.search_case_sensitive,
+			search_enable_regex: query.search_enable_regex,
 		})
-		.collect::<futures_util::stream::FuturesUnordered<_>>();
-	let mut first_error = None;
+		.await?
+	};
 
-	// Return first api response that succeeds
-	while let Some(result) = futures.next().await {
-		match result {
-			Ok(value) => return Ok(value),
-			Err(err) => {
-				if first_error.is_none() {
-					first_error = Some(err);
-				}
-			}
+	// Build actor_ids map for lookup
+	let mut actor_id_to_index: std::collections::HashMap<Uuid, i32> =
+		std::collections::HashMap::new();
+	let mut unique_actor_ids: Vec<String> = Vec::new();
+
+	// Collect unique actor IDs and map them to indices
+	for entry in &logs_res.entries {
+		if !actor_id_to_index.contains_key(&entry.actor_id) {
+			actor_id_to_index.insert(entry.actor_id, unique_actor_ids.len() as i32);
+			unique_actor_ids.push(entry.actor_id.to_string());
 		}
 	}
 
-	// Otherwise return the first error
-	Err(unwrap!(first_error))
+	// Convert logs
+	let mut lines = logs_res
+		.entries
+		.iter()
+		.map(|entry| base64::encode(&entry.message))
+		.collect::<Vec<_>>();
+	let mut timestamps = logs_res
+		.entries
+		.iter()
+		// Is nanoseconds
+		.map(|x| x.ts / 1_000_000)
+		.map(util::timestamp::to_string)
+		.collect::<Result<Vec<_>, _>>()?;
+	let mut streams = logs_res
+		.entries
+		.iter()
+		.map(|x| x.stream_type as i32)
+		.collect::<Vec<_>>();
+	let mut actor_indices = logs_res
+		.entries
+		.iter()
+		.map(|x| *actor_id_to_index.get(&x.actor_id).unwrap_or(&0))
+		.collect::<Vec<_>>();
+
+	// Order desc
+	lines.reverse();
+	timestamps.reverse();
+	streams.reverse();
+	actor_indices.reverse();
+
+	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.ts);
+	Ok(models::ActorsGetActorLogsResponse {
+		actor_ids: unique_actor_ids,
+		lines,
+		timestamps,
+		streams,
+		actor_indices,
+		watch: WatchResponse::new_as_model(watch_nts),
+	})
 }
 
 pub async fn get_logs_deprecated(
@@ -142,19 +220,27 @@ pub async fn get_logs_deprecated(
 	query: GetActorLogsQuery,
 ) -> GlobalResult<models::ServersGetServerLogsResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+
+	// Create a single-item actor_ids_json for the deprecated endpoint
+	let actor_ids_json = serde_json::to_string(&vec![server_id])?;
+
 	let logs_res = get_logs(
 		ctx,
-		server_id,
 		watch_index,
 		GetActorLogsQuery {
 			global,
 			stream: query.stream,
+			actor_ids_json,
+			search_text: query.search_text.clone(),
+			search_case_sensitive: query.search_case_sensitive,
+			search_enable_regex: query.search_enable_regex,
 		},
 	)
 	.await?;
 	Ok(models::ServersGetServerLogsResponse {
 		lines: logs_res.lines,
 		timestamps: logs_res.timestamps,
+		// streams are not part of the deprecated response
 		watch: logs_res.watch,
 	})
 }

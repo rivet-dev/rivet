@@ -94,5 +94,6 @@ pub mod actors_api;
 pub mod actors_logs_api;
 pub mod builds_api;
 pub mod regions_api;
+pub mod routes_api;
 
 pub mod configuration;

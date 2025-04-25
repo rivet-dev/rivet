@@ -46,17 +46,18 @@ async fn tail_streams(
 	stdout_fetched_tx: watch::Sender<bool>,
 	stderr_fetched_tx: watch::Sender<bool>,
 ) -> Result<()> {
+	// TODO: Update ot use ActorsQueryLogStream::All
 	tokio::try_join!(
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorsLogStream::StdOut,
+			models::ActorsQueryLogStream::StdOut,
 			stdout_fetched_tx
 		),
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorsLogStream::StdErr,
+			models::ActorsQueryLogStream::StdErr,
 			stderr_fetched_tx
 		),
 	)
@@ -67,7 +68,7 @@ async fn tail_streams(
 async fn tail_stream(
 	ctx: &toolchain::ToolchainCtx,
 	opts: &TailOpts<'_>,
-	stream: models::ActorsLogStream,
+	stream: models::ActorsQueryLogStream,
 	log_fetched_tx: watch::Sender<bool>,
 ) -> Result<()> {
 	let mut watch_index: Option<String> = None;
@@ -77,8 +78,8 @@ async fn tail_stream(
 	// future doesn't exit.
 	match (&opts.stream, stream) {
 		(LogStream::All, _) => {}
-		(LogStream::StdOut, models::ActorsLogStream::StdOut) => {}
-		(LogStream::StdErr, models::ActorsLogStream::StdErr) => {}
+		(LogStream::StdOut, models::ActorsQueryLogStream::StdOut) => {}
+		(LogStream::StdErr, models::ActorsQueryLogStream::StdErr) => {}
 		_ => {
 			// Notify poll_actor_state
 			log_fetched_tx.send(true).ok();
@@ -91,10 +92,13 @@ async fn tail_stream(
 	loop {
 		let res = apis::actors_logs_api::actors_logs_get(
 			&ctx.openapi_config_cloud,
-			&opts.actor_id.to_string(),
 			stream,
+			&serde_json::to_string(&vec![opts.actor_id])?,
 			Some(&ctx.project.name_id),
 			Some(opts.environment),
+			None,
+			None,
+			None,
 			watch_index.as_deref(),
 		)
 		.await

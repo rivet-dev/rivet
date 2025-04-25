@@ -2,27 +2,39 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Root",
   "type": "object",
-  "required": [
-    "builds"
-  ],
   "properties": {
-    "builds": {
+    "actors": {
+      "default": {},
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/Build"
+        "$ref": "#/definitions/Actor"
+      }
+    },
+    "containers": {
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Actor"
+      }
+    },
+    "functions": {
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Function"
       }
     }
   },
   "additionalProperties": false,
   "definitions": {
-    "Build": {
+    "Actor": {
       "type": "object",
       "anyOf": [
         {
-          "$ref": "#/definitions/Build2"
+          "$ref": "#/definitions/Build"
         },
         {
-          "$ref": "#/definitions/Build3"
+          "$ref": "#/definitions/Build2"
         }
       ],
       "properties": {
@@ -34,7 +46,7 @@
         }
       }
     },
-    "Build2": {
+    "Build": {
       "type": "object",
       "properties": {
         "build_args": {
@@ -71,7 +83,7 @@
       },
       "additionalProperties": false
     },
-    "Build3": {
+    "Build2": {
       "type": "object",
       "required": [
         "script"
@@ -150,6 +162,82 @@
           ]
         }
       ]
+    },
+    "Function": {
+      "type": "object",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Build"
+        },
+        {
+          "$ref": "#/definitions/Build2"
+        }
+      ],
+      "properties": {
+        "networking": {
+          "default": {
+            "internal_port": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/FunctionNetworking"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "resources": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Resources"
+            }
+          ]
+        },
+        "route_subpaths": {
+          "type": "boolean"
+        },
+        "strip_prefix": {
+          "default": null,
+          "type": "boolean"
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FunctionNetworking": {
+      "type": "object",
+      "properties": {
+        "internal_port": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        }
+      }
+    },
+    "Resources": {
+      "type": "object",
+      "required": [
+        "cpu",
+        "memory"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "memory": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
     },
     "Unstable": {
       "type": "object",

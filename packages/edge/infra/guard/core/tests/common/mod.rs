@@ -445,7 +445,7 @@ pub fn create_test_routing_fn(test_server: &TestServer) -> RoutingFn {
 					path: path.to_string(),
 				};
 
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![target],
 					timeout: RoutingTimeout {
 						routing_timeout: 5, // 5 seconds for routing timeout

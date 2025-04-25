@@ -53,9 +53,11 @@ pub async fn list(
 		.await?;
 	dcs_res.datacenters.sort_by_key(|x| x.name_id.clone());
 
+	// Filter the datacenters that can be contacted
 	let regions = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
 		.map(|dc| models::RegionsRegion {
 			id: dc.name_id,
 			name: dc.display_name,
@@ -107,9 +109,11 @@ pub async fn list_deprecated(
 		.await?;
 	dcs_res.datacenters.sort_by_key(|x| x.name_id.clone());
 
+	// Filter the datacenters that can be contacted
 	let datacenters = dcs_res
 		.datacenters
 		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
 		.map(|dc| models::ServersDatacenter {
 			id: dc.datacenter_id,
 			slug: dc.name_id,
@@ -168,12 +172,30 @@ pub async fn recommend(
 		.await?;
 	let cluster_dcs = &unwrap!(cluster_dcs_res.clusters.first()).datacenter_ids;
 
+	// Get all datacenters
+	let dcs_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: cluster_dcs.clone(),
+		})
+		.await?;
+
+	// Filter the datacenters that can be contacted
+	let filtered_dcs = dcs_res
+		.datacenters
+		.into_iter()
+		.filter(|dc| crate::utils::filter_edge_dc(ctx.config(), dc).unwrap_or(false))
+		.collect::<Vec<_>>();
+
+	if filtered_dcs.is_empty() {
+		bail!("no valid datacenters with worker and guard pools");
+	}
+
 	// Get recommended dc
-	let datacenter_id = if let Some((lat, long)) = coords {
+	let dc = if let Some((lat, long)) = coords {
 		let recommend_res = op!([ctx] region_recommend {
-			region_ids: cluster_dcs
+			region_ids: filtered_dcs
 				.iter()
-				.cloned()
+				.map(|dc| dc.datacenter_id)
 				.map(Into::into)
 				.collect(),
 			coords: Some(backend::net::Coordinates {
@@ -183,22 +205,24 @@ pub async fn recommend(
 			..Default::default()
 		})
 		.await?;
+		
+		if recommend_res.regions.is_empty() {
+			bail!("no regions found");
+		}
+		
 		let region = unwrap!(recommend_res.regions.first());
-
-		unwrap_ref!(region.region_id).as_uuid()
+		let datacenter_id = unwrap_ref!(region.region_id).as_uuid();
+		
+		// Find the datacenter in our filtered list
+		filtered_dcs
+			.iter()
+			.find(|dc| dc.datacenter_id == datacenter_id)
+			.cloned()
+			.unwrap_or_else(|| filtered_dcs.first().unwrap().clone())
 	} else {
 		tracing::warn!("coords not provided to select region");
-
-		*unwrap!(cluster_dcs.first())
+		filtered_dcs.first().unwrap().clone()
 	};
-
-	// Fetch dc
-	let dcs_res = ctx
-		.op(cluster::ops::datacenter::get::Input {
-			datacenter_ids: vec![datacenter_id],
-		})
-		.await?;
-	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
 
 	Ok(models::RegionsRecommendRegionResponse {
 		region: Box::new(models::RegionsRegion {

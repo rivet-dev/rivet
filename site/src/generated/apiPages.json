@@ -11,6 +11,11 @@
       "sortingKey": "/actors post"
     },
     {
+      "title": "actors.logs.get",
+      "href": "/docs/api/actors/logs/get",
+      "sortingKey": "/actors/logs get"
+    },
+    {
       "title": "actors.upgradeAll",
       "href": "/docs/api/actors/upgrade-all",
       "sortingKey": "/actors/upgrade post"
@@ -24,11 +29,6 @@
       "title": "actors.get",
       "href": "/docs/api/actors/get",
       "sortingKey": "/actors/{actor} get"
-    },
-    {
-      "title": "actors.logs.get",
-      "href": "/docs/api/actors/logs/get",
-      "sortingKey": "/actors/{actor}/logs get"
     },
     {
       "title": "actors.upgrade",

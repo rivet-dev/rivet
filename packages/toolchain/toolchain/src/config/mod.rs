@@ -57,7 +57,77 @@ impl Deref for Config {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Root {
-	pub builds: HashMap<String, Build>,
+	#[serde(default, alias = "builds")]
+	pub actors: HashMap<String, Actor>,
+
+	// Same as actors, but under a dfiferent name to keep the product clear how it works
+	#[serde(default)]
+	pub containers: HashMap<String, Actor>,
+
+	#[serde(default)]
+	pub functions: HashMap<String, Function>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct Actor {
+	#[serde(flatten)]
+	pub build: Build,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct Function {
+	#[serde(flatten)]
+	pub build: Build,
+	pub path: Option<String>,
+	pub route_subpaths: Option<bool>,
+	#[serde(default)]
+	pub strip_prefix: Option<bool>,
+	#[serde(default)]
+	pub networking: FunctionNetworking,
+	#[serde(default)]
+	pub resources: Option<Resources>,
+}
+
+impl Function {
+	pub fn path(&self) -> String {
+		self.path.clone().unwrap_or_else(|| "".to_string())
+	}
+
+	pub fn route_subpaths(&self) -> bool {
+		self.route_subpaths.unwrap_or(true)
+	}
+
+	pub fn strip_prefix(&self) -> bool {
+		self.strip_prefix.unwrap_or(false)
+	}
+
+	pub fn resources(&self) -> Resources {
+		self.resources.clone().unwrap_or_else(|| Resources {
+			cpu: 1000,
+			memory: 1024,
+		})
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct FunctionNetworking {
+	pub internal_port: Option<u8>,
+}
+
+impl FunctionNetworking {
+	pub fn internal_port(&self) -> u8 {
+		self.internal_port.unwrap_or(80)
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct Resources {
+	pub cpu: u64,
+	pub memory: u64,
 }
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600

@@ -153,7 +153,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		.ok()
 		.and_then(|s| s.parse::<f64>().ok())
 		.unwrap_or(0.001);
-	
+
 	Ok(include_str!("../../files/rivet_guard_configure.sh")
 		.replace(
 			"__RIVET_GUARD_CONFIG__",

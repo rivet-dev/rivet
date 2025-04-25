@@ -31,11 +31,14 @@ pub async fn build_bootstrap_data(
 				.dns
 				.as_ref()
 				.and_then(|x| x.domain_cdn.clone()),
+			// Return domain_job_for_routes instead of domain_job since we need to use this route
+			// to build the routes
 			job: server_config
 				.rivet
-				.dns
+				.domain_job_for_routes()
 				.as_ref()
-				.and_then(|x| x.domain_job.clone()),
+				.ok()
+				.map(|x| x.to_string()),
 			// Deprecated:
 			main: server_config
 				.rivet

@@ -42,6 +42,7 @@ impl Opts {
 			.context("Failed to parse extra tags")?;
 
 		crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
+			ctx: &ctx,
 			environment: &env,
 			filter_tags: filter_tags,
 			build_tags: build_tags,

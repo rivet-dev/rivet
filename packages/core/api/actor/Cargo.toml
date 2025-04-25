@@ -53,6 +53,7 @@ upload-get.workspace = true
 user-get.workspace = true
 user-identity-get.workspace = true
 user-team-list.workspace = true
+route.workspace = true
 
 [dev-dependencies]
 rivet-connection.workspace = true

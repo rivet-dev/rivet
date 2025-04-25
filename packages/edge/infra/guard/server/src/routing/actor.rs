@@ -6,11 +6,9 @@ use fdb_util::{FormalKey, SNAPSHOT};
 use foundationdb::{self as fdb};
 use global_error::GlobalResult;
 use pegboard::types::EndpointType;
-use regex::Regex;
-use rivet_guard_core::proxy_service::{RouteTarget, RoutingResult, RoutingTimeout};
-use uuid::Uuid;
-// Use pegboard module
 use pegboard::util::build_actor_hostname_and_path_regex;
+use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
+use uuid::Uuid;
 
 /// Route requests to actor services based on hostname and path
 pub async fn route_actor_request(
@@ -18,7 +16,7 @@ pub async fn route_actor_request(
 	host: &str,
 	path: &str,
 	dc_id: Uuid,
-) -> GlobalResult<Option<RoutingResult>> {
+) -> GlobalResult<Option<RoutingOutput>> {
 	// Get DC information for the current datacenter
 	let dc_res = ctx
 		.op(cluster::ops::datacenter::get::Input {
@@ -70,7 +68,7 @@ async fn try_route_with_endpoint_type(
 	endpoint_type: EndpointType,
 	guard_public_hostname: &GuardPublicHostname,
 	dc_id: Uuid,
-) -> GlobalResult<Option<RoutingResult>> {
+) -> GlobalResult<Option<RoutingOutput>> {
 	// Build regexes for the endpoint type
 	let (hostname_regex, path_regex) =
 		match build_actor_hostname_and_path_regex(endpoint_type, guard_public_hostname) {
@@ -156,12 +154,12 @@ async fn try_route_with_endpoint_type(
 
 	// Now that we have the actor_id and port_name, lookup the actor
 	match find_actor(ctx, &actor_id, &port_name, dc_id, path_to_forward).await? {
-		Some(mut target) => Ok(Some(RoutingResult {
+		Some(target) => Ok(Some(RoutingOutput::Route(RouteConfig {
 			targets: vec![target],
 			timeout: RoutingTimeout {
 				routing_timeout: 10,
 			},
-		})),
+		}))),
 		None => Ok(None),
 	}
 }

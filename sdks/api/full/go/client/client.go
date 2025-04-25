@@ -19,6 +19,7 @@ import (
 	portalclient "sdk/portal/client"
 	provisionclient "sdk/provision/client"
 	regionsclient "sdk/regions/client"
+	routesclient "sdk/routes/client"
 	serversclient "sdk/servers/client"
 )
 
@@ -36,6 +37,7 @@ type Client struct {
 	Identity     *identityclient.Client
 	Provision    *provisionclient.Client
 	Regions      *regionsclient.Client
+	Routes       *routesclient.Client
 	Servers      *serversclient.Client
 	Auth         *authclient.Client
 	Games        *gamesclient.Client
@@ -62,6 +64,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Identity:     identityclient.NewClient(opts...),
 		Provision:    provisionclient.NewClient(opts...),
 		Regions:      regionsclient.NewClient(opts...),
+		Routes:       routesclient.NewClient(opts...),
 		Servers:      serversclient.NewClient(opts...),
 		Auth:         authclient.NewClient(opts...),
 		Games:        gamesclient.NewClient(opts...),

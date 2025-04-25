@@ -39,6 +39,9 @@ foundationdb.workspace = true
 rustls-pemfile = "2.0.0"
 rustls = { version = "0.23.25" }
 rivet-cache.workspace = true
+route = { path = "../../../../core/services/route" }
+game-namespace-resolve-name-id = { path = "../../../../core/services/game/ops/namespace-resolve-name-id" }
+types-proto = { path = "../../../../common/types-proto/core", package = "types-proto" }
 
 [dev-dependencies]
 uuid = { version = "1.3", features = ["v4", "fast-rng"] }

@@ -496,6 +496,7 @@ dependencies = [
  "rivet-operation",
  "rivet-pools",
  "rivet-util-team",
+ "route",
  "s3-util",
  "serde",
  "serde_json",
@@ -12379,6 +12380,7 @@ dependencies = [
  "fdb-util",
  "foundationdb",
  "futures",
+ "game-namespace-resolve-name-id",
  "global-error",
  "once_cell",
  "pegboard",
@@ -12390,11 +12392,13 @@ dependencies = [
  "rivet-logs",
  "rivet-pools",
  "rivet-runtime",
+ "route",
  "rustls 0.23.25",
  "rustls-pemfile 2.2.0",
  "serde_json",
  "tokio",
  "tracing",
+ "types-proto",
  "uuid",
 ]
 
@@ -13098,6 +13102,24 @@ dependencies = [
  "bitflags 2.6.0",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "route"
+version = "25.2.2"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "futures-util",
+ "rivet-api",
+ "rivet-convert",
+ "rivet-operation",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.24.1",
+ "uuid",
 ]
 
 [[package]]

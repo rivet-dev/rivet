@@ -1,7 +1,7 @@
 use chirp_workflow::prelude::*;
 use cluster::types::{Filter, PoolType};
-use global_error::{bail, GlobalResult};
-use rivet_guard_core::proxy_service::{RouteTarget, RoutingResult, RoutingTimeout};
+use global_error::GlobalResult;
+use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
 use uuid::Uuid;
 
 /// Route requests to the API service
@@ -11,7 +11,7 @@ pub async fn route_api_request(
 	path: &str,
 	dc_name_id: &str,
 	dc_id: Uuid,
-) -> GlobalResult<Option<RoutingResult>> {
+) -> GlobalResult<Option<RoutingOutput>> {
 	// Match host
 	if let Some(api_host) = ctx
 		.config()
@@ -71,10 +71,14 @@ pub async fn route_api_request(
 		Vec::new()
 	};
 
-	return Ok(Some(RoutingResult {
+	if targets.is_empty() {
+		return Ok(None);
+	}
+
+	return Ok(Some(RoutingOutput::Route(RouteConfig {
 		targets,
 		timeout: RoutingTimeout {
 			routing_timeout: 10, // 10 seconds for API routing timeout
 		},
-	}));
+	})));
 }

@@ -1,0 +1,2 @@
+- Do not use cat, hexdump, perl, or sed. Always edit files directly.
+- If attempting to use Cargo, use `nix-shell --command 'cargo ...'`

@@ -22,7 +22,7 @@ use common::{
 	TestServer,
 };
 use rivet_guard_core::proxy_service::{
-	MaxInFlightConfig, RateLimitConfig, RetryConfig, RouteTarget, RoutingResponse, RoutingResult,
+	MaxInFlightConfig, RateLimitConfig, RetryConfig, RouteConfig, RouteTarget, RoutingResponse,
 	RoutingTimeout, TimeoutConfig,
 };
 
@@ -274,7 +274,7 @@ async fn create_websocket_test_server(
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(Uuid::new_v4()),
 						server_id: Some(Uuid::new_v4()),
@@ -688,7 +688,7 @@ async fn test_websocket_rate_limiting() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),
@@ -792,7 +792,7 @@ async fn test_websocket_retry() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(Uuid::new_v4()),
 						server_id: Some(Uuid::new_v4()),
@@ -980,7 +980,7 @@ async fn test_websocket_max_in_flight() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RoutingResult {
+				Ok(RoutingResponse::Ok(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),

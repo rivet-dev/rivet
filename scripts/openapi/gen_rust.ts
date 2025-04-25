@@ -71,7 +71,7 @@ async function fixOpenApiBugs() {
 			[/ActorsEndpointType/g, "crate::models::ActorsEndpointType"],
 		],
 		"actors_logs_api.rs": [
-			[/ActorsLogStream/g, "crate::models::ActorsLogStream"],
+			[/ActorsQueryLogStream/g, "crate::models::ActorsQueryLogStream"],
 		],
 		"servers_logs_api.rs": [
 			[/ServersLogStream/g, "crate::models::ServersLogStream"],

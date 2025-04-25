@@ -157,7 +157,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						}
 						protocol::ToServer::AckCommands { last_command_idx } => {
 							ctx.activity(AckCommandsInput { last_command_idx }).await?;
-						},
+						}
 					}
 				}
 				Some(Main::Command(command)) => {
@@ -565,7 +565,6 @@ async fn process_init(
 	})
 }
 
-
 // TODO: Added while sqlite flushing system is in place. As the database grows, flushes get slower
 // and slower.
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -574,12 +573,9 @@ struct AckCommandsInput {
 }
 
 #[activity(AckCommands)]
-async fn ack_commands(
-	ctx: &ActivityCtx,
-	input: &AckCommandsInput,
-) -> GlobalResult<()> {
+async fn ack_commands(ctx: &ActivityCtx, input: &AckCommandsInput) -> GlobalResult<()> {
 	let pool = &ctx.sqlite().await?;
-	
+
 	sql_execute!(
 		[ctx, pool]
 		"
@@ -588,7 +584,8 @@ async fn ack_commands(
 		WHERE idx <= ?
 		",
 		input.last_command_idx,
-	).await?;
+	)
+	.await?;
 
 	Ok(())
 }

@@ -7,6 +7,7 @@ import * as core from "./core";
 import { Actors } from "./api/resources/actors/client/Client";
 import { Builds } from "./api/resources/builds/client/Client";
 import { Regions } from "./api/resources/regions/client/Client";
+import { Routes } from "./api/resources/routes/client/Client";
 
 export declare namespace RivetClient {
     interface Options {
@@ -50,5 +51,11 @@ export class RivetClient {
 
     public get regions(): Regions {
         return (this._regions ??= new Regions(this._options));
+    }
+
+    protected _routes: Routes | undefined;
+
+    public get routes(): Routes {
+        return (this._routes ??= new Routes(this._options));
     }
 }

@@ -13,6 +13,7 @@ import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
 import { Regions } from "./api/resources/regions/client/Client";
+import { Routes } from "./api/resources/routes/client/Client";
 import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Games } from "./api/resources/games/client/Client";
@@ -55,6 +56,7 @@ export class RivetClient {
     protected _identity: Identity | undefined;
     protected _provision: Provision | undefined;
     protected _regions: Regions | undefined;
+    protected _routes: Routes | undefined;
     protected _servers: Servers | undefined;
     protected _auth: Auth | undefined;
     protected _games: Games | undefined;
@@ -98,6 +100,10 @@ export class RivetClient {
 
     public get regions(): Regions {
         return (this._regions ??= new Regions(this._options));
+    }
+
+    public get routes(): Routes {
+        return (this._routes ??= new Routes(this._options));
     }
 
     public get servers(): Servers {

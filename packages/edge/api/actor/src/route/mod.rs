@@ -6,7 +6,6 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 pub mod actors;
-pub mod logs;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GlobalQuery {
@@ -112,13 +111,6 @@ define_router! {
 						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
-			),
-		},
-
-		"actors" / Uuid / "logs": {
-			GET: logs::get_logs(
-				query: logs::GetActorLogsQuery,
-				opt_auth: true,
 			),
 		},
 	},

@@ -9,6 +9,7 @@ pub mod actors;
 pub mod builds;
 pub mod logs;
 pub mod regions;
+pub mod routes;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GlobalQuery {
@@ -116,7 +117,7 @@ define_router! {
 			),
 		},
 
-		"actors" / Uuid / "logs": {
+		"actors" / "logs": {
 			GET: logs::get_logs(
 				query: logs::GetActorLogsQuery,
 				opt_auth: true,
@@ -188,6 +189,41 @@ define_router! {
 			GET: regions::recommend(
 				query: regions::RecommendQuery,
 				opt_auth: true,
+			),
+		},
+
+		// MARK: Routes
+		"routes": {
+			GET: routes::list(
+				query: routes::ListQuery,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 60_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
+		"routes" / String: {
+			PUT: routes::update(
+				query: GlobalQuery,
+				body: models::RoutesUpdateRouteBody,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 10_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+			DELETE: routes::delete(
+				query: GlobalQuery,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 10_000, bucket: duration::minutes(1) },
+					],
+				},
 			),
 		},
 

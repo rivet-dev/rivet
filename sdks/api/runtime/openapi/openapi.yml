@@ -916,19 +916,211 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-  /actors/{actor}/logs:
+  /routes:
+    get:
+      description: Lists all routes of the given environment.
+      operationId: routes_list
+      tags:
+        - Routes
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutesListRoutesResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /routes/{id}:
+    put:
+      description: Creates or updates a route.
+      operationId: routes_update
+      tags:
+        - Routes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutesUpdateRouteResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutesUpdateRouteBody'
+    delete:
+      description: Deletes a route.
+      operationId: routes_delete
+      tags:
+        - Routes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutesDeleteRouteResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /actors/logs:
     get:
       description: Returns the logs for a given actor.
       operationId: actors_logs_get
       tags:
         - ActorsLogs
       parameters:
-        - name: actor
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
         - name: project
           in: query
           required: false
@@ -943,7 +1135,27 @@ paths:
           in: query
           required: true
           schema:
-            $ref: '#/components/schemas/ActorsLogStream'
+            $ref: '#/components/schemas/ActorsQueryLogStream'
+        - name: actor_ids_json
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: search_text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search_case_sensitive
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: search_enable_regex
+          in: query
+          required: false
+          schema:
+            type: boolean
         - name: watch_index
           in: query
           description: A query parameter denoting the requests watch index.
@@ -1200,6 +1412,44 @@ components:
           $ref: '#/components/schemas/RegionsRegion'
       required:
         - region
+    RoutesListRoutesResponse:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutesRoute'
+      required:
+        - routes
+    RoutesUpdateRouteBody:
+      type: object
+      properties:
+        hostname:
+          type: string
+        path:
+          type: string
+        strip_prefix:
+          type: boolean
+          description: >-
+            Whether to remove the path prefix before sending the request to the
+            actor.
+        route_subpaths:
+          type: boolean
+          description: Whether to route all subpaths of this path
+        target:
+          $ref: '#/components/schemas/RoutesRouteTarget'
+      required:
+        - hostname
+        - path
+        - strip_prefix
+        - route_subpaths
+        - target
+    RoutesUpdateRouteResponse:
+      type: object
+      properties: {}
+    RoutesDeleteRouteResponse:
+      type: object
+      properties: {}
     ActorsActor:
       type: object
       properties:
@@ -1351,6 +1601,13 @@ components:
     ActorsGetActorLogsResponse:
       type: object
       properties:
+        actor_ids:
+          type: array
+          items:
+            type: string
+          description: >-
+            List of actor IDs in these logs. The order of these correspond to
+            the index in the log entry.
         lines:
           type: array
           items:
@@ -1361,17 +1618,37 @@ components:
           items:
             $ref: '#/components/schemas/Timestamp'
           description: Sorted old to new.
+        streams:
+          type: array
+          items:
+            type: integer
+          description: |-
+            Streams the logs came from.
+
+            0 = stdout
+            1 = stderr
+        actor_indices:
+          type: array
+          items:
+            type: integer
+          description: >-
+            Index of the actor that this log was for. Use this index to look the
+            full ID in `actor_ids`.
         watch:
           $ref: '#/components/schemas/WatchResponse'
       required:
+        - actor_ids
         - lines
         - timestamps
+        - streams
+        - actor_indices
         - watch
-    ActorsLogStream:
+    ActorsQueryLogStream:
       type: string
       enum:
         - std_out
         - std_err
+        - all
     BuildsBuild:
       type: object
       properties:
@@ -1446,6 +1723,55 @@ components:
       required:
         - id
         - name
+    RoutesRouteTargetActors:
+      type: object
+      description: Configuration for targeting actors.
+      properties:
+        selector_tags:
+          type: object
+          additionalProperties:
+            type: string
+          description: Tags of actors to route requests to.
+      required:
+        - selector_tags
+    RoutesRouteTarget:
+      type: object
+      properties:
+        actors:
+          $ref: '#/components/schemas/RoutesRouteTargetActors'
+          description: Configuration for targeting actors.
+    RoutesRoute:
+      type: object
+      properties:
+        id:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        hostname:
+          type: string
+        path:
+          type: string
+        route_subpaths:
+          type: boolean
+          description: Whether to route all subpaths of this path
+        strip_prefix:
+          type: boolean
+          description: >-
+            Whether to remove the path prefix before sending the request to the
+            target.
+        target:
+          $ref: '#/components/schemas/RoutesRouteTarget'
+      required:
+        - id
+        - created_at
+        - updated_at
+        - hostname
+        - path
+        - route_subpaths
+        - strip_prefix
+        - target
     UploadPresignedRequest:
       type: object
       description: >-

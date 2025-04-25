@@ -12,6 +12,7 @@ use reqwest;
 
 use super::{configuration, Error};
 use crate::apis::ResponseContent;
+use crate::models::ActorsQueryLogStream;
 
 /// struct for typed errors of method [`actors_logs_get`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,21 +30,20 @@ pub enum ActorsLogsGetError {
 /// Returns the logs for a given actor.
 pub async fn actors_logs_get(
 	configuration: &configuration::Configuration,
-	actor: &str,
-	stream: crate::models::ActorsLogStream,
+	stream: ActorsQueryLogStream,
+	actor_ids_json: &str,
 	project: Option<&str>,
 	environment: Option<&str>,
+	search_text: Option<&str>,
+	search_case_sensitive: Option<bool>,
+	search_enable_regex: Option<bool>,
 	watch_index: Option<&str>,
 ) -> Result<crate::models::ActorsGetActorLogsResponse, Error<ActorsLogsGetError>> {
 	let local_var_configuration = configuration;
 
 	let local_var_client = &local_var_configuration.client;
 
-	let local_var_uri_str = format!(
-		"{}/actors/{actor}/logs",
-		local_var_configuration.base_path,
-		actor = crate::apis::urlencode(actor)
-	);
+	let local_var_uri_str = format!("{}/actors/logs", local_var_configuration.base_path);
 	let mut local_var_req_builder =
 		local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
@@ -56,6 +56,20 @@ pub async fn actors_logs_get(
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
 	}
 	local_var_req_builder = local_var_req_builder.query(&[("stream", &stream.to_string())]);
+	local_var_req_builder =
+		local_var_req_builder.query(&[("actor_ids_json", &actor_ids_json.to_string())]);
+	if let Some(ref local_var_str) = search_text {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("search_text", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = search_case_sensitive {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("search_case_sensitive", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = search_enable_regex {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("search_enable_regex", &local_var_str.to_string())]);
+	}
 	if let Some(ref local_var_str) = watch_index {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("watch_index", &local_var_str.to_string())]);

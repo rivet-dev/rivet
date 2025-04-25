@@ -7,6 +7,7 @@ export * as group from "./group";
 export * as identity from "./identity";
 export * as provision from "./provision";
 export * as regions from "./regions";
+export * as routes from "./routes";
 export * as servers from "./servers";
 export * as auth from "./auth";
 export * as captcha from "./captcha";

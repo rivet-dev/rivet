@@ -3996,7 +3996,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rivet-gg/api-full@workspace:sdks/api/full/typescript":
+"@rivet-gg/api-full@workspace:*, @rivet-gg/api-full@workspace:sdks/api/full/typescript":
   version: 0.0.0-use.local
   resolution: "@rivet-gg/api-full@workspace:sdks/api/full/typescript"
   dependencies:
@@ -4019,7 +4019,7 @@ __metadata:
 
 "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
   version: 25.2.2
-  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=1814a3&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
+  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=4b783a&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
   dependencies:
     form-data: "npm:^4.0.0"
     js-base64: "npm:^3.7.5"
@@ -4027,7 +4027,7 @@ __metadata:
     qs: "npm:^6.11.2"
     readable-stream: "npm:^4.5.2"
     url-join: "npm:^5.0.0"
-  checksum: 10c0/551b9347c7cfafd5fcc21a672b28e6e152a6bbf81815e35c98856c9ebfa80afa3771a2a82ff03e7696156181c431e3e6462b5cb7d7652331ec58c5d08fddadf1
+  checksum: 10c0/28bb22c577c5acb5b1ba6682c9dc94eaf6d362fe2d0064afb259c58bfba7bb70b3ffa14b76cf4f970ef69bd81b5b02ad16c15a7e09a3ae00407fc1c496138837
   languageName: node
   linkType: hard
 
@@ -6699,9 +6699,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"actor-core@portal:../actor-core/packages/actor-core::locator=rivet%40workspace%3A.":
+"actor-core@portal:../../actor-core/packages/actor-core::locator=rivet%40workspace%3A.":
   version: 0.0.0-use.local
-  resolution: "actor-core@portal:../actor-core/packages/actor-core::locator=rivet%40workspace%3A."
+  resolution: "actor-core@portal:../../actor-core/packages/actor-core::locator=rivet%40workspace%3A."
   dependencies:
     cbor-x: "npm:^1.6.0"
     hono: "npm:^4.7.0"
@@ -9454,6 +9454,15 @@ __metadata:
   checksum: 10c0/146ce5ae8325d07645a49bbc54d7ac3aef42f5138bfbbe83d5cf96293b50eab2219926d6cf41eed0a0f90132578089652ba9286a19297662900133a9da6c2fd0
   languageName: node
   linkType: hard
+
+"example-functions@workspace:examples/functions-js":
+  version: 0.0.0-use.local
+  resolution: "example-functions@workspace:examples/functions-js"
+  dependencies:
+    "@rivet-gg/actor": "npm:^5.1.2"
+    hono: "npm:^4.6.17"
+  languageName: unknown
+  linkType: soft
 
 "example-system-test@workspace:examples/websocket":
   version: 0.0.0-use.local
@@ -15756,14 +15765,33 @@ __metadata:
   languageName: node
   linkType: hard
 
-"system-test-container@workspace:examples/system-test":
+"system-test-container@workspace:examples/system-test-actor":
   version: 0.0.0-use.local
-  resolution: "system-test-container@workspace:examples/system-test"
+  resolution: "system-test-container@workspace:examples/system-test-actor"
   dependencies:
     "@hono/node-server": "npm:^1.13.8"
     "@hono/node-ws": "npm:^1.1.0"
     "@rivet-gg/actor-core": "npm:^5.1.2"
     "@rivet-gg/api": "npm:^24.6.2"
+    "@types/deno": "npm:^2.2.0"
+    "@types/node": "npm:^22.13.9"
+    "@types/ws": "npm:^8.18.0"
+    hono: "npm:^4.6.17"
+    node-fetch: "npm:^3.3.2"
+    tsx: "npm:^4.7.0"
+    typescript: "npm:^5.3.3"
+    ws: "npm:^8.18.1"
+  languageName: unknown
+  linkType: soft
+
+"system-test-route@workspace:examples/system-test-route":
+  version: 0.0.0-use.local
+  resolution: "system-test-route@workspace:examples/system-test-route"
+  dependencies:
+    "@hono/node-server": "npm:^1.13.8"
+    "@hono/node-ws": "npm:^1.1.0"
+    "@rivet-gg/actor-core": "npm:^5.1.2"
+    "@rivet-gg/api-full": "workspace:*"
     "@types/deno": "npm:^2.2.0"
     "@types/node": "npm:^22.13.9"
     "@types/ws": "npm:^8.18.0"

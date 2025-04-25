@@ -13,10 +13,10 @@ Returns the logs for a given actor.
 
 ## Code Examples
 
-<CodeGroup title='Request' tag='GET' label='https://api.rivet.gg/actors/{actor}/logs'>
+<CodeGroup title='Request' tag='GET' label='https://api.rivet.gg/actors/logs'>
 
 ```bash {{ "title": "cURL" }}
-curl -X GET 'https://api.rivet.gg/actors/{actor}/logs'
+curl -X GET 'https://api.rivet.gg/actors/logs'
 ```
 
 ```ts
@@ -33,5 +33,5 @@ await RIVET.actors.logs.get({
 </CodeGroup>
 
 ## Schema
-<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"actor":{"in":"path","type":"string","format":"uuid"},"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"},"stream":{"in":"query","$ref":"#/components/schemas/ActorsLogStream"},"watch_index":{"in":"query","type":"string"}},"required":["actor","stream"]}} defs={API_SCHEMA.definitions}/>
+<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"},"stream":{"in":"query","$ref":"#/components/schemas/ActorsQueryLogStream"},"actor_ids_json":{"in":"query","type":"string"},"search_text":{"in":"query","type":"string"},"search_case_sensitive":{"in":"query","type":"boolean"},"search_enable_regex":{"in":"query","type":"boolean"},"watch_index":{"in":"query","type":"string"}},"required":["stream","actor_ids_json"]}} defs={API_SCHEMA.definitions}/>
 <JsonSchemaPreview className='not-prose mt-4' title='Response' schema={{"$ref":"#/components/schemas/ActorsGetActorLogsResponse"}} defs={API_SCHEMA.definitions}/>

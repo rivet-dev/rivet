@@ -10,19 +10,20 @@ service:
     - runtime
   endpoints:
     get:
-      path: /{actor}/logs
+      path: /logs
       method: GET
       docs: >-
         Returns the logs for a given actor.
-      path-parameters:
-        actor:
-          type: uuid
       request:
         name: GetActorLogsRequestQuery
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          stream: LogStream
+          stream: QueryLogStream
+          actor_ids_json: string
+          search_text: optional<string>
+          search_case_sensitive: optional<boolean>
+          search_enable_regex: optional<boolean>
           watch_index:
             docs: A query parameter denoting the requests watch index.
             type: optional<string>
@@ -31,15 +32,29 @@ service:
 types:
   GetActorLogsResponse:
     properties:
+      actor_ids:
+        docs: List of actor IDs in these logs. The order of these correspond to the index in the log entry.
+        type: list<string>
       lines:
         docs: Sorted old to new.
         type: list<string>
       timestamps:
         docs: Sorted old to new.
         type: list<commons.Timestamp>
+      streams:
+        docs: |
+          Streams the logs came from.
+
+          0 = stdout
+          1 = stderr
+        type: list<integer>
+      actor_indices:
+        docs: Index of the actor that this log was for. Use this index to look the full ID in `actor_ids`.
+        type: list<integer>
       watch: commons.WatchResponse
 
-  LogStream:
+  QueryLogStream:
     enum:
       - std_out
       - std_err
+      - all
