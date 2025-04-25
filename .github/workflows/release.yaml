@@ -89,9 +89,9 @@ jobs:
           - platform: x86_64-unknown-linux-gnu
             runner: [self-hosted, Linux, X64]
             suffix: x86-linux
-          - platform: x86_64-pc-windows-gnu
-            runner: [self-hosted, Linux, X64]
-            suffix: x86-windows
+          # - platform: x86_64-pc-windows-gnu
+          #   runner: [self-hosted, Linux, X64]
+          #   suffix: x86-windows
           - platform: x86_64-apple-darwin
             runner: [self-hosted, Linux, X64]
             suffix: x86-mac
