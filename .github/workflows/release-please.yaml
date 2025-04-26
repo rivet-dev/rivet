@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: google-github-actions/release-please-action@v4
         with:
