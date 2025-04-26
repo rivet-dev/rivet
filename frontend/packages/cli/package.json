@@ -5,7 +5,7 @@
 		"url": "https://github.com/rivet-gg/rivet.git",
 		"directory": "frontend/packages/cli"
 	},
-	"version": "25.4.0",
+	"version": "25.4.1",
 	"bin": {
 		"rivet": "dist/cli.js",
 		"rivet-cli": "dist/cli.js"
