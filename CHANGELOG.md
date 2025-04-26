@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.4.1](https://github.com/rivet-gg/rivet/compare/v25.4.0...v25.4.1) (2025-04-26)
+
+
+### Bug Fixes
+
+* **cli:** fix cli compiled without transport feature ([#2403](https://github.com/rivet-gg/rivet/issues/2403)) ([a46b2f5](https://github.com/rivet-gg/rivet/commit/a46b2f586e1b7b55fa7da4d55fe3e2fb1a19388f))
+
+
+### Chores
+
+* **main:** release 25.4.0 ([#2402](https://github.com/rivet-gg/rivet/issues/2402)) ([844cd7d](https://github.com/rivet-gg/rivet/commit/844cd7d93a2fe9809a8d822717d21a6dda45fa1d))
+* release 25.4.1 ([6289acb](https://github.com/rivet-gg/rivet/commit/6289acbea932704040a0e3433d936391e769ebbe))
+* release 25.4.1 ([ff549fe](https://github.com/rivet-gg/rivet/commit/ff549fe7d58b95baed0e65e7da61b5bfa5e4c671))
+* **release:** update version to 25.4.1 ([00f48ed](https://github.com/rivet-gg/rivet/commit/00f48edc8400d7c044dd126483f1526e3398ad50))
+* **release:** update version to 25.4.1 ([2ca67f2](https://github.com/rivet-gg/rivet/commit/2ca67f2463b7fff393403d6a2187170b35c83c37))
+* temporarily disable sentry ([#2406](https://github.com/rivet-gg/rivet/issues/2406)) ([0a94837](https://github.com/rivet-gg/rivet/commit/0a94837ffee0c901fd64cdafdebdacc039946b1d))
+* update release please ([#2399](https://github.com/rivet-gg/rivet/issues/2399)) ([626d013](https://github.com/rivet-gg/rivet/commit/626d013b4754edf7cb80cb634b47bfce77d91e6b))
+
 ## [25.4.0](https://github.com/rivet-gg/rivet/compare/v25.3.1...v25.4.0) (2025-04-26)
 
 
