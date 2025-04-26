@@ -9,9 +9,9 @@ edition.workspace = true
 name = "rivet"
 path = "src/main.rs"
 
-[features]
-default = ["sentry"]
-sentry = []
+# [features]
+# default = ["sentry"]
+# sentry = []
 
 [dependencies]
 clap = { version = "4.5.9", features = ["derive"] }
@@ -26,7 +26,7 @@ base64 = "0.22.1"
 kv-str.workspace = true
 inquire = "0.7.5"
 webbrowser = "1.0.2"
-sentry = { version = "0.37.0", default-features = false, features = ["anyhow", "backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
+# sentry = { version = "0.37.0", default-features = false, features = ["anyhow", "backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 sysinfo = "0.32.0"
 ctrlc = "3.4.5"
 async-posthog.workspace = true
