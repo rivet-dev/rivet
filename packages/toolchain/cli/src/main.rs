@@ -33,14 +33,14 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
-// 	// We use a sync main for Sentry. Read more: https://docs.sentry.io/platforms/rust/#async-main-function
-//
-// 	// This has a 2 second deadline to flush any remaining events which is sufficient for
-// 	// short-lived commands.
-// 	let _guard = sentry::init(("https://b329eb15c63e1002611fb3b7a58a1dfa@o4504307129188352.ingest.us.sentry.io/4508361147809792", sentry::ClientOptions {
-//     release: sentry::release_name!(),
-//     ..Default::default()
-// }));
+	// 	// We use a sync main for Sentry. Read more: https://docs.sentry.io/platforms/rust/#async-main-function
+	//
+	// 	// This has a 2 second deadline to flush any remaining events which is sufficient for
+	// 	// short-lived commands.
+	// 	let _guard = sentry::init(("https://b329eb15c63e1002611fb3b7a58a1dfa@o4504307129188352.ingest.us.sentry.io/4508361147809792", sentry::ClientOptions {
+	//     release: sentry::release_name!(),
+	//     ..Default::default()
+	// }));
 
 	// Run main
 	let exit_code = tokio::runtime::Builder::new_multi_thread()
