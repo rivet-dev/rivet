@@ -118,6 +118,8 @@ async fn handle_connection(
 			tracing::error!(?addr, ?err, "handle connection inner failed");
 		}
 
+		tracing::info!(?client_id, "client connection closed");
+
 		// Clean up
 		let conn = conns.write().await.remove(&url_data.client_id);
 		if let Some(conn) = conn {
@@ -176,6 +178,8 @@ async fn handle_connection_inner(
 	}: UrlData,
 ) -> GlobalResult<()> {
 	let (tx, mut rx) = ws_stream.split();
+
+	tracing::info!(?client_id, "new client connection");
 
 	let conn = Arc::new(Connection {
 		workflow_id: RwLock::new(None),

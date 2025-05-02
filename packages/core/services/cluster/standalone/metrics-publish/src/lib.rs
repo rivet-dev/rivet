@@ -190,7 +190,6 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 		let labels = [
 			cluster_id.as_str(),
 			datacenter_id.as_str(),
-			&dc.provider_datacenter_id,
 			&dc.name_id,
 			&pool_type.to_string(),
 		];
@@ -220,7 +219,6 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 					.with_label_values(&[
 						&cluster_id,
 						&datacenter_id,
-						&dc.provider_datacenter_id,
 						&dc.name_id,
 					])
 					.set(nomad);
@@ -230,7 +228,6 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 					.with_label_values(&[
 						&cluster_id,
 						&datacenter_id,
-						&dc.provider_datacenter_id,
 						&dc.name_id,
 					])
 					.set(pegboard);
@@ -240,7 +237,6 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 					.with_label_values(&[
 						&cluster_id,
 						&datacenter_id,
-						&dc.provider_datacenter_id,
 						&dc.name_id,
 					])
 					.set(pegboard);
