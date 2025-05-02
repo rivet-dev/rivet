@@ -26,6 +26,12 @@ pub mod node_exporter {
 	}
 }
 
+pub mod process_exporter {
+	pub fn install() -> String {
+		include_str!("../files/process_exporter.sh").to_string()
+	}
+}
+
 pub mod sysctl {
 	pub fn install() -> String {
 		include_str!("../files/sysctl.sh").to_string()

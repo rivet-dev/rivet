@@ -365,6 +365,7 @@ async fn allocate_actor_v2(
 				}));
 			}
 		})
+		.custom_instrument(tracing::info_span!("actor_allocate_tx"))
 		.await?;
 
 	let dt = start_instant.elapsed().as_secs_f64();
@@ -400,6 +401,7 @@ pub async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResu
 
 					Ok(())
 				})
+				.custom_instrument(tracing::info_span!("actor_clear_tx"))
 				.await?;
 		}
 	}
@@ -595,6 +597,7 @@ pub async fn insert_ports_fdb(ctx: &ActivityCtx, input: &InsertPortsFdbInput) ->
 				Ok(())
 			}
 		})
+		.custom_instrument(tracing::info_span!("actor_insert_proxied_ports_tx"))
 		.await?;
 
 	Ok(())
@@ -899,6 +902,7 @@ async fn clear_ports_and_resources(
 				.await
 			}
 		})
+		.custom_instrument(tracing::info_span!("actor_clear_ports_and_resources_tx"))
 		.await?;
 
 	Ok(())

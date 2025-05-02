@@ -184,6 +184,7 @@ async fn find_actor(
 
 			Ok(exists)
 		})
+		.custom_instrument(tracing::info_span!("actor_exists_tx"))
 		.await?;
 
 	if !actor_exists {
@@ -275,6 +276,7 @@ async fn fetch_proxied_ports(
 				Ok(None)
 			}
 		})
+		.custom_instrument(tracing::info_span!("fetch_proxied_ports_tx"))
 		.await
 		.map_err(Into::into)
 }

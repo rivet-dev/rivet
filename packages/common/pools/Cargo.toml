@@ -24,6 +24,7 @@ lz4_flex = "0.11.3"
 rivet-config.workspace = true
 rivet-metrics.workspace = true
 service-discovery.workspace = true
+rivet-util.workspace = true
 tempfile = "3.13.0"
 thiserror = "1.0"
 tokio.workspace = true

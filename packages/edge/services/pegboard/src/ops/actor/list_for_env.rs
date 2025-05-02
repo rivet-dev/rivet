@@ -91,6 +91,7 @@ pub async fn pegboard_actor_list_for_env(
 
 			Ok(results)
 		})
+		.custom_instrument(tracing::info_span!("actor_list_tx"))
 		.await?;
 
 	Ok(Output { actors })

@@ -180,6 +180,7 @@ pub(crate) async fn pegboard_actor_allocate_ingress_ports(
 
 			Ok(results)
 		})
+		.custom_instrument(tracing::info_span!("allocate_ingress_ports_tx"))
 		.await?;
 
 	Ok(Output { ports })

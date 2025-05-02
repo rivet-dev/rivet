@@ -14,11 +14,11 @@ use fdb_util::{end_of_key_range, keys::*, FormalChunkedKey, FormalKey, SERIALIZA
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
-	tuple::Subspace,
 };
 use futures_util::{stream::BoxStream, StreamExt, TryStreamExt};
 use indoc::indoc;
 use rivet_pools::prelude::*;
+use rivet_util::future::CustomInstrumentExt;
 use serde_json::json;
 use sqlx::Acquire;
 use tokio::sync::mpsc;
@@ -58,7 +58,7 @@ const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.fdb_sqlite_nats.worker.wake";
 
 pub struct DatabaseFdbSqliteNats {
 	pools: rivet_pools::Pools,
-	subspace: Subspace,
+	subspace: fdb_util::Subspace,
 	flush_tx: mpsc::UnboundedSender<Uuid>,
 }
 
@@ -209,7 +209,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 		Ok(Arc::new(DatabaseFdbSqliteNats {
 			pools,
-			subspace: Subspace::all().subspace(&(RIVET, CHIRP_WORKFLOW, FDB_SQLITE_NATS)),
+			subspace: fdb_util::Subspace::new(&(RIVET, CHIRP_WORKFLOW, FDB_SQLITE_NATS)),
 			flush_tx,
 		}))
 	}
@@ -346,9 +346,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok((lost_worker_instance_ids, expired_workflow_count))
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("clear_expired_leases_tx"))
+			.custom_instrument(tracing::info_span!("clear_expired_leases_tx"))
 			.await?;
 
 		if expired_workflow_count != 0 {
@@ -366,11 +365,6 @@ impl Database for DatabaseFdbSqliteNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
-		// Always update ping
-		metrics::WORKER_LAST_PING
-			.with_label_values(&[&worker_instance_id.to_string()])
-			.set(rivet_util::timestamp::now());
-
 		// Attempt to be the only worker publishing metrics by writing to the lock key
 		let acquired_lock = self
 			.pools
@@ -406,9 +400,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(lock_expired)
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("acquire_lock_tx"))
+			.custom_instrument(tracing::info_span!("acquire_lock_tx"))
 			.await?;
 
 		if acquired_lock {
@@ -614,9 +607,8 @@ impl Database for DatabaseFdbSqliteNats {
 							pending_signal_count,
 						))
 					}
-					.in_current_span()
 				})
-				.instrument(tracing::info_span!("publish_metrics_tx"))
+				.custom_instrument(tracing::info_span!("publish_metrics_tx"))
 				.await?;
 
 			for (workflow_name, counts) in other_workflow_counts {
@@ -646,16 +638,13 @@ impl Database for DatabaseFdbSqliteNats {
 			// Clear lock
 			self.pools
 				.fdb()?
-				.run(|tx, _mc| {
-					async move {
-						let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
-						tx.clear(&self.subspace.pack(&metrics_lock_key));
+				.run(|tx, _mc| async move {
+					let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
+					tx.clear(&self.subspace.pack(&metrics_lock_key));
 
-						Ok(())
-					}
-					.in_current_span()
+					Ok(())
 				})
-				.instrument(tracing::info_span!("clear_lock_tx"))
+				.custom_instrument(tracing::info_span!("clear_lock_tx"))
 				.await?;
 		}
 
@@ -664,6 +653,10 @@ impl Database for DatabaseFdbSqliteNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		metrics::WORKER_LAST_PING
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(rivet_util::timestamp::now());
+
 		self.pools
 			.fdb()?
 			.run(|tx, _mc| {
@@ -680,9 +673,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("update_worker_ping_tx"))
+			.custom_instrument(tracing::info_span!("update_worker_ping_tx"))
 			.await?;
 
 		Ok(())
@@ -844,9 +836,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("dispatch_workflow_tx"))
+			.custom_instrument(tracing::info_span!("dispatch_workflow_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -913,9 +904,8 @@ impl Database for DatabaseFdbSqliteNats {
 						}))
 					}
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("get_workflow_tx"))
+			.custom_instrument(tracing::info_span!("get_workflow_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -1001,9 +991,8 @@ impl Database for DatabaseFdbSqliteNats {
 						}
 					}
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("find_workflow_tx"))
+			.custom_instrument(tracing::info_span!("find_workflow_tx"))
 			.await?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1151,7 +1140,6 @@ impl Database for DatabaseFdbSqliteNats {
 									Ok(Some((workflow_id, workflow_name, wake_deadline_ts)))
 								}
 							}
-							.in_current_span()
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(1024)
@@ -1253,7 +1241,6 @@ impl Database for DatabaseFdbSqliteNats {
 									wake_deadline_ts,
 								})
 							}
-							.in_current_span()
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(512)
@@ -1261,9 +1248,8 @@ impl Database for DatabaseFdbSqliteNats {
 						.instrument(tracing::trace_span!("map_to_partial_workflow"))
 						.await
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("pull_workflows_tx"))
+			.custom_instrument(tracing::info_span!("pull_workflows_tx"))
 			.await?;
 
 		let worker_instance_id_str = worker_instance_id.to_string();
@@ -1503,7 +1489,6 @@ impl Database for DatabaseFdbSqliteNats {
 						events: sqlite::build_history(events)?,
 					})
 				}
-				.in_current_span()
 			})
 			.buffer_unordered(512)
 			.try_collect()
@@ -1689,9 +1674,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("complete_workflows_tx"))
+			.custom_instrument(tracing::info_span!("complete_workflows_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -1838,9 +1822,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("commit_workflow_tx"))
+			.custom_instrument(tracing::info_span!("commit_workflow_tx"))
 			.await?;
 
 		// Wake worker again if the deadline is before the next tick
@@ -1918,24 +1901,21 @@ impl Database for DatabaseFdbSqliteNats {
 
 							// Fetch the next entry from all streams at the same time
 							let mut results = futures_util::future::try_join_all(
-								streams.into_iter().map(|mut stream| {
-									async move {
-										if let Some(entry) = stream.try_next().await? {
-											Result::<_, fdb::FdbBindingError>::Ok(Some((
-												entry.key().to_vec(),
-												self.subspace
-													.unpack::<keys::workflow::PendingSignalKey>(
-														&entry.key(),
-													)
-													.map_err(|x| {
-														fdb::FdbBindingError::CustomError(x.into())
-													})?,
-											)))
-										} else {
-											Ok(None)
-										}
+								streams.into_iter().map(|mut stream| async move {
+									if let Some(entry) = stream.try_next().await? {
+										Result::<_, fdb::FdbBindingError>::Ok(Some((
+											entry.key().to_vec(),
+											self.subspace
+												.unpack::<keys::workflow::PendingSignalKey>(
+													&entry.key(),
+												)
+												.map_err(|x| {
+													fdb::FdbBindingError::CustomError(x.into())
+												})?,
+										)))
+									} else {
+										Ok(None)
 									}
-									.in_current_span()
 								}),
 							)
 							.instrument(tracing::trace_span!("map_signals"))
@@ -2075,9 +2055,8 @@ impl Database for DatabaseFdbSqliteNats {
 							Ok(None)
 						}
 					}
-					.in_current_span()
 				})
-				.instrument(tracing::info_span!("pull_next_signal_tx"))
+				.custom_instrument(tracing::info_span!("pull_next_signal_tx"))
 				.await?;
 
 		if signal.is_some() {
@@ -2166,9 +2145,8 @@ impl Database for DatabaseFdbSqliteNats {
 						}))
 					}
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("get_sub_workflow_tx"))
+			.custom_instrument(tracing::info_span!("get_sub_workflow_tx"))
 			.await
 			.map_err(Into::into)
 	}
@@ -2294,9 +2272,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("publish_signal_tx"))
+			.custom_instrument(tracing::info_span!("publish_signal_tx"))
 			.await?;
 
 		self.wake_worker();
@@ -2595,9 +2572,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("update_workflow_tags_tx"))
+			.custom_instrument(tracing::info_span!("update_workflow_tags_tx"))
 			.await?;
 
 		Ok(())

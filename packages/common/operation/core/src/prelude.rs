@@ -3,7 +3,7 @@ pub use chirp_client::prelude::*;
 pub use chirp_perf::PerfCtx;
 pub use formatted_error;
 pub use global_error::{ext::*, prelude::*};
-pub use rivet_util::timestamp::DateTimeExt;
+pub use rivet_util::{future::CustomInstrumentExt, timestamp::DateTimeExt};
 
 // The code under `global_error::macros` used to be under `rivet_util`,
 // but it was merged, so we have to merge the exports.

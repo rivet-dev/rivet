@@ -44,6 +44,7 @@ pub async fn prewarm_image(
 				Ok(None)
 			}
 		})
+		.custom_instrument(tracing::info_span!("prewarm_fetch_tx"))
 		.await?;
 
 	let Some(client_id) = client_id else {

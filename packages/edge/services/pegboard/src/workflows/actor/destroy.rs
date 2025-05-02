@@ -161,6 +161,7 @@ pub async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResu
 				.await
 			}
 		})
+		.custom_instrument(tracing::info_span!("actor_destroy_tx"))
 		.await?;
 
 	Ok(())

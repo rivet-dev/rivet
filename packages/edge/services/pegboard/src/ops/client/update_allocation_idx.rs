@@ -128,6 +128,7 @@ pub async fn pegboard_client_update_allocation_idx(
 
 			Ok(())
 		})
+		.custom_instrument(tracing::info_span!("client_update_alloc_idx_tx"))
 		.await
 		.map_err(Into::into)
 }

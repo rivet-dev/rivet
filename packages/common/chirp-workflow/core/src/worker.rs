@@ -23,8 +23,10 @@ use crate::{
 	utils,
 };
 
-/// How often to run internal tasks like updating ping, gc, and publishing metrics.
-const INTERNAL_INTERVAL: Duration = Duration::from_secs(20);
+/// How often to run gc and update ping.
+const PING_INTERVAL: Duration = Duration::from_secs(20);
+/// How often to publish metrics.
+const METRICS_INTERVAL: Duration = Duration::from_secs(20);
 /// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
 const SHUTDOWN_DURATION: Duration = Duration::from_secs(30);
 
@@ -72,18 +74,22 @@ impl Worker {
 
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-		let mut internal_interval = tokio::time::interval(INTERNAL_INTERVAL);
-		internal_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		let mut sigterm = signal(SignalKind::terminate()).expect("SIGTERM hook failed");
+
+		let mut gc_handle = self.gc();
+		let mut metrics_handle = self.publish_metrics();
 
 		loop {
 			tokio::select! {
 				_ = tick_interval.tick() => {},
-				_ = internal_interval.tick() => {
-					self.gc();
-					self.publish_metrics();
-					continue;
+				res = &mut gc_handle => {
+					tracing::error!(?res, "metrics task unexpectedly stopped");
+					break;
+				}
+				res = &mut metrics_handle => {
+					tracing::error!(?res, "metrics task unexpectedly stopped");
+					break;
 				},
 				res = wake_sub.next() => {
 					if res.is_none() {
@@ -257,36 +263,50 @@ impl Worker {
 		Ok(())
 	}
 
-	fn gc(&self) {
+	fn gc(&self) -> JoinHandle<()> {
 		let db = self.db.clone();
 		let worker_instance_id = self.worker_instance_id;
 
 		tokio::task::spawn(
 			async move {
-				if let Err(err) = db.update_worker_ping(worker_instance_id).await {
-					tracing::error!(?err, "unhandled update ping error");
-				}
+				let mut ping_interval = tokio::time::interval(PING_INTERVAL);
+				ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-				if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
-					tracing::error!(?err, "unhandled gc error");
+				loop {
+					ping_interval.tick().await;
+
+					if let Err(err) = db.update_worker_ping(worker_instance_id).await {
+						tracing::error!(?err, "unhandled update ping error");
+					}
+
+					if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
+						tracing::error!(?err, "unhandled gc error");
+					}
 				}
 			}
-			.in_current_span(),
-		);
+			.instrument(tracing::info_span!("worker_gc_task")),
+		)
 	}
 
-	fn publish_metrics(&self) {
+	fn publish_metrics(&self) -> JoinHandle<()> {
 		let db = self.db.clone();
 		let worker_instance_id = self.worker_instance_id;
 
 		tokio::task::spawn(
 			async move {
-				if let Err(err) = db.publish_metrics(worker_instance_id).await {
-					tracing::error!(?err, "unhandled metrics error");
+				let mut metrics_interval = tokio::time::interval(METRICS_INTERVAL);
+				metrics_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+				loop {
+					metrics_interval.tick().await;
+
+					if let Err(err) = db.publish_metrics(worker_instance_id).await {
+						tracing::error!(?err, "unhandled metrics error");
+					}
 				}
 			}
-			.in_current_span(),
-		);
+			.instrument(tracing::info_span!("worker_metrics_task")),
+		)
 	}
 }
 

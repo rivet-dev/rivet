@@ -23,11 +23,13 @@ rand = "0.8"
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 rivet-config.workspace = true
+rivet-metrics.workspace = true
 rivet-util-macros.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "1.0"
 tokio.workspace = true
+tracing.workspace = true
 types-proto.workspace = true
 url = "2.5.4"
 uuid = { version = "1", features = ["v4", "serde"] }

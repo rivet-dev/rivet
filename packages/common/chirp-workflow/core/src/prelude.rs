@@ -6,7 +6,7 @@ pub use global_error::{ext::*, prelude::*};
 pub use rivet_cache;
 #[doc(hidden)]
 pub use rivet_pools::{self, prelude::*};
-pub use rivet_util::timestamp::DateTimeExt;
+pub use rivet_util::{future::CustomInstrumentExt, timestamp::DateTimeExt};
 
 pub mod util {
 	pub use global_error::macros::*;

@@ -164,6 +164,11 @@ impl Database for DatabaseCrdbNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		// Always update ping
+		metrics::WORKER_LAST_PING
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(rivet_util::timestamp::now());
+	
 		sql_execute!(
 			[self]
 			"
@@ -263,11 +268,6 @@ impl Database for DatabaseCrdbNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
-		// Always update ping
-		metrics::WORKER_LAST_PING
-			.with_label_values(&[&worker_instance_id.to_string()])
-			.set(rivet_util::timestamp::now());
-
 		let acquired_lock = sql_fetch_optional!(
 			[self, (i64,)]
 			"

@@ -8,9 +8,9 @@ use std::{
 
 use dirs;
 use fdb_util::{prelude::*, SERIALIZABLE};
-use foundationdb::{self as fdb, options::StreamingMode, tuple::Subspace, FdbBindingError};
+use foundationdb::{self as fdb, options::StreamingMode, FdbBindingError};
 use uuid::Uuid;
-
+use rivet_util::future::CustomInstrumentExt;
 use futures_util::{StreamExt, TryStreamExt};
 use global_error::{bail, ext::AssertionError, unwrap, GlobalResult};
 use sqlx::{
@@ -163,7 +163,7 @@ pub struct SqlitePoolManager {
 	shutdown: broadcast::Sender<()>,
 	fdb: Option<FdbPool>,
 	storage: SqliteStorage,
-	subspace: Subspace,
+	subspace: fdb_util::Subspace,
 }
 
 // MARK: Public methods
@@ -200,7 +200,7 @@ impl SqlitePoolManager {
 			shutdown,
 			fdb: fdb.clone(),
 			storage,
-			subspace: Subspace::all().subspace(&(RIVET, SQLITE)),
+			subspace: fdb_util::Subspace::new(&(RIVET, SQLITE)),
 		});
 
 		tokio::task::spawn(manager.clone().manager_gc_loop(shutdown_rx));
@@ -504,9 +504,8 @@ impl SqlitePoolManager {
 
 				Ok(())
 			}
-			.in_current_span()
 		})
-		.instrument(tracing::info_span!("snapshot_sqlite_write_tx"))
+		.custom_instrument(tracing::info_span!("snapshot_sqlite_write_tx"))
 		.await?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -703,9 +702,8 @@ impl SqlitePoolManager {
 
 					Ok((buf, chunk_count))
 				}
-				.in_current_span()
 			})
-			.instrument(tracing::info_span!("read_from_fdb_tx"))
+			.custom_instrument(tracing::info_span!("read_from_fdb_tx"))
 			.await?;
 
 		if chunks > 0 {

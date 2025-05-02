@@ -441,6 +441,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 
 			Ok(())
 		})
+		.custom_instrument(tracing::info_span!("client_insert_tx"))
 		.await?;
 
 	Ok(())
@@ -872,6 +873,7 @@ async fn fetch_remaining_actors(
 			.try_collect::<Vec<_>>()
 			.await
 		})
+		.custom_instrument(tracing::info_span!("client_fetch_remaining_actors_tx"))
 		.await?;
 
 	Ok(actor_ids)
@@ -901,6 +903,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> GlobalRe
 
 			Ok(last_ping_ts)
 		})
+		.custom_instrument(tracing::info_span!("client_check_expired_tx"))
 		.await?;
 
 	Ok(last_ping_ts < util::timestamp::now() - CLIENT_LOST_THRESHOLD_MS)
@@ -962,6 +965,7 @@ async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> Global
 					total_cpu.saturating_sub(remaining_cpu),
 				))
 			})
+			.custom_instrument(tracing::info_span!("client_update_metrics_tx"))
 			.await?;
 
 	metrics::CLIENT_CPU_ALLOCATED

@@ -110,6 +110,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 				.try_collect::<Vec<_>>()
 				.await
 		})
+		.custom_instrument(tracing::info_span!("actor_list_wf_tx"))
 		.await?;
 
 	let actor_data = futures_util::stream::iter(actors_with_wf_ids)

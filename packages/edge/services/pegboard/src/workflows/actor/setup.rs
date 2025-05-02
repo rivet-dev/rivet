@@ -447,6 +447,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 
 			Ok(())
 		})
+		.custom_instrument(tracing::info_span!("actor_insert_tx"))
 		.await?;
 
 	Ok(())

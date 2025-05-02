@@ -335,7 +335,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 			.fdb()?
 			.run(|tx, _mc| {
 				let workflow_ids = workflow_ids.clone();
-				async move { self.get_workflows_inner(workflow_ids, &tx).await }.in_current_span()
+				async move { self.get_workflows_inner(workflow_ids, &tx).await }
 			})
 			.await
 			.map_err(Into::into)
@@ -469,7 +469,6 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(workflows)
 				}
-				.in_current_span()
 			})
 			.instrument(tracing::info_span!("find_workflows_tx"))
 			.await
@@ -725,7 +724,6 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.in_current_span()
 			})
 			.instrument(tracing::info_span!("wake_workflows_tx"))
 			.await?;
@@ -990,7 +988,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 			.fdb()?
 			.run(|tx, _mc| {
 				let signal_ids = signal_ids.clone();
-				async move { self.get_signals_inner(signal_ids, &tx).await }.in_current_span()
+				async move { self.get_signals_inner(signal_ids, &tx).await }
 			})
 			.instrument(tracing::info_span!("get_signals_tx"))
 			.await
@@ -1111,7 +1109,6 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(signals)
 				}
-				.in_current_span()
 			})
 			.instrument(tracing::info_span!("find_signals_tx"))
 			.await

@@ -1,11 +1,19 @@
 use std::{
+	borrow::Cow,
+	ops::Deref,
 	path::{Path, PathBuf},
 	result::Result::Ok,
 	time::{Duration, Instant},
 };
 
 use anyhow::*;
-use foundationdb::{self as fdb, future::FdbValue, options::DatabaseOption};
+use foundationdb::{
+	self as fdb,
+	future::FdbValue,
+	options::DatabaseOption,
+	tuple::{self, PackResult, TuplePack, TupleUnpack},
+	KeySelector, RangeOption,
+};
 
 pub mod keys;
 mod metrics;
@@ -38,6 +46,78 @@ pub trait FormalChunkedKey {
 	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value>;
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>>;
+}
+
+/// Wrapper type around `foundationdb::tuple::Subspace` that records metrics.
+pub struct Subspace {
+	inner: tuple::Subspace,
+}
+
+impl Subspace {
+	/// Creates a subspace with the given tuple.
+	pub fn new<T: TuplePack>(t: &T) -> Self {
+		Self {
+			inner: tuple::Subspace::all().subspace(t),
+		}
+	}
+
+	/// Returns a new Subspace whose prefix extends this Subspace with a given tuple encodable.
+	pub fn subspace<T: TuplePack>(&self, t: &T) -> Self {
+		Self {
+			inner: self.inner.subspace(t),
+		}
+	}
+
+	/// Returns the key encoding the specified Tuple with the prefix of this Subspace
+	/// prepended.
+	pub fn pack<T: TuplePack>(&self, t: &T) -> Vec<u8> {
+		metrics::KEY_PACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
+
+		self.inner.pack(t)
+	}
+
+	/// Returns the key encoding the specified Tuple with the prefix of this Subspace
+	/// prepended, with a versionstamp.
+	pub fn pack_with_versionstamp<T: TuplePack>(&self, t: &T) -> Vec<u8> {
+		metrics::KEY_PACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
+
+		self.inner.pack_with_versionstamp(t)
+	}
+
+	/// `unpack` returns the Tuple encoded by the given key with the prefix of this Subspace
+	/// removed.  `unpack` will return an error if the key is not in this Subspace or does not
+	/// encode a well-formed Tuple.
+	pub fn unpack<'de, T: TupleUnpack<'de>>(&self, key: &'de [u8]) -> PackResult<T> {
+		metrics::KEY_UNPACK_COUNT
+			.with_label_values(&[std::any::type_name::<T>()])
+			.inc();
+
+		self.inner.unpack(key)
+	}
+}
+
+impl Deref for Subspace {
+	type Target = tuple::Subspace;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<'a> From<&'a Subspace> for RangeOption<'static> {
+	fn from(subspace: &Subspace) -> Self {
+		let (begin, end) = subspace.range();
+
+		Self {
+			begin: KeySelector::first_greater_or_equal(Cow::Owned(begin)),
+			end: KeySelector::first_greater_or_equal(Cow::Owned(end)),
+			..Self::default()
+		}
+	}
 }
 
 pub fn handle(fdb_cluster_path: &Path) -> Result<fdb::Database> {
@@ -81,17 +161,15 @@ async fn fdb_health_check(fdb_cluster_path: PathBuf) {
 		{
 			Ok(res) => {
 				let dt = start_instant.elapsed().as_secs_f64();
-				metrics::FDB_PING_DURATION
-					.with_label_values(&[])
-					.observe(dt);
-				metrics::FDB_MISSED_PING.with_label_values(&[]).set(0);
+				metrics::PING_DURATION.with_label_values(&[]).observe(dt);
+				metrics::MISSED_PING.with_label_values(&[]).set(0);
 
 				if let Err(err) = res {
 					tracing::error!(?err, "error checking fdb ping");
 				}
 			}
 			Err(_) => {
-				metrics::FDB_MISSED_PING.with_label_values(&[]).set(1);
+				metrics::MISSED_PING.with_label_values(&[]).set(1);
 
 				tracing::error!("fdb missed ping")
 			}

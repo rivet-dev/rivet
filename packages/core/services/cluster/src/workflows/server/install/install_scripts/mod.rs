@@ -24,6 +24,7 @@ pub async fn gen_install(
 	let mut script = vec![
 		components::common(),
 		components::node_exporter::install(),
+		components::process_exporter::install(),
 		components::sysctl::install(),
 		components::traefik::install(),
 		// NOTE: TLS certs expire in a year, prebakes expire in 6 months
@@ -116,6 +117,14 @@ pub async fn gen_initialize(
 		"node_exporter".into(),
 		components::vector::PrometheusTarget {
 			endpoint: "http://127.0.0.1:9100/metrics".into(),
+			scrape_interval: 15,
+		},
+	);
+
+	prometheus_targets.insert(
+		"process_exporter".into(),
+		components::vector::PrometheusTarget {
+			endpoint: "http://127.0.0.1:9256/metrics".into(),
 			scrape_interval: 15,
 		},
 	);
