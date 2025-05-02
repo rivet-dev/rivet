@@ -514,6 +514,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dgram@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "dgram@npm:1.0.1"
+  checksum: 10c0/de7db34827917ee4f2a8ba113b2e07b38d992feaa369cc539b8ac116d81c69feadf2f9f510dae7d58342c88af6330022ad0445fda1eafe6b9017ad9ffd6a28f4
+  languageName: node
+  linkType: hard
+
 "dunder-proto@npm:^1.0.1":
   version: 1.0.1
   resolution: "dunder-proto@npm:1.0.1"
@@ -1529,6 +1536,7 @@ __metadata:
     "@types/deno": "npm:^2.2.0"
     "@types/node": "npm:^22.13.9"
     "@types/ws": "npm:^8.18.0"
+    dgram: "npm:^1.0.1"
     hono: "npm:^4.6.17"
     node-fetch: "npm:^3.3.2"
     tsx: "npm:^4.7.0"

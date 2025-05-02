@@ -1,5 +1,6 @@
 import { RivetClient } from "@rivet-gg/api";
 import WebSocket from "ws";
+import dgram from 'dgram';
 
 // Can be opt since they're not required for dev
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT;
@@ -46,6 +47,13 @@ async function run() {
 							// internalPort: 80,
 							routing: {
 								guard: {},
+							},
+						},
+						udp: {
+							protocol: "udp",
+							// internalPort: 80,
+							routing: {
+								host: {},
 							},
 						},
 					},
@@ -106,6 +114,7 @@ async function run() {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
 
+		// WS
 		await new Promise((resolve, reject) => {
 			// Open a WebSocket to that endpoint
 			const ws = new WebSocket(`${actorOrigin}/ws`);
@@ -142,6 +151,47 @@ async function run() {
 				console.error("WS error", err);
 				reject("ws error");
 			};
+		});
+
+		// UDP
+		let res = await client.actor.get(actor.id, {
+			project: RIVET_PROJECT,
+			environment: RIVET_ENVIRONMENT,
+		});
+
+		console.log("Connecting to UDP echo server...");
+		const udpPort = res.actor.network.ports.udp;
+		const udpServer = `${udpPort.hostname}:${udpPort.port}`;
+		console.log("UDP server address:", udpServer);
+
+		// Create a UDP socket
+		const udpClient = dgram.createSocket('udp4');
+
+		// Send a message to the UDP echo server
+		const message = Buffer.from('Hello UDP server!');
+		udpClient.send(message, udpPort.port, udpPort.hostname, (err) => {
+			if (err) {
+				console.error("Error sending UDP message:", err);
+				udpClient.close();
+			} else {
+				console.log("UDP message sent");
+			}
+		});
+
+		// Listen for a response
+		udpClient.on('message', (msg, rinfo) => {
+			console.log(`UDP message received: ${msg.toString()}`);
+			console.log(`From: ${rinfo.address}:${rinfo.port}`);
+			udpClient.close();
+		});
+
+		udpClient.on('error', (err) => {
+			console.error("UDP client error:", err);
+			udpClient.close();
+		});
+
+		udpClient.on('close', () => {
+			console.log("UDP connection closed");
 		});
 
 		console.log("Sleeping forever so you can debug");
