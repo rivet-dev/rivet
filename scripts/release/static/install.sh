@@ -11,7 +11,7 @@ rm -rf /tmp/rivet_cli_install
 mkdir /tmp/rivet_cli_install
 cd /tmp/rivet_cli_install
 
-RIVET_CLI_VERSION="__VERSION__"
+RIVET_CLI_VERSION="${RIVET_CLI_VERSION:-__VERSION__}"
 UNAME="$(uname -s)"
 ARCH="$(uname -m)"
 
