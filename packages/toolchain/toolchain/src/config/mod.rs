@@ -114,12 +114,12 @@ impl Function {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct FunctionNetworking {
-	pub internal_port: Option<u8>,
+	pub internal_port: Option<u16>,
 }
 
 impl FunctionNetworking {
-	pub fn internal_port(&self) -> u8 {
-		self.internal_port.unwrap_or(80)
+	pub fn internal_port(&self) -> u16 {
+		self.internal_port.unwrap_or(8080)
 	}
 }
 
