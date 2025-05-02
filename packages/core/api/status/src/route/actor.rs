@@ -22,6 +22,8 @@ use crate::auth::Auth;
 pub struct StatusQuery {
 	region: Uuid,
 	build: StatusQueryBuild,
+	project: Option<String>,
+	environment: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,13 +50,17 @@ pub async fn status(
 	query: StatusQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let status_config = ctx.config().server()?.rivet.status()?;
-	let system_test_project = unwrap_ref!(
-		status_config.system_test_project,
+	let system_test_project = unwrap!(
+		query
+			.project
+			.as_ref()
+			.or(status_config.system_test_project.as_ref()),
 		"system test project not configured"
 	);
-	let system_test_env = status_config
-		.system_test_environment
+	let system_test_env = query
+		.environment
 		.clone()
+		.or(status_config.system_test_environment.clone())
 		.unwrap_or_else(|| "prod".to_string());
 
 	// Find namespace ID
