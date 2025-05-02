@@ -1275,7 +1275,22 @@ impl Database for DatabaseFdbSqliteNats {
 						.pools
 						.sqlite(sqlite::db_name_internal(partial.workflow_id), false)
 						.await?;
-					sqlite::init(partial.workflow_id, pool).await?;
+
+					// Handle error during sqlite init
+					if let Err(err) = sqlite::init(partial.workflow_id, pool).await {
+						self.commit_workflow(
+							partial.workflow_id,
+							&partial.workflow_name,
+							false,
+							None,
+							&[],
+							None,
+							&err.to_string(),
+						)
+						.await?;
+
+						return Ok(None);
+					}
 
 					// Fetch all events
 					let events = sql_fetch_all!(
@@ -1479,7 +1494,7 @@ impl Database for DatabaseFdbSqliteNats {
 					)
 					.await?;
 
-					WorkflowResult::Ok(PulledWorkflowData {
+					WorkflowResult::Ok(Some(PulledWorkflowData {
 						workflow_id: partial.workflow_id,
 						workflow_name: partial.workflow_name,
 						create_ts: partial.create_ts,
@@ -1487,10 +1502,11 @@ impl Database for DatabaseFdbSqliteNats {
 						input: partial.input,
 						wake_deadline_ts: partial.wake_deadline_ts,
 						events: sqlite::build_history(events)?,
-					})
+					}))
 				}
 			})
 			.buffer_unordered(512)
+			.try_filter_map(|x| std::future::ready(Ok(x)))
 			.try_collect()
 			.instrument(tracing::trace_span!("map_to_pulled_workflows"))
 			.await?;

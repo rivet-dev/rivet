@@ -56,11 +56,11 @@ pub enum SubCommand {
 	/// Set value at current path.
 	#[command(name = "set")]
 	Set {
-		/// Key path to list. Supports relative key paths.
-		key: Option<String>,
+		/// Key path to set. Supports relative key paths. Used as value if value is not set.
+		key_or_value: String,
 
 		/// Value to set, with optional type prefix (e.g. "u64:123", overrides type hint).
-		value: String,
+		value: Option<String>,
 		/// Optional type hint.
 		#[arg(short = 't', long)]
 		type_hint: Option<String>,
@@ -302,10 +302,16 @@ impl SubCommand {
 				}
 			}
 			SubCommand::Set {
-				key,
+				key_or_value,
 				value,
 				type_hint,
 			} => {
+				let (key, value) = if let Some(value) = value {
+					(Some(key_or_value), value)
+				} else {
+					(None, key_or_value)
+				};
+
 				let mut current_tuple = current_tuple.clone();
 				if !update_current_tuple(&mut current_tuple, key) {
 					return CommandResult::Error;

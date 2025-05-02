@@ -168,7 +168,7 @@ impl Database for DatabaseCrdbNats {
 		metrics::WORKER_LAST_PING
 			.with_label_values(&[&worker_instance_id.to_string()])
 			.set(rivet_util::timestamp::now());
-	
+
 		sql_execute!(
 			[self]
 			"

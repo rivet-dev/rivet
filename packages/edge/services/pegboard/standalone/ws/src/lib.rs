@@ -118,7 +118,7 @@ async fn handle_connection(
 			tracing::error!(?addr, ?err, "handle connection inner failed");
 		}
 
-		tracing::info!(?client_id, "client connection closed");
+		tracing::info!(client_id=?url_data.client_id, "client connection closed");
 
 		// Clean up
 		let conn = conns.write().await.remove(&url_data.client_id);
