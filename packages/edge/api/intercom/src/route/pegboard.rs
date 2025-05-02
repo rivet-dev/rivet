@@ -25,24 +25,31 @@ pub async fn prewarm_image(
 		.run(|tx, _mc| async move {
 			let alloc_idx_subspace = pegboard::keys::subspace()
 				.subspace(&pegboard::keys::datacenter::ClientsByRemainingMemKey::entire_subspace());
+			let ping_threshold_ts =
+				util::timestamp::now() - pegboard::workflows::client::CLIENT_ELIGIBLE_THRESHOLD_MS;
 
 			let mut stream = tx.get_ranges_keyvalues(
 				fdb::RangeOption {
-					mode: StreamingMode::Small,
+					mode: StreamingMode::Iterator,
 					..(&alloc_idx_subspace).into()
 				},
 				SERIALIZABLE,
 			);
 
-			if let Some(entry) = stream.try_next().await? {
+			while let Some(entry) = stream.try_next().await? {
 				let key = pegboard::keys::subspace()
 					.unpack::<pegboard::keys::datacenter::ClientsByRemainingMemKey>(entry.key())
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-				Ok(Some(key.client_id))
-			} else {
-				Ok(None)
+				// Scan by last ping
+				if key.last_ping_ts < ping_threshold_ts {
+					continue;
+				}
+
+				return Ok(Some(key.client_id));
 			}
+
+			Ok(None)
 		})
 		.custom_instrument(tracing::info_span!("prewarm_fetch_tx"))
 		.await?;

@@ -129,22 +129,18 @@ async fn get_inner(
 			}
 		})
 		.collect::<futures_util::stream::FuturesUnordered<_>>();
-	let mut first_error = None;
+	let mut last_error = None;
 
 	// Return first api response that succeeds
 	while let Some(result) = futures.next().await {
 		match result {
 			Ok(value) => return Ok(value),
-			Err(err) => {
-				if first_error.is_none() {
-					first_error = Some(err);
-				}
-			}
+			Err(err) => last_error = Some(err),
 		}
 	}
 
-	// Otherwise return the first error
-	Err(unwrap!(first_error))
+	// Otherwise return the last error
+	Err(unwrap!(last_error))
 }
 
 pub async fn get_deprecated(
@@ -250,7 +246,7 @@ pub async fn create(
 				.http_status(content.status)
 				.message(body.message)
 				.build()),
-			err => bail!("unknown error: {err:?}"),
+			err => bail!("unknown error: {:?} {:?}", content.status, content.content),
 		},
 		Err(err) => bail!("request error: {err:?}"),
 	}
@@ -451,22 +447,18 @@ pub async fn destroy(
 			}
 		})
 		.collect::<futures_util::stream::FuturesUnordered<_>>();
-	let mut first_error = None;
+	let mut last_error = None;
 
 	// Return first api response that succeeds
 	while let Some(result) = futures.next().await {
 		match result {
 			Ok(value) => return Ok(value),
-			Err(err) => {
-				if first_error.is_none() {
-					first_error = Some(err);
-				}
-			}
+			Err(err) => last_error = Some(err),
 		}
 	}
 
-	// Otherwise return the first error
-	Err(unwrap!(first_error))
+	// Otherwise return the last error
+	Err(unwrap!(last_error))
 }
 
 pub async fn destroy_deprecated(
@@ -580,22 +572,18 @@ pub async fn upgrade(
 			}
 		})
 		.collect::<futures_util::stream::FuturesUnordered<_>>();
-	let mut first_error = None;
+	let mut last_error = None;
 
 	// Return first api response that succeeds
 	while let Some(result) = futures.next().await {
 		match result {
 			Ok(value) => return Ok(value),
-			Err(err) => {
-				if first_error.is_none() {
-					first_error = Some(err);
-				}
-			}
+			Err(err) => last_error = Some(err),
 		}
 	}
 
-	// Otherwise return the first error
-	Err(unwrap!(first_error))
+	// Otherwise return the last error
+	Err(unwrap!(last_error))
 }
 
 // MARK: POST /actors/upgrade
