@@ -749,7 +749,6 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 		.with_label_values(&[
 			&input.cluster_id.to_string(),
 			&input.datacenter_id.to_string(),
-			&input.provider_datacenter_id,
 			&input.datacenter_name_id,
 			&input.pool_type.to_string(),
 		])
@@ -840,7 +839,6 @@ async fn set_nomad_node_id(ctx: &ActivityCtx, input: &SetNomadNodeIdInput) -> Gl
 			.with_label_values(&[
 				&input.cluster_id.to_string(),
 				&input.datacenter_id.to_string(),
-				&input.provider_datacenter_id,
 				&input.datacenter_name_id,
 			])
 			.observe(dt);

@@ -331,7 +331,6 @@ fn insert_metrics(
 		.with_label_values(&[
 			&dc.cluster_id.to_string(),
 			&dc.datacenter_id.to_string(),
-			&dc.provider_datacenter_id,
 			&dc.name_id,
 			&pool_type.to_string(),
 		])
