@@ -1,5 +1,4 @@
 use chirp_workflow::prelude::*;
-use formatted_error::code::ROUTE_NOT_FOUND;
 
 #[derive(Debug)]
 pub struct Input {
@@ -12,9 +11,6 @@ pub struct Output {}
 
 #[operation]
 pub async fn delete(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	// Get a database pool client
-	let pool = ctx.crdb().await?;
-
 	// Find the route ID by namespace_id and name_id
 	let route_id = sql_fetch_optional!(
 	[ctx, (Uuid,)]

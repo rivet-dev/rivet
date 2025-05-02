@@ -246,7 +246,7 @@ pub async fn create(
 				.http_status(content.status)
 				.message(body.message)
 				.build()),
-			err => bail!("unknown error: {:?} {:?}", content.status, content.content),
+			_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 		},
 		Err(err) => bail!("request error: {err:?}"),
 	}

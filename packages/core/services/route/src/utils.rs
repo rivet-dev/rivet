@@ -1,5 +1,3 @@
-use chirp_workflow::prelude::GlobalResult;
-
 /// The maximum number of path components allowed in a route path.
 ///
 /// This restricts the depth of paths used in routes, which affects both

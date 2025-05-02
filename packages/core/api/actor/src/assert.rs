@@ -180,12 +180,10 @@ pub async fn actor_for_env(
 	let actor_validation_results = ctx
 		.cache()
 		.fetch_all("actor_validation", cache_keys, {
-			let ctx = ctx.clone();
 			let game_name_id = game_name_id.clone();
 			let env_name_id = env_name_id.clone();
 
 			move |mut cache, keys_to_fetch| {
-				let ctx = ctx.clone();
 				let game_name_id = game_name_id.clone();
 				let env_name_id = env_name_id.clone();
 

@@ -74,9 +74,6 @@ impl TryInto<types::Route> for RouteRow {
 
 #[operation]
 pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	// Simple direct database query without caching
-	let pool = ctx.crdb().await?;
-
 	let rows = sql_fetch_all!(
 		[ctx, RouteRow]
 		"

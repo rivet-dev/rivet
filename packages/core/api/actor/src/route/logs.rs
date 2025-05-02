@@ -49,27 +49,18 @@ pub async fn get_logs(
 		.await?;
 
 	// Parse actor IDs from the JSON string
-	let actor_ids: Vec<Uuid> = serde_json::from_str(&query.actor_ids_json).map_err(|_| {
-		GlobalError::bad_request_builder("INVALID_ACTOR_IDS")
-			.message("Invalid actor_ids_json format".to_string())
-			.build()
-	})?;
+	let actor_ids: Vec<Uuid> = unwrap_with!(
+		serde_json::from_str(&query.actor_ids_json).ok(),
+		ACTOR_LOGS_INVALID_ACTOR_IDS
+	);
 
-	if actor_ids.is_empty() {
-		return Err(GlobalError::bad_request_builder("NO_ACTOR_IDS")
-			.message("No actor IDs provided".to_string())
-			.build());
-	}
+	ensure_with!(!actor_ids.is_empty(), ACTOR_LOGS_NO_ACTOR_IDS);
 
 	// Filter to only valid actors for this game/env
 	let valid_actor_ids = assert::actor_for_env(&ctx, &actor_ids, game_id, env_id, None).await?;
 
 	// Exit early if no valid actors
-	if valid_actor_ids.is_empty() {
-		return Err(GlobalError::bad_request_builder("NO_VALID_ACTOR_IDS")
-			.message("No valid actor IDs found for this game/environment".to_string())
-			.build());
-	}
+	ensure_with!(!valid_actor_ids.is_empty(), ACTOR_LOGS_NO_VALID_ACTOR_IDS);
 
 	// Use only the valid actor IDs from now on
 	let actor_ids = valid_actor_ids;
