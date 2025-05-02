@@ -13,7 +13,7 @@ export declare namespace Games {
         baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.4.1";
+        xApiVersion?: "25.4.2";
         fetcher?: core.FetchFunction;
     }
 }

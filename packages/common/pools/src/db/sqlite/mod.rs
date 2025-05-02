@@ -9,10 +9,9 @@ use std::{
 use dirs;
 use fdb_util::{prelude::*, SERIALIZABLE};
 use foundationdb::{self as fdb, options::StreamingMode, FdbBindingError};
-use uuid::Uuid;
-use rivet_util::future::CustomInstrumentExt;
 use futures_util::{StreamExt, TryStreamExt};
 use global_error::{bail, ext::AssertionError, unwrap, GlobalResult};
+use rivet_util::future::CustomInstrumentExt;
 use sqlx::{
 	migrate::MigrateDatabase,
 	pool::PoolConnection,
@@ -25,6 +24,7 @@ use sqlx::{
 use tokio::sync::{oneshot, OnceCell, RwLock};
 use tokio::{io::AsyncReadExt, sync::broadcast, time::Instant};
 use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::{metrics, Error, FdbPool};
 

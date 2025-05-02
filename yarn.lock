@@ -4069,8 +4069,8 @@ __metadata:
   linkType: soft
 
 "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
-  version: 25.4.1
-  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=d3205f&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
+  version: 25.4.2
+  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=49e764&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
   dependencies:
     form-data: "npm:^4.0.0"
     js-base64: "npm:^3.7.5"
@@ -4078,7 +4078,7 @@ __metadata:
     qs: "npm:^6.11.2"
     readable-stream: "npm:^4.5.2"
     url-join: "npm:^5.0.0"
-  checksum: 10c0/bd8a61556c8a8ce5c46bd149dafbf9c9f951ab87be95426cfa2484cd6cf5dd423c282ce808969a78a5032582230f4736b54e55972fe644a6bc5f61c0dc91124f
+  checksum: 10c0/3b305797ff3d5147708b86d976344ebeb63babaafa80147b55b7dac517257e215c11f18f00c339d900d5f1232394cda825c0047c56e77be18e00a9fc5ae6ad57
   languageName: node
   linkType: hard
 
@@ -8391,6 +8391,13 @@ __metadata:
   dependencies:
     dequal: "npm:^2.0.0"
   checksum: 10c0/e0928ab8f94c59417a2b8389c45c55ce0a02d9ac7fd74ef62d01ba48060129e1d594501b77de01f3eeafc7cb00773819b0df74d96251cf20b31c5b3071f45c0e
+  languageName: node
+  linkType: hard
+
+"dgram@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "dgram@npm:1.0.1"
+  checksum: 10c0/de7db34827917ee4f2a8ba113b2e07b38d992feaa369cc539b8ac116d81c69feadf2f9f510dae7d58342c88af6330022ad0445fda1eafe6b9017ad9ffd6a28f4
   languageName: node
   linkType: hard
 
@@ -15904,6 +15911,7 @@ __metadata:
     "@types/deno": "npm:^2.2.0"
     "@types/node": "npm:^22.13.9"
     "@types/ws": "npm:^8.18.0"
+    dgram: "npm:^1.0.1"
     hono: "npm:^4.6.17"
     node-fetch: "npm:^3.3.2"
     tsx: "npm:^4.7.0"

@@ -216,29 +216,17 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 		match pool_type {
 			PoolType::Job => {
 				metrics::NOMAD_SERVERS
-					.with_label_values(&[
-						&cluster_id,
-						&datacenter_id,
-						&dc.name_id,
-					])
+					.with_label_values(&[&cluster_id, &datacenter_id, &dc.name_id])
 					.set(nomad);
 			}
 			PoolType::Pegboard => {
 				metrics::PEGBOARD_SERVERS
-					.with_label_values(&[
-						&cluster_id,
-						&datacenter_id,
-						&dc.name_id,
-					])
+					.with_label_values(&[&cluster_id, &datacenter_id, &dc.name_id])
 					.set(pegboard);
 			}
 			PoolType::PegboardIsolate => {
 				metrics::PEGBOARD_ISOLATE_SERVERS
-					.with_label_values(&[
-						&cluster_id,
-						&datacenter_id,
-						&dc.name_id,
-					])
+					.with_label_values(&[&cluster_id, &datacenter_id, &dc.name_id])
 					.set(pegboard);
 			}
 			_ => {}
