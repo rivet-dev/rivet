@@ -295,7 +295,8 @@ impl ProxyState {
 		}
 
 		// Not in cache, call routing function with a default timeout
-		let default_timeout = Duration::from_secs(5); // Default 5 seconds
+		// Default 15 seconds, routing functions should have their own internal timeouts that are shorter
+		let default_timeout = Duration::from_secs(15);
 
 		tracing::debug!(
 			hostname = %hostname_only,

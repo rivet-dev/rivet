@@ -113,7 +113,7 @@ where
 					.map_or("-", |h| h.to_str().unwrap_or("-"))
 					.to_string();
 
-				tracing::debug!(
+				tracing::info!(
 					%method,
 					%uri,
 					body_size_hint = ?req.body().size_hint(),

@@ -447,18 +447,27 @@ pub async fn destroy(
 			}
 		})
 		.collect::<futures_util::stream::FuturesUnordered<_>>();
-	let mut last_error = None;
+	let mut error: Option<GlobalError> = None;
 
 	// Return first api response that succeeds
 	while let Some(result) = futures.next().await {
 		match result {
 			Ok(value) => return Ok(value),
-			Err(err) => last_error = Some(err),
+			Err(err) => {
+				// Overwrite error if its currently an ACTOR_NOT_FOUND error or None
+				if error
+					.as_ref()
+					.map(|err| err.is(formatted_error::code::ACTOR_NOT_FOUND))
+					.unwrap_or(true)
+				{
+					error = Some(err);
+				}
+			}
 		}
 	}
 
-	// Otherwise return the last error
-	Err(unwrap!(last_error))
+	// Otherwise return error
+	Err(unwrap!(error))
 }
 
 pub async fn destroy_deprecated(

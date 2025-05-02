@@ -178,7 +178,7 @@ async fn test_https_with_tls() {
 	let cert_resolver_fn: rivet_guard_core::CertResolverFn = Arc::new(move |hostname: &str| -> Result<Arc<CertifiedKey>, Box<dyn std::error::Error + Send + Sync>> {
         let api_cert = api_cert_for_resolver.clone();
         let job_cert = job_cert_for_resolver.clone();
-        
+
         // Select certificate based on domain
         if hostname.ends_with("microgravity.io") {
             Ok(job_cert)

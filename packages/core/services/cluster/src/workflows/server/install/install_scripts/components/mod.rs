@@ -32,6 +32,18 @@ pub mod process_exporter {
 	}
 }
 
+pub mod otel_collector {
+	use super::traefik::TUNNEL_OTEL_PORT;
+
+	const VERSION: &str = "0.125.0";
+
+	pub fn install() -> String {
+		include_str!("../files/otel_collector.sh")
+			.replace("__VERSION__", VERSION)
+			.replace("__TUNNEL_OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string())
+	}
+}
+
 pub mod sysctl {
 	pub fn install() -> String {
 		include_str!("../files/sysctl.sh").to_string()

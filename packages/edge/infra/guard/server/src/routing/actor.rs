@@ -172,20 +172,22 @@ async fn find_actor(
 	dc_id: Uuid,
 	path_to_forward: String,
 ) -> GlobalResult<Option<RouteTarget>> {
-	let actor_exists = ctx
-		.fdb()
-		.await?
-		.run(|tx, _mc| async move {
-			let create_ts_key = pegboard::keys::actor::CreateTsKey::new(*actor_id);
-			let exists = tx
-				.get(&pegboard::keys::subspace().pack(&create_ts_key), SNAPSHOT)
-				.await?
-				.is_some();
+	let actor_exists = tokio::time::timeout(
+		Duration::from_secs(5),
+		ctx.fdb()
+			.await?
+			.run(|tx, _mc| async move {
+				let create_ts_key = pegboard::keys::actor::CreateTsKey::new(*actor_id);
+				let exists = tx
+					.get(&pegboard::keys::subspace().pack(&create_ts_key), SNAPSHOT)
+					.await?
+					.is_some();
 
-			Ok(exists)
-		})
-		.custom_instrument(tracing::info_span!("actor_exists_tx"))
-		.await?;
+				Ok(exists)
+			})
+			.custom_instrument(tracing::info_span!("actor_exists_tx")),
+	)
+	.await??;
 
 	if !actor_exists {
 		return Ok(None);
@@ -202,7 +204,9 @@ async fn find_actor(
 		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
 		.await?;
 
-	let proxied_ports = if let Some(proxied_ports) = fetch_proxied_ports(ctx, actor_id).await? {
+	let proxied_ports = if let Some(proxied_ports) =
+		tokio::time::timeout(Duration::from_secs(5), fetch_proxied_ports(ctx, actor_id)).await??
+	{
 		proxied_ports
 	} else {
 		tracing::info!(?actor_id, "waiting for actor to become ready");
@@ -225,7 +229,10 @@ async fn find_actor(
 		}
 
 		// Fetch again after ready
-		let Some(proxied_ports) = fetch_proxied_ports(ctx, actor_id).await? else {
+		let Some(proxied_ports) =
+			tokio::time::timeout(Duration::from_secs(5), fetch_proxied_ports(ctx, actor_id))
+				.await??
+		else {
 			return Ok(None);
 		};
 
