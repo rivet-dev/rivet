@@ -123,7 +123,7 @@ async fn get_inner(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					err => bail!("unknown error: {err:?}"),
+					_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -441,7 +441,7 @@ pub async fn destroy(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					err => bail!("unknown error: {err:?}"),
+					_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -575,7 +575,7 @@ pub async fn upgrade(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					err => bail!("unknown error: {err:?}"),
+					_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -719,7 +719,7 @@ pub async fn upgrade_all(
 						.http_status(content.status)
 						.message(body.message)
 						.build()),
-					err => bail!("unknown error: {err:?}"),
+					_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 				},
 				Err(err) => bail!("request error: {err:?}"),
 			}
@@ -893,7 +893,7 @@ async fn list_actors_inner(
 								.message(body.message)
 								.build())
 						}
-						err => bail!("unknown error: {err:?}"),
+						_ => bail!("unknown error: {:?} {:?}", content.status, content.content),
 					},
 					Err(err) => bail!("request error: {err:?}"),
 				},
