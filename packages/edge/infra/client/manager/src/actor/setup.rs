@@ -841,7 +841,7 @@ impl Actor {
 			Path::new("/proc/1/ns/net").to_path_buf()
 		} else {
 			// CNI network that will be created
-			Path::new("/var/run/netns").join(self.actor_id.to_string())
+			Path::new("/var/run/netns").join(format!("{}-{}", self.actor_id, self.generation))
 		}
 	}
 

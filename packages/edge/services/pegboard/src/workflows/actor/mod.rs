@@ -147,7 +147,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 	let state_res = ctx
 		.loope(
-			runtime::State::new(client_id, client_workflow_id),
+			runtime::State::new(client_id, client_workflow_id, input.image_id),
 			|ctx, state| {
 				let input = input.clone();
 
@@ -173,8 +173,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							)
 							.await?;
 
-							if let Some(sig) =
-								runtime::reschedule_actor(ctx, &input, state, None).await?
+							if let Some(sig) = runtime::reschedule_actor(
+								ctx,
+								&input,
+								state,
+								state.image_id.unwrap_or(input.image_id),
+							)
+							.await?
 							{
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {
@@ -307,9 +312,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 											.await?;
 										}
 
-										if runtime::reschedule_actor(ctx, &input, state, None)
-											.await?
-											.is_some()
+										if runtime::reschedule_actor(
+											ctx,
+											&input,
+											state,
+											state.image_id.unwrap_or(input.image_id),
+										)
+										.await?
+										.is_some()
 										{
 											// Destroyed early
 											return Ok(Loop::Break(runtime::StateRes {
@@ -364,9 +374,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							)
 							.await?;
 
-							if let Some(sig) =
-								runtime::reschedule_actor(ctx, &input, state, Some(sig.image_id))
-									.await?
+							ctx.activity(runtime::UpdateImageInput {
+								image_id: sig.image_id,
+							})
+							.await?;
+							state.image_id = Some(sig.image_id);
+
+							if let Some(sig) = runtime::reschedule_actor(
+								ctx,
+								&input,
+								state,
+								state.image_id.unwrap_or(input.image_id),
+							)
+							.await?
 							{
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {

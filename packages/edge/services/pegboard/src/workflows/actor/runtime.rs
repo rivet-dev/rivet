@@ -28,16 +28,18 @@ pub struct State {
 	pub generation: u32,
 	pub client_id: Uuid,
 	pub client_workflow_id: Uuid,
+	pub image_id: Option<Uuid>,
 	pub drain_timeout_ts: Option<i64>,
 	pub gc_timeout_ts: Option<i64>,
 }
 
 impl State {
-	pub fn new(client_id: Uuid, client_workflow_id: Uuid) -> Self {
+	pub fn new(client_id: Uuid, client_workflow_id: Uuid, image_id: Uuid) -> Self {
 		State {
 			generation: 0,
 			client_id,
 			client_workflow_id,
+			image_id: Some(image_id),
 			drain_timeout_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS),
 		}
@@ -655,7 +657,7 @@ pub async fn spawn_actor(
 		generation,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
-				id: input.image_id,
+				id: actor_setup.image_id,
 				artifact_url_stub: actor_setup.artifact_url_stub.clone(),
 				fallback_artifact_url: actor_setup.fallback_artifact_url.clone(),
 				kind: match actor_setup.meta.build_kind {
@@ -749,20 +751,19 @@ pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut State,
-	new_image_id: Option<Uuid>,
+	image_id: Uuid,
 ) -> GlobalResult<Option<Destroy>> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
 	ctx.activity(ClearPortsAndResourcesInput {
 		actor_id: input.actor_id,
-		image_id: new_image_id.unwrap_or(input.image_id),
+		image_id,
 		client_id: state.client_id,
 		client_workflow_id: state.client_workflow_id,
 	})
 	.await?;
 
-	let actor_setup =
-		setup::setup(ctx, &input, setup::SetupCtx::Reschedule { new_image_id }).await?;
+	let actor_setup = setup::setup(ctx, &input, setup::SetupCtx::Reschedule { image_id }).await?;
 
 	let next_generation = state.generation + 1;
 

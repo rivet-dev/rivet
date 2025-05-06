@@ -6,7 +6,7 @@ use foundationdb as fdb;
 use sqlx::Acquire;
 use util::serde::AsHashableExt;
 
-use super::{runtime, Input, Port};
+use super::{Input, Port};
 use crate::{
 	keys, protocol,
 	types::{ActorLifecycle, ActorResources, GameGuardProtocol, NetworkMode, Routing},
@@ -519,12 +519,13 @@ pub enum SetupCtx {
 		network_ports: util::serde::HashableMap<String, Port>,
 	},
 	Reschedule {
-		new_image_id: Option<Uuid>,
+		image_id: Uuid,
 	},
 }
 
 #[derive(Clone)]
 pub struct ActorSetupCtx {
+	pub image_id: Uuid,
 	pub meta: GetMetaOutput,
 	pub resources: protocol::Resources,
 	pub artifact_url_stub: String,
@@ -564,15 +565,7 @@ pub async fn setup(
 
 			input.image_id
 		}
-		SetupCtx::Reschedule { new_image_id } => {
-			if let Some(image_id) = new_image_id {
-				ctx.activity(runtime::UpdateImageInput { image_id }).await?;
-
-				image_id
-			} else {
-				input.image_id
-			}
-		}
+		SetupCtx::Reschedule { image_id } => image_id,
 	};
 
 	let meta = ctx
@@ -596,6 +589,7 @@ pub async fn setup(
 		.await?;
 
 	Ok(ActorSetupCtx {
+		image_id,
 		meta,
 		resources,
 		artifact_url_stub: artifacts_res.artifact_url_stub,
