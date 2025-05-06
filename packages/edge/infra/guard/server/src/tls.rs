@@ -86,6 +86,7 @@ fn load_certified_key(cert_pair: &CertificatePair) -> GlobalResult<Arc<Certified
 ///
 /// It follows the same routing logic as the main routing function to ensure
 /// consistent behavior between routing and certificate selection.
+#[tracing::instrument(skip_all)]
 pub async fn create_cert_resolver(
 	ctx: &chirp_workflow::prelude::StandaloneCtx,
 ) -> GlobalResult<Option<CertResolverFn>> {

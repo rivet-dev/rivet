@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 use tokio_rustls::TlsAcceptor;
-use tracing::{error, info};
+use tracing::{error, info, Instrument};
 
 // HACK: GlobalError does not conform to StdError required by hyper
 #[derive(Debug)]
@@ -27,6 +27,7 @@ impl fmt::Display for GlobalErrorWrapper {
 impl std::error::Error for GlobalErrorWrapper {}
 
 // Start the server
+#[tracing::instrument(skip_all)]
 pub async fn run_server(
 	config: rivet_config::Config,
 	routing_fn: RoutingFn,
@@ -95,7 +96,8 @@ pub async fn run_server(
 	}
 
 	// Helper function to process regular connections
-	async fn process_connection(
+	#[tracing::instrument(skip_all, fields(?remote_addr))]
+	fn process_connection(
 		tcp_stream: tokio::net::TcpStream,
 		remote_addr: SocketAddr,
 		factory_clone: Arc<ProxyServiceFactory>,
@@ -128,7 +130,7 @@ pub async fn run_server(
 				error!("{} connection error: {}", port_type_str, err);
 			}
 			info!("{} connection dropped: {}", port_type_str, remote_addr);
-		});
+		}.instrument(tracing::info_span!("process_connection_task")));
 	}
 
 	// Accept connections until we receive a shutdown signal
@@ -144,7 +146,7 @@ pub async fn run_server(
 							&server,
 							&graceful,
 							"HTTP".to_string()
-						).await;
+						);
 					},
 					Err(e) => {
 						error!("Accept error on HTTP port: {}", e);
@@ -204,7 +206,7 @@ pub async fn run_server(
 												error!("TLS handshake failed for {}: {}", remote_addr, e);
 											}
 										}
-									});
+									}.instrument(tracing::info_span!("process_tls_connection_task")));
 								} else {
 									// Fallback to non-TLS handling (useful for testing)
 									// In production, this would not secure the connection
@@ -216,7 +218,7 @@ pub async fn run_server(
 										&server,
 										&graceful,
 										"HTTPS (unsecured)".to_string()
-									).await;
+									);
 								}
 							}
 						},

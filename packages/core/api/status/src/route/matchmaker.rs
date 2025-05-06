@@ -246,7 +246,7 @@ async fn test_lobby_connection(
 
 /// Returns the IP addresses for a given hostname.
 async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
-	let resolver = trust_dns_resolver::TokioAsyncResolver::tokio_from_system_conf()?;
+	let resolver = hickory_resolver::Resolver::builder_tokio()?.build();
 	let addrs = resolver
 		.lookup_ip(hostname)
 		.await?

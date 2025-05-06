@@ -892,7 +892,6 @@ async fn set_pegboard_client_id(
 			.with_label_values(&[
 				&input.cluster_id.to_string(),
 				&input.datacenter_id.to_string(),
-				&input.provider_datacenter_id,
 				&input.datacenter_name_id,
 			])
 			.observe(dt);

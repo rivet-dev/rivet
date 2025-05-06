@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
@@ -81,6 +81,16 @@ where
 {
 	tracing::debug!(?input, "operation call");
 
+	// Record metrics
+	crate::metrics::OPERATION_PENDING
+		.with_label_values(&[I::Operation::NAME])
+		.inc();
+	crate::metrics::OPERATION_TOTAL
+		.with_label_values(&[I::Operation::NAME])
+		.inc();
+
+	let start_instant = Instant::now();
+
 	let ctx = OperationCtx::new(
 		db.clone(),
 		config,
@@ -95,9 +105,45 @@ where
 
 	let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 		.await
-		.map_err(|_| WorkflowError::OperationTimeout(0))?
-		.map_err(WorkflowError::OperationFailure)
-		.map_err(GlobalError::raw);
+		.map_err(|_| WorkflowError::OperationTimeout(0))
+		.map(|res| {
+			res.map_err(WorkflowError::OperationFailure)
+				.map_err(GlobalError::raw)
+		});
+
+	// Record metrics
+	{
+		let error_code_str = match &res {
+			Ok(Err(GlobalError::Internal { ty, .. })) => {
+				let err_code_str = "__UNKNOWN__".to_string();
+				crate::metrics::OPERATION_ERRORS
+					.with_label_values(&[I::Operation::NAME, &err_code_str, ty])
+					.inc();
+
+				err_code_str
+			}
+			Ok(Err(GlobalError::BadRequest { code, .. })) => {
+				crate::metrics::OPERATION_ERRORS
+					.with_label_values(&[I::Operation::NAME, code, "bad_request"])
+					.inc();
+
+				code.clone()
+			}
+			Ok(_) => String::new(),
+			Err(_) => "timeout".to_string(),
+		};
+
+		// Other request metrics
+		let dt = start_instant.elapsed().as_secs_f64();
+		crate::metrics::OPERATION_PENDING
+			.with_label_values(&[I::Operation::NAME])
+			.dec();
+		crate::metrics::OPERATION_DURATION
+			.with_label_values(&[I::Operation::NAME, error_code_str.as_str()])
+			.observe(dt);
+	}
+
+	let res = res?;
 
 	tracing::debug!(?res, "operation response");
 

@@ -11,6 +11,7 @@ use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, R
 use uuid::Uuid;
 
 /// Route requests to actor services based on hostname and path
+#[tracing::instrument(skip_all)]
 pub async fn route_actor_request(
 	ctx: &StandaloneCtx,
 	host: &str,
@@ -35,7 +36,6 @@ pub async fn route_actor_request(
 		path,
 		EndpointType::Hostname,
 		guard_public_hostname,
-		dc_id,
 	)
 	.await?
 	{
@@ -43,15 +43,9 @@ pub async fn route_actor_request(
 	}
 
 	// Try routing with Path endpoint type
-	if let Some(routing_result) = try_route_with_endpoint_type(
-		ctx,
-		host,
-		path,
-		EndpointType::Path,
-		guard_public_hostname,
-		dc_id,
-	)
-	.await?
+	if let Some(routing_result) =
+		try_route_with_endpoint_type(ctx, host, path, EndpointType::Path, guard_public_hostname)
+			.await?
 	{
 		return Ok(Some(routing_result));
 	}
@@ -61,13 +55,13 @@ pub async fn route_actor_request(
 }
 
 /// Try to route the request using the specified endpoint type
+#[tracing::instrument(skip_all, fields(?endpoint_type, ?guard_public_hostname))]
 async fn try_route_with_endpoint_type(
 	ctx: &StandaloneCtx,
 	hostname: &str,
 	path: &str,
 	endpoint_type: EndpointType,
 	guard_public_hostname: &GuardPublicHostname,
-	dc_id: Uuid,
 ) -> GlobalResult<Option<RoutingOutput>> {
 	// Build regexes for the endpoint type
 	let (hostname_regex, path_regex) =
@@ -153,7 +147,7 @@ async fn try_route_with_endpoint_type(
 	};
 
 	// Now that we have the actor_id and port_name, lookup the actor
-	match find_actor(ctx, &actor_id, &port_name, dc_id, path_to_forward).await? {
+	match find_actor(ctx, &actor_id, &port_name, path_to_forward).await? {
 		Some(target) => Ok(Some(RoutingOutput::Route(RouteConfig {
 			targets: vec![target],
 			timeout: RoutingTimeout {
@@ -165,11 +159,11 @@ async fn try_route_with_endpoint_type(
 }
 
 /// Find an actor by actor_id and port_name - this would call into the actor registry
+#[tracing::instrument(skip_all, fields(?actor_id, %port_name, %path_to_forward))]
 async fn find_actor(
 	ctx: &StandaloneCtx,
 	actor_id: &Uuid,
 	port_name: &str,
-	dc_id: Uuid,
 	path_to_forward: String,
 ) -> GlobalResult<Option<RouteTarget>> {
 	let actor_exists = tokio::time::timeout(
@@ -258,6 +252,7 @@ async fn find_actor(
 	}))
 }
 
+#[tracing::instrument(skip_all, fields(?actor_id))]
 async fn fetch_proxied_ports(
 	ctx: &StandaloneCtx,
 	actor_id: &Uuid,

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Route requests to actors based on the route configuration
+#[tracing::instrument(skip_all)]
 pub async fn route_via_route_config(
 	ctx: &StandaloneCtx,
 	host: &str,
@@ -150,6 +151,7 @@ pub async fn route_via_route_config(
 }
 
 /// Find all potential targets for an actor
+#[tracing::instrument(skip_all)]
 async fn find_actor_targets(
 	ctx: &StandaloneCtx,
 	actor_id: &Uuid,

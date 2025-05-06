@@ -27,6 +27,7 @@ prometheus = "0.13.3"
 rivet-config.workspace = true
 rand = "0.8.5"
 cluster.workspace = true
+scc = "2.0.7"
 pegboard.workspace = true
 regex = "1.10.3"
 futures-util = "0.3.30"

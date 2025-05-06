@@ -5,6 +5,7 @@ use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, R
 use uuid::Uuid;
 
 /// Route requests to the API service
+#[tracing::instrument(skip_all)]
 pub async fn route_api_request(
 	ctx: &StandaloneCtx,
 	host: &str,

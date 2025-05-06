@@ -83,6 +83,16 @@ impl<'a> ListenCtx<'a> {
 			.with_label_values(&[self.ctx.name(), &signal.signal_name])
 			.observe(recv_lag);
 
+		if recv_lag > 15.0 {
+			// We print an error here so the trace of this workflow does not get dropped
+			tracing::error!(
+				?recv_lag,
+				signal_id=%signal.signal_id,
+				signal_name=%signal.signal_name,
+				"long signal recv time",
+			);
+		}
+
 		tracing::debug!(
 			signal_id=%signal.signal_id,
 			signal_name=%signal.signal_name,

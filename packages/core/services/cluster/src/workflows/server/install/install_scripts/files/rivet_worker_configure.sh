@@ -18,7 +18,7 @@ ConditionPathExists=/etc/rivet-server/
 # OTeL env vars
 Environment="RIVET_OTEL_ENABLED=1"
 Environment="RIVET_OTEL_SAMPLER_RATIO=1"
-Environment="RIVET_SERVICE_NAME=rivet-edge"
+Environment="RIVET_SERVICE_NAME=edge"
 Environment="RIVET_CLUSTER_ID=___CLUSTER_ID___"
 Environment="RIVET_DATACENTER_ID=___DATACENTER_ID___"
 Environment="RIVET_SERVER_ID=___SERVER_ID___"

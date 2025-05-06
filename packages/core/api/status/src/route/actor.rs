@@ -240,6 +240,7 @@ pub async fn status(
 		Some(&system_test_env),
 		None,
 	)
+	.instrument(tracing::info_span!("actor destroy request"))
 	.await?;
 
 	// Unwrap res
@@ -259,6 +260,7 @@ pub async fn status(
 	Ok(serde_json::json!({}))
 }
 
+#[tracing::instrument]
 async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) -> GlobalResult<()> {
 	// Look up IP for the actor's host
 	let gg_ips = lookup_dns(hostname).await?;
@@ -312,8 +314,9 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 }
 
 /// Returns the IP addresses for a given hostname.
+#[tracing::instrument]
 async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
-	let resolver = trust_dns_resolver::TokioAsyncResolver::tokio_from_system_conf()?;
+	let resolver = hickory_resolver::Resolver::builder_tokio()?.build();
 	let addrs = resolver
 		.lookup_ip(hostname)
 		.await?
@@ -326,6 +329,7 @@ async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
 /// Tests HTTP connectivity to a hostname for a given address.
 ///
 /// This lets us isolate of a specific GG IP address is not behaving correctly.
+#[tracing::instrument]
 async fn test_http(
 	actor_origin: String,
 	hostname: String,
@@ -340,6 +344,7 @@ async fn test_http(
 	client
 		.get(format!("{actor_origin}/health"))
 		.send()
+		.instrument(tracing::info_span!("health request"))
 		.await?
 		.error_for_status()?;
 
@@ -347,6 +352,7 @@ async fn test_http(
 }
 
 /// Tests WebSocket connectivity to a hostname.
+#[tracing::instrument]
 async fn test_ws(actor_origin: &str) -> GlobalResult<()> {
 	let actor_origin = actor_origin
 		.replace("http://", "ws://")

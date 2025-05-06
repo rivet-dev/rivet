@@ -39,7 +39,20 @@ processors:
         status_code:
           status_codes:
             - ERROR
-
+      # Guard-only policy
+      - name: policy-2
+        type: and
+        and:
+          and_sub_policy:
+            - name: latency-policy-1
+              type: latency
+              latency:
+                threshold_ms: 15000
+            - name: span-name-policy-1
+              type: ottl_condition
+              ottl_condition:
+                span:
+                  - 'name == "routing_fn"'
 exporters:
   otlp:
     endpoint: 127.0.0.1:__TUNNEL_OTEL_PORT__

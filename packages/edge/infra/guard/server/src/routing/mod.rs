@@ -21,92 +21,95 @@ pub fn create_routing_function(
 		+ Sync,
 > {
 	Arc::new(
-		move |hostname: &str, path: &str, _port_type: rivet_guard_core::proxy_service::PortType| {
+		move |hostname: &str, path: &str, port_type: rivet_guard_core::proxy_service::PortType| {
 			let ctx = ctx.clone();
 
-			Box::pin(async move {
-				// Extract just the host, stripping the port if present
-				let host = hostname.split(':').next().unwrap_or(hostname);
+			Box::pin(
+				async move {
+					// Extract just the host, stripping the port if present
+					let host = hostname.split(':').next().unwrap_or(hostname);
 
-				// Get DC information
-				let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
+					tracing::info!("Routing request for hostname: {host}, path: {path}");
 
-				// Using normal op call
-				let dc_res = ctx
-					.op(cluster::ops::datacenter::get::Input {
-						datacenter_ids: vec![dc_id],
-					})
-					.await?;
+					// Get DC information
+					let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
+					let dc_res = ctx
+						.op(cluster::ops::datacenter::get::Input {
+							datacenter_ids: vec![dc_id],
+						})
+						.await?;
 
-				let dc = unwrap!(dc_res.datacenters.first());
+					let dc = unwrap!(dc_res.datacenters.first());
 
-				tracing::info!("Routing request for hostname: {host}, path: {path}");
-
-				// Try to route using configured routes first
-				tracing::info!("Attempting route-based routing for {host} {path}");
-				match actor_routes::route_via_route_config(&ctx, host, path, dc_id).await {
-					Ok(Some(RoutingOutput::Route(routing_result))) => {
-						tracing::info!("Successfully routed via route config for {host} {path}");
-						return Ok(RoutingOutput::Route(routing_result));
+					// Try to route using configured routes first
+					tracing::info!("Attempting route-based routing for {host} {path}");
+					match actor_routes::route_via_route_config(&ctx, host, path, dc_id).await {
+						Ok(Some(RoutingOutput::Route(routing_result))) => {
+							tracing::info!(
+								"Successfully routed via route config for {host} {path}"
+							);
+							return Ok(RoutingOutput::Route(routing_result));
+						}
+						Ok(Some(RoutingOutput::Response(response))) => {
+							return Ok(RoutingOutput::Response(response));
+						}
+						Ok(None) => {
+							// Continue to next routing method
+						}
+						Err(err) => {
+							tracing::error!("Error in route_via_route_config: {err}");
+							// Continue to next routing method
+						}
 					}
-					Ok(Some(RoutingOutput::Response(response))) => {
-						return Ok(RoutingOutput::Response(response));
+
+					// Try to route to actor directly (legacy method)
+					match actor::route_actor_request(&ctx, host, path, dc_id).await {
+						Ok(Some(RoutingOutput::Route(routing_result))) => {
+							return Ok(RoutingOutput::Route(routing_result));
+						}
+						Ok(Some(RoutingOutput::Response(response))) => {
+							return Ok(RoutingOutput::Response(response));
+						}
+						Ok(None) => {
+							// Continue to next routing method
+						}
+						Err(err) => {
+							tracing::error!("Error in actor_routes::route_actor_request: {err}");
+							// Continue to next routing method
+						}
 					}
-					Ok(None) => {
-						// Continue to next routing method
+
+					// Try to route to API
+					//
+					// IMPORTANT: Route this last, since in dev this will match all hostnames
+					match api::route_api_request(&ctx, host, path, &dc.name_id, dc_id).await {
+						Ok(Some(RoutingOutput::Route(routing_result))) => {
+							return Ok(RoutingOutput::Route(routing_result));
+						}
+						Ok(Some(RoutingOutput::Response(response))) => {
+							return Ok(RoutingOutput::Response(response));
+						}
+						Ok(None) => {
+							// Continue
+						}
+						Err(err) => {
+							tracing::error!("Error in api::route_api_request: {err}");
+							// Continue to next routing method
+						}
 					}
-					Err(err) => {
-						tracing::error!("Error in route_via_route_config: {err}");
-						// Continue to next routing method
-					}
+
+					// No matching route found
+					tracing::warn!("No route found for: {host} {path}");
+					Ok(RoutingOutput::Response(StructuredResponse {
+						status: StatusCode::NOT_FOUND,
+						message: Cow::Owned(format!(
+							"No route found for hostname: {host}, path: {path}"
+						)),
+						docs: None,
+					}))
 				}
-
-				// Try to route to actor directly (legacy method)
-				match actor::route_actor_request(&ctx, host, path, dc_id).await {
-					Ok(Some(RoutingOutput::Route(routing_result))) => {
-						return Ok(RoutingOutput::Route(routing_result));
-					}
-					Ok(Some(RoutingOutput::Response(response))) => {
-						return Ok(RoutingOutput::Response(response));
-					}
-					Ok(None) => {
-						// Continue to next routing method
-					}
-					Err(err) => {
-						tracing::error!("Error in actor_routes::route_actor_request: {err}");
-						// Continue to next routing method
-					}
-				}
-
-				// Try to route to API
-				//
-				// IMPORTANT: Route this last, since in dev this will match all hostnames
-				match api::route_api_request(&ctx, host, path, &dc.name_id, dc_id).await {
-					Ok(Some(RoutingOutput::Route(routing_result))) => {
-						return Ok(RoutingOutput::Route(routing_result));
-					}
-					Ok(Some(RoutingOutput::Response(response))) => {
-						return Ok(RoutingOutput::Response(response));
-					}
-					Ok(None) => {
-						// Continue
-					}
-					Err(err) => {
-						tracing::error!("Error in api::route_api_request: {err}");
-						// Continue to next routing method
-					}
-				}
-
-				// No matching route found
-				tracing::warn!("No route found for: {host} {path}");
-				Ok(RoutingOutput::Response(StructuredResponse {
-					status: StatusCode::NOT_FOUND,
-					message: Cow::Owned(format!(
-						"No route found for hostname: {host}, path: {path}"
-					)),
-					docs: None,
-				}))
-			})
+				.instrument(tracing::info_span!("routing_fn", %hostname, %path, ?port_type)),
+			)
 		},
 	)
 }

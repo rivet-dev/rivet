@@ -1,5 +1,13 @@
 // This file is modified by Claude Code
-#[allow(unused_imports)]
+
+use std::{
+	borrow::Cow,
+	collections::HashMap as StdHashMap,
+	net::SocketAddr,
+	sync::Arc,
+	time::{Duration, Instant},
+};
+
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use global_error::*;
@@ -11,15 +19,10 @@ use hyper_tungstenite;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use rand;
+use scc::HashMap as SccHashMap;
 use serde_json;
-use std::{
-	borrow::Cow,
-	collections::HashMap,
-	net::SocketAddr,
-	sync::Arc,
-	time::{Duration, Instant},
-};
-use tokio::{sync::Mutex, time::timeout};
+use tokio::time::timeout;
+use tracing::Instrument;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -65,7 +68,7 @@ pub struct StructuredResponse {
 
 impl StructuredResponse {
 	pub fn build_response(&self) -> GlobalResult<Response<Full<Bytes>>> {
-		let mut body = HashMap::new();
+		let mut body = StdHashMap::new();
 		body.insert("message", self.message.clone().into_owned());
 
 		if let Some(docs) = &self.docs {
@@ -151,26 +154,34 @@ pub type MiddlewareFn = Arc<
 
 // Cache for routing results
 struct RouteCache {
-	cache: HashMap<(String, String), RouteConfig>,
+	cache: SccHashMap<(String, String), RouteConfig>,
 }
 
 impl RouteCache {
 	fn new() -> Self {
 		Self {
-			cache: HashMap::new(),
+			cache: SccHashMap::new(),
 		}
 	}
 
-	fn get(&self, hostname: &str, path: &str) -> Option<&RouteConfig> {
-		self.cache.get(&(hostname.to_owned(), path.to_owned()))
+	#[tracing::instrument(skip_all)]
+	async fn get(&self, hostname: &str, path: &str) -> Option<RouteConfig> {
+		self.cache
+			.get_async(&(hostname.to_owned(), path.to_owned()))
+			.await
+			.map(|v| v.clone())
 	}
 
-	fn insert(&mut self, hostname: String, path: String, result: RouteConfig) {
-		self.cache.insert((hostname, path), result);
+	#[tracing::instrument(skip_all)]
+	async fn insert(&self, hostname: String, path: String, result: RouteConfig) {
+		self.cache.upsert_async((hostname, path), result).await;
 	}
 
-	fn purge(&mut self, hostname: &str, path: &str) {
-		self.cache.remove(&(hostname.to_owned(), path.to_owned()));
+	#[tracing::instrument(skip_all)]
+	async fn purge(&self, hostname: &str, path: &str) {
+		self.cache
+			.remove_async(&(hostname.to_owned(), path.to_owned()))
+			.await;
 	}
 }
 
@@ -241,9 +252,9 @@ pub struct ProxyState {
 	_config: rivet_config::Config, // Unused but kept for potential future use
 	routing_fn: RoutingFn,
 	middleware_fn: MiddlewareFn,
-	route_cache: Mutex<RouteCache>,
-	rate_limiters: Mutex<HashMap<Uuid, RateLimiter>>,
-	in_flight_counters: Mutex<HashMap<Uuid, InFlightCounter>>,
+	route_cache: RouteCache,
+	rate_limiters: SccHashMap<Uuid, RateLimiter>,
+	in_flight_counters: SccHashMap<Uuid, InFlightCounter>,
 	port_type: PortType,
 }
 
@@ -258,13 +269,14 @@ impl ProxyState {
 			_config: config,
 			routing_fn,
 			middleware_fn,
-			route_cache: Mutex::new(RouteCache::new()),
-			rate_limiters: Mutex::new(HashMap::new()),
-			in_flight_counters: Mutex::new(HashMap::new()),
+			route_cache: RouteCache::new(),
+			rate_limiters: SccHashMap::new(),
+			in_flight_counters: SccHashMap::new(),
 			port_type,
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn resolve_route(
 		&self,
 		hostname: &str,
@@ -283,10 +295,8 @@ impl ProxyState {
 		);
 
 		// Check cache first
-		let mut cache = self.route_cache.lock().await;
-
 		if !ignore_cache {
-			if let Some(result) = cache.get(hostname_only, path) {
+			if let Some(result) = self.route_cache.get(hostname_only, path).await {
 				// Choose a random target from the cached targets
 				if let Some(target) = choose_random_target(&result.targets) {
 					return Ok(ResolveRouteOutput::Target(target.clone()));
@@ -324,7 +334,9 @@ impl ProxyState {
 					);
 
 					// Cache the result
-					cache.insert(hostname_only.to_owned(), path.to_owned(), result.clone());
+					self.route_cache
+						.insert(hostname_only.to_owned(), path.to_owned(), result.clone())
+						.await;
 					tracing::debug!("Added route to cache");
 
 					// Choose a random target
@@ -382,6 +394,7 @@ impl ProxyState {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_middleware_config(&self, actor_id: &Uuid) -> GlobalResult<MiddlewareConfig> {
 		// Call the middleware function with a timeout
 		let default_timeout = Duration::from_secs(5); // Default 5 seconds
@@ -433,20 +446,31 @@ impl ProxyState {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn check_rate_limit(&self, actor_id: &Option<Uuid>) -> GlobalResult<bool> {
 		match actor_id {
 			Some(id) => {
 				let middleware_config = self.get_middleware_config(id).await?;
 
-				let mut limiters = self.rate_limiters.lock().await;
-				let limiter = limiters.entry(*id).or_insert_with(|| {
-					RateLimiter::new(
+				let entry = self
+					.rate_limiters
+					.entry_async(*id)
+					.instrument(tracing::info_span!("entry_async"))
+					.await;
+				if let scc::hash_map::Entry::Occupied(mut entry) = entry {
+					// Key exists, get and mutate existing RateLimiter
+					let write_guard = entry.get_mut();
+					Ok(write_guard.try_acquire())
+				} else {
+					// Key doesn't exist, insert a new RateLimiter
+					let mut limiter = RateLimiter::new(
 						middleware_config.rate_limit.requests,
 						middleware_config.rate_limit.period,
-					)
-				});
-
-				Ok(limiter.try_acquire())
+					);
+					let result = limiter.try_acquire();
+					entry.insert_entry(limiter);
+					Ok(result)
+				}
 			}
 			None => {
 				// No actor ID means no rate limiting
@@ -455,17 +479,28 @@ impl ProxyState {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn acquire_in_flight(&self, actor_id: &Option<Uuid>) -> GlobalResult<bool> {
 		match actor_id {
 			Some(id) => {
 				let middleware_config = self.get_middleware_config(id).await?;
 
-				let mut counters = self.in_flight_counters.lock().await;
-				let counter = counters.entry(*id).or_insert_with(|| {
-					InFlightCounter::new(middleware_config.max_in_flight.amount)
-				});
-
-				Ok(counter.try_acquire())
+				let entry = self
+					.in_flight_counters
+					.entry_async(*id)
+					.instrument(tracing::info_span!("entry_async"))
+					.await;
+				if let scc::hash_map::Entry::Occupied(mut entry) = entry {
+					// Key exists, get and mutate existing InFlightCounter
+					let write_guard = entry.get_mut();
+					Ok(write_guard.try_acquire())
+				} else {
+					// Key doesn't exist, insert a new InFlightCounter
+					let mut counter = InFlightCounter::new(middleware_config.max_in_flight.amount);
+					let result = counter.try_acquire();
+					entry.insert_entry(counter);
+					Ok(result)
+				}
 			}
 			None => {
 				// No actor ID means no in-flight limiting
@@ -474,10 +509,15 @@ impl ProxyState {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn release_in_flight(&self, actor_id: &Option<Uuid>) {
 		if let Some(id) = actor_id {
-			let mut counters = self.in_flight_counters.lock().await;
-			if let Some(counter) = counters.get_mut(id) {
+			if let Some(mut counter) = self
+				.in_flight_counters
+				.get_async(id)
+				.instrument(tracing::info_span!("get_async"))
+				.await
+			{
 				counter.release();
 			}
 		}
@@ -523,6 +563,7 @@ impl ProxyService {
 		Duration::from_millis(initial_interval * 2u64.pow(attempt - 1))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn handle_request(
 		&self,
 		req: Request<BodyIncoming>,
@@ -609,7 +650,7 @@ impl ProxyService {
 		crate::defer! {
 			tokio::spawn(async move {
 				state_clone.release_in_flight(&actor_id_clone).await;
-			});
+			}.instrument(tracing::info_span!("release_in_flight_task")));
 		}
 
 		// Branch for WebSocket vs HTTP handling
@@ -623,6 +664,7 @@ impl ProxyService {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn handle_http_request(
 		&self,
 		req: Request<BodyIncoming>,
@@ -921,6 +963,7 @@ impl ProxyService {
 		Ok((uri, builder))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn handle_websocket_upgrade(
 		&self,
 		req: Request<BodyIncoming>,
@@ -1013,553 +1056,557 @@ impl ProxyService {
 
 		// Spawn a new task to handle the WebSocket bidirectional communication
 		info!("Spawning task to handle WebSocket communication");
-		tokio::spawn(async move {
-			// Set up a timeout for the entire operation
-			let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
-			info!(
-				"WebSocket proxy task started with {}s timeout",
-				timeout_duration.as_secs()
-			);
-
-			// Use retry logic to connect to the upstream WebSocket server
-			let mut attempts = 0;
-			let mut upstream_ws = None;
-
-			// First, wait for the client WebSocket to be ready (do this first to avoid race conditions)
-			info!("Waiting for client WebSocket to be ready...");
-			let client_ws = match tokio::time::timeout(timeout_duration, client_websocket).await {
-				Ok(Ok(ws)) => {
-					info!("Client WebSocket is ready");
-					ws
-				}
-				Ok(Err(e)) => {
-					error!("Failed to get client WebSocket: {}", e);
-					error!("Error details: {:?}", e);
-					// Decrement pending metric
-					metrics::ACTOR_REQUEST_PENDING
-						.with_label_values(&[
-							&actor_id_str_clone,
-							&server_id_str_clone,
-							&method,
-							&path,
-						])
-						.dec();
-					return;
-				}
-				Err(_) => {
-					error!(
-						"Timeout waiting for client WebSocket to be ready after {}s",
-						timeout_duration.as_secs()
-					);
-					// Decrement pending metric
-					metrics::ACTOR_REQUEST_PENDING
-						.with_label_values(&[
-							&actor_id_str_clone,
-							&server_id_str_clone,
-							&method,
-							&path,
-						])
-						.dec();
-					return;
-				}
-			};
-
-			// Now attempt to connect to the upstream server
-			info!(
-				"Attempting to connect to upstream WebSocket at {}",
-				target_url
-			);
-			while attempts < max_attempts {
-				attempts += 1;
+		tokio::spawn(
+			async move {
+				// Set up a timeout for the entire operation
+				let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
 				info!(
-					"WebSocket request attempt {}/{} to {}",
-					attempts, max_attempts, target_url
+					"WebSocket proxy task started with {}s timeout",
+					timeout_duration.as_secs()
 				);
 
-				match tokio::time::timeout(
-					Duration::from_secs(5), // 5 second timeout per connection attempt
-					tokio_tungstenite::connect_async(&target_url),
-				)
-				.await
+				// Use retry logic to connect to the upstream WebSocket server
+				let mut attempts = 0;
+				let mut upstream_ws = None;
+
+				// First, wait for the client WebSocket to be ready (do this first to avoid race conditions)
+				info!("Waiting for client WebSocket to be ready...");
+				let client_ws = match tokio::time::timeout(timeout_duration, client_websocket).await
 				{
-					Ok(Ok((ws_stream, resp))) => {
-						info!("Successfully connected to upstream WebSocket server");
-						debug!("Upstream connection response status: {:?}", resp.status());
-
-						// Log headers for debugging
-						for (name, value) in resp.headers() {
-							if let Ok(val) = value.to_str() {
-								debug!("Upstream response header - {}: {}", name, val);
-							}
-						}
-
-						upstream_ws = Some(ws_stream);
-						break;
+					Ok(Ok(ws)) => {
+						info!("Client WebSocket is ready");
+						ws
 					}
 					Ok(Err(e)) => {
-						warn!("WebSocket request attempt {} failed: {}", attempts, e);
-						warn!("Error details: {:?}", e);
+						error!("Failed to get client WebSocket: {}", e);
+						error!("Error details: {:?}", e);
+						// Decrement pending metric
+						metrics::ACTOR_REQUEST_PENDING
+							.with_label_values(&[
+								&actor_id_str_clone,
+								&server_id_str_clone,
+								&method,
+								&path,
+							])
+							.dec();
+						return;
 					}
 					Err(_) => {
-						warn!("WebSocket request attempt {} timed out after 5s", attempts);
+						error!(
+							"Timeout waiting for client WebSocket to be ready after {}s",
+							timeout_duration.as_secs()
+						);
+						// Decrement pending metric
+						metrics::ACTOR_REQUEST_PENDING
+							.with_label_values(&[
+								&actor_id_str_clone,
+								&server_id_str_clone,
+								&method,
+								&path,
+							])
+							.dec();
+						return;
 					}
+				};
+
+				// Now attempt to connect to the upstream server
+				info!(
+					"Attempting to connect to upstream WebSocket at {}",
+					target_url
+				);
+				while attempts < max_attempts {
+					attempts += 1;
+					info!(
+						"WebSocket request attempt {}/{} to {}",
+						attempts, max_attempts, target_url
+					);
+
+					match tokio::time::timeout(
+						Duration::from_secs(5), // 5 second timeout per connection attempt
+						tokio_tungstenite::connect_async(&target_url),
+					)
+					.await
+					{
+						Ok(Ok((ws_stream, resp))) => {
+							info!("Successfully connected to upstream WebSocket server");
+							debug!("Upstream connection response status: {:?}", resp.status());
+
+							// Log headers for debugging
+							for (name, value) in resp.headers() {
+								if let Ok(val) = value.to_str() {
+									debug!("Upstream response header - {}: {}", name, val);
+								}
+							}
+
+							upstream_ws = Some(ws_stream);
+							break;
+						}
+						Ok(Err(e)) => {
+							warn!("WebSocket request attempt {} failed: {}", attempts, e);
+							warn!("Error details: {:?}", e);
+						}
+						Err(_) => {
+							warn!("WebSocket request attempt {} timed out after 5s", attempts);
+						}
+					}
+
+					// Check if we've reached max attempts
+					if attempts >= max_attempts {
+						error!("All {} WebSocket connection attempts failed", max_attempts);
+
+						// Increment error metric
+						metrics::ACTOR_REQUEST_ERRORS
+							.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, "502"])
+							.inc();
+
+						// Decrement pending metric
+						metrics::ACTOR_REQUEST_PENDING
+							.with_label_values(&[
+								&actor_id_str_clone,
+								&server_id_str_clone,
+								&method,
+								&path,
+							])
+							.dec();
+
+						// Send a close message to the client since we can't connect to upstream
+						info!("Sending close message to client due to upstream connection failure");
+						let (mut client_sink, _) = client_ws.split();
+						match client_sink
+							.send(hyper_tungstenite::tungstenite::Message::Close(Some(
+								hyper_tungstenite::tungstenite::protocol::CloseFrame {
+									code: 1011.into(), // 1011 = Server error
+									reason: "Failed to connect to upstream server".into(),
+								},
+							)))
+							.await
+						{
+							Ok(_) => info!("Successfully sent close message to client"),
+							Err(e) => error!("Failed to send close message to client: {}", e),
+						};
+
+						match client_sink.flush().await {
+							Ok(_) => info!("Successfully flushed client sink after close"),
+							Err(e) => error!("Failed to flush client sink after close: {}", e),
+						};
+
+						return;
+					}
+
+					// Use backoff for the next attempt
+					let backoff = Self::calculate_backoff(attempts, initial_interval);
+					info!("Waiting for {:?} before next connection attempt", backoff);
+					tokio::time::sleep(backoff).await;
 				}
 
-				// Check if we've reached max attempts
-				if attempts >= max_attempts {
-					error!("All {} WebSocket connection attempts failed", max_attempts);
+				// If we couldn't connect to the upstream server, exit the task
+				let upstream_ws = match upstream_ws {
+					Some(ws) => {
+						info!("Successfully established upstream WebSocket connection");
+						ws
+					}
+					Option::None => {
+						error!("Failed to establish upstream WebSocket connection (unexpected)");
+						return; // Should never happen due to checks above, but just in case
+					}
+				};
 
-					// Increment error metric
-					metrics::ACTOR_REQUEST_ERRORS
-						.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, "502"])
-						.inc();
+				// Now set up bidirectional communication between the client and upstream WebSockets
+				info!("Setting up bidirectional WebSocket proxying");
+				let (client_sink, client_stream) = client_ws.split();
+				let (upstream_sink, upstream_stream) = upstream_ws.split();
 
-					// Decrement pending metric
-					metrics::ACTOR_REQUEST_PENDING
-						.with_label_values(&[
-							&actor_id_str_clone,
-							&server_id_str_clone,
-							&method,
-							&path,
-						])
-						.dec();
+				// Create channels for coordinating shutdown between client and upstream
+				let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-					// Send a close message to the client since we can't connect to upstream
-					info!("Sending close message to client due to upstream connection failure");
-					let (mut client_sink, _) = client_ws.split();
-					match client_sink
-						.send(hyper_tungstenite::tungstenite::Message::Close(Some(
-							hyper_tungstenite::tungstenite::protocol::CloseFrame {
-								code: 1011.into(), // 1011 = Server error
-								reason: "Failed to connect to upstream server".into(),
-							},
-						)))
+				// Manually forward messages from client to upstream server with shutdown coordination
+				let client_to_upstream = async {
+					info!("Starting client-to-upstream forwarder");
+					let mut stream = client_stream;
+					let mut sink = upstream_sink;
+					let mut shutdown_rx = shutdown_rx.clone();
+
+					loop {
+						tokio::select! {
+							// Check for shutdown signal
+							shutdown_result = shutdown_rx.changed() => {
+								match shutdown_result {
+									Ok(_) => {
+										if *shutdown_rx.borrow() {
+											info!("Client-to-upstream forwarder shutting down due to signal");
+											break;
+										}
+									},
+									Err(e) => {
+										// Channel closed
+										info!("Client-to-upstream shutdown channel closed: {}", e);
+										break;
+									}
+								}
+							}
+
+							// Process next message from client
+							msg_result = stream.next() => {
+								match msg_result {
+									Some(Ok(client_msg)) => {
+										// Debug output with message type
+										match &client_msg {
+											hyper_tungstenite::tungstenite::Message::Text(text) => {
+												info!("Received text message from client: {} bytes", text.len());
+												debug!("Client text message content: {}", text);
+											},
+											hyper_tungstenite::tungstenite::Message::Binary(data) => {
+												info!("Received binary message from client: {} bytes", data.len());
+											},
+											hyper_tungstenite::tungstenite::Message::Ping(data) => {
+												info!("Received ping from client: {} bytes", data.len());
+											},
+											hyper_tungstenite::tungstenite::Message::Pong(data) => {
+												info!("Received pong from client: {} bytes", data.len());
+											},
+											hyper_tungstenite::tungstenite::Message::Close(frame) => {
+												if let Some(f) = frame {
+													info!("Received close from client with code: {}", u16::from(f.code));
+												} else {
+													info!("Received close from client without code");
+												}
+											},
+											_ => {
+												info!("Received unknown message type from client");
+											}
+										}
+
+										// Convert from hyper_tungstenite::Message to tokio_tungstenite::Message
+										let upstream_msg = match client_msg {
+											hyper_tungstenite::tungstenite::Message::Text(text) => {
+												info!("Converting text message to upstream format");
+												tokio_tungstenite::tungstenite::Message::Text(text)
+											},
+											hyper_tungstenite::tungstenite::Message::Binary(data) => {
+												info!("Converting binary message to upstream format");
+												tokio_tungstenite::tungstenite::Message::Binary(data)
+											},
+											hyper_tungstenite::tungstenite::Message::Ping(data) => {
+												info!("Converting ping message to upstream format");
+												tokio_tungstenite::tungstenite::Message::Ping(data)
+											},
+											hyper_tungstenite::tungstenite::Message::Pong(data) => {
+												info!("Converting pong message to upstream format");
+												tokio_tungstenite::tungstenite::Message::Pong(data)
+											},
+											hyper_tungstenite::tungstenite::Message::Close(frame) => {
+												info!("Converting close message to upstream format");
+												// Signal shutdown to other direction
+												let _ = shutdown_tx.send(true);
+
+												if let Some(frame) = frame {
+													// Manual conversion to handle different tungstenite versions
+													let code_num: u16 = frame.code.into();
+													let reason = frame.reason.clone();
+
+													tokio_tungstenite::tungstenite::Message::Close(Some(
+														tokio_tungstenite::tungstenite::protocol::CloseFrame {
+															code: code_num.into(),
+															reason,
+														},
+													))
+												} else {
+													tokio_tungstenite::tungstenite::Message::Close(None)
+												}
+											},
+											hyper_tungstenite::tungstenite::Message::Frame(_) => {
+												info!("Skipping frame message - implementation detail");
+												// Skip frames - they're an implementation detail
+												continue;
+											},
+										};
+
+										// Send the message with a timeout
+										info!("Sending message to upstream server");
+										let send_result = tokio::time::timeout(
+											Duration::from_secs(5),
+											sink.send(upstream_msg)
+										).await;
+
+										match send_result {
+											Ok(Ok(_)) => {
+												info!("Message sent to upstream successfully");
+												// Flush the sink with a timeout
+												info!("Flushing upstream sink");
+												let flush_result = tokio::time::timeout(
+													Duration::from_secs(2),
+													sink.flush()
+												).await;
+
+												if let Err(_) = flush_result {
+													error!("Timeout flushing upstream sink");
+													let _ = shutdown_tx.send(true);
+													break;
+												} else if let Ok(Err(e)) = flush_result {
+													error!("Error flushing upstream sink: {}", e);
+													let _ = shutdown_tx.send(true);
+													break;
+												} else {
+													info!("Upstream sink flushed successfully");
+												}
+											},
+											Ok(Err(e)) => {
+												error!("Error sending message to upstream: {}", e);
+												error!("Error details: {:?}", e);
+												let _ = shutdown_tx.send(true);
+												break;
+											},
+											Err(_) => {
+												error!("Timeout sending message to upstream after 5s");
+												let _ = shutdown_tx.send(true);
+												break;
+											}
+										}
+									},
+									Some(Err(e)) => {
+										// Error receiving message from client
+										error!("Error receiving message from client: {}", e);
+										error!("Error details: {:?}", e);
+										// Signal shutdown to other direction
+										let _ = shutdown_tx.send(true);
+										break;
+									},
+									None => {
+										// End of stream
+										info!("Client WebSocket stream ended");
+										// Signal shutdown to other direction
+										let _ = shutdown_tx.send(true);
+										break;
+									}
+								}
+							}
+						}
+					}
+
+					// Try to send a close frame - ignore errors as the connection might already be closed
+					info!("Attempting to send close message to upstream");
+					match sink
+						.send(tokio_tungstenite::tungstenite::Message::Close(None))
 						.await
 					{
-						Ok(_) => info!("Successfully sent close message to client"),
-						Err(e) => error!("Failed to send close message to client: {}", e),
+						Ok(_) => info!("Close message sent to upstream successfully"),
+						Err(e) => warn!("Failed to send close message to upstream: {}", e),
 					};
 
-					match client_sink.flush().await {
-						Ok(_) => info!("Successfully flushed client sink after close"),
-						Err(e) => error!("Failed to flush client sink after close: {}", e),
+					match sink.flush().await {
+						Ok(_) => info!("Upstream sink flushed successfully after close"),
+						Err(e) => warn!("Failed to flush upstream sink after close: {}", e),
 					};
 
-					return;
-				}
+					info!("Client-to-upstream task completed");
+				};
 
-				// Use backoff for the next attempt
-				let backoff = Self::calculate_backoff(attempts, initial_interval);
-				info!("Waiting for {:?} before next connection attempt", backoff);
-				tokio::time::sleep(backoff).await;
+				// Manually forward messages from upstream server to client with shutdown coordination
+				let upstream_to_client = async {
+					info!("Starting upstream-to-client forwarder");
+					let mut stream = upstream_stream;
+					let mut sink = client_sink;
+					let mut shutdown_rx = shutdown_rx.clone();
+
+					loop {
+						tokio::select! {
+							// Check for shutdown signal
+							shutdown_result = shutdown_rx.changed() => {
+								match shutdown_result {
+									Ok(_) => {
+										if *shutdown_rx.borrow() {
+											info!("Upstream-to-client forwarder shutting down due to signal");
+											break;
+										}
+									},
+									Err(e) => {
+										// Channel closed
+										info!("Upstream-to-client shutdown channel closed: {}", e);
+										break;
+									}
+								}
+							}
+
+							// Process next message from upstream
+							msg_result = stream.next() => {
+								match msg_result {
+									Some(Ok(upstream_msg)) => {
+										// Debug output with message type
+										match &upstream_msg {
+											tokio_tungstenite::tungstenite::Message::Text(text) => {
+												info!("Received text message from upstream: {} bytes", text.len());
+												debug!("Upstream text message content: {}", text);
+											},
+											tokio_tungstenite::tungstenite::Message::Binary(data) => {
+												info!("Received binary message from upstream: {} bytes", data.len());
+											},
+											tokio_tungstenite::tungstenite::Message::Ping(data) => {
+												info!("Received ping from upstream: {} bytes", data.len());
+											},
+											tokio_tungstenite::tungstenite::Message::Pong(data) => {
+												info!("Received pong from upstream: {} bytes", data.len());
+											},
+											tokio_tungstenite::tungstenite::Message::Close(frame) => {
+												if let Some(f) = frame {
+													info!("Received close from upstream with code: {}", u16::from(f.code));
+												} else {
+													info!("Received close from upstream without code");
+												}
+											},
+											_ => {
+												info!("Received unknown message type from upstream");
+											}
+										}
+
+										// Convert from tokio_tungstenite::Message to hyper_tungstenite::Message
+										let client_msg = match upstream_msg {
+											tokio_tungstenite::tungstenite::Message::Text(text) => {
+												info!("Converting text message to client format");
+												hyper_tungstenite::tungstenite::Message::Text(text)
+											},
+											tokio_tungstenite::tungstenite::Message::Binary(data) => {
+												info!("Converting binary message to client format");
+												hyper_tungstenite::tungstenite::Message::Binary(data)
+											},
+											tokio_tungstenite::tungstenite::Message::Ping(data) => {
+												info!("Converting ping message to client format");
+												hyper_tungstenite::tungstenite::Message::Ping(data)
+											},
+											tokio_tungstenite::tungstenite::Message::Pong(data) => {
+												info!("Converting pong message to client format");
+												hyper_tungstenite::tungstenite::Message::Pong(data)
+											},
+											tokio_tungstenite::tungstenite::Message::Close(frame) => {
+												info!("Converting close message to client format");
+												// Signal shutdown to other direction
+												let _ = shutdown_tx.send(true);
+
+												if let Some(frame) = frame {
+													// Manual conversion to handle different tungstenite versions
+													let code_num: u16 = frame.code.into();
+													let reason = frame.reason.clone();
+
+													hyper_tungstenite::tungstenite::Message::Close(Some(
+														hyper_tungstenite::tungstenite::protocol::CloseFrame {
+															code: code_num.into(),
+															reason,
+														},
+													))
+												} else {
+													hyper_tungstenite::tungstenite::Message::Close(None)
+												}
+											},
+											tokio_tungstenite::tungstenite::Message::Frame(_) => {
+												info!("Skipping frame message - implementation detail");
+												// Skip frames - they're an implementation detail
+												continue;
+											},
+										};
+
+										// Send the message with a timeout
+										info!("Sending message to client");
+										let send_result = tokio::time::timeout(
+											Duration::from_secs(5),
+											sink.send(client_msg)
+										).await;
+
+										match send_result {
+											Ok(Ok(_)) => {
+												info!("Message sent to client successfully");
+												// Flush the sink with a timeout
+												info!("Flushing client sink");
+												let flush_result = tokio::time::timeout(
+													Duration::from_secs(2),
+													sink.flush()
+												).await;
+
+												if let Err(_) = flush_result {
+													error!("Timeout flushing client sink");
+													let _ = shutdown_tx.send(true);
+													break;
+												} else if let Ok(Err(e)) = flush_result {
+													error!("Error flushing client sink: {}", e);
+													let _ = shutdown_tx.send(true);
+													break;
+												} else {
+													info!("Client sink flushed successfully");
+												}
+											},
+											Ok(Err(e)) => {
+												error!("Error sending message to client: {}", e);
+												error!("Error details: {:?}", e);
+												let _ = shutdown_tx.send(true);
+												break;
+											},
+											Err(_) => {
+												error!("Timeout sending message to client after 5s");
+												let _ = shutdown_tx.send(true);
+												break;
+											}
+										}
+									},
+									Some(Err(e)) => {
+										// Error receiving message from upstream
+										error!("Error receiving message from upstream: {}", e);
+										error!("Error details: {:?}", e);
+										// Signal shutdown to other direction
+										let _ = shutdown_tx.send(true);
+										break;
+									},
+									None => {
+										// End of stream
+										info!("Upstream WebSocket stream ended");
+										// Signal shutdown to other direction
+										let _ = shutdown_tx.send(true);
+										break;
+									}
+								}
+							}
+						}
+					}
+
+					// Try to send a close frame - ignore errors as the connection might already be closed
+					info!("Attempting to send close message to client");
+					match sink
+						.send(hyper_tungstenite::tungstenite::Message::Close(None))
+						.await
+					{
+						Ok(_) => info!("Close message sent to client successfully"),
+						Err(e) => warn!("Failed to send close message to client: {}", e),
+					};
+
+					match sink.flush().await {
+						Ok(_) => info!("Client sink flushed successfully after close"),
+						Err(e) => warn!("Failed to flush client sink after close: {}", e),
+					};
+
+					info!("Upstream-to-client task completed");
+				};
+
+				// Run both directions concurrently until either one completes or errors
+				info!("Starting bidirectional message forwarding");
+				tokio::join!(client_to_upstream, upstream_to_client);
+				info!("Bidirectional message forwarding completed");
+
+				// Record duration when the WebSocket connection is closed
+				let duration = start_time.elapsed();
+				info!("WebSocket connection duration: {:?}", duration);
+				metrics::ACTOR_REQUEST_DURATION
+					.with_label_values(&[
+						&actor_id_str_clone,
+						&server_id_str_clone,
+						"101", // WebSocket connections always start with 101 status
+					])
+					.observe(duration.as_secs_f64());
+
+				// Decrement pending metric at the end
+				info!("Decrementing pending metric");
+				metrics::ACTOR_REQUEST_PENDING
+					.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, &method, &path])
+					.dec();
 			}
-
-			// If we couldn't connect to the upstream server, exit the task
-			let upstream_ws = match upstream_ws {
-				Some(ws) => {
-					info!("Successfully established upstream WebSocket connection");
-					ws
-				}
-				Option::None => {
-					error!("Failed to establish upstream WebSocket connection (unexpected)");
-					return; // Should never happen due to checks above, but just in case
-				}
-			};
-
-			// Now set up bidirectional communication between the client and upstream WebSockets
-			info!("Setting up bidirectional WebSocket proxying");
-			let (client_sink, client_stream) = client_ws.split();
-			let (upstream_sink, upstream_stream) = upstream_ws.split();
-
-			// Create channels for coordinating shutdown between client and upstream
-			let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-
-			// Manually forward messages from client to upstream server with shutdown coordination
-			let client_to_upstream = async {
-				info!("Starting client-to-upstream forwarder");
-				let mut stream = client_stream;
-				let mut sink = upstream_sink;
-				let mut shutdown_rx = shutdown_rx.clone();
-
-				loop {
-					tokio::select! {
-						// Check for shutdown signal
-						shutdown_result = shutdown_rx.changed() => {
-							match shutdown_result {
-								Ok(_) => {
-									if *shutdown_rx.borrow() {
-										info!("Client-to-upstream forwarder shutting down due to signal");
-										break;
-									}
-								},
-								Err(e) => {
-									// Channel closed
-									info!("Client-to-upstream shutdown channel closed: {}", e);
-									break;
-								}
-							}
-						}
-
-						// Process next message from client
-						msg_result = stream.next() => {
-							match msg_result {
-								Some(Ok(client_msg)) => {
-									// Debug output with message type
-									match &client_msg {
-										hyper_tungstenite::tungstenite::Message::Text(text) => {
-											info!("Received text message from client: {} bytes", text.len());
-											debug!("Client text message content: {}", text);
-										},
-										hyper_tungstenite::tungstenite::Message::Binary(data) => {
-											info!("Received binary message from client: {} bytes", data.len());
-										},
-										hyper_tungstenite::tungstenite::Message::Ping(data) => {
-											info!("Received ping from client: {} bytes", data.len());
-										},
-										hyper_tungstenite::tungstenite::Message::Pong(data) => {
-											info!("Received pong from client: {} bytes", data.len());
-										},
-										hyper_tungstenite::tungstenite::Message::Close(frame) => {
-											if let Some(f) = frame {
-												info!("Received close from client with code: {}", u16::from(f.code));
-											} else {
-												info!("Received close from client without code");
-											}
-										},
-										_ => {
-											info!("Received unknown message type from client");
-										}
-									}
-
-									// Convert from hyper_tungstenite::Message to tokio_tungstenite::Message
-									let upstream_msg = match client_msg {
-										hyper_tungstenite::tungstenite::Message::Text(text) => {
-											info!("Converting text message to upstream format");
-											tokio_tungstenite::tungstenite::Message::Text(text)
-										},
-										hyper_tungstenite::tungstenite::Message::Binary(data) => {
-											info!("Converting binary message to upstream format");
-											tokio_tungstenite::tungstenite::Message::Binary(data)
-										},
-										hyper_tungstenite::tungstenite::Message::Ping(data) => {
-											info!("Converting ping message to upstream format");
-											tokio_tungstenite::tungstenite::Message::Ping(data)
-										},
-										hyper_tungstenite::tungstenite::Message::Pong(data) => {
-											info!("Converting pong message to upstream format");
-											tokio_tungstenite::tungstenite::Message::Pong(data)
-										},
-										hyper_tungstenite::tungstenite::Message::Close(frame) => {
-											info!("Converting close message to upstream format");
-											// Signal shutdown to other direction
-											let _ = shutdown_tx.send(true);
-
-											if let Some(frame) = frame {
-												// Manual conversion to handle different tungstenite versions
-												let code_num: u16 = frame.code.into();
-												let reason = frame.reason.clone();
-
-												tokio_tungstenite::tungstenite::Message::Close(Some(
-													tokio_tungstenite::tungstenite::protocol::CloseFrame {
-														code: code_num.into(),
-														reason,
-													},
-												))
-											} else {
-												tokio_tungstenite::tungstenite::Message::Close(None)
-											}
-										},
-										hyper_tungstenite::tungstenite::Message::Frame(_) => {
-											info!("Skipping frame message - implementation detail");
-											// Skip frames - they're an implementation detail
-											continue;
-										},
-									};
-
-									// Send the message with a timeout
-									info!("Sending message to upstream server");
-									let send_result = tokio::time::timeout(
-										Duration::from_secs(5),
-										sink.send(upstream_msg)
-									).await;
-
-									match send_result {
-										Ok(Ok(_)) => {
-											info!("Message sent to upstream successfully");
-											// Flush the sink with a timeout
-											info!("Flushing upstream sink");
-											let flush_result = tokio::time::timeout(
-												Duration::from_secs(2),
-												sink.flush()
-											).await;
-
-											if let Err(_) = flush_result {
-												error!("Timeout flushing upstream sink");
-												let _ = shutdown_tx.send(true);
-												break;
-											} else if let Ok(Err(e)) = flush_result {
-												error!("Error flushing upstream sink: {}", e);
-												let _ = shutdown_tx.send(true);
-												break;
-											} else {
-												info!("Upstream sink flushed successfully");
-											}
-										},
-										Ok(Err(e)) => {
-											error!("Error sending message to upstream: {}", e);
-											error!("Error details: {:?}", e);
-											let _ = shutdown_tx.send(true);
-											break;
-										},
-										Err(_) => {
-											error!("Timeout sending message to upstream after 5s");
-											let _ = shutdown_tx.send(true);
-											break;
-										}
-									}
-								},
-								Some(Err(e)) => {
-									// Error receiving message from client
-									error!("Error receiving message from client: {}", e);
-									error!("Error details: {:?}", e);
-									// Signal shutdown to other direction
-									let _ = shutdown_tx.send(true);
-									break;
-								},
-								None => {
-									// End of stream
-									info!("Client WebSocket stream ended");
-									// Signal shutdown to other direction
-									let _ = shutdown_tx.send(true);
-									break;
-								}
-							}
-						}
-					}
-				}
-
-				// Try to send a close frame - ignore errors as the connection might already be closed
-				info!("Attempting to send close message to upstream");
-				match sink
-					.send(tokio_tungstenite::tungstenite::Message::Close(None))
-					.await
-				{
-					Ok(_) => info!("Close message sent to upstream successfully"),
-					Err(e) => warn!("Failed to send close message to upstream: {}", e),
-				};
-
-				match sink.flush().await {
-					Ok(_) => info!("Upstream sink flushed successfully after close"),
-					Err(e) => warn!("Failed to flush upstream sink after close: {}", e),
-				};
-
-				info!("Client-to-upstream task completed");
-			};
-
-			// Manually forward messages from upstream server to client with shutdown coordination
-			let upstream_to_client = async {
-				info!("Starting upstream-to-client forwarder");
-				let mut stream = upstream_stream;
-				let mut sink = client_sink;
-				let mut shutdown_rx = shutdown_rx.clone();
-
-				loop {
-					tokio::select! {
-						// Check for shutdown signal
-						shutdown_result = shutdown_rx.changed() => {
-							match shutdown_result {
-								Ok(_) => {
-									if *shutdown_rx.borrow() {
-										info!("Upstream-to-client forwarder shutting down due to signal");
-										break;
-									}
-								},
-								Err(e) => {
-									// Channel closed
-									info!("Upstream-to-client shutdown channel closed: {}", e);
-									break;
-								}
-							}
-						}
-
-						// Process next message from upstream
-						msg_result = stream.next() => {
-							match msg_result {
-								Some(Ok(upstream_msg)) => {
-									// Debug output with message type
-									match &upstream_msg {
-										tokio_tungstenite::tungstenite::Message::Text(text) => {
-											info!("Received text message from upstream: {} bytes", text.len());
-											debug!("Upstream text message content: {}", text);
-										},
-										tokio_tungstenite::tungstenite::Message::Binary(data) => {
-											info!("Received binary message from upstream: {} bytes", data.len());
-										},
-										tokio_tungstenite::tungstenite::Message::Ping(data) => {
-											info!("Received ping from upstream: {} bytes", data.len());
-										},
-										tokio_tungstenite::tungstenite::Message::Pong(data) => {
-											info!("Received pong from upstream: {} bytes", data.len());
-										},
-										tokio_tungstenite::tungstenite::Message::Close(frame) => {
-											if let Some(f) = frame {
-												info!("Received close from upstream with code: {}", u16::from(f.code));
-											} else {
-												info!("Received close from upstream without code");
-											}
-										},
-										_ => {
-											info!("Received unknown message type from upstream");
-										}
-									}
-
-									// Convert from tokio_tungstenite::Message to hyper_tungstenite::Message
-									let client_msg = match upstream_msg {
-										tokio_tungstenite::tungstenite::Message::Text(text) => {
-											info!("Converting text message to client format");
-											hyper_tungstenite::tungstenite::Message::Text(text)
-										},
-										tokio_tungstenite::tungstenite::Message::Binary(data) => {
-											info!("Converting binary message to client format");
-											hyper_tungstenite::tungstenite::Message::Binary(data)
-										},
-										tokio_tungstenite::tungstenite::Message::Ping(data) => {
-											info!("Converting ping message to client format");
-											hyper_tungstenite::tungstenite::Message::Ping(data)
-										},
-										tokio_tungstenite::tungstenite::Message::Pong(data) => {
-											info!("Converting pong message to client format");
-											hyper_tungstenite::tungstenite::Message::Pong(data)
-										},
-										tokio_tungstenite::tungstenite::Message::Close(frame) => {
-											info!("Converting close message to client format");
-											// Signal shutdown to other direction
-											let _ = shutdown_tx.send(true);
-
-											if let Some(frame) = frame {
-												// Manual conversion to handle different tungstenite versions
-												let code_num: u16 = frame.code.into();
-												let reason = frame.reason.clone();
-
-												hyper_tungstenite::tungstenite::Message::Close(Some(
-													hyper_tungstenite::tungstenite::protocol::CloseFrame {
-														code: code_num.into(),
-														reason,
-													},
-												))
-											} else {
-												hyper_tungstenite::tungstenite::Message::Close(None)
-											}
-										},
-										tokio_tungstenite::tungstenite::Message::Frame(_) => {
-											info!("Skipping frame message - implementation detail");
-											// Skip frames - they're an implementation detail
-											continue;
-										},
-									};
-
-									// Send the message with a timeout
-									info!("Sending message to client");
-									let send_result = tokio::time::timeout(
-										Duration::from_secs(5),
-										sink.send(client_msg)
-									).await;
-
-									match send_result {
-										Ok(Ok(_)) => {
-											info!("Message sent to client successfully");
-											// Flush the sink with a timeout
-											info!("Flushing client sink");
-											let flush_result = tokio::time::timeout(
-												Duration::from_secs(2),
-												sink.flush()
-											).await;
-
-											if let Err(_) = flush_result {
-												error!("Timeout flushing client sink");
-												let _ = shutdown_tx.send(true);
-												break;
-											} else if let Ok(Err(e)) = flush_result {
-												error!("Error flushing client sink: {}", e);
-												let _ = shutdown_tx.send(true);
-												break;
-											} else {
-												info!("Client sink flushed successfully");
-											}
-										},
-										Ok(Err(e)) => {
-											error!("Error sending message to client: {}", e);
-											error!("Error details: {:?}", e);
-											let _ = shutdown_tx.send(true);
-											break;
-										},
-										Err(_) => {
-											error!("Timeout sending message to client after 5s");
-											let _ = shutdown_tx.send(true);
-											break;
-										}
-									}
-								},
-								Some(Err(e)) => {
-									// Error receiving message from upstream
-									error!("Error receiving message from upstream: {}", e);
-									error!("Error details: {:?}", e);
-									// Signal shutdown to other direction
-									let _ = shutdown_tx.send(true);
-									break;
-								},
-								None => {
-									// End of stream
-									info!("Upstream WebSocket stream ended");
-									// Signal shutdown to other direction
-									let _ = shutdown_tx.send(true);
-									break;
-								}
-							}
-						}
-					}
-				}
-
-				// Try to send a close frame - ignore errors as the connection might already be closed
-				info!("Attempting to send close message to client");
-				match sink
-					.send(hyper_tungstenite::tungstenite::Message::Close(None))
-					.await
-				{
-					Ok(_) => info!("Close message sent to client successfully"),
-					Err(e) => warn!("Failed to send close message to client: {}", e),
-				};
-
-				match sink.flush().await {
-					Ok(_) => info!("Client sink flushed successfully after close"),
-					Err(e) => warn!("Failed to flush client sink after close: {}", e),
-				};
-
-				info!("Upstream-to-client task completed");
-			};
-
-			// Run both directions concurrently until either one completes or errors
-			info!("Starting bidirectional message forwarding");
-			tokio::join!(client_to_upstream, upstream_to_client);
-			info!("Bidirectional message forwarding completed");
-
-			// Record duration when the WebSocket connection is closed
-			let duration = start_time.elapsed();
-			info!("WebSocket connection duration: {:?}", duration);
-			metrics::ACTOR_REQUEST_DURATION
-				.with_label_values(&[
-					&actor_id_str_clone,
-					&server_id_str_clone,
-					"101", // WebSocket connections always start with 101 status
-				])
-				.observe(duration.as_secs_f64());
-
-			// Decrement pending metric at the end
-			info!("Decrementing pending metric");
-			metrics::ACTOR_REQUEST_PENDING
-				.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, &method, &path])
-				.dec();
-		});
+			.instrument(tracing::info_span!("handle_ws_task")),
+		);
 
 		// Return the response that will upgrade the client connection
 		// For proper WebSocket handshaking, we need to preserve the original response
@@ -1577,6 +1624,7 @@ impl ProxyService {
 
 impl ProxyService {
 	// Process an individual request
+	#[tracing::instrument(skip_all)]
 	pub async fn process(&self, req: Request<BodyIncoming>) -> GlobalResult<Response<Full<Bytes>>> {
 		// Extract request information for logging before consuming the request
 		let host = req

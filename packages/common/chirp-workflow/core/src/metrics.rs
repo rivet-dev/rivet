@@ -184,4 +184,31 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
+
+	// MARK: Ops
+	pub static ref OPERATION_PENDING: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"chirp_workflow_operation_pending",
+		"Total number of operation calls in progress.",
+		&["operation_name"],
+		*REGISTRY,
+	).unwrap();
+	pub static ref OPERATION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"chirp_workflow_operation_total",
+		"Total number of operation calls.",
+		&["operation_name"],
+		*REGISTRY,
+	).unwrap();
+	pub static ref OPERATION_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"chirp_workflow_operation_duration",
+		"Total duration of an op call.",
+		&["operation_name", "error_code"],
+		BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+	pub static ref OPERATION_ERRORS: IntCounterVec = register_int_counter_vec_with_registry!(
+		"chirp_workflow_operation_errors",
+		"All errors made by this operation.",
+		&["operation_name", "error_code", "error_type"],
+		*REGISTRY,
+	).unwrap();
 }

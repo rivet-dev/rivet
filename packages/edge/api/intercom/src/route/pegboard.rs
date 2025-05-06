@@ -1,9 +1,9 @@
 use api_helper::ctx::Ctx;
+use chirp_workflow::prelude::*;
 use fdb_util::SERIALIZABLE;
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::TryStreamExt;
 use rivet_api::models;
-use rivet_operation::prelude::*;
 use serde_json::json;
 
 use crate::auth::Auth;
@@ -59,14 +59,24 @@ pub async fn prewarm_image(
 		return Ok(json!({}));
 	};
 
-	ctx.signal(pegboard::workflows::client::PrewarmImage {
-		image_id,
-		image_artifact_url_stub: body.image_artifact_url_stub,
-	})
-	.to_workflow::<pegboard::workflows::client::Workflow>()
-	.tag("client_id", client_id)
-	.send()
-	.await?;
+	let res = ctx
+		.signal(pegboard::workflows::client::PrewarmImage {
+			image_id,
+			image_artifact_url_stub: body.image_artifact_url_stub,
+		})
+		.to_workflow::<pegboard::workflows::client::Workflow>()
+		.tag("client_id", client_id)
+		.send()
+		.await;
+
+	if let Some(WorkflowError::WorkflowNotFound) = res.as_workflow_error() {
+		tracing::warn!(
+			?client_id,
+			"client workflow not found, likely already stopped"
+		);
+	} else {
+		res?;
+	}
 
 	Ok(json!({}))
 }
@@ -80,7 +90,7 @@ pub async fn toggle_drain_client(
 	ctx.auth().bypass()?;
 
 	if body.draining {
-		ctx.signal(pegboard::workflows::client::Drain {
+		let res = ctx.signal(pegboard::workflows::client::Drain {
 			drain_timeout_ts: unwrap_with!(
 				body.drain_complete_ts,
 				API_BAD_BODY,
@@ -92,13 +102,31 @@ pub async fn toggle_drain_client(
 		.to_workflow::<pegboard::workflows::client::Workflow>()
 		.tag("client_id", client_id)
 		.send()
-		.await?;
+		.await;
+
+		if let Some(WorkflowError::WorkflowNotFound) = res.as_workflow_error() {
+			tracing::warn!(
+				?client_id,
+				"client workflow not found, likely already stopped"
+			);
+		} else {
+			res?;
+		}
 	} else {
-		ctx.signal(pegboard::workflows::client::Undrain {})
+		let res = ctx.signal(pegboard::workflows::client::Undrain {})
 			.to_workflow::<pegboard::workflows::client::Workflow>()
 			.tag("client_id", client_id)
 			.send()
-			.await?;
+			.await;
+
+		if let Some(WorkflowError::WorkflowNotFound) = res.as_workflow_error() {
+			tracing::warn!(
+				?client_id,
+				"client workflow not found, likely already stopped"
+			);
+		} else {
+			res?;
+		}
 	}
 
 	Ok(json!({}))
