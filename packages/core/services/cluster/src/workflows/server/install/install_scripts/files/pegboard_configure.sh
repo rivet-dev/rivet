@@ -255,9 +255,9 @@ for ipt in iptables ip6tables; do
     # Allow egress traffic
 	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
 
-	# Allow public ingress traffic ONLY on host ports
-	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p tcp --dport __MIN_WAN_PORT__:__MAX_WAN_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
-	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p udp --dport __MIN_WAN_PORT__:__MAX_WAN_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
+	# Allow public ingress traffic on all ports because this is already mapped by CNI
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p tcp -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p udp -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: Deny
     # Deny all other egress traffic

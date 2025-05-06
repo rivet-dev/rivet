@@ -185,7 +185,7 @@ pub async fn create(
 		args: Vec::new(),
 		network_mode: network.mode.unwrap_or_default().api_into(),
 		environment: body.runtime.and_then(|r| r.environment).unwrap_or_default(),
-		network_ports: unwrap!(network
+		network_ports: network
 			.ports
 			.unwrap_or_default()
 			.into_iter()
@@ -230,7 +230,7 @@ pub async fn create(
 					}
 				}
 			)))
-			.collect::<GlobalResult<HashMap<_, _>>>()),
+			.collect::<GlobalResult<HashMap<_, _>>>()?,
 		endpoint_type,
 	})
 	.tag("actor_id", actor_id)
