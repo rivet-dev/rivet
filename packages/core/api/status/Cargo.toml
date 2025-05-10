@@ -41,7 +41,6 @@ game-resolve-name-id.workspace = true
 game-namespace-resolve-name-id.workspace = true
 
 token-create.workspace = true
-hickory-resolver = "0.25.1"
 rivet-config.workspace = true
 rivet-env.workspace = true
 

@@ -1,5 +1,5 @@
 use std::{
-	net::{IpAddr, SocketAddr},
+	net::{IpAddr, SocketAddr, ToSocketAddrs},
 	time::Duration,
 };
 
@@ -194,7 +194,7 @@ async fn test_lobby_connection(
 	let token = &player.token;
 
 	// Look up IP for GG nodes
-	let gg_ips = lookup_dns(hostname).await?;
+	let gg_ips = lookup_dns(hostname, 443).await?;
 	ensure_with!(
 		!gg_ips.is_empty(),
 		INTERNAL_STATUS_CHECK_FAILED,
@@ -245,17 +245,23 @@ async fn test_lobby_connection(
 }
 
 /// Returns the IP addresses for a given hostname.
-async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
-	let resolver = hickory_resolver::Resolver::builder_tokio()?.build();
-	let addrs = resolver
-		.lookup_ip(hostname)
-		.await?
-		.into_iter()
-		.collect::<Vec<IpAddr>>();
+#[tracing::instrument]
+async fn lookup_dns(hostname: &str, port: u16) -> GlobalResult<Vec<IpAddr>> {
+	let addr = format!("{hostname}:{port}");
+
+	// Use native resolver in a blocking task
+	let addrs = tokio::task::spawn_blocking(move || {
+		GlobalResult::Ok(
+			addr.to_socket_addrs()?
+				.into_iter()
+				.map(|x| x.ip())
+				.collect::<Vec<_>>(),
+		)
+	})
+	.await??;
 
 	Ok(addrs)
 }
-
 /// Tests HTTP connectivity to a hostname for a given address.
 ///
 /// This lets us isolate of a specific GG IP address is not behaving correctly.

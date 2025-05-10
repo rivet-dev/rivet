@@ -1,6 +1,6 @@
 use std::{
 	collections::HashMap,
-	net::{IpAddr, SocketAddr},
+	net::{IpAddr, SocketAddr, ToSocketAddrs},
 	time::Duration,
 };
 
@@ -263,7 +263,7 @@ pub async fn status(
 #[tracing::instrument]
 async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) -> GlobalResult<()> {
 	// Look up IP for the actor's host
-	let gg_ips = lookup_dns(hostname).await?;
+	let gg_ips = lookup_dns(hostname, port).await?;
 	ensure_with!(
 		!gg_ips.is_empty(),
 		INTERNAL_STATUS_CHECK_FAILED,
@@ -315,13 +315,19 @@ async fn test_actor_connection(hostname: &str, port: u16, actor_origin: &str) ->
 
 /// Returns the IP addresses for a given hostname.
 #[tracing::instrument]
-async fn lookup_dns(hostname: &str) -> GlobalResult<Vec<IpAddr>> {
-	let resolver = hickory_resolver::Resolver::builder_tokio()?.build();
-	let addrs = resolver
-		.lookup_ip(hostname)
-		.await?
-		.into_iter()
-		.collect::<Vec<IpAddr>>();
+async fn lookup_dns(hostname: &str, port: u16) -> GlobalResult<Vec<IpAddr>> {
+	let addr = format!("{hostname}:{port}");
+
+	// Use native resolver in a blocking task
+	let addrs = tokio::task::spawn_blocking(move || {
+		GlobalResult::Ok(
+			addr.to_socket_addrs()?
+				.into_iter()
+				.map(|x| x.ip())
+				.collect::<Vec<_>>(),
+		)
+	})
+	.await??;
 
 	Ok(addrs)
 }
