@@ -276,7 +276,7 @@ impl ProxyState {
 		}
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip(self))]
 	async fn resolve_route(
 		&self,
 		hostname: &str,

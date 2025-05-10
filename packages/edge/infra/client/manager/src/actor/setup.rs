@@ -522,7 +522,7 @@ impl Actor {
 		let cmd_out = Command::new("ip")
 			.arg("netns")
 			.arg("add")
-			.arg(self.actor_id.to_string())
+			.arg(netns_path.file_name().context("bad netns path")?)
 			.output()
 			.await?;
 		ensure!(
@@ -750,7 +750,7 @@ impl Actor {
 							match Command::new("cnitool")
 								.arg("del")
 								.arg(&ctx.config().cni.network_name())
-								.arg(netns_path)
+								.arg(&netns_path)
 								.env("CNI_PATH", &ctx.config().cni.bin_path())
 								.env("NETCONFPATH", &ctx.config().cni.config_path())
 								.env("CNI_IFNAME", &ctx.config().cni.network_interface)
@@ -789,33 +789,42 @@ impl Actor {
 						}
 					}
 
-					// Clean up network
-					match Command::new("ip")
-						.arg("netns")
-						.arg("del")
-						.arg(self.actor_id.to_string())
-						.output()
-						.await
-					{
-						Result::Ok(cmd_out) => {
-							if !cmd_out.status.success() {
+					if let Some(netns_name) = netns_path.file_name() {
+						// Clean up network
+						match Command::new("ip")
+							.arg("netns")
+							.arg("del")
+							.arg(netns_name)
+							.output()
+							.await
+						{
+							Result::Ok(cmd_out) => {
+								if !cmd_out.status.success() {
+									tracing::error!(
+										actor_id=?self.actor_id,
+										generation=?self.generation,
+										stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+										stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
+										"failed `ip netns` command",
+									);
+								}
+							}
+							Err(err) => {
 								tracing::error!(
 									actor_id=?self.actor_id,
 									generation=?self.generation,
-									stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
-									stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
-									"failed `ip netns` command",
+									?err,
+									"failed to run `ip` command",
 								);
 							}
 						}
-						Err(err) => {
-							tracing::error!(
-								actor_id=?self.actor_id,
-								generation=?self.generation,
-								?err,
-								"failed to run `ip` command",
-							);
-						}
+					} else {
+						tracing::error!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							?netns_path,
+							"invalid netns path",
+						);
 					}
 				}
 			}

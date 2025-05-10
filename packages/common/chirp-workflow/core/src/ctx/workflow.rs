@@ -517,7 +517,9 @@ impl WorkflowCtx {
 
 					let duration = (u64::try_from(wake_deadline_ts)?)
 						.saturating_sub(u64::try_from(rivet_util::timestamp::now())?);
-					tokio::time::sleep(Duration::from_millis(duration)).await;
+					tokio::time::sleep(Duration::from_millis(duration))
+						.instrument(tracing::info_span!("backoff_sleep"))
+						.await;
 				}
 
 				match self

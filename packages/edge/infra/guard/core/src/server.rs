@@ -125,12 +125,15 @@ pub async fn run_server(
 		let conn = server.serve_connection_with_upgrades(io, service);
 		let conn = graceful.watch(conn.into_owned());
 
-		tokio::spawn(async move {
-			if let Err(err) = conn.await {
-				error!("{} connection error: {}", port_type_str, err);
+		tokio::spawn(
+			async move {
+				if let Err(err) = conn.await {
+					error!("{} connection error: {}", port_type_str, err);
+				}
+				info!("{} connection dropped: {}", port_type_str, remote_addr);
 			}
-			info!("{} connection dropped: {}", port_type_str, remote_addr);
-		}.instrument(tracing::info_span!("process_connection_task")));
+			.instrument(tracing::info_span!(parent: None, "process_connection_task")),
+		);
 	}
 
 	// Accept connections until we receive a shutdown signal
@@ -176,7 +179,11 @@ pub async fn run_server(
 
 									// Accept TLS connection in a separate task to avoid ownership issues
 									tokio::spawn(async move {
-										match acceptor_clone.accept(tcp_stream).await {
+										match acceptor_clone
+											.accept(tcp_stream)
+											.instrument(tracing::info_span!("accept"))
+											.await
+										{
 											Ok(tls_stream) => {
 												info!("TLS handshake successful for {}", remote_addr);
 
@@ -206,7 +213,7 @@ pub async fn run_server(
 												error!("TLS handshake failed for {}: {}", remote_addr, e);
 											}
 										}
-									}.instrument(tracing::info_span!("process_tls_connection_task")));
+									}.instrument(tracing::info_span!(parent: None, "process_tls_connection_task")));
 								} else {
 									// Fallback to non-TLS handling (useful for testing)
 									// In production, this would not secure the connection
