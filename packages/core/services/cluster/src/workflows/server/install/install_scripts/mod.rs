@@ -53,7 +53,7 @@ pub async fn gen_install(
 		}
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			script.push(components::docker::install());
-			script.push(components::otel_collector::install());
+			script.push(components::otel_collector::install(pool_type)?);
 			script.push(components::lz4::install());
 			script.push(components::skopeo::install());
 			script.push(components::umoci::install());
@@ -72,7 +72,7 @@ pub async fn gen_install(
 			script.push(components::fdb::install(initialize_immediately));
 		}
 		PoolType::Worker => {
-			script.push(components::otel_collector::install());
+			script.push(components::otel_collector::install(pool_type)?);
 			script.push(components::rivet::worker::install(config)?);
 		}
 		PoolType::Nats => {
@@ -80,7 +80,7 @@ pub async fn gen_install(
 			script.push(components::nats::install(config)?);
 		}
 		PoolType::Guard => {
-			script.push(components::otel_collector::install());
+			script.push(components::otel_collector::install(pool_type)?);
 			script.push(components::ok_server::install(initialize_immediately));
 			script.push(components::rivet::guard::install(config)?);
 		}

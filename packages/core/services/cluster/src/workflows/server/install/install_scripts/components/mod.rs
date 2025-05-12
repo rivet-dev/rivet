@@ -33,14 +33,153 @@ pub mod process_exporter {
 }
 
 pub mod otel_collector {
+	use chirp_workflow::prelude::*;
+	use serde_json::json;
+
 	use super::traefik::TUNNEL_OTEL_PORT;
+	use crate::types::PoolType;
 
 	const VERSION: &str = "0.125.0";
 
-	pub fn install() -> String {
-		include_str!("../files/otel_collector.sh")
+	pub fn install(pool_type: PoolType) -> GlobalResult<String> {
+		let config = json!({
+			"receivers": {
+				"otlp": {
+					"protocols": {
+						"grpc": {
+							"endpoint": "0.0.0.0:4317"
+						},
+						"http": {
+							"endpoint": "0.0.0.0:4318"
+						}
+					}
+				}
+			},
+			"processors": {
+				"batch": {
+					"timeout": "5s",
+					"send_batch_size": 10000
+				},
+				"tail_sampling": {
+					"decision_wait": "60s",
+					"num_traces": 50000,
+					"expected_new_traces_per_sec": 10,
+					"decision_cache": {
+						"sampled_cache_size": 1000,
+						"non_sampled_cache_size": 1000
+					},
+					"policies": if let PoolType::Guard = pool_type {
+						json!([
+							{
+								"name": "policy-1",
+								"type": "and",
+								"and": {
+									"and_sub_policy": [
+										{
+											"name": "and-policy-1",
+											"type": "status_code",
+											"status_code": {
+												"status_codes": [
+													"ERROR"
+												]
+											}
+										},
+										{
+											"name": "and-policy-2",
+											"type": "probabilistic",
+											"probabilistic": {
+												"sampling_percentage": 10
+											}
+										}
+									]
+								}
+							},
+							{
+								"name": "policy-2",
+								"type": "ottl_condition",
+								"ottl_condition": {
+									"span": [
+										"name == \"subscribe\" and attributes[\"message\"] == \"pegboard_actor_ready\""
+									]
+								}
+							}
+						])
+					} else {
+						json!([
+							{
+								"name": "policy-1",
+								"type": "status_code",
+								"status_code": {
+									"status_codes": [
+										"ERROR"
+									]
+								}
+							},
+							{
+								"name": "policy-2",
+								"type": "ottl_condition",
+								"ottl_condition": {
+									"span": [
+										"name == \"message\" and attributes[\"message\"] == \"pegboard_actor_ready\""
+									]
+								}
+							}
+						])
+					}
+				}
+			},
+			"exporters": {
+				"otlp": {
+					"endpoint": format!("127.0.0.1:{TUNNEL_OTEL_PORT}"),
+					"tls": {
+						"insecure": true
+					}
+				}
+			},
+			"service": {
+				"pipelines": {
+					"logs": {
+						"receivers": [
+							"otlp"
+						],
+						"processors": [
+							"batch"
+						],
+						"exporters": [
+							"otlp"
+						]
+					},
+					"traces": {
+						"receivers": [
+							"otlp"
+						],
+						"processors": [
+							"tail_sampling",
+							"batch"
+						],
+						"exporters": [
+							"otlp"
+						]
+					},
+					"metrics": {
+						"receivers": [
+							"otlp"
+						],
+						"processors": [
+							"batch"
+						],
+						"exporters": [
+							"otlp"
+						]
+					}
+				}
+			}
+		});
+		let config = serde_yaml::to_string(&config)?;
+
+		Ok(include_str!("../files/otel_collector.sh")
 			.replace("__VERSION__", VERSION)
-			.replace("__TUNNEL_OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string())
+			.replace("__CONFIG__", &config))
 	}
 }
 
