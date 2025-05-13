@@ -1,6 +1,6 @@
 import * as CdnNewCustomDomainForm from "@/domains/project/forms/cdn-new-custom-domain-form";
 import type { DialogContentProps } from "@/hooks/use-dialog";
-import { Rivet } from "@rivet-gg/api";
+import { Rivet } from "@rivet-gg/api-full";
 import {
 	Badge,
 	Button,

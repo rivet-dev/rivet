@@ -18,12 +18,7 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { ErrorComponent } from "@/components/error-component";
 import {
-	Card,
-	CardHeader,
-	Flex,
-	CardTitle,
 	Button,
-	CardContent,
 	Table,
 	TableHeader,
 	TableRow,
@@ -37,6 +32,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	Text,
+	H1,
 } from "@rivet-gg/components";
 import { Icon, faPlus, faEllipsisH } from "@rivet-gg/icons";
 import { useEnvironment } from "@/domains/project/data/environment-context";
@@ -53,7 +49,7 @@ function ProjectFunctionsRoute() {
 		...projectActorsQueryOptions({
 			projectNameId,
 			environmentNameId,
-			includeDestroyed: true,
+			includeDestroyed: false,
 			tags: {},
 		}),
 		pages: 10,
@@ -63,7 +59,7 @@ function ProjectFunctionsRoute() {
 		projectActorsQueryOptions({
 			projectNameId,
 			environmentNameId,
-			includeDestroyed: true,
+			includeDestroyed: false,
 			tags: {},
 		}),
 	);
@@ -76,135 +72,129 @@ function ProjectFunctionsRoute() {
 		<>
 			<Modals />
 
+			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center">
+				<H1>Functions</H1>
+				<div className="flex items-center gap-2">
+					<Button
+						variant="outline"
+						startIcon={<Icon icon={faPlus} />}
+						asChild
+					>
+						<Link
+							to="."
+							search={{ modal: "add-route" }}
+							params={{
+								projectNameId,
+								environmentNameId,
+							}}
+						>
+							Add Route
+						</Link>
+					</Button>
+				</div>
+			</div>
+
+			<hr className="mb-4" />
+
 			<div className="p-4">
 				<div className="max-w-5xl mx-auto">
-					<Card w="full">
-						<CardHeader>
-							<Flex items="center" gap="4" justify="between">
-								<CardTitle>Routes</CardTitle>
-								<div className="flex gap-2">
-									<Button
-										variant="outline"
-										startIcon={<Icon icon={faPlus} />}
-										asChild
-									>
-										<Link
-											to="."
-											search={{ modal: "add-route" }}
-											params={{
-												projectNameId,
-												environmentNameId,
-											}}
-										>
-											Add Route
-										</Link>
-									</Button>
-								</div>
-							</Flex>
-						</CardHeader>
-						<CardContent>
-							<Table>
-								<TableHeader>
+					<div className="border rounded-md">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Route</TableHead>
+									<TableHead>Instances</TableHead>
+									<TableHead />
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{routes.length === 0 ? (
 									<TableRow>
-										<TableHead>Route</TableHead>
-										<TableHead>Instances</TableHead>
-										<TableHead />
+										<TableCell colSpan={3}>
+											<Text className="text-center">
+												There's no routes yet.
+											</Text>
+										</TableCell>
 									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{routes.length === 0 ? (
-										<TableRow>
-											<TableCell colSpan={4}>
-												<Text className="text-center">
-													There's no routes yet.
-												</Text>
-											</TableCell>
-										</TableRow>
-									) : null}
-									{routes?.map((route) => (
-										<TableRow key={route.id}>
-											<TableCell>
-												<DiscreteCopyButton
-													value={`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
-												>
-													{`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
-												</DiscreteCopyButton>
-											</TableCell>
-											<TableCell>
-												{actors?.filter((actor) =>
-													Object.entries(
-														route.target.actors
-															?.selectorTags ||
-															{},
-													).some(([key, value]) => {
-														return (
-															toRecord(
-																actor.tags,
-															)[key] === value
-														);
-													}),
-												).length || 0}
-											</TableCell>
-											<TableCell>
-												<DropdownMenu>
-													<DropdownMenuTrigger
-														asChild
+								) : null}
+								{routes?.map((route) => (
+									<TableRow key={route.id}>
+										<TableCell>
+											<DiscreteCopyButton
+												value={`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
+											>
+												{`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
+											</DiscreteCopyButton>
+										</TableCell>
+										<TableCell>
+											{actors?.filter((actor) =>
+												Object.entries(
+													route.target.actors
+														?.selectorTags || {},
+												).some(([key, value]) => {
+													return (
+														toRecord(actor.tags)[
+															key
+														] === value
+													);
+												}),
+											).length || 0}
+										</TableCell>
+										<TableCell>
+											<DropdownMenu>
+												<DropdownMenuTrigger asChild>
+													<Button
+														aria-haspopup="true"
+														size="icon"
+														variant="ghost"
 													>
-														<Button
-															aria-haspopup="true"
-															size="icon"
-															variant="ghost"
-														>
-															<Icon
-																className="size-4"
-																icon={
-																	faEllipsisH
-																}
-															/>
-															<span className="sr-only">
-																Toggle menu
-															</span>
-														</Button>
-													</DropdownMenuTrigger>
-													<DropdownMenuContent align="end">
-														<DropdownMenuItem
-															onSelect={() =>
-																navigate({
-																	to: ".",
-																	search: {
-																		modal: "edit-route",
-																		route: route.id,
-																	},
-																	params: {
-																		projectNameId,
-																		environmentNameId,
-																	},
-																})
-															}
-														>
-															Edit
-														</DropdownMenuItem>
-														<DropdownMenuItem
-															onSelect={() => {
-																deleteRoute({
+														<Icon
+															className="size-4"
+															icon={faEllipsisH}
+														/>
+														<span className="sr-only">
+															Toggle menu
+														</span>
+													</Button>
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="end">
+													<DropdownMenuItem
+														onSelect={() =>
+															navigate({
+																to: ".",
+																search: {
+																	modal: "edit-route",
+																	route: route.id,
+																},
+																params: {
 																	projectNameId,
 																	environmentNameId,
-																	routeId:
-																		route.id,
-																});
-															}}
-														>
-															Delete
-														</DropdownMenuItem>
-													</DropdownMenuContent>
-												</DropdownMenu>
-											</TableCell>
-										</TableRow>
-									))}
-								</TableBody>
-							</Table>
-						</CardContent>
-					</Card>
+																},
+															})
+														}
+													>
+														Edit
+													</DropdownMenuItem>
+													<DropdownMenuItem
+														onSelect={() => {
+															deleteRoute({
+																projectNameId,
+																environmentNameId,
+																routeId:
+																	route.id,
+															});
+														}}
+													>
+														Delete
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
 				</div>
 			</div>
 		</>

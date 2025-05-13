@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { CommandItem } from "@rivet-gg/components";
 import { useCommandPanelNavigation } from "./command-panel-navigation-provider";
 

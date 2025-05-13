@@ -6,11 +6,19 @@ import {
 	projectQueryOptions,
 } from "@/domains/project/queries";
 import { GuardEnterprise } from "@/lib/guards";
-import { Badge, CommandGroup, CommandItem } from "@rivet-gg/components";
+import {
+	Badge,
+	CommandGroup,
+	CommandItem,
+	CommandSeparator,
+} from "@rivet-gg/components";
 import {
 	Icon,
 	faActorsBorderless,
+	faBarsStaggered,
 	faCodeBranch,
+	faCog,
+	faFunction,
 	faGear,
 	faGlobe,
 	faHammer,
@@ -20,6 +28,7 @@ import {
 	faMagnifyingGlass,
 	faPuzzle,
 	faScroll,
+	faServer,
 	faUserCog,
 } from "@rivet-gg/icons";
 import { useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
@@ -88,14 +97,61 @@ export function EnvironmentCommandPanelPage({
 				<CommandItem
 					onSelect={() => {
 						navigate({
-							to: "/projects/$projectNameId/environments/$environmentNameId/builds",
+							to: "/projects/$projectNameId/environments/$environmentNameId/containers",
 							params: { projectNameId, environmentNameId },
 						});
 					}}
 				>
-					<Icon icon={faHammer} />
-					Builds
+					<Icon icon={faServer} />
+					Containers
 				</CommandItem>
+				<CommandItem
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/functions",
+							params: { projectNameId, environmentNameId },
+						});
+					}}
+				>
+					<Icon icon={faFunction} />
+					Functions
+				</CommandItem>
+				<CommandSeparator />
+				<CommandItem
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/logs",
+							params: { projectNameId, environmentNameId },
+						});
+					}}
+				>
+					<Icon icon={faBarsStaggered} />
+					Logs
+				</CommandItem>
+				<CommandItem
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/actor-versions",
+							params: { projectNameId, environmentNameId },
+						});
+					}}
+				>
+					<Icon icon={faCodeBranch} />
+					Versions
+				</CommandItem>
+				<CommandSeparator />
+				<CommandItem
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/settings",
+							params: { projectNameId, environmentNameId },
+						});
+					}}
+				>
+					<Icon icon={faCog} />
+					Settings
+				</CommandItem>
+				<CommandSeparator />
 				<CommandItem
 					keywords={["actor", "search", "go to", "go", "find"]}
 					onSelect={() => {
@@ -109,6 +165,20 @@ export function EnvironmentCommandPanelPage({
 					<Icon icon={faMagnifyingGlass} />
 					Go to Actor
 				</CommandItem>
+				<CommandItem
+					keywords={["container", "search", "go to", "go", "find"]}
+					onSelect={() => {
+						navigate({
+							to: "/projects/$projectNameId/environments/$environmentNameId/containers",
+							params: { projectNameId, environmentNameId },
+							search: { modal: "go-to-actor" },
+						});
+					}}
+				>
+					<Icon icon={faMagnifyingGlass} />
+					Go to Container
+				</CommandItem>
+				<CommandSeparator />
 				{backendModulesEnabled ? (
 					<GuardEnterprise>
 						<CommandItem

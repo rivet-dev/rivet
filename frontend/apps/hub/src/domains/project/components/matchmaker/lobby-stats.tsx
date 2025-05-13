@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { Flex, Progress, ScrollArea, Strong } from "@rivet-gg/components";
 import { filesize } from "filesize";
 import { LobbyCPUStats } from "./lobby-cpu-stats";

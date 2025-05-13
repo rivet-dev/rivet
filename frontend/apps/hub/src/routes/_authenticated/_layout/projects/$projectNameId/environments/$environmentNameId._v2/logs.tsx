@@ -11,13 +11,14 @@ import {
 	WithTooltip,
 	FilterCreator,
 	Button,
-	FilterOperator,
-	type FilterDefinition,
-	type Filter,
 	toRecord,
 	ToggleGroup,
 	ToggleGroupItem,
 	ShimmerLine,
+	type FilterDefinitions,
+	type OnFiltersChange,
+	FilterValueSchema,
+	FilterOp,
 } from "@rivet-gg/components";
 import {
 	useInfiniteQuery,
@@ -31,15 +32,7 @@ import {
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { format } from "date-fns";
-import {
-	type Dispatch,
-	forwardRef,
-	type SetStateAction,
-	useCallback,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { forwardRef, useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import {
@@ -62,20 +55,16 @@ import {
 import { ErrorComponent } from "@/components/error-component";
 import { useDebounceCallback } from "usehooks-ts";
 
-const searchSchema = z.object({
-	filters: z
-		.array(
-			z.object({
-				id: z.string(),
-				defId: z.string(),
-				operator: z.custom<FilterOperator>(),
-				value: z.array(z.string()),
-			}),
-		)
-		.optional(),
-	search: z.string().optional(),
-	flags: z.array(z.enum(["case-sensitive", "regex"])).optional(),
-});
+const searchSchema = z
+	.object({
+		level: FilterValueSchema,
+		routeId: FilterValueSchema,
+		actorId: FilterValueSchema,
+
+		search: z.string().optional(),
+		flags: z.array(z.enum(["case-sensitive", "regex"])).optional(),
+	})
+	.strip();
 
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/_v2/logs",
@@ -101,7 +90,9 @@ function ProjectFunctionsRoute() {
 	const { environmentNameId, projectNameId } = Route.useParams();
 
 	const navigate = Route.useNavigate();
-	const { filters = [], flags, search } = Route.useSearch();
+	const { flags, search, level, routeId, actorId } = Route.useSearch();
+
+	const filters = { level, routeId, actorId };
 
 	usePrefetchInfiniteQuery({
 		...projectActorsQueryOptions({
@@ -146,23 +137,29 @@ function ProjectFunctionsRoute() {
 
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
-	const setFilters: Dispatch<SetStateAction<Filter[]>> = useCallback(
+	const onFiltersChange: OnFiltersChange = useCallback(
 		(fnOrValue) => {
 			if (typeof fnOrValue === "function") {
 				navigate({
-					search: (value) => ({
-						...value,
-						filters: fnOrValue(value.filters ?? []).filter(
-							(filter) => filter.value.length > 0,
+					search: ({ search, flags, ...filters }) => ({
+						search,
+						flags,
+						...Object.fromEntries(
+							Object.entries(fnOrValue(filters)).filter(
+								([, filter]) => filter.value.length > 0,
+							),
 						),
 					}),
 				});
 			} else {
 				navigate({
 					search: (value) => ({
-						...value,
-						filters: fnOrValue.filter(
-							(filter) => filter.value.length > 0,
+						search: value.search,
+						flags: value.flags,
+						...Object.fromEntries(
+							Object.entries(fnOrValue).filter(
+								([, filter]) => filter.value.length > 0,
+							),
 						),
 					}),
 				});
@@ -176,34 +173,31 @@ function ProjectFunctionsRoute() {
 
 	const definitions = useMemo(
 		() =>
-			[
-				{
+			({
+				level: {
 					label: "Level",
 					icon: faSignal,
 					type: "select",
-					id: "level",
 					options: [
 						{ label: "Info", value: "info" },
 						{ label: "Warning", value: "warning" },
 						{ label: "Error", value: "error" },
 					],
 				},
-				{
+				routeId: {
 					label: "Route",
 					type: "select",
 					icon: faSwap,
-					id: "routeId",
 					options:
 						routes?.map((route) => ({
 							label: `${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`,
 							value: route.id,
 						})) ?? [],
 				},
-				{
+				actorId: {
 					label: "Instance",
 					type: "select",
 					icon: faKey,
-					id: "actorId",
 					options:
 						actors?.map((actor) => {
 							const name = toRecord(actor.tags).name as string;
@@ -231,84 +225,78 @@ function ProjectFunctionsRoute() {
 							};
 						}) ?? [],
 				},
-			] satisfies FilterDefinition[],
+			}) satisfies FilterDefinitions,
 		[actors, routes],
 	);
 
 	// filter all rows by filters
 	const filteredRows =
 		rows?.filter((row) => {
-			const satisfiesFilters = filters.every((filter) => {
-				const { defId, operator, value } = filter;
-				const def = definitions.find((def) => def.id === defId);
-				if (!def || value.length === 0) return true;
+			const satisfiesFilters = Object.entries(filters).every(
+				([defId, filter]) => {
+					if (!filter) return true;
+					const { operator, value } = filter;
+					const def = definitions[defId as keyof typeof definitions];
+					if (!def || value.length === 0) return true;
 
-				if (def.id === "level") {
-					if (operator === FilterOperator.IS) {
-						return row.level === value[0];
+					if (defId === "level") {
+						if (operator === FilterOp.EQUAL) {
+							return value.includes(row.level as string);
+						}
+						if (operator === FilterOp.NOT_EQUAL) {
+							return value.length === 1
+								? row.level !== value[0]
+								: !value.includes(row.level as string);
+						}
 					}
-					if (operator === FilterOperator.IS_NOT) {
-						return value.length === 1
-							? row.level !== value[0]
-							: !value.includes(row.level as string);
-					}
-					if (operator === FilterOperator.IS_ANY_OF) {
-						return value.includes(row.level as string);
-					}
-				}
 
-				if (def.id === "routeId") {
-					const route = routes
-						?.filter((route) => value.includes(route.id))
-						.filter((route) => !!route);
-					const actor = actors?.find(
-						(actor) => actor.id === row.actorId,
-					);
+					if (defId === "routeId") {
+						const route = routes?.filter(
+							(route) => value.includes(route.id) && !!route,
+						);
+						const actor = actors?.find(
+							(actor) => actor.id === row.actorId,
+						);
 
-					if (!route || !actor) return true;
+						if (!route || !actor) return true;
 
-					if (
-						operator === FilterOperator.IS ||
-						operator === FilterOperator.IS_ANY_OF
-					) {
-						return route.some((r) => {
-							return Object.entries(
-								r.target.actors?.selectorTags || {},
-							).some(([key, value]) => {
-								return toRecord(actor.tags)[key] === value;
+						if (operator === FilterOp.EQUAL) {
+							return route.some((r) => {
+								return Object.entries(
+									r.target.actors?.selectorTags || {},
+								).some(([key, value]) => {
+									return toRecord(actor.tags)[key] === value;
+								});
 							});
-						});
-					}
-					if (operator === FilterOperator.IS_NOT) {
-						return route.every((r) => {
-							return Object.entries(
-								r.target.actors?.selectorTags || {},
-							).every(([key, value]) => {
-								return toRecord(actor.tags)[key] !== value;
+						}
+						if (operator === FilterOp.NOT_EQUAL) {
+							return route.every((r) => {
+								return Object.entries(
+									r.target.actors?.selectorTags || {},
+								).every(([key, value]) => {
+									return toRecord(actor.tags)[key] !== value;
+								});
 							});
-						});
+						}
 					}
-				}
 
-				if (def.id === "actorId") {
-					const actor = actors?.find(
-						(actor) => actor.id === row.actorId,
-					);
-					if (!actor) return true;
+					if (defId === "actorId") {
+						const actor = actors?.find(
+							(actor) => actor.id === row.actorId,
+						);
+						if (!actor) return true;
 
-					if (operator === FilterOperator.IS) {
-						return value.includes(actor.id);
+						if (operator === FilterOp.EQUAL) {
+							return value.includes(actor.id);
+						}
+						if (operator === FilterOp.NOT_EQUAL) {
+							return value.length === 1
+								? actor.id !== value[0]
+								: !value.includes(actor.id);
+						}
 					}
-					if (operator === FilterOperator.IS_NOT) {
-						return value.length === 1
-							? actor.id !== value[0]
-							: !value.includes(actor.id);
-					}
-					if (operator === FilterOperator.IS_ANY_OF) {
-						return value.includes(actor.id);
-					}
-				}
-			});
+				},
+			);
 
 			return (
 				satisfiesFilters &&
@@ -334,7 +322,7 @@ function ProjectFunctionsRoute() {
 					ref={searchInputRef}
 					type="text"
 					placeholder="Search..."
-					className="w-1/4 h-full rounded-md px-2 text-xs bg-card outline-none placeholder:text-muted-foreground text-foreground"
+					className="min-w-24 h-full rounded-md px-2 text-xs bg-card outline-none placeholder:text-muted-foreground text-foreground"
 					defaultValue={search}
 					onChange={(e) => setSearch(e.target.value)}
 				/>
@@ -368,8 +356,8 @@ function ProjectFunctionsRoute() {
 				</ToggleGroup>
 				<div className="h-full border-l mr-2" />
 				<FilterCreator
-					filters={filters}
-					setFilters={setFilters}
+					value={filters}
+					onChange={onFiltersChange}
 					definitions={definitions}
 				/>
 			</div>
@@ -404,7 +392,8 @@ function ProjectFunctionsRoute() {
 								No logs found.
 							</p>
 
-							{filters.length > 0 || (search?.length || 0) > 0 ? (
+							{Object.values(filters).length > 0 ||
+							(search?.length || 0) > 0 ? (
 								<Button
 									variant="outline"
 									className="text-sm ml-2"

@@ -7,7 +7,7 @@ import {
 	useProjectCreateMutation,
 } from "@/domains/project/queries";
 import { queryClient } from "@/queries/global";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import {
 	Card,
 	CardContent,

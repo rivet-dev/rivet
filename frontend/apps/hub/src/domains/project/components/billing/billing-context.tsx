@@ -3,7 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext } from "react";
 
 import { clusterQueryOptions } from "@/domains/auth/queries/bootstrap";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { startOfMonth } from "date-fns";
 import { calculateUsedCredits } from "../../data/billing-calculate-usage";
 import {

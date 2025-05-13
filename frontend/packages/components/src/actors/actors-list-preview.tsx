@@ -16,7 +16,6 @@ import {
 	useLayoutEffect,
 	useState,
 } from "react";
-import { ActorsActorDetailsPanel } from "./actors-actor-details-panel";
 import { ActorsLayoutContextProvider } from "./actors-layout-context";
 import { ActorsListPanel } from "./actors-list-panel";
 
@@ -150,11 +149,7 @@ export const ActorsListPreview = memo(
 							minWidth: RIGHT_PANEL_MIN_WIDTH,
 						}}
 					>
-						<Suspense
-							fallback={<ActorsActorDetailsPanel.Skeleton />}
-						>
-							{children}
-						</Suspense>
+						<Suspense>{children}</Suspense>
 					</motion.div>
 				</div>
 			</ActorsLayoutContextProvider>

@@ -3,7 +3,12 @@ import type { Actor, ActorAtom } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 
-type ActorStatus = "starting" | "running" | "stopped" | "crashed" | "unknown";
+export type ActorStatus =
+	| "starting"
+	| "running"
+	| "stopped"
+	| "crashed"
+	| "unknown";
 
 export function getActorStatus(
 	actor: Pick<Actor, "createdAt" | "startedAt" | "destroyedAt">,

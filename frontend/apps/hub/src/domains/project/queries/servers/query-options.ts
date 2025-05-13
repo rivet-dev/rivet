@@ -1,12 +1,13 @@
 import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
-import { Rivet } from "@rivet-gg/api";
+import { Rivet } from "@rivet-gg/api-full";
 import {
 	type InfiniteData,
 	infiniteQueryOptions,
 	queryOptions,
 } from "@tanstack/react-query";
+import stripAnsi from "strip-ansi";
 
 export const projectServersQueryOptions = ({
 	projectId,
@@ -169,7 +170,7 @@ export const serverLogsQueryOptions = (
 			),
 		select: (data) => ({
 			...data,
-			lines: data.lines.map((line) => window.atob(line)),
+			lines: data.lines.map((line) => stripAnsi(window.atob(line))),
 		}),
 		meta: {
 			watch: mergeWatchStreams,

@@ -19,7 +19,10 @@ import {
 	Link,
 	Strong,
 } from "@rivet-gg/components";
-import { currentActorIdAtom } from "@rivet-gg/components/actors";
+import {
+	ActorsListFiltersSchema,
+	currentActorIdAtom,
+} from "@rivet-gg/components/actors";
 import {
 	Icon,
 	faChrome,
@@ -54,13 +57,12 @@ import devBun, {
 export const Route = createFileRoute("/_layout/")({
 	component: RouteComponent,
 	validateSearch: zodValidator(
-		z.object({
-			actorId: z.string().optional(),
-			tab: z.string().optional(),
-			// filters
-			tags: z.array(z.tuple([z.string(), z.string()])).optional(),
-			showDestroyed: z.boolean().optional(),
-		}),
+		z
+			.object({
+				actorId: z.string().optional(),
+				tab: z.string().optional(),
+			})
+			.merge(ActorsListFiltersSchema),
 	),
 });
 

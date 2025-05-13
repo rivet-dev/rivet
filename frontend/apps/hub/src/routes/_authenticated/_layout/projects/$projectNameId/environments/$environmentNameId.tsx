@@ -30,7 +30,10 @@ function Modals() {
 
 	const handleOpenChange = (value: boolean) => {
 		if (!value) {
-			navigate({ search: (old) => ({ ...old, modal: undefined }) });
+			navigate({
+				to: ".",
+				search: (old) => ({ ...old, modal: undefined }),
+			});
 		}
 	};
 

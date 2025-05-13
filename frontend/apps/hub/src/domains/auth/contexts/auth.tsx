@@ -4,7 +4,7 @@ import {
 	useIdentityTokenMutation,
 	useLogoutMutation,
 } from "@/domains/user/queries";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
 import { bootstrapQueryOptions } from "../queries/bootstrap";

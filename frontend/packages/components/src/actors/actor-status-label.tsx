@@ -1,29 +1,27 @@
 import type { Actor, ActorAtom } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
+import type { ActorStatus } from "./actor-status-indicator";
 
-interface ActorStatusLabelProps {
-	actor: ActorAtom;
-}
+export const ACTOR_STATUS_LABEL_MAP = {
+	unknown: "Unknown",
+	starting: "Starting",
+	running: "Running",
+	stopped: "Stopped",
+	crashed: "Crashed",
+} satisfies Record<ActorStatus, string>;
+
+export const ActorStatusLabel = ({ status }: { status: ActorStatus }) => {
+	return <span>{ACTOR_STATUS_LABEL_MAP[status]}</span>;
+};
 
 const selector = (a: Actor) => a.status;
 
-export const ActorStatusLabel = ({ actor }: ActorStatusLabelProps) => {
+export const AtomizedActorStatusLabel = ({
+	actor,
+}: {
+	actor: ActorAtom;
+}) => {
 	const status = useAtomValue(selectAtom(actor, selector));
-
-	if (status === "running") {
-		return <span>Running</span>;
-	}
-
-	if (status === "starting") {
-		return <span>Starting</span>;
-	}
-
-	if (status === "crashed") {
-		return <span>Crashed</span>;
-	}
-
-	if (status === "stopped") {
-		return <span>Stopped</span>;
-	}
+	return <ActorStatusLabel status={status} />;
 };

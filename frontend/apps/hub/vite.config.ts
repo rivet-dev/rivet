@@ -48,6 +48,9 @@ export default defineConfig({
 	server: {
 		port: 5080,
 	},
+	preview: {
+		port: 5080,
+	},
 	define: {
 		// Provide a unique build ID for cache busting
 		__APP_BUILD_ID__: JSON.stringify(

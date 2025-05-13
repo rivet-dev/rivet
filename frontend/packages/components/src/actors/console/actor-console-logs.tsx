@@ -36,7 +36,7 @@ export function ActorConsoleLogs() {
 				<ActorConsoleLog
 					{...log}
 					key={log.key}
-					showTimestmaps={settings.showTimestmaps}
+					showTimestmaps={settings.showTimestamps}
 					inputTimestamp={log.inputTimestamp}
 					outputTimestamp={log.outputTimestamp}
 				/>

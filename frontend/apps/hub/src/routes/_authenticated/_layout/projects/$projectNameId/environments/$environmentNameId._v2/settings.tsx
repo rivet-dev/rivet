@@ -3,7 +3,7 @@ import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
 import { useDialog } from "@/hooks/use-dialog";
-import { ActionCard, Button, Text } from "@rivet-gg/components";
+import { ActionCard, Button, H1, Text } from "@rivet-gg/components";
 import {
 	type ErrorComponentProps,
 	Link,
@@ -14,12 +14,19 @@ import { z } from "zod";
 
 function EnvironmentSettingsRoute() {
 	return (
-		<div className="p-4">
-			<div className="max-w-5xl mx-auto flex flex-col gap-8">
-				<ServiceTokenCard />
-				<Modals />
+		<>
+			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center">
+				<H1>Settings</H1>
 			</div>
-		</div>
+
+			<hr />
+			<div className="p-4">
+				<div className="max-w-5xl mx-auto flex flex-col gap-8">
+					<ServiceTokenCard />
+					<Modals />
+				</div>
+			</div>
+		</>
 	);
 }
 
@@ -27,9 +34,10 @@ function ServiceTokenCard() {
 	return (
 		<>
 			<ActionCard
+				className="bg-transparent"
 				title="Service token"
 				footer={
-					<Button asChild>
+					<Button asChild variant="secondary">
 						<Link to="." search={{ modal: "service-token" }}>
 							Generate
 						</Link>

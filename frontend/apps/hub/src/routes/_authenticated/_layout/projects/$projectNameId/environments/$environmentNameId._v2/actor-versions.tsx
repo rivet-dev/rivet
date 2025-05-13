@@ -10,15 +10,11 @@ import {
 	usePatchActorBuildTagsMutation,
 	useUpgradeAllActorsMutation,
 } from "@/domains/project/queries";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import {
 	Button,
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
 	DiscreteCopyButton,
-	Flex,
+	H1,
 	Skeleton,
 	Table,
 	TableBody,
@@ -56,139 +52,139 @@ function ProjectBuildsRoute() {
 	const navigate = Route.useNavigate();
 
 	return (
-		<div className="p-4">
-			<Card className="max-w-5xl mx-auto">
-				<CardHeader>
-					<Flex items="center" gap="4" justify="between">
-						<CardTitle>Versions</CardTitle>
-						<div className="flex gap-2">
-							<TagsSelect
-								value={tags}
-								projectId={projectId}
-								environmentId={environmentId}
-								onValueChange={(newTags) => {
-									navigate({
-										search: {
-											tags: Object.entries(newTags).map(
-												([key, value]) =>
-													[key, value] as [
-														string,
-														string,
-													],
-											),
-										},
-									});
-								}}
-							/>
-							<Button
-								size="icon"
-								isLoading={isRefetching}
-								variant="outline"
-								onClick={() => refetch()}
-							>
-								<Icon icon={faRefresh} />
-							</Button>
-						</div>
-					</Flex>
-				</CardHeader>
-				<CardContent>
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>ID</TableHead>
-								<TableHead>Name</TableHead>
-								<TableHead>Tags</TableHead>
-								<TableHead>
-									<WithTooltip
-										content="Actors will be created with this build if a version is not explicitly specified."
-										trigger={
-											<span>
-												Current{" "}
-												<Icon icon={faInfoCircle} />
-											</span>
-										}
-									/>
-								</TableHead>
-								<TableHead>Created</TableHead>
-								<TableHead />
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{!isLoading && builds?.length === 0 ? (
+		<>
+			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center">
+				<H1>Builds</H1>
+				<div className="flex items-center gap-2">
+					<TagsSelect
+						value={tags}
+						projectId={projectId}
+						environmentId={environmentId}
+						onValueChange={(newTags) => {
+							navigate({
+								search: {
+									tags: Object.entries(newTags).map(
+										([key, value]) =>
+											[key, value] as [string, string],
+									),
+								},
+							});
+						}}
+					/>
+					<Button
+						size="icon"
+						isLoading={isRefetching}
+						variant="outline"
+						onClick={() => refetch()}
+					>
+						<Icon icon={faRefresh} />
+					</Button>
+				</div>
+			</div>
+
+			<hr className="mb-4" />
+
+			<div className="p-4">
+				<div className="max-w-5xl mx-auto">
+					<div className="border rounded-md">
+						<Table>
+							<TableHeader>
 								<TableRow>
-									<TableCell colSpan={6}>
-										<Text className="text-center">
-											There's no versions matching
-											criteria.
-										</Text>
-									</TableCell>
-								</TableRow>
-							) : null}
-							{isLoading ? (
-								<>
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-									<RowSkeleton />
-								</>
-							) : null}
-							{builds?.map((build) => (
-								<TableRow key={build.id}>
-									<TableCell>
+									<TableHead>ID</TableHead>
+									<TableHead>Name</TableHead>
+									<TableHead>Tags</TableHead>
+									<TableHead>
 										<WithTooltip
-											content={build.id}
+											content="Actors will be created with this build if a version is not explicitly specified."
 											trigger={
-												<DiscreteCopyButton
-													value={build.id}
-												>
-													{build.id.split("-")[0]}
-												</DiscreteCopyButton>
+												<span>
+													Current{" "}
+													<Icon icon={faInfoCircle} />
+												</span>
 											}
 										/>
-									</TableCell>
-									<TableCell>
-										<DiscreteCopyButton
-											value={build.tags.name}
-										>
-											{build.tags.name}
-										</DiscreteCopyButton>
-									</TableCell>
-									<TableCell>
-										<ActorTags
-											{...build}
-											excludeBuiltIn="builds"
-										/>
-									</TableCell>
-									<TableCell>
-										<ProjectBuildLatestButton
-											projectNameId={projectNameId}
-											environmentNameId={
-												environmentNameId
-											}
-											projectId={projectId}
-											environmentId={environmentId}
-											{...build}
-										/>
-									</TableCell>
-									<TableCell>
-										{build.createdAt.toLocaleString()}
-									</TableCell>
-									<TableCell>
-										<ProjectBuildsTableActions
-											buildId={build.id}
-										/>
-									</TableCell>
+									</TableHead>
+									<TableHead>Created</TableHead>
+									<TableHead />
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</CardContent>
-			</Card>
-		</div>
+							</TableHeader>
+							<TableBody>
+								{!isLoading && builds?.length === 0 ? (
+									<TableRow>
+										<TableCell colSpan={6}>
+											<Text className="text-center">
+												There's no versions matching
+												criteria.
+											</Text>
+										</TableCell>
+									</TableRow>
+								) : null}
+								{isLoading ? (
+									<>
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+										<RowSkeleton />
+									</>
+								) : null}
+								{builds?.map((build) => (
+									<TableRow key={build.id}>
+										<TableCell>
+											<WithTooltip
+												content={build.id}
+												trigger={
+													<DiscreteCopyButton
+														value={build.id}
+													>
+														{build.id.split("-")[0]}
+													</DiscreteCopyButton>
+												}
+											/>
+										</TableCell>
+										<TableCell>
+											<DiscreteCopyButton
+												value={build.tags.name}
+											>
+												{build.tags.name}
+											</DiscreteCopyButton>
+										</TableCell>
+										<TableCell>
+											<ActorTags
+												{...build}
+												excludeBuiltIn="builds"
+											/>
+										</TableCell>
+										<TableCell>
+											<ProjectBuildLatestButton
+												projectNameId={projectNameId}
+												environmentNameId={
+													environmentNameId
+												}
+												projectId={projectId}
+												environmentId={environmentId}
+												{...build}
+											/>
+										</TableCell>
+										<TableCell>
+											{build.createdAt.toLocaleString()}
+										</TableCell>
+										<TableCell>
+											<ProjectBuildsTableActions
+												buildId={build.id}
+											/>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+				</div>
+			</div>
+		</>
 	);
 }
 

@@ -1,8 +1,11 @@
 import {
+	ActorFeature,
 	ActorsActorDetails,
-	ActorsActorDetailsPanel,
+	ActorsActorEmptyDetails,
+	ActorsListFiltersSchema,
 	ActorsListPreview,
 	currentActorAtom,
+	pickActorListFilters,
 } from "@rivet-gg/components/actors";
 import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
@@ -21,7 +24,6 @@ import { useAtomValue } from "jotai";
 import { useDialog } from "@/hooks/use-dialog";
 import { ErrorComponent } from "@/components/error-component";
 import { ActorsProvider } from "@/domains/project/components/actors/actors-provider";
-
 function Actor() {
 	const navigate = Route.useNavigate();
 	const { tab } = Route.useSearch();
@@ -52,7 +54,7 @@ const FIXED_TAGS = {
 function Content() {
 	const { nameId: projectNameId } = useProject();
 	const { nameId: environmentNameId } = useEnvironment();
-	const { actorId, tags, showDestroyed, modal } = Route.useSearch();
+	const { actorId, modal, ...restSearch } = Route.useSearch();
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const GoToActorDialog = useDialog.GoToActor.Dialog;
@@ -69,19 +71,29 @@ function Content() {
 		});
 	}
 
+	const filters = pickActorListFilters(restSearch);
+
 	return (
 		<ActorsProvider
 			projectNameId={projectNameId}
 			environmentNameId={environmentNameId}
-			tags={tags}
-			showDestroyed={showDestroyed}
 			actorId={actorId}
 			fixedTags={FIXED_TAGS}
+			{...filters}
 		>
 			<ActorsListPreview>
-				<ActorsActorDetailsPanel actorId={actorId}>
-					{actorId ? <Actor /> : null}
-				</ActorsActorDetailsPanel>
+				{actorId ? (
+					<Actor />
+				) : (
+					<ActorsActorEmptyDetails
+						features={[
+							ActorFeature.Config,
+							ActorFeature.Logs,
+							ActorFeature.State,
+							ActorFeature.Connections,
+						]}
+					/>
+				)}
 			</ActorsListPreview>
 
 			<CreateActorDialog
@@ -113,7 +125,7 @@ function Content() {
 function ProjectActorsRoute() {
 	const { nameId: projectNameId } = useProject();
 	const { nameId: environmentNameId } = useEnvironment();
-	const { tags, showDestroyed } = Route.useSearch();
+	const { tags, createdAt, destroyedAt } = Route.useSearch();
 
 	const { data } = useSuspenseQuery({
 		...actorBuildsCountQueryOptions({
@@ -124,7 +136,7 @@ function ProjectActorsRoute() {
 			(query.state.data?.builds.length || 0) > 0 ? false : 2000,
 	});
 
-	if (data === 0 && !tags && showDestroyed === undefined) {
+	if (data === 0 && !tags && !createdAt && !destroyedAt) {
 		return <GettingStarted />;
 	}
 
@@ -135,13 +147,12 @@ function ProjectActorsRoute() {
 	);
 }
 
-const searchSchema = z.object({
-	actorId: z.string().optional(),
-	tab: z.string().optional(),
-
-	tags: z.array(z.tuple([z.string(), z.string()])).optional(),
-	showDestroyed: z.boolean().optional().default(true),
-});
+const searchSchema = z
+	.object({
+		actorId: z.string().optional(),
+		tab: z.string().optional(),
+	})
+	.merge(ActorsListFiltersSchema);
 
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/_v2/actors",

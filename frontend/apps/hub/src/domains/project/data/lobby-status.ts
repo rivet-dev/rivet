@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 
 export type LobbyStatus =
 	| "running"

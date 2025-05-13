@@ -10,7 +10,7 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { routeQueryOptions, usePatchRouteMutation } from "../../queries";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 
 interface OptionalContentProps extends DialogContentProps {
 	projectNameId: string;

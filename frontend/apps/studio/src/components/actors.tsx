@@ -1,6 +1,7 @@
 import {
+	ActorFeature,
 	ActorsActorDetails,
-	ActorsActorDetailsPanel,
+	ActorsActorEmptyDetails,
 	ActorsListPreview,
 	currentActorAtom,
 } from "@rivet-gg/components/actors";
@@ -10,9 +11,17 @@ import { useAtomValue } from "jotai";
 export function Actors({ actorId }: { actorId: string | undefined }) {
 	return (
 		<ActorsListPreview>
-			<ActorsActorDetailsPanel actorId={actorId}>
-				{actorId ? <Actor /> : null}
-			</ActorsActorDetailsPanel>
+			{actorId ? (
+				<Actor />
+			) : (
+				<ActorsActorEmptyDetails
+					features={[
+						ActorFeature.Config,
+						ActorFeature.State,
+						ActorFeature.Connections,
+					]}
+				/>
+			)}
 		</ActorsListPreview>
 	);
 }

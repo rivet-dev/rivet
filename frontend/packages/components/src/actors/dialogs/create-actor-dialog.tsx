@@ -9,11 +9,14 @@ import { Flex } from "../../ui/flex";
 import { useAtomValue } from "jotai";
 import { createActorAtom } from "../actor-context";
 import type { DialogContentProps } from "../hooks";
+import { useActorsView } from "../actors-view-context-provider";
 
 interface ContentProps extends DialogContentProps {}
 
 export default function CreateActorDialog({ onClose }: ContentProps) {
 	const { endpoint, create } = useAtomValue(createActorAtom);
+
+	const { copy } = useActorsView();
 
 	return (
 		<>
@@ -38,10 +41,9 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 				defaultValues={{ buildId: "", regionId: "" }}
 			>
 				<DialogHeader>
-					<DialogTitle>Create Actor</DialogTitle>
+					<DialogTitle>{copy.createActorModal.title}</DialogTitle>
 					<DialogDescription>
-						Choose a build to create an Actor from. Actor will be
-						created using default settings.
+						{copy.createActorModal.description}
 					</DialogDescription>
 				</DialogHeader>
 				<Flex gap="4" direction="col">

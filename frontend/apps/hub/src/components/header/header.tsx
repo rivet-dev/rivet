@@ -140,7 +140,7 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 						<Link to="/">
 							<img
 								className="h-6"
-								src={publicUrl("/icon-white-borderless.svg")}
+								src={publicUrl("/icon-bordered.svg")}
 								alt="Rivet logo"
 							/>
 						</Link>

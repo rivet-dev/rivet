@@ -1,6 +1,6 @@
 import { ls } from "@/lib/ls";
 import { isRivetError } from "@/lib/utils";
-import { RivetClient } from "@rivet-gg/api";
+import { RivetClient } from "@rivet-gg/api-full";
 import { RivetClient as RivetEeClient } from "@rivet-gg/api-ee";
 import { type APIResponse, type Fetcher, fetcher } from "@rivet-gg/api/core";
 import { getConfig, timing, toast } from "@rivet-gg/components";

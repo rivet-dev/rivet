@@ -9,7 +9,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { memo } from "react";
 import { ActorRegion } from "./actor-region";
-import { ActorStatusIndicator } from "./actor-status-indicator";
+import { AtomizedActorStatusIndicator } from "./actor-status-indicator";
 import { ActorTags } from "./actor-tags";
 import {
 	isCurrentActorAtom,
@@ -49,7 +49,7 @@ export const ActorsListRow = memo(
 					className="min-w-0 flex-wrap gap-2"
 				>
 					<div className="w-full flex justify-center">
-						<ActorStatusIndicator actor={actor} />
+						<AtomizedActorStatusIndicator actor={actor} />
 					</div>
 					<Region actor={actor} />
 					<SmallText>{id.split("-")[0]}</SmallText>

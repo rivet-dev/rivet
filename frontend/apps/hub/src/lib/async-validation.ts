@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { toast } from "@rivet-gg/components";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import z from "zod";

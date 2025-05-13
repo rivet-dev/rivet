@@ -187,8 +187,8 @@ function convertActor(actor: InspectorActor): Actor {
 	return {
 		...actor,
 		logs: atom({
-			errors: { lines: [], timestamps: [], ids: [] },
-			logs: { lines: [], timestamps: [], ids: [] },
+			status: "pending",
+			logs: [],
 		}),
 		endpoint: `http://localhost:${ACTOR_CORE_MANAGER_PORT}/actors/${actor.id}`,
 		status: "running",

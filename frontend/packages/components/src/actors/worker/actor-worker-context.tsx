@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ActorWorkerContainer } from "./actor-worker-container";
 import { assertNonNullable } from "../../lib/utils";
-import type { Actor, ActorAtom } from "../actor-context";
+import { ActorFeature, type Actor, type ActorAtom } from "../actor-context";
 import { selectAtom } from "jotai/utils";
 import { useAtomValue } from "jotai";
 import { toast } from "sonner";
@@ -27,7 +27,11 @@ export const useActorWorker = () => {
 const selector = (a: Actor) => ({
 	actorId: a.id,
 	endpoint: a.endpoint,
-	enabled: !a.destroyedAt && a.endpoint !== null && a.startedAt !== null,
+	enabled:
+		!a.destroyedAt &&
+		a.endpoint !== null &&
+		a.startedAt !== null &&
+		a.features?.includes(ActorFeature.Console),
 });
 
 interface ActorWorkerContextProviderProps {

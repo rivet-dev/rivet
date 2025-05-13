@@ -68,7 +68,7 @@ export function ActorLogsTab({ actor }: ActorLogsTabProps) {
 					<ActorDetailsSettingsButton />
 				</div>
 			</div>
-			<div className="flex-1 min-h-0 overflow-hidden flex">
+			<div className="flex-1 min-h-0 overflow-hidden flex relative">
 				<ActorLogs
 					actor={actor}
 					typeFilter={logsFilter}

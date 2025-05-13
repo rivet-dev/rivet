@@ -19,8 +19,9 @@ interface ActorConsoleMessageProps {
 		| "error"
 		| "log"
 		| "warn"
+		| "info"
 		| "debug";
-	timestamp?: string;
+	timestamp?: Date;
 	className?: string;
 	children: ReactNode;
 }
@@ -34,7 +35,7 @@ export const ActorConsoleMessage = forwardRef<
 			ref={ref}
 			{...props}
 			className={cn(
-				"whitespace-pre-wrap font-mono-console text-xs text-foreground/90 border-y pl-3 pr-5 flex py-1 -mt-[1px] gap-2",
+				"whitespace-pre-wrap font-mono-console text-xs text-foreground/90 border-b pl-3 pr-5 flex py-1 -mt-[1px] gap-2",
 				getConsoleMessageVariant(variant),
 				className,
 			)}
@@ -42,7 +43,7 @@ export const ActorConsoleMessage = forwardRef<
 			<div className="flex gap-1 w-4 items-center opacity-60 self-start min-h-4 flex-shrink-0 text-xs max-w-2">
 				<ConsoleMessageVariantIcon variant={variant} />
 			</div>
-			<div className="min-h-4 text-foreground/30 flex-shrink-0">
+			<div className="min-h-4 text-foreground/30 flex-shrink-0 empty:hidden">
 				{timestamp
 					? format(timestamp, "LLL dd HH:mm:ss").toUpperCase()
 					: null}

@@ -1,6 +1,6 @@
 import type { SubmitHandler } from "@/domains/project/forms/cdn-manage-auth-users-form";
 import { queryClient } from "@/queries/global";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import bcrypt from "bcryptjs";
 import { useCallback } from "react";
 import {

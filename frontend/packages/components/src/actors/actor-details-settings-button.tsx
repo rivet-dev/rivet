@@ -31,11 +31,11 @@ export function ActorDetailsSettingsButton() {
 			/>
 			<DropdownMenuContent>
 				<DropdownMenuCheckboxItem
-					checked={settings.showTimestmaps}
+					checked={settings.showTimestamps}
 					onCheckedChange={(value) => {
 						setSettings((old) => ({
 							...old,
-							showTimestmaps: value,
+							showTimestamps: value,
 						}));
 					}}
 				>

@@ -29,7 +29,7 @@ import { GroupCommandPanelPage } from "./command-panel/command-panel-page/group-
 import { IndexCommandPanelPage } from "./command-panel/command-panel-page/index-command-panel-page";
 import { ProjectCommandPanelPage } from "./command-panel/command-panel-page/project-command-panel-page";
 
-export function CommandPanel() {
+export function CommandPanel({ className }: { className?: string }) {
 	const [isOpen, setOpen] = useState(false);
 
 	const [search, setSearch] = useState("");
@@ -142,6 +142,7 @@ export function CommandPanel() {
 				variant="outline"
 				className={cn(
 					"relative h-8 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none hidden md:flex md:w-40 lg:w-64",
+					className,
 				)}
 			>
 				<span className="hidden lg:inline-flex">Search...</span>

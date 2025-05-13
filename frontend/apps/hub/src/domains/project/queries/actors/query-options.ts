@@ -1,7 +1,7 @@
 import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { safe, logfmt, type LogFmtValue, toRecord } from "@rivet-gg/components";
 import { getActorStatus } from "@rivet-gg/components/actors";
 import {
@@ -10,7 +10,7 @@ import {
 	keepPreviousData,
 	queryOptions,
 } from "@tanstack/react-query";
-import { uniqueId } from "lodash";
+import stripAnsi from 'strip-ansi';
 
 export const projectActorsQueryOptions = ({
 	projectNameId,
@@ -198,12 +198,10 @@ export const actorLogsQueryOptions = (
 		projectNameId,
 		environmentNameId,
 		actorId,
-		stream,
 	}: {
 		projectNameId: string;
 		environmentNameId: string;
 		actorId: string;
-		stream: Rivet.actors.QueryLogStream;
 	},
 	opts: { refetchInterval?: number } = {},
 ) => {
@@ -217,53 +215,43 @@ export const actorLogsQueryOptions = (
 			"actor",
 			actorId,
 			"logs",
-			stream,
 		] as const,
 		queryFn: async ({
 			signal: abortSignal,
 			meta,
-			queryKey: [, project, , environment, , actorId, , stream],
+			queryKey: [, project, , environment, , actorId],
 		}) => {
 			const response = await rivetClient.actors.logs.get(
 				{
 					project,
 					environment,
-					stream,
 					actorIdsJson: JSON.stringify([actorId]),
 					watchIndex: getMetaWatchIndex(meta),
+					stream: "all",
 				},
 				{ abortSignal },
 			);
-			return {
-				...response,
-				timestamps: response.timestamps.map((ts) => ts.toISOString()),
-				lines: response.lines.map((line) => window.atob(line)),
-				ids: response.timestamps.map(() => uniqueId(stream)),
-			};
+
+			const logs = response.lines.map((line, idx) => {
+				const timestamp = response.timestamps[idx];
+				const stream = response.streams[idx];
+				const raw = stripAnsi(window.atob(line));
+				return {
+					id: `${actorId}-${timestamp}-${idx}`,
+					level: stream === 1 ? "error" : "info",
+					timestamp,
+					line: raw,
+					message: "",
+					properties: {},
+				} as const
+			});
+
+
+			return {...response, logs };
 		},
 		meta: {
 			watch: mergeWatchStreams,
 		},
-	});
-};
-
-export const actorErrorsQueryOptions = ({
-	projectNameId,
-	environmentNameId,
-	actorId,
-}: {
-	projectNameId: string;
-	environmentNameId: string;
-	actorId: string;
-}) => {
-	return queryOptions({
-		...actorLogsQueryOptions({
-			projectNameId,
-			environmentNameId,
-			actorId,
-			stream: "std_err",
-		}),
-		select: (data) => data.lines.length > 0,
 	});
 };
 
@@ -607,7 +595,7 @@ export const logsAggregatedQueryOptions = ({
 				const actorId = logs.actorIds[actorIdx];
 				const timestamp = logs.timestamps[idx];
 				const stream = logs.streams[idx];
-				const raw = window.atob(line);
+				const raw = stripAnsi(window.atob(line));
 				const fmt = safe(logfmt.parse)(raw)[0];
 				const json = safe(JSON.parse)(raw)[0];
 				const formatted = json || fmt;

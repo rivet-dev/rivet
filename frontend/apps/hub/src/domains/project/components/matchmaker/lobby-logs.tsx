@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { Button, LogsView, WithTooltip } from "@rivet-gg/components";
 import { Icon, faSave } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";

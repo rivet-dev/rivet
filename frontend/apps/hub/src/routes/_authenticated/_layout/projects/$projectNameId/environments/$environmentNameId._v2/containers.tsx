@@ -1,9 +1,12 @@
 import {
+	ActorFeature,
 	ActorsActorDetails,
-	ActorsActorDetailsPanel,
+	ActorsActorEmptyDetails,
+	ActorsListFiltersSchema,
 	ActorsListPreview,
 	ActorsViewContext,
 	currentActorAtom,
+	pickActorListFilters,
 } from "@rivet-gg/components/actors";
 import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
@@ -22,7 +25,7 @@ import { useAtomValue } from "jotai";
 import { useDialog } from "@/hooks/use-dialog";
 import { ErrorComponent } from "@/components/error-component";
 import { ActorsProvider } from "@/domains/project/components/actors/actors-provider";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { toRecord } from "@rivet-gg/components";
 
 function Actor() {
@@ -62,12 +65,25 @@ const ACTORS_FILTER = (actor: Rivet.actors.Actor) =>
 const ACTORS_VIEW_CONTEXT = {
 	copy: {
 		goToActor: "Go to Container",
-		selectActor: "Select a Container from the list.",
+		selectActor: (
+			<>
+				No Container selected.
+				<br /> Select a Container from the list to view its details.
+			</>
+		),
 		showActorList: "Show Container list",
 		noActorsFound: "No Containers found",
 		createActor: "Create Container",
 		createActorUsingForm: "Create Container using simple form",
 		actorId: "Container ID",
+		noMoreActors: "No more Containers to load.",
+		noActorsMatchFilter: "No Containers match the filters.",
+
+		createActorModal: {
+			title: "Create Container",
+			description:
+				"Choose a build to create a Container from. Container will be created using default settings.",
+		},
 	},
 	requiresManager: false,
 };
@@ -75,7 +91,7 @@ const ACTORS_VIEW_CONTEXT = {
 function Content() {
 	const { nameId: projectNameId } = useProject();
 	const { nameId: environmentNameId } = useEnvironment();
-	const { actorId, tags, showDestroyed, modal } = Route.useSearch();
+	const { actorId, modal, ...restSearch } = Route.useSearch();
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const GoToActorDialog = useDialog.GoToActor.Dialog;
@@ -92,21 +108,26 @@ function Content() {
 		});
 	}
 
+	const filters = pickActorListFilters(restSearch);
+
 	return (
 		<ActorsViewContext.Provider value={ACTORS_VIEW_CONTEXT}>
 			<ActorsProvider
 				projectNameId={projectNameId}
 				environmentNameId={environmentNameId}
-				tags={tags}
-				showDestroyed={showDestroyed}
 				actorId={actorId}
 				fixedTags={FIXED_TAGS}
 				filter={ACTORS_FILTER}
+				{...filters}
 			>
 				<ActorsListPreview>
-					<ActorsActorDetailsPanel actorId={actorId}>
-						{actorId ? <Actor /> : null}
-					</ActorsActorDetailsPanel>
+					{actorId ? (
+						<Actor />
+					) : (
+						<ActorsActorEmptyDetails
+							features={[ActorFeature.Config, ActorFeature.Logs]}
+						/>
+					)}
 				</ActorsListPreview>
 
 				<CreateActorDialog
@@ -139,7 +160,7 @@ function Content() {
 function ProjectActorsRoute() {
 	const { nameId: projectNameId } = useProject();
 	const { nameId: environmentNameId } = useEnvironment();
-	const { tags, showDestroyed } = Route.useSearch();
+	const { tags, createdAt, destroyedAt } = Route.useSearch();
 
 	const { data } = useSuspenseQuery({
 		...actorBuildsCountQueryOptions({
@@ -150,7 +171,7 @@ function ProjectActorsRoute() {
 			(query.state.data?.builds.length || 0) > 0 ? false : 2000,
 	});
 
-	if (data === 0 && !tags && showDestroyed === undefined) {
+	if (data === 0 && !tags && !createdAt && !destroyedAt) {
 		return <GettingStarted />;
 	}
 
@@ -161,13 +182,12 @@ function ProjectActorsRoute() {
 	);
 }
 
-const searchSchema = z.object({
-	actorId: z.string().optional(),
-	tab: z.string().optional(),
-
-	tags: z.array(z.tuple([z.string(), z.string()])).optional(),
-	showDestroyed: z.boolean().optional().default(true),
-});
+const searchSchema = z
+	.object({
+		actorId: z.string().optional(),
+		tab: z.string().optional(),
+	})
+	.merge(ActorsListFiltersSchema);
 
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/_v2/containers",

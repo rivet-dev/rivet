@@ -1,7 +1,7 @@
 import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 import { isRivetError } from "@/lib/utils";
 import { queryClient, rivetClient } from "@/queries/global";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { toast } from "@rivet-gg/components";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";

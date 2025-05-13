@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import type { LobbyStatus } from "../data/lobby-status";
 
 export type GroupProjects = Rivet.group.GroupSummary & {

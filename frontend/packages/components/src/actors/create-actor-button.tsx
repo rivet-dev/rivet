@@ -13,42 +13,48 @@ export function CreateActorButton(props: ButtonProps) {
 	const endpoint = useAtomValue(actorManagerEndpointAtom);
 	const builds = useAtomValue(actorBuildsCountAtom);
 
-	const canCreate = builds > 0 && endpoint;
-
 	const { copy, requiresManager } = useActorsView();
+
+	const canCreate = builds > 0 || (requiresManager && endpoint);
+
+	const content = (
+		<div>
+			<Button
+				disabled={!canCreate}
+				size="sm"
+				variant="ghost"
+				onClick={() => {
+					navigate({
+						to: ".",
+						search: (prev) => ({
+							...prev,
+							modal: "create-actor",
+						}),
+					});
+				}}
+				startIcon={<Icon icon={faPlus} />}
+				{...props}
+			>
+				{copy.createActor}
+			</Button>
+		</div>
+	);
+
+	if (canCreate) {
+		return content;
+	}
 
 	return (
 		<WithTooltip
-			trigger={
-				<div>
-					<Button
-						disabled={!canCreate}
-						size="sm"
-						variant="ghost"
-						onClick={() => {
-							navigate({
-								to: ".",
-								search: (prev) => ({
-									...prev,
-									modal: "create-actor",
-								}),
-							});
-						}}
-						startIcon={<Icon icon={faPlus} />}
-						{...props}
-					>
-						{copy.createActor}
-					</Button>
-				</div>
-			}
+			trigger={content}
 			content={
 				builds <= 0
-					? "No builds found, please deploy a build first."
+					? "Please deploy a build first."
 					: !requiresManager
 						? copy.createActorUsingForm
 						: endpoint
 							? copy.createActorUsingForm
-							: "No Actor Manager found, please deploy a build first."
+							: "Please deploy a build first."
 			}
 		/>
 	);

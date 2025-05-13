@@ -1,5 +1,5 @@
 import { useDialog } from "@/hooks/use-dialog";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import {
 	Badge,
 	Button,

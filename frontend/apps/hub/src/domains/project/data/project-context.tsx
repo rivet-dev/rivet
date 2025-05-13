@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { projectByIdQueryOptions } from "../queries";
 import { type ReactNode, createContext, useContext, useEffect } from "react";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { ls } from "@/lib/ls";
 import { useAuth } from "@/domains/auth/contexts/auth";
 

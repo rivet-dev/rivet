@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { AssetImage, Flex, Text } from "@rivet-gg/components";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
 

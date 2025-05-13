@@ -1,4 +1,4 @@
-import { VirtualScrollArea } from "@rivet-gg/components";
+import { ShimmerLine, VirtualScrollArea } from "@rivet-gg/components";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useRef } from "react";
 import { useResizeObserver } from "usehooks-ts";
@@ -10,7 +10,7 @@ import { selectAtom } from "jotai/utils";
 
 export type LogsTypeFilter = "all" | "output" | "errors";
 
-const selector = (a: Actor) => ({ logs: a.logs, status: a.status });
+const selector = (a: Actor) => a.logs;
 
 interface ActorLogsProps {
 	actor: ActorAtom;
@@ -41,17 +41,14 @@ export const ActorLogs = memo(
 			},
 		});
 
-		const { logs: logsAtom, status } = useAtomValue(
-			selectAtom(actor, selector),
-		);
+		const logsAtom = useAtomValue(selectAtom(actor, selector));
 
-		const { logs, errors } = useAtomValue(logsAtom);
+		const { logs, status } = useAtomValue(logsAtom);
 
 		const combined = filterLogs({
 			typeFilter: typeFilter ?? "all",
 			filter: filter ?? "",
-			logs: logs as Logs,
-			errors: errors as Logs,
+			logs,
 		});
 
 		// Scroll to the bottom when new logs are added
@@ -111,13 +108,16 @@ export const ActorLogs = memo(
 			);
 		}
 
-		if (logs.status === "pending" || errors.status === "pending") {
+		if (status === "pending") {
 			return (
-				<div className="w-full flex-1 min-h-0">
-					<ActorConsoleMessage variant="debug">
-						Loading logs...
-					</ActorConsoleMessage>
-				</div>
+				<>
+					<ShimmerLine />
+					<div className="w-full flex-1 min-h-0">
+						<ActorConsoleMessage variant="debug">
+							Loading logs...
+						</ActorConsoleMessage>
+					</div>
+				</>
 			);
 		}
 
@@ -150,8 +150,10 @@ export const ActorLogs = memo(
 					className="w-full flex-1 min-h-0"
 					getRowData={(index) => ({
 						...combined[index],
-						children: combined[index].message,
-						timestamp: settings.showTimestmaps
+						children:
+							combined[index].message || combined[index].line,
+						variant: combined[index].level,
+						timestamp: settings.showTimestamps
 							? combined[index].timestamp
 							: undefined,
 					})}
@@ -191,31 +193,16 @@ export function filterLogs({
 	typeFilter,
 	filter,
 	logs,
-	errors,
-}: { typeFilter: LogsTypeFilter; filter: string; logs: Logs; errors: Logs }) {
-	const stdOutput =
-		typeFilter === "errors"
-			? []
-			: (logs?.lines.map((log, index) => ({
-					variant: log.includes("level=WARN")
-						? ("warn" as const)
-						: ("log" as const),
-					message: log,
-					timestamp: logs.timestamps[index],
-					id: logs.ids[index],
-				})) ?? []);
-
-	const errOutput =
-		typeFilter === "output"
-			? []
-			: (errors?.lines.map((log, index) => ({
-					variant: "error" as const,
-					message: log,
-					timestamp: errors.timestamps[index],
-					id: errors.ids[index],
-				})) ?? []);
-
-	const output = [...stdOutput, ...errOutput];
+}: { typeFilter: LogsTypeFilter; filter: string; logs: Logs }) {
+	const output = logs?.filter((log) => {
+		if (typeFilter === "errors") {
+			return log.level === "error";
+		}
+		if (typeFilter === "output") {
+			return log.level !== "error";
+		}
+		return true;
+	});
 
 	// Search
 	const filtered =

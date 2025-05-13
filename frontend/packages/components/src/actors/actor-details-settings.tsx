@@ -8,13 +8,13 @@ import {
 import { useLocalStorage } from "usehooks-ts";
 
 export interface Settings {
-	showTimestmaps: boolean;
+	showTimestamps: boolean;
 	autoFollowLogs: boolean;
 }
 
 export const ActorDetailsSettingsContext = createContext<
 	[Settings, Dispatch<SetStateAction<Settings>>, unknown]
->([{ showTimestmaps: false, autoFollowLogs: true }, () => {}, {}]);
+>([{ showTimestamps: false, autoFollowLogs: true }, () => {}, {}]);
 
 export const useActorDetailsSettings = () => {
 	const value = useContext(ActorDetailsSettingsContext);
@@ -29,7 +29,7 @@ export const ActorDetailsSettingsProvider = ({
 	children,
 }: ActorDetailsSettingsProviderProps) => {
 	const localStorage = useLocalStorage<Settings>("actor-details-settings", {
-		showTimestmaps: false,
+		showTimestamps: false,
 		autoFollowLogs: true,
 	});
 

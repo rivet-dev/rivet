@@ -9,7 +9,7 @@ import {
 	usePatchActorBuildTagsMutation,
 	useUpgradeAllActorsMutation,
 } from "@/domains/project/queries";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import {
 	Button,
 	Card,

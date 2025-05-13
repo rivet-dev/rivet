@@ -3,6 +3,8 @@ import { atomFamily, splitAtom } from "jotai/utils";
 import type { Rivet } from "@rivet-gg/api";
 import { toRecord } from "../lib/utils";
 import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
+import { FilterOp, FilterValue } from "../ui/filters";
+import { isAfter, isBefore } from "date-fns";
 
 export enum ActorFeature {
 	Logs = "logs",
@@ -21,7 +23,6 @@ export type Actor = Omit<
 	status: "unknown" | "starting" | "running" | "stopped" | "crashed";
 
 	lifecycle?: Rivet.actor.Lifecycle;
-	build?: Rivet.actor.Build;
 	endpoint?: string;
 	logs: LogsAtom;
 	network?: Rivet.actor.Network | null;
@@ -34,11 +35,13 @@ export type Actor = Omit<
 };
 
 export type Logs = {
-	status?: string;
-	lines: string[];
-	timestamps: string[];
-	ids: string[];
-};
+	id: string;
+	level: "error" | "info";
+	timestamp: Date;
+	line: string;
+	message: string;
+	properties: Record<string, unknown>;
+}[];
 
 export type Build = Rivet.actor.Build;
 export type DestroyActor = {
@@ -49,7 +52,8 @@ export type DestroyActor = {
 export type ActorAtom = Atom<Actor>;
 export type LogsAtom = Atom<{
 	logs: Logs;
-	errors: Logs;
+	// query status
+	status: string;
 }>;
 export type BuildAtom = Atom<Build>;
 export type DestroyActorAtom = Atom<DestroyActor>;
@@ -72,11 +76,19 @@ export type Region = Rivet.actor.Region;
 export const currentActorIdAtom = atom<string | undefined>(undefined);
 export const actorsAtom = atom<Actor[]>([]);
 export const actorFiltersAtom = atom<{
-	showDestroyed: boolean;
-	tags: Record<string, string>;
+	tags: FilterValue;
+	region: FilterValue;
+	createdAt: FilterValue;
+	destroyedAt: FilterValue;
+	status: FilterValue;
+	devMode: FilterValue;
 }>({
-	showDestroyed: true,
-	tags: {},
+	tags: undefined,
+	region: undefined,
+	createdAt: undefined,
+	destroyedAt: undefined,
+	status: undefined,
+	devMode: undefined,
 });
 export const actorsPaginationAtom = atom({
 	hasNextPage: false,
@@ -105,22 +117,117 @@ export const currentActorRegionAtom = atom((get) => {
 	return regions.find((region) => region.id === actor.region);
 });
 export const filteredActorsAtom = atom((get) => {
-	const { showDestroyed, tags } = get(actorFiltersAtom);
+	const filters = get(actorFiltersAtom);
 	const actors = get(actorsAtom);
 
 	return actors.filter((actor) => {
-		if (!showDestroyed && actor.destroyTs) {
-			return false;
-		}
-		if (Object.keys(tags).length === 0) {
-			return true;
-		}
-		for (const [key, value] of Object.entries(tags)) {
-			if (toRecord(actor.tags)[key] !== value) {
-				return false;
-			}
-		}
-		return true;
+		const satisfiesFilters = Object.entries(filters).every(
+			([key, filter]) => {
+				if (filter === undefined) {
+					return true;
+				}
+				if (key === "tags") {
+					const filterTags = filter.value.map((tag) =>
+						tag.split("="),
+					);
+					const tags = toRecord(actor.tags);
+
+					if (filter.operator === FilterOp.NOT_EQUAL) {
+						return Object.entries(tags).every(
+							([tagKey, tagValue]) => {
+								return filterTags.every(
+									([filterKey, filterValue]) => {
+										if (filterKey === tagKey) {
+											if (filterValue === "*") {
+												return false;
+											}
+											return tagValue !== filterValue;
+										}
+										return true;
+									},
+								);
+							},
+						);
+					}
+
+					return Object.entries(tags).some(([tagKey, tagValue]) => {
+						return filterTags.some(([filterKey, filterValue]) => {
+							if (filterKey === tagKey) {
+								if (filterValue === "*") {
+									return true;
+								}
+								return tagValue === filterValue;
+							}
+							return false;
+						});
+					});
+				}
+
+				if (key === "region") {
+					if (filter.operator === FilterOp.NOT_EQUAL) {
+						return !filter.value.includes(actor.region);
+					}
+
+					return filter.value.includes(actor.region);
+				}
+
+				if (key === "createdAt") {
+					if (actor.createdAt === undefined) {
+						return false;
+					}
+					const createdAt = new Date(actor.createdAt);
+
+					if (filter.operator === FilterOp.AFTER) {
+						return isAfter(createdAt, +filter.value[0]);
+					}
+					if (filter.operator === FilterOp.BEFORE) {
+						return isBefore(createdAt, +filter.value[0]);
+					}
+					if (filter.operator === FilterOp.BETWEEN) {
+						return (
+							isAfter(createdAt, +filter.value[0]) &&
+							isBefore(createdAt, +filter.value[1])
+						);
+					}
+					return false;
+				}
+
+				if (key === "destroyedAt") {
+					if (actor.destroyTs === undefined) {
+						return false;
+					}
+					const destroyedAt = new Date(actor.destroyTs);
+
+					if (filter.operator === FilterOp.AFTER) {
+						return isAfter(destroyedAt, +filter.value[0]);
+					}
+					if (filter.operator === FilterOp.BEFORE) {
+						return isBefore(destroyedAt, +filter.value[0]);
+					}
+					if (filter.operator === FilterOp.BETWEEN) {
+						return (
+							isAfter(destroyedAt, +filter.value[0]) &&
+							isBefore(destroyedAt, +filter.value[1])
+						);
+					}
+					return false;
+				}
+
+				if (key === "status") {
+					if (filter.operator === FilterOp.NOT_EQUAL) {
+						return !filter.value.includes(actor.status);
+					}
+
+					return filter.value.includes(actor.status);
+				}
+			},
+		);
+
+		const isInternal = toRecord(actor.tags).owner === "rivet";
+
+		return (
+			satisfiesFilters && ((isInternal && filters.devMode) || !isInternal)
+		);
 	});
 });
 export const actorsAtomsAtom = splitAtom(
@@ -145,8 +252,8 @@ export const isCurrentActorAtom = atomFamily((actor: ActorAtom) =>
 );
 
 export const actorFiltersCountAtom = atom((get) => {
-	const { showDestroyed, tags } = get(actorFiltersAtom);
-	return Object.keys(tags).length + (+!showDestroyed || 0);
+	const filters = get(actorFiltersAtom);
+	return Object.values(filters).filter((value) => value !== undefined).length;
 });
 
 // tags created by the user, not from the server
@@ -192,8 +299,8 @@ export const actorManagerEndpointAtom = atom<string | null>((get) => {
 });
 
 export const actorTagsAtom = atom((get) => {
-	const actorTags = get(actorsAtomsAtom).flatMap((actor) =>
-		Object.entries(toRecord(get(actor).tags)).map(([key, value]) => ({
+	const actorTags = get(actorsAtom).flatMap((actor) =>
+		Object.entries(toRecord(actor.tags)).map(([key, value]) => ({
 			key,
 			value: value as string,
 		})),

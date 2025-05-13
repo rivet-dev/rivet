@@ -7,9 +7,9 @@ import {
 	projectQueryOptions,
 } from "@/domains/project/queries";
 import { Badge, Skeleton } from "@rivet-gg/components";
-import { Icon, faPuzzle } from "@rivet-gg/icons";
+import { Icon, faAngleRight, faPuzzle } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import type { CommandPanelPage } from "./command-panel-navigation-provider";
 
 function GroupBreadcrumbs({ groupId }: { groupId: string }) {
@@ -81,23 +81,30 @@ export function CommandPanelNavigationBreadcrumbs({
 	return (
 		<div className="mt-2 flex min-h-8 items-center px-3">
 			<Suspense fallback={<Skeleton className="h-4 w-10" />}>
-				{pages.map((page) => (
-					<Badge
-						key={page.key}
-						variant="outline"
-						className="mr-2 flex items-center"
-					>
-						{page.key === "group" && (
-							<GroupBreadcrumbs {...page.params} />
+				{pages.map((page, index) => (
+					<Fragment key={page.key}>
+						{index > 0 && (
+							<Icon
+								icon={faAngleRight}
+								className="mr-2 size-3 text-muted-foreground"
+							/>
 						)}
-						{page.key === "project" && (
-							<ProjectBreadcrumb {...page.params} />
-						)}
-						{page.key === "environment" && (
-							<EnvironmentBreadcrumb {...page.params} />
-						)}
-						{page.key === "backend" && <BackendBreadcrumb />}
-					</Badge>
+						<Badge
+							variant="outline"
+							className="mr-2 flex items-center"
+						>
+							{page.key === "group" && (
+								<GroupBreadcrumbs {...page.params} />
+							)}
+							{page.key === "project" && (
+								<ProjectBreadcrumb {...page.params} />
+							)}
+							{page.key === "environment" && (
+								<EnvironmentBreadcrumb {...page.params} />
+							)}
+							{page.key === "backend" && <BackendBreadcrumb />}
+						</Badge>
+					</Fragment>
 				))}
 			</Suspense>
 		</div>

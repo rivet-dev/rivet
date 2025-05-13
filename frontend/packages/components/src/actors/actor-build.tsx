@@ -1,18 +1,31 @@
 import { Flex, Dt, Dd, Dl, DiscreteCopyButton } from "@rivet-gg/components";
 import { ActorTags } from "./actor-tags";
 import { formatISO } from "date-fns";
-import type { Actor, ActorAtom } from "./actor-context";
+import { actorBuildsAtom, type Actor, type ActorAtom } from "./actor-context";
 import { selectAtom } from "jotai/utils";
 import { useAtomValue } from "jotai";
+import { useCallback } from "react";
 
-const selector = (a: Actor) => a.build;
+const buildIdSelector = (a: Actor) => a.runtime?.build;
 
 interface ActorBuildProps {
 	actor: ActorAtom;
 }
 
 export function ActorBuild({ actor }: ActorBuildProps) {
-	const data = useAtomValue(selectAtom(actor, selector));
+	const buildId = useAtomValue(selectAtom(actor, buildIdSelector));
+
+	const data = useAtomValue(
+		selectAtom(
+			actorBuildsAtom,
+			useCallback(
+				(builds) => {
+					return builds.find((build) => build.id === buildId);
+				},
+				[buildId],
+			),
+		),
+	);
 
 	if (!data) {
 		return null;

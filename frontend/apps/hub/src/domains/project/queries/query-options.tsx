@@ -1,7 +1,7 @@
 import { isRivetError } from "@/lib/utils";
 import { rivetClient, rivetEeClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
-import { RivetError } from "@rivet-gg/api";
+import { RivetError } from "@rivet-gg/api-full";
 import { loadModuleCategories } from "@rivet-gg/components";
 import { queryOptions } from "@tanstack/react-query";
 

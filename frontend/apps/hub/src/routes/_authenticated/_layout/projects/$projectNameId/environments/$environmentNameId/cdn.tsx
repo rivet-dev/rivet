@@ -6,7 +6,7 @@ import {
 	useEnvironmentDomainPublicAuthMutation,
 } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
-import { Rivet } from "@rivet-gg/api";
+import { Rivet } from "@rivet-gg/api-full";
 import {
 	ActionCard,
 	Button,

@@ -1,6 +1,6 @@
 import { router } from "@/app";
 import { queryClient } from "@/queries/global";
-import { toRecord } from "@rivet-gg/components";
+import { type FilterValue, toRecord } from "@rivet-gg/components";
 import {
 	currentActorIdAtom,
 	actorFiltersAtom,
@@ -11,6 +11,7 @@ import {
 	actorRegionsAtom,
 	actorBuildsAtom,
 	createActorAtom,
+	type Logs,
 } from "@rivet-gg/components/actors";
 import {
 	InfiniteQueryObserver,
@@ -29,28 +30,39 @@ import {
 	actorRegionsQueryOptions,
 	actorBuildsQueryOptions,
 } from "../../queries";
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 
 interface ActorsProviderProps {
 	actorId: string | undefined;
-	showDestroyed?: boolean;
-	tags?: [string, string][];
 	projectNameId: string;
 	environmentNameId: string;
 	children?: ReactNode;
 	fixedTags?: Record<string, string>;
 	filter?: (actor: Rivet.actors.Actor) => boolean;
+
+	/// filters
+	tags: FilterValue;
+	region: FilterValue;
+	createdAt: FilterValue;
+	destroyedAt: FilterValue;
+	status: FilterValue;
+	devMode: FilterValue;
 }
 
 export function ActorsProvider({
 	actorId,
-	showDestroyed,
-	tags,
 	projectNameId,
 	environmentNameId,
 	children,
 	fixedTags,
 	filter,
+	// filters
+	tags,
+	region,
+	createdAt,
+	destroyedAt,
+	status,
+	devMode,
 }: ActorsProviderProps) {
 	const [store] = useState(() => createStore());
 
@@ -62,14 +74,14 @@ export function ActorsProvider({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
 	useEffect(() => {
 		store.set(actorFiltersAtom, {
-			showDestroyed: showDestroyed ?? true,
-			tags: Object.fromEntries(
-				tags?.map((tag) => [tag[0], tag[1]]) || [],
-			),
+			tags,
+			region,
+			createdAt,
+			destroyedAt,
+			status,
+			devMode,
 		});
-
-		store.set(currentActorIdAtom, actorId);
-	}, [tags, showDestroyed, actorId]);
+	}, [tags, region, createdAt, destroyedAt, status, devMode]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
 	useEffect(() => {
@@ -79,11 +91,7 @@ export function ActorsProvider({
 				to: ".",
 				search: (old) => ({
 					...old,
-					tags: Object.entries(value.tags).map(([key, value]) => [
-						key,
-						value,
-					]),
-					showDestroyed: value.showDestroyed,
+					...value,
 				}),
 			});
 		});
@@ -91,25 +99,23 @@ export function ActorsProvider({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
 	useEffect(() => {
-		const defaultFilters = store.get(actorFiltersAtom);
 		const actorsObserver = new InfiniteQueryObserver(
 			queryClient,
 			projectActorsQueryOptions({
 				projectNameId,
 				environmentNameId,
-				includeDestroyed: defaultFilters.showDestroyed,
-				tags: { ...defaultFilters.tags, ...fixedTags },
+				includeDestroyed: true,
+				tags: fixedTags,
 			}),
 		);
 
 		const unsubFilters = store.sub(actorFiltersAtom, () => {
-			const filters = store.get(actorFiltersAtom);
 			actorsObserver.setOptions(
 				projectActorsQueryOptions({
 					projectNameId,
 					environmentNameId,
-					tags: { ...filters.tags, ...fixedTags },
-					includeDestroyed: filters.showDestroyed,
+					tags: fixedTags,
+					includeDestroyed: true,
 				}),
 			);
 			actorsObserver.refetch();
@@ -181,36 +187,16 @@ export function ActorsProvider({
 							};
 
 							const logs = atom({
-								logs: {
-									status: "loading",
-									lines: [] as string[],
-									timestamps: [] as string[],
-									ids: [] as string[],
-								},
-								errors: {
-									status: "loading",
-									lines: [] as string[],
-									timestamps: [] as string[],
-									ids: [] as string[],
-								},
+								logs: [] as Logs,
+								status: "pending",
 							});
 							logs.onMount = (set) => {
-								const stdOutObserver = new QueryObserver(
+								const logsObserver = new QueryObserver(
 									queryClient,
 									actorLogsQueryOptions({
 										projectNameId,
 										environmentNameId,
 										actorId: actor.id,
-										stream: "std_out",
-									}),
-								);
-								const stdErrObserver = new QueryObserver(
-									queryClient,
-									actorLogsQueryOptions({
-										projectNameId,
-										environmentNameId,
-										actorId: actor.id,
-										stream: "std_err",
 									}),
 								);
 
@@ -232,59 +218,24 @@ export function ActorsProvider({
 									const data = query.data;
 									set((prev) => ({
 										...prev,
-										logs: {
-											lines:
-												data?.lines || prev.logs.lines,
-											timestamps:
-												data?.timestamps ||
-												prev.logs.timestamps,
-											ids: data?.ids || prev.logs.ids,
-											status: query.status,
-										},
+										...data,
+										status: query.status,
 									}));
 								}
 
-								function updateStdErr(query: LogQuery) {
-									const data = query.data;
-									set((prev) => ({
-										...prev,
-										errors: {
-											lines:
-												data?.lines ||
-												prev.errors.lines,
-											timestamps:
-												data?.timestamps ||
-												prev.errors.timestamps,
-											ids: data?.ids || prev.errors.ids,
-											status: query.status,
-										},
-									}));
-								}
-
-								const subOut = stdOutObserver.subscribe(
+								const subOut = logsObserver.subscribe(
 									(query) => {
 										updateStdOut(query);
 									},
 								);
 
-								const subErr = stdErrObserver.subscribe(
-									(query) => {
-										updateStdErr(query);
-									},
-								);
-
 								updateStdOut(
-									stdOutObserver.getCurrentQuery().state,
-								);
-								updateStdErr(
-									stdErrObserver.getCurrentQuery().state,
+									logsObserver.getCurrentQuery().state,
 								);
 
 								return () => {
-									stdOutObserver.destroy();
-									stdErrObserver.destroy();
+									logsObserver.destroy();
 									subOut();
-									subErr();
 								};
 							};
 

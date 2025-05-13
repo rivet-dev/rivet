@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/api";
+import type { Rivet } from "@rivet-gg/api-full";
 import { H1, Lead, Page } from "@rivet-gg/components";
 import { LayoutGroup, motion } from "framer-motion";
 import { Intro } from "../intro";

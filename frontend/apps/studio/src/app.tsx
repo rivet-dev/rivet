@@ -15,6 +15,7 @@ import { withAtomEffect } from "jotai-effect";
 import {
 	actorFiltersAtom,
 	currentActorIdAtom,
+	pickActorListFilters,
 } from "@rivet-gg/components/actors";
 import { useAtom } from "jotai";
 
@@ -37,25 +38,18 @@ export const router = createRouter({
 
 const effect = withAtomEffect(actorFiltersAtom, (get, set) => {
 	// set initial values
-	const { showDestroyed, tags } = router.state.location.search;
+	const search = router.state.location.search;
 
-	set(actorFiltersAtom, {
-		showDestroyed: showDestroyed ?? true,
-		tags: Object.fromEntries(tags?.map((tag) => [tag[0], tag[1]]) || []),
-	});
+	const filters = pickActorListFilters(search);
 
+	set(actorFiltersAtom, filters);
 	set(currentActorIdAtom, router.state.location.search.actorId);
 });
 
 const effect2 = withAtomEffect(actorFiltersAtom, (get, set) => {
-	const { tags, showDestroyed } = get(actorFiltersAtom);
-	router.navigate({
-		to: ".",
-		search: (old) => ({
-			...old,
-			tags: Object.entries(tags).map(([key, value]) => [key, value]),
-			showDestroyed,
-		}),
+	return router.subscribe("onResolved", (event) => {
+		set(actorFiltersAtom, pickActorListFilters(event.toLocation.search));
+		set(currentActorIdAtom, event.toLocation.search.actorId);
 	});
 });
 
