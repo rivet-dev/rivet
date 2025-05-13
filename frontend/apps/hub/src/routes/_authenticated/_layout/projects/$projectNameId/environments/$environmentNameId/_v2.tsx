@@ -71,59 +71,62 @@ function Sidebar() {
 	const { isFolded, setFolded } = useActorsLayout();
 	return (
 		<motion.div
-			className="p-2 flex flex-col justify-between border-r"
+			className="p-2 flex flex-col justify-between border-r @container"
 			animate={{
-				width: isFolded ? 74 : 192,
-				minWidth: isFolded ? "74px" : "192px",
+				width: isFolded ? "3.5rem" : "12rem",
+				minWidth: isFolded ? "3.5rem" : "12rem",
 			}}
 		>
-			<ul className="w-full flex flex-col gap-2">
-				{SIDEBAR.map((item, index) => {
-					if ("items" in item) {
-						return (
-							<li key={index} className="w-full">
-								<ul className="flex flex-col gap-1">
-									{item.items.map((subItem, subIndex) => {
-										return (
-											<li
-												key={subIndex}
-												className="w-full"
-											>
-												<Link
-													to={subItem.to}
-													from="/projects/$projectNameId/environments/$environmentNameId/"
+			<div className="flex flex-col">
+				<CommandPanel className="lg:w-full md:w-full mb-2" />
+				<ul className="w-full flex flex-col gap-2">
+					{SIDEBAR.map((item, index) => {
+						if ("items" in item) {
+							return (
+								<li key={index} className="w-full">
+									<ul className="flex flex-col gap-1">
+										{item.items.map((subItem, subIndex) => {
+											return (
+												<li
+													key={subIndex}
+													className="w-full"
 												>
-													{({ isActive }) => {
-														return (
-															<SidebarItem
-																isActive={
-																	isActive
-																}
-																label={
-																	subItem.label
-																}
-																icon={
-																	subItem.icon
-																}
-															/>
-														);
-													}}
-												</Link>
-											</li>
-										);
-									})}
-								</ul>
+													<Link
+														to={subItem.to}
+														className="w-full block"
+														from="/projects/$projectNameId/environments/$environmentNameId/"
+													>
+														{({ isActive }) => {
+															return (
+																<SidebarItem
+																	isActive={
+																		isActive
+																	}
+																	label={
+																		subItem.label
+																	}
+																	icon={
+																		subItem.icon
+																	}
+																/>
+															);
+														}}
+													</Link>
+												</li>
+											);
+										})}
+									</ul>
 
-								{index !== SIDEBAR.length - 1 && (
-									<hr className="mt-2" />
-								)}
-							</li>
-						);
-					}
-				})}
-			</ul>
+									{index !== SIDEBAR.length - 1 && (
+										<hr className="mt-2" />
+									)}
+								</li>
+							);
+						}
+					})}
+				</ul>
+			</div>
 			<div className="flex flex-col gap-2">
-				<CommandPanel className="lg:w-full md:w-full" />
 				<Button
 					size="icon"
 					variant="ghost"
@@ -145,7 +148,8 @@ function SidebarItem({
 	return (
 		<Button
 			className={cn(
-				"transition-all min-w-12 text-left justify-start px-2 py-2 h-auto pl-6",
+				"transition-all @[120px]:min-w-12 min-h-9 @[120px]:text-left @[120px]:justify-start px-2 py-2 h-auto @[120px]:pl-6",
+				"pl-2 min-w-0 w-full text-center justify-center",
 				{
 					"w-full": !isFolded,
 					"text-foreground": isActive,
@@ -156,28 +160,9 @@ function SidebarItem({
 			variant="ghost"
 			startIcon={<Icon icon={icon} />}
 		>
-			<AnimatePresence>
-				{isFolded ? null : (
-					<motion.span
-						key="label"
-						initial={{
-							opacity: 0,
-							scale: 0.95,
-						}}
-						animate={{
-							opacity: 1,
-							scale: 1,
-						}}
-						exit={{
-							opacity: 0,
-							scale: 0.95,
-						}}
-						className="flex-1 min-w-0"
-					>
-						{label}
-					</motion.span>
-				)}
-			</AnimatePresence>
+			<span key="label" className="flex-1 min-w-0 hidden @[120px]:block">
+				{label}
+			</span>
 		</Button>
 	);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Slot } from "@radix-ui/react-slot";
+import { Slot, Slottable } from "@radix-ui/react-slot";
 import { Icon, faCopy } from "@rivet-gg/icons";
 import {
 	type ComponentProps,
@@ -131,6 +131,7 @@ export const DiscreteCopyButton = forwardRef<
 					<Button
 						type="button"
 						variant="ghost"
+						className="max-w-full min-w-0 truncate"
 						endIcon={
 							<Icon
 								className="group-hover:opacity-100 opacity-0 transition-opacity"
@@ -138,9 +139,7 @@ export const DiscreteCopyButton = forwardRef<
 							/>
 						}
 					>
-						<div className="max-w-full min-w-0 truncate">
-							{children}
-						</div>
+						{children}
 					</Button>
 				</CopyButton>
 			}

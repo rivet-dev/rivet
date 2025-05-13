@@ -116,15 +116,6 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 									</NavItem>
 									<NavItem asChild>
 										<a
-											href="https://rivet.gg/support"
-											target="_blank"
-											rel="noreferrer"
-										>
-											Help
-										</a>
-									</NavItem>
-									<NavItem asChild>
-										<a
 											href="https://rivet.gg/docs"
 											target="_blank"
 											rel="noreferrer"
@@ -181,15 +172,6 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 						>
 							<Changelog />
 						</ErrorBoundary>
-						<NavItem asChild className="hidden md:inline-block">
-							<a
-								href="https://rivet.gg/support"
-								target="_blank"
-								rel="noreferrer"
-							>
-								Help
-							</a>
-						</NavItem>
 						<NavItem asChild className="hidden md:inline-block">
 							<a
 								href="https://rivet.gg/docs"

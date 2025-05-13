@@ -184,7 +184,7 @@ const FilterOperatorDropdown = ({
 				<Button
 					variant="outline"
 					size="xs"
-					className="shrink-0 rounded-none px-1 border-y-0 ml-1 mr-0"
+					className="shrink-0 rounded-none px-1 border-y-0 ml-1 mr-0 h-full"
 				>
 					<FilterOperatorLabel
 						valuesCount={filterValues.length}
@@ -257,7 +257,7 @@ const FilterValueCombobox = ({
 				<Button
 					variant="outline"
 					size="xs"
-					className="shrink-0 rounded-none px-1 border-y-0 mx-1 border-l-0 mx-0 text-xs"
+					className="shrink-0 rounded-none px-1 border-y-0 mx-1 border-l-0 mx-0 text-xs h-full"
 				>
 					{display}
 				</Button>
@@ -318,7 +318,7 @@ function FilterDateValueCombobox({
 				<Button
 					variant="outline"
 					size="xs"
-					className="shrink-0 rounded-none px-1 border-y-0 mx-1 border-l-0 mx-0"
+					className="shrink-0 rounded-none px-1 border-y-0 mx-1 border-l-0 mx-0 h-full"
 				>
 					{operator === FilterOp.BETWEEN
 						? `${new Date(+value[0]).toLocaleString()} - ${new Date(+value[1]).toLocaleString()}`
@@ -493,7 +493,11 @@ export default function Filters({
 
 					if (!definition) return null;
 					return (
-						<Badge variant="outline" key={key} className="p-0">
+						<Badge
+							variant="outline"
+							key={key}
+							className="p-0 h-7 rounded-md"
+						>
 							<Icon
 								icon={definition.icon}
 								className="mr-1 ml-1.5"
@@ -513,7 +517,7 @@ export default function Filters({
 								onChange={onFiltersChange}
 							/>
 							<Button
-								className="px-0.5 pr-1.5 rounded-none"
+								className="pl-1 pr-1.5 rounded-none h-full"
 								variant="ghost"
 								size="xs"
 								onClick={() => {

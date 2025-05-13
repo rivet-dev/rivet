@@ -36,8 +36,8 @@ export const changelogQueryOptions = () => {
 			if (!response.ok) {
 				throw new Error("Failed to fetch changelog");
 			}
-			const result = Changelog.safeParse(await response.json());
-			return result.success ? result.data : [];
+			const result = Changelog.parse(await response.json());
+			return result;
 		},
 	});
 };

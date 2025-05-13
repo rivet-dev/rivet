@@ -8,10 +8,14 @@ export const ChangelogItem = z.object({
 	slug: z.string(),
 	authors: z.array(
 		z.object({
-			url: z.string(),
 			name: z.string(),
 			role: z.string(),
 			avatar: z.object({ url: z.string() }),
+			socials: z.object({
+				twitter: z.string().optional(),
+				github: z.string().optional(),
+				bluesky: z.string().optional(),
+			})
 		}),
 	),
 });

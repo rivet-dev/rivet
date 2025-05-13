@@ -64,7 +64,7 @@ const Footer = () => {
 	return (
 		<footer className="text-muted-foreground bg-background p-4 text-center text-sm border-t relative">
 			<div className="container">
-				<div className="flex items-center justify-between">
+				<div className="flex items-center justify-between @container">
 					<div className="flex gap-4 items-center justify-between w-full lg:w-auto lg:justify-normal">
 						<div className="flex gap-4 items-center">
 							<img
@@ -76,7 +76,7 @@ const Footer = () => {
 						</div>
 						<a
 							className="flex items-center gap-2 hover:underline"
-							href="https://rivet-gg.betteruptime.com/"
+							href="https://rivet.betteruptime.com/"
 							target="_blank"
 							rel="noreferrer"
 						>
@@ -128,13 +128,6 @@ const Footer = () => {
 							Home
 						</NavItem>
 						<NavItem
-							href="https://rivet.gg/support"
-							target="_blank"
-							rel="noreferrer"
-						>
-							Help
-						</NavItem>
-						<NavItem
 							href="https://rivet.gg/pricing"
 							target="_blank"
 							rel="noreferrer"
@@ -149,7 +142,7 @@ const Footer = () => {
 							Docs
 						</NavItem>
 						<NavItem
-							href="https://calendly.com/d/zvq-v4z-84t/rivet-founders-15-minute"
+							href="https://rivet.gg/sales"
 							target="_blank"
 							rel="noreferrer"
 						>

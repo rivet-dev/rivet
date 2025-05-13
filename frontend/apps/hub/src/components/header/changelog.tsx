@@ -13,12 +13,14 @@ import {
 	WithTooltip,
 	cn,
 } from "@rivet-gg/components";
-import { Icon, faExternalLinkAlt, faSparkle } from "@rivet-gg/icons";
+import { Icon, faSparkle } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useLocalStorage } from "usehooks-ts";
 import { NavItem } from "./nav-item";
 
-interface ChangelogEntryProps extends ChangelogItem {}
+interface ChangelogEntryProps extends ChangelogItem {
+	isNew?: boolean;
+}
 
 export function ChangelogEntry({
 	published,
@@ -27,6 +29,7 @@ export function ChangelogEntry({
 	description,
 	slug,
 	authors,
+	isNew,
 }: ChangelogEntryProps) {
 	return (
 		<div className="py-2">
@@ -35,14 +38,25 @@ export function ChangelogEntry({
 					<div className="bg-white text-background size-8 rounded-full flex items-center justify-center">
 						<Icon icon={faSparkle} className="m-0" />
 					</div>
-					<h4 className="font-bold text-lg">New Update</h4>
+					<h4 className="font-bold text-lg text-foreground">
+						{isNew ? (
+							<span>New Update</span>
+						) : (
+							<span>Latest Update</span>
+						)}
+					</h4>
 				</div>
 				<Badge variant="outline">
 					{new Date(published).toLocaleDateString()}
 				</Badge>
 			</div>
 
-			<div>
+			<a
+				href={`https://rivet.gg/changelog/${slug}`}
+				target="_blank"
+				rel="noreferrer"
+				className="block"
+			>
 				<Picture className="rounded-md border my-4 h-[200px] w-full block overflow-hidden">
 					<PictureFallback>
 						<Skeleton className="size-full" />
@@ -57,41 +71,36 @@ export function ChangelogEntry({
 				<p className="font-semibold text-sm">{title}</p>
 
 				<p className="text-xs mt-1 text-muted-foreground">
-					{description}
-					<a
-						className="text-right text-xs flex gap-1.5 text-foreground items-center"
-						href={`https://rivet.gg/changelog/${slug}`}
-						target="_blank"
-						rel="noreferrer"
-					>
-						Read more <Icon icon={faExternalLinkAlt} />
-					</a>
+					{description}{" "}
+					<span className="text-right text-xs inline gap-1.5 text-foreground items-center">
+						Read more...
+					</span>
 				</p>
-				<div className="flex items-end justify-end mt-2">
-					<div className="flex gap-2 items-center">
-						<a
-							className="flex gap-1.5 items-center flex-row-reverse text-right"
-							href={authors[0].url}
-						>
-							<Avatar className="size-8">
-								<AvatarFallback>
-									{authors[0].name[0]}
-								</AvatarFallback>
-								<AvatarImage
-									src={`https://rivet.gg/${authors[0].avatar.url}`}
-									alt={authors[0].name}
-								/>
-							</Avatar>
-							<div className="ml-2">
-								<p className="font-semibold text-sm">
-									{authors[0].name}
-								</p>
-								<p className="text-xs text-muted-foreground">
-									{authors[0].role}
-								</p>
-							</div>
-						</a>
-					</div>
+			</a>
+			<div className="flex items-end justify-end mt-2">
+				<div className="flex gap-2 items-center">
+					<a
+						className="flex gap-1.5 items-center flex-row-reverse text-right"
+						href={authors[0].socials.twitter}
+					>
+						<Avatar className="size-8">
+							<AvatarFallback>
+								{authors[0].name[0]}
+							</AvatarFallback>
+							<AvatarImage
+								src={`https://rivet.gg/${authors[0].avatar.url}`}
+								alt={authors[0].name}
+							/>
+						</Avatar>
+						<div className="ml-2">
+							<p className="font-semibold text-sm">
+								{authors[0].name}
+							</p>
+							<p className="text-xs text-muted-foreground">
+								{authors[0].role}
+							</p>
+						</div>
+					</a>
 				</div>
 			</div>
 		</div>
@@ -134,10 +143,6 @@ export function Changelog({ className }: ChangelogProps) {
 		</NavItem>
 	);
 
-	if (data.length === 0) {
-		return trigger;
-	}
-
 	return (
 		<WithTooltip
 			delayDuration={0}
@@ -147,7 +152,7 @@ export function Changelog({ className }: ChangelogProps) {
 				}
 			}}
 			trigger={trigger}
-			content={<ChangelogEntry {...data[0]} />}
+			content={<ChangelogEntry {...data[0]} isNew={hasNewChangelog} />}
 		/>
 	);
 }

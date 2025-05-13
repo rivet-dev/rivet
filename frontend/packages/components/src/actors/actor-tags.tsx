@@ -65,9 +65,9 @@ export function ActorTags({
 											value={`${key}=${value}`}
 										>
 											<ActorTag className="flex-shrink-0 truncate max-w-52 cursor-pointer">
-												<button type="button">
+												<span>
 													{key}={value}
-												</button>
+												</span>
 											</ActorTag>
 										</DiscreteCopyButton>
 									}

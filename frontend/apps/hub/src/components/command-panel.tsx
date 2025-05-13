@@ -141,13 +141,12 @@ export function CommandPanel({ className }: { className?: string }) {
 				onClick={open}
 				variant="outline"
 				className={cn(
-					"relative h-8 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none hidden md:flex md:w-40 lg:w-64",
+					"py-2 px-0 @[100px]:px-4 @[100px]:py-2 justify-center items-center relative h-8 w-full @[100px]:justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none hidden md:flex md:w-40 lg:w-64",
 					className,
 				)}
 			>
-				<span className="hidden lg:inline-flex">Search...</span>
-				<span className="inline-flex lg:hidden">Search...</span>
-				<Kbd className="absolute right-[0.3rem] top-[0.3rem] hidden sm:flex">
+				<span className="hidden @[100px]:inline-flex">Search...</span>
+				<Kbd className="@[100px]:absolute right-[0.3rem] top-[0.3rem] hidden sm:flex">
 					<Kbd.Key />K
 				</Kbd>
 			</Button>

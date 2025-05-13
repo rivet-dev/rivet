@@ -19,6 +19,14 @@ import {
 	type OnFiltersChange,
 	FilterValueSchema,
 	FilterOp,
+	createFiltersPicker,
+	createFiltersSchema,
+	OptionsProviderProps,
+	FilterValue,
+	Checkbox,
+	CommandGroup,
+	CommandItem,
+	SmallText,
 } from "@rivet-gg/components";
 import {
 	useInfiniteQuery,
@@ -54,45 +62,15 @@ import {
 } from "@rivet-gg/components/actors";
 import { ErrorComponent } from "@/components/error-component";
 import { useDebounceCallback } from "usehooks-ts";
-
-const searchSchema = z
-	.object({
-		level: FilterValueSchema,
-		routeId: FilterValueSchema,
-		actorId: FilterValueSchema,
-
-		search: z.string().optional(),
-		flags: z.array(z.enum(["case-sensitive", "regex"])).optional(),
-	})
-	.strip();
-
-export const Route = createFileRoute(
-	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/_v2/logs",
-)({
-	validateSearch: zodValidator(searchSchema),
-	staticData: {
-		layout: "v2",
-	},
-	component: ProjectFunctionsRoute,
-	pendingComponent: Layout.Content.Skeleton,
-	errorComponent(props: ErrorComponentProps) {
-		return (
-			<div className="p-4">
-				<div className="max-w-5xl mx-auto">
-					<ErrorComponent {...props} />
-				</div>
-			</div>
-		);
-	},
-});
+import { actors } from "@rivet-gg/api-full/serialization";
 
 function ProjectFunctionsRoute() {
 	const { environmentNameId, projectNameId } = Route.useParams();
 
 	const navigate = Route.useNavigate();
-	const { flags, search, level, routeId, actorId } = Route.useSearch();
+	const { flags, search, ...restSearch } = Route.useSearch();
 
-	const filters = { level, routeId, actorId };
+	const filters = pickLogsFilters(restSearch) as Filters;
 
 	usePrefetchInfiniteQuery({
 		...projectActorsQueryOptions({
@@ -171,75 +149,15 @@ function ProjectFunctionsRoute() {
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element>>(null);
 
-	const definitions = useMemo(
-		() =>
-			({
-				level: {
-					label: "Level",
-					icon: faSignal,
-					type: "select",
-					options: [
-						{ label: "Info", value: "info" },
-						{ label: "Warning", value: "warning" },
-						{ label: "Error", value: "error" },
-					],
-				},
-				routeId: {
-					label: "Route",
-					type: "select",
-					icon: faSwap,
-					options:
-						routes?.map((route) => ({
-							label: `${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`,
-							value: route.id,
-						})) ?? [],
-				},
-				actorId: {
-					label: "Instance",
-					type: "select",
-					icon: faKey,
-					options:
-						actors?.map((actor) => {
-							const name = toRecord(actor.tags).name as string;
-							return {
-								label: (
-									<div className="flex items-center gap-1">
-										<ActorRegion
-											regionId={actor.region}
-											className="justify-start"
-										/>
-
-										{name ? (
-											<span>
-												{name}{" "}
-												<span>
-													({actor.id.split("-")[0]})
-												</span>
-											</span>
-										) : (
-											actor.id.split("-")[0]
-										)}
-									</div>
-								),
-								value: actor.id,
-							};
-						}) ?? [],
-				},
-			}) satisfies FilterDefinitions,
-		[actors, routes],
-	);
-
 	// filter all rows by filters
 	const filteredRows =
 		rows?.filter((row) => {
 			const satisfiesFilters = Object.entries(filters).every(
-				([defId, filter]) => {
-					if (!filter) return true;
-					const { operator, value } = filter;
-					const def = definitions[defId as keyof typeof definitions];
-					if (!def || value.length === 0) return true;
+				([key, filter]) => {
+					if (filter === undefined) return true;
 
-					if (defId === "level") {
+					if (key === "level") {
+						const { operator, value } = filter;
 						if (operator === FilterOp.EQUAL) {
 							return value.includes(row.level as string);
 						}
@@ -250,7 +168,8 @@ function ProjectFunctionsRoute() {
 						}
 					}
 
-					if (defId === "routeId") {
+					if (key === "routeId") {
+						const { operator, value } = filter;
 						const route = routes?.filter(
 							(route) => value.includes(route.id) && !!route,
 						);
@@ -280,7 +199,8 @@ function ProjectFunctionsRoute() {
 						}
 					}
 
-					if (defId === "actorId") {
+					if (key === "actorId") {
+						const { operator, value } = filter;
 						const actor = actors?.find(
 							(actor) => actor.id === row.actorId,
 						);
@@ -358,7 +278,7 @@ function ProjectFunctionsRoute() {
 				<FilterCreator
 					value={filters}
 					onChange={onFiltersChange}
-					definitions={definitions}
+					definitions={FILTER_DEFINITIONS}
 				/>
 			</div>
 			<div className="flex flex-1 min-h-0 max-h-full">
@@ -538,4 +458,183 @@ const ActorBadge = forwardRef<
 			</Link>
 		</Button>
 	);
+});
+
+type Filters = {
+	level: FilterValue;
+	routeId: FilterValue;
+	actorId: FilterValue;
+};
+
+const FILTER_DEFINITIONS = {
+	level: {
+		label: "Level",
+		icon: faSignal,
+		type: "select",
+		options: [
+			{ label: "Info", value: "info" },
+			{ label: "Warning", value: "warning" },
+			{ label: "Error", value: "error" },
+		],
+	},
+	routeId: {
+		label: "Route",
+		type: "select",
+		icon: faSwap,
+		options: RouteOptions,
+	},
+	actorId: {
+		label: "Instance",
+		type: "select",
+		icon: faKey,
+		options: ActorOptions,
+	},
+} satisfies FilterDefinitions;
+
+export const LogsFiltersSchema = createFiltersSchema(FILTER_DEFINITIONS);
+
+export const pickLogsFilters = createFiltersPicker(FILTER_DEFINITIONS);
+
+function ActorOptions({ onSelect, value: filterValue }: OptionsProviderProps) {
+	const { environmentNameId, projectNameId } = Route.useParams();
+
+	const { data: actors = [] } = useInfiniteQuery(
+		projectActorsQueryOptions({
+			projectNameId,
+			environmentNameId,
+			includeDestroyed: true,
+			tags: {},
+		}),
+	);
+	return (
+		<CommandGroup>
+			{actors.map(({ id, ...actor }) => {
+				const isSelected = filterValue.some((val) => val === id);
+
+				const name = toRecord(actor.tags).name as string;
+				return (
+					<CommandItem
+						key={id}
+						className="group flex gap-2 items-center"
+						value={id}
+						onSelect={() => {
+							if (isSelected) {
+								onSelect(
+									filterValue.filter(
+										(filterKey) => filterKey !== id,
+									),
+									{ closeAfter: true },
+								);
+								return;
+							}
+
+							onSelect([...filterValue, id], {
+								closeAfter: true,
+							});
+						}}
+					>
+						<Checkbox
+							checked={isSelected}
+							className={cn({
+								"opacity-0 group-data-[selected=true]:opacity-100":
+									!isSelected,
+							})}
+						/>
+						<div className="flex items-center gap-1">
+							<ActorRegion
+								regionId={actor.region}
+								className="justify-start"
+							/>
+
+							{name ? (
+								<span>
+									{name} <span>({id.split("-")[0]})</span>
+								</span>
+							) : (
+								id.split("-")[0]
+							)}
+						</div>
+					</CommandItem>
+				);
+			})}
+		</CommandGroup>
+	);
+}
+
+function RouteOptions({ onSelect, value: filterValue }: OptionsProviderProps) {
+	const { environmentNameId, projectNameId } = Route.useParams();
+	const { data: routes = [] } = useQuery(
+		routesQueryOptions({
+			projectNameId,
+			environmentNameId,
+		}),
+	);
+	return (
+		<CommandGroup>
+			{routes.map(({ id, ...route }) => {
+				const isSelected = filterValue.some((val) => val === id);
+				return (
+					<CommandItem
+						key={id}
+						className="group flex gap-2 items-center"
+						value={id}
+						onSelect={() => {
+							if (isSelected) {
+								onSelect(
+									filterValue.filter(
+										(filterKey) => filterKey !== id,
+									),
+									{ closeAfter: true },
+								);
+								return;
+							}
+
+							onSelect([...filterValue, id], {
+								closeAfter: true,
+							});
+						}}
+					>
+						<Checkbox
+							checked={isSelected}
+							className={cn({
+								"opacity-0 group-data-[selected=true]:opacity-100":
+									!isSelected,
+							})}
+						/>
+						<SmallText>
+							{`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
+						</SmallText>
+					</CommandItem>
+				);
+			})}
+		</CommandGroup>
+	);
+}
+
+const searchSchema = z
+	.object({
+		search: z.string().optional(),
+		flags: z.array(z.enum(["case-sensitive", "regex"])).optional(),
+	})
+	.merge(LogsFiltersSchema)
+	.strip();
+
+export const Route = createFileRoute(
+	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/_v2/logs",
+)({
+	validateSearch: zodValidator(searchSchema),
+	staticData: {
+		layout: "v2",
+	},
+	component: ProjectFunctionsRoute,
+	pendingComponent: Layout.Content.Skeleton,
+	errorComponent(props: ErrorComponentProps) {
+		return (
+			<div className="p-4">
+				<div className="max-w-5xl mx-auto">
+					<ErrorComponent {...props} />
+				</div>
+			</div>
+		);
+	},
 });
