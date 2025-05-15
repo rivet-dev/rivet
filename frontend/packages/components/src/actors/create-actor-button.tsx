@@ -2,20 +2,20 @@ import { Button, WithTooltip, type ButtonProps } from "@rivet-gg/components";
 import { Icon, faPlus } from "@rivet-gg/icons";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
-import {
-	actorBuildsCountAtom,
-	actorManagerEndpointAtom,
-} from "./actor-context";
+import { actorBuildsCountAtom } from "./actor-context";
 import { useActorsView } from "./actors-view-context-provider";
 
 export function CreateActorButton(props: ButtonProps) {
 	const navigate = useNavigate();
-	const endpoint = useAtomValue(actorManagerEndpointAtom);
 	const builds = useAtomValue(actorBuildsCountAtom);
 
-	const { copy, requiresManager } = useActorsView();
+	const { copy, canCreate: canCreateActors } = useActorsView();
 
-	const canCreate = builds > 0 || (requiresManager && endpoint);
+	const canCreate = builds > 0 && canCreateActors;
+
+	if (!canCreateActors) {
+		return null;
+	}
 
 	const content = (
 		<div>
@@ -50,11 +50,7 @@ export function CreateActorButton(props: ButtonProps) {
 			content={
 				builds <= 0
 					? "Please deploy a build first."
-					: !requiresManager
-						? copy.createActorUsingForm
-						: endpoint
-							? copy.createActorUsingForm
-							: "Please deploy a build first."
+					: copy.createActorUsingForm
 			}
 		/>
 	);

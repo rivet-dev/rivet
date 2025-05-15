@@ -154,7 +154,9 @@ function ProjectBuildsRoute() {
 										</TableCell>
 										<TableCell>
 											<ActorTags
+												className="max-w-[200px]"
 												{...build}
+												truncate={true}
 												excludeBuiltIn="builds"
 											/>
 										</TableCell>

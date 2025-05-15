@@ -40,13 +40,18 @@ export function ActorBuild({ actor }: ActorBuildProps) {
 				<Dl>
 					<Dt>ID</Dt>
 					<Dd>
-						<DiscreteCopyButton size="xs" value={data.id}>
+						<DiscreteCopyButton
+							size="xs"
+							value={data.id}
+							className="truncate"
+						>
 							{data.id}
 						</DiscreteCopyButton>
 					</Dd>
 					<Dt>Created</Dt>
 					<Dd>
 						<DiscreteCopyButton
+							className="truncate"
 							size="xs"
 							value={formatISO(data.createdAt)}
 						>
@@ -63,6 +68,7 @@ export function ActorBuild({ actor }: ActorBuildProps) {
 						>
 							<ActorTags
 								className="justify-start text-foreground"
+								truncate={false}
 								tags={data.tags}
 							/>
 						</Flex>

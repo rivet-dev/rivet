@@ -220,6 +220,8 @@ export const filteredActorsAtom = atom((get) => {
 
 					return filter.value.includes(actor.status);
 				}
+
+				return true;
 			},
 		);
 

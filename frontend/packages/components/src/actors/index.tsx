@@ -13,4 +13,5 @@ export * from "./console/actor-inspector";
 export * from "./actor-status-indicator";
 export * from "./actor-status-label";
 export * from "./actors-view-context-provider";
+export * from "./actor-not-found";
 export { ActorsListFiltersSchema, pickActorListFilters } from "./actors-list";

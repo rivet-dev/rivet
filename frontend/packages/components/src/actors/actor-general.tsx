@@ -53,6 +53,7 @@ export function ActorGeneral({ actor }: ActorGeneralProps) {
 						>
 							<ActorTags
 								className="justify-start text-foreground"
+								truncate={false}
 								tags={tags}
 							/>
 						</Flex>

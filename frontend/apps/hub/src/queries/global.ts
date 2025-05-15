@@ -133,6 +133,7 @@ const clientOptions: RivetClient.Options = {
 			...args,
 			withCredentials: true,
 			maxRetries: 0,
+			timeoutMs: 30_000 // 30 seconds
 		});
 
 		return response;

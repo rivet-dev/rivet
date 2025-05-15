@@ -159,8 +159,6 @@ const FormMessage = React.forwardRef<
 	const msg = error?.root?.message || error?.message;
 	const body = msg ? String(msg) : children;
 
-	console.log({ error, msg, body });
-
 	if (!error) {
 		return null;
 	}

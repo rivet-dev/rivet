@@ -43,7 +43,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useActorsView } from "./actors-view-context-provider";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { ActorTag } from "./actor-tags";
 import type { ActorStatus as ActorStatusType } from "./actor-status-indicator";
 import { ActorStatus } from "./actor-status";
@@ -261,7 +261,7 @@ const FILTER_DEFINITIONS = {
 	},
 	devMode: {
 		type: "boolean",
-		label: "Dev Mode",
+		label: "Show hidden actors",
 		icon: faCode,
 	},
 } satisfies FilterDefinitions;
@@ -305,11 +305,24 @@ function Filters() {
 		[navigate],
 	);
 
+	const { copy } = useActorsView();
+
+	const filtersDefs = useMemo(() => {
+		return {
+			...FILTER_DEFINITIONS,
+			devMode: {
+				...FILTER_DEFINITIONS.devMode,
+				hidden: true,
+				label: copy.showHiddenActors,
+			},
+		};
+	}, [copy.showHiddenActors]);
+
 	return (
 		<FilterCreator
 			value={filters}
 			onChange={onFiltersChange}
-			definitions={FILTER_DEFINITIONS}
+			definitions={filtersDefs}
 		/>
 	);
 }

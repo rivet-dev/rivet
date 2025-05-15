@@ -82,8 +82,10 @@ function Tags({ actor }: { actor: ActorAtom }) {
 				<div className="relative overflow-r-gradient">
 					<ActorTags
 						className="flex-nowrap empty:block overflow-hidden"
-						truncate={false}
+						truncate={true}
+						copy={false}
 						tags={tags}
+						hoverable={false}
 						excludeBuiltIn="actors"
 					/>
 				</div>
@@ -94,7 +96,9 @@ function Tags({ actor }: { actor: ActorAtom }) {
 					<ActorTags
 						excludeBuiltIn="actors"
 						className="empty:block"
+						copy={false}
 						truncate={false}
+						hoverable={false}
 						tags={tags}
 					/>
 				</>

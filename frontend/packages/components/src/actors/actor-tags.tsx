@@ -30,6 +30,8 @@ interface ActorTagsProps {
 	excludeBuiltIn?: keyof typeof BUILT_IN_TAGS;
 	className?: string;
 	truncate?: boolean;
+	copy?: boolean;
+	hoverable?: boolean;
 }
 
 export function ActorTags({
@@ -37,6 +39,8 @@ export function ActorTags({
 	excludeBuiltIn = undefined,
 	truncate = true,
 	className,
+	hoverable = true,
+	copy = true,
 }: ActorTagsProps) {
 	return (
 		<div
@@ -54,32 +58,52 @@ export function ActorTags({
 								: true,
 						)
 						.sort(([a], [b]) => a.localeCompare(b))
-						.map(([key, value]) =>
-							truncate ? (
-								<WithTooltip
+						.map(([key, value]) => {
+							let trigger = truncate ? (
+								<ActorTag
 									key={key}
-									content={`${key}=${value}`}
-									trigger={
-										<DiscreteCopyButton
-											size="xs"
-											value={`${key}=${value}`}
-										>
-											<ActorTag className="flex-shrink-0 truncate max-w-52 cursor-pointer">
-												<span>
-													{key}={value}
-												</span>
-											</ActorTag>
-										</DiscreteCopyButton>
-									}
-								/>
-							) : (
-								<ActorTag key={key} className="flex-shrink-0">
+									className="break-all truncate max-w-52 cursor-pointer inline"
+								>
 									<span>
 										{key}={value}
 									</span>
 								</ActorTag>
-							),
-						)
+							) : (
+								<ActorTag key={key}>
+									<span className="inline break-all max-w-full whitespace-normal">
+										{key}={value}
+									</span>
+								</ActorTag>
+							);
+
+							trigger = copy ? (
+								<DiscreteCopyButton
+									key={key}
+									size="xs"
+									className={cn(
+										"h-auto py-0.5 text-left max-w-full min-w-0 break-all",
+										truncate && "flex max-w-52",
+									)}
+									value={`${key}=${value}`}
+								>
+									<Slot className="mr-1 inline">
+										{trigger}
+									</Slot>
+								</DiscreteCopyButton>
+							) : (
+								trigger
+							);
+
+							return truncate && hoverable && !copy ? (
+								<WithTooltip
+									key={key}
+									content={`${key}=${value}`}
+									trigger={trigger}
+								/>
+							) : (
+								trigger
+							);
+						})
 				: null}
 		</div>
 	);

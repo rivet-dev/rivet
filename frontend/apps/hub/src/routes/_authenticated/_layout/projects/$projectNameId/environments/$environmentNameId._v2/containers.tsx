@@ -1,5 +1,6 @@
 import {
 	ActorFeature,
+	ActorNotFound,
 	ActorsActorDetails,
 	ActorsActorEmptyDetails,
 	ActorsListFiltersSchema,
@@ -35,7 +36,11 @@ function Actor() {
 	const actor = useAtomValue(currentActorAtom);
 
 	if (!actor) {
-		return null;
+		return (
+			<ActorNotFound
+				features={[ActorFeature.Config, ActorFeature.Logs]}
+			/>
+		);
 	}
 
 	return (
@@ -68,7 +73,10 @@ const ACTORS_VIEW_CONTEXT = {
 		selectActor: (
 			<>
 				No Container selected.
-				<br /> Select a Container from the list to view its details.
+				<br />
+				<span className="text-sm text-muted-foreground">
+					Select a Container from the list to view its details.
+				</span>
 			</>
 		),
 		showActorList: "Show Container list",
@@ -78,14 +86,19 @@ const ACTORS_VIEW_CONTEXT = {
 		actorId: "Container ID",
 		noMoreActors: "No more Containers to load.",
 		noActorsMatchFilter: "No Containers match the filters.",
+		showHiddenActors: "Show hidden Containers",
 
 		createActorModal: {
 			title: "Create Container",
 			description:
 				"Choose a build to create a Container from. Container will be created using default settings.",
 		},
+
+		actorNotFound: "Container not found",
+		actorNotFoundDescription:
+			"Change your filters to find the Container you are looking for.",
 	},
-	requiresManager: false,
+	canCreate: false,
 };
 
 function Content() {

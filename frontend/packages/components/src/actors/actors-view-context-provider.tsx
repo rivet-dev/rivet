@@ -8,11 +8,15 @@ const defaultValue = {
 		selectActor: (
 			<>
 				No Actor selected.
-				<br /> Select an Actor from the list to view its details.
+				<br />{" "}
+				<span className="text-sm text-muted-foreground">
+					Select an Actor from the list to view its details.
+				</span>
 			</>
 		),
 		goToActor: "Go to Actor",
 		showActorList: "Show Actor List",
+		showHiddenActors: "Show hidden Actors",
 		actorId: "Actor ID",
 		noActorsMatchFilter: "No Actors match the filters.",
 		noMoreActors: "No more Actors to load.",
@@ -22,8 +26,12 @@ const defaultValue = {
 			description:
 				"Choose a build to create an Actor from. Actor will be created using default settings.",
 		},
+
+		actorNotFound: "Actor not found",
+		actorNotFoundDescription:
+			"Change your filters to find the Actor you are looking for.",
 	},
-	requiresManager: true,
+	canCreate: true,
 };
 
 export const ActorsViewContext =

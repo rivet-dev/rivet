@@ -18,6 +18,7 @@ import { HeaderRouteLoader } from "./header-route-loader";
 import { HeaderSubNav } from "./header-sub-nav";
 import { MobileHeaderSubNav } from "./mobile-header-sub-nav";
 import { NavItem } from "./nav-item";
+import { CommandPanel } from "../command-panel";
 
 const UserProfileButton = () => {
 	const { profile } = useAuth();
@@ -50,7 +51,7 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 	return (
 		<header
 			className={cn(
-				" sticky top-0 z-10 flex items-center gap-4 border-b py-2",
+				" sticky top-0 z-10 flex items-center gap-4 border-b py-2 @container",
 				{
 					"bg-background/60 backdrop-blur": variant === "default",
 					"bg-background": variant === "opaque",
@@ -140,6 +141,7 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 						</div>
 					</nav>
 					<div className="gap-6 font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm">
+						<CommandPanel className="h-full" />
 						<NavItem
 							asChild
 							className="hidden md:inline-block border px-4 py-2 rounded-md"

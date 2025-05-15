@@ -1,5 +1,6 @@
 import {
 	ActorFeature,
+	ActorNotFound,
 	ActorsActorDetails,
 	ActorsActorEmptyDetails,
 	ActorsListFiltersSchema,
@@ -31,7 +32,16 @@ function Actor() {
 	const actor = useAtomValue(currentActorAtom);
 
 	if (!actor) {
-		return null;
+		return (
+			<ActorNotFound
+				features={[
+					ActorFeature.Config,
+					ActorFeature.Logs,
+					ActorFeature.State,
+					ActorFeature.Connections,
+				]}
+			/>
+		);
 	}
 
 	return (

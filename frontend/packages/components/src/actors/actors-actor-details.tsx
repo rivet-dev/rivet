@@ -79,7 +79,7 @@ export const ActorsActorEmptyDetails = ({
 	);
 };
 
-function ActorTabs({
+export function ActorTabs({
 	tab,
 	features,
 	onTabChange,

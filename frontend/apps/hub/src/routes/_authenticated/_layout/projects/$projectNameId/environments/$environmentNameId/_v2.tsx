@@ -78,7 +78,6 @@ function Sidebar() {
 			}}
 		>
 			<div className="flex flex-col">
-				<CommandPanel className="lg:w-full md:w-full mb-2" />
 				<ul className="w-full flex flex-col gap-2">
 					{SIDEBAR.map((item, index) => {
 						if ("items" in item) {

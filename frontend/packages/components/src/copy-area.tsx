@@ -131,7 +131,7 @@ export const DiscreteCopyButton = forwardRef<
 					<Button
 						type="button"
 						variant="ghost"
-						className="max-w-full min-w-0 truncate"
+						className={cn(props.className, "max-w-full min-w-0")}
 						endIcon={
 							<Icon
 								className="group-hover:opacity-100 opacity-0 transition-opacity"
