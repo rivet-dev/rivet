@@ -34,6 +34,12 @@ import { TutorialsSection } from "./TutorialsSection";
 import { CommandCenterSection } from "./CommandCenterSection";
 import { CommunitySection } from "./CommunitySection";
 import { CtaSection } from "./CtaSection";
+import GlobeSvg from "../(img)/globe.svg";
+import ActorsSvg from "../(img)/actors.svg";
+import ContainerSvg from "../(img)/container.svg";
+import WorkflowSvg from "../(img)/workflow.svg";
+import DbSvg from "../(img)/db.svg";
+import Image from "next/image";
 
 export const metadata: Metadata = {
 	title: "Rivet - The Open-Source Serverless Platform",
@@ -59,14 +65,13 @@ export default function IndexPage() {
 		</>
 	);
 }
-
 // Hero component with title, subtitle, and CTA buttons
 const Hero = () => {
 	return (
 		<div className="relative isolate overflow-hidden pt-14">
 			<div className="mx-auto max-w-7xl px-6 pt-24 pb-12 sm:pt-32 sm:pb-16 lg:px-8">
 				<div className="mx-auto max-w-4xl text-center">
-					<h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl md:text-6xl">
+					<h1 className="text-4xl font-medium tracking-tight text-white sm:text-6xl md:text-6xl">
 						The Open-Source
 						<br className="hidden sm:block" />
 						Serverless Platform
@@ -94,34 +99,20 @@ const Hero = () => {
 						<Button
 							size="lg"
 							asChild
-							className="px-4 pr-6 py-3 text-base bg-gradient-to-b from-[#FF5C00] to-[#FF5C00]/90 border border-[#FF5C00]/30 hover:border-[#FF5C00]/60 transition-all duration-200 group"
+							className="px-4 py-3 text-base bg-gradient-to-b from-[#FF5C00] to-[#FF5C00]/90 border border-[#FF5C00]/30 hover:border-[#FF5C00]/60 hover:from-[#E65400] hover:to-[#E65400]/90 transition-all duration-200"
 						>
-							<Link
-								href="#deploy"
-								className="flex items-center justify-center relative"
-							>
+							<Link href="#deploy">
 								<span>Deploy in 1 Minute</span>
-								<Icon
-									icon={faArrowRight}
-									className="absolute right-2 text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200"
-								/>
 							</Link>
 						</Button>
 						<Button
 							variant="outline"
 							size="lg"
 							asChild
-							className="px-4 pr-6 py-3 text-base border-white/10 hover:border-white/30 transition-all duration-200 group"
+							className="px-4 py-3 text-base border-white/10 hover:border-white/30 transition-all duration-200"
 						>
-							<Link
-								href="#demo"
-								className="flex items-center justify-center relative"
-							>
+							<Link href="#demo">
 								<span>Book Demo</span>
-								<Icon
-									icon={faArrowRight}
-									className="absolute right-2 text-sm opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200"
-								/>
 							</Link>
 						</Button>
 					</div>
@@ -176,24 +167,22 @@ const Feature = ({
 }) => {
 	return (
 		<Link href={href} className="block group">
-			<div className="rounded-xl bg-[#121212] group-hover:bg-zinc-800/90 border border-white/5 group-hover:border-[white]/20 shadow-sm transition-all duration-200 relative overflow-hidden h-[280px] flex flex-col">
-				{/* Simple icon that lights up on hover */}
-				<div className="h-32 w-full flex items-center justify-center mt-6">
-					<Icon
-						icon={faIcon}
-						className="text-6xl text-white/10 group-hover:text-[#FF5C00]/90 transition-colors duration-300"
-					/>
-				</div>
+			<div className="rounded-xl bg-[#121212] group-hover:bg-zinc-800/90 border border-white/5 group-hover:border-[white]/20 shadow-sm transition-all duration-200 relative overflow-hidden h-[450px] w-[360px] flex flex-col">
+				<div className="px-8 mt-6">
+					<div className="flex items-center gap-3 mb-6">
+						<Icon
+							icon={faIcon}
+							className="text-lg text-white/10 group-hover:text-white transition-colors duration-300"
+						/>
+						<h3 className="text-lg font-normal text-white">
+							{title}
+						</h3>
+					</div>
 
-				{/* Text content */}
-				<div className="px-8 pb-8 flex-1 mt-4">
-					<h3 className="text-xl font-semibold text-white mb-2">
-						{title}
-					</h3>
-					<p className="text-white/60 text-sm">{description}</p>
+					<p className="text-white text-sm">{description}</p>
 					
 					{useCases && useCases.length > 0 && (
-						<div className="mt-2 flex flex-wrap gap-x-2 text-xs text-white/50">
+						<div className="mt-3 flex flex-wrap gap-x-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
 							<span className="text-white/40">Good for:</span> 
 							{useCases.map((useCase, index) => (
 								<span key={index} className="text-white/70">
@@ -202,13 +191,66 @@ const Feature = ({
 							))}
 						</div>
 					)}
-					
-					<div className="flex items-center mt-4 text-[#FF5C00] opacity-0 group-hover:opacity-100 transition-opacity">
-						<span className="text-sm font-medium">Learn more</span>
-						<Icon
-							icon={faArrowRight}
-							className="ml-2 text-xs group-hover:translate-x-0.5 transition-all"
-						/>
+				</div>
+
+				<div className="mt-auto">
+					{title === "Functions" && (
+						<div className="absolute bottom-0 left-0 h-80 w-80 opacity-10 group-hover:opacity-20 transition-opacity duration-200 -ml-8 -mb-36">
+							<Image
+								src={GlobeSvg}
+								alt="Globe"
+								fill
+								className="object-contain scale-105"
+							/>
+						</div>
+					)}
+					{title === "Stateful Actors" && (
+						<div className="absolute top-[240px] left-0 h-64 w-64 opacity-10 group-hover:opacity-20 transition-opacity duration-200 -ml-8">
+							<Image
+								src={ActorsSvg}
+								alt="Actors"
+								fill
+								className="object-contain scale-105"
+							/>
+						</div>
+					)}
+					{title === "Sandboxed Containers" && (
+						<div className="absolute top-[240px] left-0 h-80 w-80 opacity-10 group-hover:opacity-20 transition-opacity duration-200 -ml-[100px]">
+							<Image
+								src={ContainerSvg}
+								alt="Container"
+								fill
+								className="object-contain scale-105"
+							/>
+						</div>
+					)}
+					{title === "Workflows" && (
+						<div className="absolute top-[200px] left-0 h-80 w-80 opacity-10 group-hover:opacity-20 transition-opacity duration-200 -ml-[100px]">
+							<Image
+								src={WorkflowSvg}
+								alt="Workflow"
+								fill
+								className="object-contain scale-105"
+							/>
+						</div>
+					)}
+					{title === "SQLite Databases" && (
+						<div className="absolute top-[200px] left-0 h-80 w-80 opacity-10 group-hover:opacity-20 transition-opacity duration-200 -ml-[100px]">
+							<Image
+								src={DbSvg}
+								alt="Database"
+								fill
+								className="object-contain scale-105"
+							/>
+						</div>
+					)}
+					<div className="px-8 pb-8 relative z-10">
+						<div className="flex items-center justify-end text-[#505052] opacity-0 group-hover:opacity-100 transition-opacity">
+							<Icon
+								icon={faArrowRight}
+								className="text-xl group-hover:translate-x-0.5 transition-all"
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -257,8 +299,8 @@ const FeaturesGrid = () => {
 	];
 
 	return (
-		<div className="mx-auto w-full px-6 pt-0 pb-16 -mt-8">
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-16 md:mt-20">
+		<div className="mx-auto w-full px-4 pt-0 pb-16 -mt-8 max-w-[1200px]">
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-16 md:mt-20 justify-items-center">
 				{features.map((feature, index) => (
 					<Feature
 						key={index}
@@ -272,10 +314,10 @@ const FeaturesGrid = () => {
 			</div>
 			<div className="text-center mt-16">
 				<p className="text-white/80 text-lg">
-					<span className="font-medium text-white">
-						Use one or use them all.
+					<span className="font-normal text-white">
+						Select the products that fit your needs
 					</span>{" "}
-					Best-in-class products integrated into a single platform.
+					— integrated together into a single platform.
 				</p>
 			</div>
 		</div>
@@ -310,7 +352,7 @@ const FrameworksSection = () => {
 		<div className="mx-auto max-w-7xl px-6 py-28 lg:py-44 lg:px-8 mt-16">
 			<div className="flex flex-col md:flex-row md:items-start">
 				<div className="md:w-1/3 mb-8 md:mb-0 md:pr-8">
-					<h2 className="text-3xl font-bold tracking-tight text-white text-left">
+					<h2 className="text-4xl font-medium tracking-tight text-white text-left">
 						Rivet works with any framework
 					</h2>
 					<p className="mt-4 text-lg text-white/70 text-left">
@@ -341,3 +383,4 @@ const FrameworksSection = () => {
 		</div>
 	);
 };
+

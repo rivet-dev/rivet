@@ -21,7 +21,7 @@ export const CommandCenterSection = () => {
   return (
     <div className="mx-auto max-w-7xl px-6 py-28 lg:py-44 lg:px-8 mt-16">
       <div className="text-center mb-12">
-        <h2 className="text-3xl font-bold tracking-tight text-white">The command center your backend is missing</h2>
+        <h2 className="text-4xl font-medium tracking-tight text-white">The command center your backend is missing</h2>
         <p className="mt-4 text-lg text-white/70">Complete visibility and control over your serverless infrastructure</p>
       </div>
       

@@ -73,7 +73,7 @@ export const CommunitySection = () => {
   return (
     <div className="mx-auto max-w-7xl px-6 py-28 lg:py-44 lg:px-8 mt-16">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold tracking-tight text-white">Join the community</h2>
+        <h2 className="text-4xl font-medium tracking-tight text-white">Join the community</h2>
         <p className="mt-4 text-lg text-white/70">Connect with thousands of developers building with Rivet</p>
       </div>
       
