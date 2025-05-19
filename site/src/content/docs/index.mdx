@@ -1,22 +1,42 @@
+import { Icon, faActorsBorderless, faServer, faFunction } from '@rivet-gg/icons';
+
 # Welcome to Rivet
 
-Rivet is an open-source platform for deploying and managing cloud services. Whether you're building collaborative applications, multiplayer games, AI agents, or any cloud service, Rivet provides the infrastructure you need.
+Rivet is an open-source platform for deploying and scaling complex backends. Whether you're building collaborative applications, multiplayer games, AI agents, or any cloud service, Rivet provides the infrastructure you need.
 
-## Rivet Actors
+## <Icon icon={faFunction} className="mr-2" /> Stateless Functions
 
-Deploy stateful, long-running services that can handle WebSockets and maintain state between requests. Perfect for realtime applications, multiplayer games, and collaborative tools.
+**Description**: Short-lived HTTP requests at the edge
 
-[Documentation →](/docs/actors)
+**State**: No persistent state (store state in [Actors](/docs/actors) or external database)
 
-## Rivet Containers
+**Use Cases**: APIs, edge computing, microservices
 
-Deploy any Docker container to the cloud with full control over your runtime environment. Great for CPU-intensive applications or existing software.
+**Replaces**: Cloudflare Workers, AWS Lambda, Google Cloud Run Functions
 
-[Documentation →](/docs/containers)
+[Get Started →](/docs/functions)
 
-## Rivet Functions
+## <Icon icon={faActorsBorderless} className="mr-2" /> Stateful Actors
 
-Create serverless functions that respond to HTTP requests. Ideal for APIs, webhooks, and backend services with automatic scaling.
+**Description**: Long running tasks with state persistence, hibernation, and realtime
 
-[Documentation →](/docs/functions)
+**State**: Yes, built-in state persistence (also works with external databases)
+
+**Use Cases**: AI agents, realtime apps, local-first sync, rate limiting, stream processing
+
+**Replaces**: Cloudflare Durable Objects, Redis, Socket.io, AWS Lambda + DynamoDB + EventBridge
+
+[Get Started →](/docs/actors)
+
+## <Icon icon={faServer} className="mr-2" /> Sandboxed Containers
+
+**Description**: Docker-like containers for CPU- or memory-intensive workloads
+
+**State**: No persistent state (store state in [Actors](/docs/actors) or external database)
+
+**Use Cases**: Sandboxed code execution, desktop/browser automation, game servers, FFmpeg, PDF processing
+
+**Replaces**: Kubernetes Batch Jobs, AWS Fargate, Google Cloud Run
+
+[Get Started →](/docs/containers)
 

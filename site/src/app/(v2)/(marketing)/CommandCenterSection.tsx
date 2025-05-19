@@ -1,69 +1,131 @@
 "use client";
 
-import { useState } from "react";
-import { Icon, faCheck } from "@rivet-gg/icons";
+import Image from "next/image";
+import imgHub from "@/images/screenshots/rivet-hub.png";
+import {
+	faTerminal,
+	faChartLine,
+	faBug,
+	faHeartPulse,
+	faUserGroup,
+	faGaugeHigh,
+	faCodeBranch,
+	faLeaf,
+	faEye,
+	faFlask,
+	faMagnifyingGlass,
+} from "@rivet-gg/icons";
+import { FeatureItem } from "./ServerlessLimitationsSection";
+import { Feature } from "./components/Feature";
 
 // Command Center section
 export const CommandCenterSection = () => {
-  const [activeTab, setActiveTab] = useState("monitoring");
-  
-  const tabs = [
-    { id: "monitoring", title: "Monitoring", },
-    { id: "logs", title: "Logs", },
-    { id: "local-dev", title: "Local Dev", },
-    { id: "collaboration", title: "Collaboration", },
-  ];
+	const features: FeatureItem[] = [
+		{
+			name: "Observability & Monitoring",
+			icon: faTerminal,
+			description:
+				"Real-time monitoring out of the box with powerful log querying",
+		},
+		{
+			name: "Preview Environments",
+			icon: faFlask,
+			description: "Test changes in isolated environments before deploying"
+		},
+		{
+			name: "Instant Rollbacks",
+			icon: faCodeBranch,
+			description: "Safely deploy and revert changes with zero downtime",
+		},
+		{
+			name: "Team Access",
+			icon: faUserGroup,
+			description: "Collaborate securely with teammates"
+		},
+	];
 
-  const features = [
-    "Live Logs", "Crash Reporting", "Log Retention", "Error Tracing", "Performance Metrics", "Alerts"
-  ];
+	return (
+		<div className="w-full px-6 py-40 lg:py-48">
+			<div className="relative">
+				{/* Screenshot */}
+				<div
+					className="absolute inset-0 z-[-1] overflow-hidden"
+					style={{ perspective: "2000px" }}
+				>
+					{/* Add a gradient overlay at the container level to fade out the entire element including border */}
+					<div 
+						className="absolute inset-0 z-[1] pointer-events-none" 
+						style={{
+							background: "linear-gradient(90deg, hsl(var(--background) / 0) 66%, hsl(var(--background) / 0.95) 85%, hsl(var(--background) / 1) 100%)",
+						}}
+					/>
+					
+					<div
+						className="absolute border-2 border-white/10 rounded-md"
+						style={{
+							transformStyle: "preserve-3d",
+							transform:
+								"translateX(-11%) scale(1.2) rotateX(38deg) rotateY(19deg) rotateZ(340deg)",
+							transformOrigin: "top left",
+							top: "210px",
+							left: "0",
+							right: "0",
+							width: "80%",
+							maxWidth: "1200px",
+							margin: "0 auto",
+							aspectRatio: "16/9",
+							boxShadow: "0 35px 60px -15px rgba(0, 0, 0, 0.5)",
+							zIndex: 0,
+						}}
+					>
+						{/* Hub screenshot with enhanced depth */}
+						<div
+							className="w-full h-full overflow-hidden"
+							style={{
+								transformStyle: "preserve-3d",
+								backfaceVisibility: "hidden",
+								position: "relative",
+							}}
+						>
+							<Image
+								src={imgHub}
+								alt="Rivet Hub dashboard"
+								className="w-full h-auto object-cover object-top"
+								fill
+								sizes="(max-width: 768px) 100vw, 80vw"
+								priority
+								quality={90}
+							/>
+						</div>
+					</div>
+				</div>
 
-  return (
-    <div className="mx-auto max-w-7xl px-6 py-28 lg:py-44 lg:px-8 mt-16">
-      <div className="text-center mb-12">
-        <h2 className="text-4xl font-medium tracking-tight text-white">The command center your backend is missing</h2>
-        <p className="mt-4 text-lg text-white/70">Complete visibility and control over your serverless infrastructure</p>
-      </div>
-      
-      <div className="flex justify-center mb-12">
-        <div className="inline-flex space-x-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`px-6 py-3 rounded-md text-base font-medium transition-all duration-200 border ${
-                activeTab === tab.id 
-                  ? "bg-zinc-900 text-white border-zinc-700" 
-                  : "text-white/60 hover:text-white hover:bg-black/10 border-transparent"
-              }`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.title}
-            </button>
-          ))}
-        </div>
-      </div>
-      
-      <div className="flex justify-center mb-12">
-        <div className="flex space-x-12">
-          {features.map((feature, index) => (
-            <div key={index} className="flex items-center">
-              <div className="text-white/40 mr-2">
-                <Icon icon={faCheck} className="text-sm" />
-              </div>
-              <span className="text-sm text-white/80">{feature}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="flex justify-center">
-        <div className="w-full max-w-4xl h-[480px] bg-zinc-900 border border-white/5 rounded-xl overflow-hidden">
-          {/* Placeholder for hub screenshot */}
-          <div className="w-full h-full flex items-center justify-center text-white/40">
-            Hub Screenshot Placeholder
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+				{/* Content */}
+				<div>
+					{/* Header */}
+					<div className="max-w-7xl mx-auto relative z-10">
+						<h2 className="max-w-lg text-4xl font-medium tracking-tight text-white">
+							The command center your backend is missing
+						</h2>
+						<p className="max-w-lg mt-4 text-lg text-white/70">
+							Complete visibility and control over your serverless
+							infrastructure
+						</p>
+					</div>
+
+					{/* Spacer */}
+					<div className="h-[450px]" />
+
+					{/* Features grid */}
+					<div className="pt-16 relative bg-gradient-to-t from-[hsl(var(--background))] via-[hsl(var(--background))] to-transparent z-10">
+						<div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 gap-x-6 gap-y-6">
+							{features.map((feature, index) => (
+								<Feature key={index} feature={feature} />
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 };

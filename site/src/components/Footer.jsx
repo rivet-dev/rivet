@@ -18,15 +18,28 @@ import {
 } from "@rivet-gg/icons";
 
 const footer = {
-	docs: [{ name: "Documentation", href: "/docs" }],
-	company: [
-		// { name: 'We\'re hiring!', href: 'https://rivet-gg.notion.site/Job-Board-eed66f2eab2b4d7ea3e21ccd63b22efe?pvs=4', newTab: true, highlight: true, badge: '1' },
+	product: [
+		{ name: "Functions", href: "/docs/functions" },
+		{ name: "Actors", href: "/docs/actors" },
+		{ name: "Containers", href: "/docs/containers" },
+	],
+	devs: [
+		{ name: "Documentation", href: "/docs" },
+		{ name: "Integrations", href: "/integrations" },
+		{ name: "API Reference", href: "/docs/api" },
+		{ name: "Changelog", href: "/changelog" },
+		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
+	],
+	resources: [
+		{ name: "Blog", href: "/blog" },
+		{
+			name: "Rivet vs Cloudflare Workers",
+			href: "/rivet-vs-cloudflare-workers",
+		},
 		{ name: "Support", href: "/support" },
 		{ name: "Pricing", href: "/pricing" },
 		{ name: "Sales", href: "/sales" },
-		{ name: "Manifesto", href: "/manifesto" },
-		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
-		{ name: "OSS Friends", href: "/oss-friends" },
+		{ name: "Open-Source Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.gg/press-kit.zip" },
 	],
 	legal: [
@@ -120,10 +133,10 @@ export function PageNextPrevious({ navigation }) {
 
 function SmallPrint() {
 	return (
-		<div className="mx-auto max-w-screen-2xl pb-8 pt-16 sm:pt-20">
-			<div className="xl:grid xl:grid-cols-2 xl:gap-8">
+		<div className="mx-auto max-w-screen-2xl w-full pb-8 pt-16 sm:pt-20">
+			<div className="xl:grid xl:grid-cols-12 xl:gap-24">
 				{/* Brands & links */}
-				<div className="space-y-8">
+				<div className="space-y-8 xl:col-span-3">
 					{/* Logo */}
 					<Image className="size-12" src={imgLogo} alt="Rivet" />
 					<p className="text-sm leading-6 text-gray-300">
@@ -146,13 +159,13 @@ function SmallPrint() {
 				</div>
 
 				{/* Links */}
-				<div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3 xl:mt-0">
+				<div className="mt-16 grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-4 xl:col-span-9 xl:mt-0">
 					<div>
 						<div className="text-sm font-semibold leading-6 text-white">
-							Documentation
+							Product
 						</div>
 						<ul role="list" className="mt-3 space-y-2">
-							{footer.docs.map((item) => (
+							{footer.product.map((item) => (
 								<li key={item.name}>
 									<Link
 										href={item.href}
@@ -167,10 +180,28 @@ function SmallPrint() {
 					</div>
 					<div>
 						<div className="text-sm font-semibold leading-6 text-white">
-							Company
+							Developers
 						</div>
 						<ul role="list" className="mt-3 space-y-2">
-							{footer.company.map((item) => (
+							{footer.devs.map((item) => (
+								<li key={item.name}>
+									<Link
+										href={item.href}
+										target={item.target}
+										className="text-sm leading-4 text-gray-300 hover:text-white"
+									>
+										{item.name}
+									</Link>
+								</li>
+							))}
+						</ul>
+					</div>
+					<div>
+						<div className="text-sm font-semibold leading-6 text-white">
+							Resources
+						</div>
+						<ul role="list" className="mt-3 space-y-2">
+							{footer.resources.map((item) => (
 								<li key={item.name}>
 									<Link
 										href={item.href}
@@ -182,7 +213,7 @@ function SmallPrint() {
 										<span
 											className={clsx(
 												item.highlight &&
-													"text-violet-200 drop-shadow-[0_0_10px_rgba(221,214,254,0.5)]",
+												"text-violet-200 drop-shadow-[0_0_10px_rgba(221,214,254,0.5)]",
 											)}
 										>
 											{item.name}
@@ -197,7 +228,7 @@ function SmallPrint() {
 							))}
 						</ul>
 					</div>
-					<div className="mt-10 md:mt-0">
+					<div>
 						<div className="text-sm font-semibold leading-6 text-white">
 							Legal
 						</div>
@@ -235,7 +266,7 @@ export function Footer() {
 
 			<footer
 				aria-labelledby="footer-heading"
-				className="mx-auto max-w-screen-xl px-6 lg:px-8"
+				className="mx-auto max-w-screen-2xl px-6 lg:px-12"
 			>
 				<h2 id="footer-heading" className="sr-only">
 					Footer

@@ -8,8 +8,35 @@ import { Icon, faDiscord } from "@rivet-gg/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "unframer";
+import { AnimatePresence, motion } from "framer-motion";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
+
+interface TextNavItemProps {
+  href: string;
+  children: ReactNode;
+  onMouseEnter?: () => void;
+  className?: string;
+  ariaCurrent?: boolean | "page" | "step" | "location" | "date" | "time";
+}
+
+function TextNavItem({ href, children, onMouseEnter, className, ariaCurrent }: TextNavItemProps) {
+  return (
+    <div className={cn("px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200", className)}>
+      <RivetHeader.NavItem
+        asChild
+        onMouseEnter={onMouseEnter}
+      >
+        <Link
+          href={href}
+          className="text-white"
+          aria-current={ariaCurrent}
+        >
+          {children}
+        </Link>
+      </RivetHeader.NavItem>
+    </div>
+  );
+}
 
 type Subnav = false | "product" | "solutions";
 
@@ -38,21 +65,21 @@ export function FancyHeader({
 		<>
 			<div
 				className={cn(
-					"pointer-events-none fixed inset-0 z-10 hidden backdrop-blur-sm transition-opacity md:block",
+					"pointer-events-none fixed inset-0 z-50 hidden backdrop-blur-sm transition-opacity md:block",
 					isSubnavOpen ? "opacity-100" : "opacity-0",
 				)}
 			/>
 			<motion.div
-				className="fixed top-0 z-10  w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8"
+				className="fixed top-0 z-50  w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8"
 				onMouseLeave={() => setIsSubnavOpen(false)}
 			>
 				<motion.div className='relative before:pointer-events-none before:absolute  before:inset-[-1px] before:z-20  before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] md:before:block'>
 					<motion.div
 						className={cn(
-							"absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl backdrop-blur-md backdrop-saturate-[140%] transition-all md:block",
+							"absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl transition-all md:block",
 							isSubnavOpen
 								? "bg-background backdrop-blur-0 backdrop-saturate-0"
-								: "bg-white/5 bg-gradient-to-r from-white/5 to-black/10",
+								: "bg-background/80 backdrop-blur-lg",
 						)}
 					/>
 					<RivetHeader
@@ -101,27 +128,21 @@ export function FancyHeader({
 										/>
 									</Link>
 								</RivetHeader.NavItem>
-								<RivetHeader.NavItem
-									asChild
-									className="flex mr-2"
+								<GitHubStars 
+									className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" 
+								/>
+								<Link 
+									href="https://hub.rivet.gg" 
+									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 								>
-									<GitHubStars className="text-white/90 hover:text-white transition-colors w-full" />
-								</RivetHeader.NavItem>
-								<Button
-									variant="secondary"
-									asChild
-									className="font-v2 subpixel-antialiased hover:border-white/20"
-								>
-									<Link href="https://hub.rivet.gg">
-										Sign In
-									</Link>
-								</Button>
+									Sign In
+								</Link>
 							</div>
 						}
 						mobileBreadcrumbs={<DocsMobileNavigation />}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
-								<RivetHeader.NavItem
+								{/*<RivetHeader.NavItem
 									asChild
 									className="flex cursor-pointer items-center gap-1 px-2.5 py-2 first:pl-0 "
 									onMouseEnter={() =>
@@ -138,64 +159,34 @@ export function FancyHeader({
 									>
 										Product
 									</div>
-								</RivetHeader.NavItem>
+								</RivetHeader.NavItem>*/}
 								{/* <RivetHeader.NavItem
                   asChild
                   className='flex cursor-pointer items-center gap-1 px-2.5 py-2'
                   onMouseEnter={() => setIsSubnavOpen('solutions')}>
                   <div className='text-white/90'>Solutions</div>
                 </RivetHeader.NavItem> */}
-								<RivetHeader.NavItem
+								<TextNavItem 
+									href="/docs"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									asChild
-									className="flex items-center gap-1 px-2.5 py-2"
+									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
-									<Link
-										href="/docs"
-										className="text-white/90"
-										aria-current={
-											active === "docs"
-												? "page"
-												: undefined
-										}
-									>
-										Docs
-									</Link>
-								</RivetHeader.NavItem>
-								<RivetHeader.NavItem
-									asChild
+									Documentation
+								</TextNavItem>
+								<TextNavItem 
+									href="/changelog"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									className="flex items-center gap-1 px-2.5"
+									ariaCurrent={active === "blog" ? "page" : undefined}
 								>
-									<Link
-										href="/changelog"
-										className="text-white/90"
-										aria-current={
-											active === "blog"
-												? "page"
-												: undefined
-										}
-									>
-										Changelog
-									</Link>
-								</RivetHeader.NavItem>
-								<RivetHeader.NavItem
-									asChild
+									Changelog
+								</TextNavItem>
+								<TextNavItem 
+									href="/pricing"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									className="flex items-center gap-1 px-2.5"
+									ariaCurrent={active === "pricing" ? "page" : undefined}
 								>
-									<Link
-										href="/pricing"
-										className="text-white/90"
-										aria-current={
-											active === "pricing"
-												? "page"
-												: undefined
-										}
-									>
-										Pricing
-									</Link>
-								</RivetHeader.NavItem>
+									Pricing
+								</TextNavItem>
 							</div>
 						}
 					/>

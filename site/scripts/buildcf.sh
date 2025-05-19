@@ -10,5 +10,4 @@ yarn install
 yarn build
 cd $CWD
 yarn install
-yarn update-framer || true  # TODO: fix the actual error
 npx next build && cp _redirects out/_redirects

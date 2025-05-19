@@ -62,7 +62,7 @@ export function GitHubStars({
 			target="_blank"
 			rel="noreferrer"
 			className={cn(
-				"md:bg-white/10 rounded-md px-4 h-10 flex items-center gap-2 md:hover:bg-white/20 transition-colors",
+				"flex items-center gap-2",
 				className,
 			)}
 			{...props}

@@ -24,7 +24,8 @@ import {
 	faCodePullRequest,
 	faLeaf,
 	faFunction,
-    faActors,
+	faActorsBorderless,
+	faCoin,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -75,19 +76,19 @@ export const sitemap = [
 					//	]
 					//},
 					{
+						title: "Functions",
+						href: "/docs/functions",
+						icon: faFunction,
+					},
+					{
 						title: "Actors",
 						href: "/docs/actors",
-						icon: faActors,
+						icon: faActorsBorderless,
 					},
 					{
 						title: "Containers",
 						href: "/docs/containers",
 						icon: faServer,
-					},
-					{
-						title: "Functions",
-						href: "/docs/functions",
-						icon: faFunction,
 					},
 				],
 			},
@@ -144,6 +145,11 @@ export const sitemap = [
 						title: "Edge Regions",
 						href: "/docs/edge",
 						icon: faGlobe,
+					},
+					{
+						title: "Billing",
+						href: "/docs/pricing",
+						icon: faCoin,
 					},
 					{
 						title: "Troubleshooting",

@@ -1,0 +1,47 @@
+# Billing
+
+## Choose Your Primitive
+
+Deploy your application using the model that best fits your needs. All are billed identically based on compute usage.
+
+| Primitive   | Description                                                      | Ideal Use Cases                                         |
+|-------------|------------------------------------------------------------------|---------------------------------------------------------|
+| Functions   | Stateless, event-driven code that responds to HTTP requests.     | APIs, webhooks, microservices.                          |
+| Containers  | Full control over your runtime environment with Docker containers.| Long-running services, custom environments.             |
+| Actors      | Resilient, stateful services that maintain state between requests.| WebSocket servers, game backends, real-time collaboration. |
+
+
+## Unified Compute Pricing
+
+Regardless of the primitive you choose, billing is based on the same compute metrics.
+
+| Resource        | Pricing                              | Notes                                                      |
+|-----------------|--------------------------------------|------------------------------------------------------------|
+| Compute         | $0.00000000163 per millisecond       | Billed by the millisecond; scales to zero when idle.        |
+| Bandwidth       | $0.05 per GB                         | Each deployment includes 10GB of pooled bandwidth.          |
+| Storage Reads   | 1M included, then $0.20 per million  | Fast global reads.                                         |
+| Storage Writes  | 1M included, then $1.00 per million  | Durable object storage.                                    |
+| Stored Data     | $0.20 per GB-month                   | Long-term state storage.                                   |
+
+## Sample Scenarios
+
+| Use Case                              | Setup                        | Estimated Monthly Cost |
+|----------------------------------------|------------------------------|-----------------------|
+| 1M function calls @ 50ms each          | Function, 128MB RAM          | ~$0.34                |
+| Always-on microservice (128MB)         | Container, 1/16 vCPU         | ~$4.27                |
+| Multiplayer actor swarm                | 500 actors active for 30 min/day each | ~$12         |
+
+## Contact Sales
+
+For detailed pricing information or to discuss custom requirements, please [contact our sales team](/sales).
+
+## FAQ
+
+### How is usage calculated?
+Usage is calculated based on actual resource consumption, including compute time, memory usage, and network bandwidth.
+
+### Can I upgrade or downgrade my plan?
+Yes, you can change your plan at any time. Changes take effect at the start of your next billing cycle.
+
+### Do you offer volume discounts?
+Yes, we offer volume discounts for larger deployments. Contact our sales team for more information.
