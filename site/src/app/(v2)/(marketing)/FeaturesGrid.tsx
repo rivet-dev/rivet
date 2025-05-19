@@ -49,7 +49,7 @@ const Feature = ({
 					alt: "Actors",
 					position: "bottom-0 left-0",
 					size: "h-64 w-64",
-					margin: "-ml-8 -mb-24", 
+					margin: "-ml-8 -mb-24",
 					mobileCss: "", // Position at bottom for mobile
 					desktopCss: "lg:top-[240px] lg:bottom-auto", // Reset to original position for desktop
 				};
@@ -70,7 +70,7 @@ const Feature = ({
 					position: "top-[200px] left-0",
 					size: "h-80 w-80",
 					margin: "-ml-[100px]",
-					mobileCss: "", 
+					mobileCss: "",
 					desktopCss: "",
 				};
 			case "SQLite Databases":
@@ -80,7 +80,7 @@ const Feature = ({
 					position: "top-[200px] left-0",
 					size: "h-80 w-80",
 					margin: "-ml-[100px]",
-					mobileCss: "", 
+					mobileCss: "",
 					desktopCss: "",
 				};
 			default:
@@ -143,7 +143,7 @@ const Feature = ({
 								imageDetails.size,
 								imageDetails.margin,
 								imageDetails.mobileCss,
-								imageDetails.desktopCss
+								imageDetails.desktopCss,
 							)}
 						>
 							<Image
@@ -208,7 +208,7 @@ export const FeaturesGrid = () => {
 			),
 			faIcon: faServer,
 			href: "/docs/containers",
-			useCases: ["code sandbox", "batch jobs", "game servers"],
+			useCases: ["batch jobs", "code sandbox", "game servers"],
 		},
 		//{
 		//	title: "Workflows",
