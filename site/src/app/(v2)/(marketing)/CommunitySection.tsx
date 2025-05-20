@@ -13,11 +13,11 @@ import {
 // Community section
 export const CommunitySection = () => {
 	const platforms = [
-		{ name: "Discord", icon: faDiscord, href: "https://discord.gg/rivet" },
+		{ name: "Discord", icon: faDiscord, href: "https://discord.gg/aXYfyNxYVn" },
 		{
 			name: "Discussions",
 			icon: faGithub,
-			href: "https://github.com/rivet-gg/discussions",
+			href: "https://github.com/rivet-gg/rivet/discussions",
 		},
 		{ name: "X", icon: faXTwitter, href: "https://x.com/rivet_gg" },
 		{
