@@ -48,11 +48,10 @@ Applies to Actors and Containers.
 
 | Use Case                              | Setup                        | Core Usage | Core-ms Used | Monthly Cost |
 |----------------------------------------|------------------------------|------------|--------------|--------------|
-| 1M function calls @ 50ms               | Stateless function, billed at 1/8th | 1/8 core   | 1M × 50ms = 50M | $0.56       |
-| Agents                            | 500 agents × 30min/day, light logic | 1/8 core | 27B → ÷8 = 3.375B | $37.76      |
-| Compute-heavy container (10h)          | Full CPU usage               | 1 core     | 36M          | $0.40        |
-| Storage-heavy application              | 10GB stored data, 5M reads, 1M writes | - | 10GB × $0.20 + (5M-1M) × $0.20 + (1M-1M) × $1.00 | $2.00        | */}
-
+| 1M function calls @ 50ms               | Stateless function           | 1/64 core  | 1M × 50ms = 50M → ÷64 = 0.78125M | $0.009      |
+| Agents (Actors)                        | 500 actors × 30min/day       | 1/32 core  | 500 × 1800s × 30 = 27B → ÷32 = 843.75M | $9.44       |
+| Compute-heavy container (10h)          | Full CPU usage               | 1 core     | 10h = 36,000,000 | $0.40        |
+| Storage-heavy app                      | 10GB storage, 5M reads, 1M writes | - | 10GB × $0.20 = $2.00(5M–1M) reads = $0.80(1M–1M) writes = $0.00 | $2.80       |
 
 ## Contact Sales
 
@@ -69,5 +68,5 @@ Yes, you can change your plan at any time. Changes take effect at the start of y
 ### Do you offer volume discounts?
 Yes, we offer volume discounts for larger deployments. Contact our sales team for more information.
 
-### What is the minimum compute allocation?
-You can allocate as little as 1/8th of a CPU core.
+### What is the minimum compute allocation for containers?
+You can allocate as little as 1/8th of a CPU core for containers.
