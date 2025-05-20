@@ -9,7 +9,7 @@ export default function SalesPageClient() {
 
   return (
     <main className="min-h-screen w-full bg-black">
-      <div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-40">
+      <div className="relative isolate overflow-hidden pt-40">
         <div className="mx-auto max-w-4xl px-6 lg:px-8 text-center">
           <h1 className="text-6xl font-700 text-white leading-[1.1] tracking-normal">
             Contact Sales
@@ -20,7 +20,7 @@ export default function SalesPageClient() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl px-6 lg:px-8 pt-16 sm:pt-24">
+      <div className="mx-auto max-w-2xl px-6 lg:px-8 pt-8 sm:pt-12 pb-16 sm:pb-24">
         <form action="#" method="POST" className="mx-auto mt-16 max-w-xl sm:mt-20">
           <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
             <div>
