@@ -11,7 +11,7 @@ Deploy your application using the model that best fits your needs. All are bille
 | Actors      | Resilient, stateful services that maintain state between requests.| WebSocket servers, game backends, real-time collaboration. |
 
 
-## Unified Compute Pricing
+## Usage Pricing
 
 Regardless of the primitive you choose, billing is based on the same compute metrics.
 
@@ -25,11 +25,12 @@ Regardless of the primitive you choose, billing is based on the same compute met
 
 ## Sample Scenarios
 
-| Use Case                              | Setup                        | Estimated Monthly Cost |
-|----------------------------------------|------------------------------|-----------------------|
-| 1M function calls @ 50ms each          | Function, 128MB RAM          | ~$0.34                |
-| Always-on microservice (128MB)         | Container, 1/16 vCPU         | ~$4.27                |
-| Multiplayer actor swarm                | 500 actors active for 30 min/day each | ~$12         |
+| Use Case                              | Setup                        | Core-ms Used (1/8th core) | Monthly Cost |
+|----------------------------------------|------------------------------|---------------------------|--------------|
+| 1M function calls @ 50ms each          | Function using 1/8th core    | 1M × 50ms = 50M → /8 = 6.25M | $0.07       |
+| Always-on microservice (24/7)          | Container running continuously | 2.592B ms → /8 = 324M    | $3.63       |
+| Multiplayer actor swarm                | 500 actors × 30min/day on 1/8th core | 27B ms → /8 = 3.375B | $37.76      |
+| Compute-heavy job (10h burst)          | 1/8th core for 10 hours      | 36M ms → /8 = 4.5M        | $0.05       |
 
 ## Contact Sales
 
@@ -45,3 +46,6 @@ Yes, you can change your plan at any time. Changes take effect at the start of y
 
 ### Do you offer volume discounts?
 Yes, we offer volume discounts for larger deployments. Contact our sales team for more information.
+
+### What is the minimum compute allocation?
+You can allocate as little as 1/8th of a CPU core.
