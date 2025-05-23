@@ -127,8 +127,8 @@ fn create_middleware_function(
 					amount: 20, // 20 concurrent requests
 				},
 				retry: RetryConfig {
-					max_attempts: 4,       // 3 retry attempts
-					initial_interval: 250, // 100ms initial interval
+					max_attempts: 7,
+					initial_interval: 150,
 				},
 				timeout: TimeoutConfig {
 					request_timeout: 30, // 30 seconds for requests

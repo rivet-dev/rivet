@@ -967,7 +967,7 @@ impl ProxyService {
 	async fn handle_websocket_upgrade(
 		&self,
 		req: Request<BodyIncoming>,
-		target: RouteTarget,
+		mut target: RouteTarget,
 	) -> GlobalResult<Response<Full<Bytes>>> {
 		// Get actor and server IDs for metrics and middleware
 		let actor_id = target.actor_id;
@@ -977,6 +977,19 @@ impl ProxyService {
 
 		// Start timing the request (metrics already incremented in handle_request)
 		let start_time = Instant::now();
+
+		// Parsed for retries later
+		let req_host = req
+			.headers()
+			.get(hyper::header::HOST)
+			.and_then(|h| h.to_str().ok())
+			.unwrap_or("unknown")
+			.to_string();
+		let req_path = req
+			.uri()
+			.path_and_query()
+			.map(|x| x.to_string())
+			.unwrap_or_else(|| req.uri().path().to_string());
 
 		// Log request details
 		info!("WebSocket upgrade request for path: {}, target host: {}:{}, actor_id: {}, server_id: {}",
@@ -1044,11 +1057,8 @@ impl ProxyService {
 			}
 		}
 
-		// Now we need to connect to the upstream WebSocket server
-		let target_url = format!("ws://{}:{}{}", target.host, target.port, target.path);
-		info!("Target upstream WebSocket URL: {}", target_url);
-
 		// Clone needed values for the spawned task
+		let state = self.state.clone();
 		let actor_id_str_clone = actor_id_str.clone();
 		let server_id_str_clone = server_id_str.clone();
 		let path = target.path.clone();
@@ -1110,12 +1120,11 @@ impl ProxyService {
 				};
 
 				// Now attempt to connect to the upstream server
-				info!(
-					"Attempting to connect to upstream WebSocket at {}",
-					target_url
-				);
+				info!("Attempting connect to upstream WebSocket");
 				while attempts < max_attempts {
 					attempts += 1;
+
+					let target_url = format!("ws://{}:{}{}", target.host, target.port, target.path);
 					info!(
 						"WebSocket request attempt {}/{} to {}",
 						attempts, max_attempts, target_url
@@ -1196,7 +1205,23 @@ impl ProxyService {
 					// Use backoff for the next attempt
 					let backoff = Self::calculate_backoff(attempts, initial_interval);
 					info!("Waiting for {:?} before next connection attempt", backoff);
-					tokio::time::sleep(backoff).await;
+
+					let (_, new_target) = tokio::join!(
+						tokio::time::sleep(backoff),
+						// Resolve target again, this time ignoring cache. This makes sure
+						// we always re-fetch the route on error
+						state.resolve_route(&req_host, &req_path, state.port_type.clone(), true,),
+					);
+
+					match new_target {
+						Ok(ResolveRouteOutput::Target(new_target)) => {
+							target = new_target;
+						}
+						Ok(ResolveRouteOutput::Response(_response)) => {
+							error!("Expected target, got response")
+						}
+						Err(e) => error!("Routing error: {}", e),
+					}
 				}
 
 				// If we couldn't connect to the upstream server, exit the task
