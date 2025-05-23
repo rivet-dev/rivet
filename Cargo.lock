@@ -4396,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "deno_broadcast_channel"
 version = "0.174.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4408,7 +4408,7 @@ dependencies = [
 [[package]]
 name = "deno_cache"
 version = "0.112.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4422,7 +4422,7 @@ dependencies = [
 [[package]]
 name = "deno_canvas"
 version = "0.49.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_webgpu",
@@ -4434,7 +4434,7 @@ dependencies = [
 [[package]]
 name = "deno_console"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
 ]
@@ -4482,7 +4482,7 @@ checksum = "fe4dccb6147bb3f3ba0c7a48e993bfeb999d2c2e47a81badee80e2b370c8d695"
 [[package]]
 name = "deno_cron"
 version = "0.60.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4496,7 +4496,7 @@ dependencies = [
 [[package]]
 name = "deno_crypto"
 version = "0.194.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4557,7 +4557,7 @@ dependencies = [
 [[package]]
 name = "deno_fetch"
 version = "0.204.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -4591,7 +4591,7 @@ dependencies = [
 [[package]]
 name = "deno_ffi"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4612,7 +4612,7 @@ dependencies = [
 [[package]]
 name = "deno_fs"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "base32",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "deno_http"
 version = "0.178.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -4673,7 +4673,7 @@ dependencies = [
 [[package]]
 name = "deno_io"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4695,7 +4695,7 @@ dependencies = [
 [[package]]
 name = "deno_kv"
 version = "0.88.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4750,7 +4750,7 @@ dependencies = [
 [[package]]
 name = "deno_napi"
 version = "0.111.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4778,7 +4778,7 @@ dependencies = [
 [[package]]
 name = "deno_net"
 version = "0.172.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4796,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "deno_node"
 version = "0.117.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "aead-gcm-stream",
  "aes",
@@ -4931,7 +4931,7 @@ dependencies = [
 [[package]]
 name = "deno_permissions"
 version = "0.40.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_path_util",
@@ -4950,7 +4950,7 @@ dependencies = [
 [[package]]
 name = "deno_runtime"
 version = "0.189.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "color-print",
  "deno_ast 0.44.0",
@@ -5033,7 +5033,7 @@ dependencies = [
 [[package]]
 name = "deno_telemetry"
 version = "0.2.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -5075,7 +5075,7 @@ dependencies = [
 [[package]]
 name = "deno_tls"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_native_certs",
@@ -5103,7 +5103,7 @@ dependencies = [
 [[package]]
 name = "deno_url"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "thiserror 1.0.69",
@@ -5113,7 +5113,7 @@ dependencies = [
 [[package]]
 name = "deno_web"
 version = "0.211.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "async-trait",
  "base64-simd 0.8.0",
@@ -5132,7 +5132,7 @@ dependencies = [
 [[package]]
 name = "deno_webgpu"
 version = "0.147.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "raw-window-handle",
@@ -5146,7 +5146,7 @@ dependencies = [
 [[package]]
 name = "deno_webidl"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
 ]
@@ -5154,7 +5154,7 @@ dependencies = [
 [[package]]
 name = "deno_websocket"
 version = "0.185.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "bytes",
  "deno_core",
@@ -5177,7 +5177,7 @@ dependencies = [
 [[package]]
 name = "deno_webstorage"
 version = "0.175.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "deno_core",
  "deno_web",
@@ -9613,7 +9613,7 @@ dependencies = [
 [[package]]
 name = "napi_sym"
 version = "0.110.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "quote",
  "serde",
@@ -9735,7 +9735,7 @@ checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 [[package]]
 name = "node_resolver"
 version = "0.19.0"
-source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
+source = "git+https://github.com/rivet-gg/deno?rev=a6903d67063e07b82836399f63c7a0fa5be8bf56#a6903d67063e07b82836399f63c7a0fa5be8bf56"
 dependencies = [
  "anyhow",
  "async-trait",

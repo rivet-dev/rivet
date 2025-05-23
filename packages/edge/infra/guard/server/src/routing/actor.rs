@@ -7,6 +7,7 @@ use foundationdb::{self as fdb};
 use global_error::GlobalResult;
 use pegboard::types::EndpointType;
 use pegboard::util::build_actor_hostname_and_path_regex;
+use rivet_config::config::AccessKind;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
 use uuid::Uuid;
 
@@ -25,6 +26,16 @@ pub async fn route_actor_request(
 		})
 		.await?;
 	let dc = unwrap!(dc_res.datacenters.first());
+
+	// HACK: If in local dev, force the hostname to be 127.0.0.1 since it may be routed to via a
+	// different hostname (e.g. localhost, rivet-guard)
+	let host = match (
+		&ctx.config().server()?.rivet.auth.access_kind,
+		&dc.guard_public_hostname,
+	) {
+		(AccessKind::Development, GuardPublicHostname::Static(dc_hostname)) => &dc_hostname,
+		_ => host,
+	};
 
 	// Get the guard public hostname from the datacenter config
 	let guard_public_hostname = &dc.guard_public_hostname;
