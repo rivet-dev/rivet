@@ -252,7 +252,7 @@ checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
 name = "api-auth"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "api-cf-verification"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "api-cloud"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -451,7 +451,7 @@ dependencies = [
 
 [[package]]
 name = "api-core-actor"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "base64 0.13.1",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "api-core-intercom"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -548,7 +548,7 @@ dependencies = [
 
 [[package]]
 name = "api-core-monolith-edge"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-core-intercom",
  "api-core-traefik-provider",
@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "api-core-monolith-public"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-auth",
  "api-cf-verification",
@@ -599,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "api-core-traefik-provider"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "api-edge-actor"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "base64 0.13.1",
@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "api-edge-intercom"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "api-edge-monolith-edge"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-edge-traefik-provider",
  "api-helper",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "api-edge-monolith-public"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-edge-actor",
  "api-edge-intercom",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "api-edge-traefik-provider"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-core-traefik-provider",
  "api-helper",
@@ -841,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "api-games"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "base64 0.13.1",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "api-group"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "api-helper"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper-macros",
  "async-trait",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "api-helper-macros"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "api-identity"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "api-job"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1115,7 +1115,7 @@ dependencies = [
 
 [[package]]
 name = "api-matchmaker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1183,7 +1183,7 @@ dependencies = [
 
 [[package]]
 name = "api-portal"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "api-provision"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "api-status"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -1299,7 +1299,6 @@ dependencies = [
  "tokio-tungstenite 0.21.0",
  "tracing",
  "tracing-subscriber",
- "trust-dns-resolver",
  "url",
  "urlencoding",
  "uuid",
@@ -1307,7 +1306,7 @@ dependencies = [
 
 [[package]]
 name = "api-ui"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -2381,7 +2380,7 @@ dependencies = [
 
 [[package]]
 name = "build"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "acme-lib",
  "anyhow",
@@ -2423,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "build-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2444,7 +2443,7 @@ dependencies = [
 
 [[package]]
 name = "build-default-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2469,7 +2468,7 @@ dependencies = [
 
 [[package]]
 name = "build-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2482,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "build-list-for-env"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2495,7 +2494,7 @@ dependencies = [
 
 [[package]]
 name = "build-list-for-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2590,7 +2589,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-hcaptcha-config-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2601,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-hcaptcha-verify"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2613,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-request"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2626,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-turnstile-config-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2637,7 +2636,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-turnstile-verify"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2649,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "captcha-verify"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "captcha-hcaptcha-config-get",
  "captcha-hcaptcha-verify",
@@ -2710,7 +2709,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-auth-user-remove"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-auth-user-update",
  "cdn-namespace-create",
@@ -2723,7 +2722,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-auth-user-update"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-create",
  "chirp-client",
@@ -2735,7 +2734,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2746,7 +2745,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-domain-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2760,7 +2759,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-domain-remove"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-domain-create",
  "chirp-client",
@@ -2775,7 +2774,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-create",
  "cdn-namespace-domain-create",
@@ -2789,7 +2788,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-namespace-resolve-domain"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-domain-create",
  "chirp-client",
@@ -2802,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-ns-auth-type-set"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-create",
  "chirp-client",
@@ -2814,7 +2813,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-ns-enable-domain-public-auth-set"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-create",
  "chirp-client",
@@ -2826,7 +2825,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-site-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2843,7 +2842,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-site-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2856,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-site-list-for-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2869,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-version-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2882,7 +2881,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-version-prepare"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-site-get",
  "chirp-client",
@@ -2896,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-version-publish"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-version-get",
  "chirp-client",
@@ -2912,7 +2911,7 @@ dependencies = [
 
 [[package]]
 name = "cdn-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-get",
  "cdn-site-get",
@@ -2946,7 +2945,7 @@ dependencies = [
 
 [[package]]
 name = "cf-custom-hostname-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2957,7 +2956,7 @@ dependencies = [
 
 [[package]]
 name = "cf-custom-hostname-list-for-namespace-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2968,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "cf-custom-hostname-resolve-hostname"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2979,7 +2978,7 @@ dependencies = [
 
 [[package]]
 name = "cf-custom-hostname-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cf-custom-hostname-get",
  "cf-custom-hostname-list-for-namespace-id",
@@ -3019,7 +3018,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chirp-client"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-perf",
  "chirp-types",
@@ -3047,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-metrics"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "lazy_static",
  "rivet-metrics",
@@ -3055,7 +3054,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-perf"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "lazy_static",
  "prost 0.10.4",
@@ -3072,14 +3071,14 @@ dependencies = [
 
 [[package]]
 name = "chirp-types"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "prost 0.10.4",
 ]
 
 [[package]]
 name = "chirp-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "async-trait",
  "chirp-client",
@@ -3117,7 +3116,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-worker-attributes"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-worker",
  "proc-macro2",
@@ -3128,7 +3127,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-workflow"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3177,7 +3176,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-workflow-macros"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3334,7 +3333,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-default-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3365,7 +3364,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-device-link-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3377,7 +3376,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-game-config-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3388,7 +3387,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-game-config-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3400,7 +3399,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-game-token-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3413,7 +3412,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-namespace-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-create",
  "chirp-client",
@@ -3431,7 +3430,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-namespace-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-get",
  "chirp-client",
@@ -3448,7 +3447,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-namespace-token-development-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3463,7 +3462,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-namespace-token-public-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3478,7 +3477,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-version-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-version-get",
  "chirp-client",
@@ -3496,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-version-publish"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-version-prepare",
  "cdn-version-publish",
@@ -3518,7 +3517,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3550,7 +3549,7 @@ dependencies = [
 
 [[package]]
 name = "cluster"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "acme-lib",
  "anyhow",
@@ -3578,6 +3577,7 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_urlencoded",
+ "serde_yaml",
  "server-spec",
  "sqlx",
  "ssh2",
@@ -3590,7 +3590,7 @@ dependencies = [
 
 [[package]]
 name = "cluster-datacenter-tls-renew"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "cluster-default-update"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -3630,7 +3630,7 @@ dependencies = [
 
 [[package]]
 name = "cluster-gc"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -3649,7 +3649,7 @@ dependencies = [
 
 [[package]]
 name = "cluster-metrics-publish"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -4151,7 +4151,7 @@ dependencies = [
 
 [[package]]
 name = "custom-user-avatar-list-for-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -4166,7 +4166,7 @@ dependencies = [
 
 [[package]]
 name = "custom-user-avatar-upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -4287,7 +4287,7 @@ checksum = "41b319d1b62ffbd002e057f36bebd1f42b9f97927c9577461d855f3513c4289f"
 
 [[package]]
 name = "debug-email-res"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -4317,7 +4317,7 @@ checksum = "da692b8d1080ea3045efaab14434d40468c3d8657e42abddfffca87b428f4c1b"
 
 [[package]]
 name = "deno-embed"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4396,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "deno_broadcast_channel"
 version = "0.174.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4408,7 +4408,7 @@ dependencies = [
 [[package]]
 name = "deno_cache"
 version = "0.112.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4422,7 +4422,7 @@ dependencies = [
 [[package]]
 name = "deno_canvas"
 version = "0.49.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_webgpu",
@@ -4434,7 +4434,7 @@ dependencies = [
 [[package]]
 name = "deno_console"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
 ]
@@ -4482,7 +4482,7 @@ checksum = "fe4dccb6147bb3f3ba0c7a48e993bfeb999d2c2e47a81badee80e2b370c8d695"
 [[package]]
 name = "deno_cron"
 version = "0.60.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4496,7 +4496,7 @@ dependencies = [
 [[package]]
 name = "deno_crypto"
 version = "0.194.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4557,7 +4557,7 @@ dependencies = [
 [[package]]
 name = "deno_fetch"
 version = "0.204.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -4591,7 +4591,7 @@ dependencies = [
 [[package]]
 name = "deno_ffi"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4612,7 +4612,7 @@ dependencies = [
 [[package]]
 name = "deno_fs"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "base32",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "deno_http"
 version = "0.178.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -4673,7 +4673,7 @@ dependencies = [
 [[package]]
 name = "deno_io"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4695,7 +4695,7 @@ dependencies = [
 [[package]]
 name = "deno_kv"
 version = "0.88.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4750,7 +4750,7 @@ dependencies = [
 [[package]]
 name = "deno_napi"
 version = "0.111.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4778,7 +4778,7 @@ dependencies = [
 [[package]]
 name = "deno_net"
 version = "0.172.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4796,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "deno_node"
 version = "0.117.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "aead-gcm-stream",
  "aes",
@@ -4931,7 +4931,7 @@ dependencies = [
 [[package]]
 name = "deno_permissions"
 version = "0.40.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_path_util",
@@ -4950,7 +4950,7 @@ dependencies = [
 [[package]]
 name = "deno_runtime"
 version = "0.189.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "color-print",
  "deno_ast 0.44.0",
@@ -5033,7 +5033,7 @@ dependencies = [
 [[package]]
 name = "deno_telemetry"
 version = "0.2.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -5075,7 +5075,7 @@ dependencies = [
 [[package]]
 name = "deno_tls"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_native_certs",
@@ -5103,7 +5103,7 @@ dependencies = [
 [[package]]
 name = "deno_url"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "thiserror 1.0.69",
@@ -5113,7 +5113,7 @@ dependencies = [
 [[package]]
 name = "deno_web"
 version = "0.211.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "async-trait",
  "base64-simd 0.8.0",
@@ -5132,7 +5132,7 @@ dependencies = [
 [[package]]
 name = "deno_webgpu"
 version = "0.147.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "raw-window-handle",
@@ -5146,7 +5146,7 @@ dependencies = [
 [[package]]
 name = "deno_webidl"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
 ]
@@ -5154,7 +5154,7 @@ dependencies = [
 [[package]]
 name = "deno_websocket"
 version = "0.185.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "bytes",
  "deno_core",
@@ -5177,7 +5177,7 @@ dependencies = [
 [[package]]
 name = "deno_webstorage"
 version = "0.175.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "deno_core",
  "deno_web",
@@ -5576,7 +5576,7 @@ checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
 name = "dynamic-config"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "indoc 2.0.5",
@@ -5686,7 +5686,7 @@ dependencies = [
 
 [[package]]
 name = "edge-monolith-workflow-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "pegboard",
@@ -5764,7 +5764,7 @@ dependencies = [
 
 [[package]]
 name = "email-send"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "base64 0.13.1",
  "chirp-client",
@@ -5779,7 +5779,7 @@ dependencies = [
 
 [[package]]
 name = "email-verification-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -5793,7 +5793,7 @@ dependencies = [
 
 [[package]]
 name = "email-verification-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -5937,7 +5937,7 @@ dependencies = [
 
 [[package]]
 name = "external-request-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -5953,7 +5953,7 @@ dependencies = [
 
 [[package]]
 name = "external-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -5967,7 +5967,7 @@ dependencies = [
 
 [[package]]
 name = "faker-build"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "build-create",
  "chirp-client",
@@ -5980,7 +5980,7 @@ dependencies = [
 
 [[package]]
 name = "faker-cdn-site"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-site-create",
  "chirp-client",
@@ -5994,7 +5994,7 @@ dependencies = [
 
 [[package]]
 name = "faker-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6011,7 +6011,7 @@ dependencies = [
 
 [[package]]
 name = "faker-game-namespace"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6024,7 +6024,7 @@ dependencies = [
 
 [[package]]
 name = "faker-game-version"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6043,7 +6043,7 @@ dependencies = [
 
 [[package]]
 name = "faker-job-run"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6057,7 +6057,7 @@ dependencies = [
 
 [[package]]
 name = "faker-job-template"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6069,7 +6069,7 @@ dependencies = [
 
 [[package]]
 name = "faker-mm-lobby"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6088,7 +6088,7 @@ dependencies = [
 
 [[package]]
 name = "faker-mm-lobby-row"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "faker-mm-player"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6111,7 +6111,7 @@ dependencies = [
 
 [[package]]
 name = "faker-region"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6124,7 +6124,7 @@ dependencies = [
 
 [[package]]
 name = "faker-team"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6136,7 +6136,7 @@ dependencies = [
 
 [[package]]
 name = "faker-user"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6214,7 +6214,7 @@ dependencies = [
 
 [[package]]
 name = "fdb-util"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "foundationdb",
@@ -6378,7 +6378,7 @@ dependencies = [
 
 [[package]]
 name = "formatted-error"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "gray_matter",
  "hashbrown 0.12.3",
@@ -6631,7 +6631,7 @@ dependencies = [
 
 [[package]]
 name = "game-banner-upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6647,7 +6647,7 @@ dependencies = [
 
 [[package]]
 name = "game-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6664,7 +6664,7 @@ dependencies = [
 
 [[package]]
 name = "game-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6679,7 +6679,7 @@ dependencies = [
 
 [[package]]
 name = "game-list-all"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6690,7 +6690,7 @@ dependencies = [
 
 [[package]]
 name = "game-list-for-team"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6702,7 +6702,7 @@ dependencies = [
 
 [[package]]
 name = "game-logo-upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6718,7 +6718,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6732,7 +6732,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6746,7 +6746,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6760,7 +6760,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-resolve-name-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6774,7 +6774,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-resolve-url"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-domain-create",
  "cdn-namespace-resolve-domain",
@@ -6793,7 +6793,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6805,7 +6805,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-version-history-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6816,7 +6816,7 @@ dependencies = [
 
 [[package]]
 name = "game-namespace-version-set"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6833,7 +6833,7 @@ dependencies = [
 
 [[package]]
 name = "game-recommend"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6845,7 +6845,7 @@ dependencies = [
 
 [[package]]
 name = "game-resolve-name-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6858,7 +6858,7 @@ dependencies = [
 
 [[package]]
 name = "game-resolve-namespace-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6872,7 +6872,7 @@ dependencies = [
 
 [[package]]
 name = "game-token-development-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6882,7 +6882,7 @@ dependencies = [
 
 [[package]]
 name = "game-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6893,7 +6893,7 @@ dependencies = [
 
 [[package]]
 name = "game-version-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6907,7 +6907,7 @@ dependencies = [
 
 [[package]]
 name = "game-version-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6920,7 +6920,7 @@ dependencies = [
 
 [[package]]
 name = "game-version-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -6933,7 +6933,7 @@ dependencies = [
 
 [[package]]
 name = "game-version-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -7040,7 +7040,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "global-error"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "async-trait",
  "formatted-error",
@@ -8059,7 +8059,7 @@ dependencies = [
 
 [[package]]
 name = "ip-info"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8183,7 +8183,7 @@ checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 
 [[package]]
 name = "job-gc"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8216,7 +8216,7 @@ dependencies = [
 
 [[package]]
 name = "job-log-read"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8229,7 +8229,7 @@ dependencies = [
 
 [[package]]
 name = "job-log-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8247,7 +8247,7 @@ dependencies = [
 
 [[package]]
 name = "job-run"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8409,7 +8409,7 @@ dependencies = [
 
 [[package]]
 name = "kv-str"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "envy",
@@ -8561,7 +8561,7 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linode"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "chrono",
@@ -8578,7 +8578,7 @@ dependencies = [
 
 [[package]]
 name = "linode-gc"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -8620,7 +8620,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "load-test-api-cloud"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8642,7 +8642,7 @@ dependencies = [
 
 [[package]]
 name = "load-test-mm"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8673,7 +8673,7 @@ dependencies = [
 
 [[package]]
 name = "load-test-mm-sustain"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -8706,7 +8706,7 @@ dependencies = [
 
 [[package]]
 name = "load-test-sqlx"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-get",
  "cdn-version-get",
@@ -8728,7 +8728,7 @@ dependencies = [
 
 [[package]]
 name = "load-test-watch-requests"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9032,7 +9032,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-game-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9042,7 +9042,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-game-upsert"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9052,7 +9052,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-lobby-group-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9066,7 +9066,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-lobby-group-resolve-name-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9082,7 +9082,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-lobby-group-resolve-version"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9096,7 +9096,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-namespace-config-set"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9110,7 +9110,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-namespace-config-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9120,7 +9120,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-namespace-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9131,7 +9131,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-namespace-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9143,7 +9143,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-version-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9160,7 +9160,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-version-prepare"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "build-get",
  "chirp-client",
@@ -9187,7 +9187,7 @@ dependencies = [
 
 [[package]]
 name = "mm-config-version-publish"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9203,7 +9203,7 @@ dependencies = [
 
 [[package]]
 name = "mm-dev-player-token-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9214,7 +9214,7 @@ dependencies = [
 
 [[package]]
 name = "mm-gc"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9243,7 +9243,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-find-fail"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9254,7 +9254,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-find-lobby-query-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9265,7 +9265,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-find-try-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9277,7 +9277,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-for-run-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9288,7 +9288,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9301,7 +9301,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-history"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9314,7 +9314,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-idle-update"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9336,7 +9336,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-list-for-namespace"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9349,7 +9349,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-list-for-user-id"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9361,7 +9361,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-player-count"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9374,7 +9374,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-runtime-aggregate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9394,7 +9394,7 @@ dependencies = [
 
 [[package]]
 name = "mm-lobby-state-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9407,7 +9407,7 @@ dependencies = [
 
 [[package]]
 name = "mm-player-count-for-namespace"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9420,7 +9420,7 @@ dependencies = [
 
 [[package]]
 name = "mm-player-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9432,7 +9432,7 @@ dependencies = [
 
 [[package]]
 name = "mm-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "build-get",
  "chirp-client",
@@ -9526,7 +9526,7 @@ checksum = "b52c1b33ff98142aecea13138bd399b68aa7ab5d9546c300988c345004001eea"
 
 [[package]]
 name = "monolith-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-worker",
  "cf-custom-hostname-worker",
@@ -9553,7 +9553,7 @@ dependencies = [
 
 [[package]]
 name = "monolith-workflow-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "cluster",
@@ -9613,7 +9613,7 @@ dependencies = [
 [[package]]
 name = "napi_sym"
 version = "0.110.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "quote",
  "serde",
@@ -9735,7 +9735,7 @@ checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 [[package]]
 name = "node_resolver"
 version = "0.19.0"
-source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
+source = "git+https://github.com/rivet-gg/deno?rev=512c62fabf104be9c23dc585dff739cba8e424b3#512c62fabf104be9c23dc585dff739cba8e424b3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9789,7 +9789,7 @@ dependencies = [
 
 [[package]]
 name = "nomad-monitor"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -9820,7 +9820,7 @@ dependencies = [
 
 [[package]]
 name = "nomad-util"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -10573,7 +10573,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "build",
@@ -10636,7 +10636,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-config"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "pegboard",
  "schemars",
@@ -10647,7 +10647,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-container-runner"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "nix 0.27.1",
@@ -10669,7 +10669,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-isolate-v8-runner"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "deno_ast 0.42.2",
@@ -10705,7 +10705,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-manager"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "bytes",
@@ -10745,7 +10745,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-ws"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -11686,7 +11686,7 @@ dependencies = [
 
 [[package]]
 name = "redis-util"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "lazy_static",
  "redis",
@@ -11794,7 +11794,7 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "region-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -11808,7 +11808,7 @@ dependencies = [
 
 [[package]]
 name = "region-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -11822,7 +11822,7 @@ dependencies = [
 
 [[package]]
 name = "region-list-for-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -11836,7 +11836,7 @@ dependencies = [
 
 [[package]]
 name = "region-recommend"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -11851,7 +11851,7 @@ dependencies = [
 
 [[package]]
 name = "region-resolve"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -11867,7 +11867,7 @@ dependencies = [
 
 [[package]]
 name = "region-resolve-for-game"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -12087,7 +12087,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "futures-util",
  "global-error",
@@ -12114,7 +12114,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-result"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "rivet-util",
 ]
@@ -12143,7 +12143,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-claims"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "base64 0.13.1",
  "global-error",
@@ -12160,7 +12160,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cli"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "async-posthog",
@@ -12206,7 +12206,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "config",
  "dirs",
@@ -12224,7 +12224,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-connection"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-perf",
@@ -12238,7 +12238,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-convert"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "cdn-namespace-get",
  "chirp-client",
@@ -12279,7 +12279,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-edge-server"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "api-edge-monolith-edge",
@@ -12300,7 +12300,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -12332,7 +12332,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "chirp-client",
@@ -12366,7 +12366,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-guard-core"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "bytes",
  "cluster",
@@ -12387,6 +12387,7 @@ dependencies = [
  "rivet-metrics",
  "rustls 0.23.25",
  "rustls-pemfile 2.2.0",
+ "scc",
  "serde",
  "serde_json",
  "tokio",
@@ -12399,7 +12400,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-health-checks"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "global-error",
@@ -12416,7 +12417,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-hub-embed"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "fs_extra",
  "include_dir",
@@ -12461,7 +12462,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-job-runner"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "portpicker",
@@ -12483,7 +12484,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-js-utils-embed"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "deno-embed",
@@ -12555,7 +12556,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "global-error",
  "hyper 0.14.31",
@@ -12569,7 +12570,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-migrate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -12587,7 +12588,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-operation"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "async-trait",
  "chirp-client",
@@ -12614,7 +12615,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-operation-macros"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12645,7 +12646,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-pools"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -12720,7 +12721,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "console-subscriber",
  "lazy_static",
@@ -12746,7 +12747,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-schema-generator"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "pegboard-config",
@@ -12758,7 +12759,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-server"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "api-core-monolith-edge",
@@ -12798,7 +12799,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-server-cli"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "chirp-workflow",
@@ -12838,7 +12839,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -12892,21 +12893,21 @@ dependencies = [
 
 [[package]]
 name = "rivet-test"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "types-proto",
 ]
 
 [[package]]
 name = "rivet-test-images"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "testcontainers",
 ]
 
 [[package]]
 name = "rivet-toolchain"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12960,7 +12961,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "async-trait",
  "bcrypt",
@@ -12990,14 +12991,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-build"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "rivet-operation",
 ]
 
 [[package]]
 name = "rivet-util-captcha"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "global-error",
  "serde_json",
@@ -13005,18 +13006,18 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-cdn"
-version = "25.4.1"
+version = "25.4.2"
 
 [[package]]
 name = "rivet-util-job"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "uuid",
 ]
 
 [[package]]
 name = "rivet-util-macros"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13025,7 +13026,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-mm"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "bit-vec",
  "chirp-client",
@@ -13045,14 +13046,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-search"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "uuid",
 ]
 
 [[package]]
 name = "rivet-util-team"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "rivet-operation",
 ]
@@ -13071,7 +13072,7 @@ dependencies = [
 
 [[package]]
 name = "route"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
@@ -13394,7 +13395,7 @@ checksum = "ad97d4ce1560a5e27cec89519dc8300d1aa6035b099821261c651486a19e44d5"
 
 [[package]]
 name = "s3-util"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "aws-sdk-s3",
  "aws-smithy-async 1.2.1",
@@ -13447,6 +13448,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scc"
+version = "2.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22b2d775fb28f245817589471dd49c5edf64237f4a19d10ce9a92ff4651a27f4"
+dependencies = [
+ "sdd",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13457,7 +13467,7 @@ dependencies = [
 
 [[package]]
 name = "schemac"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "lazy_static",
  "prost-build 0.11.9",
@@ -13534,6 +13544,12 @@ dependencies = [
  "ring 0.17.8",
  "untrusted 0.9.0",
 ]
+
+[[package]]
+name = "sdd"
+version = "3.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "584e070911c7017da6cb2eb0788d09f43d789029b5877d3e5ecc8acf86ceee21"
 
 [[package]]
 name = "sealed"
@@ -13852,7 +13868,7 @@ dependencies = [
 
 [[package]]
 name = "server-spec"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "linode",
@@ -13861,7 +13877,7 @@ dependencies = [
 
 [[package]]
 name = "service-discovery"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.12",
@@ -15164,7 +15180,7 @@ dependencies = [
 
 [[package]]
 name = "team-avatar-upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15180,7 +15196,7 @@ dependencies = [
 
 [[package]]
 name = "team-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15193,7 +15209,7 @@ dependencies = [
 
 [[package]]
 name = "team-invite-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15205,7 +15221,7 @@ dependencies = [
 
 [[package]]
 name = "team-invite-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15221,7 +15237,7 @@ dependencies = [
 
 [[package]]
 name = "team-join-request-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15232,7 +15248,7 @@ dependencies = [
 
 [[package]]
 name = "team-member-count"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15243,7 +15259,7 @@ dependencies = [
 
 [[package]]
 name = "team-member-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15254,7 +15270,7 @@ dependencies = [
 
 [[package]]
 name = "team-member-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15265,7 +15281,7 @@ dependencies = [
 
 [[package]]
 name = "team-member-relationship-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15277,7 +15293,7 @@ dependencies = [
 
 [[package]]
 name = "team-profile-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15288,7 +15304,7 @@ dependencies = [
 
 [[package]]
 name = "team-recommend"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15299,7 +15315,7 @@ dependencies = [
 
 [[package]]
 name = "team-resolve-display-name"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15312,7 +15328,7 @@ dependencies = [
 
 [[package]]
 name = "team-user-ban-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15323,7 +15339,7 @@ dependencies = [
 
 [[package]]
 name = "team-user-ban-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15334,7 +15350,7 @@ dependencies = [
 
 [[package]]
 name = "team-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15345,7 +15361,7 @@ dependencies = [
 
 [[package]]
 name = "team-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15367,7 +15383,7 @@ dependencies = [
 
 [[package]]
 name = "telemetry-beacon"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "async-posthog",
  "chirp-client",
@@ -15526,7 +15542,7 @@ dependencies = [
 
 [[package]]
 name = "tier"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "cluster",
@@ -15618,7 +15634,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "base64 0.13.1",
  "chirp-client",
@@ -15634,7 +15650,7 @@ dependencies = [
 
 [[package]]
 name = "token-exchange"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15647,7 +15663,7 @@ dependencies = [
 
 [[package]]
 name = "token-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -15660,7 +15676,7 @@ dependencies = [
 
 [[package]]
 name = "token-revoke"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16295,7 +16311,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "types-proto"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-types",
  "http 0.2.12",
@@ -16310,7 +16326,7 @@ dependencies = [
 
 [[package]]
 name = "types-proto-build"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "heck 0.3.3",
  "indoc 1.0.9",
@@ -16479,7 +16495,7 @@ dependencies = [
 
 [[package]]
 name = "upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16496,7 +16512,7 @@ dependencies = [
 
 [[package]]
 name = "upload-file-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16508,7 +16524,7 @@ dependencies = [
 
 [[package]]
 name = "upload-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16521,7 +16537,7 @@ dependencies = [
 
 [[package]]
 name = "upload-list-for-user"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16534,7 +16550,7 @@ dependencies = [
 
 [[package]]
 name = "upload-prepare"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16551,7 +16567,7 @@ dependencies = [
 
 [[package]]
 name = "upload-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16613,7 +16629,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-workflow",
  "cluster",
@@ -16624,7 +16640,7 @@ dependencies = [
 
 [[package]]
 name = "user-avatar-upload-complete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16640,7 +16656,7 @@ dependencies = [
 
 [[package]]
 name = "user-delete-pending"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16662,7 +16678,7 @@ dependencies = [
 
 [[package]]
 name = "user-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16677,7 +16693,7 @@ dependencies = [
 
 [[package]]
 name = "user-identity-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16689,7 +16705,7 @@ dependencies = [
 
 [[package]]
 name = "user-identity-delete"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16702,7 +16718,7 @@ dependencies = [
 
 [[package]]
 name = "user-identity-get"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16717,7 +16733,7 @@ dependencies = [
 
 [[package]]
 name = "user-pending-delete-toggle"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16731,7 +16747,7 @@ dependencies = [
 
 [[package]]
 name = "user-profile-validate"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16744,7 +16760,7 @@ dependencies = [
 
 [[package]]
 name = "user-resolve-email"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16757,7 +16773,7 @@ dependencies = [
 
 [[package]]
 name = "user-team-list"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16768,7 +16784,7 @@ dependencies = [
 
 [[package]]
 name = "user-token-create"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -16781,7 +16797,7 @@ dependencies = [
 
 [[package]]
 name = "user-worker"
-version = "25.4.1"
+version = "25.4.2"
 dependencies = [
  "chirp-client",
  "chirp-worker",

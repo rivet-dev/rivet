@@ -82,7 +82,7 @@ rev = "8a313913fa73d58f4f9532565b0084e723bc34ad"
 
 [workspace.dependencies.deno_runtime]
 git = "https://github.com/rivet-gg/deno"
-rev = "d1017ec89c630637bf7312b6792262acc887e754"
+rev = "512c62fabf104be9c23dc585dff739cba8e424b3"
 
 [workspace.dependencies.api-helper]
 path = "packages/common/api-helper/build"
