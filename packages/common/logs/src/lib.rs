@@ -1,4 +1,4 @@
-use std::{os::fd::AsRawFd, path::PathBuf};
+use std::{os::fd::AsFd, path::PathBuf};
 
 use anyhow::*;
 use chrono::{Datelike, Duration, TimeDelta, TimeZone, Utc};
@@ -80,10 +80,10 @@ impl Logs {
 			.append(true)
 			.open(path)
 			.await?;
-		let log_fd = log_file.as_raw_fd();
+		let log_fd = log_file.as_fd();
 
-		nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
-		nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
+		nix::unistd::dup2_stdout(log_fd)?;
+		nix::unistd::dup2_stderr(log_fd)?;
 
 		self.prune().await
 	}
@@ -164,10 +164,10 @@ impl Logs {
 			.create(true)
 			.append(true)
 			.open(path)?;
-		let log_fd = log_file.as_raw_fd();
+		let log_fd = log_file.as_fd();
 
-		nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
-		nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
+		nix::unistd::dup2_stdout(log_fd)?;
+		nix::unistd::dup2_stderr(log_fd)?;
 
 		self.prune_sync()
 	}

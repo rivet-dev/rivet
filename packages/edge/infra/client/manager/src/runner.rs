@@ -185,7 +185,7 @@ impl Handle {
 		// Prepare the arguments for the runner
 		let runner_args = vec![working_path.to_str().context("bad path")?];
 
-		// TODO: Do pipes have to be manually deleted here?
+		// NOTE: Pipes are automatically closed on drop
 		// Pipe communication between processes
 		let (pipe_read, pipe_write) = pipe()?;
 

@@ -18,8 +18,9 @@ fdb-util = { workspace = true, optional = true }
 foundationdb = { workspace = true, optional = true }
 heck = "0.3"
 lazy_static = "1.4"
-nix = { version = "0.27", default-features = false, features = ["user", "signal"], optional = true }
+nix = { workspace = true, optional = true }
 rand = "0.8"
+regex = "1.10.3"
 reqwest = { version = "0.12", features = ["json"] }
 rivet-api.workspace = true
 rivet-config.workspace = true
@@ -35,7 +36,6 @@ serde_urlencoded = "0.7.0"
 strum = { version = "0.24", features = ["derive"] }
 thiserror = "1.0"
 uuid = "1.11.0"
-regex = "1.10.3"
 
 build.workspace = true
 cluster.workspace = true

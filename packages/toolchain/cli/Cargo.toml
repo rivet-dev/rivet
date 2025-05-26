@@ -14,26 +14,26 @@ path = "src/main.rs"
 # sentry = []
 
 [dependencies]
+anyhow = "1.0"
+async-posthog.workspace = true
+base64 = "0.22.1"
 clap = { version = "4.5.9", features = ["derive"] }
-toolchain = { path = "../toolchain", package = "rivet-toolchain" }
-tokio.workspace = true
+ctrlc = "3.4.5"
+deno-embed.workspace = true
+inquire = "0.7.5"
+kv-str.workspace = true
+# sentry = { version = "0.37.0", default-features = false, features = ["anyhow", "backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.120"
-anyhow = "1.0"
-uuid = { version = "1.11.0", features = ["v4"] }
-url = { version = "2.5.3", features = ["serde"] }
-base64 = "0.22.1"
-kv-str.workspace = true
-inquire = "0.7.5"
-webbrowser = "1.0.2"
-# sentry = { version = "0.37.0", default-features = false, features = ["anyhow", "backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 sysinfo = "0.32.0"
-ctrlc = "3.4.5"
-async-posthog.workspace = true
-deno-embed.workspace = true
+tokio.workspace = true
+toolchain = { path = "../toolchain", package = "rivet-toolchain" }
+url = { version = "2.5.3", features = ["serde"] }
+uuid = { version = "1.11.0", features = ["v4"] }
+webbrowser = "1.0.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
+nix.workspace = true
 
 [build-dependencies]
 anyhow = "1.0"
