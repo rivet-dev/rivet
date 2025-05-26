@@ -36,6 +36,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			tls: server_config.tls.clone(),
 			rivet: Rivet {
 				namespace: server_config.rivet.namespace.clone(),
+				instance_id: server_config.rivet.instance_id,
 				clusters: Some({
 					let mut clusters = HashMap::new();
 

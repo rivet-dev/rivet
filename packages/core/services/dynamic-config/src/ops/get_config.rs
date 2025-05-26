@@ -1,51 +1,51 @@
 use chirp_workflow::prelude::*;
 use tokio::sync::OnceCell;
 
-// The cluster ID will never change, so store it in memory.
-static CLUSTER_ID_ONCE: OnceCell<Uuid> = OnceCell::const_new();
+// The instance ID will never change, so store it in memory.
+static INSTANCE_ID_ONCE: OnceCell<Uuid> = OnceCell::const_new();
 
 #[derive(Debug, Default)]
 pub struct Input {}
 
 #[derive(Debug)]
 pub struct Output {
-	pub cluster_id: Uuid,
+	pub instance_id: Uuid,
 }
 
 #[operation]
-pub async fn get_cluster_id(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn get_config(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	// IMPORTANT: This is not the same as the cluster ID from the `cluster` package. This is used
-	// for unqiuely identifying the entire Rivet cluster.
+	// for uniquely identifying the entire Rivet cluster.
 
-	// Pick a cluster ID to insert if none exists. If this is specified in the config. fall back to
+	// Pick an instance ID to insert if none exists. If this is specified in the config. fall back to
 	// this.
-	let default_cluster_id =
-		if let Some(cluster_id) = ctx.config().server()?.rivet.default_cluster_id {
-			cluster_id
+	let default_instance_id =
+		if let Some(instance_id) = ctx.config().server()?.rivet.instance_id {
+			instance_id
 		} else {
 			Uuid::new_v4()
 		};
 
-	let cluster_id = CLUSTER_ID_ONCE
+	let instance_id = INSTANCE_ID_ONCE
 		.get_or_try_init(|| async {
 			sql_fetch_one!(
 				[ctx, (Uuid,)]
 				"
 				WITH new_row AS (
-					INSERT INTO db_dynamic_config.config (id, cluster_id)
+					INSERT INTO db_dynamic_config.config (id, rivet_instance_id)
 					VALUES (1, $1)
 					ON CONFLICT (id) DO NOTHING
-					RETURNING cluster_id
+					RETURNING rivet_instance_id
 				)
-				SELECT cluster_id 
+				SELECT rivet_instance_id 
 				FROM new_row
 				UNION ALL
-				SELECT cluster_id 
+				SELECT rivet_instance_id 
 				FROM db_dynamic_config.config
 				WHERE NOT EXISTS (SELECT 1 FROM new_row)
 
 				",
-				default_cluster_id
+				default_instance_id
 			)
 			.await
 			.map(|x| x.0)
@@ -53,6 +53,6 @@ pub async fn get_cluster_id(ctx: &OperationCtx, input: &Input) -> GlobalResult<O
 		.await?;
 
 	Ok(Output {
-		cluster_id: *cluster_id,
+		instance_id: *instance_id,
 	})
 }

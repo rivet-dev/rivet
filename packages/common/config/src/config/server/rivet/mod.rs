@@ -63,6 +63,11 @@ pub struct Rivet {
 	/// If specified, will use this as the default cluster ID.
 	///
 	/// This will have no effect if applied after the cluster has first ran.
+	pub instance_id: Option<Uuid>,
+
+	/// If specified, will use this as the default cluster ID.
+	///
+	/// This will have no effect if applied after the cluster has first ran.
 	#[serde(default)]
 	pub default_cluster_id: Option<Uuid>,
 
@@ -139,6 +144,7 @@ impl Default for Rivet {
 	fn default() -> Rivet {
 		Self {
 			namespace: Self::default_namespace(),
+			instance_id: None,
 			default_cluster_id: None,
 			clusters: None,
 			provision: None,
@@ -171,7 +177,7 @@ impl Rivet {
 	}
 }
 
-impl Rivet {
+impl Rivet {	
 	pub fn default_cluster_id(&self) -> GlobalResult<Uuid> {
 		if let Some(default_cluster_id) = self.default_cluster_id {
 			ensure!(
@@ -184,9 +190,7 @@ impl Rivet {
 				// Return default development clusters
 				AccessKind::Development => Ok(default_dev_cluster::CLUSTER_ID),
 				// No cluster configured
-				AccessKind::Public | AccessKind::Private => {
-					bail!("`default_cluster_id` not configured")
-				}
+				AccessKind::Public | AccessKind::Private => bail!("`default_cluster_id` not configured"),
 			}
 		}
 	}

@@ -41,22 +41,22 @@ pub async fn run_from_env(
 		(),
 	);
 
-	// Get the cluster ID
-	let cluster_id = chirp_workflow::compat::op(&ctx, dynamic_config::ops::get_config::Input {})
+	// Get the rivet instance ID
+	let instance_id = chirp_workflow::compat::op(&ctx, dynamic_config::ops::get_config::Input {})
 		.await?
-		.cluster_id;
+		.instance_id;
 
 	// Build events
 	let mut events = Vec::new();
-	let distinct_id = format!("cluster:{cluster_id}");
+	let distinct_id = format!("instance:{instance_id}");
 
 	// Send beacon
-	let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
-	event.insert_prop("$groups", json!({ "cluster": cluster_id }))?;
+	let mut event = async_posthog::Event::new("instance_beacon", &distinct_id);
+	event.insert_prop("$groups", json!({ "instance": instance_id }))?;
 	event.insert_prop(
 		"$set",
 		json!({
-			"cluster_id": cluster_id,
+			"instance_id": instance_id,
 			"os": os_report(),
 			"source_hash": rivet_env::source_hash(),
 			"config": get_config_data(&ctx)?,
@@ -66,10 +66,10 @@ pub async fn run_from_env(
 	)?;
 	events.push(event);
 
-	// Add cluster identification data
+	// Add instance identification data
 	let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-	event.insert_prop("$group_type", "cluster")?;
-	event.insert_prop("$group_key", cluster_id)?;
+	event.insert_prop("$group_type", "instance")?;
+	event.insert_prop("$group_key", instance_id)?;
 	event.insert_prop(
 		"$group_set",
 		json!({
@@ -89,7 +89,7 @@ pub async fn run_from_env(
 	Ok(())
 }
 
-/// Returns information about the operating system running the cluster.
+/// Returns information about the operating system running the instance.
 ///
 /// This helps Rivet diagnose crash reports to easily pinpoint if issues are
 /// coming from a specific operating system.
@@ -190,9 +190,9 @@ struct ResourceAggregateRow {
 
 // /// Returns information about the pegboard configuration.
 // ///
-// /// This is helpful for diagnosing issues with the self-hosted clusters under
-// /// load. e.g. if a cluster is running on constraint resources (see os_report),
-// /// does the cluster configuration affect it?
+// /// This is helpful for diagnosing issues with the self-hosted instances under
+// /// load. e.g. if a instance is running on constraint resources (see os_report),
+// /// does the instance configuration affect it?
 // async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
 // 	use pegboard::protocol::ClientFlavor;
 
