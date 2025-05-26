@@ -24,6 +24,8 @@ impl Setup {
 	pub fn signal_child(&self, signal: &str) {
 		let kill = Command::new("kill")
 			.args(["-s", signal, &self.child.id().to_string()])
+			.stdout(std::process::Stdio::null())
+			.stderr(std::process::Stdio::null())
 			.status()
 			.unwrap();
 		assert!(kill.success());
@@ -37,6 +39,8 @@ impl Drop for Setup {
 			.arg("delete")
 			.arg("--force")
 			.arg(&self.actor_id)
+			.stdout(std::process::Stdio::null())
+			.stderr(std::process::Stdio::null())
 			.status()
 			.unwrap();
 
@@ -64,6 +68,8 @@ pub fn setup(command: &str) -> Setup {
 		.arg("docker://debian:12.4")
 		.arg("oci:oci-image:latest")
 		.current_dir(actor_dir.path())
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
 		.status()
 		.unwrap();
 	assert!(status.success());
@@ -74,6 +80,8 @@ pub fn setup(command: &str) -> Setup {
 		.arg("oci-image:latest")
 		.arg("fs")
 		.current_dir(actor_dir.path())
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
 		.status()
 		.unwrap();
 	assert!(status.success());

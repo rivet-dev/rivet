@@ -93,6 +93,8 @@ pub fn run(
 				.arg("--all")
 				.arg(&actor_id)
 				.arg("SIGTERM")
+				.stdout(Stdio::null())
+				.stderr(Stdio::null())
 				.status();
 			println!("runc kill status: {:?}", status);
 			break;
