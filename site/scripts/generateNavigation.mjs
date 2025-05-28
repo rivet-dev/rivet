@@ -22,6 +22,7 @@ export async function generateNavigation() {
         .replace(/^pages\//, '')
         .replace(/^app\//, '')
         .replace(/\/page$/, '')
+        .replace('(guide)/', '')
         .replace('(technical)/', '')
         .replace('(posts)/', '')
         .replace('(legacy)/', '');

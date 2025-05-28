@@ -47,6 +47,9 @@ export const CATEGORIES = {
 	technical: {
 		name: "Technical",
 	},
+	guide: {
+		name: "Guide",
+	},
 	frogs: {
 		name: "Frogs",
 	},
