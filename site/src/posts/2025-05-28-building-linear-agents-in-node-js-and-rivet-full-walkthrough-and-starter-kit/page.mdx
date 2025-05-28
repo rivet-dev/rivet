@@ -17,11 +17,11 @@ This project is built with:
 - [Linear SDK](https://developers.linear.app/docs/sdk/installation) for Linear API integration
 - [AI SDK](https://ai-sdk.dev) for AI-powered responses
 
-[View Source Code on GitHub](https://github.com/rivet-gg/rivet/tree/main/examples/linear-agent-starter).
+[View Source Code on GitHub →](https://github.com/rivet-gg/rivet/tree/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter).
 
 ## TL;DR
 
-The core functionality is in [`src/actors/issue-agent.ts`](https://github.com/rivet-gg/rivet/blob/05-27-docs_add_linear-agent-starter_example/examples/linear-agent-starter/src/actors/issue-agent.ts), where the agent handles different types of Linear events and interfaces with the LLM.
+The core functionality is in [`src/actors/issue-agent.ts`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/issue-agent.ts), where the agent handles different types of Linear events and interfaces with the LLM.
 
 ## Walkthrough
 
@@ -34,15 +34,15 @@ The Linear integration works through the following steps:
 
 The system exposes three endpoints:
 
-- `GET /connect-linear`: Initiates the Linear OAuth flow
-- `GET /oauth/callback/linear`: OAuth callback endpoint
-- `POST /webhook/linear`: Receives Linear webhook events
+- `GET /connect-linear`: Initiates the Linear OAuth flow ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L41))
+- `GET /oauth/callback/linear`: OAuth callback endpoint ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L82))
+- `POST /webhook/linear`: Receives Linear webhook events ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L116))
 
 And maintains state using three main [ActorCore](https://actorcore.org) actors:
 
-1. **Issue Agent** (`src/actors/issue-agent.ts`): Handles Linear issue events and generates responses
-2. **Linear App User** (`src/actors/linear-app-user.ts`): Manages authentication state for the application
-3. **OAuth Session** (`src/actors/oauth-session.ts`): Handles OAuth flow state
+1. **Issue Agent**: Handles Linear issue events and generates responses ([src/actors/issue-agent.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/issue-agent.ts#L11))
+2. **Linear App User**: Manages authentication state for the application ([src/actors/linear-app-user.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6))
+3. **OAuth Session**: Handles OAuth flow state ([src/actors/oauth-session.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10))
 
 <Tip>
 	You can read more about actors [in the ActorCore documentation](https://actorcore.org/concepts/overview).
@@ -56,9 +56,9 @@ Before our agent can interact with a Linear workspace, we need to set up authent
 
 **Step 1: Initial OAuth Request**
 
-The user is directed to `GET /connect-linear` to initiate the OAuth flow:
+The user is directed to `GET /connect-linear` ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L41)) to initiate the OAuth flow:
 - We generate a secure session with a unique ID and nonce
-- We store this state in an `oauthSession` ActorCore actor
+- We store this state in an [`oauthSession`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10) ActorCore actor
 - We redirect to Linear's authorization page with our OAuth parameters
 
 ```typescript {{"title":"src/server/index.ts"}}
@@ -113,7 +113,7 @@ When the user completes authentication, Linear redirects to our callback URL wit
 - We validate the state parameter for security
 - We exchange the code for an access token
 - We get the app user ID for the agent in this workspace (our unique identifier for this workspace)
-- We store the access token in the `linearAppUser` ActorCore actor
+- We store the access token in the [`linearAppUser`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6) ActorCore actor
 
 ```typescript {{"title":"src/server/index.ts"}}
 router.get("/oauth/callback/linear", async (c) => {
@@ -156,7 +156,7 @@ After OAuth completes, our agent is fully integrated with the Linear workspace:
 
 Once a user has authorized our application in their Linear workspace, Linear sends webhook events to our endpoint whenever something happens that involves our agent. 
 
-The server parses these events and routes them to the appropriate handlers in `src/actors/issue-agent.ts`:
+The server parses these events and routes them to the appropriate handlers in [`src/actors/issue-agent.ts`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/issue-agent.ts#L11):
 
 - **`issueMention`**: Triggered when the agent is mentioned in an issue description
 - **`issueEmojiReaction`**: Triggered when someone reacts with an emoji to an issue
@@ -365,7 +365,7 @@ Before getting started with building your own Linear agent, make sure you have:
 
 ### Adding Your Own Functionality
 
-The core of the agent is in `src/actors/issue-agent.ts`. You can customize:
+The core of the agent is in [`src/actors/issue-agent.ts`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/issue-agent.ts#L11). You can customize:
 
 1. **Event Handlers**: Modify actions for different Linear events:
    
@@ -441,5 +441,5 @@ When building a Linear agent, consider these practices for a better developer ex
 
 You can find the complete source code for this Linear agent starter kit on GitHub:
 
-[View Source Code on GitHub](https://github.com/rivet-gg/rivet/tree/main/examples/linear-agent-starter)
+[View Source Code on GitHub →](https://github.com/rivet-gg/rivet/tree/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter)
 

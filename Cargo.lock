@@ -9711,6 +9711,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags 2.6.0",
+ "cfg-if",
+ "cfg_aliases 0.2.1",
+ "libc",
+]
+
+[[package]]
 name = "nkeys"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10586,7 +10598,7 @@ dependencies = [
  "game-resolve-namespace-id",
  "heck 0.3.3",
  "lazy_static",
- "nix 0.27.1",
+ "nix 0.30.1",
  "rand 0.8.5",
  "regex",
  "reqwest 0.12.12",
@@ -10650,7 +10662,7 @@ name = "pegboard-container-runner"
 version = "25.4.2"
 dependencies = [
  "anyhow",
- "nix 0.27.1",
+ "nix 0.30.1",
  "portpicker",
  "rivet-logs",
  "serde",
@@ -10679,7 +10691,7 @@ dependencies = [
  "foundationdb",
  "futures-util",
  "netif",
- "nix 0.27.1",
+ "nix 0.30.1",
  "pegboard",
  "pegboard-actor-kv",
  "pegboard-config",
@@ -10714,7 +10726,7 @@ dependencies = [
  "indoc 2.0.5",
  "json5",
  "lazy_static",
- "nix 0.27.1",
+ "nix 0.30.1",
  "notify",
  "pegboard",
  "pegboard-config",
@@ -12170,7 +12182,7 @@ dependencies = [
  "deno-embed",
  "inquire",
  "kv-str",
- "nix 0.27.1",
+ "nix 0.30.1",
  "rivet-toolchain",
  "serde",
  "serde_json",
@@ -12525,7 +12537,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",
- "nix 0.27.1",
+ "nix 0.30.1",
  "tokio",
  "tracing",
  "tracing-logfmt",
