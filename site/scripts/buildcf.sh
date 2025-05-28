@@ -11,3 +11,5 @@ yarn build
 cd $CWD
 yarn install
 npx next build && cp _redirects out/_redirects
+
+echo test
