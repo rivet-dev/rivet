@@ -9,8 +9,14 @@ import {
 	projectQueryOptions,
 	projectsByGroupQueryOptions,
 } from "@/domains/project/queries";
-import { type QueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
+	type QueryClient,
+	QueryErrorResetBoundary,
+	useSuspenseQueries,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
+import {
+	Navigate,
 	type ParsedLocation,
 	notFound,
 	redirect,
@@ -37,6 +43,37 @@ export async function guardEnterprise({
 	if (bootstrap.cluster === "oss") {
 		throw notFound();
 	}
+}
+
+export function GuardNewbie({ children }: PropsWithChildren) {
+	const [
+		{
+			data: { cluster },
+		},
+		{ data: groups },
+	] = useSuspenseQueries({
+		queries: [bootstrapQueryOptions(), projectsByGroupQueryOptions()],
+	});
+
+	if (cluster === "oss") {
+		return (
+			<Navigate
+				to={"/projects/$projectNameId"}
+				params={{ projectNameId: groups[0].projects[0].nameId }}
+			/>
+		);
+	}
+
+	if (groups.length > 0) {
+		return (
+			<Navigate
+				to={"/teams/$groupId"}
+				params={{ groupId: groups[0].groupId }}
+			/>
+		);
+	}
+
+	return children;
 }
 
 export async function guardOssNewbie({
