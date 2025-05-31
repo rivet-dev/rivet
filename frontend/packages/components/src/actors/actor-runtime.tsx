@@ -46,7 +46,9 @@ export function ActorRuntime({ actor }: ActorRuntimeProps) {
 						<Dl>
 							<Dt>Kill timeout</Dt>
 							<Dd>
-								{formatDuration(lifecycle.killTimeout || 0)}
+								{formatDuration(lifecycle.killTimeout || 0, {
+									show0Min: true,
+								})}
 							</Dd>
 							{toRecord(tags).framework !==
 								ACTOR_FRAMEWORK_TAG_VALUE && resources ? (
