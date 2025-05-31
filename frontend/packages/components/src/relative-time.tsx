@@ -6,6 +6,7 @@ interface RelativeTimeProps {
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat("en", {
 	numeric: "auto",
+	style: "narrow",
 });
 
 function decompose(duration: number) {

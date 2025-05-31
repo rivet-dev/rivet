@@ -1,4 +1,4 @@
-import { Flex, WithTooltip } from "@rivet-gg/components";
+import { cn, Flex, WithTooltip } from "@rivet-gg/components";
 import {
 	REGION_LABEL,
 	RegionIcon,
@@ -36,7 +36,7 @@ export function ActorRegion({
 		return (
 			<Flex gap="2" items="center" justify="center" className={className}>
 				<RegionIcon region={regionKey} className="w-4 min-w-4" />
-				<span>
+				<span data-slot="label">
 					{showLabel === "abbreviated"
 						? regionKey.toUpperCase()
 						: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}

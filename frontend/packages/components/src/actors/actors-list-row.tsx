@@ -18,6 +18,7 @@ import {
 } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
+import { faTag, faTags, Icon } from "@rivet-gg/icons";
 
 interface ActorsListRowProps {
 	className?: string;
@@ -68,7 +69,13 @@ const regionSelector = (actor: Actor) => actor.region;
 function Region({ actor }: { actor: ActorAtom }) {
 	const regionId = useAtomValue(selectAtom(actor, regionSelector));
 
-	return <ActorRegion regionId={regionId} showLabel="abbreviated" />;
+	return (
+		<ActorRegion
+			regionId={regionId}
+			showLabel="abbreviated"
+			className="[&_[data-slot=label]]:hidden @[500px]/table:[&_[data-slot=label]]:flex"
+		/>
+	);
 }
 
 const tagsSelector = (actor: Actor) => toRecord(actor.tags);
@@ -76,18 +83,28 @@ const tagsSelector = (actor: Actor) => toRecord(actor.tags);
 function Tags({ actor }: { actor: ActorAtom }) {
 	const tags = useAtomValue(selectAtom(actor, tagsSelector));
 
+	const tagCount = Object.keys(tags).length;
+
 	return (
 		<WithTooltip
 			trigger={
-				<div className="relative overflow-r-gradient">
+				<div className="relative overflow-r-gradient @container">
 					<ActorTags
-						className="flex-nowrap empty:block overflow-hidden"
+						className="flex-nowrap empty:block overflow-hidden @[150px]:block space-x-2 hidden"
 						truncate={true}
 						copy={false}
 						tags={tags}
 						hoverable={false}
 						excludeBuiltIn="actors"
 					/>
+					<div className="block @[150px]:hidden text-xs text-muted-foreground">
+						<Icon
+							icon={tagCount === 1 ? faTag : faTags}
+							className="mr-1"
+						/>
+						{Object.keys(tags).length}{" "}
+						{tagCount === 1 ? "tag" : "tags"}
+					</div>
 				</div>
 			}
 			content={
