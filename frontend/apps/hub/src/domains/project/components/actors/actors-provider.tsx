@@ -12,6 +12,7 @@ import {
 	actorBuildsAtom,
 	createActorAtom,
 	type Logs,
+	actorsQueryAtom,
 } from "@rivet-gg/components/actors";
 import {
 	InfiniteQueryObserver,
@@ -122,6 +123,10 @@ export function ActorsProvider({
 		});
 
 		const unsub = actorsObserver.subscribe((query) => {
+			store.set(actorsQueryAtom, {
+				isLoading: query.isLoading,
+				error: query.error?.message ?? null,
+			});
 			store.set(actorsPaginationAtom, {
 				hasNextPage: query.hasNextPage,
 				fetchNextPage: () => query.fetchNextPage(),

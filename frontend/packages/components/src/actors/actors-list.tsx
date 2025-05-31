@@ -13,6 +13,7 @@ import {
 	type OnFiltersChange,
 	type OptionsProviderProps,
 	ScrollArea,
+	ShimmerLine,
 	SmallText,
 } from "@rivet-gg/components";
 import { ActorsListRow } from "./actors-list-row";
@@ -26,6 +27,7 @@ import {
 	actorRegionsAtom,
 	actorsAtomsAtom,
 	actorsPaginationAtom,
+	actorsQueryAtom,
 	actorTagsAtom,
 	filteredActorsCountAtom,
 } from "./actor-context";
@@ -52,51 +54,62 @@ import { ActorStatus } from "./actor-status";
 
 export function ActorsList() {
 	return (
-		<ScrollArea className="w-full @container/main">
-			<div className="grid grid-cols-[2rem_1rem_1fr_1fr_1fr_1fr] @lg/main:grid-cols-[2rem_min-content_min-content_minmax(1rem,2fr)_minmax(min-content,1fr)_minmax(min-content,1fr)] items-center justify-center gap-x-4 w-full min-w-[450px] @container/table">
-				<div className="grid grid-cols-subgrid col-span-full sticky top-0 border-b z-[1] bg-card">
-					<div className="col-span-full border-b justify-between flex px-2 py-2 gap-1">
-						<Filters />
-						<div className="flex gap-1">
-							<GoToActorButton />
-							<CreateActorButton />
+		<>
+			<ScrollArea className="w-full @container/main">
+				<div className="grid grid-cols-[2rem_1rem_1fr_1fr_1fr_1fr] @lg/main:grid-cols-[2rem_min-content_min-content_minmax(1rem,2fr)_minmax(min-content,1fr)_minmax(min-content,1fr)] items-center justify-center gap-x-4 w-full min-w-[450px] @container/table">
+					<div className="grid grid-cols-subgrid col-span-full sticky top-0 border-b z-[1] bg-card">
+						<div className="col-span-full border-b justify-between flex px-2 py-2 gap-1 relative">
+							<Filters />
+							<div className="flex gap-1">
+								<GoToActorButton />
+								<CreateActorButton />
+							</div>
+							<LoadingIndicator />
+						</div>
+						<div className="grid grid-cols-subgrid col-span-full font-semibold text-sm px-1 pr-4 min-h-[42px] items-center">
+							<div />
+							<div>
+								<span className="hidden  @[500px]/table:inline">
+									Region
+								</span>
+								<span className="@[500px]/table:hidden">
+									<Icon icon={faGlobe} />
+								</span>
+							</div>
+							<div>ID</div>
+							<div>Tags</div>
+							<div>
+								<span className="hidden @[500px]/table:inline">
+									Created
+								</span>
+								<span className="@[500px]/table:hidden">
+									<Icon icon={faCalendarPlus} />
+								</span>
+							</div>
+							<div>
+								<span className="hidden @[500px]/table:inline">
+									Destroyed
+								</span>
+								<span className="@[500px]/table:hidden">
+									<Icon icon={faCalendarMinus} />
+								</span>
+							</div>
 						</div>
 					</div>
-					<div className="grid grid-cols-subgrid col-span-full font-semibold text-sm px-1 pr-4 min-h-[42px] items-center">
-						<div />
-						<div>
-							<span className="hidden  @[500px]/table:inline">
-								Region
-							</span>
-							<span className="@[500px]/table:hidden">
-								<Icon icon={faGlobe} />
-							</span>
-						</div>
-						<div>ID</div>
-						<div>Tags</div>
-						<div>
-							<span className="hidden @[500px]/table:inline">
-								Created
-							</span>
-							<span className="@[500px]/table:hidden">
-								<Icon icon={faCalendarPlus} />
-							</span>
-						</div>
-						<div>
-							<span className="hidden @[500px]/table:inline">
-								Destroyed
-							</span>
-							<span className="@[500px]/table:hidden">
-								<Icon icon={faCalendarMinus} />
-							</span>
-						</div>
-					</div>
+					<List />
+					<Pagination />
 				</div>
-				<List />
-				<Pagination />
-			</div>
-		</ScrollArea>
+			</ScrollArea>
+		</>
 	);
+}
+
+function LoadingIndicator() {
+	const state = useAtomValue(actorsQueryAtom);
+	if (state.isLoading) {
+		return <ShimmerLine className="bottom-0" />;
+	}
+	return null;
 }
 
 function List() {

@@ -3,7 +3,7 @@ import { atomFamily, splitAtom } from "jotai/utils";
 import type { Rivet } from "@rivet-gg/api";
 import { toRecord } from "../lib/utils";
 import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
-import { FilterOp, FilterValue } from "../ui/filters";
+import { FilterOp, type FilterValue } from "../ui/filters";
 import { isAfter, isBefore } from "date-fns";
 
 export enum ActorFeature {
@@ -74,6 +74,13 @@ export type Region = Rivet.actor.Region;
 
 // global atoms
 export const currentActorIdAtom = atom<string | undefined>(undefined);
+export const actorsQueryAtom = atom<{
+	isLoading: boolean;
+	error: string | null;
+}>({
+	isLoading: false,
+	error: null,
+});
 export const actorsAtom = atom<Actor[]>([]);
 export const actorFiltersAtom = atom<{
 	tags: FilterValue;
