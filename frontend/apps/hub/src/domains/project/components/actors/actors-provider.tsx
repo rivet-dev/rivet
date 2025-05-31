@@ -336,7 +336,6 @@ export function ActorsProvider({
 				.find(
 					(a) =>
 						toRecord(a.tags).name === "manager" &&
-						toRecord(a.tags).owner === "rivet" &&
 						a.status === "running",
 				);
 
