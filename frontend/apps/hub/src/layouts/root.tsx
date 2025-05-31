@@ -68,7 +68,7 @@ const Footer = () => {
 					<div className="flex gap-4 items-center justify-between w-full lg:w-auto lg:justify-normal">
 						<div className="flex gap-4 items-center">
 							<img
-								src={publicUrl("/icon-white-borderless.svg")}
+								src={publicUrl("/icon-bordered.svg")}
 								alt="Rivet"
 								className="h-6"
 							/>
