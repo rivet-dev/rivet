@@ -77,6 +77,7 @@ function Modals() {
 					await navigate({
 						to: "/projects/$projectNameId",
 						params: { projectNameId: data.nameId },
+						search: { modal: undefined },
 					})
 				}
 				dialogProps={{
@@ -89,6 +90,7 @@ function Modals() {
 					await navigate({
 						to: "/teams/$groupId",
 						params: { groupId: data.groupId },
+						search: { modal: undefined },
 					})
 				}
 				dialogProps={{
