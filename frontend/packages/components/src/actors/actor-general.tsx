@@ -25,7 +25,7 @@ export function ActorGeneral({ actor }: ActorGeneralProps) {
 	);
 
 	return (
-		<div className="px-4 mt-4 ">
+		<div className="px-4 mt-4 mb-8">
 			<h3 className="mb-2 font-semibold">General</h3>
 			<Flex gap="2" direction="col" className="text-xs">
 				<Dl>

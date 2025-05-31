@@ -238,7 +238,7 @@ function ProjectFunctionsRoute() {
 
 	return (
 		<div className="flex flex-col max-w-full max-h-full w-full h-full bg-card relative">
-			<div className="flex px-2 w-full border-b sticky top-0 min-h-[42px]">
+			<div className="flex px-2 w-full border-b sticky top-0 h-[45px]">
 				<LiveBadge className="my-2" />
 				<div className="h-full border-l ml-2" />
 				<input

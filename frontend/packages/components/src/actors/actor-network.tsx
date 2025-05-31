@@ -1,5 +1,6 @@
 import {
 	Button,
+	cn,
 	Dd,
 	DiscreteCopyButton,
 	Dl,
@@ -27,7 +28,7 @@ export function ActorNetwork({ actor }: ActorNetworkProps) {
 	}
 
 	return (
-		<div className="px-4 mt-4 ">
+		<div className="px-4 mt-8 ">
 			<div className="flex gap-1 items-center mb-2">
 				<h3 className=" font-semibold">Network</h3>
 				<DocsSheet title="Networking" path="docs/networking">
@@ -45,77 +46,92 @@ export function ActorNetwork({ actor }: ActorNetworkProps) {
 					<Dl className="items-start">
 						<Dt>Ports</Dt>
 						<Dd>
-							{Object.entries(ports).map(([name, port]) => (
-								<Fragment key={name}>
-									{name}{" "}
-									<Dl className="mb-2 mt-2">
-										<Dt>Protocol</Dt>
-										<Dd>
-											<DiscreteCopyButton
-												size="xs"
-												value={port.protocol || ""}
-											>
-												{port.protocol}
-											</DiscreteCopyButton>
-										</Dd>
-										<Dt>Port</Dt>
-										<Dd>
-											<DiscreteCopyButton
-												size="xs"
-												value={String(port.port || "")}
-											>
-												{port.port}
-											</DiscreteCopyButton>
-										</Dd>
-										<Dt>Hostname</Dt>
-										<Dd>
-											<DiscreteCopyButton
-												size="xs"
-												className="max-w-full min-w-0"
-												value={port.hostname || ""}
-											>
-												{port.hostname}
-											</DiscreteCopyButton>
-										</Dd>
-										{port.url ? (
-											<>
-												<Dt>URL</Dt>
-												<Dd>
-													<DiscreteCopyButton
-														size="xs"
-														className="max-w-full min-w-0"
-														value={port.url || ""}
-													>
-														{port.url}
-													</DiscreteCopyButton>
-												</Dd>
-											</>
-										) : null}
-
-										{port.routing?.host ? (
-											<>
-												<Dt>Host Routing</Dt>
-												<Dd>
-													<DiscreteCopyButton
-														size="xs"
-														className="max-w-full min-w-0"
-														value={JSON.stringify(
-															port.routing.host,
-														)}
-													>
-														<ActorObjectInspector
+							{Object.entries(ports).map(
+								([name, port], index) => (
+									<Fragment key={name}>
+										<span
+											className={cn(
+												index !== 0 && "mt-8 block",
+											)}
+										>
+											{name}
+										</span>
+										<Dl className="mb-2 mt-2 border-l pl-4">
+											<Dt>Protocol</Dt>
+											<Dd>
+												<DiscreteCopyButton
+													size="xs"
+													value={port.protocol || ""}
+												>
+													{port.protocol}
+												</DiscreteCopyButton>
+											</Dd>
+											<Dt>Port</Dt>
+											<Dd>
+												<DiscreteCopyButton
+													size="xs"
+													value={String(
+														port.port || "",
+													)}
+												>
+													{port.port}
+												</DiscreteCopyButton>
+											</Dd>
+											<Dt>Hostname</Dt>
+											<Dd>
+												<DiscreteCopyButton
+													size="xs"
+													className="max-w-full min-w-0"
+													value={port.hostname || ""}
+												>
+													{port.hostname}
+												</DiscreteCopyButton>
+											</Dd>
+											{port.url ? (
+												<>
+													<Dt>URL</Dt>
+													<Dd>
+														<DiscreteCopyButton
+															size="xs"
+															className="max-w-full"
 															value={
-																port.routing
-																	.host
+																port.url || ""
 															}
-														/>
-													</DiscreteCopyButton>
-												</Dd>
-											</>
-										) : null}
-									</Dl>
-								</Fragment>
-							))}
+														>
+															<span className=" min-w-0 truncate flex-1">
+																{port.url}
+															</span>
+														</DiscreteCopyButton>
+													</Dd>
+												</>
+											) : null}
+
+											{port.routing?.host ? (
+												<>
+													<Dt>Host Routing</Dt>
+													<Dd>
+														<DiscreteCopyButton
+															size="xs"
+															className="max-w-full min-w-0"
+															value={JSON.stringify(
+																port.routing
+																	.host,
+															)}
+														>
+															<ActorObjectInspector
+																value={
+																	port.routing
+																		.host
+																}
+															/>
+														</DiscreteCopyButton>
+													</Dd>
+												</>
+											) : null}
+										</Dl>
+									</Fragment>
+								),
+							)}
 						</Dd>
 					</Dl>
 				</Flex>

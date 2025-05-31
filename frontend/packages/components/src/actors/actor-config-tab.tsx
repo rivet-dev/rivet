@@ -12,7 +12,7 @@ interface ActorConfigTabProps {
 export function ActorConfigTab(props: ActorConfigTabProps) {
 	return (
 		<ScrollArea className="overflow-auto h-full">
-			<div className="flex justify-end items-center gap-1 border-b sticky top-0 p-2 bg-card z-[1]">
+			<div className="flex justify-end items-center gap-1 border-b sticky top-0 p-2 bg-card z-[1] h-[45px]">
 				<DocsSheet title="Config" path="docs/config">
 					<Button
 						variant="outline"

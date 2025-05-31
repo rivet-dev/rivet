@@ -45,7 +45,7 @@ export const ActorsActorDetails = memo(
 						ActorFeature.InspectReconnectNotification,
 					)}
 				>
-					<div className="flex flex-col h-full flex-1 pt-2">
+					<div className="flex flex-col h-full flex-1">
 						<ActorTabs
 							features={actorFeatures}
 							actor={actor}
@@ -68,7 +68,7 @@ export const ActorsActorEmptyDetails = ({
 }) => {
 	const { copy } = useActorsView();
 	return (
-		<div className="flex flex-col h-full flex-1 pt-2">
+		<div className="flex flex-col h-full flex-1">
 			<ActorTabs disabled features={features}>
 				<div className="flex text-center text-foreground flex-1 justify-center items-center flex-col gap-2">
 					<Icon icon={faQuestionSquare} className="text-4xl" />
@@ -109,9 +109,9 @@ export function ActorTabs({
 			value={value}
 			onValueChange={onTabChange}
 			defaultValue={value}
-			className={cn(className, "flex-1 min-h-0 flex flex-col")}
+			className={cn(className, "flex-1 min-h-0 flex flex-col ")}
 		>
-			<div className="flex justify-between items-center border-b">
+			<div className="flex justify-between items-center border-b h-[45px]">
 				<ActorsSidebarToggleButton />
 				<div className="flex flex-1">
 					<TabsList className="overflow-auto border-none">

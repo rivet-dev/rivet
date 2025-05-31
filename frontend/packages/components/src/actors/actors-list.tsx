@@ -57,8 +57,8 @@ export function ActorsList() {
 		<>
 			<ScrollArea className="w-full @container/main">
 				<div className="grid grid-cols-[2rem_1rem_1fr_1fr_1fr_1fr] @lg/main:grid-cols-[2rem_min-content_min-content_minmax(1rem,2fr)_minmax(min-content,1fr)_minmax(min-content,1fr)] items-center justify-center gap-x-4 w-full min-w-[450px] @container/table">
-					<div className="grid grid-cols-subgrid col-span-full sticky top-0 border-b z-[1] bg-card">
-						<div className="col-span-full border-b justify-between flex px-2 py-2 gap-1 relative">
+					<div className="grid grid-cols-subgrid col-span-full sticky top-0 z-[1] bg-card">
+						<div className="col-span-full border-b justify-between flex px-2 py-2 gap-1 relative h-[45px]">
 							<Filters />
 							<div className="flex gap-1">
 								<GoToActorButton />
@@ -66,7 +66,7 @@ export function ActorsList() {
 							</div>
 							<LoadingIndicator />
 						</div>
-						<div className="grid grid-cols-subgrid col-span-full font-semibold text-sm px-1 pr-4 min-h-[42px] items-center">
+						<div className="grid grid-cols-subgrid col-span-full font-semibold text-sm px-1 pr-4 h-[45px] items-center  border-b">
 							<div />
 							<div>
 								<span className="hidden  @[500px]/table:inline">

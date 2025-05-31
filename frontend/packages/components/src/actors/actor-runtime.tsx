@@ -38,7 +38,7 @@ export function ActorRuntime({ actor }: ActorRuntimeProps) {
 	return (
 		<>
 			{features.includes(ActorFeature.Runtime) && lifecycle && runtime ? (
-				<div className="px-4 mt-4 mb-4">
+				<div className="px-4 my-8">
 					<div className="flex gap-1 items-center mb-2">
 						<h3 className=" font-semibold">Runtime</h3>
 					</div>
