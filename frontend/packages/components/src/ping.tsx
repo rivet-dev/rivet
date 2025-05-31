@@ -1,3 +1,4 @@
+import type { ComponentPropsWithRef } from "react";
 import { cn } from "./lib/utils";
 
 type Variant = "primary" | "destructive" | "success";
@@ -14,14 +15,21 @@ const pingVariants = {
 	destructive: "bg-red-400",
 } satisfies Record<Variant, string>;
 
-interface PingProps {
+interface PingProps extends ComponentPropsWithRef<"span"> {
 	variant?: Variant;
 	className?: string;
 }
 
-export const Ping = ({ variant = "primary", className }: PingProps) => {
+export const Ping = ({
+	variant = "primary",
+	className,
+	...props
+}: PingProps) => {
 	return (
-		<span className={cn("flex size-2 absolute top-0 -right-3", className)}>
+		<span
+			{...props}
+			className={cn("flex size-2 absolute top-0 -right-3", className)}
+		>
 			<span
 				className={cn(
 					"animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 right-0",

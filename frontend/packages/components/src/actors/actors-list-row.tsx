@@ -19,6 +19,7 @@ import {
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { faTag, faTags, Icon } from "@rivet-gg/icons";
+import { AtomizedActorStatusLabel } from "./actor-status-label";
 
 interface ActorsListRowProps {
 	className?: string;
@@ -49,9 +50,14 @@ export const ActorsListRow = memo(
 					})}
 					className="min-w-0 flex-wrap gap-2"
 				>
-					<div className="w-full flex justify-center">
-						<AtomizedActorStatusIndicator actor={actor} />
-					</div>
+					<WithTooltip
+						trigger={
+							<div className="w-full flex justify-center">
+								<AtomizedActorStatusIndicator actor={actor} />
+							</div>
+						}
+						content={<AtomizedActorStatusLabel actor={actor} />}
+					/>
 					<Region actor={actor} />
 					<SmallText>{id.split("-")[0]}</SmallText>
 					<Tags actor={actor} />
