@@ -92,7 +92,9 @@ function ProjectBuildsRoute() {
 								<TableRow>
 									<TableHead>ID</TableHead>
 									<TableHead>Name</TableHead>
-									<TableHead>Tags</TableHead>
+									<TableHead className="w-full">
+										Tags
+									</TableHead>
 									<TableHead>
 										<WithTooltip
 											content="Actors will be created with this build if a version is not explicitly specified."
@@ -154,9 +156,10 @@ function ProjectBuildsRoute() {
 										</TableCell>
 										<TableCell>
 											<ActorTags
-												className="max-w-[200px]"
+												className="max-w-[500px]"
 												{...build}
 												truncate={true}
+												max={4}
 												excludeBuiltIn="builds"
 											/>
 										</TableCell>

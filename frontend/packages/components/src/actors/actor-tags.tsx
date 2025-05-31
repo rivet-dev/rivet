@@ -1,4 +1,5 @@
 import {
+	Button,
 	DiscreteCopyButton,
 	Slot,
 	Slottable,
@@ -6,7 +7,7 @@ import {
 	cn,
 } from "@rivet-gg/components";
 import { Icon, faTag } from "@rivet-gg/icons";
-import { type ReactNode, forwardRef } from "react";
+import { type ReactNode, forwardRef, useState } from "react";
 
 const BUILT_IN_TAGS = {
 	actors: ["framework", "framework-version"],
@@ -31,6 +32,7 @@ interface ActorTagsProps {
 	className?: string;
 	truncate?: boolean;
 	copy?: boolean;
+	max?: number;
 	hoverable?: boolean;
 }
 
@@ -40,8 +42,23 @@ export function ActorTags({
 	truncate = true,
 	className,
 	hoverable = true,
+	max = Number.POSITIVE_INFINITY,
 	copy = true,
 }: ActorTagsProps) {
+	const withoutBuiltIn = Object.entries(tags ?? {}).filter(([key]) =>
+		excludeBuiltIn ? !BUILT_IN_TAGS[excludeBuiltIn].includes(key) : true,
+	);
+
+	const [isTruncatedList, setTruncatedList] = useState(
+		withoutBuiltIn.length > max,
+	);
+
+	const truncated = withoutBuiltIn.filter((_, index) =>
+		isTruncatedList ? index < max : true,
+	);
+
+	const truncatedCount = withoutBuiltIn.length - truncated.length;
+
 	return (
 		<div
 			className={cn(
@@ -50,13 +67,9 @@ export function ActorTags({
 				className,
 			)}
 		>
-			{tags && typeof tags === "object"
-				? Object.entries(tags)
-						.filter(([key]) =>
-							excludeBuiltIn
-								? !BUILT_IN_TAGS[excludeBuiltIn].includes(key)
-								: true,
-						)
+			{truncated.length > 0 ? (
+				<>
+					{truncated
 						.sort(([a], [b]) => a.localeCompare(b))
 						.map(([key, value]) => {
 							let trigger = truncate ? (
@@ -103,8 +116,26 @@ export function ActorTags({
 							) : (
 								trigger
 							);
-						})
-				: null}
+						})}
+
+					{truncatedCount > 0 ? (
+						<Button
+							variant="ghost"
+							size="xs"
+							className="h-auto py-0.5 text-left max-w-full min-w-0 break-all"
+							onClick={() => {
+								setTruncatedList(false);
+							}}
+						>
+							<ActorTag className="cursor-pointer">
+								<span className="inline">
+									+{truncatedCount} more
+								</span>
+							</ActorTag>
+						</Button>
+					) : null}
+				</>
+			) : null}
 		</div>
 	);
 }
