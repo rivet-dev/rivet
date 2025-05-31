@@ -26,23 +26,3 @@ export const useUpdateProjectBillingMutation = ({
 		},
 	});
 };
-
-export const useCreateBillingPortalSessionMutation = () => {
-	return useMutation({
-		mutationFn: ({
-			groupId,
-			intent,
-		}: {
-			groupId: string;
-		} & RivetEe.ee.cloud.groups.billing.CreateStripePortalSessionRequest) =>
-			rivetEeClient.ee.cloud.groups.billing.createStripePortalSession(
-				groupId,
-				{
-					intent,
-				},
-			),
-		onSuccess: async (data) => {
-			window.open(data.stripeSessionUrl, "_blank");
-		},
-	});
-};

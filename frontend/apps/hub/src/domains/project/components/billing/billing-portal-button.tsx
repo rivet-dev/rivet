@@ -1,5 +1,6 @@
 import { Button, type ButtonProps } from "@rivet-gg/components";
-import { useCreateBillingPortalSessionMutation } from "../../queries";
+import { portalBillingSessionQueryOptions } from "../../queries";
+import { useQuery } from "@tanstack/react-query";
 
 interface BillingPortalButtonProps extends ButtonProps {
 	groupId: string;
@@ -11,13 +12,19 @@ export function BillingPortalButton({
 	intent,
 	...props
 }: BillingPortalButtonProps) {
-	const { mutate, isPending } = useCreateBillingPortalSessionMutation();
+	const { data, isLoading } = useQuery(
+		portalBillingSessionQueryOptions(groupId, intent),
+	);
+
 	return (
-		<Button
-			type="button"
-			{...props}
-			isLoading={isPending}
-			onClick={() => mutate({ groupId, intent })}
-		/>
+		<Button type="button" {...props} isLoading={isLoading} asChild>
+			<a
+				href={data?.stripeSessionUrl}
+				target="_blank"
+				rel="noopener noreferrer"
+			>
+				{props.children}
+			</a>
+		</Button>
 	);
 }
