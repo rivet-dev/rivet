@@ -97,6 +97,12 @@ const ACTORS_VIEW_CONTEXT = {
 		actorNotFound: "Container not found",
 		actorNotFoundDescription:
 			"Change your filters to find the Container you are looking for.",
+
+		gettingStarted: {
+			title: "Getting Started with Containers",
+			description:
+				"Use a quick start guide to start deploying Containers to your environment.",
+		},
 	},
 	canCreate: false,
 };

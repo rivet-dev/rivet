@@ -30,6 +30,12 @@ const defaultValue = {
 		actorNotFound: "Actor not found",
 		actorNotFoundDescription:
 			"Change your filters to find the Actor you are looking for.",
+
+		gettingStarted: {
+			title: "Getting Started with Actors",
+			description:
+				"Use a quick start guide to start deploying Actors to your environment.",
+		},
 	},
 	canCreate: true,
 };

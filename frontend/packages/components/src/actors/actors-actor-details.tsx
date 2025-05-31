@@ -113,8 +113,8 @@ export function ActorTabs({
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
 				<ActorsSidebarToggleButton />
-				<div className="flex flex-1">
-					<TabsList className="overflow-auto border-none">
+				<div className="flex flex-1 items-center h-full ">
+					<TabsList className="overflow-auto border-none h-full items-end">
 						{supportsState ? (
 							<TabsTrigger disabled={disabled} value="state">
 								State

@@ -146,7 +146,7 @@ export function CommandPanel({ className }: { className?: string }) {
 				)}
 			>
 				<span className="hidden @[100px]:inline-flex">Search...</span>
-				<Kbd className="@[100px]:absolute right-[0.3rem] top-1/2 -translate-y-1/2 hidden sm:flex">
+				<Kbd className="@[100px]:absolute right-[0.3rem] @[100px]:right-4 top-1/2 -translate-y-1/2 hidden sm:flex">
 					<Kbd.Key />K
 				</Kbd>
 			</Button>

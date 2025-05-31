@@ -1,39 +1,33 @@
-import { Icon, faTs, faFunction, faServer, faActors } from "@rivet-gg/icons";
+import { Icon, faServer, faActors, faFunction } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import type { ComponentProps } from "react";
 import { Button } from "../ui/button";
 import { DocsSheet } from "../docs-sheet";
 import { cn } from "../lib/utils";
-import { CardHeader, CardTitle, CardContent, Card } from "../ui/card";
 
 export function ActorsResources() {
 	return (
 		<>
-			<Card className="max-w-2xl mx-auto w-full my-6">
-				<CardHeader>
-					<CardTitle>Getting Started</CardTitle>
-				</CardHeader>
-				<CardContent className="grid md:grid-cols-2 gap-4">
-					<ExampleLink
-						href="docs/actors"
-						title="Rivet Actors"
-						size="md"
-						icon={faActors}
-					/>
-					<ExampleLink
-						href="docs/containers"
-						title="Rivet Containers"
-						size="md"
-						icon={faServer}
-					/>
-					<ExampleLink
-						href="docs/functions"
-						title="Rivet Functions"
-						size="md"
-						icon={faTs}
-					/>
-				</CardContent>
-			</Card>
+			<div className="grid md:grid-cols-3 gap-4 max-w-xl mx-auto">
+				<ExampleLink
+					href="docs/actors"
+					title="Rivet Actors"
+					size="md"
+					icon={faActors}
+				/>
+				<ExampleLink
+					href="docs/containers"
+					title="Rivet Containers"
+					size="md"
+					icon={faServer}
+				/>
+				<ExampleLink
+					href="docs/functions"
+					title="Rivet Functions"
+					size="md"
+					icon={faFunction}
+				/>
+			</div>
 		</>
 	);
 }

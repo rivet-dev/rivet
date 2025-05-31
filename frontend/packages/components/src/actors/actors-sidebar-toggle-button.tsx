@@ -14,7 +14,7 @@ export function ActorsSidebarToggleButton() {
 				variant="outline"
 				size="icon-sm"
 				onClick={() => setFolded(!isFolded)}
-				className="mb-2 ml-1 mr-1"
+				className="ml-1 mr-1"
 			>
 				<Icon icon={faSidebar} />
 			</Button>
