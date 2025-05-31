@@ -84,9 +84,6 @@ const Footer = () => {
 							All services are online
 						</a>
 					</div>
-					<div>
-						<CommandPanel />
-					</div>
 				</div>
 				<div className="flex flex-col lg:flex-row items-center justify-between mt-4 gap-4 lg:gap-0 lg:mt-8 mb-4">
 					<div className="text-base flex items-center gap-4">
