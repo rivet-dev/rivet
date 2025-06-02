@@ -264,16 +264,6 @@ export const ExperimentalFeature = () => {
   return <Warning>This feature is experimental and may change in the future.</Warning>;
 };
 
-export const Version = () => {
-  const version = '0.1.5';
-  return (
-    <CodeBlock
-      lang='bash'
-      code={`deno install -n opengb -fgA https://raw.githubusercontent.com/rivet-gg/opengb/v${version}/src/cli/main.ts`}
-    />
-  );
-};
-
 export const Card = ({ href, ...props }) => {
   if (href) {
     return (
