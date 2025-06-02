@@ -8,6 +8,7 @@ import {
 	faCode,
 	faLayerGroup,
 	faRobot,
+	faLinear,
 	faDatabase,
 	faArrowsToCircle,
 	faGamepad,
@@ -33,6 +34,7 @@ import {
 
 // Import all diagram images
 import imgCodingAgent from "./images/diagrams/coding-agent.svg";
+import imgLinearAgent from "./images/diagrams/linear-agent.svg";
 import imgVoiceAgent from "./images/diagrams/voice-agent.svg";
 import imgSandboxedCode from "./images/diagrams/sandboxed-code.svg";
 import imgMcpServer from "./images/diagrams/mcp-server.svg";
@@ -59,6 +61,8 @@ interface TabItem {
 		actors?: boolean;
 		containers?: boolean;
 		functions?: boolean;
+		guide?: string;
+		sourceCode?: string;
 	};
 }
 
@@ -85,6 +89,22 @@ const TAB_GROUPS: TabGroup[] = [
 					actors: true,
 					containers: true,
 					functions: true,
+				},
+			},
+			{
+				id: "linear-agent",
+				icon: faLinear,
+				title: "Linear Agent",
+				description:
+					"Deploy intelligent Linear Agent that integrates with customers' Linear workspaces.",
+				image: imgLinearAgent,
+				docs: {
+					actors: true,
+					containers: false,
+					functions: true,
+					guide: "/blog/2025-05-28-building-linear-agents-in-node-js-and-rivet-full-walkthrough-and-starter-kit",
+					sourceCode:
+						"https://github.com/rivet-gg/rivet/tree/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter",
 				},
 			},
 			{
@@ -324,10 +344,15 @@ const TAB_GROUPS: TabGroup[] = [
 ];
 
 // Component for documentation links
-const DocLink = ({ title, href }: { title: string; href: string }) => (
+const DocLink = ({
+	title,
+	href,
+	external,
+}: { title: string; href: string; external?: boolean }) => (
 	<a
 		href={href}
 		className="text-white/70 hover:text-white text-sm font-medium flex items-center rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 transition-colors"
+		target={external ? "_blank" : undefined}
 	>
 		{title}
 		<span className="ml-1.5 text-white/50">→</span>
@@ -492,7 +517,7 @@ export const PowerfulPrimitivesSection = () => {
 									<div className="text-sm font-medium text-white/90 mb-2">
 										Documentation
 									</div>
-									<div className="flex gap-3">
+									<div className="flex gap-3 flex-wrap">
 										{activeTabData.docs.actors && (
 											<DocLink
 												title="Actors"
@@ -509,6 +534,22 @@ export const PowerfulPrimitivesSection = () => {
 											<DocLink
 												title="Functions"
 												href="/docs/functions"
+											/>
+										)}
+										{activeTabData.docs.guide && (
+											<DocLink
+												title="Guide"
+												href={activeTabData.docs.guide}
+											/>
+										)}
+										{activeTabData.docs.sourceCode && (
+											<DocLink
+												title="Source Code"
+												href={
+													activeTabData.docs
+														.sourceCode
+												}
+												external={true}
 											/>
 										)}
 									</div>

@@ -24,12 +24,14 @@ const Feature = ({
 	faIcon,
 	href,
 	useCases,
+	badge,
 }: {
 	title: string;
 	description: string;
 	faIcon: any;
 	href: string;
 	useCases: string[];
+	badge?: string;
 }) => {
 	const getImageDetails = () => {
 		switch (title) {
@@ -93,9 +95,14 @@ const Feature = ({
 		<Link href={href} className="block group">
 			<div className="rounded-xl bg-white/2 border border-white/20 group-hover:border-[white]/40 shadow-sm transition-all duration-200 relative overflow-hidden h-[300px] lg:h-[450px] flex flex-col">
 				<div className="px-8 mt-6">
-					<div className="flex items-center gap-3 mb-4 text-white text-base">
+					<div className="flex flex-wrap items-center gap-3 mb-4 text-white text-base">
 						<Icon icon={faIcon} />
 						<h3>{title}</h3>
+						{badge && (
+							<span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-950/50 text-[#FF5C00]">
+								{badge}
+							</span>
+						)}
 					</div>
 
 					<p className="text-white text-base text-white/40 mb-2">
@@ -123,6 +130,7 @@ const Feature = ({
 						))}
 						.
 					</p>
+
 
 					{/*<div className="mt-3 flex flex-wrap flex-col gap-0.5 text-sm">
 						{useCases.map((useCase, index) => (
@@ -196,6 +204,7 @@ export const FeaturesGrid = () => {
 			faIcon: faLayerGroup,
 			href: "/docs/actors",
 			useCases: ["AI agents", "realtime apps", "local-first sync"],
+			badge: "Open-Source Durable Objects",
 		},
 		{
 			//title: "Sandboxed Containers",
@@ -237,6 +246,7 @@ export const FeaturesGrid = () => {
 						faIcon={feature.faIcon}
 						href={feature.href}
 						useCases={feature.useCases}
+						badge={feature.badge}
 					/>
 				))}
 			</div>

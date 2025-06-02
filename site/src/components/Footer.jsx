@@ -253,6 +253,9 @@ function SmallPrint() {
 					&copy; {new Date().getFullYear()} Rivet Gaming, Inc. All
 					rights reserved.
 				</p>
+				<p className="text-xs leading-5 text-white/30">
+					Cloudflare® and Durable Objects™ are trademarks of Cloudflare, Inc. No affiliation or endorsement implied. References used for comparison purposes only.
+				</p>
 			</div>
 		</div>
 	);
