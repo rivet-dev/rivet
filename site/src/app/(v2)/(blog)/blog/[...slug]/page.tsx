@@ -102,8 +102,8 @@ export default async function BlogPage({ params: { slug } }) {
 					</li>
 					<li className="text-foreground font-semibold">{title}</li>
 				</ul>
-				<div className="flex flex-col gap-4 pb-6 lg:flex-row">
-					<aside className="order-1 mt-2 flex min-w-0 max-w-xs flex-1 flex-col gap-2">
+				<div className="flex flex-col gap-8 pb-6 lg:flex-row">
+					<aside className="order-1 mt-2 flex min-w-0 max-w-s flex-1 flex-col gap-2">
 						<div className="top-header sticky pt-2">
 							<p className="mb-2 text-sm font-semibold">
 								Posted by
@@ -181,7 +181,7 @@ export default async function BlogPage({ params: { slug } }) {
 						<Image
 							{...image}
 							alt="Promo Image"
-							className="rounded-sm border"
+							className="rounded-xl border border-white/10"
 						/>
 						<Content />
 						<ArticleSocials title={title} />

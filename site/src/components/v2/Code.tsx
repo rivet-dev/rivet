@@ -34,6 +34,7 @@ const languageNames = {
 	bash: "Command Line",
 	sh: "Command Line",
 	prisma: "Prisma",
+	rust: "Rust",
 };
 
 interface CodeGroupProps {

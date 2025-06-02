@@ -18,6 +18,7 @@ const LANGS: shiki.BundledLanguage[] = [
 	"yaml",
 	"http",
 	"prisma",
+	"rust",
 ];
 
 const theme = shiki.createCssVariablesTheme({

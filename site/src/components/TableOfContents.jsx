@@ -204,7 +204,7 @@ export function TableOfContents({ tableOfContents: providedToc }) {
 		<div
 			ref={ref}
 			className={clsx(
-				"pt-4 lg:top-docs-navigation lg:max-h-tabs-content lg:pt-6",
+				"lg:top-docs-navigation lg:max-h-tabs-content",
 				"w-full lg:pointer-events-auto lg:sticky lg:block lg:max-w-aside lg:self-start lg:overflow-y-auto",
 			)}
 		>

@@ -26,6 +26,7 @@ const languageNames = {
 	yaml: "YAML",
 	gdscript: "GDScript",
 	docker: "Docker",
+	rust: "Rust",
 };
 
 function getPanelTitle({ title, language }) {

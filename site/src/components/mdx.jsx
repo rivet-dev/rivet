@@ -10,6 +10,7 @@ export { Summary } from '@/components/Summary';
 export { Accordion, AccordionGroup } from '@/components/Accordion';
 export { ArticleHeader } from '@/components/ArticleHeader';
 export { ArticleSocials } from '@/components/ArticleSocials';
+export { Frame } from '@/components/Frame';
 import { CodeBlock } from '@/components/CodeBlock';
 import { Badge, CtaCard, WithTooltip } from '@rivet-gg/components';
 

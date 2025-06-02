@@ -231,7 +231,7 @@ export const Note = ({
 				<Icon icon={faInfoCircle} className="mr-2" />
 				{title}
 			</AlertTitle>
-			<AlertDescription className="prose-invert prose">
+			<AlertDescription className="prose-invert prose max-w-full w-full">
 				{children}
 			</AlertDescription>
 		</Alert>

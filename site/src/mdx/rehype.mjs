@@ -69,6 +69,7 @@ function rehypeShiki() {
 				"yaml",
 				"http",
 				"prisma",
+				"rust",
 			],
 		});
 
