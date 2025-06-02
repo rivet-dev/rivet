@@ -316,7 +316,7 @@ The value that gets cached is the targets & the middleware (in separate caches w
 
 If we cache routes and the target changes (e.g. resource upgrades or migrates to a different machine), how do we know when we need to update the target list?
 
-We could implement a cache invalidation system by sending a message to all Rivet Guard instances (similar to what we did for Traefik with NATS), but this requires adding another moving part to a system that we're trying to keep as simple as possible. _(We'll still implement later this to minimize p99 when restarting resources & pick up new targets faster.)_
+We could implement a cache invalidation system by sending a message to all Rivet Guard instances (similar to what we did for Traefik with NATS), but this requires adding another moving part to a system that we're trying to keep as simple as possible. _(We'll still implement this later to minimize p99 when restarting resources & pick up new targets faster.)_
 
 Instead, we can implement a much simpler alternative: if we can't route to a target, invalidate the cache and try again:
 
