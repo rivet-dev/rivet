@@ -680,6 +680,11 @@ impl ProxyService {
 				self.handle_http_request(req, target).await
 			};
 
+			let status = match &res {
+				Ok(resp) => resp.status().as_u16().to_string(),
+				Err(_) => "error".to_string(),
+			};
+
 			// Record metrics
 			let duration_secs = start_time.elapsed().as_secs_f64();
 			metrics::PROXY_REQUEST_DURATION
@@ -691,16 +696,11 @@ impl ProxyService {
 			res
 		};
 
-		let status = match &res {
-			Ok(resp) => resp.status().as_u16().to_string(),
-			Err(err) => {
-				metrics::PROXY_REQUEST_ERROR
-					.with_label_values(&[&err.to_string()])
-					.inc();
-
-				"error".to_string()
-			}
-		};
+		if let Err(err) = &res {
+			metrics::PROXY_REQUEST_ERROR
+				.with_label_values(&[&err.to_string()])
+				.inc();
+		}
 
 		res
 	}

@@ -26,6 +26,9 @@ s3-util.workspace = true
 edge-monolith-workflow-worker.workspace = true
 pegboard-ws.workspace = true
 
+# Singleton
+pegboard-usage-metrics-publish.workspace = true
+
 # API
 api-edge-monolith-public.workspace = true
 api-edge-monolith-edge.workspace = true

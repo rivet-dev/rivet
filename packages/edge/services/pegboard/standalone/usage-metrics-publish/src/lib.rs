@@ -118,6 +118,11 @@ pub async fn run_from_env(
 		env_usage.memory += actor.resources.memory_mib as u64;
 	}
 
+	// Clear old metrics because they will never be set to 0 (due to no actors being present and thus no
+	// metrics update)
+	pegboard::metrics::ENV_CPU_USAGE.reset();
+	pegboard::metrics::ENV_MEMORY_USAGE.reset();
+
 	// Insert metrics
 	for ((env_id, client_flavor), usage) in usage_by_env_and_flavor {
 		pegboard::metrics::ENV_CPU_USAGE
