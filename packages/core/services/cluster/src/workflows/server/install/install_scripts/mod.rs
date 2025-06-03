@@ -229,6 +229,14 @@ pub async fn gen_initialize(
 			)?);
 			script.push(components::rivet::guard::fetch_tls(server_token)?);
 			script.push(components::rivet::guard::configure(config)?);
+
+			prometheus_targets.insert(
+				"guard".into(),
+				components::vector::PrometheusTarget {
+					endpoint: "http://127.0.0.1:8091".into(),
+					scrape_interval: 15,
+				},
+			);
 		}
 	}
 

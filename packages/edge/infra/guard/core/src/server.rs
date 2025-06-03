@@ -1,4 +1,5 @@
 use crate::cert_resolver::{create_tls_config, CertResolverFn};
+use crate::metrics;
 use crate::proxy_service::{MiddlewareFn, ProxyServiceFactory, RoutingFn};
 use global_error::*;
 use hyper::service::service_fn;
@@ -6,7 +7,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::pin::pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 use tokio_rustls::TlsAcceptor;
@@ -105,6 +106,10 @@ pub async fn run_server(
 		graceful: &hyper_util::server::graceful::GracefulShutdown,
 		port_type_str: String,
 	) {
+		let connection_start = Instant::now();
+		metrics::TCP_CONNECTION_PENDING.inc();
+		metrics::TCP_CONNECTION_TOTAL.inc();
+
 		let io = hyper_util::rt::TokioIo::new(tcp_stream);
 
 		// Create a proxy service instance for this connection
@@ -131,6 +136,10 @@ pub async fn run_server(
 					error!("{} connection error: {}", port_type_str, err);
 				}
 				info!("{} connection dropped: {}", port_type_str, remote_addr);
+
+				let connection_duration = connection_start.elapsed().as_secs_f64();
+				metrics::TCP_CONNECTION_DURATION.observe(connection_duration);
+				metrics::TCP_CONNECTION_PENDING.dec();
 			}
 			.instrument(tracing::info_span!(parent: None, "process_connection_task")),
 		);
@@ -179,6 +188,10 @@ pub async fn run_server(
 
 									// Accept TLS connection in a separate task to avoid ownership issues
 									tokio::spawn(async move {
+										let connection_start = Instant::now();
+										metrics::TCP_CONNECTION_PENDING.inc();
+										metrics::TCP_CONNECTION_TOTAL.inc();
+
 										match acceptor_clone
 											.accept(tcp_stream)
 											.instrument(tracing::info_span!("accept"))
@@ -194,6 +207,7 @@ pub async fn run_server(
 												// Using service_fn to convert our function into a hyper service
 												let service = service_fn(move |req| {
 													let service_clone = proxy_service.clone();
+
 													async move {
 														service_clone.process(req).await.map_err(|err| GlobalErrorWrapper{err})
 													}
@@ -213,6 +227,10 @@ pub async fn run_server(
 												error!("TLS handshake failed for {}: {}", remote_addr, e);
 											}
 										}
+
+										let connection_duration = connection_start.elapsed().as_secs_f64();
+										metrics::TCP_CONNECTION_DURATION.observe(connection_duration);
+										metrics::TCP_CONNECTION_PENDING.dec();
 									}.instrument(tracing::info_span!(parent: None, "process_tls_connection_task")));
 								} else {
 									// Fallback to non-TLS handling (useful for testing)

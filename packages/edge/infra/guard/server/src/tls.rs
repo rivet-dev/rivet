@@ -161,12 +161,10 @@ pub async fn create_cert_resolver(
 			);
 				None
 			}
-			Err(e) => {
-				bail!(
-					"Failed to build dynamic hostname actor routing regex: {}",
-					e
-				);
-			}
+			Err(e) => bail!(
+				"Failed to build dynamic hostname actor routing regex: {}",
+				e
+			),
 		};
 	let actor_hostname_regex_static =
 		match build_actor_hostname_and_path_regex(EndpointType::Path, guard_hostname) {

@@ -175,6 +175,8 @@ impl RouteCache {
 	#[tracing::instrument(skip_all)]
 	async fn insert(&self, hostname: String, path: String, result: RouteConfig) {
 		self.cache.upsert_async((hostname, path), result).await;
+
+		metrics::ROUTE_CACHE_SIZE.set(self.cache.len() as i64);
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -182,6 +184,8 @@ impl RouteCache {
 		self.cache
 			.remove_async(&(hostname.to_owned(), path.to_owned()))
 			.await;
+
+		metrics::ROUTE_CACHE_SIZE.set(self.cache.len() as i64);
 	}
 }
 
@@ -253,8 +257,8 @@ pub struct ProxyState {
 	routing_fn: RoutingFn,
 	middleware_fn: MiddlewareFn,
 	route_cache: RouteCache,
-	rate_limiters: SccHashMap<Uuid, RateLimiter>,
-	in_flight_counters: SccHashMap<Uuid, InFlightCounter>,
+	rate_limiters: SccHashMap<(Uuid, std::net::IpAddr), RateLimiter>,
+	in_flight_counters: SccHashMap<(Uuid, std::net::IpAddr), InFlightCounter>,
 	port_type: PortType,
 }
 
@@ -447,79 +451,96 @@ impl ProxyState {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn check_rate_limit(&self, actor_id: &Option<Uuid>) -> GlobalResult<bool> {
-		match actor_id {
-			Some(id) => {
-				let middleware_config = self.get_middleware_config(id).await?;
+	async fn check_rate_limit(
+		&self,
+		ip_addr: std::net::IpAddr,
+		actor_id: &Option<Uuid>,
+	) -> GlobalResult<bool> {
+		let Some(actor_id) = *actor_id else {
+			// No rate limiting when actor_id is None
+			return Ok(true);
+		};
 
-				let entry = self
-					.rate_limiters
-					.entry_async(*id)
-					.instrument(tracing::info_span!("entry_async"))
-					.await;
-				if let scc::hash_map::Entry::Occupied(mut entry) = entry {
-					// Key exists, get and mutate existing RateLimiter
-					let write_guard = entry.get_mut();
-					Ok(write_guard.try_acquire())
-				} else {
-					// Key doesn't exist, insert a new RateLimiter
-					let mut limiter = RateLimiter::new(
-						middleware_config.rate_limit.requests,
-						middleware_config.rate_limit.period,
-					);
-					let result = limiter.try_acquire();
-					entry.insert_entry(limiter);
-					Ok(result)
-				}
-			}
-			None => {
-				// No actor ID means no rate limiting
-				Ok(true)
-			}
+		// Get actor-specific middleware config
+		let middleware_config = self.get_middleware_config(&actor_id).await?;
+
+		let cache_key = (actor_id, ip_addr);
+		let entry = self
+			.rate_limiters
+			.entry_async(cache_key)
+			.instrument(tracing::info_span!("entry_async"))
+			.await;
+		if let scc::hash_map::Entry::Occupied(mut entry) = entry {
+			// Key exists, get and mutate existing RateLimiter
+			let write_guard = entry.get_mut();
+			Ok(write_guard.try_acquire())
+		} else {
+			// Key doesn't exist, insert a new RateLimiter
+			let mut limiter = RateLimiter::new(
+				middleware_config.rate_limit.requests,
+				middleware_config.rate_limit.period,
+			);
+			let result = limiter.try_acquire();
+			entry.insert_entry(limiter);
+
+			metrics::RATE_LIMITER_COUNT.set(self.rate_limiters.len() as i64);
+
+			Ok(result)
 		}
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn acquire_in_flight(&self, actor_id: &Option<Uuid>) -> GlobalResult<bool> {
-		match actor_id {
-			Some(id) => {
-				let middleware_config = self.get_middleware_config(id).await?;
+	async fn acquire_in_flight(
+		&self,
+		ip_addr: std::net::IpAddr,
+		actor_id: &Option<Uuid>,
+	) -> GlobalResult<bool> {
+		let Some(actor_id) = *actor_id else {
+			// No in-flight limiting when actor_id is None
+			return Ok(true);
+		};
 
-				let entry = self
-					.in_flight_counters
-					.entry_async(*id)
-					.instrument(tracing::info_span!("entry_async"))
-					.await;
-				if let scc::hash_map::Entry::Occupied(mut entry) = entry {
-					// Key exists, get and mutate existing InFlightCounter
-					let write_guard = entry.get_mut();
-					Ok(write_guard.try_acquire())
-				} else {
-					// Key doesn't exist, insert a new InFlightCounter
-					let mut counter = InFlightCounter::new(middleware_config.max_in_flight.amount);
-					let result = counter.try_acquire();
-					entry.insert_entry(counter);
-					Ok(result)
-				}
-			}
-			None => {
-				// No actor ID means no in-flight limiting
-				Ok(true)
-			}
+		// Get actor-specific middleware config
+		let middleware_config = self.get_middleware_config(&actor_id).await?;
+
+		let cache_key = (actor_id, ip_addr);
+		let entry = self
+			.in_flight_counters
+			.entry_async(cache_key)
+			.instrument(tracing::info_span!("entry_async"))
+			.await;
+		if let scc::hash_map::Entry::Occupied(mut entry) = entry {
+			// Key exists, get and mutate existing InFlightCounter
+			let write_guard = entry.get_mut();
+			Ok(write_guard.try_acquire())
+		} else {
+			// Key doesn't exist, insert a new InFlightCounter
+			let mut counter = InFlightCounter::new(middleware_config.max_in_flight.amount);
+			let result = counter.try_acquire();
+			entry.insert_entry(counter);
+
+			metrics::IN_FLIGHT_COUNTER_COUNT.set(self.in_flight_counters.len() as i64);
+
+			Ok(result)
 		}
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn release_in_flight(&self, actor_id: &Option<Uuid>) {
-		if let Some(id) = actor_id {
-			if let Some(mut counter) = self
-				.in_flight_counters
-				.get_async(id)
-				.instrument(tracing::info_span!("get_async"))
-				.await
-			{
-				counter.release();
-			}
+	async fn release_in_flight(&self, ip_addr: std::net::IpAddr, actor_id: &Option<Uuid>) {
+		// Skip if actor_id is None (no in-flight tracking)
+		let actor_id = match actor_id {
+			Some(id) => *id,
+			None => return, // No in-flight tracking when actor_id is None
+		};
+
+		let cache_key = (actor_id, ip_addr);
+		if let Some(mut counter) = self
+			.in_flight_counters
+			.get_async(&cache_key)
+			.instrument(tracing::info_span!("get_async"))
+			.await
+		{
+			counter.release();
 		}
 	}
 }
@@ -580,13 +601,20 @@ impl ProxyService {
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
 		let method = req.method().clone();
+		let method_str = method.as_str();
 
-		// Resolve target
-		let target = match self
+		let start_time = Instant::now();
+
+		let target_res = self
 			.state
 			.resolve_route(host, &path, self.state.port_type.clone(), false)
-			.await
-		{
+			.await;
+
+		let duration_secs = start_time.elapsed().as_secs_f64();
+		metrics::RESOLVE_ROUTE_DURATION.observe(duration_secs);
+
+		// Resolve target
+		let target = match target_res {
 			Ok(ResolveRouteOutput::Target(target)) => target,
 			Ok(ResolveRouteOutput::Response(response)) => {
 				// Return the custom response
@@ -607,61 +635,76 @@ impl ProxyService {
 		let actor_id_str = actor_id.map_or_else(|| "none".to_string(), |id| id.to_string());
 		let server_id_str = server_id.map_or_else(|| "none".to_string(), |id| id.to_string());
 
+		// Extract IP address from remote_addr
+		let client_ip = self.remote_addr.ip();
+
 		// Apply rate limiting
-		if !self.state.check_rate_limit(&actor_id).await? {
-			metrics::ACTOR_REQUEST_ERRORS
-				.with_label_values(&[&actor_id_str, &server_id_str, "429"])
-				.inc();
-
-			return Ok(Response::builder()
+		let res = if !self.state.check_rate_limit(client_ip, &actor_id).await? {
+			Response::builder()
 				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(Full::<Bytes>::new(Bytes::new()))?);
+				.body(Full::<Bytes>::new(Bytes::new()))
+				.map_err(Into::into)
 		}
-
 		// Check in-flight limit
-		if !self.state.acquire_in_flight(&actor_id).await? {
-			metrics::ACTOR_REQUEST_ERRORS
-				.with_label_values(&[&actor_id_str, &server_id_str, "429"])
-				.inc();
-
-			return Ok(Response::builder()
+		else if !self.state.acquire_in_flight(client_ip, &actor_id).await? {
+			Response::builder()
 				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(Full::<Bytes>::new(Bytes::new()))?);
-		}
+				.body(Full::<Bytes>::new(Bytes::new()))
+				.map_err(Into::into)
+		} else {	
+			// Increment metrics
+			metrics::PROXY_REQUEST_PENDING
+				.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
+				.inc();
+	
+			metrics::PROXY_REQUEST_TOTAL
+				.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
+				.inc();
+		
+			// Prepare to release in-flight counter when done
+			let state_clone = self.state.clone();
+			crate::defer! {
+				tokio::spawn(async move {
+					state_clone.release_in_flight(client_ip, &actor_id).await;
+				}.instrument(tracing::info_span!("release_in_flight_task")));
+			}
+	
+			// Branch for WebSocket vs HTTP handling
+			// Both paths will handle their own metrics and error handling
+			if hyper_tungstenite::is_upgrade_request(&req) {
+				// WebSocket upgrade
+				self.handle_websocket_upgrade(req, target).await
+			} else {
+				// Regular HTTP request
+				self.handle_http_request(req, target).await
+			}
+		};
 
-		// Let's save method before consuming req
-		let method_str = method.as_str();
+		let status = match &res {
+			Ok(resp) => resp.status().as_u16().to_string(),
+			Err(_) => "error".to_string(),
+		};
 
-		// Increment metrics
-		metrics::ACTOR_REQUEST_PENDING
-			.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
-			.inc();
+		// Record metrics
+		let duration = start_time.elapsed();
+		metrics::PROXY_REQUEST_DURATION
+			.with_label_values(&[
+				&actor_id_str,
+				&server_id_str,
+				&status,
+			])
+			.observe(duration.as_secs_f64());
 
-		metrics::ACTOR_REQUEST_TOTAL
-			.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
-			.inc();
+		metrics::PROXY_REQUEST_PENDING
+			.with_label_values(&[
+				&actor_id_str,
+				&server_id_str,
+				method_str,
+				&path,
+			])
+			.dec();
 
-		// Create timer for duration metric
-		let start_time = Instant::now();
-
-		// Prepare to release in-flight counter when done
-		let state_clone = self.state.clone();
-		let actor_id_clone = actor_id;
-		crate::defer! {
-			tokio::spawn(async move {
-				state_clone.release_in_flight(&actor_id_clone).await;
-			}.instrument(tracing::info_span!("release_in_flight_task")));
-		}
-
-		// Branch for WebSocket vs HTTP handling
-		// Both paths will handle their own metrics and error handling
-		if hyper_tungstenite::is_upgrade_request(&req) {
-			// WebSocket upgrade
-			self.handle_websocket_upgrade(req, target).await
-		} else {
-			// Regular HTTP request
-			self.handle_http_request(req, target, start_time).await
-		}
+		res
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -669,7 +712,6 @@ impl ProxyService {
 		&self,
 		req: Request<BodyIncoming>,
 		mut target: RouteTarget,
-		start_time: Instant,
 	) -> GlobalResult<Response<Full<Bytes>>> {
 		// Get middleware config for this actor if it exists
 		let middleware_config = match &target.actor_id {
@@ -723,13 +765,6 @@ impl ProxyService {
 		let initial_interval = middleware_config.retry.initial_interval;
 		let timeout_duration = Duration::from_secs(middleware_config.timeout.request_timeout);
 
-		// Execute request with retry
-		let actor_id = target.actor_id;
-		let server_id = target.server_id;
-		// Get string representations for metrics
-		let actor_id_str = actor_id.map_or_else(|| "none".to_string(), |id| id.to_string());
-		let server_id_str = server_id.map_or_else(|| "none".to_string(), |id| id.to_string());
-
 		// Use a value-returning loop to handle both errors and successful responses
 		let (status_code, last_error) = 'retry: {
 			let mut attempts = 0;
@@ -743,14 +778,6 @@ impl ProxyService {
 					Ok(parts) => parts,
 					Err(e) => {
 						error!("Failed to build HTTP request: {}", e);
-
-						metrics::ACTOR_REQUEST_ERRORS
-							.with_label_values(&[
-								&actor_id_str,
-								&server_id_str,
-								"request_build_error",
-							])
-							.inc();
 
 						let error = Some(global_error::ext::AssertionError::Panic {
 							message: format!("Failed to build HTTP request: {}", e),
@@ -766,10 +793,6 @@ impl ProxyService {
 					Err(e) => {
 						error!("Failed to parse URI: {}", e);
 
-						metrics::ACTOR_REQUEST_ERRORS
-							.with_label_values(&[&actor_id_str, &server_id_str, "uri_parse_error"])
-							.inc();
-
 						let error = Some(global_error::ext::AssertionError::Panic {
 							message: format!("URI parse error: {}", e),
 							location: global_error::location!(),
@@ -783,6 +806,7 @@ impl ProxyService {
 					Ok(req) => req,
 					Err(e) => {
 						warn!("Failed to build request body: {}", e);
+
 						let error = Some(global_error::ext::AssertionError::Panic {
 							message: format!("Request build error: {}", e),
 							location: global_error::location!(),
@@ -794,25 +818,6 @@ impl ProxyService {
 				// Send the request with timeout
 				match timeout(timeout_duration, self.client.request(proxied_req)).await {
 					Ok(Ok(resp)) => {
-						// Record metrics
-						let duration = start_time.elapsed();
-						metrics::ACTOR_REQUEST_DURATION
-							.with_label_values(&[
-								&actor_id_str,
-								&server_id_str,
-								&resp.status().as_u16().to_string(),
-							])
-							.observe(duration.as_secs_f64());
-
-						metrics::ACTOR_REQUEST_PENDING
-							.with_label_values(&[
-								&actor_id_str,
-								&server_id_str,
-								req_parts.method.as_str(),
-								req_parts.uri.path(),
-							])
-							.dec();
-
 						// Convert the hyper::body::Incoming to http_body_util::Full<Bytes>
 						let (parts, body) = resp.into_parts();
 
@@ -874,10 +879,6 @@ impl ProxyService {
 							timeout_duration.as_secs()
 						);
 
-						metrics::ACTOR_REQUEST_ERRORS
-							.with_label_values(&[&actor_id_str, &server_id_str, "timeout"])
-							.inc();
-
 						let error = Some(global_error::ext::AssertionError::Panic {
 							message: format!("Request timed out"),
 							location: global_error::location!(),
@@ -897,22 +898,6 @@ impl ProxyService {
 
 		// Log the error
 		error!("Request failed: {:?}", last_error);
-
-		// Only increment the error metric if not already done (for timeout)
-		if status_code == StatusCode::BAD_GATEWAY {
-			metrics::ACTOR_REQUEST_ERRORS
-				.with_label_values(&[&actor_id_str, &server_id_str, "502"])
-				.inc();
-		}
-
-		metrics::ACTOR_REQUEST_PENDING
-			.with_label_values(&[
-				&actor_id_str,
-				&server_id_str,
-				req_parts.method.as_str(),
-				req_parts.uri.path(),
-			])
-			.dec();
 
 		Ok(Response::builder()
 			.status(status_code)
@@ -974,9 +959,6 @@ impl ProxyService {
 		let server_id = target.server_id;
 		let actor_id_str = actor_id.map_or_else(|| "none".to_string(), |id| id.to_string());
 		let server_id_str = server_id.map_or_else(|| "none".to_string(), |id| id.to_string());
-
-		// Start timing the request (metrics already incremented in handle_request)
-		let start_time = Instant::now();
 
 		// Parsed for retries later
 		let req_host = req
@@ -1059,10 +1041,6 @@ impl ProxyService {
 
 		// Clone needed values for the spawned task
 		let state = self.state.clone();
-		let actor_id_str_clone = actor_id_str.clone();
-		let server_id_str_clone = server_id_str.clone();
-		let path = target.path.clone();
-		let method = "GET".to_string(); // WebSockets are always GET
 
 		// Spawn a new task to handle the WebSocket bidirectional communication
 		info!("Spawning task to handle WebSocket communication");
@@ -1090,15 +1068,6 @@ impl ProxyService {
 					Ok(Err(e)) => {
 						error!("Failed to get client WebSocket: {}", e);
 						error!("Error details: {:?}", e);
-						// Decrement pending metric
-						metrics::ACTOR_REQUEST_PENDING
-							.with_label_values(&[
-								&actor_id_str_clone,
-								&server_id_str_clone,
-								&method,
-								&path,
-							])
-							.dec();
 						return;
 					}
 					Err(_) => {
@@ -1106,15 +1075,6 @@ impl ProxyService {
 							"Timeout waiting for client WebSocket to be ready after {}s",
 							timeout_duration.as_secs()
 						);
-						// Decrement pending metric
-						metrics::ACTOR_REQUEST_PENDING
-							.with_label_values(&[
-								&actor_id_str_clone,
-								&server_id_str_clone,
-								&method,
-								&path,
-							])
-							.dec();
 						return;
 					}
 				};
@@ -1162,21 +1122,6 @@ impl ProxyService {
 					// Check if we've reached max attempts
 					if attempts >= max_attempts {
 						error!("All {} WebSocket connection attempts failed", max_attempts);
-
-						// Increment error metric
-						metrics::ACTOR_REQUEST_ERRORS
-							.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, "502"])
-							.inc();
-
-						// Decrement pending metric
-						metrics::ACTOR_REQUEST_PENDING
-							.with_label_values(&[
-								&actor_id_str_clone,
-								&server_id_str_clone,
-								&method,
-								&path,
-							])
-							.dec();
 
 						// Send a close message to the client since we can't connect to upstream
 						info!("Sending close message to client due to upstream connection failure");
@@ -1612,23 +1557,6 @@ impl ProxyService {
 				info!("Starting bidirectional message forwarding");
 				tokio::join!(client_to_upstream, upstream_to_client);
 				info!("Bidirectional message forwarding completed");
-
-				// Record duration when the WebSocket connection is closed
-				let duration = start_time.elapsed();
-				info!("WebSocket connection duration: {:?}", duration);
-				metrics::ACTOR_REQUEST_DURATION
-					.with_label_values(&[
-						&actor_id_str_clone,
-						&server_id_str_clone,
-						"101", // WebSocket connections always start with 101 status
-					])
-					.observe(duration.as_secs_f64());
-
-				// Decrement pending metric at the end
-				info!("Decrementing pending metric");
-				metrics::ACTOR_REQUEST_PENDING
-					.with_label_values(&[&actor_id_str_clone, &server_id_str_clone, &method, &path])
-					.dec();
 			}
 			.instrument(tracing::info_span!("handle_ws_task")),
 		);
@@ -1666,6 +1594,7 @@ impl ProxyService {
 			.unwrap_or_else(|| req.uri().path().to_string());
 		let method = req.method().clone();
 		let request_id = Uuid::new_v4();
+
 		let user_agent = req
 			.headers()
 			.get(hyper::header::USER_AGENT)
@@ -1690,9 +1619,6 @@ impl ProxyService {
 		// Process the request
 		let result = self.handle_request(req).await;
 
-		// Log response information
-		let duration_ms = start_time.elapsed().as_millis();
-
 		match &result {
 			Ok(response) => {
 				let status = response.status().as_u16();
@@ -1711,7 +1637,6 @@ impl ProxyService {
 					host = %host,
 					remote_addr = %self.remote_addr,
 					status = %status,
-					duration_ms = %duration_ms,
 					content_length = %content_length,
 					"Request completed"
 				);
@@ -1724,7 +1649,6 @@ impl ProxyService {
 					path = %path,
 					host = %host,
 					remote_addr = %self.remote_addr,
-					duration_ms = %duration_ms,
 					error = %e,
 					"Request failed"
 				);

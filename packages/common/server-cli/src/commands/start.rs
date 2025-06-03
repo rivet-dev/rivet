@@ -54,7 +54,6 @@ impl Opts {
 			.and_then(|x| x.rivet.edge.as_ref())
 			.and_then(|x| x.redirect_logs_dir.as_ref())
 		{
-			std::fs::create_dir_all(logs_dir)?;
 			rivet_logs::Logs::new(logs_dir.clone(), LOGS_RETENTION)
 				.start()
 				.await?;

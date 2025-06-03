@@ -25,9 +25,11 @@ impl Logs {
 }
 
 impl Logs {
-	pub async fn start(self) -> Result<tokio::task::JoinHandle<()>> {
+	pub async fn start(mut self) -> Result<tokio::task::JoinHandle<()>> {
 		// Create logs dir if it does not exist
 		fs::create_dir_all(&self.path).await?;
+
+		self.rotate().await?;
 
 		Ok(tokio::spawn(self.run()))
 	}
@@ -112,9 +114,11 @@ impl Logs {
 }
 
 impl Logs {
-	pub fn start_sync(self) -> Result<std::thread::JoinHandle<()>> {
+	pub fn start_sync(mut self) -> Result<std::thread::JoinHandle<()>> {
 		// Create logs dir if it does not exist
 		std::fs::create_dir_all(&self.path)?;
+
+		self.rotate_sync()?;
 
 		Ok(std::thread::spawn(|| self.run_sync()))
 	}

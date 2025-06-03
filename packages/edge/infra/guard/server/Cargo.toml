@@ -25,6 +25,7 @@ rivet-config.workspace = true
 rivet-logs.workspace = true
 rivet-runtime.workspace = true
 rivet-pools.workspace = true
+rivet-metrics.workspace = true
 futures = "0.3.30"
 global-error.workspace = true
 cluster.workspace = true

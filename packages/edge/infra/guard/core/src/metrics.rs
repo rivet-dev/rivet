@@ -1,29 +1,80 @@
 use lazy_static::lazy_static;
-use rivet_metrics::prometheus::*;
+use rivet_metrics::{prometheus::*, REGISTRY};
 
 lazy_static! {
-	pub static ref ACTOR_REQUEST_TOTAL: IntCounterVec = register_int_counter_vec!(
-		"actor_request_total",
+	// MARK: Internal
+	pub static ref ROUTE_CACHE_SIZE: IntGauge = register_int_gauge_with_registry!(
+		"guard_route_cache_size",
+		"Number of entries in the route cache",
+		*REGISTRY,
+	).unwrap();
+	pub static ref RATE_LIMITER_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_rate_limiter_count",
+		"Number of active rate limiters",
+		*REGISTRY,
+	).unwrap();
+	pub static ref IN_FLIGHT_COUNTER_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"guard_in_flight_counter_count",
+		"Number of active in-flight counters",
+		*REGISTRY,
+	)
+	.unwrap();
+
+	// MARK: TCP
+	pub static ref TCP_CONNECTION_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"guard_tcp_connection_total",
+		"Total number of TCP connections ever",
+		*REGISTRY,
+	)
+	.unwrap();
+	pub static ref TCP_CONNECTION_PENDING: IntGauge = register_int_gauge_with_registry!(
+		"guard_tcp_connection_pending",
+		"Total number of open TCP connections",
+		*REGISTRY,
+	)
+	.unwrap();
+	pub static ref TCP_CONNECTION_DURATION: Histogram = register_histogram_with_registry!(
+		"guard_tcp_connection_duration",
+		"TCP connection duration in seconds",
+		*REGISTRY,
+	)
+	.unwrap();
+
+	// MARK: Pre-proxy
+	pub static ref RESOLVE_ROUTE_DURATION: Histogram = register_histogram_with_registry!(
+		"guard_resolve_route_duration",
+		"Time to resolve request route in seconds",
+		*REGISTRY,
+	)
+	.unwrap();
+
+	// MARK: Proxy requests
+	pub static ref PROXY_REQUEST_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_proxy_request_total",
 		"Total number of requests to actor",
-		&["actor_id", "server_id", "method", "path"]
+		&["actor_id", "server_id", "method", "path"],
+		*REGISTRY,
 	)
 	.unwrap();
-	pub static ref ACTOR_REQUEST_PENDING: IntGaugeVec = register_int_gauge_vec!(
-		"actor_request_pending",
+	pub static ref PROXY_REQUEST_PENDING: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"guard_proxy_request_pending",
 		"Number of pending requests to actor",
-		&["actor_id", "server_id", "method", "path"]
+		&["actor_id", "server_id", "method", "path"],
+		*REGISTRY,
 	)
 	.unwrap();
-	pub static ref ACTOR_REQUEST_DURATION: HistogramVec = register_histogram_vec!(
-		"actor_request_duration_seconds",
+	pub static ref PROXY_REQUEST_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"guard_proxy_request_duration",
 		"Request duration in seconds",
-		&["actor_id", "server_id", "status"]
+		&["actor_id", "server_id", "status"],
+		*REGISTRY,
 	)
 	.unwrap();
-	pub static ref ACTOR_REQUEST_ERRORS: IntCounterVec = register_int_counter_vec!(
-		"actor_request_errors_total",
+	pub static ref PROXY_REQUEST_ERROR: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_proxy_request_errors_total",
 		"Total number of errors when proxying requests to actor",
-		&["actor_id", "server_id", "error_type"]
+		&["actor_id", "server_id", "error_type"],
+		*REGISTRY,
 	)
 	.unwrap();
 }

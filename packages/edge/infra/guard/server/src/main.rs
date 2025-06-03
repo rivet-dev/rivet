@@ -46,13 +46,15 @@ async fn main_inner() -> GlobalResult<()> {
 		.and_then(|x| x.rivet.edge.as_ref())
 		.and_then(|x| x.redirect_logs_dir.as_ref())
 	{
-		tokio::fs::create_dir_all(logs_dir).await?;
 		unwrap!(
 			rivet_logs::Logs::new(logs_dir.clone(), LOGS_RETENTION)
 				.start()
 				.await
 		);
 	}
+
+	// Start metrics server
+	let metrics_task = tokio::spawn(rivet_metrics::run_standalone(config.clone()));
 
 	let pools = rivet_pools::Pools::new(config.clone()).await?;
 
@@ -86,10 +88,13 @@ async fn main_inner() -> GlobalResult<()> {
 	// Start the server
 	tracing::info!("starting proxy server");
 	tokio::select! {
-		result = rivet_guard_core::run_server(config, routing_fn, middleware_fn, cert_resolver) => {
-			if let Err(e) = result {
-				tracing::error!("Server error: {}", e);
+		res = rivet_guard_core::run_server(config, routing_fn, middleware_fn, cert_resolver) => {
+			if let Err(err) = res {
+				tracing::error!(?err, "Server error");
 			}
+		}
+		res = metrics_task => {
+			tracing::error!(?res, "Metrics task stopped");
 		}
 		_ = signal::ctrl_c() => {
 			tracing::info!("received Ctrl+C, shutting down");
