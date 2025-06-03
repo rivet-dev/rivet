@@ -111,6 +111,8 @@ pub async fn gen_initialize(
 	pool_type: PoolType,
 	server_token: &str,
 ) -> GlobalResult<String> {
+	let server_config = config.server()?;
+
 	let mut script = Vec::new();
 
 	let mut prometheus_targets = HashMap::new();
@@ -233,6 +235,7 @@ pub async fn gen_initialize(
 	// MARK: Common (post)
 	if !prometheus_targets.is_empty() {
 		script.push(components::vector::configure(
+			&server_config.rivet.namespace,
 			&components::vector::Config { prometheus_targets },
 			pool_type,
 		)?);

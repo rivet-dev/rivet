@@ -162,6 +162,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		.unwrap_or(0.001);
 
 	Ok(include_str!("../../files/rivet_worker_configure.sh")
+		.replace("__NAMESPACE__", &server_config.rivet.namespace)
 		.replace(
 			"__RIVET_EDGE_CONFIG__",
 			&serde_json::to_string_pretty(&edge_config_json)?,

@@ -21,7 +21,7 @@ pub struct PrometheusTarget {
 	pub scrape_interval: usize,
 }
 
-pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
+pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 	let sources = config
 		.prometheus_targets
 		.keys()
@@ -43,6 +43,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 				"inputs": ["filter_metrics"],
 				"source": formatdoc!(
 					r#"
+					.tags.namespace = "{namespace}"
 					.tags.server_id = "___SERVER_ID___"
 					.tags.datacenter_id = "___DATACENTER_ID___"
 					.tags.cluster_id = "___CLUSTER_ID___"
@@ -87,6 +88,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 					r#"
 					.source = "pegboard_manager"
 
+					.namespace = "{namespace}"
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"
 					.datacenter_id = "___DATACENTER_ID___"
@@ -109,6 +111,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 					r#"
 					.source = "pegboard_isolate_v8_runner"
 
+					.namespace = "{namespace}"
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"
 					.datacenter_id = "___DATACENTER_ID___"
@@ -132,6 +135,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 					.source = "pegboard_container_runner"
 					.actor_id = parse_regex!(.file, r'/var/lib/rivet-client/actors/(?P<actor_id>[0-9a-fA-F-]+)/logs/').actor_id
 
+					.namespace = "{namespace}"
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"
 					.datacenter_id = "___DATACENTER_ID___"
@@ -161,6 +165,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 					r#"
 					.source = "worker"
 
+					.namespace = "{namespace}"
 					.server_id = "___SERVER_ID___"
 					.datacenter_id = "___DATACENTER_ID___"
 					.cluster_id = "___CLUSTER_ID___"
@@ -187,6 +192,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 					r#"
 					.source = "guard"
 
+					.namespace = "{namespace}"
 					.server_id = "___SERVER_ID___"
 					.datacenter_id = "___DATACENTER_ID___"
 					.cluster_id = "___CLUSTER_ID___"

@@ -20,6 +20,9 @@ fn resource() -> Resource {
 			SCHEMA_URL,
 		);
 
+	if let Ok(v) = std::env::var("RIVET_NAMESPACE") {
+		resource = resource.with_attribute(KeyValue::new("namespace", v));
+	}
 	if let Ok(v) = std::env::var("RIVET_CLUSTER_ID") {
 		resource = resource.with_attribute(KeyValue::new("cluster_id", v));
 	}
