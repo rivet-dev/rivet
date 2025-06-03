@@ -12364,6 +12364,7 @@ dependencies = [
  "rivet-connection",
  "rivet-guard-core",
  "rivet-logs",
+ "rivet-metrics",
  "rivet-pools",
  "rivet-runtime",
  "route",
@@ -12390,6 +12391,7 @@ dependencies = [
  "hyper-tungstenite",
  "hyper-util",
  "lazy_static",
+ "moka",
  "pegboard",
  "prometheus",
  "rand 0.8.5",
@@ -12399,7 +12401,6 @@ dependencies = [
  "rivet-metrics",
  "rustls 0.23.25",
  "rustls-pemfile 2.2.0",
- "scc",
  "serde",
  "serde_json",
  "tokio",
@@ -12893,7 +12894,7 @@ dependencies = [
 [[package]]
 name = "rivet-term"
 version = "0.1.0"
-source = "git+https://github.com/rivet-gg/rivet-term?rev=b21d7a2#b21d7a2791242b04bb4868990e5b1e8085a7e8f4"
+source = "git+https://github.com/rivet-gg/rivet-term?rev=55e328470b68c557fb9bc8298369f90182d35b6d#55e328470b68c557fb9bc8298369f90182d35b6d"
 dependencies = [
  "console",
  "derive_builder 0.12.0",
@@ -13460,15 +13461,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22b2d775fb28f245817589471dd49c5edf64237f4a19d10ce9a92ff4651a27f4"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "schannel"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13556,12 +13548,6 @@ dependencies = [
  "ring 0.17.8",
  "untrusted 0.9.0",
 ]
-
-[[package]]
-name = "sdd"
-version = "3.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "584e070911c7017da6cb2eb0788d09f43d789029b5877d3e5ecc8acf86ceee21"
 
 [[package]]
 name = "sealed"
