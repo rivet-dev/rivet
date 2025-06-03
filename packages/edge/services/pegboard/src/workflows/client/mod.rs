@@ -106,7 +106,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									config,
 									system,
 								}),
-								activity(UpdateMetricsInput { client_id, flavor }),
+								activity(UpdateMetricsInput { client_id, flavor, clear: false }),
 							))
 							.await?;
 						}
@@ -118,7 +118,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									client_id,
 									events: events.clone(),
 								}),
-								activity(UpdateMetricsInput { client_id, flavor }),
+								activity(UpdateMetricsInput { client_id, flavor, clear: false }),
 							))
 							.await?;
 
@@ -242,6 +242,8 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 		flavor: input.flavor,
 	})
 	.await?;
+
+	ctx.activity(UpdateMetricsInput { client_id: input.client_id, flavor: input.flavor, clear: true }).await?;
 
 	let actors = ctx
 		.activity(FetchRemainingActorsInput {
@@ -673,7 +675,7 @@ pub async fn handle_commands(
 			activity(InsertCommandsInput {
 				commands: raw_commands.clone(),
 			}),
-			activity(UpdateMetricsInput { client_id, flavor }),
+			activity(UpdateMetricsInput { client_id, flavor, clear: false }),
 		))
 		.await?;
 
@@ -914,11 +916,14 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> GlobalRe
 struct UpdateMetricsInput {
 	client_id: Uuid,
 	flavor: ClientFlavor,
+	clear: bool,
 }
 
 #[activity(UpdateMetrics)]
 async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> GlobalResult<()> {
-	let (memory, cpu) =
+	let (memory, cpu) = if input.clear {
+		(0, 0)
+	} else {
 		ctx.fdb()
 			.await?
 			.run(|tx, _mc| async move {
@@ -966,7 +971,8 @@ async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> Global
 				))
 			})
 			.custom_instrument(tracing::info_span!("client_update_metrics_tx"))
-			.await?;
+			.await?
+	};
 
 	metrics::CLIENT_CPU_ALLOCATED
 		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])

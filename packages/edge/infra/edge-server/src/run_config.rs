@@ -22,6 +22,11 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(edge_monolith_workflow_worker::start(config, pools)),
 		),
+		Service::new(
+			"pegboard_usage_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(pegboard_usage_metrics_publish::start(config, pools)),
+		),
 	];
 
 	Ok(RunConfigData {

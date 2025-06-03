@@ -5,7 +5,7 @@ use std::{
 
 use chirp_workflow::prelude::*;
 
-use crate::types::{PoolType, Server};
+use crate::types::{PoolType, Server, ServerState};
 
 #[derive(Debug)]
 pub struct Input {
@@ -26,6 +26,7 @@ pub(crate) struct ServerRow {
 	vlan_ip: Option<IpAddr>,
 	public_ip: Option<IpAddr>,
 	cloud_destroy_ts: Option<i64>,
+	state: i64,
 }
 
 impl TryFrom<ServerRow> for Server {
@@ -40,6 +41,7 @@ impl TryFrom<ServerRow> for Server {
 			lan_ip: value.vlan_ip,
 			wan_ip: value.public_ip,
 			cloud_destroy_ts: value.cloud_destroy_ts,
+			state: unwrap!(ServerState::from_repr(value.state.try_into()?)),
 		})
 	}
 }
@@ -56,7 +58,16 @@ pub async fn cluster_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			provider_server_id,
 			vlan_ip,
 			public_ip,
-			cloud_destroy_ts
+			cloud_destroy_ts,
+			CASE
+				WHEN cloud_destroy_ts IS NOT NULL THEN 6  -- Destroyed
+				WHEN taint_ts IS NOT NULL AND drain_ts IS NOT NULL THEN 5  -- TaintedDraining
+				WHEN drain_ts IS NOT NULL THEN 4  -- Draining
+				WHEN taint_ts IS NOT NULL THEN 3  -- Tainted
+				WHEN install_complete_ts IS NOT NULL THEN 2  -- Running
+				WHEN provision_complete_ts IS NOT NULL THEN 1  -- Installing
+				ELSE 0  -- Provisioning
+			END AS state
 		FROM db_cluster.servers
 		WHERE server_id = ANY($1)
 		",

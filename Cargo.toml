@@ -65,7 +65,7 @@ rev = "b2c6f366ee68a7956fb69dd4f39357b3c184bd15"
 
 [workspace.dependencies.rivet-term]
 git = "https://github.com/rivet-gg/rivet-term"
-rev = "b21d7a2"
+rev = "55e328470b68c557fb9bc8298369f90182d35b6d"
 
 [workspace.dependencies.redis]
 git = "https://github.com/rivet-gg/redis-rs"

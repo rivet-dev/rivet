@@ -149,6 +149,18 @@ pub struct Server {
 	pub lan_ip: Option<IpAddr>,
 	pub wan_ip: Option<IpAddr>,
 	pub cloud_destroy_ts: Option<i64>,
+	pub state: ServerState,
+}
+
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+pub enum ServerState {
+	Provisioning = 0,
+	Installing = 1,
+	Running = 2,
+	Tainted = 3,
+	Draining = 4,
+	TaintedDraining = 5,
+	Destroyed = 6,
 }
 
 #[derive(Debug, Default, Clone)]

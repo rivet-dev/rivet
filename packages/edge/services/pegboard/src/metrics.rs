@@ -37,4 +37,18 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
+
+	pub static ref ENV_CPU_USAGE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"pegboard_env_cpu_usage",
+		"Total percent of CPU (per core) used by an environment.",
+		&["env_id", "flavor"],
+		*REGISTRY,
+	).unwrap();
+	
+	pub static ref ENV_MEMORY_USAGE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"pegboard_env_memory_usage",
+		"Total MiB of memory used by an environment.",
+		&["env_id", "flavor"],
+		*REGISTRY,
+	).unwrap();
 }
