@@ -10756,6 +10756,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-usage-metrics-publish"
+version = "25.4.2"
+dependencies = [
+ "build",
+ "chirp-client",
+ "chirp-workflow",
+ "fdb-util",
+ "foundationdb",
+ "pegboard",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "pegboard-ws"
 version = "25.4.2"
 dependencies = [
@@ -12299,6 +12320,7 @@ dependencies = [
  "chirp-workflow",
  "clap",
  "edge-monolith-workflow-worker",
+ "pegboard-usage-metrics-publish",
  "pegboard-ws",
  "rivet-cache",
  "rivet-config",
