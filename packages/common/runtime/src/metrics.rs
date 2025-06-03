@@ -14,6 +14,18 @@ lazy_static::lazy_static! {
 			"Number of pending tasks in the global queue.",
 			*REGISTRY
 		).unwrap();
+	pub static ref TOKIO_TASK_TOTAL: IntCounter =
+		register_int_counter_with_registry!(
+			"tokio_task_total",
+			"Total number of spawned tasks.",
+			*REGISTRY
+		).unwrap();
+	pub static ref TOKIO_ACTIVE_TASK_COUNT: IntGauge =
+		register_int_gauge_with_registry!(
+			"tokio_active_task_count",
+			"Total number of active (running or sleeping) tasks.",
+			*REGISTRY
+		).unwrap();
 	pub static ref TOKIO_WORKER_OVERFLOW_COUNT: IntGaugeVec = register_int_gauge_vec_with_registry!(
 			"tokio_worker_overflow_count",
 			"Number of times the given worker thread saturated its local queue.",

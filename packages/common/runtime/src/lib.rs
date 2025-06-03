@@ -67,12 +67,17 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 		metrics::TOKIO_THREAD_COUNT.dec();
 	});
 
+	rt_builder.on_task_spawn(move |_| {
+		metrics::TOKIO_TASK_TOTAL.inc();
+	});
+
 	if env::var("TOKIO_RUNTIME_METRICS").is_ok() {
 		rt_builder.on_before_task_poll(|_| {
 			let metrics = tokio::runtime::Handle::current().metrics();
 			let buckets = metrics.poll_time_histogram_num_buckets();
 
 			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
+			metrics::TOKIO_ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
 
 			for worker in 0..metrics.num_workers() {
 				metrics::TOKIO_WORKER_OVERFLOW_COUNT

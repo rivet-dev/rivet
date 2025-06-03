@@ -613,8 +613,6 @@ impl ProxyService {
 			.path_and_query()
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
-		let method = req.method().clone();
-		let method_str = method.as_str();
 
 		let start_time = Instant::now();
 
@@ -642,11 +640,6 @@ impl ProxyService {
 		};
 
 		let actor_id = target.actor_id;
-		let server_id = target.server_id;
-
-		// Convert UUIDs to strings for metrics, handling Optional fields
-		let actor_id_str = actor_id.map_or_else(|| "none".to_string(), |id| id.to_string());
-		let server_id_str = server_id.map_or_else(|| "none".to_string(), |id| id.to_string());
 
 		// Extract IP address from remote_addr
 		let client_ip = self.remote_addr.ip();
@@ -666,13 +659,8 @@ impl ProxyService {
 				.map_err(Into::into)
 		} else {
 			// Increment metrics
-			metrics::PROXY_REQUEST_PENDING
-				.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
-				.inc();
-
-			metrics::PROXY_REQUEST_TOTAL
-				.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
-				.inc();
+			metrics::PROXY_REQUEST_PENDING.inc();
+			metrics::PROXY_REQUEST_TOTAL.inc();
 
 			// Prepare to release in-flight counter when done
 			let state_clone = self.state.clone();
@@ -684,29 +672,35 @@ impl ProxyService {
 
 			// Branch for WebSocket vs HTTP handling
 			// Both paths will handle their own metrics and error handling
-			if hyper_tungstenite::is_upgrade_request(&req) {
+			let res = if hyper_tungstenite::is_upgrade_request(&req) {
 				// WebSocket upgrade
 				self.handle_websocket_upgrade(req, target).await
 			} else {
 				// Regular HTTP request
 				self.handle_http_request(req, target).await
-			}
+			};
+
+			// Record metrics
+			let duration_secs = start_time.elapsed().as_secs_f64();
+			metrics::PROXY_REQUEST_DURATION
+				.with_label_values(&[&status])
+				.observe(duration_secs);
+	
+			metrics::PROXY_REQUEST_PENDING.dec();
+
+			res
 		};
 
 		let status = match &res {
 			Ok(resp) => resp.status().as_u16().to_string(),
-			Err(_) => "error".to_string(),
+			Err(err) => {
+				metrics::PROXY_REQUEST_ERROR
+					.with_label_values(&[&err.to_string()])
+					.inc();
+
+				"error".to_string()
+			}
 		};
-
-		// Record metrics
-		let duration = start_time.elapsed();
-		metrics::PROXY_REQUEST_DURATION
-			.with_label_values(&[&actor_id_str, &server_id_str, &status])
-			.observe(duration.as_secs_f64());
-
-		metrics::PROXY_REQUEST_PENDING
-			.with_label_values(&[&actor_id_str, &server_id_str, method_str, &path])
-			.dec();
 
 		res
 	}
