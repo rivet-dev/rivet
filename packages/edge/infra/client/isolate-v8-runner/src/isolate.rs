@@ -217,10 +217,10 @@ pub async fn run_inner(
 	let (stderr_read_fd, stderr_write_fd) = pipe()?;
 
 	// SAFETY: These are created by pipes
-	let stdout_reader = unsafe { std::fs::File::from_raw_fd(stdout_read_fd) };
-	let stdout_writer = unsafe { std::fs::File::from_raw_fd(stdout_write_fd) };
-	let stderr_reader = unsafe { std::fs::File::from_raw_fd(stderr_read_fd) };
-	let stderr_writer = unsafe { std::fs::File::from_raw_fd(stderr_write_fd) };
+	let stdout_reader = std::fs::File::from(stdout_read_fd);
+	let stdout_writer = std::fs::File::from(stdout_write_fd);
+	let stderr_reader = std::fs::File::from(stderr_read_fd);
+	let stderr_writer = std::fs::File::from(stderr_write_fd);
 	let mut stderr_writer2 = stderr_writer.try_clone()?;
 
 	let isolate_stdout = BufReader::new(stdout_reader);
