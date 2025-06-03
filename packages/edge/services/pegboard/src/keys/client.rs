@@ -299,7 +299,9 @@ pub struct ActorSubspaceKey {
 
 impl ActorSubspaceKey {
 	fn new(client_id: Uuid) -> Self {
-		ActorSubspaceKey { client_id: Some(client_id) }
+		ActorSubspaceKey {
+			client_id: Some(client_id),
+		}
 	}
 
 	fn entire() -> Self {

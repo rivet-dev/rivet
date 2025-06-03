@@ -32,7 +32,7 @@ pub async fn run_from_env(
 		.wrap_new("pegboard-usage-metrics-publish");
 	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
-		db::DatabaseCrdbNats::from_pools(pools.clone())?,
+		db::DatabaseFdbSqliteNats::from_pools(pools.clone())?,
 		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"pegboard-usage-metrics-publish",
@@ -68,7 +68,7 @@ pub async fn run_from_env(
 			.try_collect::<Vec<_>>()
 			.await
 		})
-		.custom_instrument(tracing::info_span!("client_fetch_remaining_actors_tx"))
+		.custom_instrument(tracing::info_span!("fetch_running_actors_tx"))
 		.await?;
 
 	let actors_res = ctx

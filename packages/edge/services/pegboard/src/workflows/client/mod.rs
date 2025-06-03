@@ -106,7 +106,11 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									config,
 									system,
 								}),
-								activity(UpdateMetricsInput { client_id, flavor, clear: false }),
+								activity(UpdateMetricsInput {
+									client_id,
+									flavor,
+									clear: false,
+								}),
 							))
 							.await?;
 						}
@@ -118,7 +122,11 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									client_id,
 									events: events.clone(),
 								}),
-								activity(UpdateMetricsInput { client_id, flavor, clear: false }),
+								activity(UpdateMetricsInput {
+									client_id,
+									flavor,
+									clear: false,
+								}),
 							))
 							.await?;
 
@@ -243,7 +251,12 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	})
 	.await?;
 
-	ctx.activity(UpdateMetricsInput { client_id: input.client_id, flavor: input.flavor, clear: true }).await?;
+	ctx.activity(UpdateMetricsInput {
+		client_id: input.client_id,
+		flavor: input.flavor,
+		clear: true,
+	})
+	.await?;
 
 	let actors = ctx
 		.activity(FetchRemainingActorsInput {
@@ -675,7 +688,11 @@ pub async fn handle_commands(
 			activity(InsertCommandsInput {
 				commands: raw_commands.clone(),
 			}),
-			activity(UpdateMetricsInput { client_id, flavor, clear: false }),
+			activity(UpdateMetricsInput {
+				client_id,
+				flavor,
+				clear: false,
+			}),
 		))
 		.await?;
 

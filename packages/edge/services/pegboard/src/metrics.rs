@@ -44,7 +44,7 @@ lazy_static::lazy_static! {
 		&["env_id", "flavor"],
 		*REGISTRY,
 	).unwrap();
-	
+
 	pub static ref ENV_MEMORY_USAGE: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"pegboard_env_memory_usage",
 		"Total MiB of memory used by an environment.",

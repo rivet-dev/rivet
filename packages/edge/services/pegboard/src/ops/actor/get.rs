@@ -117,7 +117,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 
 	let actor_data = futures_util::stream::iter(actors_with_wf_ids)
 		.map(|(actor_id, workflow_id)| async move {
-			let pool = &match ctx.sqlite_for_workflow(workflow_id).await {
+			let pool = match ctx.sqlite_for_workflow(workflow_id).await {
 				Ok(x) => x,
 				Err(err)
 					if matches!(
@@ -125,13 +125,12 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 						Some(WorkflowError::WorkflowNotFound)
 					) =>
 				{
-					// Workflow is complete
-					return GlobalResult::Ok(None);
+					tracing::warn!(?actor_id, ?workflow_id, "actor workflow not found");
+					return Ok(None);
 				}
-				Err(err) => {
-					return GlobalResult::Err(err);
-				}
+				res => res?,
 			};
+			let pool = &pool;
 
 			let (actor_row, port_ingress_rows, port_host_rows, port_proxied_rows) = tokio::try_join!(
 				sql_fetch_one!(

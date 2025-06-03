@@ -299,6 +299,7 @@ pub trait Database: Send {
 	) -> WorkflowResult<()>;
 }
 
+#[derive(Debug)]
 pub struct WorkflowData {
 	pub workflow_id: Uuid,
 	input: Box<serde_json::value::RawValue>,
