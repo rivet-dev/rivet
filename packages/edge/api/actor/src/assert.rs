@@ -16,6 +16,7 @@ pub async fn actor_for_env(
 		.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![actor_id],
 			endpoint_type,
+			allow_errors: false,
 		})
 		.await?;
 	let actor = unwrap_with!(actors_res.actors.into_iter().next(), ACTOR_NOT_FOUND);

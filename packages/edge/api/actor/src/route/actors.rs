@@ -56,6 +56,7 @@ async fn get_inner(
 		.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![actor_id],
 			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
+			allow_errors: false,
 		})
 		.await?;
 	let actor = unwrap_with!(actors_res.actors.first(), ACTOR_NOT_FOUND);
@@ -255,6 +256,7 @@ pub async fn create(
 		.op(pegboard::ops::actor::get::Input {
 			actor_ids: vec![actor_id],
 			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
+			allow_errors: false,
 		})
 		.await?;
 	let actor = unwrap_with!(actors_res.actors.first(), ACTOR_NOT_FOUND);
@@ -584,6 +586,7 @@ async fn list_actors_inner(
 				.global_endpoint_type
 				.endpoint_type
 				.map(ApiInto::api_into),
+			allow_errors: false,
 		})
 		.await?;
 	actors_res.actors.sort_by_key(|x| -x.create_ts);

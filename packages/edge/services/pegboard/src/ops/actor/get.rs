@@ -72,6 +72,8 @@ pub struct Input {
 	/// If the datacenter has a parent hostname, will use hostname endpoint. Otherwise, will use
 	/// path endpoint.
 	pub endpoint_type: Option<crate::types::EndpointType>,
+
+	pub allow_errors: bool,
 }
 
 #[derive(Debug)]
@@ -192,6 +194,17 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			}))
 		})
 		.buffer_unordered(1024)
+		.map(|x| match x {
+			Ok(x) => Ok(x),
+			Err(err) => {
+				if input.allow_errors {
+					tracing::warn!(?err, "failed to fetch actor");
+					Ok(None)
+				} else {
+					Err(err)
+				}
+			}
+		})
 		.try_filter_map(|x| std::future::ready(Ok(x)))
 		.try_collect::<Vec<_>>()
 		.await?;

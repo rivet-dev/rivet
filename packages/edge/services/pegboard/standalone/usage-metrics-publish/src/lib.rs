@@ -75,6 +75,7 @@ pub async fn run_from_env(
 		.op(pegboard::ops::actor::get::Input {
 			actor_ids,
 			endpoint_type: None,
+			allow_errors: true,
 		})
 		.await?;
 
