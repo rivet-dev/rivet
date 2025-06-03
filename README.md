@@ -7,10 +7,9 @@
   </a>
 </p>
 
-<h3 align="center">Scalable. Stateful. Serverless.</h3>
+<h3 align="center">The open-source serverless platform.</h3>
 <h4 align="center">
-  Rivet is the platform to build realtime, edge, or agent applications.<br/>
-  No limitations of Redis or timeouts of Lambda.
+  Easily deploy and scale AI agents, real-time applications, game servers, and complex backends on a frictionless platform that runs anywhere.
 </h4>
 <p align="center">
   <!-- <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a> -->
@@ -23,50 +22,58 @@
 
 ![Code snippets](./.github/media/code.png)
 
-## Intro
+## Overview
 
-Rivet comes with simple primitives to build your backend. Leverage Rivet Actors to build complex functionality with ease.
+Rivet is a developer-focused serverless infrastructure platform that unifies stateless functions, stateful actors, and containerized workloads. It provides simple primitives to build your backend without managing servers. Leverage Rivet Actors to create resilient, long-lived services that maintain in-memory state between requests.
 
-### Features
+Whether you’re building AI-driven services, collaborative apps, multiplayer games, or any cloud backend, Rivet’s technology provides the performance and scalability you need in a portable, open-source package.
 
--   [**State & Persistence**](https://rivet.gg/docs/state): State that feels like memory but works like storage. Ideal for dynamic, fast-moving apps.
--   [**Remote Procedure Calls**](https://rivet.gg/docs/rpc): Lightweight messaging built for speed. Complete client/server type safety included.
--   [**Runs Forever, Sleeps When Idle**](https://rivet.gg/docs/lifecycle): Always available, sleeps on network inactivity or timeouts, and wakes instantly on demand.
--   [**Edge Networking**](https://rivet.gg/docs/edge): Automatically distribute your applications near your users for ultra-low latency.
--   [**Fault Tolerance**](https://rivet.gg/docs/fault-tolerance): Ensure application & state resilience through crashes with zero downtime.
 
-### Infrastructure
+## Key Characteristics
 
--   **Works with Your Runtime**: Supports V8 isolates, WebAssembly, and containers to work with your existing tools.
--   **Scales to Zero**: Handle millions of connections with low latency and high-throughput writes while saving costs through instant actor sleep/wake cycles.
--   **No Servers & No Configuration**: Deploy with one command. Scale on demand without any configuration.
--   **Simpler Than Lambda, No Timeouts Ever**: No execution time limits, no complexity — just better serverless.
--   **Batteries Included Monitoring**: Includes monitoring out of the box, or bring your own monitoring.
--   **Built with Technologies You Can Trust**: Rust, FoundationDB, the [Rivet workflow engine](docs-internal/libraries/workflow/OVERVIEW.md), and [Rivet orchestrator](packages/services/pegboard/) make Rivet delightfully boring to use.
+- **Open Source & Portable**  
+  Run the Rivet platform on any infrastructure – use the fully-managed Rivet Cloud or deploy it on your own servers and cloud.
 
-### Use cases
+- **Unified Primitives**  
+  Develop using stateless **Functions** (for request/response APIs), stateful **Actors** (for persistent, real-time services), or sandboxed **Containers** (for heavy or untrusted workloads). All are managed together or alone with a consistent CLI and tooling.
+
+---
+
+## Features
+
+- **Stateful Persistence**  
+  Rivet Actors preserve data in memory with automatic durability to disk. This provides persistent memory-like state – you get the speed of in-memory access with the safety of persistent storage. Ideal for dynamic, fast-moving app state (caches, game lobbies, collaborative document data, etc.).
+
+- **Remote Procedure Calls (RPC)**  
+  Lightweight built-in messaging for clients and services. Rivet offers type-safe RPC calls and broadcast events between clients and actors, simplifying real-time communication without external message brokers.
+
+- **No Cold Starts**  
+  Services hibernate on idle and wake instantly on demand. Long-running actors “sleep” when inactive and recover state immediately on the next request. Instant cold-start recovery and consistently low latency for end-users.
+
+- **Edge Distribution**  
+  Deploy backend code closer to your users. Rivet distributes actors and functions across global edge regions for ultra-low latency. Supports HTTP, WebSocket, TCP, and UDP protocols without requiring external proxies.
+
+- **Unlimited Execution & Container Support**  
+  No arbitrary execution time limits – run long-lived processes or background jobs as needed. Rivet supports anything that runs in a Docker container. If it works in Docker, it works on Rivet.
+
+- **Fault Tolerance**  
+  Actor state is persisted so that if an instance crashes or is rescheduled, it can recover its exact state with zero downtime. Combined with intelligent routing, Rivet ensures high availability.
+
+- **Local Development**  
+  Develop and test locally with ease. Spin up a full Rivet cluster with `rivet dev` or Docker Compose. Iterate locally before deploying to production.
+
+  ### Use cases
 
 -   AI agents
--   Game Servers
--   Collaborative applications
+-   Multi-tenant applications
 -   Local-first apps
--   Discord Activities
--   Chat Apps
--   Yjs Sync & Storage
+-   Collaborative applications
 -   Sandboxed Code Execution
+-   Game Servers
+-   Yjs Sync & Storage
+-   Chat Apps
 
-## Install CLI
-
-```sh
-# macOS & Linux & WSL
-curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
-
-# Windows (cmd)
-powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
-
-# Windows (PowerShell)
-iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
-```
+---
 
 ## Getting Started
 
