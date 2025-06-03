@@ -15,7 +15,7 @@ After=network-online.target
 ConditionPathExists=/etc/rivet-server/
 
 [Service]
-Environment="RIVET_OTEL_ENABLED=1"
+# OTEL is not enabled by default since it eats memory very quickly
 Environment="RIVET_OTEL_SAMPLER_RATIO=1"
 Environment="RIVET_SERVICE_NAME=guard"
 Environment="RIVET_NAMESPACE=__NAMESPACE__"
