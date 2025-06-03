@@ -35,7 +35,7 @@ OOMScoreAdjust=-1000
 # Kill main process, not children
 KillMode=process
 # Increase limit of file watches
-LimitNOFILE=65536
+LimitNOFILE=1048576
 # Increase max process limits
 LimitNPROC=infinity
 TasksMax=infinity
