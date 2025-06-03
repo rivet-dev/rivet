@@ -18,6 +18,7 @@ impl CacheInner {
 	///
 	/// This is infallible in order to make sure that anything that depends on
 	/// this never fails.
+	#[tracing::instrument(skip_all)]
 	pub async fn rate_limit(
 		&self,
 		key: &impl CacheKey,

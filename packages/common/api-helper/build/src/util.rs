@@ -284,6 +284,7 @@ pub fn as_auth_expired<T>(res: GlobalResult<T>) -> GlobalResult<T> {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn basic_rate_limit(
 	config: &rivet_config::Config,
 	rate_limit_ctx: crate::auth::AuthRateLimitCtx<'_>,

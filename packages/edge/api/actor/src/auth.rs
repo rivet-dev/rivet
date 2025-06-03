@@ -25,6 +25,7 @@ pub struct CheckOutput {
 
 #[async_trait]
 impl ApiAuth for Auth {
+	#[tracing::instrument(skip_all)]
 	async fn new(
 		config: rivet_config::Config,
 		api_token: Option<String>,
@@ -44,6 +45,7 @@ impl ApiAuth for Auth {
 		})
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn rate_limit(
 		config: &rivet_config::Config,
 		rate_limit_ctx: AuthRateLimitCtx<'_>,

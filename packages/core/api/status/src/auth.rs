@@ -8,6 +8,7 @@ pub struct Auth {
 
 #[async_trait]
 impl ApiAuth for Auth {
+	#[tracing::instrument(skip_all)]
 	async fn new(
 		config: rivet_config::Config,
 		api_token: Option<String>,

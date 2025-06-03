@@ -232,7 +232,7 @@ pub async fn create(
 		query.global.environment.as_deref(),
 		query.endpoint_type,
 	)
-	.instrument(tracing::info_span!("proxy request"))
+	.instrument(tracing::info_span!("proxy_request", base_path=%config.base_path))
 	.await
 	{
 		Ok(res) => Ok(res),
@@ -427,7 +427,7 @@ pub async fn destroy(
 				query.global.environment.as_deref(),
 				query.override_kill_timeout,
 			)
-			.instrument(tracing::info_span!("proxy request"))
+			.instrument(tracing::info_span!("proxy_request", base_path=%config.base_path))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -561,7 +561,7 @@ pub async fn upgrade(
 				query.project.as_deref(),
 				query.environment.as_deref(),
 			)
-			.instrument(tracing::info_span!("proxy request"))
+			.instrument(tracing::info_span!("proxy_request", base_path=%config.base_path))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -705,7 +705,7 @@ pub async fn upgrade_all(
 				query.project.as_deref(),
 				query.environment.as_deref(),
 			)
-			.instrument(tracing::info_span!("proxy request"))
+			.instrument(tracing::info_span!("proxy_request", base_path=%config.base_path))
 			.await
 			{
 				Ok(res) => Ok(res),
@@ -873,7 +873,7 @@ async fn list_actors_inner(
 					query.include_destroyed,
 					query.cursor.as_deref(),
 				)
-				.instrument(tracing::info_span!("proxy request")),
+				.instrument(tracing::info_span!("proxy_request", base_path=%config.base_path)),
 			)
 			.await;
 

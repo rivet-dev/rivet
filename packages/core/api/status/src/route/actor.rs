@@ -208,7 +208,7 @@ pub async fn status(
 		Some(&system_test_env),
 		None,
 	)
-	.instrument(tracing::info_span!("actor create request"))
+	.instrument(tracing::info_span!("actor_create_request"))
 	.await?;
 	let actor_id = res.actor.id;
 
@@ -240,7 +240,7 @@ pub async fn status(
 		Some(&system_test_env),
 		None,
 	)
-	.instrument(tracing::info_span!("actor destroy request"))
+	.instrument(tracing::info_span!("actor_destroy_request"))
 	.await?;
 
 	// Unwrap res
@@ -350,7 +350,7 @@ async fn test_http(
 	client
 		.get(format!("{actor_origin}/health"))
 		.send()
-		.instrument(tracing::info_span!("health request"))
+		.instrument(tracing::info_span!("health_request"))
 		.await?
 		.error_for_status()?;
 

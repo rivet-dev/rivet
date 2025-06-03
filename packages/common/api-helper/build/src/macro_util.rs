@@ -237,6 +237,7 @@ pub fn __deserialize_query<T: DeserializeOwned + Send>(route: &Url) -> GlobalRes
 }
 
 #[doc(hidden)]
+#[tracing::instrument(skip_all, name="setup_ctx")]
 pub async fn __with_ctx<
 	A: auth::ApiAuth + Send,
 	DB: chirp_workflow::db::Database + Sync + 'static,

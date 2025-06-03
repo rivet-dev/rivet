@@ -6,6 +6,7 @@ use std::{
 use moka::future::{Cache, CacheBuilder};
 use redis::AsyncCommands;
 use rivet_pools::prelude::*;
+use tracing::Instrument;
 
 use crate::{error::Error, metrics};
 
@@ -21,6 +22,7 @@ pub enum Driver {
 
 impl Driver {
 	/// Fetch multiple values from cache at once
+	#[tracing::instrument(skip_all, fields(driver=%self))]
 	pub async fn fetch_values<'a>(
 		&'a self,
 		base_key: &'a str,
@@ -33,6 +35,7 @@ impl Driver {
 	}
 
 	/// Set multiple values in cache at once
+	#[tracing::instrument(skip_all, fields(driver=%self))]
 	pub async fn set_values<'a>(
 		&'a self,
 		base_key: &'a str,
@@ -45,6 +48,7 @@ impl Driver {
 	}
 
 	/// Delete multiple keys from cache
+	#[tracing::instrument(skip_all, fields(driver=%self))]
 	pub async fn delete_keys<'a>(
 		&'a self,
 		base_key: &'a str,
@@ -95,6 +99,7 @@ impl Driver {
 	}
 
 	/// Increment a rate limit counter and return the new count
+	#[tracing::instrument(skip_all, fields(driver=%self))]
 	pub async fn rate_limit_increment<'a>(
 		&'a self,
 		key: &'a str,
@@ -119,6 +124,15 @@ impl Driver {
 		match self {
 			Driver::Redis(d) => d.decode_value(bytes),
 			Driver::InMemory(d) => d.decode_value(bytes),
+		}
+	}
+}
+
+impl std::fmt::Display for Driver {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Driver::Redis(_) => write!(f, "redis"),
+			Driver::InMemory(_) => write!(f, "in_memory"),
 		}
 	}
 }
@@ -176,6 +190,7 @@ impl RedisDriver {
 
 		match mget_cmd
 			.query_async::<_, Vec<Option<CacheValue>>>(&mut redis_conn)
+			.instrument(tracing::info_span!("redis_query"))
 			.await
 		{
 			Ok(values) => {
@@ -215,7 +230,11 @@ impl RedisDriver {
 				.ignore();
 		}
 
-		match pipe.query_async(&mut redis_conn).await {
+		match pipe
+			.query_async(&mut redis_conn)
+			.instrument(tracing::info_span!("redis_query"))
+			.await
+		{
 			Ok(()) => {
 				tracing::trace!("successfully wrote to cache");
 				Ok(())
@@ -242,7 +261,11 @@ impl RedisDriver {
 			.with_label_values(&[&base_key])
 			.inc_by(redis_keys.len() as u64);
 
-		match redis_conn.del::<_, ()>(redis_keys).await {
+		match redis_conn
+			.del::<_, ()>(redis_keys)
+			.instrument(tracing::info_span!("redis_query"))
+			.await
+		{
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
 				Ok(())
@@ -300,7 +323,11 @@ impl RedisDriver {
 		pipe.incr(key, 1);
 		pipe.pexpire(key, ttl_ms as usize).ignore();
 
-		match pipe.query_async::<_, (i64,)>(&mut redis_conn).await {
+		match pipe
+			.query_async::<_, (i64,)>(&mut redis_conn)
+			.instrument(tracing::info_span!("redis_query"))
+			.await
+		{
 			Ok((incr,)) => Ok(incr),
 			Err(err) => {
 				tracing::error!(?err, ?key, "failed to increment rate limit key");
@@ -415,9 +442,14 @@ impl InMemoryDriver {
 
 		let mut result = Vec::with_capacity(keys.len());
 
-		for key in keys {
-			result.push(cache.get(&key).await.map(|x| x.value.clone()));
+		// Async block for metrics
+		async {
+			for key in keys {
+				result.push(cache.get(&key).await.map(|x| x.value.clone()));
+			}
 		}
+		.instrument(tracing::info_span!("get"))
+		.await;
 
 		tracing::debug!(
 			cached_len = result.iter().filter(|x| x.is_some()).count(),
@@ -435,16 +467,21 @@ impl InMemoryDriver {
 	) -> Result<(), Error> {
 		let cache = self.cache.clone();
 
-		for (key, value, expire_at) in keys_values {
-			// Create an entry with the value and expiration time
-			let entry = ExpiringValue {
-				value,
-				expiry_time: expire_at,
-			};
+		// Async block for metrics
+		async {
+			for (key, value, expire_at) in keys_values {
+				// Create an entry with the value and expiration time
+				let entry = ExpiringValue {
+					value,
+					expiry_time: expire_at,
+				};
 
-			// Store in cache - expiry will be handled by ValueExpiry
-			cache.insert(key, entry).await;
+				// Store in cache - expiry will be handled by ValueExpiry
+				cache.insert(key, entry).await;
+			}
 		}
+		.instrument(tracing::info_span!("set"))
+		.await;
 
 		tracing::trace!("successfully wrote to in-memory cache with per-key expiry");
 		Ok(())
@@ -465,10 +502,15 @@ impl InMemoryDriver {
 			.with_label_values(&[&base_key])
 			.inc_by(keys.len() as u64);
 
-		for key in keys {
-			// Use remove instead of invalidate to ensure it's actually removed
-			cache.remove(&key).await;
+		// Async block for metrics
+		async {
+			for key in keys {
+				// Use remove instead of invalidate to ensure it's actually removed
+				cache.remove(&key).await;
+			}
 		}
+		.instrument(tracing::info_span!("remove"))
+		.await;
 
 		tracing::trace!("successfully deleted keys from in-memory cache");
 		Ok(())
