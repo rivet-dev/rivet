@@ -70,8 +70,11 @@ jobs:
           npmAuthToken: "${{ secrets.NPM_TOKEN }}"
           EOF
 
+          # TODO: CI yarn.lock differs from local for some reason & causes errors
           # Install dependencies
-          yarn install --immutable
+          # yarn install --immutable
+          yarn config set -H enableImmutableInstalls false
+          yarn install
 
           if [ "${{ inputs.latest }}" = "true" ]; then
               ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
@@ -86,142 +89,68 @@ jobs:
     strategy:
       matrix:
         include:
-          - platform: x86_64-unknown-linux-gnu
+          - platform: linux
             runner: [self-hosted, Linux, X64]
-            suffix: x86-linux
-          # - platform: x86_64-pc-windows-gnu
+            target: x86_64-unknown-linux-musl
+          # - platform: windows
           #   runner: [self-hosted, Linux, X64]
-          #   suffix: x86-windows
-          - platform: x86_64-apple-darwin
+          #   target: x86_64-pc-windows-musl
+          - platform: macos
             runner: [self-hosted, Linux, X64]
-            suffix: x86-mac
-          - platform: aarch64-apple-darwin
+            target: x86_64-apple-darwin
+          - platform: macos
             runner: [self-hosted, Linux, ARM64]
-            suffix: aarch64-mac
+            target: aarch64-apple-darwin
+            arch: arm64
     runs-on: ${{ matrix.runner }}
-    container:
-      image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-
-      # Required for running in Docker
-      - name: Git LFS Pull
-        run: |
-          apt-get update
-          apt-get install git-lfs
-          git lfs pull
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          lfs: 'true'
 
-      - run: corepack enable
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build
-        env:
-          # Expose correct target since we're building cross-platform
-          OVERRIDE_TARGET: ${{ matrix.platform }}
-
-          # Expose env
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
-          CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER: x86_64-apple-darwin20.4-clang
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: aarch64-apple-darwin20.4-clang
-          CC_x86_64_apple_darwin: x86_64-apple-darwin20.4-clang
-          CXX_x86_64_apple_darwin: x86_64-apple-darwin20.4-clang++
-          CC_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang
-          CXX_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang++
-          MACOSX_DEPLOYMENT_TARGET: "10.7"
-          # Use RUSTFLAGS to skip building aws-lc-rs when targeting macOS
-          # CARGO_FEATURE_RUSTLS_NATIVE_CERTS: 0
-          # CARGO_RUSTLS_NATIVE_CERTS: 0
-          # RUSTFLAGS: "--cfg tokio_unstable ${{ contains(matrix.platform, 'apple-darwin') && '--cfg tokio_unstable --cfg rustls_native_certs --cfg aws_lc_rs' || '' }}"
-
-          # Expose token for pulling GH artifacts
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # Pull via Git CLI to improve reliability in CI
-          ENV CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      - name: Build using toolchain Dockerfile
         run: |
-          # Install required components for each platform
-          apt-get update
-          if [[ "${{ matrix.platform }}" == "x86_64-pc-windows-gnu" ]]; then
-            echo "Installing Windows components"
-
-            apt-get install -y gcc-mingw-w64-x86-64
-          elif [[ "${{ matrix.platform }}" == "x86_64-unknown-linux-gnu" ]]; then
-            echo "Installing Linux components"
-
-            apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
-          elif [[ "${{ matrix.platform }}" == "x86_64-apple-darwin" || "${{ matrix.platform }}" == "aarch64-apple-darwin" ]]; then
-            echo "Installing macOS components"
-
-            apt-get install -y clang cmake patch libxml2-dev wget xz-utils curl
-
-            # Install osxcross
-            git config --global --add safe.directory '*'
-            git clone https://github.com/tpoechtrager/osxcross /root/osxcross
-            (
-              cd /root/osxcross
-              wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
-              mv MacOSX11.3.sdk.tar.xz tarballs/
-              UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
-            )
-
-            # Add osxcross to PATH permanently
-            echo 'export PATH="/root/osxcross/target/bin:$PATH"' >> ~/.bashrc
-            export PATH="/root/osxcross/target/bin:$PATH"
-
-            # Verify compiler installation
-            echo 'clang path:'
-            which x86_64-apple-darwin20.4-clang
-            echo 'clang version:'
-            x86_64-apple-darwin20.4-clang --version
-          fi
-
-          # Install targets
-          rustup target add ${{ matrix.platform }}
-
-          mkdir -p /root/.cargo && \
-          echo '\
-          [target.x86_64-unknown-linux-gnu]\n\
-          linker = "x86_64-linux-gnu-gcc"\n\
-          \n\
-          [target.x86_64-pc-windows-gnu]\n\
-          linker = "x86_64-w64-mingw32-gcc"\n\
-          \n\
-          [target.x86_64-apple-darwin]\n\
-          linker = "x86_64-apple-darwin20.4-clang"\n\
-          ar = "x86_64-apple-darwin20.4-ar"\n\
-          \n\
-          [target.aarch64-apple-darwin]\n\
-          linker = "aarch64-apple-darwin20.4-clang"\n\
-          ar = "aarch64-apple-darwin20.4-ar"\n\
-          ' > /root/.cargo/config.toml
-
-          # Build
-          cargo build --bin rivet --release --target ${{ matrix.platform }}
+          # Use Docker BuildKit
+          export DOCKER_BUILDKIT=1
+          
+          # Build the binary using our Dockerfile
+          ARCH_ARG="${{ matrix.arch }}"
+          docker/toolchain/build.sh ${{ matrix.target }}
+          
+          # Make sure dist directory exists and binary is there
+          ls -la dist/
 
       - name: Upload artifacts
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: |
+          # Install dependencies for AWS CLI
           apt-get update
-          apt-get install -y awscli
+          apt-get install -y unzip curl
+
+          # Install AWS CLI - use ARM version if running on ARM architecture
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+          else
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          fi
+          unzip awscliv2.zip
+          ./aws/install --update
 
           COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
-          BINARY_PATH="target/${{ matrix.platform }}/release/rivet"
-          BINARY_NAME="rivet-${{ matrix.suffix }}"
-          if [[ "${{ matrix.platform }}" == "x86_64-pc-windows-gnu" ]]; then
-            BINARY_PATH="${BINARY_PATH}.exe"
-            BINARY_NAME="${BINARY_NAME}.exe"
-          fi
+          BINARY_PATH="dist/rivet-${{ matrix.target }}"
 
+          # Must specify --checksum-algorithm for compatibility with R2
           aws s3 cp \
             "${BINARY_PATH}" \
-            "s3://rivet/${COMMIT_SHA_SHORT}/${BINARY_NAME}" \
+            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-${{ matrix.target }}" \
             --region auto \
-            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases
+            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases \
+            --checksum-algorithm CRC32
 
   docker:
     name: "Build & Push Docker Images"
@@ -252,12 +181,6 @@ jobs:
           apt-get update
           apt-get install git-lfs
           git lfs pull
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - run: corepack enable
 
       - name: Set outputs
         id: vars
@@ -394,4 +317,3 @@ jobs:
           else
               ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
           fi
-

@@ -2,7 +2,7 @@
 
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM --platform=linux/amd64 rust:1.82.0-bookworm AS builder
+FROM --platform=linux/amd64 rust:1.85.0-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
@@ -90,7 +90,7 @@ FROM debian:12.9-slim AS server-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
-    apt-get install -y ca-certificates openssl && \
+    apt-get install -y ca-certificates openssl curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
@@ -117,7 +117,7 @@ CMD ["/usr/bin/rivet-guard"]
 FROM --platform=linux/amd64 debian:12.9-slim AS base-runner
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
-    apt-get install -y ca-certificates openssl curl tini && \
+    apt-get install -y ca-certificates openssl curl tini curl && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # MARK: Runner (Full)

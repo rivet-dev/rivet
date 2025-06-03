@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+# Default to x86_64-unknown-linux-gnu if no target specified
+TARGET=${1:-x86_64-unknown-linux-musl}
+
+case $TARGET in
+  x86_64-unknown-linux-musl)
+    echo "Building for Linux x86_64 platform"
+    DOCKERFILE="linux.Dockerfile"
+    BINARY="rivet-$TARGET"
+    ;;
+  aarch64-apple-darwin)
+    echo "Building for macOS ARM64 platform"
+    DOCKERFILE="macos.Dockerfile"
+    BINARY="rivet-$TARGET"
+    ;;
+  x86_64-apple-darwin)
+    echo "Building for macOS x86_64 platform"
+    DOCKERFILE="macos.Dockerfile" 
+    BINARY="rivet-$TARGET"
+    ;;
+  x86_64-pc-windows-gnu)
+    echo "Building for Windows platform"
+    DOCKERFILE="windows.Dockerfile"
+    BINARY="rivet-$TARGET.exe"
+    ;;
+  *)
+    echo "Unsupported target: $TARGET"
+    exit 1
+    ;;
+esac
+
+# Build docker image
+DOCKER_BUILDKIT=1 docker build -f docker/toolchain/$DOCKERFILE -t rivet-cli-builder-$TARGET .
+
+# Extract binary
+CONTAINER_ID=$(docker create rivet-cli-builder-$TARGET)
+mkdir -p dist
+docker cp "$CONTAINER_ID:/artifacts/$BINARY" dist/
+docker rm "$CONTAINER_ID"
+
+# Make binary executable (skip for Windows .exe files)
+if [[ ! "$BINARY" == *.exe ]]; then
+  chmod +x dist/$BINARY
+fi
+
+echo "Binary saved to: dist/$BINARY"

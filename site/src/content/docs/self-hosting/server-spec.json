@@ -145,6 +145,7 @@
     "rivet": {
       "default": {
         "namespace": "rivet",
+        "instance_id": null,
         "default_cluster_id": null,
         "clusters": null,
         "provision": null,
@@ -1642,6 +1643,11 @@
               "$ref": "#/definitions/Health"
             }
           ]
+        },
+        "instance_id": {
+          "description": "If specified, will use this as the default cluster ID.\n\nThis will have no effect if applied after the cluster has first ran.",
+          "type": "string",
+          "format": "uuid"
         },
         "job_run": {
           "default": null,
