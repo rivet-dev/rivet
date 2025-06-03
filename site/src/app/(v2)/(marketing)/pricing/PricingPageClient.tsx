@@ -7,7 +7,7 @@ const tiers = [
   {
     name: 'Community',
     priceMonthly: '$0',
-    href: '#',
+    href: 'https://hub.rivet.gg/',
     highlights: [
       { description: '$5 Free credits', icon: 'gift' },
       { description: 'Community Support', icon: 'check' },
@@ -16,7 +16,7 @@ const tiers = [
   {
     name: 'Pro',
     priceMonthly: '$20',
-    href: '#',
+    href: 'https://hub.rivet.gg/',
     highlights: [
       { description: '$20 Free credits /mo', icon: 'gift' },
       { description: 'Everything in Community', icon: 'check' },
@@ -28,7 +28,7 @@ const tiers = [
   {
     name: 'Team',
     priceMonthly: '$200',
-    href: '#',
+    href: 'https://hub.rivet.gg/',
     highlights: [
       { description: '$200 Free credits /mo', icon: 'gift' },
       { description: 'Everything in Pro', icon: 'check' },
@@ -233,10 +233,7 @@ function PricingTiers() {
 									aria-label={`Start a free trial on the ${tier.name} plan`}
 									className="inline-flex items-center justify-center px-3.5 py-2 text-base font-medium rounded-xl transition-all duration-200 active:scale-[0.97] bg-[#FF5C00]/90 hover:bg-[#FF5C00] hover:brightness-110 text-white"
 								>
-									{tier.name === 'Community' && 'Get Started'}
-									{tier.name === 'Pro' && 'Upgrade'}
-									{tier.name === 'Team' && 'Upgrade'}
-									{tier.name === 'Enterprise' && 'Contact'}
+									{tier.name === 'Enterprise' ? 'Contact' : 'Get Started'}
 								</a>
 							</div>
 						</div>
