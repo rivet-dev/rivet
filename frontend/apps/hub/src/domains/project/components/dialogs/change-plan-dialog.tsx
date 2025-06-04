@@ -16,7 +16,10 @@ import { useProject } from "../../data/project-context";
 interface ContentProps extends DialogContentProps {}
 
 export default function ChangePlanDialogContent({ onClose }: ContentProps) {
-	const { gameId: projectId } = useProject();
+	const {
+		gameId: projectId,
+		developer: { groupId },
+	} = useProject();
 	const [plan, setPlan] = useState<Rivet.ee.billing.Plan | null>(null);
 
 	const { mutate, isPending } = useUpdateProjectBillingMutation({
@@ -46,7 +49,7 @@ export default function ChangePlanDialogContent({ onClose }: ContentProps) {
 						<Button
 							isLoading={isPending}
 							onClick={() => {
-								mutate({ plan, projectId });
+								mutate({ plan, projectId, groupId });
 							}}
 						>
 							Confirm
