@@ -1,14 +1,9 @@
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import {
-	projectActorsQueryOptions,
 	routesQueryOptions,
 	useDeleteRouteMutation,
 } from "@/domains/project/queries";
-import {
-	useInfiniteQuery,
-	usePrefetchInfiniteQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	type ErrorComponentProps,
@@ -26,7 +21,6 @@ import {
 	TableBody,
 	TableCell,
 	DiscreteCopyButton,
-	toRecord,
 	DropdownMenu,
 	DropdownMenuTrigger,
 	DropdownMenuContent,
@@ -43,25 +37,6 @@ function ProjectFunctionsRoute() {
 	const { projectNameId, environmentNameId } = Route.useParams();
 	const { data: routes } = useSuspenseQuery(
 		routesQueryOptions(Route.useParams()),
-	);
-
-	usePrefetchInfiniteQuery({
-		...projectActorsQueryOptions({
-			projectNameId,
-			environmentNameId,
-			includeDestroyed: false,
-			tags: {},
-		}),
-		pages: Number.POSITIVE_INFINITY,
-	});
-
-	const { data: actors } = useInfiniteQuery(
-		projectActorsQueryOptions({
-			projectNameId,
-			environmentNameId,
-			includeDestroyed: false,
-			tags: {},
-		}),
 	);
 
 	const navigate = Route.useNavigate();
@@ -103,7 +78,6 @@ function ProjectFunctionsRoute() {
 							<TableHeader>
 								<TableRow>
 									<TableHead>Route</TableHead>
-									<TableHead>Instances</TableHead>
 									<TableHead />
 								</TableRow>
 							</TableHeader>
@@ -125,20 +99,6 @@ function ProjectFunctionsRoute() {
 											>
 												{`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
 											</DiscreteCopyButton>
-										</TableCell>
-										<TableCell>
-											{actors?.filter((actor) =>
-												Object.entries(
-													route.target.actors
-														?.selectorTags || {},
-												).some(([key, value]) => {
-													return (
-														toRecord(actor.tags)[
-															key
-														] === value
-													);
-												}),
-											).length || 0}
 										</TableCell>
 										<TableCell>
 											<DropdownMenu>
