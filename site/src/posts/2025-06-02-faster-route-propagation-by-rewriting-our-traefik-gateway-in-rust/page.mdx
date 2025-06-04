@@ -339,7 +339,6 @@ Either would have been well suited for the job, but these are some factors that 
 - **Building around Hyper & Tungstenite**: Hyper is powering many production systems. As a startup, we don't have time to futz with building "correct" lower-level networking implementations. We also want to support QUIC & upcoming transports, which Hyper provides for free.
 - **Memory safety**: The surface area of bugs we need to worry about with Rust is much smaller than Go — which I can't overstate the importance of for something as critical as our gateway that touches every request that reaches Rivet
 - **Correctness guarantees**: The surface area of bugs we need to worry about with Rust is much smaller than Go because of features like `Option` preventing null pointer panics, sum types making invalid states unrepresentable, and concrete error types forcing explicit error handling. I can't overstate the importance of for something as critical as our gateway that touches every request that reaches Rivet.
-RetryClaude can make mistakes. Please double-check responses.
 - **No GC pauses**: Go advertises sub-millisecond GC pauses, but I'm not an expert enough in Go to understand the tradeoffs here. The real experience is always different than the advertised — and Rust has fewer moving parts that make it much easier to conceptualize where any potential performance issues might be coming from.
 
 ## Alternatives Considered
@@ -407,5 +406,5 @@ Sometimes you just have to build the exact tool you need.
 
 ## Edits
 
-**Edit (June 4, 2025):** Fix typo of calling Go not "memory safety" and replace with "corectness guarantees"
+**Edit (June 4, 2025):** Fix typo of calling Go not "memory safety" and replace with "correctness guarantees"
 
