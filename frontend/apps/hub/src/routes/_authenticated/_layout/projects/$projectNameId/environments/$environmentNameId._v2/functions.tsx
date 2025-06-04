@@ -52,7 +52,7 @@ function ProjectFunctionsRoute() {
 			includeDestroyed: false,
 			tags: {},
 		}),
-		pages: 10,
+		pages: Number.POSITIVE_INFINITY,
 	});
 
 	const { data: actors } = useInfiniteQuery(

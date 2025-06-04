@@ -1,34 +1,22 @@
-import { Flex, H1 } from "@rivet-gg/components";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { H1 } from "@rivet-gg/components";
 import type { ReactNode } from "react";
-import { projectQueryOptions } from "../../queries";
 
 interface BillingHeaderProps {
-	projectId: string;
 	lead?: ReactNode;
 	actions?: ReactNode;
 }
 
-export function BillingHeader({
-	projectId,
-	actions,
-	lead,
-}: BillingHeaderProps) {
-	const {
-		data: { displayName },
-	} = useSuspenseQuery(projectQueryOptions(projectId));
-
+export function BillingHeader({ actions, lead }: BillingHeaderProps) {
 	return (
-		<Flex
-			direction={{ initial: "col", md: "row" }}
-			gap="4"
-			justify="between"
-		>
-			<Flex direction="col" gap="2">
-				<H1>{displayName} Billing</H1>
-				{lead}
-			</Flex>
-			{actions ? <Flex gap="2">{actions}</Flex> : null}
-		</Flex>
+		<>
+			<div className="mx-auto my-8 flex justify-between items-center w-full">
+				<div className="flex items-center gap-2">
+					<H1>Billing</H1>
+					{lead}
+				</div>
+				<div className="flex items-center gap-2">{actions}</div>
+			</div>
+			<hr className="mb-4" />
+		</>
 	);
 }

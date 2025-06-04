@@ -16,7 +16,7 @@ export interface BillingPlanCardProps {
 	title: string;
 	lead?: string;
 	price: string;
-	priceLead?: string;
+	priceLead?: ReactNode;
 	features: {
 		key?: string;
 		name: ReactNode;
@@ -27,6 +27,8 @@ export interface BillingPlanCardProps {
 	onSubscribe?: () => void;
 	onCancel?: () => void;
 	cancelLabel?: string;
+	showPrice?: boolean;
+	className?: string;
 }
 
 export function BillingPlanCard({
@@ -37,29 +39,41 @@ export function BillingPlanCard({
 	type,
 	features,
 	cancelLabel,
+	showPrice = true,
+	className,
 	onSubscribe,
 	onCancel,
 }: BillingPlanCardProps) {
 	return (
-		<Card className="flex flex-col group hover:border-primary transition-colors">
+		<Card
+			className={cn(
+				"flex flex-col group bg-transparent transition-colors",
+				onSubscribe || onCancel || type === "custom"
+					? "hover:border-primary"
+					: "",
+				className,
+			)}
+		>
 			<CardHeader>
 				<Text className="font-semibold text-2xl">{title}</Text>
 				{lead ? <SmallText>{lead}</SmallText> : null}
-				<div className="pt-8 min-h-[7rem]">
-					<p>
-						<span className="text-5xl font-bold mr-1 ">
-							{price}
-						</span>
-						<span className="text-muted-foreground">
-							{type !== "custom" ? "/mo" : null}
-						</span>
-					</p>
-					{priceLead ? (
-						<SmallText className="text-muted-foreground">
-							{priceLead}
-						</SmallText>
-					) : null}
-				</div>
+				{showPrice ? (
+					<div className="pt-8 min-h-[7rem]">
+						<p>
+							<span className="text-5xl font-bold mr-1 ">
+								{price}
+							</span>
+							<span className="text-muted-foreground">
+								{type !== "custom" ? "/mo" : null}
+							</span>
+						</p>
+						{priceLead ? (
+							<SmallText className="text-muted-foreground">
+								{priceLead}
+							</SmallText>
+						) : null}
+					</div>
+				) : null}
 			</CardHeader>
 			<CardContent className="flex-1">
 				<Flex direction="col" gap="4" asChild>
@@ -89,10 +103,10 @@ export function BillingPlanCard({
 					</ul>
 				</Flex>
 			</CardContent>
-			<CardFooter className="justify-center">
+			<CardFooter className="justify-center empty:hidden">
 				{type === "custom" ? (
 					<a
-						href="https://calendly.com/d/zvq-v4z-84t/rivet-founders-15-minute"
+						href="https://rivet.gg/sales"
 						target="_blank"
 						rel="noreferrer"
 					>
@@ -104,7 +118,9 @@ export function BillingPlanCard({
 						{cancelLabel || "Cancel"}
 					</Button>
 				) : null}
-				{!type ? <Button onClick={onSubscribe}>Upgrade</Button> : null}
+				{!type && onSubscribe ? (
+					<Button onClick={onSubscribe}>Upgrade</Button>
+				) : null}
 			</CardFooter>
 		</Card>
 	);

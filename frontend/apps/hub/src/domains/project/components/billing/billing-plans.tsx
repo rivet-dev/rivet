@@ -1,6 +1,5 @@
-import { useDialog } from "@/hooks/use-dialog";
 import { Rivet as RivetEe } from "@rivet-gg/api-ee";
-import { Flex, Grid, H2, Link } from "@rivet-gg/components";
+import { Grid, Link } from "@rivet-gg/components";
 import {
 	faBadgeCheck,
 	faCheckCircle,
@@ -23,190 +22,63 @@ import {
 	BillingPlanCard,
 	type BillingPlanCardProps,
 } from "./billing-plan-card";
-import { BillingPlanStatus } from "./billing-plan-status";
+import { BillingPlanLead } from "./billing-plan-badge";
 
 interface BillingPlansProps {
-	projectId: string;
 	showHeader?: boolean;
-	onChoosePlan?: () => Promise<void> | void;
+	onSubscribe?: (plan: RivetEe.ee.billing.Plan) => void;
 	config?: Partial<
 		Record<RivetEe.ee.billing.Plan, Partial<BillingPlanCardProps>>
 	>;
 }
 
-export function BillingPlans({
-	projectId,
-	onChoosePlan,
-	showHeader = true,
-	config,
-}: BillingPlansProps) {
-	const { dialog, open } = useDialog.ConfirmBillingPlan({
-		projectId,
-		onSuccess: onChoosePlan,
-	});
-
+export function BillingPlans({ onSubscribe, config }: BillingPlansProps) {
 	const { plan } = useBilling();
 
 	return (
 		<>
-			{showHeader ? (
-				<Flex direction="col" mt="8" mb="4" gap="2">
-					<H2>Plan</H2>
-					<BillingPlanStatus />
-				</Flex>
-			) : null}
-			{dialog}
 			<Grid columns={{ initial: "1", xl: "4" }} gap="4">
-				<BillingPlanCard
-					title="Community"
-					price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Trial]}`}
+				<BillingCommunityPlan
 					onSubscribe={() =>
-						open({
-							plan: RivetEe.ee.billing.Plan.Trial,
-						})
+						onSubscribe?.(RivetEe.ee.billing.Plan.Trial)
 					}
-					onCancel={onChoosePlan}
 					type={
 						plan === RivetEe.ee.billing.Plan.Trial
 							? "active"
 							: undefined
 					}
-					features={[
-						{
-							name: (
-								<span>
-									$5.00 Free
-									<span className="text-xs text-muted-foreground font-normal ml-0.5">
-										/mo
-									</span>
-								</span>
-							),
-							bold: true,
-							icon: faGift,
-						},
-						{ name: "Community Support", icon: faComments },
-					]}
 					{...config?.[RivetEe.ee.billing.Plan.Trial]}
 				/>
-				<BillingPlanCard
-					title="Pro"
+				<BillingProPlan
 					onSubscribe={() =>
-						open({
-							plan: RivetEe.ee.billing.Plan.Indie,
-						})
+						onSubscribe?.(RivetEe.ee.billing.Plan.Indie)
 					}
 					onCancel={() =>
-						open({
-							plan: RivetEe.ee.billing.Plan.Trial,
-						})
+						onSubscribe?.(RivetEe.ee.billing.Plan.Trial)
 					}
-					price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Indie]}`}
 					type={
 						plan === RivetEe.ee.billing.Plan.Indie
 							? "active"
 							: undefined
 					}
-					priceLead="+ Actor Usage"
-					features={[
-						{
-							name: (
-								<span>
-									$20 Free
-									<span className="text-xs text-muted-foreground font-normal ml-0.5">
-										/mo
-									</span>
-								</span>
-							),
-							bold: true,
-							icon: faGift,
-						},
-						{
-							name: "Everything in Community",
-							icon: faCheckCircle,
-						},
-						{ name: "No Usage Limits", icon: faInfinity },
-
-						{ name: "Unlimited Seats", icon: faPeopleGroup },
-						{ name: "Email Support", icon: faEnvelope },
-					]}
 					{...config?.[RivetEe.ee.billing.Plan.Indie]}
 				/>
-				<BillingPlanCard
+				<BillingTeamPlan
 					title="Team"
 					onSubscribe={() =>
-						open({
-							plan: RivetEe.ee.billing.Plan.Studio,
-						})
+						onSubscribe?.(RivetEe.ee.billing.Plan.Studio)
 					}
 					onCancel={() =>
-						open({
-							plan: RivetEe.ee.billing.Plan.Trial,
-						})
+						onSubscribe?.(RivetEe.ee.billing.Plan.Trial)
 					}
-					price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Studio]}`}
 					type={
 						plan === RivetEe.ee.billing.Plan.Studio
 							? "active"
 							: undefined
 					}
-					priceLead="+ Actor Usage"
-					features={[
-						{
-							name: (
-								<span>
-									$200 Free
-									<span className="text-xs text-muted-foreground font-normal ml-0.5">
-										/mo
-									</span>
-								</span>
-							),
-							bold: true,
-							icon: faGift,
-						},
-						{ name: "Everything in Pro", icon: faCheckCircle },
-						{
-							name: "Dedicated Hardware",
-							icon: faServer,
-						},
-						{ name: "Custom Regions", icon: faGlobe },
-						{ name: "Advanced Support", icon: faHeadset },
-					]}
 					{...config?.[RivetEe.ee.billing.Plan.Studio]}
 				/>
-				<BillingPlanCard
-					title="Enterprise"
-					price="Custom"
-					features={[
-						{ name: "Everything in Team", icon: faCheckCircle },
-						{
-							name: "Priority Support",
-							icon: faHeadset,
-						},
-						{
-							name: "SLA",
-							icon: faBadgeCheck,
-						},
-						{ name: "No Usage Limits", icon: faInfinity },
-						{
-							name: "OIDC SSO Provider",
-							icon: faLockA,
-						},
-						{
-							name: "On-Perm Deployment",
-							icon: faRocketLaunch,
-						},
-						{
-							name: "Custom Storage Reads, Writes and Stored Data",
-							icon: faDatabase,
-						},
-
-						{
-							name: "Custom Log Retention",
-							icon: faClock,
-						},
-					]}
-					type="custom"
-				/>
+				<BillingCustomPlan />
 			</Grid>
 
 			<p className="text-center my-4">
@@ -221,5 +93,145 @@ export function BillingPlans({
 				.
 			</p>
 		</>
+	);
+}
+
+export function BillingCommunityPlan(
+	props: Omit<BillingPlanCardProps, "title" | "price" | "features">,
+) {
+	return (
+		<BillingPlanCard
+			{...props}
+			title="Community"
+			price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Trial]}`}
+			features={[
+				{
+					name: (
+						<span>
+							$5.00 Free
+							<span className="text-xs text-muted-foreground font-normal ml-0.5">
+								/mo
+							</span>
+						</span>
+					),
+					bold: true,
+					icon: faGift,
+				},
+				{ name: "Community Support", icon: faComments },
+			]}
+		/>
+	);
+}
+
+export function BillingProPlan(
+	props: Omit<BillingPlanCardProps, "title" | "price" | "features">,
+) {
+	return (
+		<BillingPlanCard
+			{...props}
+			title="Pro"
+			price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Indie]}`}
+			priceLead={<BillingPlanLead plan={RivetEe.ee.billing.Plan.Indie} />}
+			features={[
+				{
+					name: (
+						<span>
+							$20 Free
+							<span className="text-xs text-muted-foreground font-normal ml-0.5">
+								/mo
+							</span>
+						</span>
+					),
+					bold: true,
+					icon: faGift,
+				},
+				{
+					name: "Everything in Community",
+					icon: faCheckCircle,
+				},
+				{ name: "No Usage Limits", icon: faInfinity },
+
+				{ name: "Unlimited Seats", icon: faPeopleGroup },
+				{ name: "Email Support", icon: faEnvelope },
+			]}
+		/>
+	);
+}
+
+export function BillingTeamPlan(
+	props: Omit<BillingPlanCardProps, "title" | "price" | "features">,
+) {
+	return (
+		<BillingPlanCard
+			{...props}
+			title="Team"
+			price={`$${PRICE_MAP[RivetEe.ee.billing.Plan.Studio]}`}
+			priceLead={
+				<BillingPlanLead plan={RivetEe.ee.billing.Plan.Studio} />
+			}
+			features={[
+				{
+					name: (
+						<span>
+							$200 Free
+							<span className="text-xs text-muted-foreground font-normal ml-0.5">
+								/mo
+							</span>
+						</span>
+					),
+					bold: true,
+					icon: faGift,
+				},
+				{ name: "Everything in Pro", icon: faCheckCircle },
+				{
+					name: "Dedicated Hardware",
+					icon: faServer,
+				},
+				{ name: "Custom Regions", icon: faGlobe },
+				{ name: "Advanced Support", icon: faHeadset },
+			]}
+		/>
+	);
+}
+
+export function BillingCustomPlan(
+	props: Omit<BillingPlanCardProps, "title" | "price" | "features">,
+) {
+	return (
+		<BillingPlanCard
+			{...props}
+			title="Enterprise"
+			price="Custom"
+			features={[
+				{ name: "Everything in Team", icon: faCheckCircle },
+				{
+					name: "Priority Support",
+					icon: faHeadset,
+				},
+				{
+					name: "SLA",
+					icon: faBadgeCheck,
+				},
+				{ name: "No Usage Limits", icon: faInfinity },
+				{
+					name: "OIDC SSO Provider",
+					icon: faLockA,
+				},
+				{
+					name: "On-Perm Deployment",
+					icon: faRocketLaunch,
+				},
+				{
+					name: "Custom Storage Reads, Writes and Stored Data",
+					icon: faDatabase,
+				},
+
+				{
+					name: "Custom Log Retention",
+					icon: faClock,
+				},
+			]}
+			type="custom"
+		/>
 	);
 }

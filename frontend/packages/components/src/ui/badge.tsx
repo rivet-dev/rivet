@@ -10,12 +10,11 @@ import {
 } from "./helpers";
 
 const badgeVariants = cva(
-	"inline-flex items-center tracking-normal rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 whitespace-nowrap max-w-full overflow-hidden truncate",
+	"inline-flex items-center tracking-normal rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 whitespace-nowrap max-w-full overflow-hidden truncate",
 	{
 		variants: {
 			variant: {
-				default:
-					"border-transparent bg-primary text-primary-foreground",
+				default: "border-transparent bg-primary/10 text-primary",
 				secondary:
 					"border-transparent bg-secondary text-secondary-foreground ",
 				destructive:

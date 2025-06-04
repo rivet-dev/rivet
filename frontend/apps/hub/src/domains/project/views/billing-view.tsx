@@ -19,12 +19,11 @@ export function BillingView({ projectId }: BillingViewProps) {
 
 	if (!groupBilling.group.paymentMethodAttachedTs) {
 		return (
-			<MissingPaymentMethod
-				projectId={projectId}
-				groupId={developerGroupId}
-			/>
+			<>
+				<MissingPaymentMethod />
+			</>
 		);
 	}
 
-	return <Billing projectId={projectId} groupId={developerGroupId} />;
+	return <Billing />;
 }

@@ -63,7 +63,6 @@ import {
 } from "@rivet-gg/components/actors";
 import { ErrorComponent } from "@/components/error-component";
 import { useDebounceCallback } from "usehooks-ts";
-import { actors } from "@rivet-gg/api-full/serialization";
 
 function ProjectFunctionsRoute() {
 	const { environmentNameId, projectNameId } = Route.useParams();
@@ -80,7 +79,7 @@ function ProjectFunctionsRoute() {
 			includeDestroyed: true,
 			tags: {},
 		}),
-		pages: 10,
+		pages: Number.POSITIVE_INFINITY,
 	});
 
 	const { data: actors } = useInfiniteQuery({

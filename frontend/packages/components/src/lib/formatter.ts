@@ -49,3 +49,11 @@ export function formatCurrency(amount: number) {
 export function formatCurrencyToParts(amount: number) {
 	return currencyFormatter.formatToParts(amount);
 }
+
+// https://github.com/microsoft/TypeScript/issues/60608
+// @ts-expect-error
+const durationFormatter = new Intl.DurationFormat("en-US");
+
+export function intlFormatDuration(duration: Record<string, number> | number) {
+	return durationFormatter.format(duration);
+}

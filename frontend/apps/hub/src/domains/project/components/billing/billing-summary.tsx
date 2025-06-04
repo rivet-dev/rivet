@@ -3,7 +3,7 @@ import { useBilling } from "./billing-context";
 
 export function BillingSummary() {
 	const {
-		credits: { total, remaining },
+		credits: { total, remaining, max },
 	} = useBilling();
 
 	return (
@@ -14,7 +14,12 @@ export function BillingSummary() {
 			/>
 			<ValueCard
 				title="Credits remaining"
-				value={<AnimatedCurrency value={remaining} />}
+				value={
+					<AnimatedCurrency
+						from={max}
+						value={Math.max(remaining, 0)}
+					/>
+				}
 			/>
 		</Grid>
 	);
