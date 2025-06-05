@@ -38,9 +38,9 @@ const downloadLogsAtom = atom(
 		const lines = combined.map((log) => {
 			const timestamp = new Date(log.timestamp).toISOString();
 			if (settings.showTimestamps) {
-				return `[${timestamp}] ${log.message}`;
+				return `[${timestamp}] ${log.message || log.line}}`;
 			}
-			return log.message;
+			return log.message || log.line;
 		});
 
 		saveAs(
