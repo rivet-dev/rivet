@@ -1,5 +1,5 @@
-import type { Rivet as RivetEe } from "@rivet-gg/api-ee";
 import { rivetEeClient } from "@/queries/global";
+import type { Rivet as RivetEe } from "@rivet-gg/api-ee";
 import { queryOptions } from "@tanstack/react-query";
 
 export const groupBillingUsageQueryOptions = ({
@@ -74,18 +74,16 @@ export const projectBillingQueryOptions = (
 	});
 };
 
-export const portalBillingSessionQueryOptions = ({
-	intent,
-	groupId,
-}: {
-	groupId: string;
-	intent: RivetEe.ee.cloud.groups.billing.CreateStripePortalSessionRequest["intent"];
-}) =>
+
+export const portalBillingSessionQueryOptions = (
+	groupId: string,
+	intent: RivetEe.ee.cloud.groups.billing.CreateStripePortalSessionRequest["intent"],
+) =>
 	queryOptions({
-		queryKey: ["group", groupId, "billing", "portal", intent] as const,
+		queryKey: ["group", groupId, "billing", "portal", intent],
 		staleTime: 5 * 60 * 1000, // 5 minutes
 		gcTime: 5 * 60 * 1000, // 5 minutes
-		queryFn: ({ signal, queryKey: [, , , , intent] }) =>
+		queryFn: ({ signal }) =>
 			rivetEeClient.ee.cloud.groups.billing.createStripePortalSession(
 				groupId,
 				{ intent },

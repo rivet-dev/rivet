@@ -6,7 +6,7 @@ import {
 	actorBuildsQueryOptions,
 	projectBackendQueryOptions,
 	projectEnvironmentQueryOptions,
-	environmentMetadataQueryOptions,
+	projectMetadataQueryOptions,
 	projectVersionQueryOptions,
 } from "@/domains/project/queries";
 import { GuardEnterprise } from "@/lib/guards";
@@ -26,7 +26,7 @@ function environmentIdRoute() {
 	const {
 		data: { legacyLobbiesEnabled, backendModulesEnabled },
 	} = useSuspenseQuery(
-		environmentMetadataQueryOptions({ projectId, environmentId }),
+		projectMetadataQueryOptions({ projectId, environmentId }),
 	);
 
 	return (

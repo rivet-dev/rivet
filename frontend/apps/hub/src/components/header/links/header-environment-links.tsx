@@ -2,7 +2,7 @@ import {
 	environmentByIdQueryOptions,
 	projectByIdQueryOptions,
 	projectEnvironmentQueryOptions,
-	environmentMetadataQueryOptions,
+	projectMetadataQueryOptions,
 } from "@/domains/project/queries";
 import { GuardEnterprise } from "@/lib/guards";
 import {
@@ -44,7 +44,7 @@ export function HeaderEnvironmentLinks({
 	] = useSuspenseQueries({
 		queries: [
 			projectEnvironmentQueryOptions({ projectId, environmentId }),
-			environmentMetadataQueryOptions({ projectId, environmentId }),
+			projectMetadataQueryOptions({ projectId, environmentId }),
 		],
 	});
 

@@ -79,7 +79,6 @@
 		"typescript": "^5.5.4",
 		"vite": "^5.2.0",
 		"vite-bundle-analyzer": "^0.17.0",
-		"vite-plugin-favicons-inject": "^2.2.0",
-		"vite-plugin-mock-dev-server": "^1.8.7"
+		"vite-plugin-favicons-inject": "^2.2.0"
 	}
 }

@@ -4,17 +4,6 @@ import { getMetaWatchIndex } from "@/queries/utils";
 import { RivetError } from "@rivet-gg/api-full";
 import { loadModuleCategories } from "@rivet-gg/components";
 import { queryOptions } from "@tanstack/react-query";
-import {
-	projectBillingQueryOptions,
-	projectBillingUsageQueryOptions,
-} from "./billing/query-options";
-import { startOfMonth } from "date-fns";
-import {
-	calculateUsedActorCredits,
-	calculateUsedCredits,
-} from "../data/billing-calculate-usage";
-import { projectActorsQueryOptions } from "./actors/query-options";
-import { groupBillingQueryOptions } from "@/domains/group/queries";
 
 export const projectsQueryOptions = () => {
 	return queryOptions({
@@ -265,111 +254,6 @@ export const projectEnvTokenServiceQueryOptions = ({
 };
 
 export const projectMetadataQueryOptions = ({
-	projectId,
-}: {
-	projectId: string;
-}) => {
-	return queryOptions({
-		queryKey: ["project", projectId, "metadata"],
-		queryFn: async ({ queryKey: [_, projectId] }) => {
-			const { game } =
-				await rivetClient.cloud.games.getGameById(projectId);
-			const legacyLobbiesEnabled = game.versions.length > 1;
-
-			return {
-				legacyLobbiesEnabled,
-			};
-		},
-	});
-};
-
-export const projectAggregateBillingQueryOptions = ({
-	projectId,
-	projectNameId,
-	groupId,
-}: {
-	projectId: string;
-	projectNameId: string;
-	groupId: string;
-}) => {
-	return queryOptions({
-		staleTime: 60 * 60 * 1000, // 1 hour
-		queryKey: ["project", projectId, groupId, "billing"],
-		queryFn: async ({ queryKey: [_, projectId, groupId], client }) => {
-			const { group } = await client.fetchQuery(
-				groupBillingQueryOptions(groupId),
-			);
-			const { subscription, plan, activePlan } = await client.fetchQuery(
-				projectBillingQueryOptions(projectId),
-			);
-
-			const endTs = subscription?.periodStartTs || new Date();
-			const startTs = subscription?.periodEndTs || startOfMonth(endTs);
-
-			const metadata = await client.fetchQuery(
-				projectMetadataQueryOptions({
-					projectId,
-				}),
-			);
-
-			// legacy billing
-			if (metadata.legacyLobbiesEnabled) {
-				const { games } = await client.fetchQuery(
-					projectBillingUsageQueryOptions({
-						projectId,
-						groupId,
-						startTs: subscription?.periodStartTs || startTs,
-						endTs: subscription?.periodEndTs || endTs,
-					}),
-				);
-
-				const credits = calculateUsedCredits({
-					usage: games.find((game) => game.gameId === projectId),
-					plan: activePlan,
-				});
-
-				return { credits, subscription, activePlan, plan, group };
-			}
-
-			const { game: project } = await client.fetchQuery(
-				projectQueryOptions(projectId),
-			);
-
-			const allActors = [];
-
-			for (const env of project.namespaces) {
-				const actors = await client.fetchInfiniteQuery({
-					...projectActorsQueryOptions({
-						projectNameId: projectNameId,
-						environmentNameId: env.nameId,
-						includeDestroyed: true,
-						tags: {},
-					}),
-					pages: Number.POSITIVE_INFINITY,
-				});
-
-				allActors.push(...actors.pages.flatMap((page) => page.actors));
-			}
-
-			const credits = calculateUsedActorCredits({
-				actors: allActors,
-				plan: activePlan,
-				startTs,
-				endTs,
-			});
-
-			return {
-				group,
-				plan,
-				credits,
-				subscription,
-				activePlan,
-			};
-		},
-	});
-};
-
-export const environmentMetadataQueryOptions = ({
 	projectId,
 	environmentId,
 }: {

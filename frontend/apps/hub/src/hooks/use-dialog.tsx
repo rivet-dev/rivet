@@ -22,7 +22,7 @@ export interface DialogContentProps {
 
 interface DialogConfig {
 	autoFocus?: boolean;
-	size?: "md" | "lg" | "xl";
+	size?: "md" | "lg";
 }
 
 export const createDialogHook = <
@@ -46,7 +46,6 @@ export const createDialogHook = <
 				<Dialog {...dialogProps}>
 					<DialogContent
 						className={cn({
-							"max-w-6xl": opts.size === "xl",
 							"max-w-2xl": opts.size === "lg",
 							"max-w-xl": opts.size === "md",
 						})}
@@ -223,6 +222,11 @@ useDialog.DeployEnvironmentVersion = createDialogHook(
 	),
 );
 
+useDialog.ConfirmBillingPlan = createDataDialogHook(
+	["plan"],
+	import("@/domains/project/components/dialogs/confirm-billing-plan-dialog"),
+);
+
 useDialog.CreateGroupInvite = createDialogHook(
 	import("@/domains/group/components/dialogs/create-group-invite-dialog"),
 );
@@ -288,9 +292,4 @@ useDialog.EditRoute = createDialogHook(
 
 useDialog.CreateRoute = createDialogHook(
 	import("@/domains/project/components/dialogs/create-route-dialog"),
-);
-
-useDialog.ChangePlan = createDialogHook(
-	import("@/domains/project/components/dialogs/change-plan-dialog"),
-	{ size: "xl" },
 );

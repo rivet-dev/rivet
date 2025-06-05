@@ -58,7 +58,7 @@ function RouteComponent() {
 				className="h-full min-h-full max-h-full w-full min-w-full max-w-full"
 				left={<Sidebar />}
 				right={
-					<div className="h-full w-full">
+					<div className="h-full overflow-auto">
 						<Outlet />
 					</div>
 				}

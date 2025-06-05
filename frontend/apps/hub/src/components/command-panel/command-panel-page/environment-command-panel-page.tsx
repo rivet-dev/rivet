@@ -2,7 +2,7 @@ import {
 	environmentByIdQueryOptions,
 	projectByIdQueryOptions,
 	projectEnvironmentQueryOptions,
-	environmentMetadataQueryOptions,
+	projectMetadataQueryOptions,
 	projectQueryOptions,
 } from "@/domains/project/queries";
 import { GuardEnterprise } from "@/lib/guards";
@@ -21,6 +21,7 @@ import {
 	faFunction,
 	faGear,
 	faGlobe,
+	faHammer,
 	faJoystick,
 	faKey,
 	faLink,
@@ -61,7 +62,7 @@ export function EnvironmentCommandPanelPage({
 	] = useSuspenseQueries({
 		queries: [
 			projectQueryOptions(projectId),
-			environmentMetadataQueryOptions({ projectId, environmentId }),
+			projectMetadataQueryOptions({ projectId, environmentId }),
 		],
 	});
 

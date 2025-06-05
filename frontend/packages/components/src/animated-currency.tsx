@@ -12,11 +12,10 @@ import { formatCurrency } from "./lib/formatter";
 
 interface AnimatedCurrencyProps {
 	value: number;
-	from?: number;
 }
 
-export function AnimatedCurrency({ value, from }: AnimatedCurrencyProps) {
-	const startValue = useMotionValue(from ?? 0);
+export function AnimatedCurrency({ value }: AnimatedCurrencyProps) {
+	const startValue = useMotionValue(0);
 	const currentValue = useTransform(startValue, (v) => formatCurrency(v));
 
 	useEffect(() => {

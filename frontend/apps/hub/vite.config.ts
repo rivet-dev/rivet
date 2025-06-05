@@ -7,7 +7,6 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig } from "vite";
 import vitePluginFaviconsInject from "vite-plugin-favicons-inject";
-import { mockDevServerPlugin } from 'vite-plugin-mock-dev-server'
 // @ts-ignore
 import { config as mdxConfig } from "../../../site/src/mdx/mdx.mjs";
 
@@ -26,7 +25,6 @@ export default defineConfig({
 				rehypePlugins: mdxConfig.options.rehypePlugins,
 			}),
 		},
-		mockDevServerPlugin(),
 		react(),
 		TanStackRouterVite(),
 		vitePluginFaviconsInject(
@@ -49,10 +47,6 @@ export default defineConfig({
 	],
 	server: {
 		port: 5080,
-		proxy: {
-			'^/api': { target: 'http://127.0.0.1:8080', rewrite: path => path.replace(/^\/api/, '') }
-		},
-		cors: true,
 	},
 	preview: {
 		port: 5080,

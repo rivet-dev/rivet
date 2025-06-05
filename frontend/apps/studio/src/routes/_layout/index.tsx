@@ -87,9 +87,9 @@ function RouteComponent() {
 					initial={{ opacity: 0, scale: 0.95 }}
 					animate={{ opacity: 1, scale: 1 }}
 					exit={{ opacity: 0, scale: 0.95 }}
-					className="size-full flex items-center justify-center-safe flex-col overflow-auto"
+					className="h-full w-full flex items-center justify-center flex-col"
 				>
-					<H1 className="mt-4">Rivet Studio</H1>
+					<H1>Rivet Studio</H1>
 					<Card className="max-w-md w-full mb-6 mt-8">
 						<CardHeader>
 							<CardTitle>Getting Started</CardTitle>

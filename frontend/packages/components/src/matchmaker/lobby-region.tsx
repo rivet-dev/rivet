@@ -1,10 +1,10 @@
-import { Icon, type IconProp, faComputer, faServer } from "@rivet-gg/icons";
+import { Icon, type IconProp, faComputer } from "@rivet-gg/icons";
 import { AssetImage } from "../asset-image";
 import { convertEmojiToUriFriendlyString } from "../lib/emoji";
 
 export const REGION_ICON: Record<string, string | IconProp> = {
 	local: faComputer,
-	unknown: faServer,
+	unknown: "❓",
 	atlanta: "🇺🇸", // Atlanta
 	san_francisco: "🇺🇸", // San Francisco
 	frankfurt: "🇩🇪", // Frankfurt

@@ -41,7 +41,7 @@ export function BillingUsageProgress(props: BillingUsageProgressProps) {
 	}
 
 	const { used, max, overage, plan } = props;
-	const percentage = Math.min((used / max) * MAX_RANGE, MAX_RANGE + 10);
+	const percentage = Math.min((used / max) * MAX_RANGE, MAX_RANGE);
 
 	return (
 		<>
@@ -59,7 +59,7 @@ export function BillingUsageProgress(props: BillingUsageProgressProps) {
 				direction={{ initial: "col", md: "row" }}
 				justify="center"
 				items="center"
-				pb="4"
+				py="8"
 			>
 				<RangedProgressBar
 					percentage={percentage}

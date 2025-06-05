@@ -22,10 +22,3 @@ export function millisecondsToMonths(milliseconds: number) {
 
 	return months;
 }
-
-export function millisecondsToDays(milliseconds: number) {
-	// Calculate the difference in days
-	const days = milliseconds / timing.hours(24);
-
-	return days;
-}

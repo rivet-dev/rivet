@@ -567,7 +567,7 @@ export const logsAggregatedQueryOptions = ({
 					includeDestroyed: true,
 					tags: {},
 				}),
-				pages: Number.POSITIVE_INFINITY,
+				pages: 10,
 			});
 
 			const allActors = actors.pages.flatMap((page) => page.actors || []);

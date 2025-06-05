@@ -3,17 +3,16 @@ import { Icon, faExclamationTriangle } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { BILLING_PLANS_CREDITS_VISIBILITY } from "../../data/billing-calculate-usage";
 import { useOptionalBilling } from "./billing-context";
-import { useProject } from "../../data/project-context";
 
 export function BillingOverageWarning() {
 	const billing = useOptionalBilling();
-	const { nameId: projectNameId } = useProject();
 
 	if (!billing) {
 		return null;
 	}
 
 	const {
+		project: { nameId: projectNameId },
 		activePlan,
 		credits: { overage },
 	} = billing;

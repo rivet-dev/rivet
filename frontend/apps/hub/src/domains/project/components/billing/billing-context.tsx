@@ -2,19 +2,20 @@ import type { Rivet as RivetEe } from "@rivet-gg/api-ee";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext } from "react";
 
-import { projectAggregateBillingQueryOptions } from "../../queries";
-import { useProject } from "../../data/project-context";
 import { clusterQueryOptions } from "@/domains/auth/queries/bootstrap";
+import type { Rivet } from "@rivet-gg/api-full";
+import { startOfMonth } from "date-fns";
+import { calculateUsedCredits } from "../../data/billing-calculate-usage";
+import {
+	projectBillingQueryOptions,
+	projectBillingUsageQueryOptions,
+	projectQueryOptions,
+} from "../../queries";
+import { useProject } from "../../data/project-context";
 
 interface BillingContextValue {
-	/**
-	 * The plan that the user is currently on.
-	 * This is the plan directly from Stripe
-	 */
+	project: Rivet.cloud.GameFull;
 	activePlan: RivetEe.ee.billing.Plan;
-	/**
-	 * The plan the user will be on next month, different from `activePlan` if the user has a subscription that will change next month.
-	 */
 	plan: RivetEe.ee.billing.Plan;
 	credits: {
 		max: number;
@@ -24,38 +25,76 @@ interface BillingContextValue {
 		total: number;
 	};
 	subscription: RivetEe.ee.billing.Subscription | undefined;
-	group: RivetEe.ee.billing.Group;
 }
 
 export const BillingContext = createContext<BillingContextValue | undefined>(
 	undefined,
 );
 
+interface BillingSubscriptionProviderProps {
+	project: Rivet.cloud.GameFull;
+	subscription: RivetEe.ee.billing.Subscription | undefined;
+	plan: RivetEe.ee.billing.Plan;
+	activePlan: RivetEe.ee.billing.Plan;
+	children?: ReactNode;
+}
+
+const today = new Date();
+const firstDayOfMonth = startOfMonth(today);
+
+function BillingSubscriptionProvider({
+	children,
+	...rest
+}: BillingSubscriptionProviderProps) {
+	const {
+		project: { gameId, developerGroupId },
+		subscription,
+		activePlan,
+		plan,
+	} = rest;
+	const { data: usage } = useSuspenseQuery(
+		projectBillingUsageQueryOptions({
+			projectId: gameId,
+			groupId: developerGroupId,
+			startTs: subscription?.periodStartTs || firstDayOfMonth,
+			endTs: subscription?.periodEndTs || today,
+		}),
+	);
+
+	const credits = calculateUsedCredits({ usage, plan: activePlan });
+
+	return (
+		<BillingContext.Provider value={{ credits, ...rest }}>
+			{children}
+		</BillingContext.Provider>
+	);
+}
+
 interface BillingProviderContentProps {
 	projectId: string;
-	projectNameId: string;
 	groupId: string;
 	children?: ReactNode;
 }
 function Content({
 	projectId,
-	projectNameId,
 	groupId,
 	children,
 }: BillingProviderContentProps) {
-	const { data: billing } = useSuspenseQuery(
-		projectAggregateBillingQueryOptions({
-			projectId,
-			projectNameId,
-			groupId,
-		}),
-	);
+	const { data: project } = useSuspenseQuery(projectQueryOptions(projectId));
+	const { data } = useSuspenseQuery(projectBillingQueryOptions(projectId));
 
-	return (
-		<BillingContext.Provider value={billing}>
-			{children}
-		</BillingContext.Provider>
-	);
+	if (data) {
+		return (
+			<BillingSubscriptionProvider
+				subscription={data.subscription}
+				project={project}
+				{...data}
+			>
+				{children}
+			</BillingSubscriptionProvider>
+		);
+	}
+	return children;
 }
 
 interface BillingProviderProps {
@@ -65,7 +104,6 @@ interface BillingProviderProps {
 export const BillingProvider = ({ children }: BillingProviderProps) => {
 	const {
 		gameId: projectId,
-		nameId,
 		developer: { groupId },
 	} = useProject();
 
@@ -76,7 +114,7 @@ export const BillingProvider = ({ children }: BillingProviderProps) => {
 	}
 
 	return (
-		<Content projectId={projectId} projectNameId={nameId} groupId={groupId}>
+		<Content projectId={projectId} groupId={groupId}>
 			{children}
 		</Content>
 	);
