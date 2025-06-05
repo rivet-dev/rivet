@@ -154,7 +154,7 @@ export function Header({ active, subnav }: HeaderProps) {
 								active === "docs" ? "page" : undefined
 							}
 						>
-						Documentation
+							Documentation
 						</Link>
 					</RivetHeader.NavItem>
 					<RivetHeader.NavItem
