@@ -27,7 +27,7 @@ export function SalesForm() {
 				<span className="text-2xl text-white mb-2 block">
 					Thank you for your interest!
 				</span>
-				We will get back to you in within the next few days. In the
+				We will get back to you within the next few days. In the
 				meantime, feel free to explore our{" "}
 				<a href="/docs" className="text-[#FF5C00] hover:underline">
 					documentation
