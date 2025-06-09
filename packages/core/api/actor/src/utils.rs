@@ -40,14 +40,11 @@ pub fn filter_edge_dc(
 ) -> GlobalResult<bool> {
 	if config.server()?.rivet.has_multiple_server_types() {
 		// Validate that the dc has a worker & guard so it can be contacted
-		Ok(dc
-			.pools
-			.iter()
-			.any(|x| x.pool_type == PoolType::Worker && x.desired_count > 0)
-			&& dc
-				.pools
-				.iter()
-				.any(|x| x.pool_type == PoolType::Guard && x.desired_count > 0))
+		Ok(dc.pools.iter().any(|x| {
+			x.pool_type == PoolType::Worker && x.desired_count.max(x.min_count).min(x.max_count) > 0
+		}) && dc.pools.iter().any(|x| {
+			x.pool_type == PoolType::Guard && x.desired_count.max(x.min_count).min(x.max_count) > 0
+		}))
 	} else {
 		// All DC are valid
 		Ok(true)
