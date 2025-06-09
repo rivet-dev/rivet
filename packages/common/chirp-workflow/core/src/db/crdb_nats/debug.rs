@@ -404,7 +404,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					8 AS event_type,
 					1 AS version,
 					NULL as create_ts,
-					NULL AS name,
+					event_name AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
 					NULL AS input,

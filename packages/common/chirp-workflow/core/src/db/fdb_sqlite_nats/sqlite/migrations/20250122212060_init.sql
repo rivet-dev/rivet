@@ -176,7 +176,7 @@ WHERE NOT forgotten;
 CREATE TABLE workflow_removed_events (
   location BLOB PRIMARY KEY, -- JSONB
   event_type INT NOT NULL, -- event::EventType
-  event_name TEXT NOT NULL,
+  event_name TEXT,
   create_ts INT NOT NULL,
   loop_location BLOB, -- JSONB
   forgotten INT NOT NULL DEFAULT false -- BOOLEAN

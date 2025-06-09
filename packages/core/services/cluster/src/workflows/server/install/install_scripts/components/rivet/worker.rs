@@ -115,13 +115,13 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					"http://127.0.0.1:{TUNNEL_PROMETHEUS_PORT}",
 				))?,
 			}),
-
 			foundationdb: Some(FoundationDb {
 				addresses: Addresses::Dynamic {
 					fetch_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"))?,
 				},
 				..Default::default()
 			}),
+			vector_http: Some(VectorHttp::default()),
 			nats: Nats {
 				addresses: Addresses::Dynamic {
 					fetch_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}/provision/datacenters/___DATACENTER_ID___/servers?pools=nats"))?,
