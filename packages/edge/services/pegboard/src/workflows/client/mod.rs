@@ -938,9 +938,19 @@ struct UpdateMetricsInput {
 
 #[activity(UpdateMetrics)]
 async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> GlobalResult<()> {
-	let (memory, cpu) = if input.clear {
-		(0, 0)
-	} else {
+	if input.clear {
+		metrics::CLIENT_MEMORY_ALLOCATED
+			.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
+			.set(0);
+
+		metrics::CLIENT_CPU_ALLOCATED
+			.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
+			.set(0);
+
+		return Ok(());
+	}
+
+	let (total_mem, total_cpu, remaining_mem, remaining_cpu) =
 		ctx.fdb()
 			.await?
 			.run(|tx, _mc| async move {
@@ -983,21 +993,33 @@ async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> Global
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 				Ok((
-					total_mem.saturating_sub(remaining_mem),
-					total_cpu.saturating_sub(remaining_cpu),
+					total_mem,
+					remaining_mem,
+					total_cpu,
+					remaining_cpu,
 				))
 			})
 			.custom_instrument(tracing::info_span!("client_update_metrics_tx"))
-			.await?
-	};
+			.await?;
 
-	metrics::CLIENT_CPU_ALLOCATED
+	metrics::CLIENT_MEMORY_TOTAL
 		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
-		.set(cpu.try_into()?);
+		.set(total_mem.try_into()?);
+
+	metrics::CLIENT_CPU_TOTAL
+		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
+		.set(total_cpu.try_into()?);
+
+	let allocated_mem = total_mem.saturating_sub(remaining_mem);
+	let allocated_cpu = total_cpu.saturating_sub(remaining_cpu);
 
 	metrics::CLIENT_MEMORY_ALLOCATED
 		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
-		.set(memory.try_into()?);
+		.set(allocated_mem.try_into()?);
+
+	metrics::CLIENT_CPU_ALLOCATED
+		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])
+		.set(allocated_cpu.try_into()?);
 
 	Ok(())
 }

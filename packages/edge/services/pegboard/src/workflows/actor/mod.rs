@@ -26,6 +26,9 @@ const ACTOR_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
 const ACTOR_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
 /// How long to wait after stopped and not receiving an exit state before setting actor as lost.
 const ACTOR_EXIT_THRESHOLD_MS: i64 = util::duration::seconds(5);
+/// How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its
+/// backoff to 0.
+const RETRY_RESET_DURATION_MS: i64 = util::duration::minutes(10);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -124,9 +127,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		.send()
 		.await?;
 
-	let Some((client_id, client_workflow_id)) =
-		runtime::spawn_actor(ctx, input, &initial_actor_setup, 0).await?
-	else {
+	let Some(res) = runtime::spawn_actor(ctx, input, &initial_actor_setup, 0).await? else {
 		ctx.msg(Failed {
 			message: "Failed to allocate (no availability).".into(),
 		})
@@ -147,7 +148,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 	let state_res = ctx
 		.loope(
-			runtime::State::new(client_id, client_workflow_id, input.image_id),
+			runtime::State::new(res.client_id, res.client_workflow_id, input.image_id),
 			|ctx, state| {
 				let input = input.clone();
 
@@ -229,7 +230,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 							ctx.activity(runtime::UpdateFdbInput {
 								actor_id: input.actor_id,
-								client_id,
+								client_id: state.client_id,
 								state: sig.state.clone(),
 							})
 							.await?;
