@@ -90,11 +90,11 @@ async fn handle(
 			)
 			SELECT * FROM UNNEST($1, $2, $3, $4, $5)
 			",
-			version_ids,
-			globs,
-			priorities,
-			header_names,
-			header_values,
+			&version_ids,
+			&globs,
+			&priorities,
+			&header_names,
+			&header_values,
 		)
 		.await?;
 	}

@@ -129,7 +129,7 @@ async fn handle(
 		env_id,
 		upload_id,
 		&ctx.display_name,
-		image_tag,
+		&image_tag,
 		ctx.ts(),
 		kind as i32,
 		compression as i32,

@@ -145,7 +145,7 @@ async fn handle(
 				[ctx]
 				"INSERT INTO db_token.sessions (session_id, entitlements, entitlement_tags, exp) VALUES ($1, $2, $3, $4)",
 				new_session_id,
-				ent_bufs,
+				&ent_bufs,
 				&tags,
 				ctx.ts() + token_config.ttl,
 			).await?;

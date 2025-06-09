@@ -1,3 +1,14 @@
+/// Base retry for query retry backoff.
+pub const QUERY_RETRY_MS: usize = 100;
+/// Maximum times a query is retried.
+pub const MAX_QUERY_RETRIES: usize = 6;
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+	#[error("max sql retries, last error: {0}")]
+	MaxSqlRetries(sqlx::Error),
+}
+
 lazy_static::lazy_static! {
 	/// Rate limit used to limit creating a stampede of connections to the database.
 	pub static ref CONN_ACQUIRE_RATE_LIMIT: governor::RateLimiter<
@@ -132,22 +143,61 @@ macro_rules! __sql_query {
 		async {
 			use sqlx::Acquire;
 
-			let query = sqlx::query($crate::__opt_indoc!($sql))
-			$(
-				.bind($bind)
-			)*;
-
 			// Acquire connection
 			$crate::__sql_query_metrics_acquire!(_acquire);
 			let driver = $driver;
 			let mut conn = $crate::__sql_acquire!($ctx, driver);
 
-			// Execute query
 			$crate::__sql_query_metrics_start!($ctx, execute, _acquire, _start);
-			let res = query.execute(&mut *conn).await.map_err(Into::<GlobalError>::into);
+
+			let mut backoff = $crate::__rivet_util::Backoff::new(
+				4,
+				None,
+				$crate::utils::sql_query_macros::QUERY_RETRY_MS,
+				50
+			);
+			let mut i = 0;
+
+			// Retry loop
+			let res = loop {
+				let query = sqlx::query($crate::__opt_indoc!($sql))
+				$(
+					.bind($bind)
+				)*;
+
+				match query.execute(&mut *conn).await {
+					Err(err) => {
+						i += 1;
+						if i > $crate::utils::sql_query_macros::MAX_QUERY_RETRIES {
+							break Err(
+								sqlx::Error::Io(
+									std::io::Error::new(
+										std::io::ErrorKind::Other,
+										$crate::utils::sql_query_macros::Error::MaxSqlRetries(err),
+									)
+								)
+							);
+						}
+
+						use sqlx::Error::*;
+						match &err {
+							// Retry other errors with a backoff
+							Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
+							| WorkerCrashed => {
+								tracing::warn!(?err, "query retry ({i}/{})", $crate::utils::sql_query_macros::MAX_QUERY_RETRIES);
+								backoff.tick().await;
+							}
+							// Throw error
+							_ => break Err(err),
+						}
+					}
+					x => break x,
+				}
+			};
+
 			$crate::__sql_query_metrics_finish!($ctx, execute, _start);
 
-			res
+			res.map_err(Into::<GlobalError>::into)
 		}
 		.instrument(tracing::info_span!("sql_query"))
 	};

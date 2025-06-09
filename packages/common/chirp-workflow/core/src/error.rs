@@ -9,10 +9,6 @@ use crate::ctx::common::RETRY_TIMEOUT_MS;
 
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
 
-/// Throwing this will eject from the workflow scope back in to the engine.
-///
-/// This error should not be touched by the user and is only intended to be handled by the workflow
-/// engine.
 #[derive(thiserror::Error, Debug)]
 pub enum WorkflowError {
 	#[error("workflow failure: {0:?}")]
@@ -150,9 +146,6 @@ pub enum WorkflowError {
 
 	#[error("fdb error: {0}")]
 	Fdb(#[from] fdb::FdbBindingError),
-
-	#[error("max sql retries, last error: {0}")]
-	MaxSqlRetries(sqlx::Error),
 
 	#[error("pools error: {0}")]
 	Pools(#[from] rivet_pools::Error),

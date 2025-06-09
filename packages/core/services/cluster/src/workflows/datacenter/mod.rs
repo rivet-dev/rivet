@@ -369,8 +369,8 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 		input.datacenter_id,
 		serde_json::to_string(&pools)?,
 		input.prebakes_enabled,
-		gph_dns_parent,
-		gph_static
+		&gph_dns_parent,
+		&gph_static
 	)
 	.await?;
 

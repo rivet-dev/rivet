@@ -40,7 +40,7 @@ async fn handle(
 		)
 		VALUES ($1, $2, $3)",
 		version_id,
-		captcha_buf,
+		&captcha_buf,
 		util_mm::version_migrations::all(),
 	)
 	.await?;

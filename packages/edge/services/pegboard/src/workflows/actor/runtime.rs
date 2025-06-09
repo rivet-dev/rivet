@@ -82,7 +82,7 @@ async fn update_client(ctx: &ActivityCtx, input: &UpdateClientInput) -> GlobalRe
 		",
 		input.client_id,
 		input.client_workflow_id,
-		client_wan_hostname,
+		&client_wan_hostname,
 	)
 	.await?;
 

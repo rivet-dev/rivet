@@ -113,9 +113,9 @@ async fn handle(
 		user_id,
 		// Hardcoded to AWS since we don't use this feature anymore
 		backend::upload::Provider::Aws as i64,
-		paths,
-		mimes,
-		content_lengths,
+		&paths,
+		&mimes,
+		&content_lengths,
 	)
 	.await?;
 
@@ -165,8 +165,8 @@ async fn handle(
 					upload_files.path = v.path
 				",
 				upload_id,
-				multipart_paths,
-				multipart_upload_ids,
+				&multipart_paths,
+				&multipart_upload_ids,
 			)
 			.await
 			.map_err(Into::<GlobalError>::into)

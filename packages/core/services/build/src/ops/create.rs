@@ -168,7 +168,7 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 		env_id,
 		upload_id,
 		&input.display_name,
-		image_tag,
+		&image_tag,
 		ctx.ts(),
 		input.kind as i32,
 		input.compression as i32,
