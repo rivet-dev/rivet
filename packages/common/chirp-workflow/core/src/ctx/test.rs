@@ -296,6 +296,11 @@ impl TestCtx {
 		self.conn.clickhouse().await
 	}
 
+	#[tracing::instrument(skip_all)]
+	pub async fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		self.conn.clickhouse_inserter().await
+	}
+
 	#[tracing::instrument(skip_all, fields(%workflow_id))]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
 		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true)

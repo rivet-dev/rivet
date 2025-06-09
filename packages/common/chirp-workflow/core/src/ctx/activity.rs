@@ -239,6 +239,11 @@ impl ActivityCtx {
 	}
 
 	#[tracing::instrument(skip_all)]
+	pub async fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		self.conn.clickhouse_inserter().await
+	}
+
+	#[tracing::instrument(skip_all)]
 	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
 		self.conn.fdb().await
 	}

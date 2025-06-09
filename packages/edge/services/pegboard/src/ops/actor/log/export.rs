@@ -37,9 +37,20 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 				actor_id = ? AND
 				stream_type = ?
 			ORDER BY ts ASC
+
+			UNION ALL
+
+			SELECT message
+			FROM db_pegboard_actor_log.actor_logs2
+			WHERE
+				actor_id = ? AND
+				stream_type = ?
+			ORDER BY ts ASC
 			"
 		))
 		.bind(input.actor_id)
+		.bind(input.stream_type as i8)
+		.bind(input.actor_id.to_string())
 		.bind(input.stream_type as i8)
 		.fetch::<LogEntry>()?;
 

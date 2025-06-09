@@ -19,6 +19,9 @@ pub struct DeployOpts<'a> {
 	pub filter_tags: Option<HashMap<String, String>>,
 	pub build_tags: Option<HashMap<String, String>>,
 	pub version: Option<String>,
+	pub auto_create_routes: Option<bool>,
+	pub auto_sync_routes: Option<bool>,
+	pub non_interactive: bool,
 }
 
 pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
@@ -65,7 +68,15 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 	.await?;
 
 	// Setup function routes
-	setup_function_routes(opts.ctx, environment, &config, &opts.filter_tags).await?;
+	setup_function_routes(
+		opts.ctx, 
+		environment, 
+		&config, 
+		&opts.filter_tags,
+		opts.auto_create_routes,
+		opts.auto_sync_routes,
+		opts.non_interactive
+	).await?;
 
 	// Print summary
 	print_summary(opts.ctx, environment);
@@ -78,6 +89,9 @@ async fn setup_function_routes(
 	environment: &toolchain::project::environment::TEMPEnvironment,
 	config: &config::Config,
 	filter_tags: &Option<HashMap<String, String>>,
+	auto_create_routes: Option<bool>,
+	auto_sync_routes: Option<bool>,
+	non_interactive: bool,
 ) -> Result<()> {
 	// Determine default hostname based on project & env
 	let default_hostname = format!(
@@ -190,19 +204,38 @@ async fn setup_function_routes(
 			];
 
 			println!();
-			let choice = block_in_place(|| {
-				Select::new(
-					&format!(
-						"Route configuration for '{fn_name}' has changed{}",
-						changes_text
-					),
-					options.to_vec(),
-				)
-				.with_starting_cursor(0)
-				.prompt()
-			})?;
+			
+			let choice_index = if non_interactive {
+				// In non-interactive mode, use auto_sync_routes if provided, otherwise sync by default
+				if let Some(auto_sync) = auto_sync_routes {
+					if auto_sync {
+						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
+						0 // Sync route with config
+					} else {
+						println!("Skipping route sync for '{fn_name}' (non-interactive mode)");
+						1 // Keep existing route
+					}
+				} else {
+					println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
+					0 // Default to sync in non-interactive mode
+				}
+			} else {
+				// Interactive mode - prompt the user
+				let choice = block_in_place(|| {
+					Select::new(
+						&format!(
+							"Route configuration for '{fn_name}' has changed{}",
+							changes_text
+						),
+						options.to_vec(),
+					)
+					.with_starting_cursor(0)
+					.prompt()
+				})?;
+				choice.index
+			};
 
-			match choice.index {
+			match choice_index {
 				0 => {
 					// Update first matching route to match config
 					let mut update_route_body = models::RoutesUpdateRouteBody {
@@ -268,17 +301,36 @@ async fn setup_function_routes(
 			];
 
 			println!();
-			let choice = block_in_place(|| {
-				Select::new(
-					&format!("Set up routing for function '{}':", fn_name),
-					options.to_vec(),
-				)
-				.with_help_message("Routes can be manually created in the Rivet dashboard")
-				.with_starting_cursor(0)
-				.prompt()
-			})?;
 
-			match choice.index {
+			let choice_index = if non_interactive {
+				// In non-interactive mode, use auto_create_routes if provided, otherwise create by default
+				if let Some(auto_create) = auto_create_routes {
+					if auto_create {
+						println!("Auto-creating route for function '{fn_name}' (non-interactive mode)");
+						0 // Create default route
+					} else {
+						println!("Skipping route creation for '{fn_name}' (non-interactive mode)");
+						1 // Skip route creation
+					}
+				} else {
+					println!("Auto-creating route for function '{fn_name}' (non-interactive mode)");
+					0 // Default to create in non-interactive mode
+				}
+			} else {
+				// Interactive mode - prompt the user
+				let choice = block_in_place(|| {
+					Select::new(
+						&format!("Set up routing for function '{}':", fn_name),
+						options.to_vec(),
+					)
+					.with_help_message("Routes can be manually created in the Rivet dashboard")
+					.with_starting_cursor(0)
+					.prompt()
+				})?;
+				choice.index
+			};
+
+			match choice_index {
 				0 => {
 					// Create route with default settings
 					create_function_route(

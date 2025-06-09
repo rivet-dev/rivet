@@ -1,3 +1,4 @@
+use clickhouse_inserter::ClickHouseInserterHandle;
 use fdb_util::prelude::*;
 use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
@@ -16,6 +17,7 @@ pub(crate) struct PoolsInner {
 	pub(crate) crdb: Option<CrdbPool>,
 	pub(crate) redis: HashMap<String, RedisPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
+	pub(crate) clickhouse_inserter: Option<ClickHouseInserterHandle>,
 	pub(crate) fdb: Option<FdbPool>,
 	pub(crate) sqlite: SqlitePoolManagerHandle,
 	clickhouse_enabled: bool,
@@ -40,12 +42,24 @@ impl Pools {
 		let clickhouse = crate::db::clickhouse::setup(config.clone())?;
 		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
+		// Create the ClickHouse inserter if vector is enabled
+		let clickhouse_inserter = if let Some(vector_http) =
+			config.server.as_ref().and_then(|x| x.vector_http.as_ref())
+		{
+			let inserter = clickhouse_inserter::create_inserter(&vector_http.host, vector_http.port)
+				.map_err(Error::BuildClickHouseInserter)?;
+			Some(inserter)
+		} else {
+			None
+		};
+
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
 			nats: Some(nats),
 			crdb: Some(crdb),
 			redis,
 			clickhouse,
+			clickhouse_inserter,
 			fdb,
 			sqlite,
 			clickhouse_enabled: config
@@ -77,12 +91,14 @@ impl Pools {
 		)?;
 		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
+		// Test setup doesn't use ClickHouse inserter
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
 			nats: Some(nats),
 			crdb: None,
 			redis,
 			clickhouse: None,
+			clickhouse_inserter: None,
 			fdb,
 			sqlite,
 			clickhouse_enabled: config
@@ -163,6 +179,20 @@ impl Pools {
 
 		let ch = unwrap!(self.0.clickhouse.clone(), "missing clickhouse pool");
 		Ok(ch)
+	}
+
+	pub fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		ensure_with!(
+			self.clickhouse_enabled(),
+			FEATURE_DISABLED,
+			feature = "Clickhouse"
+		);
+
+		let inserter = unwrap!(
+			self.0.clickhouse_inserter.clone(),
+			"missing clickhouse inserter"
+		);
+		Ok(inserter)
 	}
 
 	pub fn fdb(&self) -> Result<FdbPool, Error> {

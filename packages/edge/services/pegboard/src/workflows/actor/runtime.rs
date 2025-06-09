@@ -684,7 +684,7 @@ pub async fn spawn_actor(
 				},
 			},
 			root_user_enabled: input.root_user_enabled,
-			env: input.environment.as_hashable(),
+			env: input.environment.clone(),
 			ports: ports_res
 				.ports
 				.iter()
@@ -724,7 +724,7 @@ pub async fn spawn_actor(
 			metadata: util::serde::Raw::new(&protocol::ActorMetadata {
 				actor: protocol::ActorMetadataActor {
 					actor_id: input.actor_id,
-					tags: input.tags.as_hashable(),
+					tags: input.tags.clone(),
 					create_ts: ctx.ts(),
 				},
 				network: Some(protocol::ActorMetadataNetwork {

@@ -85,10 +85,13 @@ async fn main_inner() -> GlobalResult<()> {
 		tracing::info!("No TLS configuration found, HTTPS will not be enabled");
 	}
 
+	// Get the ClickHouse inserter from pools if available
+	let clickhouse_inserter = ctx.op_ctx().pools().clickhouse_inserter().ok();
+
 	// Start the server
 	tracing::info!("starting proxy server");
 	tokio::select! {
-		res = rivet_guard_core::run_server(config, routing_fn, middleware_fn, cert_resolver) => {
+		res = rivet_guard_core::run_server(config, routing_fn, middleware_fn, cert_resolver, clickhouse_inserter) => {
 			if let Err(err) = res {
 				tracing::error!(?err, "Server error");
 			}

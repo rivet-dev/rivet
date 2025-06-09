@@ -10,6 +10,7 @@ dirs = { workspace = true }
 anyhow = "1.0"
 async-nats = "0.33"
 clickhouse = { version = "0.11.2", features = ["uuid"] }
+clickhouse-inserter.workspace = true
 fdb-util.workspace = true
 foundationdb.workspace = true
 funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981

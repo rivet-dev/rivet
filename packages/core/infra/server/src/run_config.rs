@@ -271,6 +271,18 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			),
 			db_name: "db_service_log",
 		},
+		SqlService {
+			kind: SqlServiceKind::ClickHouse,
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/infra/guard/db/analytics"),
+			db_name: "db_guard_analytics",
+		},
+		SqlService {
+			kind: SqlServiceKind::ClickHouse,
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/analytics"
+			),
+			db_name: "db_pegboard_analytics",
+		},
 	];
 
 	let s3_buckets = vec![

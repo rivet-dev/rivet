@@ -268,6 +268,14 @@
           "$ref": "#/definitions/Turnstile"
         }
       ]
+    },
+    "vector_http": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/VectorHttp"
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -605,15 +613,7 @@
     },
     "ClusterPoolAts": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -643,15 +643,7 @@
     },
     "ClusterPoolGg": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -666,15 +658,7 @@
     },
     "ClusterPoolGuard": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -689,29 +673,11 @@
     },
     "ClusterPoolJob": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
-      "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        }
-      },
       "additionalProperties": false
     },
     "ClusterPoolNats": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -727,15 +693,7 @@
     "ClusterPoolPegboard": {
       "description": "These port range values will be pass to the Rivet Clients to choose ports & are used to provision firewalls.",
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -775,15 +733,7 @@
     },
     "ClusterPoolWorker": {
       "type": "object",
-      "required": [
-        "autoscale_margin"
-      ],
       "properties": {
-        "autoscale_margin": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -871,7 +821,7 @@
           "format": "uri"
         },
         "pools": {
-          "description": "Configuration for server pools that use a margin for scaling.",
+          "description": "Configuration for server pools.",
           "allOf": [
             {
               "$ref": "#/definitions/ClusterPools"
@@ -1985,6 +1935,24 @@
         "public_origin_regex": {
           "description": "Regular expression to match valid UI origins.",
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "VectorHttp": {
+      "type": "object",
+      "required": [
+        "host",
+        "port"
+      ],
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

@@ -11,6 +11,8 @@ pub use crate::{
 	db::redis::RedisPool, db::sqlite::SqlitePool, error::Error, pools::Pools,
 };
 
+pub use clickhouse_inserter::ClickHouseInserterHandle;
+
 // Re-export for macros
 #[doc(hidden)]
 pub use rivet_util as __rivet_util;

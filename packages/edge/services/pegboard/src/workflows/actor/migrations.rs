@@ -3,6 +3,7 @@ use sqlx::Acquire;
 
 pub async fn run(ctx: &mut WorkflowCtx) -> GlobalResult<()> {
 	ctx.activity(MigrateInitInput {}).await?;
+	ctx.v(2).activity(MigrateExtraMetaInput {}).await?;
 
 	Ok(())
 }
@@ -12,6 +13,7 @@ struct MigrateInitInput {}
 
 #[activity(MigrateInit)]
 async fn migrate_init(ctx: &ActivityCtx, _input: &MigrateInitInput) -> GlobalResult<()> {
+	// Transactions make migrations atomic
 	let pool = ctx.sqlite().await?;
 	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
@@ -67,6 +69,31 @@ async fn migrate_init(ctx: &ActivityCtx, _input: &MigrateInitInput) -> GlobalRes
 			ip TEXT NOT NULL,
 			source INT NOT NULL
 		) STRICT;
+		",
+	)
+	.await?;
+
+	tx.commit().await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct MigrateExtraMetaInput {}
+
+#[activity(MigrateExtraMeta)]
+async fn migrate_extra_meta(ctx: &ActivityCtx, _input: &MigrateExtraMetaInput) -> GlobalResult<()> {
+	let pool = ctx.sqlite().await?;
+	let mut conn = pool.conn().await?;
+	let mut tx = conn.begin().await?;
+
+	sql_execute!(
+		[ctx, @tx &mut tx]
+		"
+        ALTER TABLE state ADD project_id BLOB DEFAULT X'00000000000000000000000000000000';  -- UUID
+        ALTER TABLE state ADD root_user_enabled INT DEFAULT false;
+        ALTER TABLE state ADD build_kind INT DEFAULT -1;
+        ALTER TABLE state ADD build_compression INT DEFAULT -1;
 		",
 	)
 	.await?;

@@ -11,6 +11,11 @@ sources:
       - http://rivet-client:6090
     scrape_interval_secs: 15
   
+  dynamic_events_http:
+    type: http_server
+    address: 0.0.0.0:5022
+    encoding: ndjson
+  
   pegboard_manager:
     type: file
     include:
@@ -92,6 +97,7 @@ sinks:
     type: vector
     inputs:
       - metrics_add_meta
+      - dynamic_events_http
       - pegboard_manager_add_meta
       - pegboard_v8_isolate_runner_add_meta
       - pegboard_container_runner_add_meta

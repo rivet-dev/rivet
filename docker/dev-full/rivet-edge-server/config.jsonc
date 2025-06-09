@@ -68,6 +68,10 @@
 				}
 			}
 		},
+		"vector_http": {
+			"host": "vector-client",
+			"port": 5022
+		},
 		"prometheus": {
 			"url": "http://prometheus:9090"
 		},

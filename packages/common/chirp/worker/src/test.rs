@@ -84,4 +84,8 @@ impl TestCtx {
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.op_ctx.clickhouse().await
 	}
+
+	pub async fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		self.op_ctx.clickhouse_inserter().await
+	}
 }

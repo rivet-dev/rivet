@@ -34,6 +34,7 @@ pub async fn run_server(
 	routing_fn: RoutingFn,
 	middleware_fn: MiddlewareFn,
 	cert_resolver_fn: Option<CertResolverFn>,
+	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 ) -> GlobalResult<()> {
 	// Configure servers for different ports
 	let guard_config = config.guard()?;
@@ -45,6 +46,7 @@ pub async fn run_server(
 		routing_fn.clone(),
 		middleware_fn.clone(),
 		crate::proxy_service::PortType::Http,
+		clickhouse_inserter.clone(),
 	));
 	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
@@ -57,6 +59,7 @@ pub async fn run_server(
 				routing_fn.clone(),
 				middleware_fn.clone(),
 				crate::proxy_service::PortType::Https,
+				clickhouse_inserter.clone(),
 			));
 			let listener = tokio::net::TcpListener::bind(https_addr).await?;
 

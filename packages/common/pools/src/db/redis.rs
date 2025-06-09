@@ -1,3 +1,4 @@
+use redis::aio::ConnectionManager;
 use rivet_config::Config;
 use std::collections::HashMap;
 use tokio::task::JoinSet;
@@ -5,7 +6,7 @@ use tokio::time::Duration;
 
 use crate::Error;
 
-pub type RedisPool = redis::aio::ConnectionManager;
+pub type RedisPool = ConnectionManager;
 
 /// Connection timeout for the first connection.
 ///
@@ -15,7 +16,7 @@ const INITIAL_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 #[tracing::instrument(skip(config))]
 pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> {
 	// Create Redis connections
-	let mut join_set = JoinSet::new();
+	let mut join_set: JoinSet<Result<(&'static str, ConnectionManager), Error>> = JoinSet::new();
 	let redis_types = &config.server().map_err(Error::Global)?.redis;
 	for (key, redis_config) in [
 		("ephemeral", redis_types.ephemeral.clone()),

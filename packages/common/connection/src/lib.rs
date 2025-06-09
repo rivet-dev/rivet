@@ -114,6 +114,10 @@ impl Connection {
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.pools.clickhouse()
 	}
+
+	pub async fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		self.pools.clickhouse_inserter()
+	}
 }
 
 impl std::ops::Deref for Connection {

@@ -1,0 +1,19 @@
+[package]
+name = "clickhouse-inserter"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+global-error.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.11", features = ["json"] }
+tracing.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
+thiserror = "1.0"
+tokio-util = "0.7"
+futures = "0.3"
+async-channel = "2.1.1"
+anyhow.workspace = true

@@ -1472,6 +1472,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-channel"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89b47800b0be77592da0afd425cc03468052844aff33b84e33cc696f64e77b6a"
+dependencies = [
+ "concurrent-queue",
+ "event-listener-strategy",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-compression"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2385,6 +2397,7 @@ dependencies = [
  "acme-lib",
  "anyhow",
  "chirp-workflow",
+ "cjson",
  "cloudflare",
  "cluster",
  "faker-build",
@@ -3311,6 +3324,23 @@ dependencies = [
  "quote",
  "serde_derive_internals 0.26.0",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "clickhouse-inserter"
+version = "25.4.2"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "futures",
+ "global-error",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util 0.7.12",
+ "tracing",
 ]
 
 [[package]]
@@ -12404,6 +12434,7 @@ name = "rivet-guard-core"
 version = "25.4.2"
 dependencies = [
  "bytes",
+ "clickhouse-inserter",
  "cluster",
  "futures",
  "futures-util",
@@ -12686,6 +12717,7 @@ dependencies = [
  "anyhow",
  "async-nats",
  "clickhouse",
+ "clickhouse-inserter",
  "dirs",
  "divan",
  "fdb-util",

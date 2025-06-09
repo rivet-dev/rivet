@@ -9,6 +9,7 @@ pub mod logout;
 pub mod metadata;
 pub mod project;
 pub mod region;
+pub mod route;
 pub mod shell;
 
 use anyhow::*;
@@ -58,6 +59,12 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		subcommand: region::SubCommand,
 	},
+	/// Commands for managing routes
+	#[clap(alias = "r", alias = "endpoint")]
+	Route {
+		#[clap(subcommand)]
+		subcommand: route::SubCommand,
+	},
 	/// Commands for managing Rivet configuration
 	Config {
 		#[clap(subcommand)]
@@ -95,6 +102,7 @@ impl SubCommand {
 			SubCommand::Actor { subcommand } => subcommand.execute().await,
 			SubCommand::Build { subcommand } => subcommand.execute().await,
 			SubCommand::Region { subcommand } => subcommand.execute().await,
+			SubCommand::Route { subcommand } => subcommand.execute().await,
 			SubCommand::Config { subcommand } => subcommand.execute().await,
 			SubCommand::Metadata { subcommand } => subcommand.execute().await,
 			SubCommand::Deno(opts) => opts.execute().await,

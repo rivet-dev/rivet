@@ -33,6 +33,7 @@ regex = "1.10.3"
 futures-util = "0.3.30"
 hyper-tungstenite = "0.17.0"
 tokio-tungstenite = "0.26.1"
+clickhouse-inserter.workspace = true
 
 [dev-dependencies]
 futures-util = "0.3.30"

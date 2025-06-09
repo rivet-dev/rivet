@@ -272,6 +272,10 @@ where
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
 	}
+
+	pub async fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
+		self.conn.clickhouse_inserter().await
+	}
 }
 
 impl<B> std::ops::Deref for OperationContext<B>

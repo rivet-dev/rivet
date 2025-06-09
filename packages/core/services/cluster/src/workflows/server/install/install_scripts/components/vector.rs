@@ -7,6 +7,7 @@ use crate::types::PoolType;
 
 pub const TUNNEL_VECTOR_PORT: u16 = 5020;
 pub const TUNNEL_VECTOR_TCP_JSON_PORT: u16 = 5021;
+pub const TUNNEL_VECTOR_HTTP_PORT: u16 = 5022;
 
 pub fn install() -> String {
 	include_str!("../files/vector_install.sh").to_string()
@@ -32,6 +33,13 @@ pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> Globa
 		"api": {
 			"enabled": true
 		},
+		"sources": {
+			"http_events": {
+				"type": "http_server",
+				"address": format!("127.0.0.1:{}", TUNNEL_VECTOR_HTTP_PORT),
+				"encoding": "ndjson"
+			}
+		},
 		"transforms": {
 			"filter_metrics": {
 				"type": "filter",
@@ -56,7 +64,7 @@ pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> Globa
 		"sinks": {
 			"vector_sink": {
 				"type": "vector",
-				"inputs": ["metrics_add_meta"],
+				"inputs": ["metrics_add_meta", "http_events"],
 				"address": format!("127.0.0.1:{}", TUNNEL_VECTOR_PORT),
 				"healthcheck": {
 					"enabled": false
@@ -227,3 +235,4 @@ pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> Globa
 
 	Ok(include_str!("../files/vector_configure.sh").replace("__VECTOR_CONFIG__", &config_str))
 }
+

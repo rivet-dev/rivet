@@ -92,11 +92,26 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 			ts,
 			message,
 			stream_type,
-			toString(actor_id) as actor_id_str
-		FROM
-			db_pegboard_actor_log.actor_logs
+			actor_id_str
+		FROM (
+			SELECT
+				ts,
+				message,
+				stream_type,
+				toString(actor_id) as actor_id_str
+			FROM
+				db_pegboard_actor_log.actor_logs
+			UNION ALL
+			SELECT
+				ts,
+				message,
+				stream_type,
+				actor_id as actor_id_str
+			FROM
+				db_pegboard_actor_log.actor_logs2
+		)
 		WHERE
-			actor_id IN ?
+			actor_id_str IN ?
 			AND stream_type IN ?
 			-- Apply timestamp filtering based on query type
 			AND (
@@ -131,10 +146,13 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 		"
 	);
 
+	// Convert actor IDs to strings for the query
+	let actor_id_strings: Vec<String> = input.actor_ids.iter().map(|id| id.to_string()).collect();
+
 	// Build query with all parameters and safety restrictions
 	let query_builder = clickhouse
 		.query(&query)
-		.bind(&input.actor_ids)
+		.bind(&actor_id_strings)
 		.bind(stream_type_values)
 		// Query type parameters
 		.bind(is_all)

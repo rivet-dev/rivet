@@ -42,6 +42,8 @@ pub struct Server {
 	pub prometheus: Option<Prometheus>,
 	#[serde(default)]
 	pub foundationdb: Option<FoundationDb>,
+	#[serde(default)]
+	pub vector_http: Option<VectorHttp>,
 
 	// Services
 	#[serde(default)]
@@ -485,6 +487,22 @@ impl Default for FoundationDb {
 impl FoundationDb {
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(self::default_ports::FDB)
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct VectorHttp {
+	pub host: String,
+	pub port: u16,
+}
+
+impl Default for VectorHttp {
+	fn default() -> Self {
+		Self {
+			host: "127.0.0.1".into(),
+			port: 5022,
+		}
 	}
 }
 

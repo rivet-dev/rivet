@@ -14,7 +14,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use global_error::*;
 use http_body_util::Full;
-use hyper::body::Incoming as BodyIncoming;
+use hyper::body::{Body, Incoming as BodyIncoming};
 use hyper::header::HeaderName;
 use hyper::{Request, Response, StatusCode};
 use hyper_tungstenite;
@@ -29,6 +29,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::metrics;
+use crate::request_context::RequestContext;
 
 const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
@@ -266,6 +267,7 @@ pub struct ProxyState {
 	rate_limiters: Cache<(Uuid, std::net::IpAddr), Arc<Mutex<RateLimiter>>>,
 	in_flight_counters: Cache<(Uuid, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
 	port_type: PortType,
+	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 }
 
 impl ProxyState {
@@ -274,6 +276,7 @@ impl ProxyState {
 		routing_fn: RoutingFn,
 		middleware_fn: MiddlewareFn,
 		port_type: PortType,
+		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	) -> Self {
 		Self {
 			_config: config,
@@ -289,6 +292,7 @@ impl ProxyState {
 				.time_to_live(PROXY_STATE_CACHE_TTL)
 				.build(),
 			port_type,
+			clickhouse_inserter,
 		}
 	}
 
@@ -601,6 +605,7 @@ impl ProxyService {
 	async fn handle_request(
 		&self,
 		req: Request<BodyIncoming>,
+		request_context: &mut RequestContext,
 	) -> GlobalResult<Response<Full<Bytes>>> {
 		let host = req
 			.headers()
@@ -615,6 +620,8 @@ impl ProxyService {
 			.unwrap_or_else(|| req.uri().path().to_string());
 
 		let start_time = Instant::now();
+
+		// Set request body size in analytics (will be updated with actual size later)
 
 		let target_res = self
 			.state
@@ -640,6 +647,21 @@ impl ProxyService {
 		};
 
 		let actor_id = target.actor_id;
+
+		// Update request context with target info
+		if let Some(actor_id) = actor_id {
+			request_context.service_actor_id = Some(actor_id);
+		}
+		if let Some(server_id) = target.server_id {
+			request_context.service_server_id = Some(server_id);
+		}
+
+		// Set service IP from target
+		if let Ok(target_ip) =
+			format!("{}:{}", target.host, target.port).parse::<std::net::SocketAddr>()
+		{
+			request_context.service_ip = Some(target_ip.ip());
+		}
 
 		// Extract IP address from remote_addr
 		let client_ip = self.remote_addr.ip();
@@ -674,10 +696,11 @@ impl ProxyService {
 			// Both paths will handle their own metrics and error handling
 			let res = if hyper_tungstenite::is_upgrade_request(&req) {
 				// WebSocket upgrade
-				self.handle_websocket_upgrade(req, target).await
+				self.handle_websocket_upgrade(req, target, request_context)
+					.await
 			} else {
 				// Regular HTTP request
-				self.handle_http_request(req, target).await
+				self.handle_http_request(req, target, request_context).await
 			};
 
 			let status = match &res {
@@ -690,7 +713,7 @@ impl ProxyService {
 			metrics::PROXY_REQUEST_DURATION
 				.with_label_values(&[&status])
 				.observe(duration_secs);
-	
+
 			metrics::PROXY_REQUEST_PENDING.dec();
 
 			res
@@ -702,6 +725,55 @@ impl ProxyService {
 				.inc();
 		}
 
+		// Update request context with response details
+		match &res {
+			Ok(resp) => {
+				request_context.guard_response_status = Some(resp.status().as_u16());
+				request_context.service_response_status = Some(resp.status().as_u16());
+
+				if let Some(content_type) = resp
+					.headers()
+					.get(hyper::header::CONTENT_TYPE)
+					.and_then(|h| h.to_str().ok())
+				{
+					request_context.guard_response_content_type = Some(content_type.to_string());
+				}
+
+				if let Some(expires) = resp
+					.headers()
+					.get(hyper::header::EXPIRES)
+					.and_then(|h| h.to_str().ok())
+				{
+					request_context.service_response_http_expires = Some(expires.to_string());
+				}
+
+				if let Some(last_modified) = resp
+					.headers()
+					.get(hyper::header::LAST_MODIFIED)
+					.and_then(|h| h.to_str().ok())
+				{
+					request_context.service_response_http_last_modified =
+						Some(last_modified.to_string());
+				}
+			}
+			Err(_) => {
+				request_context.guard_response_status = Some(500);
+				request_context.service_response_status = Some(500);
+			}
+		}
+
+		// Set timing information
+		request_context.service_response_duration_ms =
+			Some(start_time.elapsed().as_millis() as u32);
+
+		// Insert analytics event asynchronously
+		let mut context_clone = request_context.clone();
+		tokio::spawn(async move {
+			if let Err(error) = context_clone.insert_event().await {
+				tracing::warn!(?error, "failed to insert guard analytics event");
+			}
+		});
+
 		res
 	}
 
@@ -710,6 +782,7 @@ impl ProxyService {
 		&self,
 		req: Request<BodyIncoming>,
 		mut target: RouteTarget,
+		request_context: &mut RequestContext,
 	) -> GlobalResult<Response<Full<Bytes>>> {
 		// Get middleware config for this actor if it exists
 		let middleware_config = match &target.actor_id {
@@ -757,6 +830,9 @@ impl ProxyService {
 				Bytes::new()
 			}
 		};
+
+		// Set actual request body size in analytics
+		request_context.client_request_body_bytes = Some(req_body.len() as u64);
 
 		// Set up retry with backoff from middleware config
 		let max_attempts = middleware_config.retry.max_attempts;
@@ -814,8 +890,11 @@ impl ProxyService {
 				};
 
 				// Send the request with timeout
+				let request_send_start = Instant::now();
 				match timeout(timeout_duration, self.client.request(proxied_req)).await {
 					Ok(Ok(resp)) => {
+						let response_receive_time = request_send_start.elapsed();
+
 						// Convert the hyper::body::Incoming to http_body_util::Full<Bytes>
 						let (parts, body) = resp.into_parts();
 
@@ -824,6 +903,9 @@ impl ProxyService {
 							Ok(collected) => collected.to_bytes(),
 							Err(_) => Bytes::new(),
 						};
+
+						// Set actual response body size in analytics
+						request_context.guard_response_body_bytes = Some(body_bytes.len() as u64);
 
 						let full_body = Full::new(body_bytes);
 						return Ok(Response::from_parts(parts, full_body));
@@ -951,6 +1033,7 @@ impl ProxyService {
 		&self,
 		req: Request<BodyIncoming>,
 		mut target: RouteTarget,
+		_request_context: &mut RequestContext,
 	) -> GlobalResult<Response<Full<Bytes>>> {
 		// Get actor and server IDs for metrics and middleware
 		let actor_id = target.actor_id;
@@ -1577,7 +1660,10 @@ impl ProxyService {
 	// Process an individual request
 	#[tracing::instrument(skip_all)]
 	pub async fn process(&self, req: Request<BodyIncoming>) -> GlobalResult<Response<Full<Bytes>>> {
-		// Extract request information for logging before consuming the request
+		// Create request context for analytics tracking
+		let mut request_context = RequestContext::new(self.state.clickhouse_inserter.clone());
+
+		// Extract request information for logging and analytics before consuming the request
 		let host = req
 			.headers()
 			.get(hyper::header::HOST)
@@ -1591,7 +1677,6 @@ impl ProxyService {
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
 		let method = req.method().clone();
-		let request_id = Uuid::new_v4();
 
 		let user_agent = req
 			.headers()
@@ -1599,9 +1684,43 @@ impl ProxyService {
 			.and_then(|h| h.to_str().ok())
 			.map(|s| s.to_string());
 
+		// Populate request context with available data
+		request_context.client_ip = Some(self.remote_addr.ip());
+		request_context.client_request_host = Some(host.clone());
+		request_context.client_request_method = Some(method.to_string());
+		request_context.client_request_path = Some(req.uri().path().to_string());
+		request_context.client_request_protocol = Some(format!("{:?}", req.version()));
+		request_context.client_request_scheme =
+			Some(req.uri().scheme_str().unwrap_or("http").to_string());
+		request_context.client_request_uri = Some(path.clone());
+		request_context.client_src_port = Some(self.remote_addr.port());
+
+		if let Some(referer) = req
+			.headers()
+			.get(hyper::header::REFERER)
+			.and_then(|h| h.to_str().ok())
+		{
+			request_context.client_request_referer = Some(referer.to_string());
+		}
+
+		if let Some(ua) = &user_agent {
+			request_context.client_request_user_agent = Some(ua.clone());
+		}
+
+		if let Some(requested_with) = req
+			.headers()
+			.get("x-requested-with")
+			.and_then(|h| h.to_str().ok())
+		{
+			request_context.client_x_requested_with = Some(requested_with.to_string());
+		}
+
+		// TLS information would be set here if available (for HTTPS connections)
+		// This requires TLS connection introspection and is marked for future enhancement
+
 		// Debug log request information with structured fields (Apache-like access log)
 		debug!(
-			request_id = %request_id,
+			request_id = %request_context.request_id,
 			method = %method,
 			path = %path,
 			host = %host,
@@ -1613,7 +1732,7 @@ impl ProxyService {
 		);
 
 		// Process the request
-		let result = self.handle_request(req).await;
+		let result = self.handle_request(req, &mut request_context).await;
 
 		match &result {
 			Ok(response) => {
@@ -1627,7 +1746,7 @@ impl ProxyService {
 
 				// Log information about the completed request
 				debug!(
-					request_id = %request_id,
+					request_id = %request_context.request_id,
 					method = %method,
 					path = %path,
 					host = %host,
@@ -1640,7 +1759,7 @@ impl ProxyService {
 			Err(e) => {
 				// Log error information
 				debug!(
-					request_id = %request_id,
+					request_id = %request_context.request_id,
 					method = %method,
 					path = %path,
 					host = %host,
@@ -1676,12 +1795,14 @@ impl ProxyServiceFactory {
 		routing_fn: RoutingFn,
 		middleware_fn: MiddlewareFn,
 		port_type: PortType,
+		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	) -> Self {
 		let state = Arc::new(ProxyState::new(
 			config,
 			routing_fn,
 			middleware_fn,
 			port_type,
+			clickhouse_inserter,
 		));
 		Self { state }
 	}

@@ -59,6 +59,35 @@ transforms:
     condition:
       type: vrl
       source: .source == "pegboard_container_runner"
+      
+  clickhouse_dynamic_events_filter:
+    type: filter
+    inputs:
+      - vector
+    condition:
+      type: vrl
+      source: .source == "clickhouse"
+  
+  clickhouse_dynamic_events_transform:
+    type: remap
+    inputs:
+      - clickhouse_dynamic_events_filter
+    source: |
+      # Extract and store metadata
+      __database = .database
+      __table = .table
+      __columns = .columns
+      
+      # Create a new object with just the columns data
+      . = {
+        "__database": __database,
+        "__table": __table,
+        # By default insert namespace column since most tables include this
+        "namespace": "rivet"
+      }
+      
+      # Merge in the column data that should be inserted
+      . = merge!(., __columns)
 
 sinks:
   prom_exporter:
@@ -82,7 +111,7 @@ sinks:
     compression: gzip
     database: db_pegboard_actor_log
     endpoint: http://clickhouse:8123
-    table: actor_logs
+    table: actor_logs2
     auth:
       strategy: basic
       user: vector
@@ -118,4 +147,19 @@ sinks:
     path: "/var/log/vector/pegboard_container_runner/%Y-%m-%d.log"
     encoding:
       codec: "text"
+      
+  clickhouse_dynamic_events:
+    type: clickhouse
+    inputs:
+      - clickhouse_dynamic_events_transform
+    compression: gzip
+    endpoint: http://clickhouse:8123
+    database: "{{ __database }}"
+    table: "{{ __table }}"
+    auth:
+      strategy: basic
+      user: vector
+      password: vector
+    batch:
+      timeout_secs: 1.0
 

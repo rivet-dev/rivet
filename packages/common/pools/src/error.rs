@@ -12,6 +12,9 @@ pub enum Error {
 	#[error("missing clickhouse pool")]
 	MissingClickHousePool,
 
+	#[error("missing clickhouse inserter")]
+	MissingClickHouseInserter,
+
 	#[error("missing fdb pool")]
 	MissingFdbPool,
 
@@ -57,6 +60,9 @@ pub enum Error {
 	#[error("build clickhouse url: {0}")]
 	BuildClickHouseUrl(url::ParseError),
 
+	#[error("build clickhouse inserter: {0}")]
+	BuildClickHouseInserter(global_error::GlobalError),
+
 	#[error("io error: {0}")]
 	Io(std::io::Error),
 
@@ -65,4 +71,10 @@ pub enum Error {
 
 	#[error("lz4: {0}")]
 	Lz4(lz4_flex::frame::Error),
+}
+
+impl From<global_error::GlobalError> for Error {
+    fn from(err: global_error::GlobalError) -> Self {
+        Error::Global(err)
+    }
 }

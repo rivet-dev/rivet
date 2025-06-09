@@ -200,6 +200,9 @@ impl Opts {
 				filter_tags: None,
 				build_tags: Some(build_tags),
 				version: self.version.clone(),
+				auto_create_routes: None,
+				auto_sync_routes: None,
+				non_interactive: false,
 			})
 			.await?;
 
