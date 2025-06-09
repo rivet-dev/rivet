@@ -30,6 +30,7 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
+			s.create_ts,
 			s.cloud_destroy_ts,
 			CASE
 				WHEN s.cloud_destroy_ts IS NOT NULL THEN 6  -- Destroyed

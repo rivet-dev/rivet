@@ -430,7 +430,6 @@
       },
       "id": 17,
       "interval": "15s",
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [
@@ -531,7 +530,6 @@
       },
       "id": 18,
       "interval": "15s",
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [],
@@ -630,7 +628,6 @@
       },
       "id": 19,
       "interval": "15s",
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [],
@@ -743,7 +740,6 @@
       },
       "id": 23,
       "interval": "15s",
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [
@@ -845,7 +841,6 @@
       },
       "id": 24,
       "interval": "15s",
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [

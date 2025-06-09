@@ -107,7 +107,6 @@
         "y": 1
       },
       "id": 2,
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [],
@@ -252,7 +251,6 @@
         "y": 10
       },
       "id": 7,
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [],
@@ -396,7 +394,6 @@
         "y": 19
       },
       "id": 8,
-      "maxDataPoints": 50,
       "options": {
         "legend": {
           "calcs": [],

@@ -143,3 +143,43 @@ pub fn gen_name_id(s: impl AsRef<str>, default: &str) -> String {
 		.chain(hash)
 		.collect::<String>()
 }
+
+pub fn duration(ms: i64, relative: bool) -> String {
+	let neg = ms < 0;
+	let ms = ms.abs();
+	let mut parts = Vec::with_capacity(5);
+
+	if relative && neg {
+		parts.push("in".to_string());
+	}
+
+	if ms == 0 {
+		parts.push("0ms".to_string());
+	} else if ms < 1000 {
+		parts.push(format!("{ms}ms"));
+	} else {
+		let days = ms / 86_400_000;
+		let hours = (ms % 86_400_000) / 3_600_000;
+		let minutes = (ms % 3_600_000) / 60_000;
+		let seconds = (ms % 60_000) / 1_000;
+	
+		if days > 0 {
+			parts.push(format!("{days}d"));
+		}
+		if hours > 0 {
+			parts.push(format!("{hours}h"));
+		}
+		if minutes > 0 {
+			parts.push(format!("{minutes}m"));
+		}
+		if ms < 60_000 && seconds > 0 {
+			parts.push(format!("{seconds}s"));
+		}
+	}
+
+	if relative && !neg {
+		parts.push("ago".to_string());
+	}
+
+    parts.join(" ")
+}

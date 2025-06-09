@@ -8,7 +8,7 @@ use futures_util::{StreamExt, TryStreamExt};
 use pegboard::{keys, protocol};
 
 struct Usage {
-	// Percent of core.
+	// Millicores.
 	pub cpu: u64,
 	/// MiB.
 	pub memory: u64,
@@ -115,7 +115,7 @@ pub async fn run_from_env(
 			.entry((actor.env_id, client_flavor))
 			.or_insert(Usage { cpu: 0, memory: 0 });
 
-		env_usage.cpu += (actor.resources.cpu_millicores / 10) as u64;
+		env_usage.cpu += actor.resources.cpu_millicores as u64;
 		env_usage.memory += actor.resources.memory_mib as u64;
 	}
 

@@ -25,6 +25,7 @@ pub(crate) struct ServerRow {
 	provider_server_id: Option<String>,
 	vlan_ip: Option<IpAddr>,
 	public_ip: Option<IpAddr>,
+	create_ts: i64,
 	cloud_destroy_ts: Option<i64>,
 	state: i64,
 }
@@ -40,6 +41,7 @@ impl TryFrom<ServerRow> for Server {
 			provider_server_id: value.provider_server_id,
 			lan_ip: value.vlan_ip,
 			wan_ip: value.public_ip,
+			create_ts: value.create_ts,
 			cloud_destroy_ts: value.cloud_destroy_ts,
 			state: unwrap!(ServerState::from_repr(value.state.try_into()?)),
 		})
@@ -58,6 +60,7 @@ pub async fn cluster_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			provider_server_id,
 			vlan_ip,
 			public_ip,
+			create_ts,
 			cloud_destroy_ts,
 			CASE
 				WHEN cloud_destroy_ts IS NOT NULL THEN 6  -- Destroyed

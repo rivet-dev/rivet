@@ -133,7 +133,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			let pool = &pool;
 
 			let (actor_row, port_ingress_rows, port_host_rows, port_proxied_rows) = tokio::try_join!(
-				sql_fetch_one!(
+				sql_fetch_optional!(
 					[ctx, ActorRow, pool]
 					"
 					SELECT
@@ -183,6 +183,11 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 					",
 				),
 			)?;
+
+			let Some(actor_row) = actor_row else {
+				tracing::error!(?actor_id, ?workflow_id, "actor has no state row");
+				return Ok(None);
+			};
 
 			GlobalResult::Ok(Some(ActorData {
 				actor_id,

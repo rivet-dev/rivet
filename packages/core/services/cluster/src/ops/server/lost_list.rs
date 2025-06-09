@@ -143,7 +143,17 @@ async fn run_for_linode_account(
 			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
-			s.cloud_destroy_ts
+			s.create_ts,
+			s.cloud_destroy_ts,
+			CASE
+				WHEN s.cloud_destroy_ts IS NOT NULL THEN 6  -- Destroyed
+				WHEN s.taint_ts IS NOT NULL AND s.drain_ts IS NOT NULL THEN 5  -- TaintedDraining
+				WHEN s.drain_ts IS NOT NULL THEN 4  -- Draining
+				WHEN s.taint_ts IS NOT NULL THEN 3  -- Tainted
+				WHEN s.install_complete_ts IS NOT NULL THEN 2  -- Running
+				WHEN s.provision_complete_ts IS NOT NULL THEN 1  -- Installing
+				ELSE 0  -- Provisioning
+			END AS state
 		FROM db_cluster.servers AS s
 		JOIN db_cluster.datacenters AS d
 		ON s.datacenter_id = d.datacenter_id
