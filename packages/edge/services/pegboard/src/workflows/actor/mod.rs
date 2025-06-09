@@ -146,6 +146,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		return Ok(());
 	};
 
+	ctx.v(2).msg(Allocated {
+		client_id: res.client_id,
+	})
+	.tag("actor_id", input.actor_id)
+	.send()
+	.await?;
+
 	let state_res = ctx
 		.loope(
 			runtime::State::new(res.client_id, res.client_workflow_id, input.image_id),
@@ -446,6 +453,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 #[message("pegboard_actor_create_complete")]
 pub struct CreateComplete {}
+
+#[message("pegboard_actor_allocated")]
+pub struct Allocated {
+	pub client_id: Uuid,
+}
 
 #[message("pegboard_actor_failed")]
 pub struct Failed {
