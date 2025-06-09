@@ -22,7 +22,7 @@ mod setup;
 /// How often to check for a PID when one is not present and a stop command was received.
 const STOP_PID_INTERVAL: Duration = std::time::Duration::from_millis(250);
 /// How many times to check for a PID when a stop command was received.
-const STOP_PID_RETRIES: usize = 32;
+const STOP_PID_RETRIES: usize = 1024;
 
 pub struct Actor {
 	actor_id: Uuid,
@@ -377,16 +377,31 @@ impl Actor {
 
 		// Signal command might be sent before the actor has a runner. This loop waits for the runner to start
 		let runner_guard = loop {
-			let runner_guard = self.runner.lock().await;
-			if runner_guard.is_some() {
-				break Some(runner_guard);
+			{
+				let runner_guard = self.runner.lock().await;
+				if runner_guard.is_some() {
+					break Some(runner_guard);
+				}
 			}
 
-			tracing::warn!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				"waiting for pid to signal actor",
-			);
+			if *self.exited.lock().await {
+				tracing::warn!(
+					actor_id=?self.actor_id,
+					generation=?self.generation,
+					"actor exited before PID was set, ignoring signal",
+				);
+
+				break None;
+			}
+
+			// Progress log
+			if i % 10 == 0 {
+				tracing::warn!(
+					actor_id=?self.actor_id,
+					generation=?self.generation,
+					"waiting for PID to signal actor",
+				);
+			}
 
 			if i > STOP_PID_RETRIES {
 				tracing::error!(
@@ -396,6 +411,7 @@ impl Actor {
 
 				break None;
 			}
+
 			i += 1;
 
 			tokio::time::sleep(STOP_PID_INTERVAL).await;

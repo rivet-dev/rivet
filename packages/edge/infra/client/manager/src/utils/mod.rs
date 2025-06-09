@@ -2,6 +2,7 @@ use std::{
 	hash::{DefaultHasher, Hasher},
 	path::Path,
 	result::Result::{Err, Ok},
+	sync::Arc,
 	time::{self, Duration},
 };
 
@@ -395,17 +396,22 @@ pub async fn fetch_image_stream(
 	bail!("artifact url could not be resolved");
 }
 
-pub async fn prewarm_image(ctx: &Ctx, image_id: Uuid, image_artifact_url_stub: &str) {
+pub fn prewarm_image(ctx: &Arc<Ctx>, image_id: Uuid, image_artifact_url_stub: &str) {
 	// Log full URL for prewarm operation
 	let prewarm_url = format!("{}/{}", image_artifact_url_stub, image_id);
 	tracing::info!(?image_id, %prewarm_url, "prewarming image");
 
-	match fetch_image_stream(ctx, image_id, image_artifact_url_stub, None).await {
-		Ok(_) => tracing::info!(?image_id, %prewarm_url, "prewarm complete"),
-		Err(_) => tracing::warn!(
-			?image_id,
-			%prewarm_url,
-			"prewarm failed, artifact url could not be resolved"
-		),
-	}
+	let ctx = ctx.clone();
+	let image_artifact_url_stub = image_artifact_url_stub.to_string();
+
+	tokio::spawn(async move {
+		match fetch_image_stream(&ctx, image_id, &image_artifact_url_stub, None).await {
+			Ok(_) => tracing::info!(?image_id, %prewarm_url, "prewarm complete"),
+			Err(_) => tracing::warn!(
+				?image_id,
+				%prewarm_url,
+				"prewarm failed, artifact url could not be resolved"
+			),
+		}
+	});
 }

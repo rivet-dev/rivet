@@ -412,13 +412,7 @@ impl Ctx {
 			protocol::ToClient::PrewarmImage {
 				image_id,
 				image_artifact_url_stub,
-			} => {
-				let self2 = self.clone();
-
-				tokio::spawn(async move {
-					utils::prewarm_image(&self2, image_id, &image_artifact_url_stub).await
-				});
-			}
+			} => utils::prewarm_image(&self, image_id, &image_artifact_url_stub),
 		}
 
 		Ok(())
