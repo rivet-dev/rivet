@@ -54,40 +54,40 @@ pub async fn route_api_request(
 		.await?;
 	tracing::info!(?servers_res, "servers");
 
-	let targets = if !servers_res.servers.is_empty() {
-		let port = ctx.config().server()?.rivet.api_public.port();
-		servers_res
-			.servers
-			.iter()
-			.map(|server| {
-				// For each server, create a target
-				// In a real implementation, use the actual server IP
-				// For demo purposes, use the loopback IP for all servers
-				Ok(RouteTarget {
-					actor_id: None,
-					server_id: Some(server.server_id),
-					host: unwrap!(server.lan_ip).to_string(),
-					port,
-					path: path.to_owned(),
-				})
+	let port = ctx.config().server()?.rivet.api_public.port();
+	let targets = servers_res
+		.servers
+		.iter()
+		// Only include servers that are installed
+		.filter(|server| server.install_complete_ts.is_some())
+		.map(|server| {
+			// For each server, create a target
+			Ok(RouteTarget {
+				actor_id: None,
+				server_id: Some(server.server_id),
+				host: unwrap!(server.lan_ip).to_string(),
+				port,
+				path: path.to_owned(),
 			})
-			.collect::<GlobalResult<Vec<_>>>()?
-	} else if let Some((host, port)) = ctx.config().server()?.rivet.edge_api_fallback_addr_lan() {
-		vec![RouteTarget {
-			actor_id: None,
-			server_id: None,
-			host,
-			port,
-			path: path.to_owned(),
-		}]
-	} else {
-		// No API servers to route to
-		Vec::new()
-	};
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
 
-	if targets.is_empty() {
-		return Ok(None);
-	}
+	let targets = if targets.is_empty() {
+		if let Some((host, port)) = ctx.config().server()?.rivet.edge_api_fallback_addr_lan() {
+			vec![RouteTarget {
+				actor_id: None,
+				server_id: None,
+				host,
+				port,
+				path: path.to_owned(),
+			}]
+		} else {
+			// No API servers to route to
+			return Ok(None);
+		}
+	} else {
+		targets
+	};
 
 	return Ok(Some(RoutingOutput::Route(RouteConfig {
 		targets,

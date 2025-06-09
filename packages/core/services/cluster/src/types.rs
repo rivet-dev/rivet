@@ -153,6 +153,7 @@ pub struct Server {
 	pub lan_ip: Option<IpAddr>,
 	pub wan_ip: Option<IpAddr>,
 	pub create_ts: i64,
+	pub install_complete_ts: Option<i64>,
 	pub cloud_destroy_ts: Option<i64>,
 	pub state: ServerState,
 }
