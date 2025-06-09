@@ -157,7 +157,9 @@ pub struct Server {
 	pub state: ServerState,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[derive(
+	Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr,
+)]
 pub enum ServerState {
 	Provisioning = 0,
 	Installing = 1,

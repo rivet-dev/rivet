@@ -235,4 +235,3 @@ pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> Globa
 
 	Ok(include_str!("../files/vector_configure.sh").replace("__VECTOR_CONFIG__", &config_str))
 }
-

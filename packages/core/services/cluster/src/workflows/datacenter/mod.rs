@@ -47,13 +47,21 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 		};
 
 		match ctx.check_version(2).await? {
-			1 => ctx.activity(v1).await?,
+			1 => {
+				// We remove here because the hash doesn't calculate correctly anymore
+				ctx.removed::<Activity<InsertDb>>().await?;
+			}
+			2 => {
+				// We remove here because the hash doesn't calculate correctly anymore
+				ctx.removed::<Activity<InsertDbV2>>().await?;
+			}
 			_latest => {
-				ctx.activity(InsertDbInputV2 {
-					v1,
-					guard_public_hostname: input.guard_public_hostname.clone(),
-				})
-				.await?
+				ctx.v(3)
+					.activity(InsertDbInputV2 {
+						v1,
+						guard_public_hostname: input.guard_public_hostname.clone(),
+					})
+					.await?
 			}
 		}
 	}

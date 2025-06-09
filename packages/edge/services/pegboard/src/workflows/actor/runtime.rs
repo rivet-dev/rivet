@@ -9,7 +9,6 @@ use foundationdb::{
 };
 use futures_util::{FutureExt, TryStreamExt};
 use sqlx::Acquire;
-use util::serde::AsHashableExt;
 
 use super::{
 	destroy::{self, KillCtx},

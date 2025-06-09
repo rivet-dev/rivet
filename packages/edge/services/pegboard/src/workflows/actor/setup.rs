@@ -4,9 +4,8 @@ use cluster::types::BuildDeliveryMethod;
 use fdb_util::FormalKey;
 use foundationdb as fdb;
 use sqlx::Acquire;
-use util::serde::AsHashableExt;
 
-use super::{analytics::InsertClickHouseInput, Input, Port};
+use super::{Input, Port};
 use crate::{
 	keys, protocol,
 	types::{ActorLifecycle, ActorResources, GameGuardProtocol, NetworkMode, Routing},
