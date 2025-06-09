@@ -164,52 +164,84 @@ pub async fn status(
 		..Default::default()
 	};
 
-	tracing::info!("creating actor");
-	let res = actors_api::actors_create(
-		&config,
-		models::ActorsCreateActorRequest {
-			tags: Some(serde_json::json!({
-				"name": query.build.build_name(),
-			})),
-			build_tags: Some(Some(serde_json::json!({
-				"name": query.build.build_name(),
-				"current": "true",
-			}))),
-			region: Some(dc.name_id.clone()),
-			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
-				ports: Some(HashMap::from([(
-					"http".to_string(),
-					models::ActorsCreateActorPortRequest {
-						protocol: models::ActorsPortProtocol::Https,
-						routing: Some(Box::new(models::ActorsPortRouting {
-							guard: Some(serde_json::json!({})),
-							host: None,
-						})),
-						..Default::default()
-					},
-				)])),
-				..Default::default()
-			})),
-			lifecycle: Some(Box::new(models::ActorsLifecycle {
-				// Don't reboot on failure
-				durable: Some(false),
-				..Default::default()
-			})),
-			resources: match &query.build {
-				StatusQueryBuild::WsIsolate => None,
-				StatusQueryBuild::WsContainer => Some(Box::new(models::ActorsResources {
-					cpu: 100,
-					memory: 128,
-				})),
-			},
+	let body = models::ActorsCreateActorRequest {
+		tags: Some(serde_json::json!({
+			"name": query.build.build_name(),
+		})),
+		build_tags: Some(Some(serde_json::json!({
+			"name": query.build.build_name(),
+			"current": "true",
+		}))),
+		region: Some(dc.name_id.clone()),
+		network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
+			ports: Some(HashMap::from([(
+				"http".to_string(),
+				models::ActorsCreateActorPortRequest {
+					protocol: models::ActorsPortProtocol::Https,
+					routing: Some(Box::new(models::ActorsPortRouting {
+						guard: Some(serde_json::json!({})),
+						host: None,
+					})),
+					..Default::default()
+				},
+			)])),
 			..Default::default()
+		})),
+		lifecycle: Some(Box::new(models::ActorsLifecycle {
+			// Don't reboot on failure
+			durable: Some(false),
+			..Default::default()
+		})),
+		resources: match &query.build {
+			StatusQueryBuild::WsIsolate => None,
+			StatusQueryBuild::WsContainer => Some(Box::new(models::ActorsResources {
+				cpu: 100,
+				memory: 128,
+			})),
 		},
+		..Default::default()
+	};
+
+	tracing::info!("creating actor");
+	// Pass the request to the edge api
+	use actors_api::ActorsCreateError::*;
+	let res = match actors_api::actors_create(
+		&config,
+		body,
 		Some(&system_test_project),
 		Some(&system_test_env),
 		None,
 	)
-	.instrument(tracing::info_span!("actor_create_request"))
-	.await?;
+	.instrument(tracing::info_span!("actor_create_request", base_path=%config.base_path))
+	.await
+	{
+		Ok(res) => res,
+		Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
+			Some(Status400(body))
+			| Some(Status403(body))
+			| Some(Status404(body))
+			| Some(Status408(body))
+			| Some(Status429(body))
+			| Some(Status500(body)) => {
+				bail_with!(
+					INTERNAL_STATUS_CHECK_FAILED,
+					error = format!("{}: {} (ray_id {})", body.code, body.message, body.ray_id)
+				);
+			}
+			_ => {
+				bail_with!(
+					INTERNAL_STATUS_CHECK_FAILED,
+					error = format!("unknown request error: {:?} {:?}", content.status, content.content)
+				);
+			}
+		},
+		Err(err) => {
+			bail_with!(
+				INTERNAL_STATUS_CHECK_FAILED,
+				error = format!("request error: {err:?}")
+			);
+		}
+	};
 	let actor_id = res.actor.id;
 
 	tracing::info!(?actor_id, "created actor");
@@ -233,15 +265,46 @@ pub async fn status(
 	.await;
 
 	// Destroy actor regardless of connection status
-	actors_api::actors_destroy(
-		&config,
-		&actor_id.to_string(),
-		Some(&system_test_project),
-		Some(&system_test_env),
-		None,
-	)
-	.instrument(tracing::info_span!("actor_destroy_request"))
-	.await?;
+	{
+		use actors_api::ActorsDestroyError::*;
+		match actors_api::actors_destroy(
+			&config,
+			&actor_id.to_string(),
+			Some(&system_test_project),
+			Some(&system_test_env),
+			None,
+		)
+		.instrument(tracing::info_span!("actor_destroy_request", base_path=%config.base_path))
+		.await
+		{
+			Ok(_res) => {},
+			Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
+				Some(Status400(body))
+				| Some(Status403(body))
+				| Some(Status404(body))
+				| Some(Status408(body))
+				| Some(Status429(body))
+				| Some(Status500(body)) => {
+					bail_with!(
+						INTERNAL_STATUS_CHECK_FAILED,
+						error = format!("{}: {} (ray_id {})", body.code, body.message, body.ray_id)
+					);
+				}
+				_ => {
+					bail_with!(
+						INTERNAL_STATUS_CHECK_FAILED,
+						error = format!("unknown request error: {:?} {:?}", content.status, content.content)
+					);
+				}
+			},
+			Err(err) => {
+				bail_with!(
+					INTERNAL_STATUS_CHECK_FAILED,
+					error = format!("request error: {err:?}")
+				);
+			}
+		}
+	}
 
 	// Unwrap res
 	match test_res {
