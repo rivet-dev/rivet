@@ -9,6 +9,7 @@ edition.workspace = true
 acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow.workspace = true
+cjson = "0.1"
 cloudflare.workspace = true
 heck = "0.3"
 http = "0.2"
