@@ -37,24 +37,14 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 			r#"
 			label_replace(
 				sum by (client_id) (
-					last_over_time(
-						rivet_pegboard_client_cpu_allocated{{
-							client_id=~"({client_ids})",
-						}}
-						[15m:15s]
-					)
+					rivet_pegboard_client_cpu_allocated{{client_id=~"({client_ids})"}}
 				),
 				"metric", "cpu", "", ""
 			)
 			OR
 			label_replace(
 				sum by (client_id) (
-					last_over_time(
-						rivet_pegboard_client_memory_allocated{{
-							client_id=~"({client_ids})",
-						}}
-						[15m:15s]
-					)
+					rivet_pegboard_client_memory_allocated{{client_id=~"({client_ids})"}}
 				),
 				"metric", "mem", "", ""
 			)

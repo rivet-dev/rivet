@@ -118,8 +118,7 @@ pub async fn cluster_datacenter_topology_get(
 		FROM db_cluster.servers
 		WHERE
 			datacenter_id = ANY($1) AND
-			cloud_destroy_ts IS NULL AND
-			taint_ts IS NULL
+			cloud_destroy_ts IS NULL
 		",
 		&input.datacenter_ids,
 	)
