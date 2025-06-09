@@ -194,21 +194,37 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 				Some(Main::Drain(sig)) => {
 					state.drain_timeout_ts = Some(sig.drain_timeout_ts);
 
-					ctx.activity(SetDrainInput {
-						client_id,
-						flavor,
-						draining: true,
-					})
+					ctx.join((
+						activity(SetDrainInput {
+							client_id,
+							flavor,
+							draining: true,
+						}),
+						v(2).activity(UpdateMetricsInput {
+							client_id,
+							flavor,
+							draining: true,
+							clear: false,
+						}),
+					))
 					.await?;
 				}
 				Some(Main::Undrain(_)) => {
 					state.drain_timeout_ts = None;
 
-					ctx.activity(SetDrainInput {
-						client_id,
-						flavor,
-						draining: false,
-					})
+					ctx.join((
+						activity(SetDrainInput {
+							client_id,
+							flavor,
+							draining: false,
+						}),
+						v(2).activity(UpdateMetricsInput {
+							client_id,
+							flavor,
+							draining: false,
+							clear: false,
+						}),
+					))
 					.await?;
 
 					let actor_ids = ctx

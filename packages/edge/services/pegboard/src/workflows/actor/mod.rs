@@ -152,12 +152,13 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		return Ok(());
 	};
 
-	ctx.v(2).msg(Allocated {
-		client_id: res.client_id,
-	})
-	.tag("actor_id", input.actor_id)
-	.send()
-	.await?;
+	ctx.v(2)
+		.msg(Allocated {
+			client_id: res.client_id,
+		})
+		.tag("actor_id", input.actor_id)
+		.send()
+		.await?;
 
 	let state_res = ctx
 		.loope(
