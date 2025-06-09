@@ -277,7 +277,8 @@ pub async fn insert_clickhouse(
 			selected_memory_mib: state_row.selected_resources_memory_mib.unwrap_or_default() as u32,
 			root_user_enabled: state_row.root_user_enabled,
 			env_vars: state_row.environment.len() as i64,
-			env_var_bytes: state_row.environment
+			env_var_bytes: state_row
+				.environment
 				.iter()
 				.map(|(k, v)| k.len() + v.len())
 				.sum::<usize>() as i64,
