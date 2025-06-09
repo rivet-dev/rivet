@@ -58,7 +58,12 @@ pub fn create_routing_function(
 						}
 						Err(err) => {
 							tracing::error!("Error in route_via_route_config: {err}");
-							// Continue to next routing method
+
+							return Ok(RoutingOutput::Response(StructuredResponse {
+								status: StatusCode::INTERNAL_SERVER_ERROR,
+								message: Cow::Borrowed("Failed while attempting to route request."),
+								docs: None,
+							}));
 						}
 					}
 
@@ -75,7 +80,12 @@ pub fn create_routing_function(
 						}
 						Err(err) => {
 							tracing::error!("Error in actor_routes::route_actor_request: {err}");
-							// Continue to next routing method
+
+							return Ok(RoutingOutput::Response(StructuredResponse {
+								status: StatusCode::INTERNAL_SERVER_ERROR,
+								message: Cow::Borrowed("Failed while attempting to route request."),
+								docs: None,
+							}));
 						}
 					}
 
@@ -94,7 +104,12 @@ pub fn create_routing_function(
 						}
 						Err(err) => {
 							tracing::error!("Error in api::route_api_request: {err}");
-							// Continue to next routing method
+
+							return Ok(RoutingOutput::Response(StructuredResponse {
+								status: StatusCode::INTERNAL_SERVER_ERROR,
+								message: Cow::Borrowed("Failed while attempting to route request."),
+								docs: None,
+							}));
 						}
 					}
 

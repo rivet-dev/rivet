@@ -1,7 +1,9 @@
 use chirp_workflow::prelude::*;
 use cluster::types::{Filter, PoolType};
 use global_error::GlobalResult;
-use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout, StructuredResponse};
+use rivet_guard_core::proxy_service::{
+	RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout, StructuredResponse,
+};
 use rivet_guard_core::status::StatusCode;
 use std::borrow::Cow;
 use uuid::Uuid;
