@@ -49,6 +49,8 @@ pub struct Pool {
 	pub min_count: u32,
 	pub max_count: u32,
 	pub drain_timeout: u64,
+	#[serde(default)]
+	pub margin: u32,
 }
 
 // Backwards compatibility
@@ -69,6 +71,7 @@ impl TryFrom<backend::cluster::Pool> for Pool {
 			min_count: value.min_count,
 			max_count: value.max_count,
 			drain_timeout: value.drain_timeout,
+			margin: 0,
 		})
 	}
 }
@@ -119,6 +122,7 @@ pub struct PoolUpdate {
 	pub min_count: Option<u32>,
 	pub max_count: Option<u32>,
 	pub drain_timeout: Option<u64>,
+	pub margin: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
