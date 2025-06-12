@@ -22,7 +22,7 @@ import { FrameworksSection } from "./FrameworksSection";
 export const metadata: Metadata = {
 	title: "Rivet - The Open-Source Serverless Platform",
 	description:
-		"Easily build & scale AI agents, functions, and more. Open-source & self-hostable.",
+		"Build scalable backends with Rivet—an open-source serverless platform for AI agents, real-time apps, and multiplayer services.",
 };
 
 export default function IndexPage() {
