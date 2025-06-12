@@ -75,6 +75,8 @@ pub async fn servers(
 		servers: servers_res
 			.servers
 			.into_iter()
+			// Filter out installing servers
+			.filter(|server| server.install_complete_ts.is_some())
 			.map(ApiInto::api_into)
 			.collect(),
 	})
