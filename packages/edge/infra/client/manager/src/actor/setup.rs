@@ -719,7 +719,7 @@ impl Actor {
 				match Command::new("runc")
 					.arg("delete")
 					.arg("--force")
-					.arg(self.actor_id.to_string())
+					.arg(format!("{}-{}", self.actor_id, self.generation))
 					.output()
 					.await
 				{
