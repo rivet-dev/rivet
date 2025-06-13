@@ -13,6 +13,8 @@ import {
 	createActorAtom,
 	type Logs,
 	actorsQueryAtom,
+	actorsInternalFilterAtom,
+	type Actor,
 } from "@rivet-gg/components/actors";
 import {
 	InfiniteQueryObserver,
@@ -40,6 +42,7 @@ interface ActorsProviderProps {
 	children?: ReactNode;
 	fixedTags?: Record<string, string>;
 	filter?: (actor: Rivet.actors.Actor) => boolean;
+	isActorInternal?: (actor: Actor) => boolean;
 
 	/// filters
 	tags: FilterValue;
@@ -57,6 +60,7 @@ export function ActorsProvider({
 	children,
 	fixedTags,
 	filter,
+	isActorInternal: internalFilter,
 	// filters
 	tags,
 	region,
@@ -83,6 +87,13 @@ export function ActorsProvider({
 			devMode,
 		});
 	}, [tags, region, createdAt, destroyedAt, status, devMode]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies:  store is not a dependency
+	useEffect(() => {
+		if (internalFilter) {
+			store.set(actorsInternalFilterAtom, internalFilter);
+		}
+	}, [internalFilter]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
 	useEffect(() => {

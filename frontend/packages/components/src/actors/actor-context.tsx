@@ -112,6 +112,8 @@ export const actorRegionsAtom = atom<Region[]>([
 
 export const actorBuildsAtom = atom<Build[]>([]);
 
+export const actorsInternalFilterAtom = atom<(actor: Actor) => boolean>();
+
 // derived atoms
 
 export const currentActorRegionAtom = atom((get) => {
@@ -126,6 +128,8 @@ export const currentActorRegionAtom = atom((get) => {
 export const filteredActorsAtom = atom((get) => {
 	const filters = get(actorFiltersAtom);
 	const actors = get(actorsAtom);
+
+	const isActorInternal = get(actorsInternalFilterAtom);
 
 	return actors.filter((actor) => {
 		const satisfiesFilters = Object.entries(filters).every(
@@ -232,7 +236,9 @@ export const filteredActorsAtom = atom((get) => {
 			},
 		);
 
-		const isInternal = toRecord(actor.tags).owner === "rivet";
+		const isInternal =
+			toRecord(actor.tags).owner === "rivet" ||
+			(isActorInternal?.(actor) ?? false);
 
 		return (
 			satisfiesFilters && ((isInternal && filters.devMode) || !isInternal)

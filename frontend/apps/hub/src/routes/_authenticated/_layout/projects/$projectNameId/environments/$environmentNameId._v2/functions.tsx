@@ -26,7 +26,6 @@ import {
 	TableBody,
 	TableCell,
 	DiscreteCopyButton,
-	toRecord,
 	DropdownMenu,
 	DropdownMenuTrigger,
 	DropdownMenuContent,
@@ -102,8 +101,8 @@ function ProjectFunctionsRoute() {
 						<Table>
 							<TableHeader>
 								<TableRow>
+									<TableHead>Name</TableHead>
 									<TableHead>Route</TableHead>
-									<TableHead>Instances</TableHead>
 									<TableHead />
 								</TableRow>
 							</TableHeader>
@@ -121,24 +120,17 @@ function ProjectFunctionsRoute() {
 									<TableRow key={route.id}>
 										<TableCell>
 											<DiscreteCopyButton
+												value={route.id}
+											>
+												{route.id}
+											</DiscreteCopyButton>
+										</TableCell>
+										<TableCell>
+											<DiscreteCopyButton
 												value={`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
 											>
 												{`${route.hostname}${route.path}${route.routeSubpaths ? "/*" : ""}`}
 											</DiscreteCopyButton>
-										</TableCell>
-										<TableCell>
-											{actors?.filter((actor) =>
-												Object.entries(
-													route.target.actors
-														?.selectorTags || {},
-												).some(([key, value]) => {
-													return (
-														toRecord(actor.tags)[
-															key
-														] === value
-													);
-												}),
-											).length || 0}
 										</TableCell>
 										<TableCell>
 											<DropdownMenu>
