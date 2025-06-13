@@ -64,7 +64,7 @@ const FIXED_TAGS = {};
 //	toRecord(actor.tags).framework !== "actor-core";
 
 const ACTORS_FILTER = (actor: Rivet.actors.Actor) =>
-	//toRecord(actor.tags).type !== "function" &&
+	toRecord(actor.tags).type !== "function" &&
 	toRecord(actor.tags).framework !== "actor-core";
 
 const ACTORS_VIEW_CONTEXT = {
