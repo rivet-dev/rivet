@@ -112,7 +112,9 @@ export const actorRegionsAtom = atom<Region[]>([
 
 export const actorBuildsAtom = atom<Build[]>([]);
 
-export const actorsInternalFilterAtom = atom<(actor: Actor) => boolean>();
+export const actorsInternalFilterAtom = atom<{
+	fn: (actor: Actor) => boolean;
+}>();
 
 // derived atoms
 
@@ -129,7 +131,7 @@ export const filteredActorsAtom = atom((get) => {
 	const filters = get(actorFiltersAtom);
 	const actors = get(actorsAtom);
 
-	const isActorInternal = get(actorsInternalFilterAtom);
+	const isActorInternal = get(actorsInternalFilterAtom)?.fn;
 
 	return actors.filter((actor) => {
 		const satisfiesFilters = Object.entries(filters).every(

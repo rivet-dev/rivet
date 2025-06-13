@@ -91,7 +91,9 @@ export function ActorsProvider({
 	// biome-ignore lint/correctness/useExhaustiveDependencies:  store is not a dependency
 	useEffect(() => {
 		if (internalFilter) {
-			store.set(actorsInternalFilterAtom, internalFilter);
+			store.set(actorsInternalFilterAtom, { fn: internalFilter });
+		} else {
+			store.set(actorsInternalFilterAtom, undefined);
 		}
 	}, [internalFilter]);
 
