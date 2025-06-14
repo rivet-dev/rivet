@@ -1,5 +1,5 @@
-import apiPages from "@/generated/apiPages.json" assert { type: "json" };
-import type { Sitemap } from "@/lib/sitemap";
+import apiData from "@/generated/apiPages.json" assert { type: "json" };
+import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 import {
 	faDownload,
 	faExclamationTriangle,
@@ -313,6 +313,22 @@ export const sitemap = [
 	{
 		title: "API",
 		href: "/docs/api",
-		sidebar: apiPages.pages,
+		sidebar: [
+			{
+				title: "Overview",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/api",
+					},
+					{
+						title: "Errors",
+						href: "/docs/api/errors",
+					},
+				]
+			},
+			...(apiData.groups as SidebarItem[]),
+		],
 	},
 ] satisfies Sitemap;
+

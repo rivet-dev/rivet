@@ -1,2 +1,29 @@
-# API
-Read documentation for all low-level API endpoints here.
+# API Overview
+
+The Rivet API provides HTTP endpoints for managing your serverless infrastructure programmatically.
+
+## Authentication
+
+All API requests require [authentication tokens](/docs/tokens). Use these tokens with the `Authorization` header.
+
+## Resources
+
+- **[Actors](/docs/actors)** - Stateful serverless containers
+- **[Builds](/docs/config)** - Code deployments
+- **[Routes](/docs/networking)** - HTTP routing configuration
+- **[Regions](/docs/edge)** - Global deployment locations
+
+## SDKs
+
+While you can use the HTTP API directly, we recommend using our official SDKs:
+
+- [TypeScript & JavaScript](https://www.npmjs.com/package/@rivet-gg/api)
+- [Go](https://github.com/rivet-gg/rivet/tree/main/sdks/api/runtime/go)
+- [Rust](https://github.com/rivet-gg/rivet/tree/main/sdks/api/runtime/rust)
+- [OpenAPI](https://github.com/rivet-gg/rivet/blob/main/sdks/api/runtime/openapi/openapi.yml)
+- [Command Line Interface](/docs/cli)
+
+## Error Handling
+
+See [API Errors](/docs/api/errors) for all error codes.
+

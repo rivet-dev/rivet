@@ -21,7 +21,7 @@ import {
 	QueryObserver,
 	MutationObserver,
 } from "@tanstack/react-query";
-import { createClient } from "actor-core/client";
+//import { createClient } from "actor-core/client";
 import { atom, createStore, Provider, type PrimitiveAtom } from "jotai";
 import equal from "fast-deep-equal";
 import { type ReactNode, useEffect, useState } from "react";
@@ -327,19 +327,19 @@ export function ActorsProvider({
 				region?: string;
 				params?: Record<string, unknown>;
 			}) => {
-				const client = createClient(data.endpoint);
-
-				const build = store
-					.get(actorBuildsAtom)
-					.find((build) => build.id === data.id);
-
-				return client.create(build?.tags.name || "", {
-					params: data.params,
-					create: {
-						tags: data.tags,
-						region: data.region || undefined,
-					},
-				});
+				//const client = createClient(data.endpoint);
+				//
+				//const build = store
+				//	.get(actorBuildsAtom)
+				//	.find((build) => build.id === data.id);
+				//
+				//return client.create(build?.tags.name || "", {
+				//	params: data.params,
+				//	create: {
+				//		tags: data.tags,
+				//		region: data.region || undefined,
+				//	},
+				//});
 			},
 		});
 

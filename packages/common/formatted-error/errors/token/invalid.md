@@ -24,15 +24,3 @@ The given token has an invalid amount of separators (`.`). Inspect your token to
 The algorithm specified in the token is not allowed by Rivet. This likely signified a breaking change with how
 tokens are parsed and should never show up.
 
-<!-- TODO: Move to a dedicated page for tokens -->
-
-## Token structure
-
-A token will look something like this:
-
-`label.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-
-where every `x` is a random base64 valid character.
-
-The label has no functionality and only serves to differentiate tokens easily for the user. It and the
-following `.` are optional.
