@@ -280,8 +280,8 @@ async function processErrorDir(inputPath, pages) {
       }
       
       // Filter out errors for matchmaker, backend, cdn, kv
-      if (name.startsWith("matchmaker") || name.startsWith("backend") || 
-          name.startsWith("cdn") || name.startsWith("kv")) {
+      if (name.startsWith("MATCHMAKER") || name.startsWith("BACKEND") || 
+          name.startsWith("CDN") || name.startsWith("KV") || name.startsWith("IDENTITY")) {
         continue;
       }
       
