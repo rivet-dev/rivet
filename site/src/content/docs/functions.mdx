@@ -24,19 +24,10 @@ npm init -y
 npm install hono@4 @hono/node-server@1
 ```
 
-Add the following files: 
+
+Add the following files to your project: 
 
 <CodeGroup>
-
-```json {{ "title": "rivet.json" }}
-{
-  "functions": {
-    "hello-world": {
-      "dockerfile": "Dockerfile"
-    }
-  }
-}
-```
 
 ```javascript {{ "title": "index.js" }}
 import { Hono } from "hono";
@@ -54,6 +45,16 @@ serve({
 	fetch: app.fetch,
 	port,
 });
+```
+
+```json {{ "title": "rivet.json" }}
+{
+  "functions": {
+    "hello-world": {
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
 ```
 
 ```dockerfile {{ "title": "Dockerfile" }}
@@ -75,7 +76,11 @@ CMD ["node", "index.js"]
 
 </CodeGroup>
 
-See [Containers documentation](/docs/containers) for more information on writing code for the Rivet platform.
+<Info title="Configuring port">
+	By default, Rivet Functions will listen on port 8080. This can be configured using the `networking.internal_port` option in your configuration (see [Configuration Options](#configuration-options) below).
+</Info>
+
+See [Rivet Containers documentation](/docs/containers) for more information on writing code for the Rivet platform.
 
 ### 2. Deploy your function
 
@@ -100,7 +105,7 @@ Visit your function at the configured URL. You can monitor the logs in the _Logs
 | `strip_prefix` | When true, removes the configured path prefix from the request URL before forwarding to your function |
 | `resources.cpu` | CPU allocation for the function (defaults to 1) |
 | `resources.memory` | Memory allocation in MB (defaults to 1024) |
-| `networking.internal_port` | The port your function listens on within the container |
+| `networking.internal_port` | The port your function listens on within the container (defaults to 8080) |
 
 #### Example: route_subpaths
 
