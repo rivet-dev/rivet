@@ -103,7 +103,7 @@ pub struct Opts {
 
 	/// Specify which log stream to display
 	#[clap(long)]
-	log_stream: Option<crate::util::actor::logs::LogStream>,
+	log_stream: Option<toolchain::util::actor::logs::LogStream>,
 
 	/// Deploy the build before creating the actor
 	#[clap(long)]
@@ -299,17 +299,18 @@ impl Opts {
 
 		// Tail logs
 		if self.logs {
-			crate::util::actor::logs::tail(
+			toolchain::util::actor::logs::tail(
 				&ctx,
-				crate::util::actor::logs::TailOpts {
+				toolchain::util::actor::logs::TailOpts {
 					environment: &env,
 					actor_id: response.actor.id,
 					stream: self
 						.log_stream
 						.clone()
-						.unwrap_or(crate::util::actor::logs::LogStream::All),
+						.unwrap_or(toolchain::util::actor::logs::LogStream::All),
 					follow: true,
-					timestamps: true,
+					print_type: toolchain::util::actor::logs::PrintType::PrintWithTime,
+					exit_on_ctrl_c: true,
 				},
 			)
 			.await?;

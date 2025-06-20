@@ -78,6 +78,13 @@ export async function runRivetBuild(
 		const actorId = createResponse.actor.id;
 		buildStore.addLog(buildId, `Created Rivet actor: ${actorId}`);
 
+		buildStore.updateStatus(buildId, {
+			type: "running",
+			data: {
+				rivet: { actorId }
+			}
+		});
+
 		await pollActorStatus(
 			buildStore,
 			client,

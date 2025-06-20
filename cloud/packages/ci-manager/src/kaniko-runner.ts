@@ -17,7 +17,12 @@ export async function runKanikoBuild(
 
 	await mkdir(dirname(build.contextPath!), { recursive: true });
 
-	buildStore.updateStatus(buildId, { type: "running", data: {} });
+	buildStore.updateStatus(buildId, {
+		type: "running",
+		data: {
+			noRunner: {}
+		}
+	});
 
 	const executionMode = process.env.KANIKO_EXECUTION_MODE || "docker";
 	buildStore.addLog(buildId, `Using execution mode: ${executionMode}`);

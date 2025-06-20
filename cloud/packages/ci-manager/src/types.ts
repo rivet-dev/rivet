@@ -1,9 +1,25 @@
 import { z } from "zod";
 import { NO_SEP_CHAR_REGEX, UNIT_SEP_CHAR } from "./common";
 
+export const RunnerSchema = z.union([
+    z.object({
+        rivet: z.object({
+            actorId: z.string(),
+        })
+    }),
+    z.object({
+        docker: z.object({})
+    }),
+    z.object({
+        noRunner: z.object({})
+    })
+]);
+
+export type Runner = z.infer<typeof RunnerSchema>;
+
 export const StatusSchema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("starting"), data: z.object({}) }),
-    z.object({ type: z.literal("running"), data: z.object({}) }),
+    z.object({ type: z.literal("running"), data: RunnerSchema }),
     z.object({ type: z.literal("finishing"), data: z.object({}) }),
     z.object({ type: z.literal("converting"), data: z.object({}) }),
     z.object({ type: z.literal("uploading"), data: z.object({}) }),

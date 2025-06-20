@@ -38,6 +38,11 @@ export async function runDockerBuild(
 		`Starting kaniko with args: docker ${kanikoArgs.join(" ")}`,
 	);
 
+	buildStore.updateStatus(buildId, {
+		type: "running",
+		data: { docker: {} }
+	});
+
 	return new Promise<void>((resolve, reject) => {
 		const dockerProcess = spawn("docker", kanikoArgs, {
 			stdio: ["pipe", "pipe", "pipe"]

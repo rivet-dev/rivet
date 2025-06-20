@@ -16,7 +16,7 @@ pub struct Opts {
 
 	/// Specify which log stream to display (stdout, stderr, or all)
 	#[clap(long, short = 's')]
-	stream: Option<crate::util::actor::logs::LogStream>,
+	stream: Option<toolchain::util::actor::logs::LogStream>,
 
 	/// Disable timestamp display in logs
 	#[clap(long)]
@@ -36,17 +36,23 @@ impl Opts {
 		let actor_id =
 			Uuid::parse_str(&self.id).map_err(|_| errors::UserError::new("invalid id uuid"))?;
 
-		crate::util::actor::logs::tail(
+		let print_type = if self.no_timestamps {
+			toolchain::util::actor::logs::PrintType::Print
+		} else {
+			toolchain::util::actor::logs::PrintType::PrintWithTime
+		};
+		toolchain::util::actor::logs::tail(
 			&ctx,
-			crate::util::actor::logs::TailOpts {
+			toolchain::util::actor::logs::TailOpts {
 				environment: &env,
 				actor_id,
 				stream: self
 					.stream
 					.clone()
-					.unwrap_or(crate::util::actor::logs::LogStream::All),
+					.unwrap_or(toolchain::util::actor::logs::LogStream::All),
 				follow: !self.no_follow,
-				timestamps: !self.no_timestamps,
+				print_type,
+				exit_on_ctrl_c: true
 			},
 		)
 		.await?;

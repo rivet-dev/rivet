@@ -16,7 +16,6 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 async-posthog.workspace = true
-base64 = "0.22.1"
 clap = { version = "4.5.9", features = ["derive"] }
 ctrlc = "3.4.5"
 deno-embed.workspace = true

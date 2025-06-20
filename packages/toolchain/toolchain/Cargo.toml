@@ -9,6 +9,8 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0"
 async-stream = "0.3.3"
+base64 = "0.22.1"
+chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 console = "0.15"
 const_format = "0.2.32"
@@ -34,6 +36,7 @@ schemars = "0.8.21"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 sha1 = "0.10.6"
+strip-ansi-escapes = "0.2.1"
 strum = { version = "0.24", features = ["derive"] }
 tar = "0.4.40"
 tempfile = "3.13.0"

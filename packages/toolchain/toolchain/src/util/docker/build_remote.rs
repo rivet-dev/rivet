@@ -505,7 +505,7 @@ async fn upload_build_context(
 }
 
 async fn poll_build_status(
-	_ctx: &ToolchainCtx,
+	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
 	build_id: &str,
 	ci_manager_endpoint: &str,
@@ -514,11 +514,16 @@ async fn poll_build_status(
 
 	// Poll build status until completion
 	task.log("[Remote Build] Polling build status...");
-	let max_attempts = 900; // 30 minutes
-	let interval = Duration::from_secs(2);
+	let max_timeout = Duration::from_secs(30 * 60);
+	let poll_interval = Duration::from_secs(2);
+	let start_time = std::time::Instant::now();
+	let mut previous_status = String::new();
+	loop {
+		if start_time.elapsed() >= max_timeout {
+			bail!("Build polling timeout after 30 minutes");
+		}
 
-	for attempt in 0..max_attempts {
-		tokio::time::sleep(interval).await;
+		tokio::time::sleep(poll_interval).await;
 
 		let response = reqwest::Client::new()
 			.get(&format!("{}/builds/{}", server_url, build_id))
@@ -539,7 +544,10 @@ async fn poll_build_status(
 						.and_then(|t| t.as_str())
 						.unwrap_or("unknown");
 
-					task.log(format!("[Remote Build] Build status: {}", status));
+					let is_status_changed = previous_status != status;
+					if is_status_changed {
+						previous_status = status.to_string();
+					}
 
 					match status {
 						"success" => {
@@ -562,33 +570,138 @@ async fn poll_build_status(
 								.unwrap_or("Unknown error");
 							bail!("Remote build failed: {}", reason);
 						}
+						"running" => {
+							task.log(format!("[Remote Build] Build status: {}", status));
+
+							// If we know its running, and have its actor ID,
+							// we can stop polling and start streaming logs
+							// until the actor exists.
+							let runner = build_info
+								.get("status")
+								.and_then(|s| s.get("data"))
+								.and_then(|d| d.get("rivet"));
+							if let Some(runner) = runner {
+								let actor_id_raw = runner
+									.get("actorId")
+									.and_then(|a| a.as_str())
+									.context("Rivet runner missing actorId")?;
+
+								let actor_id = Uuid::parse_str(&actor_id_raw)
+									.context("Failed to parse actor ID from rivet runner")?;
+
+								task.log("[Remote Build] Streaming build logs from actor.");
+
+								match crate::util::actor::logs::tail(
+									&ctx,
+									crate::util::actor::logs::TailOpts {
+										environment: CI_ENVIRONMENT_ID,
+										actor_id,
+										stream: crate::util::actor::logs::LogStream::All,
+										follow: true,
+										print_type: crate::util::actor::logs::PrintType::Custom(handle_build_log_line),
+										exit_on_ctrl_c: false
+									},
+								)
+								.await {
+									Ok(_) => {
+										task.log("[Remote Build] Build logs streaming completed.");
+									}
+									Err(e) => {
+										task.log(format!(
+											"[Remote Build] Failed to stream build logs: {}",
+											e
+										));
+									}
+								}
+							}
+						}
 						_ => {
+							if is_status_changed {
+								task.log(format!("[Remote Build] Build status: {}", status));
+							}
 							// Continue polling for other statuses (pending, running, etc.)
 						}
 					}
 				} else {
 					task.log(format!(
-						"[Remote Build] Poll attempt {} failed: HTTP {}",
-						attempt + 1,
+						"[Remote Build] Poll failed: HTTP {}",
 						res.status()
 					));
 				}
 			}
 			Err(e) => {
 				task.log(format!(
-					"[Remote Build] Poll attempt {} failed: {}",
-					attempt + 1,
+					"[Remote Build] Poll failed: {}",
 					e
 				));
 			}
 		}
+	}
+}
 
-		if attempt == max_attempts - 1 {
-			bail!("Build polling timeout after {} attempts", max_attempts);
-		}
+fn handle_build_log_line(
+	_timestamp: chrono::DateTime<chrono::Utc>,
+	line: String,
+) {
+	let line = strip_ansi_escape_codes(&line);
+
+	// If the line starts with INFO[.+], its a Kaniko log line
+	// so we strip the prefix and only print it if its important
+	let Some(line) = transform_log_line(line) else {
+		return;
+	};
+
+	println!("[Remote Build] {line}");
+}
+
+fn transform_log_line(line: String) -> Option<String> {
+	let Some(stripped) = line.strip_prefix("INFO[") else {
+		return Some(format!("> {}", line).to_string());
+	};
+
+	let end_index = stripped.find(']').unwrap_or(stripped.len());
+	let stripped = &stripped[end_index + 1..].trim();
+
+	let line: String = stripped.to_string();
+
+	// If it starts with uppercase word, its probably important
+	// since it's probably a Dockerfile instruction
+	let first_word = &line.split_whitespace()
+		.next()
+		.unwrap_or("");
+	let is_docker_instruction = first_word
+		.chars()
+		.filter(|c| c.is_alphabetic())
+		.all(|c| c.is_uppercase());
+
+	if is_docker_instruction {
+		return Some(line);
+	}
+	
+	if line.starts_with("Unpacking rootfs") {
+		return Some("Initializing image filesystem...".to_string());
 	}
 
-	bail!("timed out polling status")
+	if line.starts_with("Taking snapshot of full filesystem") {
+		return Some("Taking snapshot of filesystem...".to_string());
+	}
+
+	if line.starts_with("Uploading tar file") {
+		return Some("Exporting built image...".to_string());
+	}
+
+	None
+}
+
+fn strip_ansi_escape_codes(line: &str) -> String {
+	// If the input doesn't contain escape sequences, don't process it,
+	// as strip_ansi_escapes happens to strip tabs as well.
+	// (See https://github.com/luser/strip-ansi-escapes/issues/20)
+	if line.contains('\x1b') {
+		return strip_ansi_escapes::strip_str(line).to_string()
+	}
+
+	line.to_string()
 }
 
 async fn _get_build_by_tags(

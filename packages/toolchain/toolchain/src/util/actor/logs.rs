@@ -1,10 +1,14 @@
 use anyhow::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use clap::ValueEnum;
+use chrono::{DateTime, Utc};
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
-use toolchain::rivet_api::{apis, models};
+use crate::{
+	rivet_api::{apis, models},
+	ToolchainCtx
+};
 use uuid::Uuid;
 
 #[derive(ValueEnum, Clone)]
@@ -17,23 +21,36 @@ pub enum LogStream {
 	StdErr,
 }
 
+pub enum PrintType {
+	/// Callback that is called when a new line is fetched.
+	/// The first argument is the timestamp of the line, the second argument is the decoded line.
+	Custom(fn(DateTime<Utc>, String)),
+	/// Prints the line to stdout.
+	Print,
+	/// Prints with timestamp
+	PrintWithTime,
+}
+
 pub struct TailOpts<'a> {
+	pub print_type: PrintType,
 	pub environment: &'a str,
 	pub actor_id: Uuid,
 	pub stream: LogStream,
 	pub follow: bool,
-	pub timestamps: bool,
+	pub exit_on_ctrl_c: bool,
 }
 
 /// Reads the logs of an actor.
-pub async fn tail(ctx: &toolchain::ToolchainCtx, opts: TailOpts<'_>) -> Result<()> {
+pub async fn tail(ctx: &ToolchainCtx, opts: TailOpts<'_>) -> Result<()> {
 	let (stdout_fetched_tx, stdout_fetched_rx) = watch::channel(false);
 	let (stderr_fetched_tx, stderr_fetched_rx) = watch::channel(false);
 
+	let exit_on_ctrl_c = opts.exit_on_ctrl_c;
+	
 	tokio::select! {
 		result = tail_streams(ctx, &opts, stdout_fetched_tx, stderr_fetched_tx) => result,
 		result = poll_actor_state(ctx, &opts, stdout_fetched_rx, stderr_fetched_rx) => result,
-		_ = signal::ctrl_c() => {
+		_ = signal::ctrl_c(), if exit_on_ctrl_c => {
 			Ok(())
 		}
 	}
@@ -41,7 +58,7 @@ pub async fn tail(ctx: &toolchain::ToolchainCtx, opts: TailOpts<'_>) -> Result<(
 
 /// Reads the streams of an actor's logs.
 async fn tail_streams(
-	ctx: &toolchain::ToolchainCtx,
+	ctx: &ToolchainCtx,
 	opts: &TailOpts<'_>,
 	stdout_fetched_tx: watch::Sender<bool>,
 	stderr_fetched_tx: watch::Sender<bool>,
@@ -66,7 +83,7 @@ async fn tail_streams(
 
 /// Reads a specific stream of an actor's log.
 async fn tail_stream(
-	ctx: &toolchain::ToolchainCtx,
+	ctx: &ToolchainCtx,
 	opts: &TailOpts<'_>,
 	stream: models::ActorsQueryLogStream,
 	log_fetched_tx: watch::Sender<bool>,
@@ -111,6 +128,10 @@ async fn tail_stream(
 		}
 
 		for (ts, line) in res.timestamps.iter().zip(res.lines.iter()) {
+			let Result::Ok(ts) = ts.parse::<DateTime<Utc>>() else {
+				eprintln!("Failed to parse timestamp: {ts} for line {line}");
+				continue;
+			};
 			let decoded_line = match STANDARD.decode(line) {
 				Result::Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
 				Err(_) => {
@@ -119,10 +140,17 @@ async fn tail_stream(
 				}
 			};
 
-			if opts.timestamps {
-				println!("{ts} {decoded_line}");
-			} else {
-				println!("{decoded_line}");
+
+			match &opts.print_type {
+				PrintType::Custom(callback) => {
+					(callback)(ts, decoded_line);
+				}
+				PrintType::Print => {
+					println!("{decoded_line}");
+				}
+				PrintType::PrintWithTime => {
+					println!("{ts} {decoded_line}");
+				}
 			}
 		}
 
@@ -138,7 +166,7 @@ async fn tail_stream(
 ///
 /// Using this in a `tokio::select` will make all other tasks cancel when the actor finishes.
 async fn poll_actor_state(
-	ctx: &toolchain::ToolchainCtx,
+	ctx: &ToolchainCtx,
 	opts: &TailOpts<'_>,
 	mut stdout_fetched_rx: watch::Receiver<bool>,
 	mut stderr_fetched_rx: watch::Receiver<bool>,
@@ -171,7 +199,12 @@ async fn poll_actor_state(
 		.map_err(|err| anyhow!("Failed to poll actor: {err}"))?;
 
 		if res.actor.destroyed_at.is_some() {
-			println!("Actor finished");
+			match opts.print_type {
+				PrintType::Custom(_cb) => {}
+				_ => {
+					println!("Actor finished");
+				}
+			}
 			return Ok(());
 		}
 	}
