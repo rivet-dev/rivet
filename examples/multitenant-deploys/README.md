@@ -65,7 +65,8 @@ yarn test
 {
   "success": true,
   "appId": "your-app-id",
-  "endpoint": "https://your-app-id.example.com"
+  "endpoint": "https://your-app-id.example.com",
+  "buildOutput": "..." // Output logs from build command
 }
 ```
 

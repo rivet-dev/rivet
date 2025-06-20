@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install rivet CLI
 RUN apk add --no-cache curl unzip
-RUN curl -fsSL https://get.rivet.gg/install.sh | sh
+RUN curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
 
 # Copy package files and install dependencies
 COPY package.json yarn.lock ./

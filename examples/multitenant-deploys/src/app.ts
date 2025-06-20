@@ -4,7 +4,6 @@ import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import temp from "temp";
-import { RivetClient } from "@rivet-gg/api-full";
 
 const execAsync = promisify(exec);
 
@@ -21,8 +20,6 @@ if (!RIVET_CLOUD_TOKEN || !RIVET_PROJECT || !RIVET_ENVIRONMENT) {
 		"Missing required environment variables: RIVET_CLOUD_TOKEN, RIVET_PROJECT, RIVET_ENVIRONMENT",
 	);
 }
-
-export const rivet = new RivetClient({ token: RIVET_CLOUD_TOKEN });
 
 export const app = new Hono();
 
@@ -102,7 +99,10 @@ app.post("/deploy/:appId", async (c) => {
 		functions: {
 			[functionName]: {
 				build_path: "./project/",
-				dockerfile: "./project/Dockerfile",
+				dockerfile: "./Dockerfile",
+				unstable: {
+					build_method: "remote"
+				},
 				build_args: {
 					// See MY_ENV_VAR build args in Dockerfile
 					MY_ENV_VAR: "custom env var",
@@ -137,7 +137,7 @@ app.post("/deploy/:appId", async (c) => {
 
 	// Get the function endpoint
 	const endpointResult = await execAsync(
-		`rivet function endpoint --environment prod ${functionName}`,
+		`rivet function endpoint --environment ${RIVET_ENVIRONMENT} ${functionName}`,
 		{
 			cwd: tempDir,
 		},
@@ -151,5 +151,6 @@ app.post("/deploy/:appId", async (c) => {
 		success: true,
 		appId,
 		endpoint: endpointUrl,
+		buildOutput: deployResult.stdout,
 	});
 });
