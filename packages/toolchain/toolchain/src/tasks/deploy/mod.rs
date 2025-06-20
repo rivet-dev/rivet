@@ -176,10 +176,26 @@ async fn create_edge_function_actors(
 		}
 
 		// Define actor tags for this function
-		let actor_tags = json!({
+		let mut actor_tags = json!({
 			"type": "function",
 			"function": fn_name,
 		});
+
+		// Use build tags to match the appropriate build
+		// This is more robust than using a specific build ID
+		let mut build_tags = json!({
+			"name": fn_name,
+			"current": "true",
+			"type": "function"
+		});
+
+		// Add extra tags to the function tags
+		if let Some(tags) = &function.build.tags {
+			for (k, v) in tags {
+				actor_tags[k] = json!(v);
+				build_tags[k] = json!(v);
+			}
+		}
 
 		// List all existing actors for this function
 		let actors_res = apis::actors_api::actors_list(
@@ -202,14 +218,6 @@ async fn create_edge_function_actors(
 			existing_regions.insert(actor.region.clone());
 			existing_actors.insert(actor.region.clone(), actor.id);
 		}
-
-		// Use build tags to match the appropriate build
-		// This is more robust than using a specific build ID
-		let build_tags = json!({
-			"name": fn_name,
-			"current": "true",
-			"type": "function"
-		});
 
 		// Create or upgrade actors for each region
 		for region in &region_ids {
