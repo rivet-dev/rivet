@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use fdb_util::keys::*;
 use include_dir::{include_dir, Dir, File};
 use indoc::indoc;
 use rivet_pools::prelude::*;
@@ -406,9 +405,4 @@ pub fn build_history(
 	}
 
 	Ok(events_by_location)
-}
-
-/// Database name for the workflow internal state.
-pub fn db_name_internal(workflow_id: Uuid) -> (usize, Uuid, usize) {
-	(WORKFLOW, workflow_id, INTERNAL)
 }

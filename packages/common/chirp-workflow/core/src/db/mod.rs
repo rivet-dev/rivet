@@ -343,3 +343,8 @@ pub struct SignalData {
 pub fn sqlite_db_name_data(workflow_id: Uuid) -> (usize, Uuid, usize) {
 	(WORKFLOW, workflow_id, DATA)
 }
+
+/// Database name for the workflow internal state.
+pub fn sqlite_db_name_internal(workflow_id: Uuid) -> (usize, Uuid, usize) {
+	(WORKFLOW, workflow_id, INTERNAL)
+}

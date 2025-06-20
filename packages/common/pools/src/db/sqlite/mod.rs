@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::{metrics, Error, FdbPool};
 
-mod keys;
+pub mod keys;
 
 #[cfg(test)]
 mod tests;
@@ -146,7 +146,7 @@ impl SqliteWriterEntry {
 /// DB key in packed form. This is not the full FDB key, this is the DB name segment in DbDataKey.
 ///
 /// Stored in an `Arc` since this is frequently copied around.
-type KeyPacked = Arc<Vec<u8>>;
+pub type KeyPacked = Arc<Vec<u8>>;
 
 pub type SqlitePoolManagerHandle = Arc<SqlitePoolManager>;
 pub type SqlitePoolManagerHandleWeak = Weak<SqlitePoolManager>;
@@ -293,22 +293,15 @@ impl SqlitePoolManager {
 
 // MARK: Private helpers
 impl SqlitePoolManager {
-	fn db_info(&self, key_packed: &KeyPacked) -> (PathBuf, String) {
+	fn db_path(&self, key_packed: &KeyPacked) -> PathBuf {
 		let hex_key_str = hex::encode(&**key_packed);
 
 		match &self.storage {
-			SqliteStorage::Local { path } => {
-				// Determine the persistent location of this database
-				let db_path = path.join(format!("{hex_key_str}.db"));
-				let db_url = format!("sqlite://{}", db_path.display());
-				(db_path, db_url)
-			}
+			// Determine the persistent location of this database
+			SqliteStorage::Local { path } => path.join(format!("{hex_key_str}.db")),
+			// Generate temporary file location so multiple readers don't clobber each other
 			SqliteStorage::FoundationDb { path } => {
-				// Generate temporary file location so multiple readers don't clobber each other
-				let db_path =
-					path.join(format!("rivet-sqlite-{hex_key_str}-{}.db", Uuid::new_v4()));
-				let db_url = format!("sqlite://{}", db_path.display());
-				(db_path, db_url)
+				path.join(format!("rivet-sqlite-{hex_key_str}-{}.db", Uuid::new_v4()))
 			}
 		}
 	}
@@ -344,7 +337,7 @@ impl SqlitePoolManager {
 							}
 						}
 					},
-					clear_db_files(&self.storage, self.db_info(&key_packed).0),
+					clear_db_files(&self.storage, self.db_path(&key_packed)),
 				);
 			}
 		}
@@ -746,13 +739,13 @@ pub struct SqlitePoolInner {
 }
 
 impl SqlitePoolInner {
-	#[tracing::instrument(name = "sqlite_pool_new", skip_all)]
 	async fn new(
 		key_packed: KeyPacked,
 		conn_type: SqliteConnType,
 		manager: SqlitePoolManagerHandle,
 	) -> Result<SqlitePool, Error> {
-		let (db_path, db_url) = manager.db_info(&key_packed);
+		let db_path = manager.db_path(&key_packed);
+		let db_url = format!("sqlite://{}", db_path.display());
 
 		// Load database
 		match &manager.storage {
@@ -893,6 +886,7 @@ impl SqlitePoolInner {
 }
 
 impl SqlitePoolInner {
+	// TODO: Doesn't need a result type
 	#[tracing::instrument(name = "sqlite_pool_snapshot", skip_all)]
 	pub async fn snapshot(&self, vacuum: bool) -> GlobalResult<bool> {
 		match self
@@ -910,9 +904,21 @@ impl SqlitePoolInner {
 			}
 		}
 	}
+
+	#[tracing::instrument(name = "sqlite_pool_evict", skip_all)]
+	pub async fn evict(&self) -> GlobalResult<()> {
+		self
+			.manager
+			.evict_with_key(&[self.key_packed.clone()])
+			.await
+	}
 }
 
 impl SqlitePoolInner {
+	pub fn db_path(&self) -> &Path {
+		&self.db_path
+	}
+
 	#[tracing::instrument(skip_all)]
 	pub async fn conn(&self) -> Result<PoolConnection<Sqlite>, sqlx::Error> {
 		// Attempt to use an existing connection

@@ -29,6 +29,10 @@ pub enum DatabaseType {
 	Redis,
 	#[clap(alias = "ch")]
 	Clickhouse,
+	#[clap(alias = "wfd")]
+	WorkflowData,
+	#[clap(alias = "wfi")]
+	WorkflowInternal,
 }
 
 impl SubCommand {
@@ -55,6 +59,12 @@ impl SubCommand {
 					DatabaseType::Redis => crate::util::db::redis_shell(config, shell_ctx).await?,
 					DatabaseType::Clickhouse => {
 						crate::util::db::clickhouse_shell(config, shell_ctx).await?
+					}
+					DatabaseType::WorkflowData => {
+						crate::util::db::wf_sqlite_shell(config, shell_ctx, false).await?
+					}
+					DatabaseType::WorkflowInternal => {
+						crate::util::db::wf_sqlite_shell(config, shell_ctx, true).await?
 					}
 				}
 

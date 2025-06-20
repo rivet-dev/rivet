@@ -142,7 +142,7 @@ impl DatabaseFdbSqliteNats {
 		self.pools
 			.sqlite_manager()
 			.evict(vec![
-				sqlite::db_name_internal(workflow_id),
+				crate::db::sqlite_db_name_internal(workflow_id),
 				crate::db::sqlite_db_name_data(workflow_id),
 			])
 			.await?;
@@ -1277,7 +1277,7 @@ impl Database for DatabaseFdbSqliteNats {
 				async move {
 					let pool = &self
 						.pools
-						.sqlite(sqlite::db_name_internal(partial.workflow_id), false)
+						.sqlite(crate::db::sqlite_db_name_internal(partial.workflow_id), false)
 						.await?;
 
 					// Handle error during sqlite init
@@ -1876,7 +1876,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<Option<SignalData>> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(workflow_id), false)
 			.await?;
 
 		let owned_filter = filter
@@ -2323,7 +2323,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		// Insert history event
@@ -2351,7 +2351,7 @@ impl Database for DatabaseFdbSqliteNats {
 			.sqlite_manager()
 			.flush(
 				vec![
-					sqlite::db_name_internal(from_workflow_id),
+					crate::db::sqlite_db_name_internal(from_workflow_id),
 					crate::db::sqlite_db_name_data(from_workflow_id),
 				],
 				false,
@@ -2413,7 +2413,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<Uuid> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(workflow_id), false)
 			.await?;
 
 		// Insert history event
@@ -2448,7 +2448,7 @@ impl Database for DatabaseFdbSqliteNats {
 			.sqlite_manager()
 			.flush(
 				vec![
-					sqlite::db_name_internal(workflow_id),
+					crate::db::sqlite_db_name_internal(workflow_id),
 					crate::db::sqlite_db_name_data(workflow_id),
 				],
 				false,
@@ -2596,7 +2596,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(workflow_id), false)
 			.await?;
 		let input_hash = event_id.input_hash.to_be_bytes();
 
@@ -2702,7 +2702,7 @@ impl Database for DatabaseFdbSqliteNats {
 			.sqlite_manager()
 			.flush(
 				vec![
-					sqlite::db_name_internal(from_workflow_id),
+					crate::db::sqlite_db_name_internal(from_workflow_id),
 					crate::db::sqlite_db_name_data(from_workflow_id),
 				],
 				false,
@@ -2711,7 +2711,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -2751,7 +2751,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(workflow_id), false)
 			.await?;
 
 		self.txn(|| async {
@@ -3040,7 +3040,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -3072,7 +3072,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -3100,7 +3100,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -3132,7 +3132,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -3164,7 +3164,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
+			.sqlite(crate::db::sqlite_db_name_internal(from_workflow_id), false)
 			.await?;
 
 		sql_execute!(
@@ -3220,7 +3220,7 @@ async fn flush_handler(pools: rivet_pools::Pools, mut flush_rx: mpsc::UnboundedR
 			.sqlite_manager()
 			.flush(
 				vec![
-					sqlite::db_name_internal(workflow_id),
+					crate::db::sqlite_db_name_internal(workflow_id),
 					crate::db::sqlite_db_name_data(workflow_id),
 				],
 				true,

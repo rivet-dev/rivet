@@ -165,7 +165,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 			runtime::State::new(res.client_id, res.client_workflow_id, input.image_id),
 			|ctx, state| {
 				let input = input.clone();
-				let meta = initial_actor_setup.meta.clone();
 
 				async move {
 					let sig = if let Some(drain_timeout_ts) = state.drain_timeout_ts {

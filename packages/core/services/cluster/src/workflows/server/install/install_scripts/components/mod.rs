@@ -217,6 +217,38 @@ pub mod skopeo {
 	}
 }
 
+pub mod go {
+	use indoc::indoc;
+
+	pub fn install() -> String {
+		indoc!(
+			r#"
+			wget https://go.dev/dl/go1.24.4.linux-amd64.tar.gz
+			sudo tar -C /usr/local -xzf go1.24.4.linux-amd64.tar.gz
+			export PATH=$PATH:/usr/local/go/bin
+			export PATH="$PATH:$(go env GOPATH)/bin"
+			"#
+		)
+		.to_string()
+	}
+}
+
+pub mod usql {
+	use indoc::indoc;
+
+	/// Requires go.
+	pub fn install() -> String {
+		indoc!(
+			r#"
+			apt install -y gcc
+
+			go install github.com/xo/usql@latest
+			"#
+		)
+		.to_string()
+	}
+}
+
 pub mod umoci {
 	use indoc::indoc;
 

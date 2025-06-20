@@ -11,13 +11,15 @@ chirp-workflow.workspace = true
 chrono = "0.4.38"
 clap = { version = "4.3", features = ["derive"] }
 colored_json = "5.0.0"
+fdb-util.workspace = true
+foundationdb.workspace = true
 futures-util = "0.3"
 global-error.workspace = true
 hex.workspace = true
 include_dir = "0.7.4"
 indoc = "2.0.5"
+lz4_flex = "0.11.3"
 reqwest = "0.12.9"
-foundationdb.workspace = true
 rivet-api.workspace = true
 rivet-config.workspace = true
 rivet-logs.workspace = true

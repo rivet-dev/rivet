@@ -617,6 +617,19 @@ pub async fn insert_ports_fdb(ctx: &ActivityCtx, input: &InsertPortsFdbInput) ->
 	Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct CompareRetryInput {
+	last_retry_ts: i64,
+}
+
+#[activity(CompareRetry)]
+async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> GlobalResult<(i64, bool)> {
+	let now = util::timestamp::now();
+
+	// If the last retry ts is more than RETRY_RESET_DURATION_MS, reset retry count
+	Ok((now, input.last_retry_ts < now - RETRY_RESET_DURATION_MS))
+}
+
 /// Returns whether or not there was availability to spawn the actor.
 pub async fn spawn_actor(
 	ctx: &mut WorkflowCtx,
@@ -790,9 +803,11 @@ pub async fn reschedule_actor(
 				let mut backoff =
 					util::Backoff::new_at(8, None, BASE_RETRY_TIMEOUT_MS, 500, state.retry_count);
 
-				// If the last retry ts is more than RETRY_RESET_DURATION_MS, reset retry count to 0
-				let now = util::timestamp::now();
-				state.retry_count = if state.last_retry_ts < now - RETRY_RESET_DURATION_MS {
+				let (now, reset) = ctx.v(2).activity(CompareRetryInput {
+					last_retry_ts: state.last_retry_ts,
+				}).await?;
+
+				state.retry_count = if reset {
 					0
 				} else {
 					state.retry_count + 1

@@ -72,6 +72,8 @@ pub async fn gen_install(
 			script.push(components::fdb::install(initialize_immediately));
 		}
 		PoolType::Worker => {
+			script.push(components::go::install());
+			script.push(components::usql::install());
 			script.push(components::otel_collector::install(pool_type)?);
 			script.push(components::rivet::worker::install(config)?);
 		}
