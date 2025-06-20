@@ -7476,6 +7476,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/node@npm:^22.15.30":
+  version: 22.15.31
+  resolution: "@types/node@npm:22.15.31"
+  dependencies:
+    undici-types: "npm:~6.21.0"
+  checksum: 10c0/ef7d5dc890da41cfd554d35ab8998bc18be9e3a0caa642e720599ac4410a94a4879766e52b3c9cafa06c66b7b8aebdc51f322cf67df23a6489927890196a316d
+  languageName: node
+  linkType: hard
+
 "@types/pg-pool@npm:2.0.6":
   version: 2.0.6
   resolution: "@types/pg-pool@npm:2.0.6"
@@ -9171,6 +9180,7 @@ __metadata:
     "@hono/node-server": "npm:^1.14.4"
     "@rivet-gg/api": "npm:^25.4.2"
     "@types/eventsource": "npm:^1.1.15"
+    "@types/node": "npm:^22.15.30"
     eventsource: "npm:^4.0.0"
     get-port: "npm:^7.1.0"
     hono: "npm:^4.7.11"

@@ -5,6 +5,8 @@
 				"access_kind": "development"
 			},
 			"ui": {
+				"enable": true,
+				"proxy_origin": "http://frontend-hub:5080",
 				"public_origin_regex": ".*"
 			},
 			"guard": {

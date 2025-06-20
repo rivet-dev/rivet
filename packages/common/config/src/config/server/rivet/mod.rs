@@ -730,6 +730,11 @@ pub struct Ui {
 	///
 	/// If disabled, the UI can be hosted separately.
 	pub enable: Option<bool>,
+	/// Origin to proxy UI requests to. This should be the server serving the actula files fro the
+	/// frontend.
+	///
+	/// This is frequently either Vite for a development setup or Nginx for a simple setup.
+	pub proxy_origin: Option<Url>,
 	/// The origin URL for the UI.
 	pub public_origin: Option<Url>,
 	/// Regular expression to match valid UI origins.
@@ -739,6 +744,12 @@ pub struct Ui {
 impl Ui {
 	pub fn enable(&self) -> bool {
 		self.enable.unwrap_or(true)
+	}
+
+	pub fn proxy_origin(&self) -> Url {
+		self.proxy_origin
+			.clone()
+			.unwrap_or_else(|| Url::parse(&format!("http://127.0.0.1:5080")).unwrap())
 	}
 
 	pub fn public_origin(&self) -> Url {

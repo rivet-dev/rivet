@@ -46,7 +46,14 @@ export default defineConfig({
 		process.env.DEBUG_BUNDLE ? visualizer() : null,
 	],
 	server: {
+		host: "0.0.0.0",
 		port: 5080,
+		allowedHosts: true,
+		// Listen on a different port since we don't proxy WebSockets on /ui
+		hmr: {
+			port: 5080,
+			host: "127.0.0.1"
+		}
 	},
 	preview: {
 		port: 5080,

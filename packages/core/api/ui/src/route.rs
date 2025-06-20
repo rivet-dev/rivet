@@ -1,29 +1,9 @@
-use hyper::{Body, Request, Response};
+use hyper::{Body, Method, Request, Response};
 use rivet_operation::prelude::*;
 
 pub struct Router;
 
 impl Router {
-	fn replace_vite_app_api_url(
-		content: &[u8],
-		config: &rivet_config::Config,
-	) -> GlobalResult<Vec<u8>> {
-		let content_str = std::str::from_utf8(content)?;
-
-		let replacement_count = content_str.matches("__APP_API_URL__").count();
-		ensure!(
-			replacement_count > 0,
-			"Expected at least one occurrence of __APP_API_URL__, found {}",
-			replacement_count
-		);
-
-		let public_origin =
-			util::url::to_string_without_slash(&config.server()?.rivet.api_public.public_origin());
-		let replaced_content = content_str.replace("__APP_API_URL__", &public_origin);
-
-		Ok(replaced_content.into_bytes())
-	}
-
 	#[doc(hidden)]
 	#[tracing::instrument(skip_all)]
 	pub async fn __inner(
@@ -57,74 +37,89 @@ impl Router {
 			return Ok(None);
 		}
 
-		// Strip the prefix to:
-		// - Strip the mount path of /ui.
-		// - Strip the starting slash in order to match the format `include_dir` needs.
-		let path = request.uri().path().trim_start_matches("/ui/");
-		let content = rivet_hub_embed::get_file_content(path);
+		// Build proxy URL by joining request path to base URL
+		let mut proxy_url = config.server()?.rivet.ui.proxy_origin().clone();
+		
+		// Remove leading slash from request path since join() expects relative paths
+		let request_path = request.uri().path().strip_prefix('/').unwrap_or(request.uri().path());
+		
+		// Join the request path to the base URL
+		proxy_url = match proxy_url.join(request_path) {
+			Ok(url) => url,
+			Err(e) => bail!("Failed to build proxy URL: {}", e),
+		};
+		
+		// Set query string if present
+		proxy_url.set_query(request.uri().query());
+		
+		let full_proxy_url = proxy_url.to_string();
 
-		match content {
-			Some(content) => {
-				let content_type = mime_guess::from_path(path).first_or_octet_stream();
-				tracing::debug!(
-					path = ?path,
-					?content_type,
-					length = ?content.len(),
-					"serving file"
-				);
-				if let Some(headers) = response.headers_mut() {
-					headers.insert(
-						hyper::header::CONTENT_TYPE,
-						hyper::header::HeaderValue::from_str(content_type.as_ref()).unwrap(),
-					);
-				}
+		tracing::debug!(
+			original_path = ?path,
+			proxy_url = ?full_proxy_url,
+			"proxying request"
+		);
 
-				// Replace VITE_APP_API_URL if the file is index.html
-				let content = if path == "index.html" {
-					Self::replace_vite_app_api_url(content, &config)?
-				} else {
-					content.to_vec()
-				};
+		// Build reqwest request
+		let client = reqwest::Client::new();
+		let method = match reqwest::Method::from_bytes(request.method().as_str().as_bytes()) {
+			Ok(method) => method,
+			Err(e) => bail!("Invalid HTTP method: {}", e),
+		};
+		let mut req_builder = client.request(method, &full_proxy_url);
 
-				Ok(Some(content))
+		// Forward headers
+		for (name, value) in request.headers() {
+			if let Ok(value_str) = value.to_str() {
+				req_builder = req_builder.header(name.as_str(), value_str);
 			}
-			None => {
-				// HACK(FRONT-545): Paths with tokens in them are interpreted as a file, so we
-				// include certain exceptions
-				if path.ends_with(".html") || !path.contains('.') || path.contains("device.") {
-					tracing::debug!(
-						path = ?path,
-						"file not found, serving index.html"
-					);
+		}
 
-					// Serve index.html content
-					let index_content = unwrap!(
-						rivet_hub_embed::get_file_content("index.html"),
-						"index.html not found"
-					);
+		// Forward body for non-GET requests
+		if request.method() != Method::GET && request.method() != Method::HEAD {
+			let body_bytes = match hyper::body::to_bytes(std::mem::replace(request.body_mut(), Body::empty())).await {
+				Ok(bytes) => bytes,
+				Err(e) => bail!("Failed to read request body: {}", e),
+			};
+			req_builder = req_builder.body(body_bytes.to_vec());
+		}
 
-					// Replace VITE_APP_API_URL in index.html
-					let index_content = Self::replace_vite_app_api_url(index_content, &config)?;
+		// Make the request
+		let proxy_response = match req_builder.send().await {
+			Ok(response) => response,
+			Err(e) => bail!("Proxy request failed: {}", e),
+		};
 
-					if let Some(headers) = response.headers_mut() {
-						headers.insert(
-							hyper::header::CONTENT_TYPE,
-							hyper::header::HeaderValue::from_static("text/html"),
-						);
+		// Set response status
+		let status_code = proxy_response.status();
+		let hyper_status = match hyper::StatusCode::from_u16(status_code.as_u16()) {
+			Ok(status) => status,
+			Err(e) => bail!("Invalid status code: {}", e),
+		};
+		*response = std::mem::take(response).status(hyper_status);
+
+		// Forward response headers
+		if let Some(headers) = response.headers_mut() {
+			for (name, value) in proxy_response.headers() {
+				if let Ok(header_name) =
+					hyper::header::HeaderName::from_bytes(name.as_str().as_bytes())
+				{
+					if let Ok(header_value) =
+						hyper::header::HeaderValue::from_bytes(value.as_bytes())
+					{
+						headers.insert(header_name, header_value);
 					}
-
-					Ok(Some(index_content))
-				} else {
-					tracing::debug!(
-						path = ?path,
-						"file not found, returning 404"
-					);
-
-					*response = std::mem::take(response).status(hyper::StatusCode::NOT_FOUND);
-					Ok(Some("Not Found".into()))
 				}
 			}
 		}
+
+		// Get response body
+		let body_bytes = match proxy_response.bytes().await {
+			Ok(bytes) => bytes,
+			Err(e) => bail!("Failed to read proxy response body: {}", e),
+		};
+
+		Ok(Some(body_bytes.to_vec()))
 	}
 
 	#[tracing::instrument(skip_all)]

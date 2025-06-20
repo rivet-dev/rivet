@@ -9,5 +9,7 @@ cd /app
 yarn install
 
 # Start dev server
+#
+# Set base to /ui since this is where the UI is hosted in the dev server
 cd /app/frontend/apps/hub
-yarn dev --host 0.0.0.0 --port 5080
+yarn dev --base=/ui
