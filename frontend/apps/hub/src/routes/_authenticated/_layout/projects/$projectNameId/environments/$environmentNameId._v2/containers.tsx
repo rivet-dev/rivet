@@ -60,10 +60,6 @@ function Actor() {
 
 const FIXED_TAGS = {};
 
-//const ACTORS_FILTER = (actor: Rivet.actors.Actor) =>
-//	toRecord(actor.tags).type !== "function" &&
-//	toRecord(actor.tags).framework !== "actor-core";
-
 const ACTORS_FILTER = (actor: Rivet.actors.Actor) =>
 	toRecord(actor.tags).framework !== "actor-core";
 
