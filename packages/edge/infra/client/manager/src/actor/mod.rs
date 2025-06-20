@@ -155,8 +155,7 @@ impl Actor {
 		let (_, ports) = tokio::try_join!(
 			async {
 				self.download_image(&ctx).await?;
-				self.make_fs(&ctx).await?;
-				Result::<(), anyhow::Error>::Ok(())
+				self.make_fs(&ctx).await
 			},
 			async {
 				let ports = self.bind_ports(ctx).await?;

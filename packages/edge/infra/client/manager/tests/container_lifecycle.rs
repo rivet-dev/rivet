@@ -83,9 +83,6 @@ async fn handle_connection(
 							send_init_packet(&mut tx).await;
 
 							start_echo_actor(&mut tx, actor_id).await;
-							start_echo_actor(&mut tx, Uuid::new_v4()).await;
-
-							tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
@@ -188,7 +185,7 @@ async fn handle_connection(
 											);
 										}
 
-										tokio::time::sleep(Duration::from_millis(50)).await;
+										tokio::time::sleep(Duration::from_millis(1000)).await;
 
 										// Verify client state
 										let actors = ctx.actors().read().await;

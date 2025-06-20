@@ -378,15 +378,34 @@ pub async fn total_dir_size<P: AsRef<Path>>(path: P) -> Result<u64> {
 	ensure!(path.is_dir(), "path is not a directory: {}", path.display());
 
 	let mut total_size = 0;
-	let mut read_dir = fs::read_dir(path).await?;
+	let mut read_dir = fs::read_dir(path).await.context("failed to read dir")?;
 
-	while let Some(entry) = read_dir.next_entry().await? {
+	while let Some(entry) = read_dir.next_entry().await.transpose() {
+		let entry = match entry {
+			Ok(entry) => entry,
+			Err(err) => {
+				tracing::debug!(?err, "failed to read entry");
+				continue;
+			}
+		};
 		let entry_path = entry.path();
 
 		if entry_path.is_dir() {
-			total_size += Box::pin(total_dir_size(entry_path)).await?;
+			match Box::pin(total_dir_size(entry_path)).await {
+				Ok(size) => total_size += size,
+				Err(err) => {
+					tracing::debug!(?err, p=?entry.path().display(), "failed to calculate size for directory");
+					continue;
+				}
+			}
 		} else {
-			total_size += fs::metadata(entry_path).await?.len();
+			match fs::metadata(entry_path).await {
+				Ok(metadata) => total_size += metadata.len(),
+				Err(err) => {
+					tracing::debug!(?err, p=?entry.path().display(), "failed to get metadata for file");
+					continue;
+				}
+			}
 		}
 	}
 

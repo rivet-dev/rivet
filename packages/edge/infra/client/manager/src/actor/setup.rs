@@ -391,7 +391,8 @@ impl Actor {
 			.arg("add")
 			.arg(netns_path.file_name().context("bad netns path")?)
 			.output()
-			.await?;
+			.await
+			.context("failed to run `ip`")?;
 		ensure!(
 			cmd_out.status.success(),
 			"failed `ip netns` command\n{}",
@@ -413,7 +414,8 @@ impl Actor {
 			.env("CNI_IFNAME", &ctx.config().cni.network_interface)
 			.env("CAP_ARGS", cni_params_json)
 			.output()
-			.await?;
+			.await
+			.context("failed to run `cnitool`")?;
 		ensure!(
 			cmd_out.status.success(),
 			"failed `cnitool` command\n{}",

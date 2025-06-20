@@ -230,11 +230,11 @@ impl ImageDownloadHandler {
 				metrics::IMAGE_CACHE_SIZE.set(images_dir_size + image_size as i64 - removed_bytes);
 
 				// Update state to signify download completed successfully
-				sqlx::query(indoc!(
+				let foo = sqlx::query(indoc!(
 					"
 					UPDATE images_cache
 					SET
-						download_complete_ts = ?2 AND
+						download_complete_ts = ?2,
 						size = ?3
 					WHERE image_id = ?1
 					",
