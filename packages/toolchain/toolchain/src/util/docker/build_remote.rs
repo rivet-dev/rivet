@@ -39,13 +39,13 @@ pub async fn build_remote(
 	task.log("[Remote Build] Starting remote build process");
 
 	// Get or create CI namespace
-	let _ci_namespace = get_or_create_ci_namespace(ctx, task.clone()).await?;
+	let ci_env = get_or_create_ci_namespace(ctx, task.clone()).await?;
 
 	// Get build IDs for CI manager and runner
-	let ci_manager_build_id = upload_ci_manager_build(ctx, task.clone()).await?;
-	let ci_runner_build_id = upload_ci_runner_build(ctx, task.clone()).await?;
+	let ci_manager_build_id = upload_ci_manager_build(ctx, task.clone(), &ci_env).await?;
+	let ci_runner_build_id = upload_ci_runner_build(ctx, task.clone(), &ci_env).await?;
 
-	// Get or create ci-runner actor
+	// Get or create ci-manager actor
 	let (ci_runner_actor_id, ci_runner_endpoint) =
 		get_or_create_ci_manager_actor(ctx, task.clone(), ci_manager_build_id, ci_runner_build_id)
 			.await?;
@@ -126,17 +126,26 @@ async fn get_or_create_ci_namespace(
 	Ok(TEMPEnvironment::from(*namespace_response.namespace))
 }
 
-async fn upload_ci_manager_build(ctx: &ToolchainCtx, task: task::TaskCtx) -> Result<Uuid> {
-	upload_ci_build(ctx, task, "ci-manager", CI_MANAGER_RELEASE_URL).await
+async fn upload_ci_manager_build(
+	ctx: &ToolchainCtx,
+	task: task::TaskCtx,
+	ci_env: &TEMPEnvironment
+) -> Result<Uuid> {
+	upload_ci_build(ctx, task, ci_env, "ci-manager", CI_MANAGER_RELEASE_URL).await
 }
 
-async fn upload_ci_runner_build(ctx: &ToolchainCtx, task: task::TaskCtx) -> Result<Uuid> {
-	upload_ci_build(ctx, task, "ci-runner", CI_RUNNER_RELEASE_URL).await
+async fn upload_ci_runner_build(
+	ctx: &ToolchainCtx,
+	task: task::TaskCtx,
+	ci_env: &TEMPEnvironment
+) -> Result<Uuid> {
+	upload_ci_build(ctx, task, ci_env, "ci-runner", CI_RUNNER_RELEASE_URL).await
 }
 
 async fn upload_ci_build(
 	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
+	ci_env: &TEMPEnvironment,
 	name: &str,
 	url: &str,
 ) -> Result<Uuid> {
@@ -144,11 +153,6 @@ async fn upload_ci_build(
 		"[Remote Build] Checking for existing {} build",
 		name
 	));
-
-	// Get the CI environment
-	let ci_env = get_ci_environment(ctx, task.clone())
-		.await
-		.context("Failed to get CI environment")?;
 
 	// Check if build already exists with this URL tag
 	let tags_filter = serde_json::to_string(&serde_json::json!({
@@ -219,10 +223,6 @@ async fn upload_ci_build(
 		name, push_output.build_id
 	));
 	Ok(push_output.build_id)
-}
-
-async fn get_ci_environment(ctx: &ToolchainCtx, task: task::TaskCtx) -> Result<TEMPEnvironment> {
-	get_or_create_ci_namespace(ctx, task).await
 }
 
 async fn download_file(url: &str) -> Result<NamedTempFile> {
