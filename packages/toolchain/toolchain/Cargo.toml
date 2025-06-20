@@ -14,6 +14,7 @@ console = "0.15"
 const_format = "0.2.32"
 deno-embed.workspace = true
 dirs = "5.0"
+flate2 = "1.0"
 futures-util = "0.3"
 humansize = "1.1"
 ignore = "0.4"

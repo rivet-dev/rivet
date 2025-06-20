@@ -1,0 +1,15 @@
+{
+	"actors": {
+		"ci-manager": {
+			"dockerfile": "packages/ci-manager/Dockerfile",
+			"build_path": "packages/ci-manager"
+		},
+		"ci-runner": {
+			"dockerfile": "packages/ci-runner/Dockerfile",
+			"build_path": "packages/ci-runner",
+			"unstable": {
+				"allow_root": true
+			}
+		}
+	}
+}

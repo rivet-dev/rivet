@@ -12984,6 +12984,7 @@ dependencies = [
  "const_format",
  "deno-embed",
  "dirs",
+ "flate2",
  "futures-util",
  "humansize",
  "ignore",

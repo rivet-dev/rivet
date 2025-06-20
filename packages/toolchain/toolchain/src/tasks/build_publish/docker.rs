@@ -125,34 +125,50 @@ pub async fn docker_build_and_push(
 	current_dir: &Path,
 	push_opts: &DockerBuildPushOpts,
 ) -> Result<docker::push::PushOutput> {
-	// Build image
-	let build_output = docker::build::build_image(
-		ctx,
-		task.clone(),
-		current_dir,
-		&Path::new(&push_opts.dockerfile),
-		push_opts.build_method,
-		push_opts.bundle,
-		push_opts.compression,
-		push_opts.build_args.as_ref().map(|x| x.as_slice()),
-		push_opts.build_target.as_ref().map(String::as_str),
-		push_opts.allow_root,
-	)
-	.await?;
+	match push_opts.build_method {
+		config::build::docker::BuildMethod::Native | config::build::docker::BuildMethod::Buildx => {
+			// Build image
+			let build_output = docker::build::build_image(
+				ctx,
+				task.clone(),
+				current_dir,
+				&Path::new(&push_opts.dockerfile),
+				push_opts.build_method,
+				push_opts.bundle,
+				push_opts.compression,
+				push_opts.build_args.as_ref().map(|x| x.as_slice()),
+				push_opts.build_target.as_ref().map(String::as_str),
+				push_opts.allow_root,
+			)
+			.await?;
 
-	// Upload build
-	docker::push::push_tar(
-		ctx,
-		task.clone(),
-		&docker::push::PushOpts {
-			env: push_opts.env.clone(),
-			path: build_output.path.to_owned(),
-			docker_tag: build_output.tag,
-			bundle: push_opts.bundle,
-			compression: push_opts.compression,
-		},
-	)
-	.await
+			// Upload build
+			docker::push::push_tar(
+				ctx,
+				task.clone(),
+				&docker::push::PushOpts {
+					env: push_opts.env.clone(),
+					path: build_output.path.to_owned(),
+					docker_tag: build_output.tag,
+					bundle: push_opts.bundle,
+					compression: push_opts.compression,
+				},
+			)
+			.await
+		}
+		config::build::docker::BuildMethod::Remote => {
+			docker::build_remote::build_remote(
+				ctx,
+				task.clone(),
+				push_opts.env.clone(),
+				current_dir,
+				&Path::new(&push_opts.dockerfile),
+				&push_opts.build_args,
+				&push_opts.build_target,
+			)
+			.await
+		}
+	}
 }
 
 pub struct DockerPushOpts {

@@ -5,6 +5,7 @@
 	"workspaces": [
 		"frontend/apps/*",
 		"frontend/packages/*",
+		"cloud/packages/*",
 		"site",
 		"sdks/api/runtime/typescript",
 		"sdks/api/full/typescript",
@@ -25,17 +26,6 @@
 	},
 	"resolutions": {
 		"react": "^19",
-		"react-dom": "^19",
-		"actor-core": "portal:../actor-core/packages/actor-core",
-		"@actor-core/cli": "portal:../actor-core/packages/actor-core-cli",
-		"create-actor": "portal:../../actor-core/packages/create-actor",
-		"@actor-core/memory": "portal:../actor-core/packages/drivers/memory",
-		"@actor-core/redis": "portal:../actor-core/packages/drivers/redis",
-		"@actor-core/framework-base": "portal:../actor-core/packages/frameworks/framework-base",
-		"@actor-core/react": "portal:../actor-core/packages/frameworks/react",
-		"@actor-core/bun": "portal:../actor-core/packages/platforms/bun",
-		"@actor-core/cloudflare-workers": "portal:../actor-core/packages/platforms/cloudflare-workers",
-		"@actor-core/nodejs": "portal:../actor-core/packages/platforms/nodejs",
-		"@actor-core/rivet": "portal:../actor-core/packages/platforms/rivet"
+		"react-dom": "^19"
 	}
 }

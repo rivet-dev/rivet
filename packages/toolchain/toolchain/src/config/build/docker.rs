@@ -65,6 +65,9 @@ pub enum BuildMethod {
 
 	/// Create & use a Buildx builder on this machine. Required for cross-platform compilation.
 	Native,
+
+	/// Use Rivet Cloud for building.
+	Remote,
 }
 
 #[derive(

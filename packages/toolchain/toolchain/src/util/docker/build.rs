@@ -1,5 +1,5 @@
 use anyhow::*;
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, result::Result::Ok};
 
 use crate::{
 	config::{self},
@@ -17,7 +17,7 @@ pub struct BuildImageOutput {
 
 /// Builds an image and archives it to a path.
 pub async fn build_image(
-	_ctx: &ToolchainCtx,
+	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
 	build_path: &Path,
 	dockerfile: &Path,
@@ -48,6 +48,7 @@ pub async fn build_image(
 	let buildx_info = match build_method {
 		config::build::docker::BuildMethod::Native => " (with native)",
 		config::build::docker::BuildMethod::Buildx => " (with buildx)",
+		config::build::docker::BuildMethod::Remote => " (with remote)",
 	};
 	task.log(format!("[Building] {}{buildx_info}", dockerfile.display()));
 
@@ -70,102 +71,29 @@ pub async fn build_image(
 	let image_tag = super::generate_unique_image_tag();
 	match build_method {
 		config::build::docker::BuildMethod::Native => {
-			let mut build_cmd = shell_cmd("docker");
-			build_cmd
-				.arg("build")
-				.arg("--platform")
-				.arg("linux/amd64")
-				.arg("--file")
-				.arg(dockerfile)
-				.arg("--tag")
-				.arg(&image_tag)
-				.args(
-					&build_arg_flags
-						.iter()
-						.map(|(k, v)| format!("--build-arg={}={}", k, v))
-						.collect::<Vec<String>>(),
-				);
-			if let Some(build_target) = build_target {
-				build_cmd.arg("--target").arg(build_target);
-			}
-			build_cmd.arg(build_path);
-			cmd::execute_docker_cmd(
+			build_native(
 				task.clone(),
-				build_cmd,
-				"Docker image failed to build (native)",
+				build_path,
+				dockerfile,
+				&build_arg_flags,
+				build_target,
+				&image_tag,
 			)
 			.await?;
 		}
 		config::build::docker::BuildMethod::Buildx => {
-			let builder_name = "rivet_toolchain";
-
-			// Determine if needs to create a new builder
-			let mut inspect_cmd = shell_cmd("docker");
-			inspect_cmd.arg("buildx").arg("inspect").arg(builder_name);
-			let inspect_output = cmd::execute_docker_cmd_silent_fallible(inspect_cmd).await?;
-
-			if !inspect_output.status.success()
-				&& String::from_utf8(inspect_output.stderr.clone())?
-					.contains(&format!("no builder \"{builder_name}\" found"))
-			{
-				// Create new builder
-
-				let mut build_cmd = shell_cmd("docker");
-				build_cmd
-					.arg("buildx")
-					.arg("create")
-					.arg("--name")
-					.arg(builder_name)
-					.arg("--driver")
-					.arg("docker-container")
-					.arg("--platform")
-					.arg("linux/amd64");
-				cmd::execute_docker_cmd(
-					task.clone(),
-					build_cmd,
-					"Failed to create Docker Buildx builder",
-				)
-				.await?;
-			} else {
-				// Builder exists
-
-				cmd::error_for_output_failure(
-					&inspect_output,
-					"Failed to inspect Docker Buildx runner",
-				)?;
-			}
-
-			// Build image
-			let mut build_cmd = shell_cmd("docker");
-			build_cmd
-				.arg("buildx")
-				.arg("build")
-				.arg("--builder")
-				.arg(builder_name)
-				.arg("--platform")
-				.arg("linux/amd64")
-				.arg("--file")
-				.arg(dockerfile)
-				.arg("--tag")
-				.arg(&image_tag)
-				.args(
-					&build_arg_flags
-						.iter()
-						.map(|(k, v)| format!("--build-arg={}={}", k, v))
-						.collect::<Vec<String>>(),
-				)
-				.arg("--output")
-				.arg("type=docker");
-			if let Some(build_target) = build_target {
-				build_cmd.arg("--target").arg(build_target);
-			}
-			build_cmd.arg(build_path);
-			cmd::execute_docker_cmd(
+			build_buildx(
 				task.clone(),
-				build_cmd,
-				"Docker image failed to build (buildx)",
+				build_path,
+				dockerfile,
+				&build_arg_flags,
+				build_target,
+				&image_tag,
 			)
 			.await?;
+		}
+		config::build::docker::BuildMethod::Remote => {
+			unreachable!()
 		}
 	}
 
@@ -192,4 +120,107 @@ pub async fn build_image(
 		tag: image_tag,
 		path: build_tar_path,
 	})
+}
+
+async fn build_native(
+	task: task::TaskCtx,
+	build_path: &Path,
+	dockerfile: &Path,
+	build_arg_flags: &HashMap<String, String>,
+	build_target: Option<&str>,
+	image_tag: &str,
+) -> Result<()> {
+	let mut build_cmd = shell_cmd("docker");
+	build_cmd
+		.arg("build")
+		.arg("--platform")
+		.arg("linux/amd64")
+		.arg("--file")
+		.arg(dockerfile)
+		.arg("--tag")
+		.arg(image_tag)
+		.args(
+			&build_arg_flags
+				.iter()
+				.map(|(k, v)| format!("--build-arg={}={}", k, v))
+				.collect::<Vec<String>>(),
+		);
+	if let Some(build_target) = build_target {
+		build_cmd.arg("--target").arg(build_target);
+	}
+	build_cmd.arg(build_path);
+	cmd::execute_docker_cmd(task, build_cmd, "Docker image failed to build (native)").await?;
+	Ok(())
+}
+
+async fn build_buildx(
+	task: task::TaskCtx,
+	build_path: &Path,
+	dockerfile: &Path,
+	build_arg_flags: &HashMap<String, String>,
+	build_target: Option<&str>,
+	image_tag: &str,
+) -> Result<()> {
+	let builder_name = "rivet_toolchain";
+
+	// Determine if needs to create a new builder
+	let mut inspect_cmd = shell_cmd("docker");
+	inspect_cmd.arg("buildx").arg("inspect").arg(builder_name);
+	let inspect_output = cmd::execute_docker_cmd_silent_fallible(inspect_cmd).await?;
+
+	if !inspect_output.status.success()
+		&& String::from_utf8(inspect_output.stderr.clone())?
+			.contains(&format!("no builder \"{builder_name}\" found"))
+	{
+		// Create new builder
+
+		let mut build_cmd = shell_cmd("docker");
+		build_cmd
+			.arg("buildx")
+			.arg("create")
+			.arg("--name")
+			.arg(builder_name)
+			.arg("--driver")
+			.arg("docker-container")
+			.arg("--platform")
+			.arg("linux/amd64");
+		cmd::execute_docker_cmd(
+			task.clone(),
+			build_cmd,
+			"Failed to create Docker Buildx builder",
+		)
+		.await?;
+	} else {
+		// Builder exists
+
+		cmd::error_for_output_failure(&inspect_output, "Failed to inspect Docker Buildx runner")?;
+	}
+
+	// Build image
+	let mut build_cmd = shell_cmd("docker");
+	build_cmd
+		.arg("buildx")
+		.arg("build")
+		.arg("--builder")
+		.arg(builder_name)
+		.arg("--platform")
+		.arg("linux/amd64")
+		.arg("--file")
+		.arg(dockerfile)
+		.arg("--tag")
+		.arg(image_tag)
+		.args(
+			&build_arg_flags
+				.iter()
+				.map(|(k, v)| format!("--build-arg={}={}", k, v))
+				.collect::<Vec<String>>(),
+		)
+		.arg("--output")
+		.arg("type=docker");
+	if let Some(build_target) = build_target {
+		build_cmd.arg("--target").arg(build_target);
+	}
+	build_cmd.arg(build_path);
+	cmd::execute_docker_cmd(task, build_cmd, "Docker image failed to build (buildx)").await?;
+	Ok(())
 }
