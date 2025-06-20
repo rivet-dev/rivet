@@ -10,7 +10,6 @@
 	},
 	"devDependencies": {
 		"@rivet-gg/actor-core": "^5.1.2",
-		"@rivet-gg/api-full": "workspace:*",
 		"@types/deno": "^2.2.0",
 		"@types/node": "^22.13.9",
 		"@types/ws": "^8.18.0",

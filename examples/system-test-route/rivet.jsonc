@@ -1,10 +1,6 @@
 {
 	"functions": {
-		"http-isolate": {
-			"script": "src/isolate/main.ts",
-			"path": "/isolate"
-		},
-		"http-container": {
+		"http": {
 			"dockerfile": "Dockerfile",
 			"path": "/container"
 		}

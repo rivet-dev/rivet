@@ -23,4 +23,4 @@ RUN chown -R rivet:rivet /app/dist
 USER rivet
 
 # Start the server
-CMD ["node", "dist/src/container/main.js"]
+CMD ["node", "dist/src/index.js"]
