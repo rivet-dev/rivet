@@ -33,7 +33,6 @@ async fn client_rebuild_state() {
 	let close_tx = Arc::new(close_tx);
 
 	let actor_id = Uuid::new_v4();
-	let actor_port = portpicker::pick_unused_port().expect("no free ports");
 	let first_client = Arc::new(AtomicBool::new(true));
 
 	let port = portpicker::pick_unused_port().expect("no free ports");
@@ -48,7 +47,6 @@ async fn client_rebuild_state() {
 				close_tx,
 				raw_stream,
 				actor_id,
-				actor_port,
 				first_client2.clone(),
 			)
 		},
@@ -72,7 +70,6 @@ async fn handle_connection(
 	close_tx: Arc<tokio::sync::watch::Sender<()>>,
 	raw_stream: TcpStream,
 	actor_id: Uuid,
-	actor_port: u16,
 	first_client: Arc<AtomicBool>,
 ) {
 	tokio::spawn(async move {
@@ -100,7 +97,7 @@ async fn handle_connection(
 
 							if first_client.load(Ordering::SeqCst) {
 								// Spawn actor on first client
-								start_echo_actor(&mut tx, actor_id, actor_port).await;
+								start_echo_actor(&mut tx, actor_id).await;
 							} else {
 								tokio::time::sleep(Duration::from_millis(350)).await;
 
@@ -108,7 +105,7 @@ async fn handle_connection(
 								let actors = ctx.actors().read().await;
 
 								assert!(
-									actors.contains_key(&actor_id),
+									actors.contains_key(&(actor_id, 0)),
 									"actor not in client memory"
 								);
 
@@ -119,9 +116,9 @@ async fn handle_connection(
 									&mut tx,
 									protocol::Command::SignalActor {
 										actor_id,
+										generation: 0,
 										signal: Signal::SIGKILL as i32,
 										persist_storage: false,
-										ignore_future_state: false,
 									},
 								)
 								.await;
@@ -146,7 +143,7 @@ async fn handle_connection(
 										// Verify client state
 										let actors = ctx.actors().read().await;
 										assert!(
-											!actors.contains_key(&actor_id),
+											!actors.contains_key(&(actor_id, 0)),
 											"actor still in client memory"
 										);
 
@@ -159,6 +156,7 @@ async fn handle_connection(
 								}
 							}
 						}
+						protocol::ToServer::AckCommands { .. } => {}
 					}
 				}
 				Message::Close(_) => {

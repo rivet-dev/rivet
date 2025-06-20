@@ -36,7 +36,6 @@ async fn client_state_external_kill() {
 	let close_tx = Arc::new(close_tx);
 
 	let actor_id = Uuid::new_v4();
-	let actor_port = portpicker::pick_unused_port().expect("no free ports");
 	let first_client = Arc::new(AtomicBool::new(true));
 	let actor_pid = Arc::new(AtomicI32::new(0));
 
@@ -53,7 +52,6 @@ async fn client_state_external_kill() {
 				close_tx,
 				raw_stream,
 				actor_id,
-				actor_port,
 				first_client2.clone(),
 				actor_pid2.clone(),
 			)
@@ -87,7 +85,6 @@ async fn handle_connection(
 	close_tx: Arc<tokio::sync::watch::Sender<()>>,
 	raw_stream: TcpStream,
 	actor_id: Uuid,
-	actor_port: u16,
 	first_client: Arc<AtomicBool>,
 	actor_pid: Arc<AtomicI32>,
 ) {
@@ -116,7 +113,7 @@ async fn handle_connection(
 
 							if first_client.load(Ordering::SeqCst) {
 								// Spawn actor on first client
-								start_echo_actor(&mut tx, actor_id, actor_port).await;
+								start_echo_actor(&mut tx, actor_id).await;
 							}
 						}
 						protocol::ToServer::Events(events) => {
@@ -141,7 +138,7 @@ async fn handle_connection(
 										// Verify client state
 										let actors = ctx.actors().read().await;
 										assert!(
-											!actors.contains_key(&actor_id),
+											!actors.contains_key(&(actor_id, 0)),
 											"actor still in client memory"
 										);
 
@@ -154,6 +151,7 @@ async fn handle_connection(
 								}
 							}
 						}
+						protocol::ToServer::AckCommands { .. } => {}
 					}
 				}
 				Message::Close(_) => {

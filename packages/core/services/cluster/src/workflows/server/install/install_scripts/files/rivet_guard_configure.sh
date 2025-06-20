@@ -26,6 +26,8 @@ ExecStart=/usr/local/bin/rivet-guard
 Restart=always
 RestartSec=2
 
+# High scheduling priority
+Nice=-15
 # Real time service
 CPUSchedulingPolicy=fifo
 # High CPU priority

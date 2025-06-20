@@ -10064,11 +10064,7 @@ components:
         - server_id
     EdgeIntercomPegboardPrewarmImageRequest:
       type: object
-      properties:
-        image_artifact_url_stub:
-          type: string
-      required:
-        - image_artifact_url_stub
+      properties: {}
     EdgeIntercomPegboardToggleClientDrainRequest:
       type: object
       properties:

@@ -520,13 +520,7 @@ pub async fn complete_build(
 					edge_intercom_pegboard_prewarm_image(
 						&config,
 						&build_id.to_string(),
-						models::EdgeIntercomPegboardPrewarmImageRequest {
-							image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
-								ctx.config(),
-								build.upload_id,
-								&build::utils::file_name(build.kind, build.compression),
-							)?,
-						},
+						json!({}),
 					)
 					.await
 					.map_err(Into::<GlobalError>::into)
@@ -542,10 +536,11 @@ pub async fn complete_build(
 			}
 		}
 
-		// Error only if all prewarm requests failed
-		if !results.is_empty() && results.iter().all(|res| res.is_err()) {
-			return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
-		}
+		// TODO: Disabled until deploy
+		// // Error only if all prewarm requests failed
+		// if !results.is_empty() && results.iter().all(|res| res.is_err()) {
+		// 	return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
+		// }
 	}
 
 	Ok(json!({}))

@@ -40,8 +40,13 @@ async fn container_lifecycle() {
 
 	// Init project directories
 	let tmp_dir = tempfile::TempDir::new().unwrap();
-	let config = init_client(&gen_tmp_dir_path, tmp_dir.path()).await;
-	tracing::info!(path=%tmp_dir.path().display(), "client dir");
+	let path = tmp_dir.path();
+	// let path = std::path::Path::new(
+	// 	"/home/rivet/rivet-ee/oss/packages/edge/infra/client/manager/tests/foo",
+	// );
+
+	let config = init_client(&gen_tmp_dir_path, &path).await;
+	tracing::info!(path=%path.display(), "client dir");
 
 	start_client(config, ctx_wrapper, close_rx, port).await;
 }
@@ -64,7 +69,6 @@ async fn handle_connection(
 		};
 
 		let actor_id = Uuid::new_v4();
-		let actor_port = portpicker::pick_unused_port().expect("no free ports");
 		let mut actor_state = State::None;
 
 		// Receive messages from socket
@@ -78,7 +82,10 @@ async fn handle_connection(
 						protocol::ToServer::Init { .. } => {
 							send_init_packet(&mut tx).await;
 
-							start_echo_actor(&mut tx, actor_id, actor_port).await;
+							start_echo_actor(&mut tx, actor_id).await;
+							start_echo_actor(&mut tx, Uuid::new_v4()).await;
+
+							tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
@@ -104,12 +111,12 @@ async fn handle_connection(
 											"actor not in client memory"
 										);
 									}
-									protocol::ActorState::Running { .. } => {
+									protocol::ActorState::Running { ref ports, .. } => {
 										if let State::Starting = actor_state {
 											actor_state = State::Running;
 										} else {
 											panic!(
-												"invalid prior state: {actor_state:?} -> {state:?}"
+												"invalid prior state: {actor_state:?} -> {state:?}",
 											);
 										}
 
@@ -125,10 +132,12 @@ async fn handle_connection(
 
 										tracing::info!("sending echo");
 
+										let port = ports.get("main").expect("no main port").source;
+
 										// Send echo test
 										let req = b"hello world";
 										let res = reqwest::Client::new()
-											.post(format!("http://0.0.0.0:{actor_port}"))
+											.post(format!("http://0.0.0.0:{port}"))
 											.body(req.to_vec())
 											.send()
 											.await
@@ -179,12 +188,12 @@ async fn handle_connection(
 											);
 										}
 
-										tokio::time::sleep(Duration::from_millis(5)).await;
+										tokio::time::sleep(Duration::from_millis(50)).await;
 
 										// Verify client state
 										let actors = ctx.actors().read().await;
 										assert!(
-											actors.contains_key(&(actor_id, 0)),
+											!actors.contains_key(&(actor_id, 0)),
 											"actor still in client memory"
 										);
 
@@ -195,6 +204,7 @@ async fn handle_connection(
 								}
 							}
 						}
+						protocol::ToServer::AckCommands { .. } => {}
 					}
 				}
 				Message::Close(_) => {

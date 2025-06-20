@@ -22,9 +22,8 @@ service:
 
 types:
   PrewarmImageRequest:
-    properties:
-      image_artifact_url_stub: string
-  
+    properties: {}
+
   ToggleClientDrainRequest:
     properties:
       draining: boolean

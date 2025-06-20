@@ -9,12 +9,8 @@ import * as core from "../../../../../../core";
 export const PrewarmImageRequest: core.serialization.ObjectSchema<
     serializers.edgeIntercom.pegboard.PrewarmImageRequest.Raw,
     Rivet.edgeIntercom.pegboard.PrewarmImageRequest
-> = core.serialization.object({
-    imageArtifactUrlStub: core.serialization.property("image_artifact_url_stub", core.serialization.string()),
-});
+> = core.serialization.object({});
 
 export declare namespace PrewarmImageRequest {
-    export interface Raw {
-        image_artifact_url_stub: string;
-    }
+    export interface Raw {}
 }

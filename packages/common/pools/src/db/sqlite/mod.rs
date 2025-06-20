@@ -907,8 +907,7 @@ impl SqlitePoolInner {
 
 	#[tracing::instrument(name = "sqlite_pool_evict", skip_all)]
 	pub async fn evict(&self) -> GlobalResult<()> {
-		self
-			.manager
+		self.manager
 			.evict_with_key(&[self.key_packed.clone()])
 			.await
 	}

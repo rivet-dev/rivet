@@ -50,9 +50,7 @@ export class Pegboard {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.edgeIntercom.pegboard.prewarmImage("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         imageArtifactUrlStub: "string"
-     *     })
+     *     await client.edgeIntercom.pegboard.prewarmImage("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {})
      */
     public async prewarmImage(
         imageId: string,

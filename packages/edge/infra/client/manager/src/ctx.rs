@@ -37,9 +37,8 @@ use uuid::Uuid;
 use crate::{
 	actor::Actor,
 	event_sender::EventSender,
-	metrics,
-	pull_addr_handler::PullAddrHandler,
-	runner,
+	image_download_handler::ImageDownloadHandler,
+	metrics, runner,
 	utils::{self, sql::SqlitePoolExt},
 };
 
@@ -81,7 +80,7 @@ pub struct Ctx {
 	pool: RwLock<SqlitePool>,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 	event_sender: EventSender,
-	pub(crate) pull_addr_handler: PullAddrHandler,
+	pub(crate) image_download_handler: ImageDownloadHandler,
 
 	pub(crate) actors: RwLock<HashMap<(Uuid, u32), Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
@@ -101,7 +100,7 @@ impl Ctx {
 			pool: RwLock::new(pool),
 			tx: Mutex::new(tx),
 			event_sender: EventSender::new(),
-			pull_addr_handler: PullAddrHandler::new(),
+			image_download_handler: ImageDownloadHandler::new(),
 
 			actors: RwLock::new(HashMap::new()),
 			isolate_runner: RwLock::new(None),
@@ -409,10 +408,7 @@ impl Ctx {
 					self.process_command(command).await?;
 				}
 			}
-			protocol::ToClient::PrewarmImage {
-				image_id,
-				image_artifact_url_stub,
-			} => utils::prewarm_image(&self, image_id, &image_artifact_url_stub),
+			protocol::ToClient::PrewarmImage { image } => self.prewarm_image(image),
 		}
 
 		Ok(())
@@ -602,6 +598,30 @@ impl Ctx {
 			if let Err(err) = res {
 				// TODO: This should hard error the manager
 				tracing::error!(%err, "failed to write isolate runner");
+			}
+		});
+	}
+
+	fn prewarm_image(self: &Arc<Ctx>, image_config: protocol::Image) {
+		// Log full URL for prewarm operation
+		let prewarm_url = format!("{}/{}", image_config.artifact_url_stub, image_config.id);
+		tracing::info!(image_id=?image_config.id, %prewarm_url, "prewarming image");
+
+		let self2 = self.clone();
+		tokio::spawn(async move {
+			match self2
+				.image_download_handler
+				.download(&self2, &image_config)
+				.await
+			{
+				Ok(_) => {
+					tracing::info!(image_id=?image_config.id, %prewarm_url, "prewarm complete")
+				}
+				Err(_) => tracing::warn!(
+					image_id=?image_config.id,
+					%prewarm_url,
+					"prewarm failed, artifact url could not be resolved"
+				),
 			}
 		});
 	}
@@ -809,6 +829,8 @@ impl Ctx {
 			})
 		)?;
 
+		self.rebuild_images_cache().await?;
+
 		self.event_sender.set_idx(last_event_idx + 1);
 
 		let isolate_runner = { self.isolate_runner.read().await.clone() };
@@ -899,6 +921,82 @@ impl Ctx {
 
 		Ok(())
 	}
+
+	/// Cleans up image cache entries that no longer have corresponding directories.
+	async fn rebuild_images_cache(&self) -> Result<()> {
+		let mut valid_image_ids = Vec::new();
+		let mut entries = fs::read_dir(self.images_path()).await?;
+
+		// Read all entries in the images directory
+		while let Some(entry) = entries.next_entry().await? {
+			if let Ok(file_type) = entry.file_type().await {
+				if file_type.is_dir() {
+					if let Some(name) = entry.file_name().to_str() {
+						if let Ok(image_id) = Uuid::parse_str(name) {
+							valid_image_ids.push(image_id);
+						} else {
+							tracing::warn!(path=%entry.path().display(), "invalid file name in image cache");
+						}
+					} else {
+						tracing::warn!(path=%entry.path().display(), "invalid file name in image cache");
+					}
+				} else {
+					tracing::warn!(path=%entry.path().display(), "unexpected file in image cache");
+				}
+			}
+		}
+
+		let mut conn = self.sql().await?;
+		let mut tx = conn.begin().await?;
+
+		sqlx::query(indoc!(
+			"
+			CREATE TEMPORARY TABLE __valid_images (
+				image_id BLOB PRIMARY KEY
+			)
+			"
+		))
+		.execute(&mut *tx)
+		.await?;
+
+		// For each valid image ID, mark it for keeping in a temporary table
+		for image_id in valid_image_ids {
+			sqlx::query(indoc!(
+				"
+				INSERT OR IGNORE INTO __valid_images (image_id) VALUES (?)
+				"
+			))
+			.bind(image_id)
+			.execute(&mut *tx)
+			.await?;
+		}
+
+		// Delete entries that aren't in our valid images table
+		let deleted = sqlx::query(indoc!(
+			"
+			DELETE
+			FROM images_cache
+			WHERE image_id NOT IN (
+				SELECT image_id FROM __valid_images
+			)
+			"
+		))
+		.execute(&mut *tx)
+		.await?;
+
+		// Clean up the temporary table
+		sqlx::query("DROP TABLE __valid_images")
+			.execute(&mut *tx)
+			.await?;
+
+		tx.commit().await?;
+
+		if deleted.rows_affected() > 0 {
+			tracing::info!(count=%deleted.rows_affected(), "cleaned up missing images");
+		}
+
+		Ok(())
+	}
 }
 
 // MARK: Utils
@@ -913,6 +1011,14 @@ impl Ctx {
 
 	pub fn actor_path(&self, actor_id: Uuid, generation: u32) -> PathBuf {
 		self.actors_path().join(format!("{actor_id}-{generation}"))
+	}
+
+	pub fn images_path(&self) -> PathBuf {
+		self.config().data_dir().join("images")
+	}
+
+	pub fn image_path(&self, image_id: Uuid) -> PathBuf {
+		self.images_path().join(image_id.to_string())
 	}
 
 	pub fn isolate_runner_path(&self) -> PathBuf {

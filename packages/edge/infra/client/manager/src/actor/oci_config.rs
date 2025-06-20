@@ -25,9 +25,7 @@ pub fn config(opts: ConfigOpts) -> Result<serde_json::Value> {
 	//
 	// Corresponds to cpu.weight in cgroups. Must be [1, 10_000]
 	//
-	// We divide by 8 in order to make sure the CPU shares are within bounds. `cpu` is measured in
-	// millishares, so 1_000 = 1 core. For a range of 32d1 (32_000) to 1d16 (62), we divide by 8
-	// to make the range 3_200 to 6.
+	// We divide by 10 in order to make sure the CPU shares are within bounds.
 	let mut cpu_shares = opts.cpu / 10;
 	if cpu_shares > 10_000 {
 		cpu_shares = 10_000;

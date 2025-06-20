@@ -1,8 +1,10 @@
 use api_helper::ctx::Ctx;
 use chirp_workflow::prelude::*;
+use cluster::types::BuildDeliveryMethod;
 use fdb_util::SERIALIZABLE;
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::TryStreamExt;
+use pegboard::protocol;
 use rivet_api::models;
 use serde_json::json;
 
@@ -12,13 +14,10 @@ use crate::auth::Auth;
 pub async fn prewarm_image(
 	ctx: Ctx<Auth>,
 	image_id: Uuid,
-	body: models::EdgeIntercomPegboardPrewarmImageRequest,
+	body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
 	ctx.auth().bypass()?;
 
-	// TODO: If we replicate the algorithm for choosing the correct ATS node from the pb manager, we can
-	// remove prewarming from the pb protocol entirely and just prewarm the image here since this api service
-	// is in the same dc
 	let client_id = ctx
 		.fdb()
 		.await?
@@ -59,10 +58,35 @@ pub async fn prewarm_image(
 		return Ok(json!({}));
 	};
 
+	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
+	let (dc_res, builds_res) = tokio::try_join!(
+		ctx.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![dc_id],
+		}),
+		ctx.op(build::ops::get::Input {
+			build_ids: vec![image_id],
+		}),
+	)?;
+
+	let dc = unwrap!(dc_res.datacenters.first());
+	let build = unwrap!(builds_res.builds.first());
+
+	let fallback_artifact_url =
+		resolve_image_fallback_artifact_url(&ctx, dc.build_delivery_method, &build).await?;
+
 	let res = ctx
-		.signal(pegboard::workflows::client::PrewarmImage {
-			image_id,
-			image_artifact_url_stub: body.image_artifact_url_stub,
+		.signal(pegboard::workflows::client::PrewarmImage2 {
+			image: protocol::Image {
+				id: image_id,
+				artifact_url_stub: pegboard::util::image_artifact_url_stub(
+					ctx.config(),
+					build.upload_id,
+					&build::utils::file_name(build.kind, build.compression),
+				)?,
+				fallback_artifact_url,
+				kind: build.kind.into(),
+				compression: build.compression.into(),
+			},
 		})
 		.to_workflow::<pegboard::workflows::client::Workflow>()
 		.tag("client_id", client_id)
@@ -130,4 +154,44 @@ pub async fn toggle_drain_client(
 	}
 
 	Ok(json!({}))
+}
+
+async fn resolve_image_fallback_artifact_url(
+	ctx: &Ctx<Auth>,
+	dc_build_delivery_method: BuildDeliveryMethod,
+	build: &build::types::Build,
+) -> GlobalResult<Option<String>> {
+	if let BuildDeliveryMethod::S3Direct = dc_build_delivery_method {
+		tracing::debug!("using s3 direct delivery");
+
+		// Build client
+		let s3_client = s3_util::Client::with_bucket_and_endpoint(
+			ctx.config(),
+			"bucket-build",
+			s3_util::EndpointKind::EdgeInternal,
+		)
+		.await?;
+
+		let presigned_req = s3_client
+			.get_object()
+			.bucket(s3_client.bucket())
+			.key(format!(
+				"{upload_id}/{file_name}",
+				upload_id = build.upload_id,
+				file_name = build::utils::file_name(build.kind, build.compression),
+			))
+			.presigned(
+				s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
+					.expires_in(std::time::Duration::from_secs(15 * 60))
+					.build()?,
+			)
+			.await?;
+
+		let addr_str = presigned_req.uri().to_string();
+		tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
+
+		Ok(Some(addr_str))
+	} else {
+		Ok(None)
+	}
 }

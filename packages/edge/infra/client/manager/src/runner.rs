@@ -230,6 +230,19 @@ impl Handle {
 						// Disassociate from the parent by creating a new session
 						setsid().context("setsid failed")?;
 
+						// Adjust nice, cpu priority, and OOM score
+						let pid = std::process::id() as i32;
+						utils::libc::set_nice_level(pid, 0).context("failed to set nice level")?;
+						utils::libc::set_oom_score_adj(pid, 0)
+							.context("failed to set oom score adjustment")?;
+						utils::libc::set_scheduling_policy(
+							pid,
+							utils::libc::SchedPolicy::Other,
+							// Must be 0 with SCHED_OTHER
+							0,
+						)
+						.context("failed to set scheduling policy")?;
+
 						// Exit immediately on fail in order to not leak process
 						let err = std::process::Command::new(&runner_binary_path)
 							.args(&runner_args)

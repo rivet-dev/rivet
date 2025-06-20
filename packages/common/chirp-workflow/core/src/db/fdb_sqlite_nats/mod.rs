@@ -1277,7 +1277,10 @@ impl Database for DatabaseFdbSqliteNats {
 				async move {
 					let pool = &self
 						.pools
-						.sqlite(crate::db::sqlite_db_name_internal(partial.workflow_id), false)
+						.sqlite(
+							crate::db::sqlite_db_name_internal(partial.workflow_id),
+							false,
+						)
 						.await?;
 
 					// Handle error during sqlite init

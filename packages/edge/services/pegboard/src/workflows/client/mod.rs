@@ -180,13 +180,10 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					)
 					.await?;
 				}
-				Some(Main::PrewarmImage(sig)) => {
+				Some(Main::PrewarmImage2(sig)) => {
 					ctx.msg(ToWs {
 						client_id,
-						inner: protocol::ToClient::PrewarmImage {
-							image_id: sig.image_id,
-							image_artifact_url_stub: sig.image_artifact_url_stub,
-						},
+						inner: protocol::ToClient::PrewarmImage { image: sig.image },
 					})
 					.send()
 					.await?;
@@ -1146,10 +1143,9 @@ pub struct ToWs {
 	pub inner: protocol::ToClient,
 }
 
-#[signal("pegboard_prewarm_image")]
-pub struct PrewarmImage {
-	pub image_id: Uuid,
-	pub image_artifact_url_stub: String,
+#[signal("pegboard_prewarm_image2")]
+pub struct PrewarmImage2 {
+	pub image: protocol::Image,
 }
 #[message("pegboard_client_close_ws")]
 pub struct CloseWs {
@@ -1168,7 +1164,7 @@ join_signal!(Main {
 	Command(protocol::Command),
 	// Forwarded from the ws to this workflow
 	Forward(protocol::ToServer),
-	PrewarmImage,
+	PrewarmImage2,
 	Drain,
 	Undrain,
 });

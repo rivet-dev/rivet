@@ -12,7 +12,7 @@ define_router! {
 			POST: pegboard::prewarm_image(
 				internal_endpoint: true,
 				opt_auth: true,
-				body: models::EdgeIntercomPegboardPrewarmImageRequest,
+				body: serde_json::Value,
 			),
 		},
 

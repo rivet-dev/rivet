@@ -20,7 +20,10 @@
 	"transforms": {
 		"actors": {
 			"type": "filter",
-			"inputs": ["vector", "tcp_json"],
+			"inputs": [
+				"vector",
+				"tcp_json"
+			],
 			"condition": {
 				"type": "vrl",
 				"source": ".source == \"actors\""
@@ -28,21 +31,27 @@
 		},
 		"add_prefix": {
 			"type": "remap",
-			"inputs": ["actors"],
-			"source": ".message, err = \"\u001b[2m\" + \"actor_id=\" + .server_id + \"\u001b[0m \" + .message"
+			"inputs": [
+				"actors"
+			],
+			"source": ".message, err = \"\u001b[2m\" + \"actor_id=\" + .actor_id + \"\u001b[0m \" + .message"
 		}
 	},
 	"sinks": {
 		"actor_logs": {
 			"type": "console",
-			"inputs": ["add_prefix"],
+			"inputs": [
+				"add_prefix"
+			],
 			"encoding": {
 				"codec": "text"
 			}
 		},
 		"console": {
 			"type": "console",
-			"inputs": ["vector_logs"],
+			"inputs": [
+				"vector_logs"
+			],
 			"encoding": {
 				"codec": "text"
 			}

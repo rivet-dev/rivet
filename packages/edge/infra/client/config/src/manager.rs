@@ -120,6 +120,8 @@ impl Runner {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Images {
 	pub pull_addresses: Option<Addresses>,
+	/// Bytes. Defaults to 64 GiB.
+	pub max_cache_size: Option<u64>,
 }
 
 impl Images {
@@ -128,6 +130,11 @@ impl Images {
 			.as_ref()
 			.map(Cow::Borrowed)
 			.unwrap_or_else(|| Cow::Owned(Addresses::Static(Vec::new())))
+	}
+
+	pub fn max_cache_size(&self) -> u64 {
+		// 64 GiB
+		self.max_cache_size.unwrap_or(1024 * 1024 * 1024 * 64)
 	}
 }
 

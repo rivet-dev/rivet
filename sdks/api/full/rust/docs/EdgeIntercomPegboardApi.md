@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 ## edge_intercom_pegboard_prewarm_image
 
-> edge_intercom_pegboard_prewarm_image(image_id, edge_intercom_pegboard_prewarm_image_request)
+> edge_intercom_pegboard_prewarm_image(image_id, body)
 
 
 ### Parameters
@@ -20,7 +20,7 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **image_id** | **uuid::Uuid** |  | [required] |
-**edge_intercom_pegboard_prewarm_image_request** | [**EdgeIntercomPegboardPrewarmImageRequest**](EdgeIntercomPegboardPrewarmImageRequest.md) |  | [required] |
+**body** | **serde_json::Value** |  | [required] |
 
 ### Return type
 

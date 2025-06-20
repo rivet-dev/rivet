@@ -58,7 +58,6 @@ async fn handle_connection(
 		};
 
 		let actor_id = Uuid::new_v4();
-		let actor_port = portpicker::pick_unused_port().expect("no free ports");
 
 		// Receive messages from socket
 		while let Some(msg) = rx.next().await {
@@ -71,7 +70,7 @@ async fn handle_connection(
 						protocol::ToServer::Init { .. } => {
 							send_init_packet(&mut tx).await;
 
-							start_echo_actor(&mut tx, actor_id, actor_port).await;
+							start_echo_actor(&mut tx, actor_id).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
@@ -92,7 +91,7 @@ async fn handle_connection(
 										// Verify client state
 										let actors = ctx.actors().read().await;
 										assert!(
-											!actors.contains_key(&actor_id),
+											!actors.contains_key(&(actor_id, 0)),
 											"actor still in client memory"
 										);
 
@@ -105,6 +104,7 @@ async fn handle_connection(
 								}
 							}
 						}
+						protocol::ToServer::AckCommands { .. } => {}
 					}
 				}
 				Message::Close(_) => {

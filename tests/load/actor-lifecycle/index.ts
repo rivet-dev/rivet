@@ -47,18 +47,18 @@ export default function () {
 			if (!isHealthy) fail("actor did not become healthy");
 		}
 
-		// // Test WebSocket if not disabled
-		// if (!CONFIG.disableWebsocket) {
-		// 	const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
-		// 	testWebSocket(wsUrl);
-		// }
-		//
-		// // Sleep if not disabled
-		// if (!CONFIG.disableSleep) {
-		// 	const sleepDuration = (start + 60_000 - Date.now()) / 1000;
-		// 	console.log(`sleeping for ${sleepDuration}s`);
-		// 	sleep(sleepDuration);
-		// }
+		// Test WebSocket if not disabled
+		if (!CONFIG.disableWebsocket) {
+			const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
+			testWebSocket(wsUrl);
+		}
+
+		// Sleep if not disabled
+		if (!CONFIG.disableSleep) {
+			const sleepDuration = (start + 60_000 - Date.now()) / 1000;
+			console.log(`sleeping for ${sleepDuration}s`);
+			sleep(sleepDuration);
+		}
 	} finally {
 		// Cleanup
 		if (actorId) {

@@ -22,6 +22,7 @@ use url::Url;
 mod actor;
 mod ctx;
 mod event_sender;
+mod image_download_handler;
 mod metrics;
 mod pull_addr_handler;
 mod runner;

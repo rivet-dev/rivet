@@ -10,8 +10,6 @@ import (
 )
 
 type PrewarmImageRequest struct {
-	ImageArtifactUrlStub string `json:"image_artifact_url_stub"`
-
 	_rawJSON json.RawMessage
 }
 

@@ -39,6 +39,17 @@ pub async fn run_from_env(
 	)
 	.await?;
 
+	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![dc_id],
+		})
+		.await?;
+	if dc_res.datacenters.is_empty() {
+		tracing::debug!("cluster not initialized");
+		return Ok(());
+	}
+
 	// List all actor ids that are currently running
 	let actor_ids = ctx
 		.fdb()

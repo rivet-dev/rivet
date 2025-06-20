@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use build::types::{BuildCompression, BuildKind};
+use build::types::BuildKind;
 use chirp_workflow::prelude::*;
 use fdb_util::{end_of_key_range, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
@@ -685,15 +685,8 @@ pub async fn spawn_actor(
 				id: actor_setup.image_id,
 				artifact_url_stub: actor_setup.artifact_url_stub.clone(),
 				fallback_artifact_url: actor_setup.fallback_artifact_url.clone(),
-				kind: match actor_setup.meta.build_kind {
-					BuildKind::DockerImage => protocol::ImageKind::DockerImage,
-					BuildKind::OciBundle => protocol::ImageKind::OciBundle,
-					BuildKind::JavaScript => protocol::ImageKind::JavaScript,
-				},
-				compression: match actor_setup.meta.build_compression {
-					BuildCompression::None => protocol::ImageCompression::None,
-					BuildCompression::Lz4 => protocol::ImageCompression::Lz4,
-				},
+				kind: actor_setup.meta.build_kind.into(),
+				compression: actor_setup.meta.build_compression.into(),
 			},
 			root_user_enabled: input.root_user_enabled,
 			env: input.environment.clone(),
@@ -803,15 +796,14 @@ pub async fn reschedule_actor(
 				let mut backoff =
 					util::Backoff::new_at(8, None, BASE_RETRY_TIMEOUT_MS, 500, state.retry_count);
 
-				let (now, reset) = ctx.v(2).activity(CompareRetryInput {
-					last_retry_ts: state.last_retry_ts,
-				}).await?;
+				let (now, reset) = ctx
+					.v(2)
+					.activity(CompareRetryInput {
+						last_retry_ts: state.last_retry_ts,
+					})
+					.await?;
 
-				state.retry_count = if reset {
-					0
-				} else {
-					state.retry_count + 1
-				};
+				state.retry_count = if reset { 0 } else { state.retry_count + 1 };
 				state.last_retry_ts = now;
 
 				// Don't sleep for first retry

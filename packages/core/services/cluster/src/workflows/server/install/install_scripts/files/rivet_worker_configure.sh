@@ -28,6 +28,8 @@ ExecStart=/usr/local/bin/rivet-edge-server start --skip-provision
 Restart=always
 RestartSec=2
 
+# High scheduling priority
+Nice=-15
 # Real time service
 CPUSchedulingPolicy=fifo
 # High CPU priority

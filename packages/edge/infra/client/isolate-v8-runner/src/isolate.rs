@@ -153,7 +153,7 @@ pub async fn run_inner(
 	tracing::info!(?actor_id, ?generation, "isolate kv initialized");
 
 	// Should match the path from `Actor::make_fs` in manager/src/actor/setup.rs
-	let index = actor_path.join("fs").join("index.js");
+	let index = actor_path.join("fs").join("upper").join("index.js");
 
 	// Load index.js
 	let index_script_content = match fs::read_to_string(&index).await {
@@ -560,7 +560,8 @@ mod tests {
 
 		let fs_path = actors_path
 			.join(format!("{actor_id}-{generation}"))
-			.join("fs");
+			.join("fs")
+			.join("upper");
 		std::fs::create_dir_all(&fs_path)?;
 
 		std::fs::copy(

@@ -15,11 +15,7 @@ use std::{
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::{
-	keys,
-	sqlite::SqlStub,
-	DatabaseFdbSqliteNats,
-};
+use super::{keys, sqlite::SqlStub, DatabaseFdbSqliteNats};
 use crate::{
 	db::debug::{
 		ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,

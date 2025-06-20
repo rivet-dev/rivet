@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 /// Duration between pulling addresses again.
 const PULL_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
+/// Handles the list of ATS node addresses to pull images from.
 pub struct PullAddrHandler {
 	last_pull: RwLock<Option<Instant>>,
 	addresses: RwLock<Vec<String>>,

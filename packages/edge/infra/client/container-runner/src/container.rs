@@ -32,7 +32,7 @@ pub fn run(
 		.context("empty `actor_path`")?
 		.to_string_lossy()
 		.to_string();
-	let fs_path = actor_path.join("fs");
+	let fs_path = actor_path.join("fs").join("upper");
 	let oci_bundle_config_json = fs_path.join("config.json");
 
 	// Validate OCI bundle

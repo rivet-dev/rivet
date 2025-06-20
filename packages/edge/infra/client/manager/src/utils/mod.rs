@@ -1,13 +1,10 @@
 use std::{
-	hash::{DefaultHasher, Hasher},
 	path::Path,
 	result::Result::{Err, Ok},
-	sync::Arc,
 	time::{self, Duration},
 };
 
 use anyhow::*;
-use futures_util::Stream;
 use indoc::indoc;
 use notify::{
 	event::{AccessKind, AccessMode},
@@ -15,8 +12,6 @@ use notify::{
 };
 use pegboard::protocol;
 use pegboard_config::Config;
-use rand::{prelude::SliceRandom, SeedableRng};
-use rand_chacha::ChaCha12Rng;
 use sql::SqlitePoolExt;
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -27,11 +22,8 @@ use tokio::{
 	fs,
 	sync::mpsc::{channel, Receiver},
 };
-use url::Url;
-use uuid::Uuid;
 
-use crate::ctx::Ctx;
-
+pub mod libc;
 pub mod sql;
 
 pub async fn init_dir(config: &Config) -> Result<()> {
@@ -71,6 +63,12 @@ pub async fn init_dir(config: &Config) -> Result<()> {
 	match fs::create_dir(data_dir.join("actors")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /actors dir in data dir")?,
+	}
+
+	// Create images dir
+	match fs::create_dir(data_dir.join("images")).await {
+		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+		x => x.context("failed to create /images dir in data dir")?,
 	}
 
 	// Create runner dir
@@ -195,6 +193,22 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
+		CREATE TABLE IF NOT EXISTS images_cache (
+			image_id BLOB NOT NULL, -- UUID
+			size INTEGER NOT NULL,
+
+			last_used_ts INTEGER NOT NULL,
+			download_complete_ts INTEGER,
+
+			PRIMARY KEY (image_id)
+		) STRICT
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
 		CREATE TABLE IF NOT EXISTS actors (
 			actor_id BLOB NOT NULL, -- UUID
 			generation INTEGER NOT NULL,
@@ -208,8 +222,21 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 			pid INTEGER,
 			exit_code INTEGER,
 
+			-- Also exists in the config column but this is for indexing
+			image_id BLOB NOT NULL, -- UUID
+
 			PRIMARY KEY (actor_id, generation)
 		) STRICT
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
+		CREATE INDEX IF NOT EXISTS actors_image_id_idx
+		ON actors(image_id)
+		WHERE stop_ts IS NULL
 		",
 	))
 	.execute(&mut *conn)
@@ -261,50 +288,6 @@ pub fn now() -> i64 {
 		.expect("now doesn't fit in i64")
 }
 
-/// Generates a list of address URLs for a given build ID, with deterministic shuffling.
-///
-/// This function accepts a build ID and returns an array of URLs, including both
-/// the seeded shuffling and the fallback address (if provided).
-pub async fn get_image_addresses(
-	ctx: &Ctx,
-	image_id: Uuid,
-	image_artifact_url_stub: &str,
-	image_fallback_artifact_url: Option<&str>,
-) -> Result<Vec<String>> {
-	// Get hash from image id
-	let mut hasher = DefaultHasher::new();
-	hasher.write(image_id.as_bytes());
-	let hash = hasher.finish();
-
-	let mut rng = ChaCha12Rng::seed_from_u64(hash);
-
-	// Shuffle based on hash
-	let mut addresses = ctx
-		.pull_addr_handler
-		.addresses(ctx.config())
-		.await?
-		.iter()
-		.map(|addr| {
-			Ok(Url::parse(&format!("{addr}{}", image_artifact_url_stub))
-				.context("failed to build artifact url")?
-				.to_string())
-		})
-		.collect::<Result<Vec<_>>>()?;
-	addresses.shuffle(&mut rng);
-
-	// Add fallback url to the end if one is set
-	if let Some(fallback_artifact_url) = image_fallback_artifact_url {
-		addresses.push(fallback_artifact_url.to_string());
-	}
-
-	ensure!(
-		!addresses.is_empty(),
-		"no artifact urls available (no pull addresses nor fallback)"
-	);
-
-	Ok(addresses)
-}
-
 /// Creates an async file watcher.
 fn async_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
 	let (tx, rx) = channel(1);
@@ -353,65 +336,59 @@ pub async fn wait_for_write<P: AsRef<Path>>(path: P) -> Result<()> {
 	Ok(())
 }
 
-/// Deterministically shuffles a list of available ATS URL's to download the image from based on the image
-// ID and attempts to download from each URL until success.
-pub async fn fetch_image_stream(
-	ctx: &Ctx,
-	image_id: Uuid,
-	image_artifact_url_stub: &str,
-	image_fallback_artifact_url: Option<&str>,
-) -> Result<impl Stream<Item = reqwest::Result<bytes::Bytes>>> {
-	let addresses = get_image_addresses(
-		ctx,
-		image_id,
-		image_artifact_url_stub,
-		image_fallback_artifact_url,
-	)
-	.await?;
+/// Recursively copy a directory from source to destination.
+pub async fn copy_dir_all<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> Result<()> {
+	let src = src.as_ref();
+	let dst = dst.as_ref();
 
-	let mut iter = addresses.into_iter();
-	while let Some(artifact_url) = iter.next() {
-		// Log the full URL we're attempting to download from
-		tracing::info!(?image_id, %artifact_url, "attempting to download image");
+	if !src.is_dir() {
+		return Err(anyhow!("source is not a directory: {}", src.display()));
+	}
 
-		match reqwest::get(&artifact_url)
-			.await
-			.and_then(|res| res.error_for_status())
-		{
-			Ok(res) => {
-				tracing::info!(?image_id, %artifact_url, "successfully downloading image");
-				return Ok(res.bytes_stream());
-			}
-			Err(err) => {
-				tracing::warn!(
-					?image_id,
-					%artifact_url,
-					%err,
-					"failed to download image"
-				);
-			}
+	if !dst.exists() {
+		fs::create_dir_all(dst).await?;
+	} else if !dst.is_dir() {
+		return Err(anyhow!(
+			"destination exists but is not a directory: {}",
+			dst.display()
+		));
+	}
+
+	let mut read_dir = fs::read_dir(src).await?;
+
+	while let Some(entry) = read_dir.next_entry().await? {
+		let entry_path = entry.path();
+		let file_name = entry.file_name();
+		let dst_path = dst.join(file_name);
+
+		if entry_path.is_dir() {
+			Box::pin(copy_dir_all(entry_path, dst_path)).await?;
+		} else {
+			fs::copy(entry_path, dst_path).await?;
 		}
 	}
 
-	bail!("artifact url could not be resolved");
+	Ok(())
 }
 
-pub fn prewarm_image(ctx: &Arc<Ctx>, image_id: Uuid, image_artifact_url_stub: &str) {
-	// Log full URL for prewarm operation
-	let prewarm_url = format!("{}/{}", image_artifact_url_stub, image_id);
-	tracing::info!(?image_id, %prewarm_url, "prewarming image");
+/// Calculates the total size of a folder in bytes.
+pub async fn total_dir_size<P: AsRef<Path>>(path: P) -> Result<u64> {
+	let path = path.as_ref();
 
-	let ctx = ctx.clone();
-	let image_artifact_url_stub = image_artifact_url_stub.to_string();
+	ensure!(path.is_dir(), "path is not a directory: {}", path.display());
 
-	tokio::spawn(async move {
-		match fetch_image_stream(&ctx, image_id, &image_artifact_url_stub, None).await {
-			Ok(_) => tracing::info!(?image_id, %prewarm_url, "prewarm complete"),
-			Err(_) => tracing::warn!(
-				?image_id,
-				%prewarm_url,
-				"prewarm failed, artifact url could not be resolved"
-			),
+	let mut total_size = 0;
+	let mut read_dir = fs::read_dir(path).await?;
+
+	while let Some(entry) = read_dir.next_entry().await? {
+		let entry_path = entry.path();
+
+		if entry_path.is_dir() {
+			total_size += Box::pin(total_dir_size(entry_path)).await?;
+		} else {
+			total_size += fs::metadata(entry_path).await?.len();
 		}
-	});
+	}
+
+	Ok(total_size)
 }

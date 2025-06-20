@@ -1,10 +1,13 @@
 {
 	"builds": {
-		"ws-isolate": {
-			"script": "src/isolate/main.ts"
-		},
+		// "ws-isolate": {
+		// 	"script": "src/isolate/main.ts"
+		// },
 		"ws-container": {
-			"dockerfile": "Dockerfile"
+			"dockerfile": "Dockerfile",
+			// "unstable": {
+			// 	"compression": "none"
+			// }
 		}
 	}
 }

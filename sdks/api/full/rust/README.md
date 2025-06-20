@@ -363,7 +363,6 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerProxyKind](docs/CloudVersionMatchmakerProxyKind.md)
  - [CloudVersionSummary](docs/CloudVersionSummary.md)
  - [CoreIntercomPegboardMarkClientRegisteredRequest](docs/CoreIntercomPegboardMarkClientRegisteredRequest.md)
- - [EdgeIntercomPegboardPrewarmImageRequest](docs/EdgeIntercomPegboardPrewarmImageRequest.md)
  - [EdgeIntercomPegboardToggleClientDrainRequest](docs/EdgeIntercomPegboardToggleClientDrainRequest.md)
  - [ErrorBody](docs/ErrorBody.md)
  - [GameGameSummary](docs/GameGameSummary.md)

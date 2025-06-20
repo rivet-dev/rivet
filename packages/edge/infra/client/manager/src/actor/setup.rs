@@ -2,6 +2,7 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 	result::Result::{Err, Ok},
+	time::Instant,
 };
 
 use anyhow::*;
@@ -21,10 +22,14 @@ use crate::{ctx::Ctx, utils};
 
 impl Actor {
 	pub async fn make_fs(&self, ctx: &Ctx) -> Result<()> {
-		let timer = std::time::Instant::now();
+		let timer = Instant::now();
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
+
 		let fs_img_path = actor_path.join("fs.img");
 		let fs_path = actor_path.join("fs");
+		let fs_upper_path = fs_path.join("upper");
+		let fs_work_path = fs_path.join("work");
+		let image_path = ctx.image_path(self.config.image.id);
 
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating fs");
 
@@ -40,11 +45,16 @@ impl Actor {
 				.context("failed to create disk image")?;
 			fs_img
 				.set_len(self.config.resources.disk as u64 * 1024 * 1024)
-				.await?;
+				.await
+				.context("failed to set disk image length")?;
 
 			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "formatting disk image");
 			// Format file as ext4
-			let cmd_out = Command::new("mkfs.ext4").arg(&fs_img_path).output().await?;
+			let cmd_out = Command::new("mkfs.ext4")
+				.arg(&fs_img_path)
+				.output()
+				.await
+				.context("failed to run `mkfs.ext4`")?;
 
 			ensure!(
 				cmd_out.status.success(),
@@ -53,6 +63,7 @@ impl Actor {
 			);
 
 			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "mounting disk image");
+
 			// Mount fs img as loop mount
 			let cmd_out = Command::new("mount")
 				.arg("-o")
@@ -60,172 +71,94 @@ impl Actor {
 				.arg(&fs_img_path)
 				.arg(&fs_path)
 				.output()
-				.await?;
+				.await
+				.context("failed to run `mount`")?;
 
 			ensure!(
 				cmd_out.status.success(),
 				"failed `mount` command\n{}",
 				std::str::from_utf8(&cmd_out.stderr)?
 			);
+
+			// Create folders on disk
+			fs::create_dir(&fs_upper_path)
+				.await
+				.context("failed to create actor fs upper dir")?;
+			fs::create_dir(&fs_work_path)
+				.await
+				.context("failed to create actor fs work dir")?;
+
+			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "mounting overlay");
+
+			ensure!(
+				fs::metadata(&image_path).await.is_ok(),
+				"image dir does not exist"
+			);
+
+			// Overlay mount setup:
+			// lowerdir = extracted build in manager's builds cache folder
+			// upperdir = {actor dir}/fs/upper folder
+			// workdir = {actor dir}/fs/work folder
+			// merged dir = also fs/upper folder, it mounts to the upperdir
+			let cmd_out = Command::new("mount")
+				.arg("-t")
+				.arg("overlay")
+				// Arbitrary device name
+				.arg(format!("{}-{}", self.actor_id, self.generation))
+				.arg("-o")
+				.arg(format!(
+					"lowerdir={},upperdir={},workdir={}",
+					image_path.display(),
+					fs_upper_path.display(),
+					fs_work_path.display()
+				))
+				.arg(&fs_upper_path)
+				.output()
+				.await
+				.context("failed to run overlay `mount`")?;
+
+			ensure!(
+				cmd_out.status.success(),
+				"failed overlay `mount` command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
+		} else {
+			// Create folder on host
+			fs::create_dir(&fs_upper_path)
+				.await
+				.context("failed to create actor fs upper dir")?;
+
+			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "copying image contents to fs");
+
+			// Copy everything from the image (lowerdir) to the upperdir
+			utils::copy_dir_all(image_path, &fs_upper_path)
+				.await
+				.context("failed to copy image contents to fs upper dir")?;
 		}
 
 		let duration = timer.elapsed().as_secs_f64();
 		crate::metrics::SETUP_MAKE_FS_DURATION.observe(duration);
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, duration_seconds=duration, "fs creation completed");
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			duration_seconds=duration,
+			"fs creation completed",
+		);
 
 		Ok(())
 	}
 
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
-		let timer = std::time::Instant::now();
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "downloading artifact");
+		let timer = Instant::now();
 
-		let actor_path = ctx.actor_path(self.actor_id, self.generation);
-		let fs_path = actor_path.join("fs");
+		ctx.image_download_handler
+			.download(ctx, &self.config.image)
+			.await?;
 
-		// Get addresses using the shared utility function
-		let addresses = crate::utils::get_image_addresses(
-			ctx,
-			self.config.image.id,
-			&self.config.image.artifact_url_stub,
-			self.config.image.fallback_artifact_url.as_deref(),
-		)
-		.await?;
+		let duration = timer.elapsed().as_secs_f64();
+		crate::metrics::SETUP_DOWNLOAD_IMAGE_DURATION.observe(duration);
 
-		// Log the URLs we're attempting to download from
-		tracing::info!(
-			actor_id=?self.actor_id,
-			generation=?self.generation,
-			image_id=?self.config.image.id,
-			addresses=?addresses,
-			"initiating image download"
-		);
-
-		// Try each URL until one succeeds
-		let mut last_error = None;
-		for url in &addresses {
-			tracing::info!(actor_id=?self.actor_id, generation=?self.generation, ?url, "attempting download");
-
-			// Build the shell command based on image kind and compression
-			// Using shell commands with native Unix pipes improves performance by:
-			// 1. Reducing overhead of passing data through Rust
-			// 2. Letting the OS handle data transfer between processes efficiently
-			// 3. Avoiding unnecessary buffer copies in memory
-			let shell_cmd = match (self.config.image.kind, self.config.image.compression) {
-				// Docker image, no compression
-				(protocol::ImageKind::DockerImage, protocol::ImageCompression::None) => {
-					let docker_image_path = fs_path.join("docker-image.tar");
-					tracing::info!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						"downloading uncompressed docker image using curl"
-					);
-
-					// Use curl to download directly to file
-					format!("curl -sSfL '{}' -o '{}'", url, docker_image_path.display())
-				}
-
-				// Docker image with LZ4 compression
-				(protocol::ImageKind::DockerImage, protocol::ImageCompression::Lz4) => {
-					let docker_image_path = fs_path.join("docker-image.tar");
-					tracing::info!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						"downloading and decompressing docker image using curl | lz4"
-					);
-
-					// Use curl piped to lz4 for decompression
-					format!(
-						"curl -sSfL '{}' | lz4 -d - '{}'",
-						url,
-						docker_image_path.display()
-					)
-				}
-
-				// OCI Bundle or JavaScript with no compression
-				(
-					protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript,
-					protocol::ImageCompression::None,
-				) => {
-					tracing::info!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						"downloading and unarchiving uncompressed artifact using curl | tar"
-					);
-
-					// Use curl piped to tar for extraction
-					format!("curl -sSfL '{}' | tar -x -C '{}'", url, fs_path.display())
-				}
-
-				// OCI Bundle or JavaScript with LZ4 compression
-				(
-					protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript,
-					protocol::ImageCompression::Lz4,
-				) => {
-					tracing::info!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						"downloading, decompressing, and unarchiving artifact using curl | lz4 | tar"
-					);
-
-					// Use curl piped to lz4 for decompression, then to tar for extraction
-					format!(
-						"curl -sSfL '{}' | lz4 -d | tar -x -C '{}'",
-						url,
-						fs_path.display()
-					)
-				}
-			};
-
-			// Execute the shell command
-			// Use curl's built-in error handling to fail silently and let us try the next URL
-			let cmd_result = Command::new("sh").arg("-c").arg(&shell_cmd).output().await;
-
-			match cmd_result {
-				Ok(output) if output.status.success() => {
-					tracing::info!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						?url,
-						"successfully downloaded image"
-					);
-
-					let duration = timer.elapsed().as_secs_f64();
-					crate::metrics::SETUP_DOWNLOAD_IMAGE_DURATION.observe(duration);
-					tracing::info!(actor_id=?self.actor_id, generation=?self.generation, duration_seconds=duration, "artifact download completed");
-
-					return Ok(());
-				}
-				Ok(output) => {
-					// Command ran but failed
-					let stderr = String::from_utf8_lossy(&output.stderr);
-					tracing::warn!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						?url,
-						status=?output.status,
-						stderr=%stderr,
-						"failed to download image"
-					);
-					last_error = Some(anyhow!("download failed: {}", stderr));
-				}
-				Err(e) => {
-					// Failed to execute command
-					tracing::warn!(
-						actor_id=?self.actor_id,
-						generation=?self.generation,
-						?url,
-						error=?e,
-						"failed to execute download command"
-					);
-					last_error = Some(anyhow!("download command failed: {}", e));
-				}
-			}
-		}
-
-		// If we get here, all URLs failed
-		Err(last_error
-			.unwrap_or_else(|| anyhow!("failed to download image from any available URL")))
+		Ok(())
 	}
 
 	pub async fn setup_oci_bundle(
@@ -233,80 +166,12 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		let timer = std::time::Instant::now();
+		let timer = Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up oci bundle");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
-		let fs_path = actor_path.join("fs");
+		let fs_path = actor_path.join("fs").join("upper");
 		let netns_path = self.netns_path();
-
-		// We need to convert the Docker image to an OCI bundle in order to run it.
-		// Allows us to work with the build with umoci
-		if let protocol::ImageKind::DockerImage = self.config.image.kind {
-			let docker_image_path = fs_path.join("docker-image.tar");
-			let oci_image_path = fs_path.join("oci-image");
-
-			tracing::info!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				"converting Docker image -> OCI image",
-			);
-			let conversion_start = std::time::Instant::now();
-			let cmd_out = Command::new("skopeo")
-				.arg("copy")
-				.arg(format!("docker-archive:{}", docker_image_path.display()))
-				.arg(format!("oci:{}:default", oci_image_path.display()))
-				.output()
-				.await?;
-			ensure!(
-				cmd_out.status.success(),
-				"failed `skopeo` command\n{}",
-				std::str::from_utf8(&cmd_out.stderr)?
-			);
-			tracing::info!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				duration_seconds=conversion_start.elapsed().as_secs_f64(),
-				"docker to OCI conversion completed",
-			);
-
-			// Allows us to run the bundle natively with runc
-			tracing::info!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				"converting OCI image -> OCI bundle",
-			);
-			let unpack_start = std::time::Instant::now();
-			let cmd_out = Command::new("umoci")
-				.arg("unpack")
-				.arg("--image")
-				.arg(format!("{}:default", oci_image_path.display()))
-				.arg(&fs_path)
-				.output()
-				.await?;
-			ensure!(
-				cmd_out.status.success(),
-				"failed `umoci` command\n{}",
-				std::str::from_utf8(&cmd_out.stderr)?
-			);
-			tracing::info!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				duration_seconds=unpack_start.elapsed().as_secs_f64(),
-				"OCI image unpacking completed",
-			);
-
-			// Remove artifacts
-			tracing::info!(
-				actor_id=?self.actor_id,
-				generation=?self.generation,
-				"cleaning up temporary image artifacts",
-			);
-			tokio::try_join!(
-				fs::remove_file(&docker_image_path),
-				fs::remove_dir_all(&oci_image_path),
-			)?;
-		}
 
 		// Read the config.json from the user-provided OCI bundle
 		tracing::info!(
@@ -315,7 +180,9 @@ impl Actor {
 			"reading OCI bundle configuration",
 		);
 		let oci_bundle_config_path = fs_path.join("config.json");
-		let user_config_json = fs::read_to_string(&oci_bundle_config_path).await?;
+		let user_config_json = fs::read_to_string(&oci_bundle_config_path)
+			.await
+			.context("failed to read oci config")?;
 		let user_config =
 			serde_json::from_str::<super::partial_oci_config::PartialOciConfig>(&user_config_json)?;
 
@@ -410,7 +277,7 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		let timer = std::time::Instant::now();
+		let timer = Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up isolate environment");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
@@ -471,7 +338,7 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		let timer = std::time::Instant::now();
+		let timer = Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up cni network");
 
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
@@ -569,7 +436,7 @@ impl Actor {
 		&self,
 		ctx: &Ctx,
 	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
-		let timer = std::time::Instant::now();
+		let timer = Instant::now();
 		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "binding ports");
 
 		let (mut gg_ports, mut host_ports): (Vec<_>, Vec<_>) = self
@@ -683,8 +550,35 @@ impl Actor {
 		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let netns_path = self.netns_path();
 
-		// Clean up fs mount
+		// Clean up fs mounts
 		if ctx.config().runner.use_mounts() {
+			match Command::new("umount")
+				.arg("-dl")
+				.arg(actor_path.join("fs").join("upper"))
+				.output()
+				.await
+			{
+				Result::Ok(cmd_out) => {
+					if !cmd_out.status.success() {
+						tracing::error!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+							stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
+							"failed overlay `umount` command",
+						);
+					}
+				}
+				Err(err) => {
+					tracing::error!(
+						actor_id=?self.actor_id,
+						generation=?self.generation,
+						?err,
+						"failed to run overlay `umount` command",
+					);
+				}
+			}
+
 			match Command::new("umount")
 				.arg("-dl")
 				.arg(actor_path.join("fs"))

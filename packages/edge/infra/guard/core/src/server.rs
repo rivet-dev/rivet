@@ -51,38 +51,39 @@ pub async fn run_server(
 	let http_listener = tokio::net::TcpListener::bind(http_addr).await?;
 
 	// Set up HTTPS server (if configured)
-	let (https_addr, https_factory, https_listener, https_acceptor) =
-		if let Some(https) = &guard_config.https {
-			let https_addr: std::net::SocketAddr = ([0, 0, 0, 0], https.port).into();
-			let https_factory = Arc::new(ProxyServiceFactory::new(
-				config.clone(),
-				routing_fn.clone(),
-				middleware_fn.clone(),
-				crate::proxy_service::PortType::Https,
-				clickhouse_inserter.clone(),
-			));
-			let listener = tokio::net::TcpListener::bind(https_addr).await?;
+	let (https_addr, https_factory, https_listener, https_acceptor) = if let Some(https) =
+		&guard_config.https
+	{
+		let https_addr: std::net::SocketAddr = ([0, 0, 0, 0], https.port).into();
+		let https_factory = Arc::new(ProxyServiceFactory::new(
+			config.clone(),
+			routing_fn.clone(),
+			middleware_fn.clone(),
+			crate::proxy_service::PortType::Https,
+			clickhouse_inserter.clone(),
+		));
+		let listener = tokio::net::TcpListener::bind(https_addr).await?;
 
-			// Configure TLS if resolver function is provided
-			let acceptor = if let Some(resolver_fn) = cert_resolver_fn {
-				// Create a TLS server config using our certificate resolver
-				let server_config = create_tls_config(resolver_fn);
+		// Configure TLS if resolver function is provided
+		let acceptor = if let Some(resolver_fn) = cert_resolver_fn {
+			// Create a TLS server config using our certificate resolver
+			let server_config = create_tls_config(resolver_fn);
 
-				Some(TlsAcceptor::from(Arc::new(server_config)))
-			} else {
-				tracing::warn!("No TLS certificate resolver provided, HTTPS will not work properly");
-				None
-			};
-
-			(
-				Some(https_addr),
-				Some(https_factory),
-				Some(listener),
-				acceptor,
-			)
+			Some(TlsAcceptor::from(Arc::new(server_config)))
 		} else {
-			(None, None, None, None)
+			tracing::warn!("No TLS certificate resolver provided, HTTPS will not work properly");
+			None
 		};
+
+		(
+			Some(https_addr),
+			Some(https_factory),
+			Some(listener),
+			acceptor,
+		)
+	} else {
+		(None, None, None, None)
+	};
 
 	// Set up server builder and graceful shutdown
 	let server = hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());

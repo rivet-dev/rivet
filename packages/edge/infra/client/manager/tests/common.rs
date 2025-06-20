@@ -68,7 +68,6 @@ pub async fn send_init_packet(tx: &mut SplitSink<WebSocketStream<tokio::net::Tcp
 pub async fn start_echo_actor(
 	tx: &mut SplitSink<WebSocketStream<tokio::net::TcpStream>, Message>,
 	actor_id: Uuid,
-	port: u16,
 ) {
 	let cmd = protocol::Command::StartActor {
 		actor_id,
@@ -82,7 +81,7 @@ pub async fn start_echo_actor(
 				compression: protocol::ImageCompression::None,
 			},
 			root_user_enabled: false,
-			env: [("PORT".to_string(), port.to_string())]
+			env: [("foo".to_string(), "bar".to_string())]
 				.into_iter()
 				.collect(),
 			ports: [(
@@ -266,11 +265,12 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 				// Not necessary for the test
 				flavor: protocol::ClientFlavor::Container,
 				port: None,
-				use_mounts: Some(false),
+				use_mounts: Some(true),
 				container_runner_binary_path: Some(container_runner_binary_path),
 				isolate_runner_binary_path: Some(isolate_runner_binary_path),
 			},
 			images: Images {
+				max_cache_size: None,
 				// Should match the URL in `serve_binaries`
 				pull_addresses: Some(Addresses::Static(vec![format!(
 					"http://127.0.0.1:{ARTIFACTS_PORT}"
@@ -487,11 +487,23 @@ pub async fn serve_binaries(gen_path: PathBuf) {
 						panic!("invalid path: {path}");
 					};
 
-					let file = File::open(path).await?;
+					let file = File::open(&path).await?;
+
+					// Get file metadata to determine content length
+					let metadata = file.metadata().await?;
+					let content_length = metadata.len();
+
 					let stream = ReaderStream::new(BufReader::new(file));
 					let body = Body::wrap_stream(stream);
 
-					Result::<_, std::io::Error>::Ok(Response::new(body))
+					// Create response and add Content-Length header
+					let mut res = Response::new(body);
+					res.headers_mut().insert(
+						hyper::header::CONTENT_LENGTH,
+						hyper::header::HeaderValue::from(content_length),
+					);
+
+					Result::<_, std::io::Error>::Ok(res)
 				}
 			}))
 		}

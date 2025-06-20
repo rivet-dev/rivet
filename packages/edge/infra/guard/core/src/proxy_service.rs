@@ -182,7 +182,7 @@ impl RouteCache {
 	async fn insert(&self, hostname: String, path: String, result: RouteConfig) {
 		self.cache.insert((hostname, path), result).await;
 
-		metrics::ROUTE_CACHE_SIZE.set(self.cache.entry_count() as i64);
+		metrics::ROUTE_CACHE_COUNT.set(self.cache.entry_count() as i64);
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -191,7 +191,7 @@ impl RouteCache {
 			.invalidate(&(hostname.to_owned(), path.to_owned()))
 			.await;
 
-		metrics::ROUTE_CACHE_SIZE.set(self.cache.entry_count() as i64);
+		metrics::ROUTE_CACHE_COUNT.set(self.cache.entry_count() as i64);
 	}
 }
 
@@ -1166,7 +1166,9 @@ impl ProxyService {
 					let target_url = format!("ws://{}:{}{}", target.host, target.port, target.path);
 					tracing::debug!(
 						"WebSocket request attempt {}/{} to {}",
-						attempts, max_attempts, target_url
+						attempts,
+						max_attempts,
+						target_url
 					);
 
 					match tokio::time::timeout(
@@ -1177,7 +1179,10 @@ impl ProxyService {
 					{
 						Ok(Ok((ws_stream, resp))) => {
 							tracing::debug!("Successfully connected to upstream WebSocket server");
-							tracing::debug!("Upstream connection response status: {:?}", resp.status());
+							tracing::debug!(
+								"Upstream connection response status: {:?}",
+								resp.status()
+							);
 
 							// Log headers for debugging
 							for (name, value) in resp.headers() {
@@ -1193,16 +1198,24 @@ impl ProxyService {
 							tracing::debug!(?err, "WebSocket request attempt {} failed", attempts);
 						}
 						Err(_) => {
-							tracing::debug!("WebSocket request attempt {} timed out after 5s", attempts);
+							tracing::debug!(
+								"WebSocket request attempt {} timed out after 5s",
+								attempts
+							);
 						}
 					}
 
 					// Check if we've reached max attempts
 					if attempts >= max_attempts {
-						tracing::debug!("All {} WebSocket connection attempts failed", max_attempts);
+						tracing::debug!(
+							"All {} WebSocket connection attempts failed",
+							max_attempts
+						);
 
 						// Send a close message to the client since we can't connect to upstream
-						tracing::debug!("Sending close message to client due to upstream connection failure");
+						tracing::debug!(
+							"Sending close message to client due to upstream connection failure"
+						);
 						let (mut client_sink, _) = client_ws.split();
 						match client_sink
 							.send(hyper_tungstenite::tungstenite::Message::Close(Some(
@@ -1214,12 +1227,18 @@ impl ProxyService {
 							.await
 						{
 							Ok(_) => tracing::debug!("Successfully sent close message to client"),
-							Err(err) => tracing::error!(?err, "Failed to send close message to client"),
+							Err(err) => {
+								tracing::error!(?err, "Failed to send close message to client")
+							}
 						};
 
 						match client_sink.flush().await {
-							Ok(_) => tracing::debug!("Successfully flushed client sink after close"),
-							Err(err) => tracing::error!(?err, "Failed to flush client sink after close"),
+							Ok(_) => {
+								tracing::debug!("Successfully flushed client sink after close")
+							}
+							Err(err) => {
+								tracing::error!(?err, "Failed to flush client sink after close")
+							}
 						};
 
 						return;
@@ -1254,7 +1273,9 @@ impl ProxyService {
 						ws
 					}
 					Option::None => {
-						tracing::error!("Failed to establish upstream WebSocket connection (unexpected)");
+						tracing::error!(
+							"Failed to establish upstream WebSocket connection (unexpected)"
+						);
 						return; // Should never happen due to checks above, but just in case
 					}
 				};
@@ -1404,12 +1425,16 @@ impl ProxyService {
 						.await
 					{
 						Ok(_) => tracing::debug!("Close message sent to upstream successfully"),
-						Err(err) => tracing::debug!(?err, "Failed to send close message to upstream"),
+						Err(err) => {
+							tracing::debug!(?err, "Failed to send close message to upstream")
+						}
 					};
 
 					match sink.flush().await {
 						Ok(_) => tracing::debug!("Upstream sink flushed successfully after close"),
-						Err(err) => tracing::debug!(?err, "Failed to flush upstream sink after close"),
+						Err(err) => {
+							tracing::debug!(?err, "Failed to flush upstream sink after close")
+						}
 					};
 
 					tracing::debug!("Client-to-upstream task completed");
@@ -1556,7 +1581,9 @@ impl ProxyService {
 
 					match sink.flush().await {
 						Ok(_) => tracing::debug!("Client sink flushed successfully after close"),
-						Err(err) => tracing::debug!(?err, "Failed to flush client sink after close"),
+						Err(err) => {
+							tracing::debug!(?err, "Failed to flush client sink after close")
+						}
 					};
 
 					tracing::debug!("Upstream-to-client task completed");

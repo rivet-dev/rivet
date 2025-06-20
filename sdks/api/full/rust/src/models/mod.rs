@@ -380,8 +380,6 @@ pub mod cloud_version_summary;
 pub use self::cloud_version_summary::CloudVersionSummary;
 pub mod core_intercom_pegboard_mark_client_registered_request;
 pub use self::core_intercom_pegboard_mark_client_registered_request::CoreIntercomPegboardMarkClientRegisteredRequest;
-pub mod edge_intercom_pegboard_prewarm_image_request;
-pub use self::edge_intercom_pegboard_prewarm_image_request::EdgeIntercomPegboardPrewarmImageRequest;
 pub mod edge_intercom_pegboard_toggle_client_drain_request;
 pub use self::edge_intercom_pegboard_toggle_client_drain_request::EdgeIntercomPegboardToggleClientDrainRequest;
 pub mod error_body;
