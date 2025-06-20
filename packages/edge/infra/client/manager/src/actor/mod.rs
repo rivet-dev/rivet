@@ -205,7 +205,7 @@ impl Actor {
 		let mut runner_env = vec![
 			(
 				"ROOT_USER_ENABLED",
-				self.config.root_user_enabled.to_string(),
+				if self.config.root_user_enabled { "1" } else { "0" }.to_string(),
 			),
 			("ACTOR_ID", self.actor_id.to_string()),
 		];
