@@ -71,8 +71,19 @@ pub async fn prewarm_image(
 	let dc = unwrap!(dc_res.datacenters.first());
 	let build = unwrap!(builds_res.builds.first());
 
-	let fallback_artifact_url =
-		resolve_image_fallback_artifact_url(&ctx, dc.build_delivery_method, &build).await?;
+	// Only prewarm if using ATS
+	let BuildDeliveryMethod::TrafficServer = dc.build_delivery_method else {
+		tracing::debug!("skipping prewarm since we're not using ats build delivery method");
+		return Ok(json!({}));
+	};
+
+	// Get the artifact size
+	let uploads_res = op!([ctx] upload_get {
+		upload_ids: vec![build.upload_id.into()],
+	})
+	.await?;
+	let upload = unwrap!(uploads_res.uploads.first());
+	let artifact_size_bytes = upload.content_length;
 
 	let res = ctx
 		.signal(pegboard::workflows::client::PrewarmImage2 {
@@ -83,7 +94,10 @@ pub async fn prewarm_image(
 					build.upload_id,
 					&build::utils::file_name(build.kind, build.compression),
 				)?,
-				fallback_artifact_url,
+				// We will never need to fall back to fetching directly from S3. This short
+				// circuits earlier in the fn.
+				fallback_artifact_url: None,
+				artifact_size_bytes,
 				kind: build.kind.into(),
 				compression: build.compression.into(),
 			},

@@ -117,6 +117,8 @@ pub struct Image {
 	pub artifact_url_stub: String,
 	/// Direct S3 url to download the image from without ATS.
 	pub fallback_artifact_url: Option<String>,
+	/// Size in bytes of the artfiact.
+	pub artifact_size_bytes: u64,
 	pub kind: ImageKind,
 	pub compression: ImageCompression,
 }

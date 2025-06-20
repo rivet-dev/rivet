@@ -559,6 +559,7 @@ pub struct ActorSetupCtx {
 	pub resources: protocol::Resources,
 	pub artifact_url_stub: String,
 	pub fallback_artifact_url: Option<String>,
+	pub artifact_size_bytes: u64,
 }
 
 pub async fn setup(
@@ -630,6 +631,7 @@ pub async fn setup(
 		resources,
 		artifact_url_stub: artifacts_res.artifact_url_stub,
 		fallback_artifact_url: artifacts_res.fallback_artifact_url,
+		artifact_size_bytes: artifacts_res.artifact_size_bytes,
 	})
 }
 
@@ -707,6 +709,7 @@ struct ResolveArtifactsInput {
 struct ResolveArtifactsOutput {
 	artifact_url_stub: String,
 	fallback_artifact_url: Option<String>,
+	artifact_size_bytes: u64,
 }
 
 #[activity(ResolveArtifacts)]
@@ -714,40 +717,46 @@ async fn resolve_artifacts(
 	ctx: &ActivityCtx,
 	input: &ResolveArtifactsInput,
 ) -> GlobalResult<ResolveArtifactsOutput> {
-	let fallback_artifact_url =
-		if let BuildDeliveryMethod::S3Direct = input.dc_build_delivery_method {
-			tracing::debug!("using s3 direct delivery");
+	// Get the fallback URL
+	let fallback_artifact_url = {
+		tracing::debug!("using s3 direct delivery");
 
-			// Build client
-			let s3_client = s3_util::Client::with_bucket_and_endpoint(
-				ctx.config(),
-				"bucket-build",
-				s3_util::EndpointKind::EdgeInternal,
+		// Build client
+		let s3_client = s3_util::Client::with_bucket_and_endpoint(
+			ctx.config(),
+			"bucket-build",
+			s3_util::EndpointKind::EdgeInternal,
+		)
+		.await?;
+
+		let presigned_req = s3_client
+			.get_object()
+			.bucket(s3_client.bucket())
+			.key(format!(
+				"{upload_id}/{file_name}",
+				upload_id = input.build_upload_id,
+				file_name = input.build_file_name,
+			))
+			.presigned(
+				s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
+					.expires_in(std::time::Duration::from_secs(15 * 60))
+					.build()?,
 			)
 			.await?;
 
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(format!(
-					"{upload_id}/{file_name}",
-					upload_id = input.build_upload_id,
-					file_name = input.build_file_name,
-				))
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
+		let addr_str = presigned_req.uri().to_string();
+		tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
 
-			let addr_str = presigned_req.uri().to_string();
-			tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
+		Some(addr_str)
+	};
 
-			Some(addr_str)
-		} else {
-			None
-		};
+	// Get the artifact size
+	let uploads_res = op!([ctx] upload_get {
+		upload_ids: vec![input.build_upload_id.into()],
+	})
+	.await?;
+	let upload = unwrap!(uploads_res.uploads.first());
+	let artifact_size_bytes = upload.content_length;
 
 	Ok(ResolveArtifactsOutput {
 		artifact_url_stub: crate::util::image_artifact_url_stub(
@@ -756,5 +765,6 @@ async fn resolve_artifacts(
 			&input.build_file_name,
 		)?,
 		fallback_artifact_url,
+		artifact_size_bytes,
 	})
 }

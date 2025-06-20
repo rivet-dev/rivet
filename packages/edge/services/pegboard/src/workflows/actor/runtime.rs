@@ -8,6 +8,7 @@ use foundationdb::{
 	options::{ConflictRangeType, StreamingMode},
 };
 use futures_util::{FutureExt, TryStreamExt};
+use rivet_api::models::actors_endpoint_type;
 use sqlx::Acquire;
 
 use super::{
@@ -685,6 +686,7 @@ pub async fn spawn_actor(
 				id: actor_setup.image_id,
 				artifact_url_stub: actor_setup.artifact_url_stub.clone(),
 				fallback_artifact_url: actor_setup.fallback_artifact_url.clone(),
+				artifact_size_bytes: actor_setup.artifact_size_bytes,
 				kind: actor_setup.meta.build_kind.into(),
 				compression: actor_setup.meta.build_compression.into(),
 			},
