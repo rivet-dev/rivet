@@ -218,6 +218,7 @@ impl Actor {
 			env,
 			user: user_config.process.user,
 			cwd: user_config.process.cwd,
+			use_resource_constraints: ctx.config().runner.use_resource_constraints(),
 			cpu: self.config.resources.cpu,
 			memory: self.config.resources.memory,
 			memory_max: self.config.resources.memory_max,

@@ -1,64 +1,7 @@
-# SEE ALSO: docker/dev-full/rivet-client/pegboard-configure.sh
+#!/bin/sh
+set -euf
 
-PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
-
-# MARK: Pegboard config
-cat << 'EOF' > /etc/rivet-client/config.json
-{
-	"client": {
-		"cluster": {
-			"client_id": "___SERVER_ID___",
-			"api_endpoint": "__ORIGIN_API__",
-			"ws_addresses": {
-				"dynamic": {
-					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=worker"
-				}
-			}
-		},
-		"runner": {
-			"flavor": "__FLAVOR__"
-		},
-		"images": {
-			"pull_addresses": {
-				"dynamic": {
-					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=ats"
-				}
-			}
-		},
-		"network": {
-			"bind_ip": "___VLAN_IP___",
-			"lan_hostname": "___VLAN_IP___",
-			"wan_hostname": "___PUBLIC_IP___"
-		},
-		"cni": {
-			"network_interface": "eth0"
-		},
-		"reserved_resources": {
-			"cpu": 0,
-			"memory": __RESERVED_MEMORY__
-		},
-		"foundationdb": {
-			"cluster_description": "fdb",
-			"cluster_id": "fdb",
-			"addresses": {
-				"dynamic": {
-					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"
-				}
-			}
-		},
-		"vector": {
-			"address": "127.0.0.1:5021"
-		}
-	}
-}
-EOF
-
-# Create admin chain that only accepts traffic from the GG subnet
-#
-# See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
-ADMIN_CHAIN="RIVET-ADMIN"
-SUBNET_IPV4="172.26.64.0/20"
-SUBNET_IPV6="fd00:db8:2::/64"
+# SEE ALSO: packages/core/services/cluster/src/workflows/server/install/install_scripts/files/pegboard_configure.sh
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #
@@ -85,10 +28,12 @@ SUBNET_IPV6="fd00:db8:2::/64"
 #
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-# MARK: iptables
-cat << EOF > /usr/local/bin/setup_pegboard_networking.sh
-#!/bin/bash
-set -euf
+# Create admin chain that only accepts traffic from the GG subnet
+#
+# See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
+ADMIN_CHAIN="RIVET-ADMIN"
+SUBNET_IPV4="172.26.64.0/20"
+SUBNET_IPV6="fd00:db8:2::/64"
 
 # MARK: Linux Traffic Control
 for iface in __PUBLIC_IFACE__ __VLAN_IFACE__; do
@@ -265,27 +210,9 @@ for ipt in iptables ip6tables; do
     # Deny all other egress traffic
 	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -j DROP"
 done
-EOF
 
-chmod +x /usr/local/bin/setup_pegboard_networking.sh
-
-cat << 'EOF' > /etc/systemd/system/setup_pegboard_networking.service
-[Unit]
-Description=Setup Pegboard Networking
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/setup_pegboard_networking.sh
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable setup_pegboard_networking
-systemctl start setup_pegboard_networking
-
+# MARK: CNI
+#
 # Dual-stack CNI config
 #
 # We use ptp instead of bridge networking in order to isolate the pod's traffic. It's also more performant than bridge networking.
@@ -341,40 +268,3 @@ cat << EOF > /opt/cni/config/rivet-actor.conflist
 }
 EOF
 
-# Systemd service
-cat << 'EOF' > /etc/systemd/system/pegboard.service
-
-[Unit]
-Description=Pegboard
-Wants=network-online.target setup_pegboard_networking.service
-After=network-online.target setup_pegboard_networking.service
-ConditionPathExists=/etc/rivet-client/
-
-[Service]
-ExecStart=/usr/local/bin/rivet-client -c /etc/rivet-client/config.json
-Restart=always
-RestartSec=2
-
-# High scheduling priority
-Nice=-15
-# Real time service
-CPUSchedulingPolicy=fifo
-# High CPU priority
-CPUSchedulingPriority=90
-# Prevent killing from system OOM
-OOMScoreAdjust=-1000
-# Kill main process, not children
-KillMode=process
-# Increase limit of file watches
-LimitNOFILE=65536
-# Increase max process limits
-LimitNPROC=infinity
-TasksMax=infinity
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable pegboard
-systemctl start pegboard

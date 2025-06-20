@@ -248,34 +248,6 @@ jobs:
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
-      - name: Build & Push (rivetgg/client:isolate-v8-runner)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet-client:isolate-v8-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: isolate-v8-runner
-          platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
-
-      - name: Build & Push (rivetgg/client:container-runner)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet-client:container-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: container-runner
-          platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
-
       - name: Build & Push (rivetgg/rivet:monolith)
         uses: docker/build-push-action@v4
         with:

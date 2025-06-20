@@ -13,7 +13,7 @@ services:
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      # - RUST_LOG=debug,hyper=info
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -44,6 +44,8 @@ services:
       interval: 2s
       timeout: 10s
       retries: 10
+      # Initial SQL migrations sometimes take time to run
+      start_period: 30s
 
   rivet-edge-server:
     build:
@@ -60,7 +62,7 @@ services:
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_SERVICE_NAME=rivet-edge
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      # - RUST_LOG=debug,hyper=info
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -138,7 +140,7 @@ services:
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_SERVICE_NAME=rivet-guard
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      # - RUST_LOG=debug,hyper=info
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # HTTP
@@ -198,6 +200,9 @@ services:
     platform: linux/amd64
     restart: unless-stopped
     command: -c /etc/rivet-client/config.jsonc
+    # entrypoint: entrypoint.sh
+    # Required for runc & cnitool to operate
+    privileged: true
     environment:
       - RUST_BACKTRACE=1
       - RUST_LOG_ANSI_COLOR=1
@@ -205,7 +210,7 @@ services:
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_SERVICE_NAME=rivet-client
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      # - RUST_LOG=debug,hyper=info
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     depends_on:
       rivet-edge-server:
@@ -213,7 +218,9 @@ services:
       foundationdb:
         condition: service_healthy
     volumes:
+      # - ./rivet-client/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
       - ./rivet-client/config.jsonc:/etc/rivet-client/config.jsonc:ro
+      - ./rivet-client/rivet-actor.conflist:/opt/cni/config/rivet-actor.conflist:ro
       - client-data:/var/lib/rivet-client
     ports:
       # Enable host networking for actors

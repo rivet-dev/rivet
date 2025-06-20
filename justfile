@@ -39,6 +39,10 @@ dev-logs-client:
 	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/logs/*'
 
 [group('dev')]
+dev-logs-client-crashed:
+	docker run --rm -it -v dev-full_client-data:/var/lib/rivet-client busybox sh -c 'cat /var/lib/rivet-client/logs/*'
+
+[group('dev')]
 dev-logs-runner:
 	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/runner/logs/*'
 

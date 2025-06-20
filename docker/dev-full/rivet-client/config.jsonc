@@ -1,9 +1,8 @@
 {
 	"client": {
 		"runner": {
-			"flavor": "isolate",
-			// Enables running in non-privileged Docker containers
-			"use_mounts": false
+			"flavor": "container",
+			"use_resource_constraints": false
 		},
 		"cluster": {
 			// This is safe to hardcode
@@ -15,6 +14,7 @@
 				]
 			}
 		},
+		// TODO: Compare this to network in cluster config
 		"network": {
 			"bind_ip": "127.0.0.1",
 			// Point to DNS name inside Docker container
