@@ -269,7 +269,7 @@ async fn create_edge_function_actors(
 					build: None,
 					build_tags: Some(Some(build_tags.clone())),
 					runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
-						environment: None,
+						environment: function.runtime.environment.clone(),
 						network: None,
 					})),
 					network: Some(Box::new(models::ActorsCreateActorNetworkRequest {

@@ -87,6 +87,8 @@ pub struct Function {
 	#[serde(default)]
 	pub networking: FunctionNetworking,
 	#[serde(default)]
+	pub runtime: FunctionRuntime,
+	#[serde(default)]
 	pub resources: Option<Resources>,
 }
 
@@ -121,6 +123,12 @@ impl FunctionNetworking {
 	pub fn internal_port(&self) -> u16 {
 		self.internal_port.unwrap_or(8080)
 	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct FunctionRuntime {
+	pub environment: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
