@@ -394,55 +394,41 @@ async fn create_function_route(
 	route_tags: &HashMap<String, String>,
 	default_hostname: &str,
 ) -> Result<()> {
-	// Get route_subpaths and strip_prefix from config
 	let default_route_subpaths = function.route_subpaths.unwrap_or(true);
 	let default_strip_prefix = function.strip_prefix.unwrap_or(true);
 
-	// Loop until route creation succeeds
-	let mut route_created = false;
-	while !route_created {
-		let hostname = default_hostname.to_string();
-		let path = function.path();
-		let route_subpaths = default_route_subpaths;
-		let strip_prefix = default_strip_prefix;
+	let hostname = default_hostname.to_string();
+	let path = function.path();
+	let route_subpaths = default_route_subpaths;
+	let strip_prefix = default_strip_prefix;
 
-		// Prepare route body
-		let update_route_body = models::RoutesUpdateRouteBody {
-			hostname,
-			path,
-			route_subpaths,
-			strip_prefix,
-			target: Box::new(models::RoutesRouteTarget {
-				actors: Some(Box::new(models::RoutesRouteTargetActors {
-					selector_tags: route_tags.clone(),
-				})),
-			}),
-		};
+	// Prepare route body
+	let update_route_body = models::RoutesUpdateRouteBody {
+		hostname,
+		path,
+		route_subpaths,
+		strip_prefix,
+		target: Box::new(models::RoutesRouteTarget {
+			actors: Some(Box::new(models::RoutesRouteTargetActors {
+				selector_tags: route_tags.clone(),
+			})),
+		}),
+	};
 
-		// Create/update route
-		let result = apis::routes_api::routes_update(
-			&ctx.openapi_config_cloud,
-			&fn_name,
-			update_route_body.clone(),
-			Some(&ctx.project.name_id.to_string()),
-			Some(&environment.slug),
-		)
-		.await;
+	// Create/update route
+	apis::routes_api::routes_update(
+		&ctx.openapi_config_cloud,
+		&fn_name,
+		update_route_body.clone(),
+		Some(&ctx.project.name_id.to_string()),
+		Some(&environment.slug),
+	)
+	.await?;
 
-		match result {
-			Result::Ok(_) => {
-				println!(
-					"Successfully created route: {}{}",
-					update_route_body.hostname, update_route_body.path
-				);
-				route_created = true;
-			}
-			Err(err) => {
-				eprintln!("Failed to create route: {}", err);
-				break;
-			}
-		}
-	}
+	println!(
+		"Successfully created route: {}{}",
+		update_route_body.hostname, update_route_body.path
+	);
 
 	Ok(())
 }

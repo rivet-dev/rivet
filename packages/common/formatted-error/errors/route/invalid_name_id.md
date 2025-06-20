@@ -5,7 +5,7 @@ description_basic = "The route name_id format is invalid."
 http_status = 400
 ---
 
-# invalid_name_id
+# Invalid Name ID
 
 The name_id provided for the route is invalid. Route name_ids must be lowercase alphanumeric or dashes without repeating double dashes, and are limited to 16 characters.
 
