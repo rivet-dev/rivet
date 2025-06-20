@@ -46,7 +46,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 			prebakes_enabled: input.prebakes_enabled,
 		};
 
-		match ctx.check_version(2).await? {
+		match ctx.check_version(3).await? {
 			1 => {
 				// We remove here because the hash doesn't calculate correctly anymore
 				ctx.removed::<Activity<InsertDb>>().await?;
