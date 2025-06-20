@@ -2,17 +2,18 @@ use std::{future::Future, sync::Arc, time::Duration};
 
 use rand::Rng;
 use reqwest::Client;
+use rivet_api::models::{ProvisionDatacentersGetServersResponse, ProvisionServer};
 use tokio::{
 	sync::{Mutex, RwLock},
 	task::JoinHandle,
 };
 use url::Url;
-use rivet_api::models::{ProvisionServer, ProvisionDatacentersGetServersResponse};
 
 pub struct ServiceDiscovery {
 	fetch_endpoint: Url,
 	last: RwLock<Vec<ProvisionServer>>,
 	handle: Mutex<Option<JoinHandle<()>>>,
+	client: Client,
 }
 
 impl ServiceDiscovery {
@@ -21,6 +22,7 @@ impl ServiceDiscovery {
 			fetch_endpoint,
 			last: RwLock::new(Vec::new()),
 			handle: Mutex::new(None),
+			client: Client::new(),
 		})
 	}
 
@@ -36,10 +38,8 @@ impl ServiceDiscovery {
 
 		let self2 = self.clone();
 		*guard = Some(tokio::task::spawn(async move {
-			let client = Client::new();
-
 			loop {
-				let res = match self2.fetch_inner(&client).await {
+				let res = match self2.fetch_inner().await {
 					Ok(res) => res,
 					Err(err) => {
 						tracing::error!(?err, "fetch service discovery failed");
@@ -70,12 +70,12 @@ impl ServiceDiscovery {
 
 	/// Manually fetches the endpoint.
 	pub async fn fetch(&self) -> Result<Vec<ProvisionServer>, reqwest::Error> {
-		let client = Client::new();
-		Ok(self.fetch_inner(&client).await?.servers)
+		Ok(self.fetch_inner().await?.servers)
 	}
 
-	async fn fetch_inner(&self, client: &Client) -> Result<ProvisionDatacentersGetServersResponse, reqwest::Error> {
-		Ok(client
+	async fn fetch_inner(&self) -> Result<ProvisionDatacentersGetServersResponse, reqwest::Error> {
+		Ok(self
+			.client
 			.get(self.fetch_endpoint.clone())
 			.send()
 			.await?
