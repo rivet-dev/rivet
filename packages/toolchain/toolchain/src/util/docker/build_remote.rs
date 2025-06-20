@@ -1,7 +1,7 @@
 use anyhow::*;
 use flate2::{write::GzEncoder, Compression};
 use serde_json::json;
-use std::{collections::HashMap, io::Write, path::Path, result::Result::Ok, time::Duration};
+use std::{collections::HashMap, io::Write, path::{Path, PathBuf}, result::Result::Ok, time::Duration};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
@@ -380,15 +380,69 @@ async fn get_or_create_ci_manager_actor(
 	Ok((create_response.actor.id.to_string(), endpoint.clone()))
 }
 
+/// Moves over build context to a temp directory,
+/// ignoring all .dockerignore files.
+fn prepare_build_context_dir(
+	build_path: &Path,
+	dockerfile_path: &Path
+) -> Result<Vec<PathBuf>> {
+	const DOCKERIGNORE_FILENAME: &str = ".dockerignore";
+
+	let mut paths = Vec::new();
+
+	// For Kaniko on the remote build, we need to expose
+	// our Dockerfile and our .dockerignore file if it
+	// exists
+	paths.push(dockerfile_path.to_path_buf());
+
+	let dockerignore_path = build_path.join(DOCKERIGNORE_FILENAME);
+	if dockerignore_path.try_exists().unwrap_or(false) {
+		paths.push(dockerignore_path.clone());
+	}
+
+	let walk = ignore::WalkBuilder::new(build_path)
+		.standard_filters(false)
+		.add_custom_ignore_filename(DOCKERIGNORE_FILENAME)
+		.parents(true)
+		.build();
+		
+	for entry in walk {
+		let entry = entry?;
+
+		if entry.path() == dockerfile_path  || entry.path() == &dockerignore_path {
+			// Skip the Dockerfile or .dockerignore itself, we already added it
+			continue;
+		}
+
+		let is_file = entry.file_type()
+			.map(|ft| ft.is_file())
+			.unwrap_or(false);
+
+		if is_file {
+			let file_path = entry.path();
+
+			paths.push(file_path.to_path_buf());
+		}
+	}
+
+	Ok(paths)
+}
+
 async fn create_build_context_archive(
 	task: task::TaskCtx,
 	build_path: &Path,
-	_dockerfile: &Path,
+	dockerfile: &Path,
 ) -> Result<Vec<u8>> {
 	task.log(format!(
 		"[Remote Build] Creating gzipped tar archive from build path: {:?}",
 		build_path
 	));
+
+	let dockerfile_path_buf = build_path.join(dockerfile);
+	let dockerfile = Path::new(&dockerfile_path_buf);
+
+	// Get a list of all paths that weren't in .dockerignore
+	let build_file_paths = prepare_build_context_dir(build_path, dockerfile)?;
 
 	// Create a gzipped tar archive of the build context
 	let mut archive_data = Vec::new();
@@ -396,9 +450,14 @@ async fn create_build_context_archive(
 		let gz_encoder = GzEncoder::new(&mut archive_data, Compression::default());
 		let mut tar = tar::Builder::new(gz_encoder);
 
-		// Add the entire build directory to the archive
-		tar.append_dir_all(".", build_path)
-			.context("Failed to create build context archive")?;
+		// Add the prepared build file paths to the archive
+		for file_path in build_file_paths.iter() {
+			let relative_path = file_path.strip_prefix(build_path)
+				.context("Failed to strip build path prefix")?;
+
+			tar.append_path_with_name(&file_path, relative_path)
+				.context(format!("Failed to add file to tar: {:?}", file_path))?;
+		}
 
 		tar.finish().context("Failed to finalize tar archive")?;
 	}
