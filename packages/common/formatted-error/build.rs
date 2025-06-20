@@ -178,7 +178,7 @@ fn visit_dir(ctx: &mut Ctx, path: PathBuf) -> std::io::Result<()> {
 					}
 				})
 				.collect::<String>();
-			let documentation = format!("https://rivet.gg/docs/general/errors#{clean_title}");
+			let documentation = format!("https://rivet.gg/docs/api/errors#{clean_title}");
 
 			ctx.hash_items.push(formatdoc!(
 				"

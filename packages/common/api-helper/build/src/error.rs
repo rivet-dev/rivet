@@ -1,3 +1,4 @@
+use chirp_workflow::prelude::WorkflowError;
 use chrono::TimeZone;
 use global_error::prelude::*;
 use headers::HeaderValue;
@@ -26,6 +27,14 @@ pub fn handle_rejection(
 	mut response: http::response::Builder,
 	ray_id: Uuid,
 ) -> Result<Response<Body>, http::Error> {
+	// TODO: Remove panic
+	let verbose_errors = config
+		.server()
+		.expect("missing server")
+		.rivet
+		.api_public
+		.verbose_errors();
+
 	// Log error
 	let err = match err {
 		GlobalError::BadRequest { .. } => {
@@ -37,36 +46,43 @@ pub fn handle_rejection(
 
 			// Replace internal errors with global errors
 			// TODO: Remove panic
-			if config
-				.server()
-				.expect("missing server")
-				.rivet
-				.api_public
-				.verbose_errors()
-			{
+			if verbose_errors {
 				err_code!(ERROR, error = err.to_string())
 			} else {
 				err_code!(ERROR, error = "An internal error has occurred.",)
 			}
 		}
 		GlobalError::Raw(err) => {
-			tracing::error!(?err, "internal error response");
+			// Check if this is a workflow error that wraps a global error
+			match err.downcast::<WorkflowError>().map(|x| *x) {
+				Ok(WorkflowError::OperationFailure(global_err)) => {
+					// Handle unwrapped error
+					return handle_rejection(config, global_err, response, ray_id);
+				}
+				Ok(err) => {
+					tracing::error!(?err, "internal error response");
 
-			// Replace internal errors with global errors
-			// TODO: Remove panic
-			if config
-				.server()
-				.expect("missing server")
-				.rivet
-				.api_public
-				.verbose_errors()
-			{
-				err_code!(ERROR, error = err.to_string())
-			} else {
-				err_code!(
-					ERROR,
-					error = format!("An internal error has occurred (ray_id {}).", ray_id)
-				)
+					if verbose_errors {
+						err_code!(ERROR, error = err.to_string())
+					} else {
+						err_code!(
+							ERROR,
+							error = format!("An internal error has occurred (ray_id {}).", ray_id)
+						)
+					}
+				}
+				Err(err) => {
+					tracing::error!(?err, "internal error response");
+
+					if verbose_errors {
+						err_code!(ERROR, error = err.to_string())
+					} else {
+						err_code!(
+							ERROR,
+							error = format!("An internal error has occurred (ray_id {}).", ray_id)
+						)
+					}
+				}
 			}
 		}
 	};
