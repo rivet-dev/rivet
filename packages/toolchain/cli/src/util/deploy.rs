@@ -19,8 +19,8 @@ pub struct DeployOpts<'a> {
 	pub filter_tags: Option<HashMap<String, String>>,
 	pub build_tags: Option<HashMap<String, String>>,
 	pub version: Option<String>,
-	pub auto_create_routes: Option<bool>,
-	pub auto_sync_routes: Option<bool>,
+	pub skip_route_creation: Option<bool>,
+	pub keep_existing_routes: Option<bool>,
 	pub non_interactive: bool,
 }
 
@@ -69,14 +69,15 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 
 	// Setup function routes
 	setup_function_routes(
-		opts.ctx, 
-		environment, 
-		&config, 
+		opts.ctx,
+		environment,
+		&config,
 		&opts.filter_tags,
-		opts.auto_create_routes,
-		opts.auto_sync_routes,
-		opts.non_interactive
-	).await?;
+		opts.skip_route_creation,
+		opts.keep_existing_routes,
+		opts.non_interactive,
+	)
+	.await?;
 
 	// Print summary
 	print_summary(opts.ctx, environment);
@@ -89,23 +90,23 @@ async fn setup_function_routes(
 	environment: &toolchain::project::environment::TEMPEnvironment,
 	config: &config::Config,
 	filter_tags: &Option<HashMap<String, String>>,
-	auto_create_routes: Option<bool>,
-	auto_sync_routes: Option<bool>,
+	skip_route_creation: Option<bool>,
+	keep_existing_routes: Option<bool>,
 	non_interactive: bool,
 ) -> Result<()> {
-	// Determine default hostname based on project & env
-	let default_hostname = format!(
-		"{}-{}.{}",
-		ctx.project.name_id,
-		environment.slug,
-		ctx.bootstrap
-			.domains
-			.job
-			.as_ref()
-			.context("bootstrap.domains.job")?
-	);
-
 	for (fn_name, function) in &config.functions {
+		// Determine default hostname based on project & env
+		let default_hostname = format!(
+			"{}-{}-{fn_name}.{}",
+			ctx.project.name_id,
+			environment.slug,
+			ctx.bootstrap
+				.domains
+				.job
+				.as_ref()
+				.context("bootstrap.domains.job")?
+		);
+
 		// TODO: Convert this in to a shared fn
 		// Filter out builds that match the tags
 		if let Some(filter) = &filter_tags {
@@ -204,20 +205,22 @@ async fn setup_function_routes(
 			];
 
 			println!();
-			
+
 			let choice_index = if non_interactive {
 				// In non-interactive mode, use auto_sync_routes if provided, otherwise sync by default
-				if let Some(auto_sync) = auto_sync_routes {
-					if auto_sync {
-						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
-						0 // Sync route with config
-					} else {
+				match keep_existing_routes {
+					Some(true) => {
 						println!("Skipping route sync for '{fn_name}' (non-interactive mode)");
 						1 // Keep existing route
 					}
-				} else {
-					println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
-					0 // Default to sync in non-interactive mode
+					Some(false) => {
+						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
+						0 // Sync route with config
+					}
+					None => {
+						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
+						0 // Default to sync in non-interactive mode
+					}
 				}
 			} else {
 				// Interactive mode - prompt the user
@@ -304,17 +307,23 @@ async fn setup_function_routes(
 
 			let choice_index = if non_interactive {
 				// In non-interactive mode, use auto_create_routes if provided, otherwise create by default
-				if let Some(auto_create) = auto_create_routes {
-					if auto_create {
-						println!("Auto-creating route for function '{fn_name}' (non-interactive mode)");
-						0 // Create default route
-					} else {
+				match skip_route_creation {
+					Some(true) => {
 						println!("Skipping route creation for '{fn_name}' (non-interactive mode)");
 						1 // Skip route creation
 					}
-				} else {
-					println!("Auto-creating route for function '{fn_name}' (non-interactive mode)");
-					0 // Default to create in non-interactive mode
+					Some(false) => {
+						println!(
+							"Auto-creating route for function '{fn_name}' (non-interactive mode)"
+						);
+						0 // Create default route
+					}
+					None => {
+						println!(
+							"Auto-creating route for function '{fn_name}' (non-interactive mode)"
+						);
+						0 // Default to create in non-interactive mode
+					}
 				}
 			} else {
 				// Interactive mode - prompt the user
@@ -437,3 +446,4 @@ async fn create_function_route(
 
 	Ok(())
 }
+

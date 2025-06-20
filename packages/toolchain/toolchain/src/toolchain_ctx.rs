@@ -50,7 +50,13 @@ pub fn cloud_config_from_env() -> Option<(String, String)> {
 
 /// If the credentials already exist or loading credentials from env.
 pub async fn has_cloud_config() -> Result<bool> {
-	if cloud_config_from_env().is_some() {
+	if let Some((api_endpoint, token)) = cloud_config_from_env() {
+		meta::mutate_project(&paths::data_dir()?, |meta| {
+			if meta.cloud.is_none() {
+				meta.cloud = Some(meta::Cloud::new(api_endpoint, token))
+			}
+		})
+		.await?;
 		Ok(true)
 	} else {
 		meta::read_project(&paths::data_dir()?, |x| x.cloud.is_some()).await
