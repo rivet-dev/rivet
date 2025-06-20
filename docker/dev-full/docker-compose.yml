@@ -379,6 +379,21 @@ services:
     environment:
       - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
 
+  frontend-hub:
+    image: node:22-bullseye
+    restart: unless-stopped
+    working_dir: /app/frontend/apps/hub
+    command: /bin/bash /etc/frontend-hub/entrypoint.sh
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "5080:5080"
+    volumes:
+      - ../..:/app:rw
+      - ./frontend-hub/entrypoint.sh:/etc/frontend-hub/entrypoint.sh:ro
+    networks:
+      - rivet-network
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
