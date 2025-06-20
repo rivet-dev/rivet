@@ -8,7 +8,6 @@ use uuid::Uuid;
 use crate::{
 	config::{self},
 	project::environment::TEMPEnvironment,
-	tasks::env,
 	toolchain_ctx::ToolchainCtx,
 	util::{docker::push, task},
 };
@@ -34,8 +33,8 @@ pub async fn build_remote(
 	environment: TEMPEnvironment,
 	build_path: &Path,
 	dockerfile: &Path,
-	_build_arg_flags: &Option<Vec<String>>,
-	_build_target: &Option<String>,
+	build_arg_flags: &Option<Vec<String>>,
+	build_target: &Option<String>,
 ) -> Result<push::PushOutput> {
 	task.log("[Remote Build] Starting remote build process");
 
@@ -58,6 +57,8 @@ pub async fn build_remote(
 		&environment,
 		build_path,
 		dockerfile,
+		build_arg_flags,
+		build_target,
 		&ci_runner_actor_id,
 		&ci_runner_endpoint,
 	)
@@ -415,6 +416,8 @@ async fn upload_build_context(
 	environment: &TEMPEnvironment,
 	build_path: &Path,
 	dockerfile: &Path,
+	build_arg_flags: &Option<Vec<String>>,
+	build_target: &Option<String>,
 	_ci_manager_actor_id: &str,
 	ci_manager_endpoint: &str,
 ) -> Result<String> {
@@ -431,10 +434,16 @@ async fn upload_build_context(
 	// Prepare multipart form data
 	task.log("[Remote Build] Uploading build context...");
 
+	// Serialize build args if provided
+	let serialized_build_args = serde_json::to_string(
+		build_arg_flags.as_deref().unwrap_or(&[])
+	).context("Failed to serialize build args")?;
+
 	// Create FormData-like structure using reqwest
 	let form = reqwest::multipart::Form::new()
 		.text("buildName", build_name)
 		.text("environmentId", environment.slug.to_string())
+		.text("buildArgs", serialized_build_args)
 		.text(
 			"dockerfilePath",
 			dockerfile
@@ -449,6 +458,12 @@ async fn upload_build_context(
 				.file_name("context.tar.gz")
 				.mime_str("application/gzip")?,
 		);
+	
+	let form = if let Some(target) = build_target {
+		form.text("buildTarget", target.clone())
+	} else {
+		form
+	};
 
 	// Submit build
 	let encoded_server_url = server_url.replace(":", "%3A").replace("/", "%2F");
@@ -576,7 +591,7 @@ async fn poll_build_status(
 	bail!("timed out polling status")
 }
 
-async fn get_build_by_tags(
+async fn _get_build_by_tags(
 	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
 	environment: &TEMPEnvironment,

@@ -1,8 +1,10 @@
 {
-	"builds": {
-		// "ws-isolate": {
-		// 	"script": "src/isolate/main.ts"
-		// },
+	"actors": {
+		"ws-isolate": {
+			"script": "src/isolate/main.ts"
+		}
+	},
+	"containers": {
 		"ws-container": {
 			"dockerfile": "Dockerfile"
 		}

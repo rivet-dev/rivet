@@ -20,7 +20,13 @@ export class BuildStore {
 		await mkdir(this.tempDir, { recursive: true });
 	}
 
-	createBuild(buildName: string, dockerfilePath: string, environmentId: string): string {
+	createBuild(
+		buildName: string,
+		dockerfilePath: string,
+		environmentId: string,
+		buildArgs: Record<string, string>,
+		buildTarget: string | undefined
+	): string {
 		const id = randomUUID();
 		const contextPath = join(this.tempDir, id, "context.tar.gz");
 		const outputPath = join(this.tempDir, id, "output.tar.gz");
@@ -32,6 +38,8 @@ export class BuildStore {
 			dockerfilePath,
 			environmentId,
 			contextPath,
+			buildArgs,
+			buildTarget,
 			outputPath,
 			events: [],
 			createdAt: new Date(),
@@ -86,7 +94,7 @@ export class BuildStore {
 		}
 	}
 
-	getContextPath(id: string): string | undefined {
+	getContextPath(id: string): string | undefined{
 		return this.builds.get(id)?.contextPath;
 	}
 
@@ -118,17 +126,15 @@ export class BuildStore {
 			}
 
 			// Remove build directory and all files
-			if (build.contextPath) {
-				const buildDir = dirname(build.contextPath);
-				try {
-					await rm(buildDir, { recursive: true, force: true });
-					console.log(`Removed build directory: ${buildDir}`);
-				} catch (error) {
-					console.warn(
-						`Failed to remove build directory ${buildDir}:`,
-						error,
-					);
-				}
+			const buildDir = dirname(build.contextPath);
+			try {
+				await rm(buildDir, { recursive: true, force: true });
+				console.log(`Removed build directory: ${buildDir}`);
+			} catch (error) {
+				console.warn(
+					`Failed to remove build directory ${buildDir}:`,
+					error,
+				);
 			}
 
 			// Remove from memory

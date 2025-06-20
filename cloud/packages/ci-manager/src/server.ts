@@ -17,14 +17,16 @@ import {
 	uploadOCIBundleToRivet,
 	type RivetUploadConfig,
 } from "./rivet-uploader";
+import { UNIT_SEP_CHAR } from "./common";
+import { BuildRequestSchema } from "./types";
 
 async function processRivetUpload(
 	buildStore: BuildStore,
 	buildId: string,
 ): Promise<void> {
 	const build = buildStore.getBuild(buildId);
-	if (!build || !build.outputPath) {
-		throw new Error(`Build ${buildId} not found or missing output path`);
+	if (!build) {
+		throw new Error(`Build ${buildId} not found`);
 	}
 
 	try {
@@ -63,7 +65,7 @@ async function processRivetUpload(
 
 			const uploadResult = await uploadOCIBundleToRivet(
 				conversionResult.bundleTarPath,
-				build.buildName!,
+				build.buildName,
 				`${buildId}:latest`, // Match kaniko destination format
 				rivetConfig,
 				new Date().toISOString(), // Use timestamp as version for now
@@ -100,30 +102,31 @@ export async function createServer(port: number = 3000) {
 
 	app.post("/builds", async (c) => {
 		try {
-			const formData = await c.req.formData();
-			const buildName = formData.get("buildName") as string;
-			const dockerfilePath = formData.get("dockerfilePath") as string;
-			const environmentId = formData.get("environmentId") as string;
-			const contextFile = formData.get("context") as File;
-
-			if (!buildName) {
-				return c.json({ error: "buildName is required" }, 400);
+			const body = await c.req.parseBody();
+			const parseResult = BuildRequestSchema.safeParse(body);
+			if (!parseResult.success) {
+				return c.json(
+					{ error: "Invalid build request format" },
+					400,
+				);
 			}
-
-			if (!dockerfilePath) {
-				return c.json({ error: "dockerfilePath is required" }, 400);
-			}
-
-			if (!environmentId) {
-				return c.json({ error: "environmentId is required" }, 400);
-			}
-
-			if (!contextFile) {
-				return c.json({ error: "context file is required" }, 400);
-			}
+			const {
+				buildName,
+				dockerfilePath,
+				environmentId,
+				buildArgs,
+				buildTarget,
+				context: contextFile
+			} = parseResult.data;
 
 			// Create the build
-			const buildId = buildStore.createBuild(buildName, dockerfilePath, environmentId);
+			const buildId = buildStore.createBuild(
+				buildName, 
+				dockerfilePath, 
+				environmentId, 
+				buildArgs,
+				buildTarget
+			);
 			const contextPath = buildStore.getContextPath(buildId);
 
 			if (!contextPath) {
@@ -169,6 +172,7 @@ export async function createServer(port: number = 3000) {
 
 			return c.json({ buildId });
 		} catch (error) {
+			console.error("Error processing build request:", error);
 			return c.json({ error: "Failed to process build request" }, 500);
 		}
 	});

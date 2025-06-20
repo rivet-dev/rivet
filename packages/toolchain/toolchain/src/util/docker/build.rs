@@ -17,7 +17,7 @@ pub struct BuildImageOutput {
 
 /// Builds an image and archives it to a path.
 pub async fn build_image(
-	ctx: &ToolchainCtx,
+	_ctx: &ToolchainCtx,
 	task: task::TaskCtx,
 	build_path: &Path,
 	dockerfile: &Path,

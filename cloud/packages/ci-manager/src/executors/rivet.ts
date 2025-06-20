@@ -1,5 +1,6 @@
 import { RivetClient } from "@rivet-gg/api";
 import { BuildStore } from "../build-store";
+import { serializeKanikoArguments } from "../common";
 
 export async function runRivetBuild(
 	buildStore: BuildStore,
@@ -49,10 +50,14 @@ export async function runRivetBuild(
 				build: kanikoBuildId,
 				runtime: {
 					environment: {
-						CONTEXT_URL: contextUrl,
-						OUTPUT_URL: outputUrl,
-						DESTINATION: `${buildId}:latest`,
-						DOCKERFILE_PATH: build.dockerfilePath!,
+						KANIKO_ARGS: serializeKanikoArguments({
+							contextUrl,
+							outputUrl,
+							destination: `${buildId}:latest`,
+							dockerfilePath: build.dockerfilePath,
+							buildArgs: build.buildArgs,
+							buildTarget: build.buildTarget,
+						})
 					},
 				},
 				network: {

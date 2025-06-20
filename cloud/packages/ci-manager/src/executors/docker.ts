@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { BuildStore } from "../build-store";
+import { serializeKanikoArguments, UNIT_SEP_CHAR } from "../common";
 
 export async function runDockerBuild(
 	buildStore: BuildStore,
@@ -19,13 +20,16 @@ export async function runDockerBuild(
 		"--rm",
 		"--network=host",
 		"-e",
-		`CONTEXT_URL=${contextUrl}`,
-		"-e",
-		`OUTPUT_URL=${outputUrl}`,
-		"-e",
-		`DESTINATION=${buildId}:latest`,
-		"-e",
-		`DOCKERFILE_PATH=${build.dockerfilePath}`,
+		`KANIKO_ARGS=${
+			serializeKanikoArguments({
+				contextUrl,
+				outputUrl,
+				destination: `${buildId}:latest`,
+				dockerfilePath: build.dockerfilePath,
+				buildArgs: build.buildArgs,
+				buildTarget: build.buildTarget,
+			})
+		}`,
 		"ci-runner",
 	];
 
@@ -36,7 +40,7 @@ export async function runDockerBuild(
 
 	return new Promise<void>((resolve, reject) => {
 		const dockerProcess = spawn("docker", kanikoArgs, {
-			stdio: ["pipe", "pipe", "pipe"],
+			stdio: ["pipe", "pipe", "pipe"]
 		});
 
 		buildStore.setContainerProcess(buildId, dockerProcess);

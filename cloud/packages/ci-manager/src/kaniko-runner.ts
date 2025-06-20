@@ -37,10 +37,10 @@ async function validateBuildUpload(
 	buildId: string,
 ): Promise<void> {
 	const build = buildStore.getBuild(buildId);
-	if (!build || !build.outputPath) {
+	if (!build) {
 		buildStore.updateStatus(buildId, {
 			type: "failure",
-			data: { reason: "Build not found or missing output path" },
+			data: { reason: "Build not found" },
 		});
 		return;
 	}
