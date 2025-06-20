@@ -92,18 +92,23 @@ jobs:
           - platform: linux
             runner: [self-hosted, Linux, X64]
             target: x86_64-unknown-linux-musl
-          - platform: linux
-            runner: [self-hosted, Linux, ARM64]
-            target: aarch64-unknown-linux-musl
-          # - platform: windows
-          #   runner: [self-hosted, Linux, X64]
-          #   target: x86_64-pc-windows-gnu
+            binary_ext: ""
+            arch: x86_64
+          - platform: windows
+            runner: [self-hosted, Linux, X64]
+            target: x86_64-pc-windows-gnu
+            binary_ext: ".exe"
+            arch: x86_64
           - platform: macos
             runner: [self-hosted, Linux, X64]
             target: x86_64-apple-darwin
+            binary_ext: ""
+            arch: x86_64
           - platform: macos
             runner: [self-hosted, Linux, ARM64]
             target: aarch64-apple-darwin
+            binary_ext: ""
+            arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -119,7 +124,6 @@ jobs:
           export DOCKER_BUILDKIT=1
           
           # Build the binary using our Dockerfile
-          ARCH_ARG="${{ matrix.arch }}"
           docker/toolchain/build.sh ${{ matrix.target }}
           
           # Make sure dist directory exists and binary is there
@@ -135,7 +139,7 @@ jobs:
           apt-get install -y unzip curl
 
           # Install AWS CLI - use ARM version if running on ARM architecture
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
             curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
           else
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -144,12 +148,12 @@ jobs:
           ./aws/install --update
 
           COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
-          BINARY_PATH="dist/rivet-${{ matrix.target }}"
+          BINARY_PATH="dist/rivet-${{ matrix.target }}${{ matrix.binary_ext }}"
 
           # Must specify --checksum-algorithm for compatibility with R2
           aws s3 cp \
             "${BINARY_PATH}" \
-            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-${{ matrix.target }}" \
+            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-${{ matrix.target }}${{ matrix.binary_ext }}" \
             --region auto \
             --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases \
             --checksum-algorithm CRC32
