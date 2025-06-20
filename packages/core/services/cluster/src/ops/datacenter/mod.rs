@@ -1,3 +1,4 @@
+pub mod server_discovery;
 pub mod get;
 pub mod list;
 pub mod location_get;

@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
+use std::{net::Ipv4Addr, time::{Duration, Instant}};
 
 use anyhow::*;
 use pegboard_config::{Addresses, Client};
-use service_discovery::ApiResponse;
+use serde::Deserialize;
 use tokio::sync::RwLock;
 
 /// Duration between pulling addresses again.
@@ -62,4 +62,14 @@ impl PullAddrHandler {
 			Addresses::Static(addresses) => Ok(addresses.clone()),
 		}
 	}
+}
+
+#[derive(Deserialize)]
+struct ApiResponse {
+	servers: Vec<ApiServer>,
+}
+
+#[derive(Deserialize, Clone)]
+struct ApiServer {
+	lan_ip: Option<Ipv4Addr>,
 }

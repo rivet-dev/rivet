@@ -8,6 +8,7 @@ edition.workspace = true
 [dependencies]
 rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
+rivet-api.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 tokio.workspace = true
 tracing = "0.1"

@@ -1,6 +1,7 @@
 use std::{
 	convert::{TryFrom, TryInto},
 	net::{IpAddr, Ipv4Addr},
+	str::FromStr,
 };
 
 use chirp_workflow::prelude::*;
@@ -107,6 +108,25 @@ impl std::fmt::Display for PoolType {
 	}
 }
 
+impl FromStr for PoolType {
+	type Err = GlobalError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"job" => Ok(PoolType::Job),
+			"gg" => Ok(PoolType::Gg),
+			"ats" => Ok(PoolType::Ats),
+			"pegboard" => Ok(PoolType::Pegboard),
+			"pegboard-isolate" => Ok(PoolType::PegboardIsolate),
+			"fdb" => Ok(PoolType::Fdb),
+			"worker" => Ok(PoolType::Worker),
+			"nats" => Ok(PoolType::Nats),
+			"guard" => Ok(PoolType::Guard),
+			_ => bail!("Invalid PoolType string: {}", s),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Hardware {
 	pub provider_hardware: String,
@@ -144,7 +164,7 @@ impl From<rivet_config::config::rivet::BuildDeliveryMethod> for BuildDeliveryMet
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Server {
 	pub server_id: Uuid,
 	pub datacenter_id: Uuid,

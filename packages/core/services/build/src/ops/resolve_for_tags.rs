@@ -29,7 +29,7 @@ pub async fn build_resolve_for_tags(ctx: &OperationCtx, input: &Input) -> Global
 				.ttl(util::duration::seconds(15))
 				.fetch_one_json(
 					"build",
-					format!("{}:{}", input.env_id, tags_str.as_str()),
+					(input.env_id, tags_str.as_str()),
 					{
 						let ctx = ctx.clone();
 						let tags_str = tags_str.clone();

@@ -536,11 +536,10 @@ pub async fn complete_build(
 			}
 		}
 
-		// TODO: Disabled until deploy
-		// // Error only if all prewarm requests failed
-		// if !results.is_empty() && results.iter().all(|res| res.is_err()) {
-		// 	return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
-		// }
+		// Error only if all prewarm requests failed
+		if !results.is_empty() && results.iter().all(|res| res.is_err()) {
+			return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
+		}
 	}
 
 	Ok(json!({}))

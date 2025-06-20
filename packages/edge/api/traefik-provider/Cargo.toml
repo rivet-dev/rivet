@@ -43,7 +43,6 @@ util-job.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
 api-core-traefik-provider.workspace = true
-cluster.workspace = true
 pegboard.workspace = true
 
 [dependencies.sqlx]

@@ -56,18 +56,14 @@ pub async fn servers(
 	_watch_index: WatchIndexQuery,
 	query: ServerFilterQuery,
 ) -> GlobalResult<models::ProvisionDatacentersGetServersResponse> {
-	// Find server based on public ip
 	let servers_res = ctx
-		.op(cluster::ops::server::list::Input {
-			filter: cluster::types::Filter {
-				datacenter_ids: Some(vec![datacenter_id]),
-				pool_types: (!query.pools.is_empty())
-					.then(|| query.pools.into_iter().map(ApiInto::api_into).collect()),
-				..Default::default()
-			},
-			include_destroyed: false,
-			exclude_draining: true,
-			exclude_no_vlan: true,
+		.op(cluster::ops::datacenter::server_discovery::Input {
+			datacenter_id,
+			pool_types: query
+				.pools
+				.into_iter()
+				.map(ApiInto::api_into)
+				.collect(),
 		})
 		.await?;
 
@@ -75,8 +71,6 @@ pub async fn servers(
 		servers: servers_res
 			.servers
 			.into_iter()
-			// Filter out installing servers
-			.filter(|server| server.install_complete_ts.is_some())
 			.map(ApiInto::api_into)
 			.collect(),
 	})

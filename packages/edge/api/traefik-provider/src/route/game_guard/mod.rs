@@ -1,4 +1,3 @@
-use api::build_api;
 use api_core_traefik_provider::types;
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use job::build_job;
@@ -7,7 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
 
-pub mod api;
 pub mod job;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,8 +27,6 @@ pub async fn config(
 	let mut config = types::TraefikConfigResponse::default();
 
 	build_job(&ctx, &mut config).await?;
-
-	build_api(&ctx, &mut config).await?;
 
 	tracing::debug!(
 		http_services = ?config.http.services.len(),

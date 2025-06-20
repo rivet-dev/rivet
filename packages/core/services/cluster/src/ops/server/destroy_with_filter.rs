@@ -21,6 +21,7 @@ pub async fn cluster_server_destroy_with_filter(
 		.op(crate::ops::server::list::Input {
 			filter: input.filter.clone(),
 			include_destroyed: false,
+			exclude_installing: false,
 			exclude_draining: false,
 			exclude_no_vlan: false,
 		})
