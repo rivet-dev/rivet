@@ -1,7 +1,6 @@
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::{sign::CertifiedKey, ServerConfig};
 use std::sync::Arc;
-use tracing::{debug, error};
 
 /// Type signature for a function that resolves a TLS certificate based on the server name
 pub type CertResolverFn = Arc<
@@ -33,23 +32,23 @@ impl ResolvesServerCert for CertResolver {
 	fn resolve(&self, client_hello: ClientHello) -> Option<Arc<CertifiedKey>> {
 		// Extract the server name if available
 		if let Some(server_name) = client_hello.server_name() {
-			debug!("SNI server name requested: {}", server_name);
+			tracing::debug!("SNI server name requested: {}", server_name);
 
 			// Call the resolver function with the server name directly
 			let resolver_fn = &self.resolver_fn;
 			match (resolver_fn)(server_name) {
 				Ok(cert) => {
-					debug!("Resolved certificate for {}", server_name);
+					tracing::debug!("Resolved certificate for {}", server_name);
 					return Some(cert);
 				}
 				Err(e) => {
 					// Log the error but don't fall back to a default certificate
-					error!("Error resolving certificate for {}: {}", server_name, e);
+					tracing::debug!("Error resolving certificate for {}: {}", server_name, e);
 					return None;
 				}
 			}
 		} else {
-			debug!("No SNI server name provided");
+			tracing::debug!("No SNI server name provided");
 			return None;
 		}
 	}

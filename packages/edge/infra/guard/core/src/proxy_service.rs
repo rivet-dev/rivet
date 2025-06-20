@@ -14,7 +14,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use global_error::*;
 use http_body_util::Full;
-use hyper::body::{Body, Incoming as BodyIncoming};
+use hyper::body::Incoming as BodyIncoming;
 use hyper::header::HeaderName;
 use hyper::{Request, Response, StatusCode};
 use hyper_tungstenite;
@@ -25,7 +25,6 @@ use rand;
 use serde_json;
 use tokio::time::timeout;
 use tracing::Instrument;
-use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::metrics;
@@ -396,7 +395,7 @@ impl ProxyState {
 				}
 			},
 			Err(_) => {
-				tracing::warn!(
+				tracing::error!(
 					hostname = %hostname_only,
 					path = %path,
 					timeout_seconds = default_timeout.as_secs(),
@@ -638,8 +637,8 @@ impl ProxyService {
 				// Return the custom response
 				return response.build_response();
 			}
-			Err(e) => {
-				error!("Routing error: {}", e);
+			Err(err) => {
+				tracing::error!(?err, "Routing error");
 				return Ok(Response::builder()
 					.status(StatusCode::BAD_GATEWAY)
 					.body(Full::<Bytes>::new(Bytes::new()))?);
@@ -825,8 +824,8 @@ impl ProxyService {
 		let (req_parts, body) = req.into_parts();
 		let req_body = match http_body_util::BodyExt::collect(body).await {
 			Ok(collected) => collected.to_bytes(),
-			Err(e) => {
-				warn!("Failed to read request body: {}", e);
+			Err(err) => {
+				tracing::debug!(?err, "Failed to read request body");
 				Bytes::new()
 			}
 		};
@@ -850,11 +849,11 @@ impl ProxyService {
 				let (uri_str, builder) = match self.build_proxied_request_parts(&req_parts, &target)
 				{
 					Ok(parts) => parts,
-					Err(e) => {
-						error!("Failed to build HTTP request: {}", e);
+					Err(err) => {
+						tracing::error!(?err, "Failed to build HTTP request");
 
 						let error = Some(global_error::ext::AssertionError::Panic {
-							message: format!("Failed to build HTTP request: {}", e),
+							message: format!("Failed to build HTTP request"),
 							location: global_error::location!(),
 						});
 						break 'retry (StatusCode::INTERNAL_SERVER_ERROR, error);
@@ -864,11 +863,11 @@ impl ProxyService {
 				// Parse the URI for hyper-util client
 				let _uri = match uri_str.parse::<hyper::Uri>() {
 					Ok(uri) => uri,
-					Err(e) => {
-						error!("Failed to parse URI: {}", e);
+					Err(err) => {
+						tracing::error!(?err, "Failed to parse URI");
 
 						let error = Some(global_error::ext::AssertionError::Panic {
-							message: format!("URI parse error: {}", e),
+							message: format!("URI parse error"),
 							location: global_error::location!(),
 						});
 						break 'retry (StatusCode::BAD_GATEWAY, error);
@@ -878,11 +877,11 @@ impl ProxyService {
 				// Create the final request with body
 				let proxied_req = match builder.body(Full::<Bytes>::new(req_body.clone())) {
 					Ok(req) => req,
-					Err(e) => {
-						warn!("Failed to build request body: {}", e);
+					Err(err) => {
+						tracing::warn!(?err, "Failed to build request body");
 
 						let error = Some(global_error::ext::AssertionError::Panic {
-							message: format!("Request build error: {}", e),
+							message: format!("Request build error"),
 							location: global_error::location!(),
 						});
 						break 'retry (StatusCode::INTERNAL_SERVER_ERROR, error);
@@ -910,16 +909,16 @@ impl ProxyService {
 						let full_body = Full::new(body_bytes);
 						return Ok(Response::from_parts(parts, full_body));
 					}
-					Ok(Err(e)) => {
-						if !e.is_connect() || attempts >= max_attempts {
+					Ok(Err(err)) => {
+						if !err.is_connect() || attempts >= max_attempts {
 							let error = Some(global_error::ext::AssertionError::Panic {
-								message: format!("Request error: {}", e),
+								message: format!("Request error"),
 								location: global_error::location!(),
 							});
 							break 'retry (StatusCode::BAD_GATEWAY, error);
 						} else {
 							// Request connect error, might retry
-							warn!("Request attempt {} failed: {}", attempts, e);
+							tracing::debug!(?err, "Request attempt {attempts} failed");
 
 							// Use backoff and continue
 							let backoff = Self::calculate_backoff(attempts, initial_interval);
@@ -941,8 +940,8 @@ impl ProxyService {
 								Ok(ResolveRouteOutput::Response(response)) => {
 									return response.build_response()
 								}
-								Err(e) => {
-									error!("Routing error: {}", e);
+								Err(err) => {
+									tracing::error!(?err, "Routing error");
 									return Ok(Response::builder()
 										.status(StatusCode::BAD_GATEWAY)
 										.body(Full::<Bytes>::new(Bytes::new()))?);
@@ -954,7 +953,7 @@ impl ProxyService {
 					}
 					Err(_) => {
 						// Timeout error
-						warn!(
+						tracing::debug!(
 							"Request timed out after {} seconds",
 							timeout_duration.as_secs()
 						);
@@ -977,7 +976,7 @@ impl ProxyService {
 		};
 
 		// Log the error
-		error!("Request failed: {:?}", last_error);
+		tracing::error!(?last_error, "Request failed");
 
 		Ok(Response::builder()
 			.status(status_code)
@@ -1055,7 +1054,7 @@ impl ProxyService {
 			.unwrap_or_else(|| req.uri().path().to_string());
 
 		// Log request details
-		info!("WebSocket upgrade request for path: {}, target host: {}:{}, actor_id: {}, server_id: {}",
+		tracing::debug!("WebSocket upgrade request for path: {}, target host: {}:{}, actor_id: {}, server_id: {}",
 			target.path, target.host, target.port, actor_id_str, server_id_str);
 
 		// Get middleware config for this actor if it exists
@@ -1063,7 +1062,7 @@ impl ProxyService {
 			Some(actor_id) => self.state.get_middleware_config(actor_id).await?,
 			None => {
 				// Default middleware config for targets without actor_id
-				info!("Using default middleware config (no actor_id)");
+				tracing::debug!("Using default middleware config (no actor_id)");
 				MiddlewareConfig {
 					rate_limit: RateLimitConfig {
 						requests: 100, // 100 requests
@@ -1088,35 +1087,35 @@ impl ProxyService {
 		let initial_interval = middleware_config.retry.initial_interval;
 
 		// Log the headers for debugging
-		debug!("WebSocket upgrade request headers:");
+		tracing::debug!("WebSocket upgrade request headers:");
 		for (name, value) in req.headers() {
 			if let Ok(val) = value.to_str() {
-				debug!("  {}: {}", name, val);
+				tracing::debug!("  {}: {}", name, val);
 			}
 		}
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		// First, upgrade the client connection
-		info!("Upgrading client connection to WebSocket");
+		tracing::debug!("Upgrading client connection to WebSocket");
 		let (client_response, client_websocket) = match hyper_tungstenite::upgrade(req, None) {
 			Ok(x) => {
-				info!("Client WebSocket upgrade successful");
+				tracing::debug!("Client WebSocket upgrade successful");
 				x
 			}
 			Err(err) => {
-				error!("Failed to upgrade client WebSocket: {}", err);
+				tracing::error!(?err, "Failed to upgrade client WebSocket");
 				bail!("Failed to upgrade client WebSocket: {err}")
 			}
 		};
 
 		// Log response status and headers
-		info!(
+		tracing::debug!(
 			"Client upgrade response status: {}",
 			client_response.status()
 		);
 		for (name, value) in client_response.headers() {
 			if let Ok(val) = value.to_str() {
-				debug!("Client upgrade response header - {}: {}", name, val);
+				tracing::debug!("Client upgrade response header - {}: {}", name, val);
 			}
 		}
 
@@ -1124,12 +1123,12 @@ impl ProxyService {
 		let state = self.state.clone();
 
 		// Spawn a new task to handle the WebSocket bidirectional communication
-		info!("Spawning task to handle WebSocket communication");
+		tracing::debug!("Spawning task to handle WebSocket communication");
 		tokio::spawn(
 			async move {
 				// Set up a timeout for the entire operation
 				let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
-				info!(
+				tracing::debug!(
 					"WebSocket proxy task started with {}s timeout",
 					timeout_duration.as_secs()
 				);
@@ -1139,20 +1138,19 @@ impl ProxyService {
 				let mut upstream_ws = None;
 
 				// First, wait for the client WebSocket to be ready (do this first to avoid race conditions)
-				info!("Waiting for client WebSocket to be ready...");
+				tracing::debug!("Waiting for client WebSocket to be ready...");
 				let client_ws = match tokio::time::timeout(timeout_duration, client_websocket).await
 				{
 					Ok(Ok(ws)) => {
-						info!("Client WebSocket is ready");
+						tracing::debug!("Client WebSocket is ready");
 						ws
 					}
-					Ok(Err(e)) => {
-						error!("Failed to get client WebSocket: {}", e);
-						error!("Error details: {:?}", e);
+					Ok(Err(err)) => {
+						tracing::error!(?err, "Failed to get client WebSocket");
 						return;
 					}
 					Err(_) => {
-						error!(
+						tracing::error!(
 							"Timeout waiting for client WebSocket to be ready after {}s",
 							timeout_duration.as_secs()
 						);
@@ -1161,12 +1159,12 @@ impl ProxyService {
 				};
 
 				// Now attempt to connect to the upstream server
-				info!("Attempting connect to upstream WebSocket");
+				tracing::debug!("Attempting connect to upstream WebSocket");
 				while attempts < max_attempts {
 					attempts += 1;
 
 					let target_url = format!("ws://{}:{}{}", target.host, target.port, target.path);
-					info!(
+					tracing::debug!(
 						"WebSocket request attempt {}/{} to {}",
 						attempts, max_attempts, target_url
 					);
@@ -1178,34 +1176,33 @@ impl ProxyService {
 					.await
 					{
 						Ok(Ok((ws_stream, resp))) => {
-							info!("Successfully connected to upstream WebSocket server");
-							debug!("Upstream connection response status: {:?}", resp.status());
+							tracing::debug!("Successfully connected to upstream WebSocket server");
+							tracing::debug!("Upstream connection response status: {:?}", resp.status());
 
 							// Log headers for debugging
 							for (name, value) in resp.headers() {
 								if let Ok(val) = value.to_str() {
-									debug!("Upstream response header - {}: {}", name, val);
+									tracing::debug!("Upstream response header - {}: {}", name, val);
 								}
 							}
 
 							upstream_ws = Some(ws_stream);
 							break;
 						}
-						Ok(Err(e)) => {
-							warn!("WebSocket request attempt {} failed: {}", attempts, e);
-							warn!("Error details: {:?}", e);
+						Ok(Err(err)) => {
+							tracing::debug!(?err, "WebSocket request attempt {} failed", attempts);
 						}
 						Err(_) => {
-							warn!("WebSocket request attempt {} timed out after 5s", attempts);
+							tracing::debug!("WebSocket request attempt {} timed out after 5s", attempts);
 						}
 					}
 
 					// Check if we've reached max attempts
 					if attempts >= max_attempts {
-						error!("All {} WebSocket connection attempts failed", max_attempts);
+						tracing::debug!("All {} WebSocket connection attempts failed", max_attempts);
 
 						// Send a close message to the client since we can't connect to upstream
-						info!("Sending close message to client due to upstream connection failure");
+						tracing::debug!("Sending close message to client due to upstream connection failure");
 						let (mut client_sink, _) = client_ws.split();
 						match client_sink
 							.send(hyper_tungstenite::tungstenite::Message::Close(Some(
@@ -1216,13 +1213,13 @@ impl ProxyService {
 							)))
 							.await
 						{
-							Ok(_) => info!("Successfully sent close message to client"),
-							Err(e) => error!("Failed to send close message to client: {}", e),
+							Ok(_) => tracing::debug!("Successfully sent close message to client"),
+							Err(err) => tracing::error!(?err, "Failed to send close message to client"),
 						};
 
 						match client_sink.flush().await {
-							Ok(_) => info!("Successfully flushed client sink after close"),
-							Err(e) => error!("Failed to flush client sink after close: {}", e),
+							Ok(_) => tracing::debug!("Successfully flushed client sink after close"),
+							Err(err) => tracing::error!(?err, "Failed to flush client sink after close"),
 						};
 
 						return;
@@ -1230,7 +1227,7 @@ impl ProxyService {
 
 					// Use backoff for the next attempt
 					let backoff = Self::calculate_backoff(attempts, initial_interval);
-					info!("Waiting for {:?} before next connection attempt", backoff);
+					tracing::debug!("Waiting for {:?} before next connection attempt", backoff);
 
 					let (_, new_target) = tokio::join!(
 						tokio::time::sleep(backoff),
@@ -1244,26 +1241,26 @@ impl ProxyService {
 							target = new_target;
 						}
 						Ok(ResolveRouteOutput::Response(_response)) => {
-							error!("Expected target, got response")
+							tracing::error!("Expected target, got response")
 						}
-						Err(e) => error!("Routing error: {}", e),
+						Err(err) => tracing::error!(?err, "Routing error"),
 					}
 				}
 
 				// If we couldn't connect to the upstream server, exit the task
 				let upstream_ws = match upstream_ws {
 					Some(ws) => {
-						info!("Successfully established upstream WebSocket connection");
+						tracing::debug!("Successfully established upstream WebSocket connection");
 						ws
 					}
 					Option::None => {
-						error!("Failed to establish upstream WebSocket connection (unexpected)");
+						tracing::error!("Failed to establish upstream WebSocket connection (unexpected)");
 						return; // Should never happen due to checks above, but just in case
 					}
 				};
 
 				// Now set up bidirectional communication between the client and upstream WebSockets
-				info!("Setting up bidirectional WebSocket proxying");
+				tracing::debug!("Setting up bidirectional WebSocket proxying");
 				let (client_sink, client_stream) = client_ws.split();
 				let (upstream_sink, upstream_stream) = upstream_ws.split();
 
@@ -1272,7 +1269,7 @@ impl ProxyService {
 
 				// Manually forward messages from client to upstream server with shutdown coordination
 				let client_to_upstream = async {
-					info!("Starting client-to-upstream forwarder");
+					tracing::debug!("Starting client-to-upstream forwarder");
 					let mut stream = client_stream;
 					let mut sink = upstream_sink;
 					let mut shutdown_rx = shutdown_rx.clone();
@@ -1284,13 +1281,13 @@ impl ProxyService {
 								match shutdown_result {
 									Ok(_) => {
 										if *shutdown_rx.borrow() {
-											info!("Client-to-upstream forwarder shutting down due to signal");
+											tracing::debug!("Client-to-upstream forwarder shutting down due to signal");
 											break;
 										}
 									},
-									Err(e) => {
+									Err(err) => {
 										// Channel closed
-										info!("Client-to-upstream shutdown channel closed: {}", e);
+										tracing::debug!(?err, "Client-to-upstream shutdown channel closed");
 										break;
 									}
 								}
@@ -1300,53 +1297,21 @@ impl ProxyService {
 							msg_result = stream.next() => {
 								match msg_result {
 									Some(Ok(client_msg)) => {
-										// Debug output with message type
-										match &client_msg {
-											hyper_tungstenite::tungstenite::Message::Text(text) => {
-												info!("Received text message from client: {} bytes", text.len());
-												debug!("Client text message content: {}", text);
-											},
-											hyper_tungstenite::tungstenite::Message::Binary(data) => {
-												info!("Received binary message from client: {} bytes", data.len());
-											},
-											hyper_tungstenite::tungstenite::Message::Ping(data) => {
-												info!("Received ping from client: {} bytes", data.len());
-											},
-											hyper_tungstenite::tungstenite::Message::Pong(data) => {
-												info!("Received pong from client: {} bytes", data.len());
-											},
-											hyper_tungstenite::tungstenite::Message::Close(frame) => {
-												if let Some(f) = frame {
-													info!("Received close from client with code: {}", u16::from(f.code));
-												} else {
-													info!("Received close from client without code");
-												}
-											},
-											_ => {
-												info!("Received unknown message type from client");
-											}
-										}
-
 										// Convert from hyper_tungstenite::Message to tokio_tungstenite::Message
 										let upstream_msg = match client_msg {
 											hyper_tungstenite::tungstenite::Message::Text(text) => {
-												info!("Converting text message to upstream format");
 												tokio_tungstenite::tungstenite::Message::Text(text)
 											},
 											hyper_tungstenite::tungstenite::Message::Binary(data) => {
-												info!("Converting binary message to upstream format");
 												tokio_tungstenite::tungstenite::Message::Binary(data)
 											},
 											hyper_tungstenite::tungstenite::Message::Ping(data) => {
-												info!("Converting ping message to upstream format");
 												tokio_tungstenite::tungstenite::Message::Ping(data)
 											},
 											hyper_tungstenite::tungstenite::Message::Pong(data) => {
-												info!("Converting pong message to upstream format");
 												tokio_tungstenite::tungstenite::Message::Pong(data)
 											},
 											hyper_tungstenite::tungstenite::Message::Close(frame) => {
-												info!("Converting close message to upstream format");
 												// Signal shutdown to other direction
 												let _ = shutdown_tx.send(true);
 
@@ -1366,14 +1331,13 @@ impl ProxyService {
 												}
 											},
 											hyper_tungstenite::tungstenite::Message::Frame(_) => {
-												info!("Skipping frame message - implementation detail");
 												// Skip frames - they're an implementation detail
 												continue;
 											},
 										};
 
 										// Send the message with a timeout
-										info!("Sending message to upstream server");
+										tracing::debug!("Sending message to upstream server");
 										let send_result = tokio::time::timeout(
 											Duration::from_secs(5),
 											sink.send(upstream_msg)
@@ -1381,50 +1345,49 @@ impl ProxyService {
 
 										match send_result {
 											Ok(Ok(_)) => {
-												info!("Message sent to upstream successfully");
+												tracing::debug!("Message sent to upstream successfully");
 												// Flush the sink with a timeout
-												info!("Flushing upstream sink");
+												tracing::debug!("Flushing upstream sink");
 												let flush_result = tokio::time::timeout(
 													Duration::from_secs(2),
 													sink.flush()
 												).await;
 
 												if let Err(_) = flush_result {
-													error!("Timeout flushing upstream sink");
+													tracing::debug!("Timeout flushing upstream sink");
 													let _ = shutdown_tx.send(true);
 													break;
-												} else if let Ok(Err(e)) = flush_result {
-													error!("Error flushing upstream sink: {}", e);
+												} else if let Ok(Err(err)) = flush_result {
+													tracing::debug!(?err, "Error flushing upstream sink");
 													let _ = shutdown_tx.send(true);
 													break;
 												} else {
-													info!("Upstream sink flushed successfully");
+													tracing::debug!("Upstream sink flushed successfully");
 												}
 											},
-											Ok(Err(e)) => {
-												error!("Error sending message to upstream: {}", e);
-												error!("Error details: {:?}", e);
+											Ok(Err(err)) => {
+												tracing::debug!(?err, "Error sending message to upstream");
 												let _ = shutdown_tx.send(true);
 												break;
 											},
 											Err(_) => {
-												error!("Timeout sending message to upstream after 5s");
+												tracing::debug!("Timeout sending message to upstream after 5s");
 												let _ = shutdown_tx.send(true);
 												break;
 											}
 										}
 									},
-									Some(Err(e)) => {
+									Some(Err(err)) => {
 										// Error receiving message from client
-										error!("Error receiving message from client: {}", e);
-										error!("Error details: {:?}", e);
+										tracing::debug!(?err, "Error receiving message from client");
+										tracing::debug!(?err, "Error details");
 										// Signal shutdown to other direction
 										let _ = shutdown_tx.send(true);
 										break;
 									},
 									None => {
 										// End of stream
-										info!("Client WebSocket stream ended");
+										tracing::debug!("Client WebSocket stream ended");
 										// Signal shutdown to other direction
 										let _ = shutdown_tx.send(true);
 										break;
@@ -1435,26 +1398,26 @@ impl ProxyService {
 					}
 
 					// Try to send a close frame - ignore errors as the connection might already be closed
-					info!("Attempting to send close message to upstream");
+					tracing::debug!("Attempting to send close message to upstream");
 					match sink
 						.send(tokio_tungstenite::tungstenite::Message::Close(None))
 						.await
 					{
-						Ok(_) => info!("Close message sent to upstream successfully"),
-						Err(e) => warn!("Failed to send close message to upstream: {}", e),
+						Ok(_) => tracing::debug!("Close message sent to upstream successfully"),
+						Err(err) => tracing::debug!(?err, "Failed to send close message to upstream"),
 					};
 
 					match sink.flush().await {
-						Ok(_) => info!("Upstream sink flushed successfully after close"),
-						Err(e) => warn!("Failed to flush upstream sink after close: {}", e),
+						Ok(_) => tracing::debug!("Upstream sink flushed successfully after close"),
+						Err(err) => tracing::debug!(?err, "Failed to flush upstream sink after close"),
 					};
 
-					info!("Client-to-upstream task completed");
+					tracing::debug!("Client-to-upstream task completed");
 				};
 
 				// Manually forward messages from upstream server to client with shutdown coordination
 				let upstream_to_client = async {
-					info!("Starting upstream-to-client forwarder");
+					tracing::debug!("Starting upstream-to-client forwarder");
 					let mut stream = upstream_stream;
 					let mut sink = client_sink;
 					let mut shutdown_rx = shutdown_rx.clone();
@@ -1466,13 +1429,13 @@ impl ProxyService {
 								match shutdown_result {
 									Ok(_) => {
 										if *shutdown_rx.borrow() {
-											info!("Upstream-to-client forwarder shutting down due to signal");
+											tracing::debug!("Upstream-to-client forwarder shutting down due to signal");
 											break;
 										}
 									},
-									Err(e) => {
+									Err(err) => {
 										// Channel closed
-										info!("Upstream-to-client shutdown channel closed: {}", e);
+										tracing::debug!(?err, "Upstream-to-client shutdown channel closed");
 										break;
 									}
 								}
@@ -1482,53 +1445,21 @@ impl ProxyService {
 							msg_result = stream.next() => {
 								match msg_result {
 									Some(Ok(upstream_msg)) => {
-										// Debug output with message type
-										match &upstream_msg {
-											tokio_tungstenite::tungstenite::Message::Text(text) => {
-												info!("Received text message from upstream: {} bytes", text.len());
-												debug!("Upstream text message content: {}", text);
-											},
-											tokio_tungstenite::tungstenite::Message::Binary(data) => {
-												info!("Received binary message from upstream: {} bytes", data.len());
-											},
-											tokio_tungstenite::tungstenite::Message::Ping(data) => {
-												info!("Received ping from upstream: {} bytes", data.len());
-											},
-											tokio_tungstenite::tungstenite::Message::Pong(data) => {
-												info!("Received pong from upstream: {} bytes", data.len());
-											},
-											tokio_tungstenite::tungstenite::Message::Close(frame) => {
-												if let Some(f) = frame {
-													info!("Received close from upstream with code: {}", u16::from(f.code));
-												} else {
-													info!("Received close from upstream without code");
-												}
-											},
-											_ => {
-												info!("Received unknown message type from upstream");
-											}
-										}
-
 										// Convert from tokio_tungstenite::Message to hyper_tungstenite::Message
 										let client_msg = match upstream_msg {
 											tokio_tungstenite::tungstenite::Message::Text(text) => {
-												info!("Converting text message to client format");
 												hyper_tungstenite::tungstenite::Message::Text(text)
 											},
 											tokio_tungstenite::tungstenite::Message::Binary(data) => {
-												info!("Converting binary message to client format");
 												hyper_tungstenite::tungstenite::Message::Binary(data)
 											},
 											tokio_tungstenite::tungstenite::Message::Ping(data) => {
-												info!("Converting ping message to client format");
 												hyper_tungstenite::tungstenite::Message::Ping(data)
 											},
 											tokio_tungstenite::tungstenite::Message::Pong(data) => {
-												info!("Converting pong message to client format");
 												hyper_tungstenite::tungstenite::Message::Pong(data)
 											},
 											tokio_tungstenite::tungstenite::Message::Close(frame) => {
-												info!("Converting close message to client format");
 												// Signal shutdown to other direction
 												let _ = shutdown_tx.send(true);
 
@@ -1548,14 +1479,13 @@ impl ProxyService {
 												}
 											},
 											tokio_tungstenite::tungstenite::Message::Frame(_) => {
-												info!("Skipping frame message - implementation detail");
 												// Skip frames - they're an implementation detail
 												continue;
 											},
 										};
 
 										// Send the message with a timeout
-										info!("Sending message to client");
+										tracing::debug!("Sending message to client");
 										let send_result = tokio::time::timeout(
 											Duration::from_secs(5),
 											sink.send(client_msg)
@@ -1563,50 +1493,48 @@ impl ProxyService {
 
 										match send_result {
 											Ok(Ok(_)) => {
-												info!("Message sent to client successfully");
+												tracing::debug!("Message sent to client successfully");
 												// Flush the sink with a timeout
-												info!("Flushing client sink");
+												tracing::debug!("Flushing client sink");
 												let flush_result = tokio::time::timeout(
 													Duration::from_secs(2),
 													sink.flush()
 												).await;
 
 												if let Err(_) = flush_result {
-													error!("Timeout flushing client sink");
+													tracing::debug!("Timeout flushing client sink");
 													let _ = shutdown_tx.send(true);
 													break;
-												} else if let Ok(Err(e)) = flush_result {
-													error!("Error flushing client sink: {}", e);
+												} else if let Ok(Err(err)) = flush_result {
+													tracing::debug!(?err, "Error flushing client sink");
 													let _ = shutdown_tx.send(true);
 													break;
 												} else {
-													info!("Client sink flushed successfully");
+													tracing::debug!("Client sink flushed successfully");
 												}
 											},
-											Ok(Err(e)) => {
-												error!("Error sending message to client: {}", e);
-												error!("Error details: {:?}", e);
+											Ok(Err(err)) => {
+												tracing::debug!(?err, "Error sending message to client");
 												let _ = shutdown_tx.send(true);
 												break;
 											},
 											Err(_) => {
-												error!("Timeout sending message to client after 5s");
+												tracing::debug!("Timeout sending message to client after 5s");
 												let _ = shutdown_tx.send(true);
 												break;
 											}
 										}
 									},
-									Some(Err(e)) => {
+									Some(Err(err)) => {
 										// Error receiving message from upstream
-										error!("Error receiving message from upstream: {}", e);
-										error!("Error details: {:?}", e);
+										tracing::debug!(?err, "Error receiving message from upstream");
 										// Signal shutdown to other direction
 										let _ = shutdown_tx.send(true);
 										break;
 									},
 									None => {
 										// End of stream
-										info!("Upstream WebSocket stream ended");
+										tracing::debug!("Upstream WebSocket stream ended");
 										// Signal shutdown to other direction
 										let _ = shutdown_tx.send(true);
 										break;
@@ -1617,27 +1545,27 @@ impl ProxyService {
 					}
 
 					// Try to send a close frame - ignore errors as the connection might already be closed
-					info!("Attempting to send close message to client");
+					tracing::debug!("Attempting to send close message to client");
 					match sink
 						.send(hyper_tungstenite::tungstenite::Message::Close(None))
 						.await
 					{
-						Ok(_) => info!("Close message sent to client successfully"),
-						Err(e) => warn!("Failed to send close message to client: {}", e),
+						Ok(_) => tracing::debug!("Close message sent to client successfully"),
+						Err(err) => tracing::debug!(?err, "Failed to send close message to client"),
 					};
 
 					match sink.flush().await {
-						Ok(_) => info!("Client sink flushed successfully after close"),
-						Err(e) => warn!("Failed to flush client sink after close: {}", e),
+						Ok(_) => tracing::debug!("Client sink flushed successfully after close"),
+						Err(err) => tracing::debug!(?err, "Failed to flush client sink after close"),
 					};
 
-					info!("Upstream-to-client task completed");
+					tracing::debug!("Upstream-to-client task completed");
 				};
 
 				// Run both directions concurrently until either one completes or errors
-				info!("Starting bidirectional message forwarding");
+				tracing::debug!("Starting bidirectional message forwarding");
 				tokio::join!(client_to_upstream, upstream_to_client);
-				info!("Bidirectional message forwarding completed");
+				tracing::debug!("Bidirectional message forwarding completed");
 			}
 			.instrument(tracing::info_span!("handle_ws_task")),
 		);
@@ -1645,7 +1573,7 @@ impl ProxyService {
 		// Return the response that will upgrade the client connection
 		// For proper WebSocket handshaking, we need to preserve the original response
 		// structure but convert it to our expected return type without modifying its content
-		info!("Returning WebSocket upgrade response to client");
+		tracing::debug!("Returning WebSocket upgrade response to client");
 		// Extract the parts from the response but preserve all headers and status
 		let (parts, _) = client_response.into_parts();
 		// Create a new response with an empty body - WebSocket upgrades don't need a body
@@ -1719,7 +1647,7 @@ impl ProxyService {
 		// This requires TLS connection introspection and is marked for future enhancement
 
 		// Debug log request information with structured fields (Apache-like access log)
-		debug!(
+		tracing::debug!(
 			request_id = %request_context.request_id,
 			method = %method,
 			path = %path,
@@ -1745,7 +1673,7 @@ impl ProxyService {
 					.unwrap_or(0);
 
 				// Log information about the completed request
-				debug!(
+				tracing::debug!(
 					request_id = %request_context.request_id,
 					method = %method,
 					path = %path,
@@ -1756,15 +1684,15 @@ impl ProxyService {
 					"Request completed"
 				);
 			}
-			Err(e) => {
+			Err(err) => {
 				// Log error information
-				debug!(
+				tracing::debug!(
 					request_id = %request_context.request_id,
-					method = %method,
-					path = %path,
-					host = %host,
+					%method,
+					%path,
+					%host,
 					remote_addr = %self.remote_addr,
-					error = %e,
+					%err,
 					"Request failed"
 				);
 			}

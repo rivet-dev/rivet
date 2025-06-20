@@ -2,7 +2,6 @@ use crate::analytics::GuardHttpRequest;
 use global_error::GlobalResult;
 use lazy_static::lazy_static;
 use std::{net::IpAddr, time::SystemTime};
-use tracing::warn;
 use uuid::Uuid;
 
 // Properties not currently tracked but should be added in future iterations:

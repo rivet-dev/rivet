@@ -33,9 +33,9 @@ fn load_certified_key(cert_pair: &CertificatePair) -> GlobalResult<Arc<Certified
 		);
 	}
 
-	tracing::info!("Loading {} certificate from:", cert_pair.name);
-	tracing::info!("  Cert: {:?}", cert_pair.cert_path);
-	tracing::info!("  Key: {:?}", cert_pair.key_path);
+	tracing::debug!("Loading {} certificate from:", cert_pair.name);
+	tracing::debug!("  Cert: {:?}", cert_pair.cert_path);
+	tracing::debug!("  Key: {:?}", cert_pair.key_path);
 
 	// Load certificate
 	let cert_file = match File::open(&cert_pair.cert_path) {
@@ -94,7 +94,7 @@ pub async fn create_cert_resolver(
 	let guard_config = match ctx.config().guard() {
 		Ok(config) => config,
 		Err(e) => {
-			tracing::info!("Failed to get Guard configuration: {}", e);
+			tracing::warn!("Failed to get Guard configuration: {}", e);
 			return Ok(None);
 		}
 	};
@@ -161,9 +161,9 @@ pub async fn create_cert_resolver(
 			);
 				None
 			}
-			Err(e) => bail!(
+			Err(err) => bail!(
 				"Failed to build dynamic hostname actor routing regex: {}",
-				e
+				err
 			),
 		};
 	let actor_hostname_regex_static =

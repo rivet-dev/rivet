@@ -1,5 +1,4 @@
 use global_error::prelude::*;
-use regex::Regex;
 use uuid::Uuid;
 
 use crate::types::{EndpointType, GameGuardProtocol};

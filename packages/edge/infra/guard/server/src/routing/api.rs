@@ -52,7 +52,7 @@ pub async fn route_api_request(
 			exclude_no_vlan: true,
 		})
 		.await?;
-	tracing::info!(?servers_res, "servers");
+	tracing::debug!(?servers_res, "servers");
 
 	let port = ctx.config().server()?.rivet.api_public.port();
 	let targets = servers_res
