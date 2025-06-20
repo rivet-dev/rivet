@@ -92,16 +92,18 @@ jobs:
           - platform: linux
             runner: [self-hosted, Linux, X64]
             target: x86_64-unknown-linux-musl
+          - platform: linux
+            runner: [self-hosted, Linux, ARM64]
+            target: aarch64-unknown-linux-musl
           # - platform: windows
           #   runner: [self-hosted, Linux, X64]
-          #   target: x86_64-pc-windows-musl
+          #   target: x86_64-pc-windows-gnu
           - platform: macos
             runner: [self-hosted, Linux, X64]
             target: x86_64-apple-darwin
           - platform: macos
             runner: [self-hosted, Linux, ARM64]
             target: aarch64-apple-darwin
-            arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
