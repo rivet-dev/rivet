@@ -14418,7 +14418,6 @@ __metadata:
   resolution: "multitenant-deploys@workspace:examples/multitenant-deploys"
   dependencies:
     "@hono/node-server": "npm:^1.7.0"
-    "@rivet-gg/api-full": "workspace:*"
     "@types/node": "npm:^20.11.19"
     "@types/temp": "npm:^0.9.4"
     axios: "npm:^1.6.7"
