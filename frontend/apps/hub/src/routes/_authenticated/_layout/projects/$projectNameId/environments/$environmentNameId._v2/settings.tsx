@@ -15,13 +15,13 @@ import { z } from "zod";
 function EnvironmentSettingsRoute() {
 	return (
 		<>
-			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center">
+			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center p-4">
 				<H1>Settings</H1>
 			</div>
 
 			<hr />
 			<div className="p-4">
-				<div className="max-w-5xl mx-auto flex flex-col gap-8">
+				<div className="max-w-5xl mx-auto flex flex-col gap-8 p-2">
 					<ServiceTokenCard />
 					<Modals />
 				</div>

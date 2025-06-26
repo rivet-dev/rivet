@@ -71,7 +71,7 @@ function ProjectFunctionsRoute() {
 		<>
 			<Modals />
 
-			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center">
+			<div className="max-w-5xl mx-auto my-8 flex justify-between items-center p-4">
 				<H1>Functions</H1>
 				<div className="flex items-center gap-2">
 					<Button
@@ -96,7 +96,7 @@ function ProjectFunctionsRoute() {
 			<hr className="mb-4" />
 
 			<div className="p-4">
-				<div className="max-w-5xl mx-auto">
+				<div className="max-w-5xl mx-auto p-2">
 					<div className="border rounded-md">
 						<Table>
 							<TableHeader>

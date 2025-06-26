@@ -57,9 +57,8 @@ export const formSchema = z.object({
 		),
 	path: z
 		.string()
-		.min(1)
 		.refine((value) => {
-			const regex = /^(\/[a-zA-Z0-9-_]+)+$/;
+			const regex = /^(\/[a-zA-Z0-9-_]+)*$/;
 			return regex.test(value);
 		}, "Path must start with a / and contain only alphanumeric characters, dashes, and underscores")
 		.refine((value) => {
@@ -180,7 +179,18 @@ export const Tags = ({
 	return (
 		<>
 			{fields.length === 0 ? (
-				<p className="text-xs mb-2">There's no selectors added.</p>
+				<div>
+					<p className="text-xs mb-2">There's no selectors added.</p>
+					<FormField
+						control={control}
+						name="tags"
+						render={({ field }) => (
+							<FormItem>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
 			) : null}
 			{fields.map((field, index) => (
 				<div
