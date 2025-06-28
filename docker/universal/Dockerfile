@@ -123,7 +123,7 @@ RUN apt-get update -y && \
 # MARK: Runner (Full)
 FROM --platform=linux/amd64 base-runner AS client-full
 ARG CNI_PLUGINS_VERSION=1.3.0
-RUN apt-get install -y skopeo iproute2 runc && \
+RUN apt-get install -y skopeo iproute2 runc dnsutils && \
 	echo "Downloading lz4" && \
 	curl -L https://releases.rivet.gg/tools/lz4/1.10.0/debian11-amd64/lz4 -o /usr/local/bin/lz4 && \
 	chmod +x /usr/local/bin/lz4 && \
@@ -137,8 +137,10 @@ RUN apt-get install -y skopeo iproute2 runc && \
 	mkdir -p /opt/cni/bin /opt/cni/config && \
 	curl -L https://github.com/containernetworking/plugins/releases/download/v${CNI_PLUGINS_VERSION}/cni-plugins-linux-amd64-v${CNI_PLUGINS_VERSION}.tgz | \
 		tar -xz -C /opt/cni/bin
+COPY --chmod=755 ./docker/dev-full/rivet-client/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY ./docker/dev-full/rivet-client/rivet-actor.conflist /opt/cni/config/rivet-actor.conflist
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-container-runner /usr/local/bin/
-ENTRYPOINT ["/usr/bin/tini", "--", "rivet-client"]
+ENTRYPOINT ["/usr/bin/tini", "--", "entrypoint.sh"]
 
 # MARK: Monlith
 FROM --platform=linux/amd64 debian:12.9-slim AS monolith

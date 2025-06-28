@@ -213,6 +213,9 @@ services:
       - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     depends_on:
+      # HACK: rivet-server dependency since we need to do a DNS lookup in entrypoint.sh for the iptables chain
+      rivet-server:
+        condition: service_healthy
       rivet-edge-server:
         condition: service_healthy
       foundationdb:
@@ -220,7 +223,6 @@ services:
     volumes:
       # - ./rivet-client/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
       - ./rivet-client/config.jsonc:/etc/rivet-client/config.jsonc:ro
-      - ./rivet-client/rivet-actor.conflist:/opt/cni/config/rivet-actor.conflist:ro
       - client-data:/var/lib/rivet-client
     ports:
       # Enable host networking for actors
