@@ -151,7 +151,7 @@ fn ship_logs(
 		// spike of logs does not exhaust the long rate limit.
 		//
 		// 64 logs/s
-		let mut throttle_short = throttle::Throttle::new(960, Duration::from_secs(15));
+		let mut throttle_short = throttle::Throttle::new(960 * 1024, Duration::from_secs(15));
 
 		// Reduces logs from noisy games. Set reasonable caps on how
 		// much can be logged per minute. This is here to prevent games
@@ -160,10 +160,10 @@ fn ship_logs(
 		// amounts of logging. This happens very frequently.
 		//
 		// 4 logs/s * 1024 bytes/log = 4096 bytes/lobby/s = 14.7 MB/lobby/hr = 353.8 MB/lobby/day  = 10.6 GB/lobby/month
-		let mut throttle_long = throttle::Throttle::new(1200, Duration::from_secs(300));
+		let mut throttle_long = throttle::Throttle::new(1200 * 1024, Duration::from_secs(300));
 
 		// Throttles error logs
-		let mut throttle_error = throttle::Throttle::new(1, Duration::from_secs(60));
+		let mut throttle_error = throttle::Throttle::new(1 * 1024, Duration::from_secs(60));
 
 		// How many lines have been logged as a preview, see `MAX_PREVIEW_LINES`
 		let mut preview_iine_count = 0;
