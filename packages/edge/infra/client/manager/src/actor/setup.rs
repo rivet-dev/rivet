@@ -258,7 +258,7 @@ impl Actor {
 		tokio::try_join!(
 			fs::write(oci_bundle_config_path, config_json),
 			fs::write(actor_path.join("resolv.conf"), resolv_conf),
-			fs::write(fs_path.join("hosts"), hosts_content)
+			fs::write(actor_path.join("hosts"), hosts_content)
 		)?;
 
 		let duration = timer.elapsed().as_secs_f64();
