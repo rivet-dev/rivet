@@ -36,15 +36,15 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		formatdoc!(
 			r#"
 			label_replace(
-				sum by (client_id) (
-					rivet_pegboard_client_cpu_allocated{{client_id=~"({client_ids})"}}
+				max by (client_id) (
+					last_over_time(rivet_pegboard_client_cpu_allocated{{client_id=~"({client_ids})"}} [3h])
 				),
 				"metric", "cpu", "", ""
 			)
 			OR
 			label_replace(
-				sum by (client_id) (
-					rivet_pegboard_client_memory_allocated{{client_id=~"({client_ids})"}}
+				max by (client_id) (
+					last_over_time(rivet_pegboard_client_memory_allocated{{client_id=~"({client_ids})"}} [3h])
 				),
 				"metric", "mem", "", ""
 			)

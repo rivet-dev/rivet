@@ -473,49 +473,53 @@ async fn fetch_server_metrics(
 			r#"
 			label_replace(
 				# Add up all millicores from all cpus
-				sum by (datacenter_id, pool_type, server_id) (
-					last_over_time(
-						irate(
-							node_cpu_seconds_total{{
-								server_id=~"({server_ids})",
-
-								mode!="idle",
-								mode!="iowait",
-								mode!="steal"
-							}}
-							[5m]
+				sum by (server_id) (
+					max by (server_id, mode) (
+						last_over_time(
+							irate(
+								node_cpu_seconds_total{{
+									server_id=~"({server_ids})",
+	
+									mode!="idle",
+									mode!="iowait",
+									mode!="steal"
+								}}
+								[5m]
+							)
+							[3h]
 						)
-						[15m:15s]
 					)
-					# Millicores
-					* 1000
-				),
+				)
+				# Millicores
+				* 1000,
 				"metric", "cpu", "", ""
 			)
 			OR
 			label_replace(
 				# Selects the memory usage of a server in bytes
-				max by (datacenter_id, pool_type, server_id) (
+				max by (server_id) (
 					node_memory_Active_bytes{{
 						server_id=~"({server_ids})",
 					}}
-					# MiB
-					/ 1024 / 1024
-				),
+				)
+				# MiB
+				/ 1024 / 1024,
 				"metric", "mem", "", ""
 			)
 			OR
 			label_replace(
 				# Selects the bandwidth usage of a server
-				sum by (datacenter_id, pool_type, server_id) (
-					last_over_time((
-						irate(
-							node_network_transmit_bytes_total{{
-								server_id=~"({server_ids})",
-								device=~"(eth0|eth1)"
-							}}[1m]
-						)
-					) [1m:15s])
+				sum by (server_id) (
+					max by (server_id, device) (
+						last_over_time((
+							irate(
+								node_network_transmit_bytes_total{{
+									server_id=~"({server_ids})",
+									device=~"(eth0|eth1)"
+								}}[1m]
+							)
+						) [3h])
+					)
 				)
 				# Convert from B/s to Kb/s
 				* 8 / 1000,
