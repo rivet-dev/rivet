@@ -101,6 +101,10 @@ pub struct Runner {
 
 	pub container_runner_binary_path: Option<PathBuf>,
 	pub isolate_runner_binary_path: Option<PathBuf>,
+	
+	/// Custom host entries to append to /etc/hosts in actor containers.
+	#[serde(default)]
+	pub custom_hosts: Option<Vec<HostEntry>>,
 }
 
 impl Runner {
@@ -126,6 +130,10 @@ impl Runner {
 		self.isolate_runner_binary_path
 			.clone()
 			.unwrap_or_else(|| Path::new("/usr/local/bin/rivet-isolate-v8-runner").into())
+	}
+
+	pub fn custom_hosts(&self) -> &[HostEntry] {
+		self.custom_hosts.as_deref().unwrap_or(&[])
 	}
 }
 
@@ -291,4 +299,11 @@ pub enum Addresses {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Vector {
 	pub address: String,
+}
+
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct HostEntry {
+	pub ip: String,
+	pub hostname: String,
 }
