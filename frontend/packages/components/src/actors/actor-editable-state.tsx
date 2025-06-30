@@ -1,4 +1,4 @@
-import { Badge, Button, LiveBadge, WithTooltip } from "@rivet-gg/components";
+import { Badge, Button, WithTooltip } from "@rivet-gg/components";
 import {
 	type CodeMirrorRef,
 	EditorView,
@@ -42,8 +42,6 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 		<>
 			<div className="flex justify-between items-center border-b gap-1 p-2">
 				<div className="flex items-center justify-start gap-1">
-					<LiveBadge />
-
 					<ActorStateChangeIndicator state={state.value} />
 				</div>
 				<div className="flex gap-2">

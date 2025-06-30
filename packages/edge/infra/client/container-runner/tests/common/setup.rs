@@ -38,7 +38,7 @@ impl Drop for Setup {
 		Command::new("runc")
 			.arg("delete")
 			.arg("--force")
-			.arg(&self.actor_id)
+			.arg(&self.container_id)
 			.stdout(std::process::Stdio::null())
 			.stderr(std::process::Stdio::null())
 			.status()

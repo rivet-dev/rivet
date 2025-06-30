@@ -13,6 +13,7 @@ export enum ActorFeature {
 	State = "state",
 	Console = "console",
 	Runtime = "runtime",
+	Metrics = "metrics",
 	InspectReconnectNotification = "inspect_reconnect_notification",
 }
 
@@ -25,6 +26,7 @@ export type Actor = Omit<
 	lifecycle?: Rivet.actor.Lifecycle;
 	endpoint?: string;
 	logs: LogsAtom;
+	metrics: MetricsAtom;
 	network?: Rivet.actor.Network | null;
 	resources?: Rivet.actor.Resources | null;
 	runtime?: Rivet.actor.Runtime | null;
@@ -43,6 +45,8 @@ export type Logs = {
 	properties: Record<string, unknown>;
 }[];
 
+export type Metrics = Record<string, number | null>;
+
 export type Build = Rivet.actor.Build;
 export type DestroyActor = {
 	isDestroying: boolean;
@@ -52,6 +56,11 @@ export type DestroyActor = {
 export type ActorAtom = Atom<Actor>;
 export type LogsAtom = Atom<{
 	logs: Logs;
+	// query status
+	status: string;
+}>;
+export type MetricsAtom = Atom<{
+	metrics: Metrics;
 	// query status
 	status: string;
 }>;
@@ -378,6 +387,7 @@ const commonActorFeatures = [
 	ActorFeature.Logs,
 	ActorFeature.Config,
 	ActorFeature.Runtime,
+	ActorFeature.Metrics,
 	ActorFeature.InspectReconnectNotification,
 ];
 

@@ -5,6 +5,14 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'cadvisor'
+          static_configs:
+            - targets: ['rivet-client:7780']
+          metrics_path: /metrics
+          scrape_interval: 30s
 
 processors:
   batch:
@@ -52,7 +60,7 @@ service:
       processors: [batch]
       exporters: [clickhouse]
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, prometheus]
       processors: [batch]
       exporters: [clickhouse]
 

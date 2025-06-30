@@ -53,6 +53,7 @@ pub async fn gen_install(
 		}
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			script.push(components::docker::install());
+			script.push(components::cadvisor_metric_exporter::install());
 			script.push(components::otel_collector::install(pool_type)?);
 			script.push(components::lz4::install());
 			script.push(components::skopeo::install());
@@ -83,7 +84,6 @@ pub async fn gen_install(
 		}
 		PoolType::Guard => {
 			script.push(components::otel_collector::install(pool_type)?);
-			script.push(components::ok_server::install(initialize_immediately));
 			script.push(components::rivet::guard::install(config)?);
 		}
 	}

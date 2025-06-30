@@ -10,7 +10,7 @@ import {
 	keepPreviousData,
 	queryOptions,
 } from "@tanstack/react-query";
-import stripAnsi from 'strip-ansi';
+import stripAnsi from "strip-ansi";
 
 export const projectActorsQueryOptions = ({
 	projectNameId,
@@ -243,14 +243,138 @@ export const actorLogsQueryOptions = (
 					line: raw,
 					message: "",
 					properties: {},
-				} as const
+				} as const;
 			});
 
-
-			return {...response, logs };
+			return { ...response, logs };
 		},
 		meta: {
 			watch: mergeWatchStreams,
+		},
+	});
+};
+
+export const actorMetricsQueryOptions = (
+	{
+		projectNameId,
+		environmentNameId,
+		actorId,
+	}: {
+		projectNameId: string;
+		environmentNameId: string;
+		actorId: string;
+	},
+	opts: { refetchInterval?: number } = {},
+) => {
+	return queryOptions({
+		...opts,
+		queryKey: [
+			"project",
+			projectNameId,
+			"environment",
+			environmentNameId,
+			"actor",
+			actorId,
+			"metrics",
+		] as const,
+		queryFn: async ({
+			signal: abortSignal,
+			queryKey: [, project, , environment, , actorId],
+		}) => {
+			const pollOffset = 5_000;
+			const pollInterval = 15_000;
+
+			const now = Date.now();
+			const start = now - pollInterval * 2 - pollOffset; // Last minute + 2 data points
+			const end = now - pollOffset; // Metrics have a minimum a 5 second latency based on poll interval
+
+			const response = await rivetClient.actors.metrics.get(
+				actorId,
+				{
+					project,
+					environment,
+					start,
+					end,
+					interval: pollInterval,
+				},
+				{ abortSignal },
+			);
+
+			// Process the new response format
+			const metrics: Record<string, number | null> = {};
+			const rawData: Record<string, number[]> = {};
+
+			if (
+				response.metricNames &&
+				response.metricValues &&
+				response.metricAttributes &&
+				response.metricNames.length > 0
+			) {
+				response.metricNames.forEach((metricName, index) => {
+					const metricValues = response.metricValues[index];
+					const attributes = response.metricAttributes[index] || {};
+					
+					// Create the metric key based on the metric name and attributes
+					let metricKey = metricName;
+					
+					// Handle specific attribute mappings to match UI expectations
+					if (attributes.failure_type && attributes.scope) {
+						metricKey = `memory_failures_${attributes.failure_type}_${attributes.scope}`;
+					} else if (attributes.tcp_state) {
+						if (metricName.includes('tcp6')) {
+							metricKey = `network_tcp6_usage_${attributes.tcp_state}`;
+						} else {
+							metricKey = `network_tcp_usage_${attributes.tcp_state}`;
+						}
+					} else if (attributes.udp_state) {
+						if (metricName.includes('udp6')) {
+							metricKey = `network_udp6_usage_${attributes.udp_state}`;
+						} else {
+							metricKey = `network_udp_usage_${attributes.udp_state}`;
+						}
+					} else if (attributes.state) {
+						metricKey = `tasks_state_${attributes.state}`;
+					} else if (attributes.interface) {
+						// Handle network interface attributes
+						const baseMetric = metricName.replace(/^container_/, '');
+						metricKey = `${baseMetric}_${attributes.interface}`;
+					} else if (attributes.device) {
+						// Handle filesystem device attributes
+						const baseMetric = metricName.replace(/^container_/, '');
+						metricKey = `${baseMetric}_${attributes.device}`;
+					} else {
+						// Remove "container_" prefix to match UI expectations
+						metricKey = metricName.replace(/^container_/, '');
+					}
+					
+					// Store raw time series data for rate calculations
+					rawData[metricKey] = metricValues || [];
+					
+					if (metricValues && metricValues.length > 0) {
+						// Get the latest non-zero value (last value is often 0)
+						let value = null;
+						for (let i = metricValues.length - 1; i >= 0; i--) {
+							if (metricValues[i] !== 0) {
+								value = metricValues[i];
+								break;
+							}
+						}
+						// If all values are 0, use the last value anyway
+						if (value === null && metricValues.length > 0) {
+							value = metricValues[metricValues.length - 1];
+						}
+						metrics[metricKey] = value;
+					} else {
+						metrics[metricKey] = null;
+					}
+				});
+			}
+
+			return {
+				metrics,
+				rawData,
+				interval: pollInterval,
+			};
 		},
 	});
 };

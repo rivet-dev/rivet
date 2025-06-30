@@ -13,10 +13,12 @@ docs/ActorsCreateActorRuntimeNetworkRequest.md
 docs/ActorsCreateActorRuntimeRequest.md
 docs/ActorsEndpointType.md
 docs/ActorsGetActorLogsResponse.md
+docs/ActorsGetActorMetricsResponse.md
 docs/ActorsGetActorResponse.md
 docs/ActorsLifecycle.md
 docs/ActorsListActorsResponse.md
 docs/ActorsLogsApi.md
+docs/ActorsMetricsApi.md
 docs/ActorsNetwork.md
 docs/ActorsNetworkMode.md
 docs/ActorsPort.md
@@ -390,6 +392,7 @@ docs/WatchResponse.md
 git_push.sh
 src/apis/actors_api.rs
 src/apis/actors_logs_api.rs
+src/apis/actors_metrics_api.rs
 src/apis/auth_identity_email_api.rs
 src/apis/auth_tokens_api.rs
 src/apis/builds_api.rs
@@ -445,6 +448,7 @@ src/models/actors_create_actor_runtime_network_request.rs
 src/models/actors_create_actor_runtime_request.rs
 src/models/actors_endpoint_type.rs
 src/models/actors_get_actor_logs_response.rs
+src/models/actors_get_actor_metrics_response.rs
 src/models/actors_get_actor_response.rs
 src/models/actors_lifecycle.rs
 src/models/actors_list_actors_response.rs

@@ -32,6 +32,12 @@ pub mod process_exporter {
 	}
 }
 
+pub mod cadvisor_metric_exporter {
+	pub fn install() -> String {
+		include_str!("../files/cadvisor_metric_exporter.sh").to_string()
+	}
+}
+
 pub mod otel_collector {
 	use chirp_workflow::prelude::*;
 	use serde_json::json;
@@ -42,19 +48,41 @@ pub mod otel_collector {
 	const VERSION: &str = "0.125.0";
 
 	pub fn install(pool_type: PoolType) -> GlobalResult<String> {
-		let config = json!({
-			"receivers": {
-				"otlp": {
-					"protocols": {
-						"grpc": {
-							"endpoint": "0.0.0.0:4317"
-						},
-						"http": {
-							"endpoint": "0.0.0.0:4318"
-						}
+		let mut receivers = json!({
+			"otlp": {
+				"protocols": {
+					"grpc": {
+						"endpoint": "0.0.0.0:4317"
+					},
+					"http": {
+						"endpoint": "0.0.0.0:4318"
 					}
 				}
-			},
+			}
+		});
+
+		// Add prometheus receiver for cadvisor on Pegboard pools
+		if matches!(pool_type, PoolType::Pegboard) {
+			receivers["prometheus"] = json!({
+				"config": {
+					"scrape_configs": [
+						{
+							"job_name": "cadvisor",
+							"static_configs": [
+								{
+									"targets": ["127.0.0.1:7780"]
+								}
+							],
+							"metrics_path": "/metrics",
+							"scrape_interval": "5s"
+						}
+					]
+				}
+			});
+		}
+
+		let config = json!({
+			"receivers": receivers,
 			"processors": {
 				"batch": {
 					"timeout": "5s",
@@ -162,9 +190,11 @@ pub mod otel_collector {
 						]
 					},
 					"metrics": {
-						"receivers": [
-							"otlp"
-						],
+						"receivers": if matches!(pool_type, PoolType::Pegboard | PoolType::PegboardIsolate) {
+							json!(["otlp", "prometheus"])
+						} else {
+							json!(["otlp"])
+						},
 						"processors": [
 							"batch"
 						],

@@ -41,6 +41,24 @@ No actor IDs were provided in the request. Please provide at least one valid act
 None of the provided actor IDs are valid for this game/environment. Please provide valid actor IDs.
 
 
+## Invalid Metrics
+
+<Summary>{`ACTOR_METRICS_INVALID_METRICS`}</Summary>
+
+The provided list of metrics is not in a valid JSON format. Please provide a valid JSON array of metric names.
+
+## No Metrics
+
+<Summary>{`ACTOR_METRICS_NO_METRICS`}</Summary>
+
+No metrics were specified in the request. Please provide at least one metric name to query.
+
+## Unsupported Metrics
+
+<Summary>{`ACTOR_METRICS_UNSUPPORTED_METRICS`}</Summary>
+
+The requested metrics are not supported. Supported metrics include: cpu, memory, memory_limit, network_rx_bytes, network_tx_bytes.
+
 ## Actor Not Found
 
 <Summary>{`ACTOR_NOT_FOUND`}</Summary>
@@ -456,34 +474,6 @@ The group attempting to be joined does not allow anyone to join it.
 The identity is not a member of the request/related group.
 
 
-## Identity Not Admin
-
-<Summary>{`IDENTITY_NOT_ADMIN`}</Summary>
-
-The identity requesting this endpoint is not an admin.
-
-
-## Identity Not Found
-
-<Summary>{`IDENTITY_NOT_FOUND`}</Summary>
-
-The requested identity does not exist or is not visible to whoever is requesting.
-
-
-## Identity Not Registered
-
-<Summary>{`IDENTITY_NOT_REGISTERED`}</Summary>
-
-The identity that created this request is not registered.
-
-
-## Wrong Identity
-
-<Summary>{`IDENTITY_WRONG_IDENTITY`}</Summary>
-
-The given resource is not available for the current identity.
-
-
 ## Project Not Found
 
 <Summary>{`PROJECT_NOT_FOUND`}</Summary>
@@ -541,7 +531,7 @@ Valid:
 - `api-v1.job.example.com`
 - `my-service-123.job.example.com`
 
-## invalid_name_id
+## Invalid Name ID
 
 <Summary>{`ROUTE_INVALID_NAME_ID`}</Summary>
 
@@ -561,6 +551,7 @@ Make sure your name_id:
 
 Invalid: `UPPERCASE-route`, `route--name`, `-route-name`, `route-name-`
 Valid: `my-route`, `route-123`, `api-v2`
+
 
 ## invalid_path
 

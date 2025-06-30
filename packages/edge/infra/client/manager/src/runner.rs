@@ -179,11 +179,12 @@ impl Handle {
 	pub fn spawn_orphaned(
 		comms: Comms,
 		runner_binary_path: &Path,
+		container_id: &str,
 		working_path: PathBuf,
 		env: &[(&str, String)],
 	) -> Result<Self> {
 		// Prepare the arguments for the runner
-		let runner_args = vec![working_path.to_str().context("bad path")?];
+		let runner_args = vec![working_path.to_str().context("bad path")?, container_id];
 
 		// NOTE: Pipes are automatically closed on drop
 		// Pipe communication between processes

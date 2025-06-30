@@ -16,11 +16,10 @@ const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 fn main() -> Result<()> {
-	let actor_path = std::env::args()
-		.skip(1)
-		.next()
-		.context("`actor_path` arg required")?;
-	let actor_path = Path::new(&actor_path);
+	let mut args = std::env::args().skip(1);
+	let actor_path_str = args.next().context("`actor_path` arg required")?;
+	let container_id = args.next().context("`container_id` arg required")?;
+	let actor_path = Path::new(&actor_path_str);
 
 	rivet_logs::Logs::new(actor_path.join("logs"), LOGS_RETENTION).start_sync()?;
 
@@ -57,7 +56,12 @@ fn main() -> Result<()> {
 	};
 
 	// Run the container
-	let exit_code = match container::run(msg_tx.clone(), &actor_path, root_user_enabled) {
+	let exit_code = match container::run(
+		msg_tx.clone(),
+		&actor_path,
+		&container_id,
+		root_user_enabled,
+	) {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
 			eprintln!("run container failed: {err:?}");

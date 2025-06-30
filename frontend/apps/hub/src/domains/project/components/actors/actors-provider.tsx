@@ -12,6 +12,7 @@ import {
 	actorBuildsAtom,
 	createActorAtom,
 	type Logs,
+	type Metrics,
 	actorsQueryAtom,
 	actorsInternalFilterAtom,
 	type Actor,
@@ -30,6 +31,7 @@ import {
 	createActorEndpoint,
 	destroyActorMutationOptions,
 	actorLogsQueryOptions,
+	actorMetricsQueryOptions,
 	actorRegionsQueryOptions,
 	actorBuildsQueryOptions,
 } from "../../queries";
@@ -257,9 +259,63 @@ export function ActorsProvider({
 								};
 							};
 
+							const metrics = atom({
+								metrics: { cpu: null, memory: null } as Metrics,
+								status: "pending",
+							});
+							metrics.onMount = (set) => {
+								const metricsObserver = new QueryObserver(
+									queryClient,
+									actorMetricsQueryOptions({
+										projectNameId,
+										environmentNameId,
+										actorId: actor.id,
+									}, { refetchInterval: 5000 }),
+								);
+
+								type MetricsQuery = {
+									status: string;
+									data?: Awaited<
+										ReturnType<
+											Exclude<
+												ReturnType<
+													typeof actorMetricsQueryOptions
+												>["queryFn"],
+												undefined
+											>
+										>
+									>;
+								};
+
+								function updateMetrics(query: MetricsQuery) {
+									const data = query.data;
+									set((prev) => ({
+										...prev,
+										...data,
+										status: query.status,
+									}));
+								}
+
+								const subMetrics = metricsObserver.subscribe(
+									(query) => {
+										updateMetrics(query);
+									},
+								);
+
+								updateMetrics(
+									metricsObserver.getCurrentQuery().state,
+								);
+
+								return () => {
+									metricsObserver.destroy();
+									subMetrics();
+								};
+							};
+
 							return {
 								...actor,
 								logs,
+								metrics,
 								destroy,
 								status: getActorStatus(actor),
 							};

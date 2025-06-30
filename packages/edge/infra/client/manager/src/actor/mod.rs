@@ -220,6 +220,10 @@ impl Actor {
 				runner::Handle::spawn_orphaned(
 					runner::Comms::Basic,
 					&ctx.config().runner.container_runner_binary_path(),
+					&pegboard_config::utils::format_container_id(
+						&self.actor_id.to_string(),
+						self.generation,
+					),
 					ctx.actor_path(self.actor_id, self.generation),
 					&runner_env,
 				)?

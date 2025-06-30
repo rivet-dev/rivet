@@ -23,6 +23,7 @@ const MAX_PREVIEW_LINES: usize = 128;
 pub fn run(
 	msg_tx: Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	actor_path: &Path,
+	container_id: &str,
 	root_user_enabled: bool,
 ) -> Result<i32> {
 	// Extract actor id from path
@@ -71,7 +72,7 @@ pub fn run(
 
 	let mut runc_child = Command::new("runc")
 		.arg("run")
-		.arg(&actor_id)
+		.arg(&container_id)
 		.arg("-b")
 		.arg(fs_path)
 		.stdout(Stdio::piped())
@@ -86,13 +87,14 @@ pub fn run(
 	// This will wait for the child to exit and then exit itself so we have time to ship all of the
 	// required logs
 	let mut signals = Signals::new(&[SIGTERM])?;
+	let container_id2 = container_id.to_owned();
 	thread::spawn(move || {
 		for _ in signals.forever() {
 			println!("Received SIGTERM, forwarding to runc container {actor_id}");
 			let status = Command::new("runc")
 				.arg("kill")
 				.arg("--all")
-				.arg(&actor_id)
+				.arg(&container_id2)
 				.arg("SIGTERM")
 				.stdout(Stdio::null())
 				.stderr(Stdio::null())

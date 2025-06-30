@@ -349,7 +349,7 @@ async fn run_migration(config: rivet_config::Config, cmd: &MigrateCmd) -> Result
 			.await
 			.expect("Failed to read stdout")
 		{
-			tracing::debug!("migrate stdout: {}", line);
+			tracing::info!("migrate stdout: {}", line);
 		}
 	});
 
@@ -360,7 +360,7 @@ async fn run_migration(config: rivet_config::Config, cmd: &MigrateCmd) -> Result
 			.await
 			.expect("Failed to read stderr")
 		{
-			tracing::debug!("migrate stderr: {}", line);
+			tracing::info!("migrate stderr: {}", line);
 		}
 	});
 

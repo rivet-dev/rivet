@@ -611,7 +611,10 @@ impl Actor {
 				match Command::new("runc")
 					.arg("delete")
 					.arg("--force")
-					.arg(format!("{}-{}", self.actor_id, self.generation))
+					.arg(pegboard_config::utils::format_container_id(
+						&self.actor_id.to_string(),
+						self.generation,
+					))
 					.output()
 					.await
 				{

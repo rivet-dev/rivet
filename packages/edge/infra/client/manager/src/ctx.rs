@@ -533,6 +533,7 @@ impl Ctx {
 			let runner = runner::Handle::spawn_orphaned(
 				runner::Comms::socket(),
 				&self.config().runner.isolate_runner_binary_path(),
+				"",
 				working_path,
 				&[],
 			)?;

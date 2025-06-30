@@ -32,6 +32,7 @@ Class | Method | HTTP request | Description
 *ActorsApi* | [**actors_upgrade**](docs/ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
 *ActorsApi* | [**actors_upgrade_all**](docs/ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
 *ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/logs | 
+*ActorsMetricsApi* | [**actors_metrics_get**](docs/ActorsMetricsApi.md#actors_metrics_get) | **GET** /actors/{actor}/metrics/history | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
@@ -181,6 +182,7 @@ Class | Method | HTTP request | Description
  - [ActorsCreateActorRuntimeRequest](docs/ActorsCreateActorRuntimeRequest.md)
  - [ActorsEndpointType](docs/ActorsEndpointType.md)
  - [ActorsGetActorLogsResponse](docs/ActorsGetActorLogsResponse.md)
+ - [ActorsGetActorMetricsResponse](docs/ActorsGetActorMetricsResponse.md)
  - [ActorsGetActorResponse](docs/ActorsGetActorResponse.md)
  - [ActorsLifecycle](docs/ActorsLifecycle.md)
  - [ActorsListActorsResponse](docs/ActorsListActorsResponse.md)

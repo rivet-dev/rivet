@@ -34,6 +34,11 @@
           "sortingKey": "/actors/{actor} get"
         },
         {
+          "title": "actors.metrics.get",
+          "href": "/docs/api/actors/metrics/get",
+          "sortingKey": "/actors/{actor}/metrics/history get"
+        },
+        {
           "title": "actors.upgrade",
           "href": "/docs/api/actors/upgrade",
           "sortingKey": "/actors/{actor}/upgrade post"

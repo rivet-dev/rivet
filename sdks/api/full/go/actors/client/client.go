@@ -15,6 +15,7 @@ import (
 	sdk "sdk"
 	actors "sdk/actors"
 	logs "sdk/actors/logs"
+	metrics "sdk/actors/metrics"
 	core "sdk/core"
 )
 
@@ -23,7 +24,8 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Logs *logs.Client
+	Logs    *logs.Client
+	Metrics *metrics.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -36,6 +38,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		caller:  core.NewCaller(options.HTTPClient),
 		header:  options.ToHeader(),
 		Logs:    logs.NewClient(opts...),
+		Metrics: metrics.NewClient(opts...),
 	}
 }
 

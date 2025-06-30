@@ -233,6 +233,8 @@ services:
       # We only reserve 100 ports instead of the default 22,000. See
       # rivet-guard for explanation.
       - "7600-7699:7600-7699"
+      # cAdvisor metrics endpoint
+      - "7780:7780"
     networks:
       - rivet-network
 

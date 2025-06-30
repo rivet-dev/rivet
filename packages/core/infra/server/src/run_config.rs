@@ -283,6 +283,14 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			),
 			db_name: "db_pegboard_analytics",
 		},
+		// This schema is automatically set up by OTEL collector
+		//
+		// We still have to create this database so we can grant users access to read from it
+		SqlService {
+			kind: SqlServiceKind::ClickHouse,
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../core/services/otel/db/otel"),
+			db_name: "otel",
+		},
 	];
 
 	let s3_buckets = vec![

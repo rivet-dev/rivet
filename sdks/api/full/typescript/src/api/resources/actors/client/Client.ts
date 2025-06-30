@@ -9,6 +9,7 @@ import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
 import * as errors from "../../../../errors/index";
 import { Logs } from "../resources/logs/client/Client";
+import { Metrics } from "../resources/metrics/client/Client";
 
 export declare namespace Actors {
     export interface Options {
@@ -37,11 +38,16 @@ export declare namespace Actors {
 
 export class Actors {
     protected _logs: Logs | undefined;
+    protected _metrics: Metrics | undefined;
 
     constructor(protected readonly _options: Actors.Options = {}) {}
 
     public get logs(): Logs {
         return (this._logs ??= new Logs(this._options));
+    }
+
+    public get metrics(): Metrics {
+        return (this._metrics ??= new Metrics(this._options));
     }
 
     /**

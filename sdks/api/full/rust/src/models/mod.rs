@@ -16,6 +16,8 @@ pub mod actors_endpoint_type;
 pub use self::actors_endpoint_type::ActorsEndpointType;
 pub mod actors_get_actor_logs_response;
 pub use self::actors_get_actor_logs_response::ActorsGetActorLogsResponse;
+pub mod actors_get_actor_metrics_response;
+pub use self::actors_get_actor_metrics_response::ActorsGetActorMetricsResponse;
 pub mod actors_get_actor_response;
 pub use self::actors_get_actor_response::ActorsGetActorResponse;
 pub mod actors_lifecycle;

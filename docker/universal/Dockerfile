@@ -120,8 +120,8 @@ RUN apt-get update -y && \
     apt-get install -y ca-certificates openssl curl tini curl && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
-# MARK: Runner (Full)
-FROM --platform=linux/amd64 base-runner AS client-full
+# MARK: Runner (Slim)
+FROM --platform=linux/amd64 base-runner AS client-slim
 ARG CNI_PLUGINS_VERSION=1.3.0
 RUN apt-get install -y skopeo iproute2 runc dnsutils && \
 	echo "Downloading lz4" && \
@@ -141,6 +141,21 @@ COPY --chmod=755 ./docker/dev-full/rivet-client/entrypoint.sh /usr/local/bin/ent
 COPY ./docker/dev-full/rivet-client/rivet-actor.conflist /opt/cni/config/rivet-actor.conflist
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-container-runner /usr/local/bin/
 ENTRYPOINT ["/usr/bin/tini", "--", "entrypoint.sh"]
+
+# MARK: Runner (Full)
+FROM client-slim AS client-full
+ARG CADVISOR_VERSION=v0.52.0
+RUN apt-get update -y && \
+    apt-get install -y wget && \
+    wget -O /usr/local/bin/cadvisor "https://github.com/google/cadvisor/releases/download/${CADVISOR_VERSION}/cadvisor-${CADVISOR_VERSION}-linux-amd64" && \
+    chmod +x /usr/local/bin/cadvisor && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY docker/universal/client-full-entrypoint.sh /usr/local/bin/client-full-entrypoint.sh
+RUN chmod +x /usr/local/bin/client-full-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/client-full-entrypoint.sh"]
 
 # MARK: Monlith
 FROM --platform=linux/amd64 debian:12.9-slim AS monolith

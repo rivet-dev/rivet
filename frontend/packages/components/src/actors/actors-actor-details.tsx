@@ -11,6 +11,7 @@ import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorLogsTab } from "./actor-logs-tab";
+import { ActorMetricsTab } from "./actor-metrics-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { AtomizedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
@@ -100,6 +101,7 @@ export function ActorTabs({
 	const supportsLogs = features?.includes(ActorFeature.Logs);
 	const supportsConnections = features?.includes(ActorFeature.Connections);
 	const supportsConfig = features?.includes(ActorFeature.Config);
+	const supportsMetrics = features?.includes(ActorFeature.Metrics);
 
 	const defaultTab = supportsState ? "state" : "logs";
 	const value = disabled ? undefined : tab || defaultTab;
@@ -136,6 +138,11 @@ export function ActorTabs({
 						{supportsConfig ? (
 							<TabsTrigger disabled={disabled} value="config">
 								Config
+							</TabsTrigger>
+						) : null}
+						{supportsMetrics ? (
+							<TabsTrigger disabled={disabled} value="metrics">
+								Metrics
 							</TabsTrigger>
 						) : null}
 					</TabsList>
@@ -189,6 +196,14 @@ export function ActorTabs({
 							className="min-h-0 flex-1 mt-0"
 						>
 							<ActorStateTab actor={actor} />
+						</TabsContent>
+					) : null}
+					{supportsMetrics ? (
+						<TabsContent
+							value="metrics"
+							className="min-h-0 flex-1 mt-0 h-full"
+						>
+							<ActorMetricsTab actor={actor} />
 						</TabsContent>
 					) : null}
 				</>
