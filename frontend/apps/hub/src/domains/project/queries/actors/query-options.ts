@@ -282,10 +282,10 @@ export const actorMetricsQueryOptions = (
 			queryKey: [, project, , environment, , actorId],
 		}) => {
 			const pollOffset = 5_000;
-			const pollInterval = 15_000;
+			const pollInterval = 10_000;
 
 			const now = Date.now();
-			const start = now - pollInterval * 2 - pollOffset; // Last minute + 2 data points
+			const start = now - pollInterval * 5 - pollOffset; // Last minute + 2+ data points
 			const end = now - pollOffset; // Metrics have a minimum a 5 second latency based on poll interval
 
 			const response = await rivetClient.actors.metrics.get(
