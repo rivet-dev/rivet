@@ -803,7 +803,6 @@ dependencies = [
  "chirp-client",
  "chirp-workflow",
  "chrono",
- "cluster",
  "faker-cdn-site",
  "faker-game",
  "faker-game-namespace",
@@ -12385,9 +12384,11 @@ dependencies = [
  "rustls 0.23.25",
  "rustls-pemfile 2.2.0",
  "serde_json",
+ "service-discovery",
  "tokio",
  "tracing",
  "types-proto",
+ "url",
  "uuid",
 ]
 
@@ -12401,6 +12402,7 @@ dependencies = [
  "futures",
  "futures-util",
  "global-error",
+ "http-body 1.0.1",
  "http-body-util",
  "hyper 1.6.0",
  "hyper-tungstenite",
@@ -12420,6 +12422,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls 0.26.2",
+ "tokio-stream",
  "tokio-tungstenite 0.26.2",
  "tracing",
  "tracing-subscriber",
@@ -13906,6 +13909,7 @@ version = "25.4.2"
 dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.12",
+ "rivet-api",
  "serde",
  "tokio",
  "tracing",

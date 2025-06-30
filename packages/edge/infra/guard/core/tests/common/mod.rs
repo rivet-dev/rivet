@@ -8,7 +8,7 @@ use hyper_util::rt::TokioIo;
 use rivet_guard_core::{
 	proxy_service::{
 		MaxInFlightConfig, MiddlewareConfig, MiddlewareFn, MiddlewareResponse, RateLimitConfig,
-		RetryConfig, RouteTarget, RoutingFn, RoutingResponse, RoutingResult, RoutingTimeout,
+		RetryConfig, RouteConfig, RouteTarget, RoutingFn, RoutingOutput, RoutingTimeout,
 		TimeoutConfig,
 	},
 	GlobalErrorWrapper,
@@ -445,7 +445,7 @@ pub fn create_test_routing_fn(test_server: &TestServer) -> RoutingFn {
 					path: path.to_string(),
 				};
 
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![target],
 					timeout: RoutingTimeout {
 						routing_timeout: 5, // 5 seconds for routing timeout
@@ -552,6 +552,7 @@ pub async fn start_guard_with_middleware(
 			routing_fn_clone,
 			middleware_fn_clone,
 			rivet_guard_core::proxy_service::PortType::Http, // Default port type for tests
+			None, // No ClickHouse inserter for tests
 		));
 
 		// Run the server until shutdown signal

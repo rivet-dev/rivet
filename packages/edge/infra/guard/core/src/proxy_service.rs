@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use global_error::*;
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming as BodyIncoming;
 use hyper::header::HeaderName;
 use hyper::{Request, Response, StatusCode};
@@ -33,6 +33,68 @@ use crate::request_context::RequestContext;
 const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
+
+/// Response body type that can handle both streaming and buffered responses
+#[derive(Debug)]
+pub enum ResponseBody {
+	/// Buffered response body
+	Full(Full<Bytes>),
+	/// Streaming response body
+	Incoming(BodyIncoming),
+}
+
+impl http_body::Body for ResponseBody {
+	type Data = Bytes;
+	type Error = Box<dyn std::error::Error + Send + Sync>;
+
+	fn poll_frame(
+		self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+		match self.get_mut() {
+			ResponseBody::Full(body) => {
+				let pin = std::pin::Pin::new(body);
+				match pin.poll_frame(cx) {
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
+					}
+					std::task::Poll::Ready(Some(Err(e))) => {
+						std::task::Poll::Ready(Some(Err(Box::new(e))))
+					}
+					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+					std::task::Poll::Pending => std::task::Poll::Pending,
+				}
+			}
+			ResponseBody::Incoming(body) => {
+				let pin = std::pin::Pin::new(body);
+				match pin.poll_frame(cx) {
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
+					}
+					std::task::Poll::Ready(Some(Err(e))) => {
+						std::task::Poll::Ready(Some(Err(Box::new(e))))
+					}
+					std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+					std::task::Poll::Pending => std::task::Poll::Pending,
+				}
+			}
+		}
+	}
+
+	fn is_end_stream(&self) -> bool {
+		match self {
+			ResponseBody::Full(body) => body.is_end_stream(),
+			ResponseBody::Incoming(body) => body.is_end_stream(),
+		}
+	}
+
+	fn size_hint(&self) -> http_body::SizeHint {
+		match self {
+			ResponseBody::Full(body) => body.size_hint(),
+			ResponseBody::Incoming(body) => body.size_hint(),
+		}
+	}
+}
 
 // Routing types
 #[derive(Clone, Debug)]
@@ -71,7 +133,7 @@ pub struct StructuredResponse {
 }
 
 impl StructuredResponse {
-	pub fn build_response(&self) -> GlobalResult<Response<Full<Bytes>>> {
+	pub fn build_response(&self) -> GlobalResult<Response<ResponseBody>> {
 		let mut body = StdHashMap::new();
 		body.insert("message", self.message.clone().into_owned());
 
@@ -85,7 +147,7 @@ impl StructuredResponse {
 		let response = Response::builder()
 			.status(self.status)
 			.header(hyper::header::CONTENT_TYPE, "application/json")
-			.body(Full::new(bytes))?;
+			.body(ResponseBody::Full(Full::new(bytes)))?;
 
 		Ok(response)
 	}
@@ -605,7 +667,7 @@ impl ProxyService {
 		&self,
 		req: Request<BodyIncoming>,
 		request_context: &mut RequestContext,
-	) -> GlobalResult<Response<Full<Bytes>>> {
+	) -> GlobalResult<Response<ResponseBody>> {
 		let host = req
 			.headers()
 			.get(hyper::header::HOST)
@@ -641,7 +703,7 @@ impl ProxyService {
 				tracing::error!(?err, "Routing error");
 				return Ok(Response::builder()
 					.status(StatusCode::BAD_GATEWAY)
-					.body(Full::<Bytes>::new(Bytes::new()))?);
+					.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))?);
 			}
 		};
 
@@ -669,14 +731,14 @@ impl ProxyService {
 		let res = if !self.state.check_rate_limit(client_ip, &actor_id).await? {
 			Response::builder()
 				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(Full::<Bytes>::new(Bytes::new()))
+				.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
 				.map_err(Into::into)
 		}
 		// Check in-flight limit
 		else if !self.state.acquire_in_flight(client_ip, &actor_id).await? {
 			Response::builder()
 				.status(StatusCode::TOO_MANY_REQUESTS)
-				.body(Full::<Bytes>::new(Bytes::new()))
+				.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))
 				.map_err(Into::into)
 		} else {
 			// Increment metrics
@@ -782,7 +844,7 @@ impl ProxyService {
 		req: Request<BodyIncoming>,
 		mut target: RouteTarget,
 		request_context: &mut RequestContext,
-	) -> GlobalResult<Response<Full<Bytes>>> {
+	) -> GlobalResult<Response<ResponseBody>> {
 		// Get middleware config for this actor if it exists
 		let middleware_config = match &target.actor_id {
 			Some(actor_id) => self.state.get_middleware_config(actor_id).await?,
@@ -894,20 +956,38 @@ impl ProxyService {
 					Ok(Ok(resp)) => {
 						let response_receive_time = request_send_start.elapsed();
 
-						// Convert the hyper::body::Incoming to http_body_util::Full<Bytes>
 						let (parts, body) = resp.into_parts();
 
-						// Read the response body
-						let body_bytes = match http_body_util::BodyExt::collect(body).await {
-							Ok(collected) => collected.to_bytes(),
-							Err(_) => Bytes::new(),
-						};
+						// Check if this is a streaming response by examining headers
+						// let is_streaming = parts.headers.get("content-type")
+						// 	.and_then(|ct| ct.to_str().ok())
+						// 	.map(|ct| ct.contains("text/event-stream") || ct.contains("application/stream"))
+						// 	.unwrap_or(false);
+						let is_streaming = true;
 
-						// Set actual response body size in analytics
-						request_context.guard_response_body_bytes = Some(body_bytes.len() as u64);
+						if is_streaming {
+							// For streaming responses, pass through the body without buffering
+							tracing::debug!("Detected streaming response, preserving stream");
 
-						let full_body = Full::new(body_bytes);
-						return Ok(Response::from_parts(parts, full_body));
+							// We can't easily calculate response size for streaming, so set it to None
+							request_context.guard_response_body_bytes = None;
+
+							let streaming_body = ResponseBody::Incoming(body);
+							return Ok(Response::from_parts(parts, streaming_body));
+						} else {
+							// For non-streaming responses, buffer as before
+							let body_bytes = match BodyExt::collect(body).await {
+								Ok(collected) => collected.to_bytes(),
+								Err(_) => Bytes::new(),
+							};
+
+							// Set actual response body size in analytics
+							request_context.guard_response_body_bytes =
+								Some(body_bytes.len() as u64);
+
+							let full_body = ResponseBody::Full(Full::new(body_bytes));
+							return Ok(Response::from_parts(parts, full_body));
+						}
 					}
 					Ok(Err(err)) => {
 						if !err.is_connect() || attempts >= max_attempts {
@@ -944,7 +1024,9 @@ impl ProxyService {
 									tracing::error!(?err, "Routing error");
 									return Ok(Response::builder()
 										.status(StatusCode::BAD_GATEWAY)
-										.body(Full::<Bytes>::new(Bytes::new()))?);
+										.body(ResponseBody::Full(Full::<Bytes>::new(
+											Bytes::new(),
+										)))?);
 								}
 							};
 
@@ -980,7 +1062,7 @@ impl ProxyService {
 
 		Ok(Response::builder()
 			.status(status_code)
-			.body(Full::<Bytes>::new(Bytes::new()))?)
+			.body(ResponseBody::Full(Full::<Bytes>::new(Bytes::new())))?)
 	}
 
 	// Common function to build a request URI and headers
@@ -1033,7 +1115,7 @@ impl ProxyService {
 		req: Request<BodyIncoming>,
 		mut target: RouteTarget,
 		_request_context: &mut RequestContext,
-	) -> GlobalResult<Response<Full<Bytes>>> {
+	) -> GlobalResult<Response<ResponseBody>> {
 		// Get actor and server IDs for metrics and middleware
 		let actor_id = target.actor_id;
 		let server_id = target.server_id;
@@ -1606,7 +1688,7 @@ impl ProxyService {
 		// Create a new response with an empty body - WebSocket upgrades don't need a body
 		Ok(Response::from_parts(
 			parts,
-			Full::<Bytes>::new(Bytes::new()),
+			ResponseBody::Full(Full::<Bytes>::new(Bytes::new())),
 		))
 	}
 }
@@ -1614,7 +1696,10 @@ impl ProxyService {
 impl ProxyService {
 	// Process an individual request
 	#[tracing::instrument(skip_all)]
-	pub async fn process(&self, req: Request<BodyIncoming>) -> GlobalResult<Response<Full<Bytes>>> {
+	pub async fn process(
+		&self,
+		req: Request<BodyIncoming>,
+	) -> GlobalResult<Response<ResponseBody>> {
 		// Create request context for analytics tracking
 		let mut request_context = RequestContext::new(self.state.clickhouse_inserter.clone());
 

@@ -14,7 +14,7 @@ use common::{
 };
 use rivet_guard_core::proxy_service::{
 	MaxInFlightConfig, MiddlewareConfig, MiddlewareResponse, RateLimitConfig, RetryConfig,
-	RouteConfig, RouteTarget, RoutingResponse, RoutingTimeout, TimeoutConfig,
+	RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout, TimeoutConfig,
 };
 
 #[tokio::test]
@@ -129,12 +129,12 @@ async fn test_rate_limiting() {
 				let route_target = RouteTarget {
 					actor_id: Some(actor_id),
 					server_id: Some(server_id),
-					host: test_server_addr.ip(),
+					host: test_server_addr.ip().to_string(),
 					port: test_server_addr.port(),
 					path: path.to_string(),
 				};
 
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![route_target],
 					timeout: RoutingTimeout { routing_timeout: 5 },
 				}))
@@ -200,11 +200,11 @@ async fn test_max_in_flight_requests() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),
-						host: test_server_addr.ip(),
+						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
 					}],
@@ -266,11 +266,11 @@ async fn test_timeout_handling() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(server_id),
-						host: test_server_addr.ip(),
+						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
 					}],
@@ -327,11 +327,11 @@ async fn test_retry_functionality() {
 		      path: &str,
 		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(Uuid::new_v4()),
 						server_id: Some(Uuid::new_v4()),
-						host: server_addr.ip(),
+						host: server_addr.ip().to_string(),
 						port: server_addr.port(),
 						path: path.to_string(),
 					}],
@@ -504,11 +504,11 @@ async fn test_different_path_routing() {
 					Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap()
 				};
 
-				Ok(RoutingResponse::Ok(RouteConfig {
+				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
 						server_id: Some(Uuid::new_v4()),
-						host: test_server_addr.ip(),
+						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
 					}],
