@@ -89,7 +89,7 @@ pub async fn get_metrics(
 	let interval_seconds = query.interval / 1000;
 
 	if interval_seconds == 0 {
-		return Err(formatted_error::code::ACTOR_METRICS_INVALID_INTERVAL);
+		bail_with!(ACTOR_METRICS_INVALID_INTERVAL);
 	}
 
 	let actor_prefix = format!("/system.slice/pegboard-actor-{}-", actor_id);
