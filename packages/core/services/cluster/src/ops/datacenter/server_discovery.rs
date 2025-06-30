@@ -17,7 +17,10 @@ pub struct Output {
 
 /// Wrapper around server::list with very short cache.
 #[operation]
-pub async fn cluster_datacenter_server_discovery(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn cluster_datacenter_server_discovery(
+	ctx: &OperationCtx,
+	input: &Input,
+) -> GlobalResult<Output> {
 	let cache_keys = if input.pool_types.is_empty() {
 		vec![(input.datacenter_id, "all".to_string())]
 	} else {

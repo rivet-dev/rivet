@@ -41,10 +41,10 @@ impl Opts {
 	pub async fn execute(&self) -> Result<()> {
 		let ctx = crate::util::login::load_or_login().await?;
 		let env = crate::util::env::get_or_select(&ctx, self.environment.as_ref()).await?;
-		
+
 		// Get existing route if it exists
 		let route = get_route(&ctx, &env, &self.name).await?;
-		
+
 		// Parse selector tags
 		let selector_tags = self
 			.selector_tags
@@ -55,20 +55,26 @@ impl Opts {
 
 		// Build route update body
 		let mut update_route_body = models::RoutesUpdateRouteBody {
-			hostname: route.as_ref().map(|r| r.hostname.clone()).unwrap_or_else(|| {
-				// Default hostname is project-env.domain
-				format!(
-					"{}-{}.{}",
-					ctx.project.name_id,
-					env,
-					ctx.bootstrap
-						.domains
-						.job
-						.as_ref()
-						.expect("bootstrap.domains.job")
-				)
-			}),
-			path: route.as_ref().map(|r| r.path.clone()).unwrap_or_else(|| "/".to_string()),
+			hostname: route
+				.as_ref()
+				.map(|r| r.hostname.clone())
+				.unwrap_or_else(|| {
+					// Default hostname is project-env.domain
+					format!(
+						"{}-{}.{}",
+						ctx.project.name_id,
+						env,
+						ctx.bootstrap
+							.domains
+							.job
+							.as_ref()
+							.expect("bootstrap.domains.job")
+					)
+				}),
+			path: route
+				.as_ref()
+				.map(|r| r.path.clone())
+				.unwrap_or_else(|| "/".to_string()),
 			route_subpaths: route.as_ref().map(|r| r.route_subpaths).unwrap_or(true),
 			strip_prefix: route.as_ref().map(|r| r.strip_prefix).unwrap_or(true),
 			target: Box::new(models::RoutesRouteTarget {
@@ -124,15 +130,24 @@ impl Opts {
 			Result::Ok(_) => {
 				println!(
 					"Successfully {} route: {}{}",
-					if route.is_some() { "updated" } else { "created" },
-					update_route_body.hostname, 
+					if route.is_some() {
+						"updated"
+					} else {
+						"created"
+					},
+					update_route_body.hostname,
 					update_route_body.path
 				);
 				Ok(())
 			}
 			Err(err) => {
-				eprintln!("Failed to {}: {}", 
-					if route.is_some() { "update route" } else { "create route" }, 
+				eprintln!(
+					"Failed to {}: {}",
+					if route.is_some() {
+						"update route"
+					} else {
+						"create route"
+					},
 					err
 				);
 				Err(err.into())
@@ -142,7 +157,11 @@ impl Opts {
 }
 
 // Helper function to get route if it exists
-async fn get_route(ctx: &ToolchainCtx, env: &str, route_id: &str) -> Result<Option<models::RoutesRoute>> {
+async fn get_route(
+	ctx: &ToolchainCtx,
+	env: &str,
+	route_id: &str,
+) -> Result<Option<models::RoutesRoute>> {
 	let routes_response = apis::routes_api::routes_list(
 		&ctx.openapi_config_cloud,
 		Some(&ctx.project.name_id.to_string()),

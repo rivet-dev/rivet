@@ -133,13 +133,13 @@ pub enum ImageKind {
 }
 
 impl From<build::types::BuildKind> for ImageKind {
-    fn from(kind: build::types::BuildKind) -> Self {
-        match kind {
-            build::types::BuildKind::DockerImage => ImageKind::DockerImage,
-            build::types::BuildKind::OciBundle => ImageKind::OciBundle,
-            build::types::BuildKind::JavaScript => ImageKind::JavaScript,
-        }
-    }
+	fn from(kind: build::types::BuildKind) -> Self {
+		match kind {
+			build::types::BuildKind::DockerImage => ImageKind::DockerImage,
+			build::types::BuildKind::OciBundle => ImageKind::OciBundle,
+			build::types::BuildKind::JavaScript => ImageKind::JavaScript,
+		}
+	}
 }
 
 impl ImageKind {
@@ -159,12 +159,12 @@ pub enum ImageCompression {
 }
 
 impl From<build::types::BuildCompression> for ImageCompression {
-    fn from(compression: build::types::BuildCompression) -> Self {
-        match compression {
-            build::types::BuildCompression::None => ImageCompression::None,
-            build::types::BuildCompression::Lz4 => ImageCompression::Lz4,
-        }
-    }
+	fn from(compression: build::types::BuildCompression) -> Self {
+		match compression {
+			build::types::BuildCompression::None => ImageCompression::None,
+			build::types::BuildCompression::Lz4 => ImageCompression::Lz4,
+		}
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]

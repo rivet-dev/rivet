@@ -193,7 +193,6 @@ async fn run(init: Init, first: bool) -> Result<()> {
 		async { metrics_thread.await?.map_err(Into::into) },
 		ctx.run(rx),
 	)?;
-	
 
 	Ok(())
 }

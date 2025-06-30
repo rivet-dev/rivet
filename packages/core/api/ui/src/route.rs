@@ -39,19 +39,23 @@ impl Router {
 
 		// Build proxy URL by joining request path to base URL
 		let mut proxy_url = config.server()?.rivet.ui.proxy_origin().clone();
-		
+
 		// Remove leading slash from request path since join() expects relative paths
-		let request_path = request.uri().path().strip_prefix('/').unwrap_or(request.uri().path());
-		
+		let request_path = request
+			.uri()
+			.path()
+			.strip_prefix('/')
+			.unwrap_or(request.uri().path());
+
 		// Join the request path to the base URL
 		proxy_url = match proxy_url.join(request_path) {
 			Ok(url) => url,
 			Err(e) => bail!("Failed to build proxy URL: {}", e),
 		};
-		
+
 		// Set query string if present
 		proxy_url.set_query(request.uri().query());
-		
+
 		let full_proxy_url = proxy_url.to_string();
 
 		tracing::debug!(
@@ -77,10 +81,13 @@ impl Router {
 
 		// Forward body for non-GET requests
 		if request.method() != Method::GET && request.method() != Method::HEAD {
-			let body_bytes = match hyper::body::to_bytes(std::mem::replace(request.body_mut(), Body::empty())).await {
-				Ok(bytes) => bytes,
-				Err(e) => bail!("Failed to read request body: {}", e),
-			};
+			let body_bytes =
+				match hyper::body::to_bytes(std::mem::replace(request.body_mut(), Body::empty()))
+					.await
+				{
+					Ok(bytes) => bytes,
+					Err(e) => bail!("Failed to read request body: {}", e),
+				};
 			req_builder = req_builder.body(body_bytes.to_vec());
 		}
 

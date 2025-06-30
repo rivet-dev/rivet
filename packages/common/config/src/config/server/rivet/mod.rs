@@ -177,7 +177,7 @@ impl Rivet {
 	}
 }
 
-impl Rivet {	
+impl Rivet {
 	pub fn default_cluster_id(&self) -> GlobalResult<Uuid> {
 		if let Some(default_cluster_id) = self.default_cluster_id {
 			ensure!(
@@ -190,7 +190,9 @@ impl Rivet {
 				// Return default development clusters
 				AccessKind::Development => Ok(default_dev_cluster::CLUSTER_ID),
 				// No cluster configured
-				AccessKind::Public | AccessKind::Private => bail!("`default_cluster_id` not configured"),
+				AccessKind::Public | AccessKind::Private => {
+					bail!("`default_cluster_id` not configured")
+				}
 			}
 		}
 	}

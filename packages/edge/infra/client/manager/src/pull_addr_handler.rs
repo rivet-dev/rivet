@@ -1,4 +1,7 @@
-use std::{net::Ipv4Addr, time::{Duration, Instant}};
+use std::{
+	net::Ipv4Addr,
+	time::{Duration, Instant},
+};
 
 use anyhow::*;
 use pegboard_config::{Addresses, Client};

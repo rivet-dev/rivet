@@ -1,7 +1,8 @@
 mod common;
 
 use bytes::Bytes;
-use http_body_util::{Full, BodyExt};
+use futures_util::StreamExt;
+use http_body_util::{BodyExt, Full};
 use hyper::service::service_fn;
 use hyper::{body::Incoming, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
@@ -9,13 +10,10 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use futures_util::StreamExt;
 
-use common::{
-	create_test_config, start_guard, init_tracing,
-};
+use common::{create_test_config, init_tracing, start_guard};
 use rivet_guard_core::proxy_service::{
-	RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout, RoutingFn,
+	RouteConfig, RouteTarget, RoutingFn, RoutingOutput, RoutingTimeout,
 };
 use uuid::Uuid;
 
@@ -44,16 +42,15 @@ async fn test_streaming_response_should_timeout() {
 	let test_timeout = Duration::from_secs(3);
 
 	// Create an HTTP client to make requests to the guard proxy (not directly to our server)
-	let client = hyper_util::client::legacy::Client::builder(
-		hyper_util::rt::TokioExecutor::new()
-	).build_http();
+	let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+		.build_http();
 
 	// Construct the request URI pointing to the guard proxy
 	let uri = format!("http://{}/stream", guard_addr);
 	let request = Request::builder()
 		.method("GET")
 		.uri(&uri)
-		.header("Host", "example.com")  // Required for routing
+		.header("Host", "example.com") // Required for routing
 		.header("Accept", "text/event-stream")
 		.body(Full::<Bytes>::new(Bytes::new()))
 		.expect("Failed to build request");
@@ -72,24 +69,28 @@ async fn test_streaming_response_should_timeout() {
 	match response_result {
 		Ok(Ok(response)) => {
 			println!("✅ Got response immediately: {}", response.status());
-			
+
 			// If we get here, streaming is working. Let's verify we can read data
 			let (parts, body) = response.into_parts();
-			
+
 			// Try to read the first chunk with a timeout
 			let mut body_stream = body.into_data_stream();
-			let first_chunk_result = tokio::time::timeout(
-				Duration::from_millis(500), 
-				body_stream.next()
-			).await;
-			
+			let first_chunk_result =
+				tokio::time::timeout(Duration::from_millis(500), body_stream.next()).await;
+
 			match first_chunk_result {
 				Ok(Some(Ok(chunk))) => {
 					let chunk_str = String::from_utf8_lossy(&chunk);
 					println!("✅ Received first chunk: {}", chunk_str);
-					assert!(chunk_str.contains("data: "), "Chunk should contain streaming data");
-					println!("✅ Streaming is working! Received {} bytes of data", chunk.len());
-					
+					assert!(
+						chunk_str.contains("data: "),
+						"Chunk should contain streaming data"
+					);
+					println!(
+						"✅ Streaming is working! Received {} bytes of data",
+						chunk.len()
+					);
+
 					// If we got this far, streaming is working correctly!
 					// The test was designed to timeout if streaming was broken
 				}
@@ -109,8 +110,13 @@ async fn test_streaming_response_should_timeout() {
 		}
 		Err(_) => {
 			// This is what we expect to happen when streaming is broken
-			println!("❌ Test timed out after {}s - streaming is NOT working!", test_timeout.as_secs());
-			println!("❌ This indicates the proxy is buffering the entire response before returning it");
+			println!(
+				"❌ Test timed out after {}s - streaming is NOT working!",
+				test_timeout.as_secs()
+			);
+			println!(
+				"❌ This indicates the proxy is buffering the entire response before returning it"
+			);
 			panic!("Streaming response test timed out - proxy is buffering responses instead of streaming");
 		}
 	}
@@ -122,7 +128,7 @@ async fn test_streaming_response_should_timeout() {
 async fn start_streaming_server() -> (SocketAddr, mpsc::Sender<String>) {
 	// Create a channel for sending messages to the streaming endpoint
 	let (message_tx, _message_rx) = mpsc::channel::<String>(100);
-	
+
 	// Bind to a random port
 	let listener = TcpListener::bind("127.0.0.1:0")
 		.await
@@ -156,7 +162,11 @@ async fn start_streaming_server() -> (SocketAddr, mpsc::Sender<String>) {
 			tokio::spawn(async move {
 				let service = service_fn(move |req: Request<Incoming>| {
 					async move {
-						println!("Streaming server: Received request: {} {}", req.method(), req.uri());
+						println!(
+							"Streaming server: Received request: {} {}",
+							req.method(),
+							req.uri()
+						);
 
 						// Check if this is a streaming request
 						if req.uri().path() != "/stream" {
@@ -173,19 +183,19 @@ async fn start_streaming_server() -> (SocketAddr, mpsc::Sender<String>) {
 						// Create a large response that will take time to fully buffer
 						// This simulates streaming behavior - the proxy should return this immediately
 						// but if it buffers, it will wait for the full response
-						
+
 						// Create a large response to simulate a slow streaming endpoint
 						let mut large_data = String::new();
 						large_data.push_str("data: stream-started\n\n");
-						
+
 						// Add a lot of data to make buffering take noticeable time
 						for i in 0..1000 {
 							large_data.push_str(&format!("data: chunk-{}\n\n", i));
 						}
-						
+
 						// Add a delay to simulate network latency
 						tokio::time::sleep(Duration::from_millis(500)).await;
-						
+
 						println!("Streaming server: Returning large streaming response");
 						Ok(Response::builder()
 							.status(StatusCode::OK)
@@ -218,11 +228,11 @@ async fn start_streaming_server() -> (SocketAddr, mpsc::Sender<String>) {
 fn create_streaming_routing_fn(server_addr: SocketAddr) -> RoutingFn {
 	std::sync::Arc::new(
 		move |_hostname: &str,
-			  path: &str,
-			  _port_type: rivet_guard_core::proxy_service::PortType| {
+		      path: &str,
+		      _port_type: rivet_guard_core::proxy_service::PortType| {
 			Box::pin(async move {
 				println!("Guard: Routing request - path: {}", path);
-				
+
 				if path == "/stream" {
 					let target = RouteTarget {
 						actor_id: Some(Uuid::new_v4()),

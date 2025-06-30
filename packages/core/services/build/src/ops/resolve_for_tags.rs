@@ -27,25 +27,21 @@ pub async fn build_resolve_for_tags(ctx: &OperationCtx, input: &Input) -> Global
 		unwrap!(
 			ctx.cache()
 				.ttl(util::duration::seconds(15))
-				.fetch_one_json(
-					"build",
-					(input.env_id, tags_str.as_str()),
-					{
+				.fetch_one_json("build", (input.env_id, tags_str.as_str()), {
+					let ctx = ctx.clone();
+					let tags_str = tags_str.clone();
+					move |mut cache, key| {
 						let ctx = ctx.clone();
 						let tags_str = tags_str.clone();
-						move |mut cache, key| {
-							let ctx = ctx.clone();
-							let tags_str = tags_str.clone();
-							async move {
-								let builds = get_builds(&ctx, input.env_id, &tags_str).await?;
+						async move {
+							let builds = get_builds(&ctx, input.env_id, &tags_str).await?;
 
-								cache.resolve(&key, builds);
+							cache.resolve(&key, builds);
 
-								Ok(cache)
-							}
+							Ok(cache)
 						}
 					}
-				)
+				})
 				.await?
 		)
 	};

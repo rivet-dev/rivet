@@ -432,4 +432,3 @@ async fn create_function_route(
 
 	Ok(())
 }
-

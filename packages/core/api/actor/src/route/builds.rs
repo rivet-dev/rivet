@@ -517,13 +517,9 @@ pub async fn complete_build(
 						..Default::default()
 					};
 
-					edge_intercom_pegboard_prewarm_image(
-						&config,
-						&build_id.to_string(),
-						json!({}),
-					)
-					.await
-					.map_err(Into::<GlobalError>::into)
+					edge_intercom_pegboard_prewarm_image(&config, &build_id.to_string(), json!({}))
+						.await
+						.map_err(Into::<GlobalError>::into)
 				}
 			})
 			.buffer_unordered(16)

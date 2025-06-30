@@ -128,19 +128,20 @@ pub async fn toggle_drain_client(
 	ctx.auth().bypass()?;
 
 	if body.draining {
-		let res = ctx.signal(pegboard::workflows::client::Drain {
-			drain_timeout_ts: unwrap_with!(
-				body.drain_complete_ts,
-				API_BAD_BODY,
-				error = "missing `drain_complete_ts`"
-			)
-			.parse::<chrono::DateTime<chrono::Utc>>()?
-			.timestamp_millis(),
-		})
-		.to_workflow::<pegboard::workflows::client::Workflow>()
-		.tag("client_id", client_id)
-		.send()
-		.await;
+		let res = ctx
+			.signal(pegboard::workflows::client::Drain {
+				drain_timeout_ts: unwrap_with!(
+					body.drain_complete_ts,
+					API_BAD_BODY,
+					error = "missing `drain_complete_ts`"
+				)
+				.parse::<chrono::DateTime<chrono::Utc>>()?
+				.timestamp_millis(),
+			})
+			.to_workflow::<pegboard::workflows::client::Workflow>()
+			.tag("client_id", client_id)
+			.send()
+			.await;
 
 		if let Some(WorkflowError::WorkflowNotFound) = res.as_workflow_error() {
 			tracing::warn!(
@@ -151,7 +152,8 @@ pub async fn toggle_drain_client(
 			res?;
 		}
 	} else {
-		let res = ctx.signal(pegboard::workflows::client::Undrain {})
+		let res = ctx
+			.signal(pegboard::workflows::client::Undrain {})
 			.to_workflow::<pegboard::workflows::client::Workflow>()
 			.tag("client_id", client_id)
 			.send()

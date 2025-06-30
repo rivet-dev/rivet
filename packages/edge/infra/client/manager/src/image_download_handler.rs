@@ -220,11 +220,18 @@ impl ImageDownloadHandler {
 				// Release lock on sqlite pool
 				drop(conn);
 
-				self.download_inner(ctx, image_config).await?;
-				self.convert(ctx, image_config).await?;
+				// Download image & compute size
+				//
+				// `image_size` is a slight over-estimate of the image size, since this is
+				// counting the number of bytes read from the tar. This is fine since
+				// over-estimating is safe for caching.
+				let download_start_instant = Instant::now();
+				let image_size = self.download_inner(ctx, image_config).await?;
+				let download_duration = download_start_instant.elapsed().as_secs_f64();
 
-				// Calculate dir size after unpacking image and save to db
-				let image_size = utils::total_dir_size(&image_path).await?;
+				let convert_start_instant = Instant::now();
+				self.convert(ctx, image_config).await?;
+				let convert_duration = convert_start_instant.elapsed().as_secs_f64();
 
 				// Update metrics after unpacking
 				metrics::IMAGE_CACHE_SIZE.set(images_dir_size + image_size as i64 - removed_bytes);
@@ -245,9 +252,14 @@ impl ImageDownloadHandler {
 				.execute(&mut *ctx.sql().await?)
 				.await?;
 
-				let duration = start_instant.elapsed().as_secs_f64();
-				crate::metrics::DOWNLOAD_IMAGE_DURATION.observe(duration);
-				tracing::info!(duration_seconds = duration, "image download completed");
+				let total_duration = start_instant.elapsed().as_secs_f64();
+				crate::metrics::DOWNLOAD_IMAGE_DURATION.observe(total_duration);
+				tracing::info!(
+					total_duration,
+					download_duration,
+					convert_duration,
+					"image download completed"
+				);
 
 				// The lock on entry is held until this point. After this any other parallel downloaders will
 				// continue with the image already downloaded
@@ -258,7 +270,7 @@ impl ImageDownloadHandler {
 		Ok(())
 	}
 
-	async fn download_inner(&self, ctx: &Ctx, image_config: &protocol::Image) -> Result<()> {
+	async fn download_inner(&self, ctx: &Ctx, image_config: &protocol::Image) -> Result<u64> {
 		let image_path = ctx.image_path(image_config.id);
 
 		let addresses = self.get_image_addresses(ctx, image_config).await?;
@@ -318,7 +330,7 @@ impl ImageDownloadHandler {
 
 					// Use curl piped to tar for extraction
 					format!(
-						"curl -sSfL '{}' | tar -x -C '{}'",
+						"curl -sSfL '{}' | tar -x --totals -C '{}'",
 						url,
 						image_path.display()
 					)
@@ -336,7 +348,7 @@ impl ImageDownloadHandler {
 
 					// Use curl piped to lz4 for decompression, then to tar for extraction
 					format!(
-						"curl -sSfL '{}' | lz4 -d | tar -x -C '{}'",
+						"curl -sSfL '{}' | lz4 -d | tar -x --totals -C '{}'",
 						url,
 						image_path.display()
 					)
@@ -349,9 +361,27 @@ impl ImageDownloadHandler {
 
 			match cmd_result {
 				Ok(output) if output.status.success() => {
-					tracing::info!(image_id=?image_config.id, ?url, "successfully downloaded image");
+					// Parse bytes read from tar to get dir size efficiently
+					//
+					// This is an over-estimate since the size on disk is smaller than the actual
+					// tar
+					let stderr = String::from_utf8_lossy(&output.stderr);
+					let bytes_read = match parse_tar_total_bytes(&stderr) {
+						Some(x) => x,
+						None => {
+							tracing::error!(%stderr, "failed to parse bytes read from tar output");
+							bail!("failed to parse bytes read from tar output")
+						}
+					};
 
-					return Ok(());
+					tracing::info!(
+						image_id=?image_config.id,
+						?url,
+						bytes_read=?bytes_read,
+						"successfully downloaded image"
+					);
+
+					return Ok(bytes_read);
 				}
 				Ok(output) => {
 					// Command ran but failed
@@ -534,4 +564,22 @@ impl ImageDownloadHandler {
 
 		bail!("artifact url could not be resolved");
 	}
+}
+
+/// Parses total bytes read from tar output.
+fn parse_tar_total_bytes(stderr: &str) -> Option<u64> {
+	// Example: "Total bytes read: 646737920 (617MiB, 339MiB/s)"
+	for line in stderr.lines() {
+		if line.starts_with("Total bytes read: ") {
+			if let Some(bytes_str) = line.strip_prefix("Total bytes read: ") {
+				if let Some(space_pos) = bytes_str.find(' ') {
+					let bytes_part = &bytes_str[..space_pos];
+					if let Ok(bytes) = bytes_part.parse::<u64>() {
+						return Some(bytes);
+					}
+				}
+			}
+		}
+	}
+	None
 }

@@ -101,7 +101,7 @@ pub struct Runner {
 
 	pub container_runner_binary_path: Option<PathBuf>,
 	pub isolate_runner_binary_path: Option<PathBuf>,
-	
+
 	/// Custom host entries to append to /etc/hosts in actor containers.
 	#[serde(default)]
 	pub custom_hosts: Option<Vec<HostEntry>>,

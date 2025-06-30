@@ -776,12 +776,13 @@ fn build_hosts_content(ctx: &Ctx) -> String {
 		127.0.0.1	localhost
 		::1			localhost ip6-localhost ip6-loopback
 		"
-	).to_string();
-	
+	)
+	.to_string();
+
 	for host_entry in ctx.config().runner.custom_hosts() {
 		content.push_str(&format!("{}\t{}\n", host_entry.ip, host_entry.hostname));
 	}
-	
+
 	content
 }
 

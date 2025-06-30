@@ -162,7 +162,7 @@ pub fn duration(ms: i64, relative: bool) -> String {
 		let hours = (ms % 86_400_000) / 3_600_000;
 		let minutes = (ms % 3_600_000) / 60_000;
 		let seconds = (ms % 60_000) / 1_000;
-	
+
 		if days > 0 {
 			parts.push(format!("{days}d"));
 		}
@@ -181,5 +181,5 @@ pub fn duration(ms: i64, relative: bool) -> String {
 		parts.push("ago".to_string());
 	}
 
-    parts.join(" ")
+	parts.join(" ")
 }

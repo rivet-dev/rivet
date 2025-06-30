@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use rivet_metrics::{prometheus::*, REGISTRY, BUCKETS};
+use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY};
 
 lazy_static! {
 	// MARK: Internal

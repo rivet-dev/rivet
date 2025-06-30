@@ -1,14 +1,14 @@
+use crate::{
+	rivet_api::{apis, models},
+	ToolchainCtx,
+};
 use anyhow::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use clap::ValueEnum;
 use chrono::{DateTime, Utc};
+use clap::ValueEnum;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
-use crate::{
-	rivet_api::{apis, models},
-	ToolchainCtx
-};
 use uuid::Uuid;
 
 #[derive(ValueEnum, Clone)]
@@ -46,7 +46,7 @@ pub async fn tail(ctx: &ToolchainCtx, opts: TailOpts<'_>) -> Result<()> {
 	let (stderr_fetched_tx, stderr_fetched_rx) = watch::channel(false);
 
 	let exit_on_ctrl_c = opts.exit_on_ctrl_c;
-	
+
 	tokio::select! {
 		result = tail_streams(ctx, &opts, stdout_fetched_tx, stderr_fetched_tx) => result,
 		result = poll_actor_state(ctx, &opts, stdout_fetched_rx, stderr_fetched_rx) => result,
@@ -139,7 +139,6 @@ async fn tail_stream(
 					continue;
 				}
 			};
-
 
 			match &opts.print_type {
 				PrintType::Custom(callback) => {

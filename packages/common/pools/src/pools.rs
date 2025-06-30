@@ -46,8 +46,9 @@ impl Pools {
 		let clickhouse_inserter = if let Some(vector_http) =
 			config.server.as_ref().and_then(|x| x.vector_http.as_ref())
 		{
-			let inserter = clickhouse_inserter::create_inserter(&vector_http.host, vector_http.port)
-				.map_err(Error::BuildClickHouseInserter)?;
+			let inserter =
+				clickhouse_inserter::create_inserter(&vector_http.host, vector_http.port)
+					.map_err(Error::BuildClickHouseInserter)?;
 			Some(inserter)
 		} else {
 			None

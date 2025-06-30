@@ -231,7 +231,10 @@ pub async fn status(
 			_ => {
 				bail_with!(
 					INTERNAL_STATUS_CHECK_FAILED,
-					error = format!("unknown request error: {:?} {:?}", content.status, content.content)
+					error = format!(
+						"unknown request error: {:?} {:?}",
+						content.status, content.content
+					)
 				);
 			}
 		},
@@ -277,7 +280,7 @@ pub async fn status(
 		.instrument(tracing::info_span!("actor_destroy_request", base_path=%config.base_path))
 		.await
 		{
-			Ok(_res) => {},
+			Ok(_res) => {}
 			Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
 				Some(Status400(body))
 				| Some(Status403(body))
@@ -293,7 +296,10 @@ pub async fn status(
 				_ => {
 					bail_with!(
 						INTERNAL_STATUS_CHECK_FAILED,
-						error = format!("unknown request error: {:?} {:?}", content.status, content.content)
+						error = format!(
+							"unknown request error: {:?} {:?}",
+							content.status, content.content
+						)
 					);
 				}
 			},

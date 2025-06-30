@@ -59,11 +59,7 @@ pub async fn servers(
 	let servers_res = ctx
 		.op(cluster::ops::datacenter::server_discovery::Input {
 			datacenter_id,
-			pool_types: query
-				.pools
-				.into_iter()
-				.map(ApiInto::api_into)
-				.collect(),
+			pool_types: query.pools.into_iter().map(ApiInto::api_into).collect(),
 		})
 		.await?;
 

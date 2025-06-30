@@ -74,7 +74,7 @@ pub enum Error {
 }
 
 impl From<global_error::GlobalError> for Error {
-    fn from(err: global_error::GlobalError) -> Self {
-        Error::Global(err)
-    }
+	fn from(err: global_error::GlobalError) -> Self {
+		Error::Global(err)
+	}
 }

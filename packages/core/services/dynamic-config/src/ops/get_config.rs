@@ -19,12 +19,11 @@ pub async fn get_config(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 
 	// Pick an instance ID to insert if none exists. If this is specified in the config. fall back to
 	// this.
-	let default_instance_id =
-		if let Some(instance_id) = ctx.config().server()?.rivet.instance_id {
-			instance_id
-		} else {
-			Uuid::new_v4()
-		};
+	let default_instance_id = if let Some(instance_id) = ctx.config().server()?.rivet.instance_id {
+		instance_id
+	} else {
+		Uuid::new_v4()
+	};
 
 	let instance_id = INSTANCE_ID_ONCE
 		.get_or_try_init(|| async {

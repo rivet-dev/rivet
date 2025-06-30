@@ -1,7 +1,13 @@
 use anyhow::*;
 use flate2::{write::GzEncoder, Compression};
 use serde_json::json;
-use std::{collections::HashMap, io::Write, path::{Path, PathBuf}, result::Result::Ok, time::Duration};
+use std::{
+	collections::HashMap,
+	io::Write,
+	path::{Path, PathBuf},
+	result::Result::Ok,
+	time::Duration,
+};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
@@ -129,7 +135,7 @@ async fn get_or_create_ci_namespace(
 async fn upload_ci_manager_build(
 	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
-	ci_env: &TEMPEnvironment
+	ci_env: &TEMPEnvironment,
 ) -> Result<Uuid> {
 	upload_ci_build(ctx, task, ci_env, "ci-manager", CI_MANAGER_RELEASE_URL).await
 }
@@ -137,7 +143,7 @@ async fn upload_ci_manager_build(
 async fn upload_ci_runner_build(
 	ctx: &ToolchainCtx,
 	task: task::TaskCtx,
-	ci_env: &TEMPEnvironment
+	ci_env: &TEMPEnvironment,
 ) -> Result<Uuid> {
 	upload_ci_build(ctx, task, ci_env, "ci-runner", CI_RUNNER_RELEASE_URL).await
 }
@@ -382,10 +388,7 @@ async fn get_or_create_ci_manager_actor(
 
 /// Moves over build context to a temp directory,
 /// ignoring all .dockerignore files.
-fn prepare_build_context_dir(
-	build_path: &Path,
-	dockerfile_path: &Path
-) -> Result<Vec<PathBuf>> {
+fn prepare_build_context_dir(build_path: &Path, dockerfile_path: &Path) -> Result<Vec<PathBuf>> {
 	const DOCKERIGNORE_FILENAME: &str = ".dockerignore";
 
 	let mut paths = Vec::new();
@@ -405,18 +408,16 @@ fn prepare_build_context_dir(
 		.add_custom_ignore_filename(DOCKERIGNORE_FILENAME)
 		.parents(true)
 		.build();
-		
+
 	for entry in walk {
 		let entry = entry?;
 
-		if entry.path() == dockerfile_path  || entry.path() == &dockerignore_path {
+		if entry.path() == dockerfile_path || entry.path() == &dockerignore_path {
 			// Skip the Dockerfile or .dockerignore itself, we already added it
 			continue;
 		}
 
-		let is_file = entry.file_type()
-			.map(|ft| ft.is_file())
-			.unwrap_or(false);
+		let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
 
 		if is_file {
 			let file_path = entry.path();
@@ -452,7 +453,8 @@ async fn create_build_context_archive(
 
 		// Add the prepared build file paths to the archive
 		for file_path in build_file_paths.iter() {
-			let relative_path = file_path.strip_prefix(build_path)
+			let relative_path = file_path
+				.strip_prefix(build_path)
 				.context("Failed to strip build path prefix")?;
 
 			tar.append_path_with_name(&file_path, relative_path)
@@ -494,9 +496,8 @@ async fn upload_build_context(
 	task.log("[Remote Build] Uploading build context...");
 
 	// Serialize build args if provided
-	let serialized_build_args = serde_json::to_string(
-		build_arg_flags.as_deref().unwrap_or(&[])
-	).context("Failed to serialize build args")?;
+	let serialized_build_args = serde_json::to_string(build_arg_flags.as_deref().unwrap_or(&[]))
+		.context("Failed to serialize build args")?;
 
 	// Create FormData-like structure using reqwest
 	let form = reqwest::multipart::Form::new()
@@ -517,7 +518,7 @@ async fn upload_build_context(
 				.file_name("context.tar.gz")
 				.mime_str("application/gzip")?,
 		);
-	
+
 	let form = if let Some(target) = build_target {
 		form.text("buildTarget", target.clone())
 	} else {
@@ -657,11 +658,14 @@ async fn poll_build_status(
 										actor_id,
 										stream: crate::util::actor::logs::LogStream::All,
 										follow: true,
-										print_type: crate::util::actor::logs::PrintType::Custom(handle_build_log_line),
-										exit_on_ctrl_c: false
+										print_type: crate::util::actor::logs::PrintType::Custom(
+											handle_build_log_line,
+										),
+										exit_on_ctrl_c: false,
 									},
 								)
-								.await {
+								.await
+								{
 									Ok(_) => {
 										task.log("[Remote Build] Build logs streaming completed.");
 									}
@@ -682,26 +686,17 @@ async fn poll_build_status(
 						}
 					}
 				} else {
-					task.log(format!(
-						"[Remote Build] Poll failed: HTTP {}",
-						res.status()
-					));
+					task.log(format!("[Remote Build] Poll failed: HTTP {}", res.status()));
 				}
 			}
 			Err(e) => {
-				task.log(format!(
-					"[Remote Build] Poll failed: {}",
-					e
-				));
+				task.log(format!("[Remote Build] Poll failed: {}", e));
 			}
 		}
 	}
 }
 
-fn handle_build_log_line(
-	_timestamp: chrono::DateTime<chrono::Utc>,
-	line: String,
-) {
+fn handle_build_log_line(_timestamp: chrono::DateTime<chrono::Utc>, line: String) {
 	let line = strip_ansi_escape_codes(&line);
 
 	// If the line starts with INFO[.+], its a Kaniko log line
@@ -725,9 +720,7 @@ fn transform_log_line(line: String) -> Option<String> {
 
 	// If it starts with uppercase word, its probably important
 	// since it's probably a Dockerfile instruction
-	let first_word = &line.split_whitespace()
-		.next()
-		.unwrap_or("");
+	let first_word = &line.split_whitespace().next().unwrap_or("");
 	let is_docker_instruction = first_word
 		.chars()
 		.filter(|c| c.is_alphabetic())
@@ -736,7 +729,7 @@ fn transform_log_line(line: String) -> Option<String> {
 	if is_docker_instruction {
 		return Some(line);
 	}
-	
+
 	if line.starts_with("Unpacking rootfs") {
 		return Some("Initializing image filesystem...".to_string());
 	}
@@ -757,7 +750,7 @@ fn strip_ansi_escape_codes(line: &str) -> String {
 	// as strip_ansi_escapes happens to strip tabs as well.
 	// (See https://github.com/luser/strip-ansi-escapes/issues/20)
 	if line.contains('\x1b') {
-		return strip_ansi_escapes::strip_str(line).to_string()
+		return strip_ansi_escapes::strip_str(line).to_string();
 	}
 
 	line.to_string()

@@ -52,7 +52,7 @@ impl Opts {
 					.unwrap_or(toolchain::util::actor::logs::LogStream::All),
 				follow: !self.no_follow,
 				print_type,
-				exit_on_ctrl_c: true
+				exit_on_ctrl_c: true,
 			},
 		)
 		.await?;

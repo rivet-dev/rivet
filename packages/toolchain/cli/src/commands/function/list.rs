@@ -35,4 +35,3 @@ impl Opts {
 		Ok(())
 	}
 }
-
