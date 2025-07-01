@@ -13,12 +13,12 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 		Deno.env.get("R2_RELEASES_SECRET_ACCESS_KEY") ??
 		(await $`op read "op://Engineering/rivet-releases R2 Upload/password"`.text());
 
+	const endpointUrl = "https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
+
 	// Create AWS CLI command builder with credentials
 	const awsCommand = new CommandBuilder().env({
 		AWS_ACCESS_KEY_ID: awsAccessKeyId,
 		AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
-		AWS_ENDPOINT_URL:
-			"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com",
 		AWS_DEFAULT_REGION: "auto",
 	});
 
@@ -27,7 +27,7 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 	$.logStep("Listing Original Files", commitPrefix);
 	const commitFiles = await awsCommand
 		.command(
-			`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix}`,
+			`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`,
 		)
 		.json();
 	assert(
@@ -37,13 +37,13 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 
 	// Copy files to version directory
 	const versionTarget = `rivet/${opts.version}/`;
-	await copyFiles(awsCommand, commitPrefix, versionTarget);
-	await generateInstallScripts(awsCommand, opts, opts.version);
+	await copyFiles(awsCommand, commitPrefix, versionTarget, endpointUrl);
+	await generateInstallScripts(awsCommand, opts, opts.version, endpointUrl);
 
 	// If this is the latest version, copy to latest directory
 	if (opts.latest) {
-		await copyFiles(awsCommand, commitPrefix, "rivet/latest/");
-		await generateInstallScripts(awsCommand, opts, "latest");
+		await copyFiles(awsCommand, commitPrefix, "rivet/latest/", endpointUrl);
+		await generateInstallScripts(awsCommand, opts, "latest", endpointUrl);
 	}
 }
 
@@ -51,20 +51,21 @@ async function copyFiles(
 	awsCommand: CommandBuilder,
 	sourcePrefix: string,
 	targetPrefix: string,
+	endpointUrl: string,
 ) {
 	$.logStep("Copying Files", targetPrefix);
 	await $.logGroup(async () => {
 		// Delete existing files in target directory using --recursive
 		$.logStep("Deleting existing files in", targetPrefix);
 		await awsCommand
-			.command(`aws s3 rm s3://rivet-releases/${targetPrefix} --recursive`)
+			.command(`aws s3 rm s3://rivet-releases/${targetPrefix} --recursive --endpoint-url ${endpointUrl}`)
 			.spawn();
 
 		// Copy new files using --recursive
 		$.logStep("Copying files from", sourcePrefix, "to", targetPrefix);
 		await awsCommand
 			.command(
-				`aws s3 cp s3://rivet-releases/${sourcePrefix} s3://rivet-releases/${targetPrefix} --recursive --copy-props none`,
+				`aws s3 cp s3://rivet-releases/${sourcePrefix} s3://rivet-releases/${targetPrefix} --recursive --copy-props none --endpoint-url ${endpointUrl}`,
 			)
 			.spawn();
 	});
@@ -74,6 +75,7 @@ async function generateInstallScripts(
 	awsCommand: CommandBuilder,
 	opts: ReleaseOpts,
 	version: string,
+	endpointUrl: string,
 ) {
 	const installScriptPaths = [
 		resolve(opts.root, "scripts/release/static/install.sh"),
@@ -89,7 +91,7 @@ async function generateInstallScripts(
 		// Upload the install script to S3
 		$.logStep("Uploading Install Script", uploadKey);
 		await awsCommand
-			.command(`aws s3 cp - s3://rivet-releases/${uploadKey}`)
+			.command(`aws s3 cp - s3://rivet-releases/${uploadKey} --endpoint-url ${endpointUrl}`)
 			.stdinText(scriptContent)
 			.spawn();
 	}
