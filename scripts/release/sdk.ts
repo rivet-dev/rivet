@@ -63,7 +63,7 @@ export async function publishSdk(opts: ReleaseOpts) {
 		{
 	
 			path: `${opts.root}/frontend/packages/cli`,
-			name: "@rivet-gg/cli",
+			name: "rivet-cli",
 			//jsr: true,
 			npm: true,
 			turbo: true

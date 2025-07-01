@@ -20,18 +20,18 @@ const arch = os.arch();
 
 function computeBinaryFilename() {
 	if (platform === "linux") {
-		return "rivet-x86-linux";
+		return "rivet-x86_64-unknown-linux-musl";
 	}
 
 	if (platform === "darwin") {
 		if (arch === "arm64") {
-			return "rivet-aarch64-mac";
+			return "rivet-aarch64-apple-darwin";
 		}
-		return "rivet-x86-mac";
+		return "rivet-x86_64-apple-darwin";
 	}
 
 	if (platform === "win32") {
-		return "rivet-x86-windows.exe";
+		return "rivet-x86_64-pc-windows-gnu.exe";
 	}
 
 	throw new Error(`unsupported platform ${process.platform}`);
@@ -55,7 +55,7 @@ function isYarn(): boolean {
 
 /**
  *
- * @see https://github.com/evanw/esbuild/blob/main/lib/npm/node-install.ts#L171
+ * @see https://github.com/evanw/esbuild/blob/f4159a7b823cd5fe2217da2c30e8873d2f319667/lib/npm/node-install.ts#L171
  */
 function maybeOptimizePackage(binPath: string, toPath: string): void {
 	if (platform !== "win32" && !isYarn()) {
@@ -72,7 +72,13 @@ function maybeOptimizePackage(binPath: string, toPath: string): void {
 
 async function download(version: string) {
 	const binaryFilename = computeBinaryFilename();
-	const response = await fetch(artifactUrl(version, binaryFilename));
+	const url = artifactUrl(version, binaryFilename);
+	
+	console.log(`Downloading Rivet CLI ${version} for ${platform}-${arch}`);
+	console.log(`Binary: ${binaryFilename}`);
+	console.log(`URL: ${url}`);
+	
+	const response = await fetch(url);
 
 	if (!response.ok) {
 		throw new Error(`unexpected response ${response.statusText}`);
@@ -105,16 +111,22 @@ async function download(version: string) {
 }
 
 async function main() {
+	console.log("Starting Rivet CLI installation...");
+	
 	try {
 		await fs.promises.rm(RIVET_CLI_BINARY_PATH);
+		console.log("Cleaned up existing binary");
 	} catch {}
 
 	await download(pkgJson.version);
+	console.log("Download completed");
 
 	maybeOptimizePackage(RIVET_CLI_BINARY_PATH, RIVET_CLI_NODE_PATH);
+	console.log("Package optimization completed");
 
 	fs.chmodSync(RIVET_CLI_NODE_PATH, 0o755);
 	fs.chmodSync(RIVET_CLI_BINARY_PATH, 0o755);
+	console.log("Permissions set");
 }
 
 main()

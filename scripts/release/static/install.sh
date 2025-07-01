@@ -21,9 +21,9 @@ if [ "$(printf '%s' "$UNAME" | cut -c 1-6)" = "Darwin" ]; then
 	echo "> Detected macOS"
 
 	if [ "$ARCH" = "x86_64" ]; then
-		FILE_NAME="rivet-x86-mac"
+		FILE_NAME="rivet-x86_64-apple-darwin"
 	elif [ "$ARCH" = "arm64" ]; then
-		FILE_NAME="rivet-aarch64-mac"
+		FILE_NAME="rivet-aarch64-apple-darwin"
 	else
 		echo "Unknown arch $ARCH" 1>&2
 		exit 1
@@ -32,7 +32,7 @@ elif [ "$(printf '%s' "$UNAME" | cut -c 1-5)" = "Linux" ]; then
 	echo
 	echo "> Detected Linux ($(getconf LONG_BIT) bit)"
 
-	FILE_NAME="rivet-x86-linux"
+	FILE_NAME="rivet-x86_64-unknown-linux-musl"
 else
 	echo "Unable to determine platform" 1>&2
 	exit 1

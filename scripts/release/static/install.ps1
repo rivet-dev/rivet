@@ -18,7 +18,7 @@ if (!(Test-Path $RivetInstall)) {
 
 $RivetExe = "$RivetInstall\rivet.exe"
 $Version = '__VERSION__'
-$FileName = 'rivet-x86-windows.exe'
+$FileName = 'rivet-x86_64-pc-windows-gnu.exe'
 
 Write-Host
 Write-Host "> Installing Rivet CLI ${Version}"

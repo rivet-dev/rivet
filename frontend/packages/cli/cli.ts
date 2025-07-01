@@ -13,6 +13,13 @@ function computeTargetFilename() {
 	return "rivet-cli";
 }
 
-execFileSync(join(__dirname, computeTargetFilename()), process.argv.slice(2), {
-	stdio: "inherit",
-});
+try {
+	execFileSync(join(__dirname, computeTargetFilename()), process.argv.slice(2), {
+		stdio: "inherit",
+	});
+} catch (error) {
+	if (error.status) {
+		process.exit(error.status);
+	}
+	throw error;
+}
