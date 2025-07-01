@@ -26,6 +26,21 @@ export async function updateVersion(opts: ReleaseOpts) {
 			find: /version:\n\s\sheader: "X-API-Version"\n\s\sdefault: ".*"\n\s\svalues: \[".*"\]/,
 			replace: `version:\n  header: "X-API-Version"\n  default: "${opts.version}"\n  values: ["${opts.version}"]`,
 		},
+		{
+			path: "site/src/content/docs/install.mdx",
+			find: /rivet-cli@\d+\.\d+\.\d+/g,
+			replace: `rivet-cli@${opts.version}`,
+		},
+		{
+			path: "site/src/content/docs/install.mdx",
+			find: /RIVET_CLI_VERSION=v\d+\.\d+\.\d+/g,
+			replace: `RIVET_CLI_VERSION=v${opts.version}`,
+		},
+		{
+			path: "README.md",
+			find: /rivet-cli@\d+\.\d+\.\d+/g,
+			replace: `rivet-cli@${opts.version}`,
+		},
 	];
 
 	// Substitute all files

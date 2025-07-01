@@ -1,62 +1,69 @@
-import imgBuilds from "./images/install/builds.png";
-import imgActors from "./images/install/actors.png";
-
 # Install Rivet CLI
 
-Run this command to install Rivet on your system:
+Install the Rivet CLI to manage your projects from the command line.
 
-<Tabs>
-
-{/*<Tab title="NPM">
+## NPM Installation
 
 To install globally:
 
-```sh
-npm i -g @rivet-gg/cli@latest
+<CodeGroup>
+```sh {{"title":"Latest"}}
+npm i -g rivet-cli@latest
+rivet --version
 ```
+```sh {{"title":"Pinned Version"}}
+npm i -g rivet-cli@25.4.2
+rivet --version
+```
+</CodeGroup>
 
 To run without install:
 
-```sh
-npx @rivet-gg/cli@latest
+<CodeGroup>
+```sh {{"title":"Latest"}}
+npx rivet-cli@latest --version
 ```
+```sh {{"title":"Pinned Version"}}
+npx rivet-cli@25.4.2 --version
+```
+</CodeGroup>
 
-</Tab>*/}
 
-<Tab title="macOS & Linux & WSL">
+## Binary Installation
 
-```sh
+### macOS & Linux & WSL
+
+<CodeGroup>
+```sh {{"title":"Latest"}}
 curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
+rivet --version
 ```
-
-</Tab>
-
-<Tab title="Windows (cmd)">
-
-```ps1
-powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
+```sh {{"title":"Pinned Version"}}
+export RIVET_CLI_VERSION=v25.4.2
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
+rivet --version
 ```
+</CodeGroup>
 
-</Tab>
+### Windows (PowerShell)
 
-<Tab title="Windows (PowerShell)">
-
-```ps1
+<CodeGroup>
+```ps1 {{"title":"Latest"}}
 iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
+rivet --version
 ```
+```ps1 {{"title":"Pinned Version"}}
+$env:RIVET_CLI_VERSION = "v25.4.2"
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
+rivet --version
+```
+</CodeGroup>
 
-</Tab>
-
-<Tab title="Build from source">
+## Build From Source
 
 ```sh
 git clone https://github.com/rivet-gg/rivet
 cargo build --bin rivet
+./target/debug/rivet --version
 ```
-
-The executable will be available at _target/debug/rivet_.
-
-</Tab>
-
-</Tabs>
 

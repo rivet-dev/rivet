@@ -168,20 +168,8 @@ function EmptyState() {
 							</SmallText>
 							<div className="flex gap-2">
 								<DocsSheet
-									path="https://actorcore.org/frameworks/react"
-									title="React Quick Start"
-								>
-									<Button
-										variant="outline"
-										size="sm"
-										startIcon={<Icon icon={faReact} />}
-									>
-										React
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path="https://actorcore.org/clients/javascript"
-									title="TypeScript Quick Start"
+									path="https://rivetkit.org/actors/quickstart-backend"
+									title="Node.js & Bun Quick Start"
 								>
 									<Button
 										variant="outline"
@@ -192,15 +180,15 @@ function EmptyState() {
 									</Button>
 								</DocsSheet>
 								<DocsSheet
-									path="https://actorcore.org/clients/rust"
-									title="Rust Quick Start"
+									path="https://rivetkit.org/actors/quickstart-frontend"
+									title="React Quick Start"
 								>
 									<Button
 										variant="outline"
 										size="sm"
-										startIcon={<Icon icon={faRust} />}
+										startIcon={<Icon icon={faReact} />}
 									>
-										Rust
+										React
 									</Button>
 								</DocsSheet>
 							</div>

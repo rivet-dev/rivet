@@ -20,8 +20,6 @@
   <a href="/LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?logo=open-source-initiative&logoColor=white"></a>
 </p>
 
-![Code snippets](./.github/media/code.png)
-
 ## Overview
 
 Rivet is a developer-focused serverless infrastructure platform that unifies stateless functions, stateful actors, and containerized workloads. It provides simple primitives to build your backend without managing servers. Leverage Rivet Actors to create resilient, long-lived services that maintain in-memory state between requests.
@@ -77,27 +75,56 @@ Whether you’re building AI-driven services, collaborative apps, multiplayer ga
 
 ## Getting Started
 
-### Quickstart (TypeScript)
+### Install the Rivet CLI
 
-_See the [full quickstart guide](https://rivet.gg/docs/actors) for a comprehensive walkthrough._
+<details>
+<summary>NPM</summary>
 
-**Step 1: Create Actor**
-
+**Global Install:**
 ```sh
-npx create-actor@latest -p rivet -t counter
+npm i -g rivet-cli@latest
+rivet --version
 ```
 
-**Step 2: Deploy Actor**
+**Run Without Install:**
+```sh
+npx rivet-cli@latest --version
+```
+</details>
+
+<details>
+<summary>Binary (macOS/Linux)</summary>
 
 ```sh
-cd your-project
-npm run deploy
-
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
+rivet --version
 ```
+</details>
 
-**Step 3: Monitor**
+<details>
+<summary>Binary (Windows)</summary>
 
-Visit the [Rivet Hub](https://hub.rivet.gg) to create & test your actors.
+```ps1
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
+rivet --version
+```
+</details>
+
+<details>
+<summary>Build from Source</summary>
+
+```sh
+git clone https://github.com/rivet-gg/rivet
+cargo build --bin rivet
+./target/debug/rivet --version
+```
+</details>
+
+### Quickstart
+
+- [**Functions**](https://rivet.gg/docs/functions)
+- [**Actors**](https://rivet.gg/docs/actors)
+- [**Containers**](https://rivet.gg/docs/containers)
 
 ### Documentation
 
@@ -125,7 +152,6 @@ Visit the [Rivet Hub](https://hub.rivet.gg) to create & test your actors.
 ## Technologies
 
 -   **Rust**
--   **V8 & Deno**: Actor isolate runtime
 -   **FoundationDB**: Actor state
 -   **CockroachDB**: OLTP
 -   **ClickHouse**: Developer-facing monitoring

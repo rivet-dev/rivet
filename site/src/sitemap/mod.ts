@@ -216,6 +216,10 @@ export const sitemap = [
 				title: "Advanced",
 				pages: [
 					{
+						title: "Actors (Low-Level)",
+						href: "/docs/actors-low-level",
+					},
+					{
 						title: "Limitations",
 						href: "/docs/limitations",
 						//icon: faRuler,

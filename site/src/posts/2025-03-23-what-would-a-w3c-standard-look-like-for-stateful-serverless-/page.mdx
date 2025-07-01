@@ -6,7 +6,7 @@ import Link from "next/link";
 export const author = "nathan-flurry"
 export const published = "2025-03-23"
 export const category = "technical"
-export const keywords = ["durable-objects","actor-core","standard","w3c"]
+export const keywords = ["durable-objects","rivetkit","standard","w3c"]
 
 # Considering A W3C Standard For Stateful Serverless
 
@@ -16,7 +16,7 @@ Earlier today, I was <Link href="https://x.com/janwilmake/status/190358037292059
 
 <Link href="https://x.com/janwilmake/status/1903580372920590667" target="_blank"><Image src={tweetImg} alt="threepointone tweet" /></Link>
 
-Having implemented a cloud-agnostic stateful serverless library called <Link href="https://github.com/rivet-gg/actor-core" target="_blank">ActorCore</Link>, I have a lot of experience with what's required to build a portable standard. And thus, I derailed my Saturday to write them down here.
+Having implemented a cloud-agnostic stateful serverless library called <Link href="https://github.com/rivet-gg/rivetkit" target="_blank">RivetKit</Link>, I have a lot of experience with what's required to build a portable standard. And thus, I derailed my Saturday to write them down here.
 
 This specification is intended as step 1 to start the conversation about what is required to develop a stateful serverless specification that makes stateful serverless easier for companies to adopt. I don't expect this to be the end result. See _Specification Goals_ for more information.
 
@@ -40,7 +40,7 @@ export default {
 }
 ```
 
-On the other hand, **stateful serverless provides an infinitely running process with storage**. An example implementation on [ActorCore](https://actorcore.org/introduction) would look like this:
+On the other hand, **stateful serverless provides an infinitely running process with storage**. An example implementation on [RivetKit](https://rivetkit.org/introduction) would look like this:
 
 ```typescript
 // Once created, this DurableObject will exist indefinitely
@@ -79,7 +79,7 @@ The primary use cases of stateful serverless are:
 * **Horizontal Scalability**: Systems that need to scale by distributing load across many instances. For example, **Realtime Stream Processing** for stateful event handling.
 * **Local-First Architecture**: Systems that synchronize state between offline clients. For example, **Local-First Sync** between devices.
 
-Read more about stateful serverless <Link href="https://github.com/rivet-gg/actor-core" target="_blank">here</Link>.
+Read more about stateful serverless <Link href="https://github.com/rivet-gg/rivetkit" target="_blank">here</Link>.
 
 ### Scope Of This Proposal
 
@@ -120,7 +120,7 @@ For example: though AWS is the leading cloud provider and pushes their own close
 
 ### Incentivize More Providers
 
-**A standard would incentivize more cloud providers to enter the stateful serverless space.** Currently, only Cloudflare, Rivet, and ActorCore offer this capability, leaving a massive opportunity for other serverless cloud providers to adopt stateful serverless. With a common standard, more frameworks & developers can adopt this model.
+**A standard would incentivize more cloud providers to enter the stateful serverless space.** Currently, only Cloudflare, Rivet, and RivetKit offer this capability, leaving a massive opportunity for other serverless cloud providers to adopt stateful serverless. With a common standard, more frameworks & developers can adopt this model.
 
 ## Today's Stateful Serverless Implementations
 
@@ -166,7 +166,7 @@ I'm the founder of Rivet and have a vested interest in seeing stateful serverles
 
 We also provide a handful of features in our runtime that don't make sense to be part of a standard, since the best W3C standards build on existing web standards: [Docker containers for non-JavaScript applications](https://rivet.gg/docs/container-runtime), [HTTP, UDP, and TCP support](https://rivet.gg/docs/networking), [advanced lifecycle management](https://rivet.gg/docs/durability), [actor tagging](https://rivet.gg/docs/api/actors/create) for advanced multi-tenant applications, [advanced control over actor upgrades](https://rivet.gg/docs/api/actors/upgrade-all) for companies with specific use cases, [fine-grained control over where your actor is running](https://rivet.gg/docs/api/regions/list), and a developer-friendly REST API for managing Rivet Actors.
 
-We encourage developers building on Rivet to use [ActorCore](https://github.com/rivet-gg/actor-core). However, we also provide a [low-level API](https://rivet.gg/docs/javascript-runtime) for defining actors:
+We encourage developers building on Rivet to use [RivetKit](https://github.com/rivet-gg/rivetkit). However, we also provide a [low-level API](https://rivet.gg/docs/javascript-runtime) for defining actors:
 
 ```typescript
 import type { ActorContext } from "@rivet-gg/actor";
@@ -194,14 +194,14 @@ Unlike Durable Objects, Rivet's core API design opts to lean into Unix-like patt
 
 Check out the [source code on GitHub](https://github.com/rivet-gg/rivet).
 
-### ActorCore Framework: Stateful Serverless On Any Cloud
+### RivetKit Framework: Stateful Serverless On Any Cloud
 
-At Rivet, we also manage a framework called [ActorCore](https://github.com/rivet-gg/actor-core) that provides a Durable Object-like experience on any cloud that provides _stateless_ serverless.
+At Rivet, we also manage a framework called [RivetKit](https://github.com/rivet-gg/rivetkit) that provides a Durable Object-like experience on any cloud that provides _stateless_ serverless.
 
-An ActorCore Actor definition looks something like this:
+A Rivet Actor definition looks something like this:
 
 ```typescript
-import { actor } from "actor-core";
+import { actor } from "@rivetkit/actor";
 
 const chatRoom = actor({
   state: { messages: [] },
@@ -220,11 +220,11 @@ const chatRoom = actor({
 });
 ```
 
-Under the hood is where it gets interesting: ActorCore is intended to support as many platforms as possible and is **completely abstracted with drivers**. By doing so, ActorCore supports Rivet, Cloudflare Durable Objects, Bun, Node.js. Vercel, Supabase, Deno, and Lambda are coming in the near future.
+Under the hood is where it gets interesting: RivetKit is intended to support as many platforms as possible and is **completely abstracted with drivers**. By doing so, RivetKit supports Rivet, Cloudflare Durable Objects, Bun, Node.js. Vercel, Supabase, Deno, and Lambda are coming in the near future.
 
 These drivers provide a **peek at what a standard might require**, since they're already abstracted to be platform-agnostic:
 
-**[ActorDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/actor/driver.ts#L12)**: Manages actor state, lifecycle, and persistence
+**[ActorDriver](https://github.com/rivet-gg/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/actor/driver.ts#L12)**: Manages actor state, lifecycle, and persistence
 
 ```typescript
 export interface ActorDriver {
@@ -238,7 +238,7 @@ export interface ActorDriver {
 }
 ```
 
-**[ManagerDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/manager/driver.ts#L5)**: Handles actor discovery, routing, and scaling
+**[ManagerDriver](https://github.com/rivet-gg/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/manager/driver.ts#L5)**: Handles actor discovery, routing, and scaling
 
 ```typescript
 export interface ManagerDriver {
@@ -280,9 +280,9 @@ export interface CreateActorOutput {
 }
 ```
 
-There is also a **[CoordinatedDriver](https://github.com/rivet-gg/actor-core/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/topologies/coordinate/driver.ts#L29)** that provides support for implementing actors over peer-to-peer for platforms that don't natively support stateful serverless. This would not apply to an actor standard.
+There is also a **[CoordinatedDriver](https://github.com/rivet-gg/rivetkit/blob/a9a5cfa5b91aff73889bbbee965d52221f89c2c7/packages/actor-core/src/topologies/coordinate/driver.ts#L29)** that provides support for implementing actors over peer-to-peer for platforms that don't natively support stateful serverless. This would not apply to an actor standard.
 
-Read more about [building your own ActorCore drivers](https://github.com/rivet-gg/actor-core/tree/main/docs).
+Read more about [building your own RivetKit drivers](https://github.com/rivet-gg/rivetkit/tree/main/docs).
 
 Check out the [source code on GitHub](https://github.com/rivet-gg/rivet).
 
@@ -298,7 +298,7 @@ The goals of this proposal are:
 
 - **Simplicity Of Implementation**: Implementing standards correctly is difficult, expensive, and highly error prone. Simpler is better.
 - **Simplicity Of Usage**: Stateful serverless is not a concept that is easy for many developers to understand. Prefer simplicity vs advanced features to keep the API as simple as possible for greater adoption.
-- **Build For Frameworks**: <Link href="https://hono.dev/" target="_blank">Hono</Link> and <Link href="https://itty.dev/itty-router/" target="_blank">itty-router</Link> already proved that frameworks are almost always used with serverless runtimes. Stateful serverless is already used widely with <Link href="https://www.partykit.io/" target="_blank">PartyKit</Link>, <Link href="https://github.com/rivet-gg/actor-core" target="_blank">ActorCore</Link>, <Link href="https://developers.cloudflare.com/agents/" target="_blank">Agents</Link>, and misc tools like <Link href="https://tinybase.org/" target="_blank">TinyBase</Link>. If possible, leave functionality up to frameworks to implement.
+- **Build For Frameworks**: <Link href="https://hono.dev/" target="_blank">Hono</Link> and <Link href="https://itty.dev/itty-router/" target="_blank">itty-router</Link> already proved that frameworks are almost always used with serverless runtimes. Stateful serverless is already used widely with <Link href="https://www.partykit.io/" target="_blank">PartyKit</Link>, <Link href="https://github.com/rivet-gg/rivetkit" target="_blank">RivetKit</Link>, <Link href="https://developers.cloudflare.com/agents/" target="_blank">Agents</Link>, and misc tools like <Link href="https://tinybase.org/" target="_blank">TinyBase</Link>. If possible, leave functionality up to frameworks to implement.
 - **Built On Existing Web Development Paradigms**: Stateful serverless is very similar to <Link href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API" target="_blank">Web Workers</Link>. Where possible refer to Web Workers to see what works well.
 - **Focus On Stateful Workloads, Not Actors**: I love building distributed systems with the actor model, but actors require extra consideration around message handling, concurrency, and backpressure.
 
@@ -385,9 +385,9 @@ export class Counter {
 }
 ```
 
-```typescript {{ "title": "ActorCore" }}
+```typescript {{ "title": "RivetKit" }}
 // client.js - Client side
-import { createClient } from 'actor-core';
+import { createClient } from '@rivetkit/actor';
 
 const client = createClient();
 const counter = await client.counter.get('counter-1');
@@ -395,7 +395,7 @@ const result = await counter.increment(5);
 console.log('Counter:', result);
 
 // counter.js - Actor definition
-import { actor } from 'actor-core';
+import { actor } from '@rivetkit/actor';
 
 export const counter = actor({
   state: { value: 0 },
@@ -410,7 +410,7 @@ export const counter = actor({
 
 </CodeGroup>
 
-The `onmessage` handler is very similar to the `fetch` handler in a Durable Object or an [Action](https://actorcore.org/concepts/actions) in ActorCore.
+The `onmessage` handler is very similar to the `fetch` handler in a Durable Object or an [Action](https://rivetkit.org/concepts/actions) in RivetKit.
 
 The key differences are:
 
@@ -432,13 +432,13 @@ The key differences are:
 
 ### Creating, Initializing, & Addressing `ServerlessWorker`s
 
-**Current Implementation: Rivet & ActorCore**
+**Current Implementation: Rivet & RivetKit**
 
-Rivet and ActorCore provide a tagging system for organizing actors. This allows you to build more manageable multi-tenant applications with complex requirements. For example:
+Rivet and RivetKit provide a tagging system for organizing actors. This allows you to build more manageable multi-tenant applications with complex requirements. For example:
 
 Rivet allows you to create actors with the [`actors.create`](https://rivet.gg/docs/api/actors/create) endpoint. The API accepts environment variables to configure how the actor behaves.
 
-ActorCore allows passing tags to [`client.get({ /* tags */ })`](https://github.com/rivet-gg/actor-core/tree/main/packages/actor-core) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
+RivetKit allows passing tags to [`client.get({ /* tags */ })`](https://github.com/rivet-gg/rivetkit) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
 
 ```typescript
 const client = createClient<App>("http://localhost:6420");
@@ -507,7 +507,7 @@ console.log(self.name);
 
 Rivet provides two ways to destroy an actor: use `process.exit(0)` or call [`actors.destroy`](https://rivet.gg/docs/api/actors/destroy) from the API.
 
-ActorCore will provide a `ctx.shutdown` method that delegates to `ActorDriver`, though is not currently implemented.
+RivetKit will provide a `ctx.shutdown` method that delegates to `ActorDriver`, though is not currently implemented.
 
 **Current Implementation: Durable Objects**
 
@@ -1317,7 +1317,7 @@ Please add feedback as a issue or pull request on the [proposal GitHub](https://
 
 ### Reference Implementation
 
-Once a general specification is implemented, a reference specification is trivial to implement on any of the providers previously mentioned. A compatibility layer could be implemented on the existing work with [ActorCore drivers](https://actorcore.org/drivers/overview).
+Once a general specification is implemented, a reference specification is trivial to implement on any of the providers previously mentioned. A compatibility layer could be implemented on the existing work with [RivetKit drivers](https://rivetkit.org/drivers/overview).
 
 ## Survey: Help Shape the Specification
 

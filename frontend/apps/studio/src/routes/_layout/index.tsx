@@ -101,20 +101,8 @@ function RouteComponent() {
 							<div className="flex-1 flex flex-col gap-2 mt-4">
 								<div className="flex flex-row justify-stretch items-center gap-2">
 									<DocsSheet
-										path="https://actorcore.org/frameworks/react"
-										title="React Quick Start"
-									>
-										<Button
-											className="flex-1"
-											variant="outline"
-											startIcon={<Icon icon={faReact} />}
-										>
-											React
-										</Button>
-									</DocsSheet>
-									<DocsSheet
-										path="https://actorcore.org/clients/javascript"
-										title="TypeScript Quick Start"
+										path="https://rivetkit.org/actors/quickstart-backend"
+										title="Node.js & Bun Quick Start"
 									>
 										<Button
 											className="flex-1"
@@ -125,15 +113,15 @@ function RouteComponent() {
 										</Button>
 									</DocsSheet>
 									<DocsSheet
-										path="https://actorcore.org/clients/rust"
-										title="Rust Quick Start"
+										path="https://rivetkit.org/actors/quickstart-frontend"
+										title="React Quick Start"
 									>
 										<Button
 											className="flex-1"
 											variant="outline"
-											startIcon={<Icon icon={faRust} />}
+											startIcon={<Icon icon={faReact} />}
 										>
-											Rust
+											React
 										</Button>
 									</DocsSheet>
 								</div>

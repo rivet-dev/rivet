@@ -12,7 +12,7 @@ export const keywords = ["linear","agent","ai","starter"]
 
 This project is built with:
 
-- Rivet's [ActorCore](https://actorcore.org) library to manage the agent & authentication state
+- Rivet's [RivetKit](https://rivetkit.org) library to manage the agent & authentication state
 - [Hono](https://hono.dev/) for the HTTP server
 - [Linear SDK](https://developers.linear.app/docs/sdk/installation) for Linear API integration
 - [AI SDK](https://ai-sdk.dev) for AI-powered responses
@@ -38,14 +38,14 @@ The system exposes three endpoints:
 - `GET /oauth/callback/linear`: OAuth callback endpoint ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L82))
 - `POST /webhook/linear`: Receives Linear webhook events ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L116))
 
-And maintains state using three main [ActorCore](https://actorcore.org) actors:
+And maintains state using three main [RivetKit](https://rivetkit.org) actors:
 
 1. **Issue Agent**: Handles Linear issue events and generates responses ([src/actors/issue-agent.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/issue-agent.ts#L11))
 2. **Linear App User**: Manages authentication state for the application ([src/actors/linear-app-user.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6))
 3. **OAuth Session**: Handles OAuth flow state ([src/actors/oauth-session.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10))
 
 <Tip>
-	You can read more about actors [in the ActorCore documentation](https://actorcore.org/concepts/overview).
+	You can read more about actors [in the RivetKit documentation](https://rivetkit.org/concepts/overview).
 </Tip>
 
 We'll dive in to how these work together next.
@@ -58,7 +58,7 @@ Before our agent can interact with a Linear workspace, we need to set up authent
 
 The user is directed to `GET /connect-linear` ([src/server/index.ts](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/server/index.ts#L41)) to initiate the OAuth flow:
 - We generate a secure session with a unique ID and nonce
-- We store this state in an [`oauthSession`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10) ActorCore actor
+- We store this state in an [`oauthSession`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/oauth-session.ts#L10) RivetKit actor
 - We redirect to Linear's authorization page with our OAuth parameters
 
 ```typescript {{"title":"src/server/index.ts"}}
@@ -80,7 +80,7 @@ router.get("/connect-linear", async (c) => {
     redirect_uri: LINEAR_OAUTH_REDIRECT_URI,
     state: oauthState,
     scope: "read write app:assignable app:mentionable",
-    actor: "app",  // This is a Linear "actor", not to be confused with ActorCore actors
+    actor: "app",  // This is a Linear "actor", not to be confused with RivetKit actors
   };
   const redirectTo: URL = openidClient.buildAuthorizationUrl(
     openidConfig,
@@ -113,7 +113,7 @@ When the user completes authentication, Linear redirects to our callback URL wit
 - We validate the state parameter for security
 - We exchange the code for an access token
 - We get the app user ID for the agent in this workspace (our unique identifier for this workspace)
-- We store the access token in the [`linearAppUser`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6) ActorCore actor
+- We store the access token in the [`linearAppUser`](https://github.com/rivet-gg/rivet/blob/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter/src/actors/linear-app-user.ts#L6) RivetKit actor
 
 ```typescript {{"title":"src/server/index.ts"}}
 router.get("/oauth/callback/linear", async (c) => {

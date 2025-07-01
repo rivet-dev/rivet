@@ -25,7 +25,7 @@ const footer = {
 	],
 	devs: [
 		{ name: "Documentation", href: "/docs" },
-		{ name: "Integrations", href: "/integrations" },
+		// { name: "Integrations", href: "/integrations" },
 		{ name: "API Reference", href: "/docs/api" },
 		{ name: "Changelog", href: "/changelog" },
 		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
