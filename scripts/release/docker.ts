@@ -4,8 +4,6 @@ const REPOS = [
 	{ name: "rivetgg/rivet-server", prefix: "slim", main: true },
 	{ name: "rivetgg/rivet-server", prefix: "full" },
 	{ name: "rivetgg/rivet-client", prefix: "full", main: true },
-	{ name: "rivetgg/rivet-client", prefix: "isolate-v8-runner" },
-	{ name: "rivetgg/rivet-client", prefix: "container-runner" },
 	//{ name: "rivetgg/rivet", prefix: "monolith", main: true },
 ]
 
