@@ -36,11 +36,6 @@ export async function updateVersion(opts: ReleaseOpts) {
 			find: /RIVET_CLI_VERSION=v\d+\.\d+\.\d+/g,
 			replace: `RIVET_CLI_VERSION=v${opts.version}`,
 		},
-		{
-			path: "README.md",
-			find: /rivet-cli@\d+\.\d+\.\d+/g,
-			replace: `rivet-cli@${opts.version}`,
-		},
 	];
 
 	// Substitute all files
