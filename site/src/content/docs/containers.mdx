@@ -250,3 +250,27 @@ USER rivet
 ```
 
 </CodeGroup>
+
+## Runtime Details
+
+### Memory & CPU Overcommit
+
+Understanding Rivet's memory and CPU resource allocation helps you optimize performance and avoid unexpected container termination.
+
+<Note>
+  Monitor your container's resource usage through the Rivet dashboard to ensure you stay within your allocated limits and avoid performance issues or unexpected termination.
+</Note>
+
+### Memory Limits
+
+Rivet uses a two-tier memory allocation system:
+
+- **Soft limit**: This is the memory amount you've reserved on the host machine for your container. This is the target amount you should stay under during normal operation.
+- **Hard limit**: This is set 50% higher than your reserved amount to provide a buffer for unexpected memory spikes. For example, if you reserved 1 GB, your hard limit would be approximately 1.5 GB. Exceeding this hard limit will likely cause your container to be killed.
+
+#### CPU Throttling
+
+CPU allocation works similarly to memory:
+
+- The CPU percentage you see in monitoring represents what you should follow to avoid getting throttled during periods of resource contention on the host.
+- Like memory, the CPU has a mechanism that allows for temporary spikes above your allocated amount, but sustained high usage may result in throttling if there's resource contention.
