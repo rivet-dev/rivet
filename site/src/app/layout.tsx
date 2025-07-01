@@ -3,6 +3,7 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import { Toaster, TooltipProvider } from "@rivet-gg/components";
 import type { Metadata } from "next";
 import "@fortawesome/fontawesome-svg-core/styles.css";
+import Script from "next/script";
 
 let metadataBase: URL | null = null;
 if (process.env.METADATA_BASE)
@@ -40,6 +41,11 @@ export default function Layout({ children }) {
 		<html lang="en" className="dark">
 			<head>
 				<GoogleAnalytics gaId="G-GHX1328ZFD" />
+				<Script
+					src="https://analytics.ahrefs.com/analytics.js"
+					data-key="wQAsHie9RgJMLNhmUbr/fQ"
+					strategy="beforeInteractive"
+				/>
 
 				<link
 					rel="apple-touch-icon"
@@ -67,10 +73,7 @@ export default function Layout({ children }) {
 				<meta name="msapplication-TileColor" content="#0c0a09" />
 				<meta name="theme-color" content="#0c0a09" />
 
-				<meta
-					name="viewport"
-					content="width=device-width, initial-scale=1.0"
-				/>
+				<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 			</head>
 			<body className="dark">
 				<TooltipProvider>
