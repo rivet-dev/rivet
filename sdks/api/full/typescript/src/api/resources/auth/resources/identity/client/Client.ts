@@ -13,7 +13,7 @@ export declare namespace Identity {
         baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.4.2";
+        xApiVersion?: "25.5.0";
         fetcher?: core.FetchFunction;
     }
 }
