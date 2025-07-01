@@ -278,38 +278,38 @@ export const sitemap = [
 			//},
 		],
 	},
-	{
-		title: "Integrations",
-		href: "/integrations",
-		sidebar: [
-			{
-				title: "Introduction",
-				href: "/integrations",
-				icon: faSquareInfo,
-			},
-			//{
-			//	title: "AI Agents",
-			//	pages: [
-			//		{ title: "LangGraph", href: "/integrations/tinybase" },
-			//	],
-			//},
-			//{
-			//	title: "Local-First Sync",
-			//	pages: [
-			//		{ title: "TinyBase", href: "/integrations/tinybase" },
-			//	],
-			//},
-			{
-				title: "Monitoring",
-				pages: [
-					{
-						title: "Better Stack",
-						href: "/integrations/better-stack",
-					},
-				],
-			},
-		],
-	},
+	// {
+	// 	title: "Integrations",
+	// 	href: "/integrations",
+	// 	sidebar: [
+	// 		{
+	// 			title: "Introduction",
+	// 			href: "/integrations",
+	// 			icon: faSquareInfo,
+	// 		},
+	// 		//{
+	// 		//	title: "AI Agents",
+	// 		//	pages: [
+	// 		//		{ title: "LangGraph", href: "/integrations/tinybase" },
+	// 		//	],
+	// 		//},
+	// 		//{
+	// 		//	title: "Local-First Sync",
+	// 		//	pages: [
+	// 		//		{ title: "TinyBase", href: "/integrations/tinybase" },
+	// 		//	],
+	// 		//},
+	// 		{
+	// 			title: "Monitoring",
+	// 			pages: [
+	// 				{
+	// 					title: "Better Stack",
+	// 					href: "/integrations/better-stack",
+	// 				},
+	// 			],
+	// 		},
+	// 	],
+	// },
 	{
 		title: "API",
 		href: "/docs/api",

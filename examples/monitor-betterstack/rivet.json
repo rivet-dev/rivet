@@ -1,8 +1,0 @@
-{
-	"builds": {
-		"example": {
-			"dockerfile": "Dockerfile",
-			"access": "private"
-		}
-	}
-}
