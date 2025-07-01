@@ -11,6 +11,10 @@ use crate::util::task::{run_task, TaskOutputStyle};
 #[derive(Parser, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Opts {
+	/// Specify the environment to use (will prompt if not specified)
+	#[clap(long, alias = "env")]
+	environment: Option<String>,
+
 	#[clap(
 		long,
 		short = 'e',
@@ -56,7 +60,7 @@ impl Opts {
 
 		// Always populate environment variables
 		let ctx = crate::util::login::load_or_login().await?;
-		let env_slug = crate::util::env::get_or_select(&ctx, Option::<String>::None).await?;
+		let env_slug = crate::util::env::get_or_select(&ctx, self.environment.as_ref()).await?;
 		let bootstrap_data = run_task::<get_bootstrap_data::Task>(
 			TaskOutputStyle::None,
 			get_bootstrap_data::Input {},
