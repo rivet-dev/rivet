@@ -67,7 +67,7 @@ jobs:
       - name: Deploy to environment
         env:
           RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
-        run: rivet deploy --environment ${{ github.ref_name }} --extra-tags 'commit=${{ github.sha }}'
+        run: rivet deploy --non-interactive --environment ${{ github.ref_name }} --extra-tags 'commit=${{ github.sha }}'
 ```
 
 ### Step 4: Push Changes to Your Repository
@@ -123,13 +123,13 @@ To deploy to specific environments regardless of branch name:
   if: github.ref == 'refs/heads/main'
   env:
     RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
-  run: rivet deploy --environment prod --extra-tags 'commit=${{ github.sha }}'
+  run: rivet deploy --non-interactive --environment prod --extra-tags 'commit=${{ github.sha }}'
 
 - name: Deploy to staging
   if: github.ref != 'refs/heads/main'
   env:
     RIVET_CLOUD_TOKEN: ${{ secrets.RIVET_CLOUD_TOKEN }}
-  run: rivet deploy --environment staging --extra-tags 'commit=${{ github.sha }}'
+  run: rivet deploy --non-interactive --environment staging --extra-tags 'commit=${{ github.sha }}'
 ```
 
 ### Using the Latest Build in Your Application
