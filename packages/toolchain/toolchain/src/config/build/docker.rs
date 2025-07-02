@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use super::Compression;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Build {
 	/// Directory to build the Docker image from.
-	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(skip_serializing_if = "Option::is_none", alias = "build_path")]
 	pub build_path: Option<String>,
 	/// Existing image tag to upload.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -18,10 +18,10 @@ pub struct Build {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub dockerfile: Option<String>,
 	/// Build target to upload.
-	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(skip_serializing_if = "Option::is_none", alias = "build_target")]
 	pub build_target: Option<String>,
 	/// Build arguments to pass to the build.
-	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(skip_serializing_if = "Option::is_none", alias = "build_args")]
 	pub build_args: Option<HashMap<String, String>>,
 	/// Unstable features.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -35,9 +35,11 @@ impl Build {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Unstable {
+	#[serde(alias = "allow_root")]
 	pub allow_root: Option<bool>,
+	#[serde(alias = "build_method")]
 	pub build_method: Option<BuildMethod>,
 	pub bundle: Option<BundleKind>,
 	pub compression: Option<Compression>,
@@ -58,7 +60,7 @@ impl Unstable {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, JsonSchema, clap::ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum BuildMethod {
 	/// Use the native Docker build command. Only used if Buildx is not available.
 	Buildx,
@@ -73,7 +75,7 @@ pub enum BuildMethod {
 #[derive(
 	Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum,
 )]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum BundleKind {
 	/// Legacy option. Docker image archive output from `docker save`. Slower lobby start
 	/// times.

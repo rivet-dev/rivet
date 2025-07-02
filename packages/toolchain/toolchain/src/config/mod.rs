@@ -55,7 +55,7 @@ impl Deref for Config {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Root {
 	#[serde(default, alias = "builds")]
 	pub actors: HashMap<String, Actor>,
@@ -67,25 +67,26 @@ pub struct Root {
 	#[serde(default)]
 	pub functions: HashMap<String, Function>,
 
-	#[serde(default)]
+	#[serde(default, alias = "rivetkit")]
 	pub rivetkit: Option<RivetKit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct Actor {
 	#[serde(flatten)]
 	pub build: Build,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct Function {
 	#[serde(flatten)]
 	pub build: Build,
 	pub path: Option<String>,
+	#[serde(alias = "route_subpaths")]
 	pub route_subpaths: Option<bool>,
-	#[serde(default)]
+	#[serde(default, alias = "strip_prefix")]
 	pub strip_prefix: Option<bool>,
 	#[serde(default)]
 	pub networking: FunctionNetworking,
@@ -117,8 +118,9 @@ impl Function {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct FunctionNetworking {
+	#[serde(alias = "internal_port")]
 	pub internal_port: Option<u16>,
 }
 
@@ -129,13 +131,13 @@ impl FunctionNetworking {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct FunctionRuntime {
 	pub environment: Option<HashMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct RivetKit {
 	// TEMPORARY: We need to auto-generate a worker file using isoaltes, so we need to know the
 	// path to the registry
@@ -148,7 +150,7 @@ pub struct RivetKit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct Resources {
 	pub cpu: u64,
 	pub memory: u64,
@@ -156,7 +158,7 @@ pub struct Resources {
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct Build {
 	pub tags: Option<HashMap<String, String>>,
 	#[serde(flatten)]

@@ -5,7 +5,7 @@ pub mod docker;
 pub mod javascript;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", untagged)]
+#[serde(rename_all = "camelCase", untagged)]
 pub enum Runtime {
 	Docker(docker::Build),
 	#[serde(rename = "javascript")]
@@ -15,7 +15,7 @@ pub enum Runtime {
 #[derive(
 	Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum,
 )]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum Compression {
 	/// No compression.
 	#[strum(serialize = "none")]

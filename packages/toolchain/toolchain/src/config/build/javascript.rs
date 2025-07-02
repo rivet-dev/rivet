@@ -5,7 +5,7 @@ use super::Compression;
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct Build {
 	pub script: String,
 	#[serde(default)]
@@ -13,13 +13,17 @@ pub struct Build {
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Unstable {
 	pub minify: Option<bool>,
+	#[serde(alias = "analyze_result")]
 	pub analyze_result: Option<bool>,
+	#[serde(alias = "esbuild_log_level")]
 	pub esbuild_log_level: Option<String>,
 	pub compression: Option<Compression>,
+	#[serde(alias = "dump_build")]
 	pub dump_build: Option<bool>,
+	#[serde(alias = "no_bundler")]
 	pub no_bundler: Option<bool>,
 }
 
