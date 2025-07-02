@@ -14,7 +14,7 @@ const BUILT_IN_TAGS = {
 	builds: ["current"],
 };
 
-export const ACTOR_FRAMEWORK_TAG_VALUE = "actor-core";
+export const ACTOR_FRAMEWORK_TAG_VALUE = "rivetkit";
 
 export const ActorTag = forwardRef<
 	HTMLSpanElement,

@@ -59,7 +59,7 @@ function Actor() {
 }
 
 const FIXED_TAGS = {
-	framework: "actor-core",
+	framework: "rivetkit",
 };
 function Content() {
 	const { nameId: projectNameId } = useProject();

@@ -447,7 +447,7 @@ const ActorBadge = forwardRef<
 		<Button ref={ref} variant="ghost" size="xs" asChild {...props}>
 			<Link
 				to={
-					actorTags.framework === "actor-core"
+					actorTags.framework === "rivetkit"
 						? "/projects/$projectNameId/environments/$environmentNameId/actors"
 						: actorTags.type === "function"
 							? "/projects/$projectNameId/environments/$environmentNameId/functions"

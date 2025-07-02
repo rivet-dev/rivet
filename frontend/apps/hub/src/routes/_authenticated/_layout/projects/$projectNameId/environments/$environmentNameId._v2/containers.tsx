@@ -61,7 +61,7 @@ function Actor() {
 const FIXED_TAGS = {};
 
 const ACTORS_FILTER = (actor: Rivet.actors.Actor) =>
-	toRecord(actor.tags).framework !== "actor-core";
+	toRecord(actor.tags).framework !== "rivetkit";
 
 const ACTORS_VIEW_CONTEXT = {
 	copy: {
