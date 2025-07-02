@@ -3,8 +3,35 @@ import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 
 /**
+ * Recursively searches for a file in the current directory and parent directories
+ * @param startDir The directory to start searching from
+ * @param fileName The file to search for
+ * @returns The path to the file if found, or null if not found
+ */
+function findFileRecursively(startDir: string, fileName: string): string | null {
+    let currentDir = path.resolve(startDir);
+    const rootDir = path.parse(currentDir).root;
+
+    while (currentDir !== rootDir) {
+        const filePath = path.join(currentDir, fileName);
+        if (fs.existsSync(filePath)) {
+            return filePath;
+        }
+        currentDir = path.dirname(currentDir);
+    }
+
+    // Check root directory
+    const filePath = path.join(rootDir, fileName);
+    if (fs.existsSync(filePath)) {
+        return filePath;
+    }
+
+    return null;
+}
+
+/**
  * Determines the preferred package manager based on lockfiles and config files.
- * Checks for yarn.lock, package-lock.json, pnpm-lock.yaml, and .npmrc
+ * Recursively searches parent directories for yarn.lock, package-lock.json, pnpm-lock.yaml, and .npmrc
  * @returns The detected package manager ('yarn', 'npm', 'pnpm') or undefined if none found
  */
 export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' | 'pnpm' | undefined {
@@ -17,15 +44,15 @@ export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' 
 
     console.log('Detecting preferred package manager...');
 
-    // Check for lockfiles in the current directory
-    const hasYarnLock = fs.existsSync(path.join(projectRoot, 'yarn.lock'));
-    const hasNpmLock = fs.existsSync(path.join(projectRoot, 'package-lock.json'));
-    const hasPnpmLock = fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'));
+    // Recursively search for lockfiles
+    const yarnLockPath = findFileRecursively(projectRoot, 'yarn.lock');
+    const npmLockPath = findFileRecursively(projectRoot, 'package-lock.json');
+    const pnpmLockPath = findFileRecursively(projectRoot, 'pnpm-lock.yaml');
 
-    // Check .npmrc for pnpm configuration
-    const npmrcPath = path.join(projectRoot, '.npmrc');
+    // Check .npmrc for pnpm configuration (recursively)
+    const npmrcPath = findFileRecursively(projectRoot, '.npmrc');
     let hasPnpmConfig = false;
-    if (fs.existsSync(npmrcPath)) {
+    if (npmrcPath) {
         try {
             const npmrcContent = fs.readFileSync(npmrcPath, 'utf8');
             hasPnpmConfig = npmrcContent.includes('package-manager=pnpm');
@@ -35,16 +62,20 @@ export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' 
     }
 
     // Add logging before return statements
-    if (hasYarnLock) {
-        console.log('Found yarn.lock - using yarn');
+    if (yarnLockPath) {
+        console.log(`Found yarn.lock at ${yarnLockPath} - using yarn`);
         return 'yarn';
     }
-    if (hasPnpmLock || hasPnpmConfig) {
-        console.log('Found pnpm configuration - using pnpm');
+    if (pnpmLockPath || hasPnpmConfig) {
+        if (pnpmLockPath) {
+            console.log(`Found pnpm-lock.yaml at ${pnpmLockPath} - using pnpm`);
+        } else {
+            console.log(`Found pnpm configuration in .npmrc at ${npmrcPath} - using pnpm`);
+        }
         return 'pnpm';
     }
-    if (hasNpmLock) {
-        console.log('Found package-lock.json - using npm');
+    if (npmLockPath) {
+        console.log(`Found package-lock.json at ${npmLockPath} - using npm`);
         return 'npm';
     }
 

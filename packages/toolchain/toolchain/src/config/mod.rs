@@ -30,7 +30,7 @@ impl Config {
 		Ok(file_path)
 	}
 
-	pub async fn load(path: Option<&Path>) -> Result<Self> {
+	pub async fn load(path: Option<&Path>) -> Result<Root> {
 		let file_path = Self::config_path(path).await?;
 		let content = tokio::fs::read_to_string(&file_path)
 			.await
@@ -42,7 +42,7 @@ impl Config {
 		let root: Root = serde_json::from_value::<Root>(parsed_value)
 			.map_err(|err| anyhow!("Invalid config {}: {err}", file_path.display()))?;
 
-		Ok(Config(Arc::new(root)))
+		Ok(root)
 	}
 }
 
@@ -54,7 +54,7 @@ impl Deref for Config {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Root {
 	#[serde(default, alias = "builds")]
@@ -66,6 +66,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub functions: HashMap<String, Function>,
+
+	#[serde(default)]
+	pub rivetkit: Option<RivetKit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -129,6 +132,19 @@ impl FunctionNetworking {
 #[serde(rename_all = "snake_case")]
 pub struct FunctionRuntime {
 	pub environment: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct RivetKit {
+	// TEMPORARY: We need to auto-generate a worker file using isoaltes, so we need to know the
+	// path to the registry
+	pub registry: String,
+
+	// The RivetKit config is effectively a function with a worker automatically deployed from the
+	// same Dockerfile.
+	#[serde(flatten)]
+	pub function: Function,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::Compression;
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Build {
 	pub script: String,
@@ -12,7 +12,7 @@ pub struct Build {
 	pub unstable: Unstable,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Unstable {
 	pub minify: Option<bool>,
