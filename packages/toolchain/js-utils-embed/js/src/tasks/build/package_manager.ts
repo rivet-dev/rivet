@@ -83,7 +83,7 @@ async function isPackageManagerInstalled(packageManager: string): Promise<boolea
  * @returns A promise that resolves when the command completes
  */
 export async function runPackageManagerCommand(projectRoot: string, command: string, ...args: string[]): Promise<void> {
-    const packageManager = getPreferredPackageManager(projectRoot) || 'yarn';
+    const packageManager = getPreferredPackageManager(projectRoot) || 'npm';
     console.log(`Selected package manager: ${packageManager}`);
     
     // Check environment variable override for Deno usage
