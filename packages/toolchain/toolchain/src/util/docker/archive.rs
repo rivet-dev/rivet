@@ -315,6 +315,7 @@ fn copy_container_to_rootfs(
 	let root_path = UnixPath::new("rootfs");
 
 	// Read TAR stream and copy in to OCI bundle
+	let debug_tar = std::env::var("_RIVET_DEBUG_TAR").map_or(false, |x| x == "1");
 	let rootfs_stream = cp_child.stdout.take().context("cp_child.stdout.take()")?;
 	let mut archive = tar::Archive::new(rootfs_stream);
 	for entry in archive.entries()? {
@@ -325,7 +326,7 @@ fn copy_container_to_rootfs(
 		//
 		// Don't use `header.set_path` because `builder.append_data` will handle long path names for
 		// us
-		let old_path_bytes = header.path_bytes();
+		let old_path_bytes = entry.path_bytes().to_vec();
 		let old_path = UnixPath::new(old_path_bytes.as_ref() as &[u8]);
 		let old_path_relative = old_path.strip_prefix("/")?;
 		let new_path = root_path.join(old_path_relative);
@@ -367,7 +368,7 @@ fn copy_container_to_rootfs(
 		// an absolute symlink to `/foo/bar` within runc (i.e. chroot) will
 		// resolve to `./rootfs/bin/foo`.
 		if header.entry_type().is_hard_link() {
-			if let Some(old_link) = header.link_name_bytes() {
+			if let Some(old_link) = entry.link_name_bytes() {
 				let old_link = UnixPath::new(old_link.as_ref() as &[u8]);
 
 				if old_link.is_absolute() {
@@ -381,14 +382,46 @@ fn copy_container_to_rootfs(
 					// paths.
 					oci_bundle_archive.append_link(&mut header, new_path_std, new_link_std)?;
 
+					if debug_tar {
+						println!(
+							"Copying hard link {old_path:?} -> {new_path_std:?} with link {new_link_std:?}",
+							old_path = String::from_utf8_lossy(&old_path_bytes)
+						);
+					}
+
 					continue;
 				}
+			}
+		}
+
+		// Copy symlinks
+		//
+		// We have to use this specifically instead of `append_data` since `append_data` only adds
+		// the headers, which will truncate the symlink to 100 chars.
+		if header.entry_type().is_symlink() {
+			if let Some(link) = entry.link_name()? {
+				if debug_tar {
+					println!(
+						"Creating symlink {old_path:?} -> {link:?}",
+						old_path = String::from_utf8_lossy(&old_path_bytes)
+					);
+				}
+
+				oci_bundle_archive.append_link(&mut header, new_path_std, link)?;
+
+				continue;
 			}
 		}
 
 		// Write entry data to TAR
 		//
 		// We have to use `append_data` specifically because it allows us to pass long paths.
+		if debug_tar {
+			println!(
+				"Copying {old_path:?} -> {new_path_std:?}",
+				old_path = String::from_utf8_lossy(&old_path_bytes)
+			);
+		}
 		if let Some(read_data) = read_data {
 			oci_bundle_archive.append_data(
 				&mut header,
