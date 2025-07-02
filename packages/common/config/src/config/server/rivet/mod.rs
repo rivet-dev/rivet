@@ -25,7 +25,7 @@ pub mod default_dev_cluster {
 
 	// In dev, there are no servers to pull the addresses from. We need to have a fallback address.
 	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_HOST: &str = "rivet-edge-server";
-	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT: u16 = 8080;
+	pub const DEV_EDGE_API_FALLBACK_ADDR_LAN_PORT: u16 = 6420;
 }
 
 pub mod default_hosts {
@@ -43,13 +43,13 @@ pub mod default_hosts {
 }
 
 pub(crate) mod default_ports {
-	pub const API_PUBLIC: u16 = 8080;
-	pub const API_EDGE: u16 = 8081;
-	pub const PEGBOARD: u16 = 8082;
-	pub const TUNNEL: u16 = 8003;
+	pub const API_PUBLIC: u16 = 6420;
+	pub const API_EDGE: u16 = 6421;
+	pub const PEGBOARD: u16 = 6422;
+	pub const TUNNEL: u16 = 6423;
 
-	pub const HEALTH: u16 = 8090;
-	pub const METRICS: u16 = 8091;
+	pub const HEALTH: u16 = 6430;
+	pub const METRICS: u16 = 6431;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

@@ -17,11 +17,11 @@ services:
     stop_grace_period: 0s
     ports:
       # API
-      - "8080:8080"
+      - "6420:6420"
       # API edge
-      - "8081:8081"
+      - "6421:6421"
       # Pegboard
-      - "8082:8082"
+      - "6422:6422"
     depends_on:
       cockroachdb:
         condition: service_healthy
@@ -66,7 +66,7 @@ services:
     stop_grace_period: 0s
     ports:
       # API
-      - "8083:8080"
+      - "6423:6423"
     depends_on:
       rivet-server:
         condition: service_healthy
