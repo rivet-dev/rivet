@@ -1,8 +1,9 @@
 use anyhow::*;
-use indoc::{formatdoc};
+use indoc::formatdoc;
 use inquire::{list_option::ListOption, Select};
 use serde_json;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tempfile;
 use tokio::task::block_in_place;
@@ -18,6 +19,67 @@ use crate::util::{
 	self,
 	task::{run_task, TaskOutputStyle},
 };
+
+#[derive(Debug)]
+struct PackageManager {
+	name: String,
+	install_cmd: String,
+	install_prod_cmd: String,
+	copy_files: Vec<String>,
+	cache_mount: String,
+}
+
+fn detect_package_manager(project_root: &Path) -> PackageManager {
+	// Check for lockfiles in order of preference
+	if project_root.join("yarn.lock").exists() {
+		PackageManager {
+			name: "yarn".to_string(),
+			install_cmd: "yarn install --frozen-lockfile".to_string(),
+			install_prod_cmd: "yarn install --production --frozen-lockfile".to_string(),
+			copy_files: vec!["package.json".to_string(), "yarn.lock".to_string()],
+			cache_mount: "--mount=type=cache,id=yarn,target=/usr/local/share/.cache/yarn".to_string(),
+		}
+	} else if project_root.join("bun.lockb").exists() || project_root.join("bun.lock").exists() {
+		// Determine which bun lockfile exists and use appropriate copy files
+		let lockfile = if project_root.join("bun.lockb").exists() {
+			"bun.lockb"
+		} else {
+			"bun.lock"
+		};
+		PackageManager {
+			name: "bun".to_string(),
+			install_cmd: "bun install --frozen-lockfile".to_string(),
+			install_prod_cmd: "bun install --production --frozen-lockfile".to_string(),
+			copy_files: vec!["package.json".to_string(), lockfile.to_string()],
+			cache_mount: "--mount=type=cache,id=bun,target=/root/.bun".to_string(),
+		}
+	} else if project_root.join("pnpm-lock.yaml").exists() {
+		PackageManager {
+			name: "pnpm".to_string(),
+			install_cmd: "pnpm install --frozen-lockfile".to_string(),
+			install_prod_cmd: "pnpm install --production --frozen-lockfile".to_string(),
+			copy_files: vec!["package.json".to_string(), "pnpm-lock.yaml".to_string()],
+			cache_mount: "--mount=type=cache,id=pnpm,target=/root/.pnpm-store".to_string(),
+		}
+	} else if project_root.join("package-lock.json").exists() {
+		PackageManager {
+			name: "npm".to_string(),
+			install_cmd: "npm ci".to_string(),
+			install_prod_cmd: "npm ci --omit=dev".to_string(),
+			copy_files: vec!["package.json".to_string(), "package-lock.json".to_string()],
+			cache_mount: "--mount=type=cache,id=npm,target=/root/.npm".to_string(),
+		}
+	} else {
+		// Default to npm if no lockfile is found
+		PackageManager {
+			name: "npm".to_string(),
+			install_cmd: "npm install".to_string(),
+			install_prod_cmd: "npm install --production".to_string(),
+			copy_files: vec!["package.json".to_string()],
+			cache_mount: "--mount=type=cache,id=npm,target=/root/.npm".to_string(),
+		}
+	}
+}
 
 pub struct DeployOpts<'a> {
 	pub ctx: &'a ToolchainCtx,
@@ -62,7 +124,8 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 	let mut root = toolchain::config::Config::load(None).await?;
 
 	// Setup Rivetkit
-	let mut _rivet_worker_tempfile = None;
+	let mut _rivet_actor_tempfiles = Vec::new();
+	let mut _rivet_actor_tempdirs = Vec::new();
 	if let Some(rivetkit) = &root.rivetkit {
 		// Create service token
 		let service_token =
@@ -74,83 +137,102 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 			.await?;
 
 		// Add server
-		let mut server_tags = rivetkit.function.build.tags.clone().unwrap_or_default();
+		let mut server_tags = rivetkit.tags.clone().unwrap_or_default();
 		server_tags.insert("role".into(), "server".into());
 		server_tags.insert("framework".into(), "rivetkit".into());
 
 		let mut env_vars = rivetkit
-			.function
 			.runtime
 			.environment
 			.iter()
 			.flat_map(|x| x.clone().into_iter())
 			.collect::<HashMap<String, String>>();
+		env_vars.insert("RIVETKIT_DRIVER".into(), "rivet".into());
 		env_vars.insert("RIVET_ENDPOINT".into(), cloud_data.api_endpoint);
 		env_vars.insert("RIVET_SERVICE_TOKEN".into(), service_token.token);
 		env_vars.insert("RIVET_PROJECT".into(), opts.ctx.project.name_id.clone());
 		env_vars.insert("RIVET_ENVIRONMENT".into(), environment.slug.clone());
 
+		// Auto-generate actor enterypoint
+		//
+		// Has to be in the project path in order to use NPM dependencies
+		let project_root = toolchain::paths::project_root()?;
+		let actor_tempfile = tempfile::Builder::new()
+			.prefix("rivet-actor-")
+			.suffix(".tmp.ts")
+			.tempfile_in(&project_root)?;
+		let actor_path = actor_tempfile.path().to_owned();
+		_rivet_actor_tempfiles.push(actor_tempfile);
+
+		let registry_abs_path = project_root.join(&rivetkit.registry);
+		let registry_display_path = registry_abs_path.display();
+		tokio::fs::write(
+			&actor_path,
+			generate_actor_script(registry_display_path.to_string()),
+		)
+		.await?;
+
+		// Determine server runtime
+		let function_build = if rivetkit.build.image.is_some()
+			|| rivetkit.build.dockerfile.is_some()
+		{
+			// Use user-provided Docker config
+			rivetkit.build.clone()
+		} else {
+			// Auto-generate server Dockerfile
+			//
+			// Has to be in the project path in order to use NPM dependencies
+			let dockerfile_tempdir = tempfile::Builder::new().prefix("rivet-server-").tempdir()?;
+			let dockerfile_path = dockerfile_tempdir.path().join("Dockerfile");
+			let dockerignore_path = dockerfile_tempdir.path().join("Dockerfile.dockerignore");
+			_rivet_actor_tempdirs.push(dockerfile_tempdir);
+
+			let server_path = rivetkit.server.clone();
+			tokio::fs::write(&dockerfile_path, generate_server_dockerfile(&project_root, server_path)).await?;
+			tokio::fs::write(&dockerignore_path, generate_server_dockerignore()).await?;
+
+			toolchain::config::build::docker::Build {
+				dockerfile: Some(dockerfile_path.display().to_string()),
+				build_path: Some(project_root.display().to_string()),
+				image: None,
+				build_target: None,
+				build_args: None,
+				unstable: rivetkit.build.unstable.clone(),
+			}
+		};
+
+		// Add function
 		root.functions.insert(
 			crate::util::rivetkit::SERVER_NAME.into(),
 			toolchain::config::Function {
 				build: toolchain::config::Build {
 					tags: Some(server_tags),
-					runtime: rivetkit.function.build.runtime.clone(),
+					runtime: toolchain::config::build::Runtime::Docker(function_build),
 				},
-				path: rivetkit.function.path.clone(),
-				route_subpaths: rivetkit.function.route_subpaths,
-				strip_prefix: rivetkit.function.strip_prefix,
-				networking: rivetkit.function.networking.clone(),
+				path: rivetkit.path.clone(),
+				route_subpaths: rivetkit.route_subpaths,
+				strip_prefix: rivetkit.strip_prefix,
+				networking: rivetkit.networking.clone(),
 				runtime: toolchain::config::FunctionRuntime {
 					environment: Some(env_vars),
 				},
-				resources: rivetkit.function.resources.clone(),
+				resources: rivetkit.resources.clone(),
 			},
 		);
 
-		// TODO: I don't think this will work
-		// Auto-generate worker enterypoint
-		//
-		// Has to be in the project path in order to use NPM dependencies
-		let project_root = toolchain::paths::project_root()?;
-		let worker_tempfile = tempfile::Builder::new()
-			.prefix("rivet-worker-")
-			.suffix(".tmp.ts")
-			.tempfile_in(&project_root)?;
-		let worker_path = worker_tempfile.path().to_owned();
-		_rivet_worker_tempfile = Some(worker_tempfile);
-
-		let registry_abs_path = project_root.join(&rivetkit.registry);
-		let registry_display_path = registry_abs_path.display();
-
-		let worker_script = formatdoc!(
-			r#"
-			// DO NOT EDIT
-			//
-			// This file is auto-generated by the Rivet CLI. This file should automatically be
-			// removed once the deploy is complete.
-
-			import {{ createWorkerHandler }} from "@rivetkit/rivet/worker";
-			import {{ registry }} from "{registry_display_path}";
-
-			export default createWorkerHandler(registry);
-			"#,
-		);
-		tokio::fs::write(&worker_path, worker_script).await?;
-
 		// Add actor
-		let mut worker_tags = rivetkit.function.build.tags.clone().unwrap_or_default();
-		worker_tags.insert("role".into(), "worker".into());
-		worker_tags.insert("framework".into(), "rivetkit".into());
+		let mut actor_tags = rivetkit.tags.clone().unwrap_or_default();
+		actor_tags.insert("role".into(), "actor".into());
+		actor_tags.insert("framework".into(), "rivetkit".into());
 
 		root.actors.insert(
-			crate::util::rivetkit::WORKER_NAME.into(),
+			crate::util::rivetkit::ACTOR_NAME.into(),
 			toolchain::config::Actor {
 				build: toolchain::config::Build {
-					tags: Some(worker_tags),
+					tags: Some(actor_tags),
 					runtime: toolchain::config::build::Runtime::JavaScript(
 						toolchain::config::build::javascript::Build {
-							script: worker_path.display().to_string(),
+							script: actor_path.display().to_string(),
 							unstable: toolchain::config::build::javascript::Unstable::default(),
 						},
 					),
@@ -285,7 +367,7 @@ async fn setup_function_routes(
 				// println!("Route already exists for function '{}'", fn_name);
 
 				if is_rivetkit {
-					rivetkit_endpoint = Some(default_hostname);
+					rivetkit_endpoint = Some(matching_route.hostname.clone());
 				}
 
 				continue;
@@ -529,7 +611,7 @@ fn print_summary(
 	}
 	println!("  Dashboard:       {hub_origin}/projects/{project_slug}/environments/{env_slug}");
 	if config.rivetkit.is_some() {
-		println!("  Next Steps:      https://rivet.gg/docs/quickstart/workers");
+		println!("  Next Steps:      https://rivet.gg/docs/quickstart/actors");
 	} else {
 		println!("  Next Steps:      https://rivet.gg/docs/quickstart");
 	}
@@ -581,4 +663,200 @@ async fn create_function_route(
 	);
 
 	Ok(())
+}
+
+fn generate_actor_script(registry_path: String) -> String {
+	formatdoc!(
+		r#"
+		// DO NOT EDIT
+		//
+		// This file is auto-generated by the Rivet CLI. This file should automatically be
+		// removed once the deploy is complete.
+
+		import {{ createActorHandler }} from "@rivetkit/actor/drivers/rivet";
+		import {{ registry }} from "{registry_path}";
+
+		export default createActorHandler(registry);
+		"#,
+	)
+}
+
+fn generate_server_dockerfile(project_root: &std::path::Path, server_path: String) -> String {
+	// Detect package manager
+	let package_manager = detect_package_manager(project_root);
+	println!("[RivetKit] Detected package manager: {}", package_manager.name);
+
+	// Strip TypeScript extensions - Node.js will automatically resolve to the correct .js extension
+	let server_path_js = if server_path.ends_with(".ts") {
+		server_path[..server_path.len() - 3].to_string()
+	} else if server_path.ends_with(".tsx") {
+		server_path[..server_path.len() - 4].to_string()
+	} else if server_path.ends_with(".mts") {
+		server_path[..server_path.len() - 4].to_string()
+	} else if server_path.ends_with(".cts") {
+		server_path[..server_path.len() - 4].to_string()
+	} else {
+		server_path
+	};
+
+	generate_dockerfile_for_package_manager(&package_manager, &server_path_js)
+}
+
+fn generate_dockerfile_for_package_manager(package_manager: &PackageManager, server_path_js: &str) -> String {
+	let copy_files = package_manager.copy_files.join(" ");
+	
+	// Determine package manager specific configurations
+	let (base_image, setup_commands, build_cmd, runtime_cmd, add_deps_cmd) = match package_manager.name.as_str() {
+		"yarn" => (
+			"node:22-alpine",
+			"# Install Yarn if not present\n\t\t\tRUN if ! command -v yarn &> /dev/null; then \\\n\t\t\t\techo \"[RivetKit] Installing Yarn\"; \\\n\t\t\t\tcorepack enable && corepack prepare yarn@stable --activate; \\\n\t\t\tfi",
+			"yarn dlx tsc --outDir dist/ --rootDir ./",
+			"node",
+			"yarn add @hono/node-server @hono/node-ws"
+		),
+		"bun" => (
+			"oven/bun:1-alpine",
+			"",
+			"bunx tsc --outDir dist/ --rootDir ./",
+			"bun run",
+			"bun add @hono/node-server @hono/node-ws"
+		),
+		"pnpm" => (
+			"node:22-alpine",
+			"# Install pnpm\n\t\t\tRUN corepack enable && corepack prepare pnpm@latest --activate",
+			"pnpm dlx tsc --outDir dist/ --rootDir ./",
+			"node",
+			"pnpm add @hono/node-server @hono/node-ws"
+		),
+		_ => (
+			"node:22-alpine",
+			"",
+			"npx tsc --outDir dist/ --rootDir ./",
+			"node",
+			"npm install @hono/node-server @hono/node-ws"
+		)
+	};
+
+	let mut dockerfile = String::new();
+	
+	// Builder stage
+	dockerfile.push_str(&format!("FROM {} AS builder\n\n", base_image));
+	dockerfile.push_str("WORKDIR /app\n\n");
+	dockerfile.push_str(&format!("# Copy package files\nCOPY {} ./\n\n", copy_files));
+	
+	// Setup package manager if needed
+	if !setup_commands.is_empty() {
+		dockerfile.push_str(setup_commands);
+		dockerfile.push_str("\n\n");
+	}
+	
+	// Install dependencies
+	if package_manager.name == "npm" {
+		dockerfile.push_str(&format!(
+			"RUN {} \\\n\tif [ -f package-lock.json ]; then \\\n\t\techo \"[RivetKit] Installing dependencies with npm ci (lockfile found)\"; \\\n\t\t{}; \\\n\telse \\\n\t\techo \"[RivetKit] Installing dependencies with npm install (no lockfile)\"; \\\n\t\tnpm install; \\\n\tfi\n\n",
+			package_manager.cache_mount,
+			package_manager.install_cmd
+		));
+	} else {
+		dockerfile.push_str(&format!(
+			"RUN {} \\\n\techo \"[RivetKit] Installing dependencies with {}\"; \\\n\t{}\n\n",
+			package_manager.cache_mount,
+			package_manager.name,
+			package_manager.install_cmd
+		));
+	}
+	
+	dockerfile.push_str("COPY . .\n\n");
+	dockerfile.push_str(&format!("RUN {}\n\n", build_cmd));
+	dockerfile.push_str("# ===\n\n");
+	
+	// Runtime stage
+	dockerfile.push_str(&format!("FROM {} AS runtime\n\n", base_image));
+	dockerfile.push_str("RUN addgroup -g 1001 -S rivet && \\\n\tadduser -S rivet -u 1001 -G rivet\n\n");
+	dockerfile.push_str("WORKDIR /app\n\n");
+	
+	// Setup package manager in runtime if needed
+	if !setup_commands.is_empty() {
+		dockerfile.push_str(setup_commands);
+		dockerfile.push_str("\n\n");
+	}
+	
+	dockerfile.push_str(&format!("COPY --from=builder --chown=rivet:rivet /app/{} ./\n\n", copy_files));
+	
+	// Install production dependencies
+	if package_manager.name == "npm" {
+		dockerfile.push_str(&format!(
+			"RUN {} \\\n\tif [ -f package-lock.json ]; then \\\n\t\techo \"[RivetKit] Installing prod deps with npm ci\"; \\\n\t\t{}; \\\n\telse \\\n\t\techo \"[RivetKit] Installing prod deps with npm install\"; \\\n\t\tnpm install --production; \\\n\tfi && \\\n\techo \"[RivetKit] Adding Hono runtime deps\" && \\\n\t{}\n\n",
+			package_manager.cache_mount,
+			package_manager.install_prod_cmd,
+			add_deps_cmd
+		));
+	} else {
+		dockerfile.push_str(&format!(
+			"RUN {} \\\n\techo \"[RivetKit] Installing production dependencies with {}\"; \\\n\t{} && \\\n\techo \"[RivetKit] Adding Hono runtime deps\" && \\\n\t{}\n\n",
+			package_manager.cache_mount,
+			package_manager.name,
+			package_manager.install_prod_cmd,
+			add_deps_cmd
+		));
+	}
+	
+	dockerfile.push_str("COPY --from=builder --chown=rivet:rivet /app/dist ./dist\n\n");
+	dockerfile.push_str("USER rivet\n\n");
+	
+	// Final command
+	if runtime_cmd == "bun run" {
+		dockerfile.push_str(&format!("CMD [\"bun\", \"run\", \"dist/{}\"]\n", server_path_js));
+	} else {
+		dockerfile.push_str(&format!("CMD [\"node\", \"dist/{}\"]\n", server_path_js));
+	}
+	
+	dockerfile
+}
+
+fn generate_server_dockerignore() -> String {
+	formatdoc!(
+		r#"
+		# Dependencies
+		node_modules/
+		npm-debug.log*
+		yarn-debug.log*
+		yarn-error.log*
+		pnpm-debug.log*
+		.pnpm-debug.log*
+		bun-debug.log*
+		.bun-debug.log*
+
+		# Build outputs
+		dist/
+		build/
+		.next/
+		.nuxt/
+
+		# Development files
+		.env*
+		.vscode/
+		.idea/
+		*.log
+		.DS_Store
+		Thumbs.db
+
+		# Git
+		.git/
+		.gitignore
+		README.md
+		
+		# Testing
+		coverage/
+		.nyc_output/
+		test/
+		tests/
+		__tests__/
+		*.test.*
+		*.spec.*
+
+		# TypeScript
+		*.tsbuildinfo
+		"#
+	)
 }

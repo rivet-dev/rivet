@@ -70,6 +70,9 @@ export async function build(input: Input): Promise<Output> {
 			// Wasm must be loaded as a separate file manually, cannot be bundled
 			"*.wasm",
 			"*.wasm?module",
+			// HACK: Node-specific libraries
+			"@hono/node-ws",
+			"@hono/node-server",
 		],
 		bundle: true,
 		minify: input.bundle.minify,

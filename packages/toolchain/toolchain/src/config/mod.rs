@@ -139,14 +139,29 @@ pub struct FunctionRuntime {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RivetKit {
-	// TEMPORARY: We need to auto-generate a worker file using isoaltes, so we need to know the
+	// TEMPORARY: We need to auto-generate a actor file using isoaltes, so we need to know the
 	// path to the registry
 	pub registry: String,
 
-	// The RivetKit config is effectively a function with a worker automatically deployed from the
-	// same Dockerfile.
+	// TEMPORARY: We use this path to auto-generate a Dockerfile for the server
+	pub server: String,
+
+	// Function properties
+	pub tags: Option<HashMap<String, String>>,
+	// If specified, this will override the default Dockerfile defined by the server
 	#[serde(flatten)]
-	pub function: Function,
+	pub build: build::docker::Build,
+	pub path: Option<String>,
+	#[serde(alias = "route_subpaths")]
+	pub route_subpaths: Option<bool>,
+	#[serde(default, alias = "strip_prefix")]
+	pub strip_prefix: Option<bool>,
+	#[serde(default)]
+	pub networking: FunctionNetworking,
+	#[serde(default)]
+	pub runtime: FunctionRuntime,
+	#[serde(default)]
+	pub resources: Option<Resources>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

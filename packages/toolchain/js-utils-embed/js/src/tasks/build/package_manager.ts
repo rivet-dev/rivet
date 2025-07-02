@@ -31,15 +31,15 @@ function findFileRecursively(startDir: string, fileName: string): string | null 
 
 /**
  * Determines the preferred package manager based on lockfiles and config files.
- * Recursively searches parent directories for yarn.lock, package-lock.json, pnpm-lock.yaml, and .npmrc
- * @returns The detected package manager ('yarn', 'npm', 'pnpm') or undefined if none found
+ * Recursively searches parent directories for yarn.lock, package-lock.json, pnpm-lock.yaml, bun.lockb, bun.lock, and .npmrc
+ * @returns The detected package manager ('yarn', 'npm', 'pnpm', 'bun') or undefined if none found
  */
-export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' | 'pnpm' | undefined {
+export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' | 'pnpm' | 'bun' | undefined {
     // Check environment variable override first
     const envPackageManager = process.env._RIVET_PACKAGE_MANAGER?.toLowerCase();
-    if (envPackageManager && ['yarn', 'npm', 'pnpm'].includes(envPackageManager)) {
+    if (envPackageManager && ['yarn', 'npm', 'pnpm', 'bun'].includes(envPackageManager)) {
         console.log(`Using package manager from environment: ${envPackageManager}`);
-        return envPackageManager as 'yarn' | 'npm' | 'pnpm';
+        return envPackageManager as 'yarn' | 'npm' | 'pnpm' | 'bun';
     }
 
     console.log('Detecting preferred package manager...');
@@ -48,6 +48,8 @@ export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' 
     const yarnLockPath = findFileRecursively(projectRoot, 'yarn.lock');
     const npmLockPath = findFileRecursively(projectRoot, 'package-lock.json');
     const pnpmLockPath = findFileRecursively(projectRoot, 'pnpm-lock.yaml');
+    const bunLockbPath = findFileRecursively(projectRoot, 'bun.lockb');
+    const bunLockPath = findFileRecursively(projectRoot, 'bun.lock');
 
     // Check .npmrc for pnpm configuration (recursively)
     const npmrcPath = findFileRecursively(projectRoot, '.npmrc');
@@ -65,6 +67,14 @@ export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' 
     if (yarnLockPath) {
         console.log(`Found yarn.lock at ${yarnLockPath} - using yarn`);
         return 'yarn';
+    }
+    if (bunLockbPath || bunLockPath) {
+        if (bunLockbPath) {
+            console.log(`Found bun.lockb at ${bunLockbPath} - using bun`);
+        } else {
+            console.log(`Found bun.lock at ${bunLockPath} - using bun`);
+        }
+        return 'bun';
     }
     if (pnpmLockPath || hasPnpmConfig) {
         if (pnpmLockPath) {
