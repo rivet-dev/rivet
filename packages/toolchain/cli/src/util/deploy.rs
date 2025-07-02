@@ -1,5 +1,5 @@
 use anyhow::*;
-use indoc::formatdoc;
+use indoc::{formatdoc};
 use inquire::{list_option::ListOption, Select};
 use serde_json;
 use std::collections::HashMap;
@@ -175,7 +175,7 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 	.await?;
 
 	// Setup function routes
-	setup_function_routes(
+	let routes_output = setup_function_routes(
 		opts.ctx,
 		environment,
 		&config,
@@ -187,9 +187,13 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 	.await?;
 
 	// Print summary
-	print_summary(opts.ctx, environment);
+	print_summary(opts.ctx, environment, config.clone(), routes_output);
 
 	Ok(build.build_ids)
+}
+
+struct SetupRoutesOutput {
+	rivetkit_endpoint: Option<String>,
 }
 
 async fn setup_function_routes(
@@ -200,21 +204,37 @@ async fn setup_function_routes(
 	skip_route_creation: Option<bool>,
 	keep_existing_routes: Option<bool>,
 	non_interactive: bool,
-) -> Result<()> {
+) -> Result<SetupRoutesOutput> {
+	let mut rivetkit_endpoint = None;
 	for (fn_name, function) in &config.functions {
 		let is_rivetkit = fn_name == util::rivetkit::SERVER_NAME;
 
 		// Determine default hostname based on project & env
-		let default_hostname = format!(
-			"{}-{}-{fn_name}.{}",
-			ctx.project.name_id,
-			environment.slug,
-			ctx.bootstrap
-				.domains
-				.job
-				.as_ref()
-				.context("bootstrap.domains.job")?
-		);
+		let default_hostname = if is_rivetkit {
+			// Don't include fn name to keep the endpoint clean
+			format!(
+				"{}-{}.{}",
+				ctx.project.name_id,
+				environment.slug,
+				ctx.bootstrap
+					.domains
+					.job
+					.as_ref()
+					.context("bootstrap.domains.job")?
+			)
+		} else {
+			// Include fn name in case there are multiple functions
+			format!(
+				"{}-{}-{fn_name}.{}",
+				ctx.project.name_id,
+				environment.slug,
+				ctx.bootstrap
+					.domains
+					.job
+					.as_ref()
+					.context("bootstrap.domains.job")?
+			)
+		};
 
 		// TODO: Convert this in to a shared fn
 		// Filter out builds that match the tags
@@ -263,6 +283,11 @@ async fn setup_function_routes(
 			if exact_match {
 				// Skip if an exact match is found
 				// println!("Route already exists for function '{}'", fn_name);
+
+				if is_rivetkit {
+					rivetkit_endpoint = Some(default_hostname);
+				}
+
 				continue;
 			}
 
@@ -388,9 +413,13 @@ async fn setup_function_routes(
 								"Successfully updated route: {}{}",
 								update_route_body.hostname, update_route_body.path
 							);
+
+							if is_rivetkit {
+								rivetkit_endpoint = Some(default_hostname);
+							}
 						}
 						Err(err) => {
-							eprintln!("Failed to update route: {}", err);
+							bail!("Failed to update route: {}", err);
 						}
 					}
 				}
@@ -463,6 +492,10 @@ async fn setup_function_routes(
 						&default_hostname,
 					)
 					.await?;
+
+					if is_rivetkit {
+						rivetkit_endpoint = Some(default_hostname);
+					}
 				}
 				1 => {
 					// Skip creating a route
@@ -473,28 +506,33 @@ async fn setup_function_routes(
 		}
 	}
 
-	Ok(())
+	Ok(SetupRoutesOutput { rivetkit_endpoint })
 }
 
-fn print_summary(ctx: &ToolchainCtx, env: &toolchain::project::environment::TEMPEnvironment) {
+fn print_summary(
+	ctx: &ToolchainCtx,
+	env: &toolchain::project::environment::TEMPEnvironment,
+	config: config::Config,
+	routes_output: SetupRoutesOutput,
+) {
 	let hub_origin = &ctx.bootstrap.origins.hub;
 	let project_slug = &ctx.project.name_id;
 	let env_slug = &env.slug;
 
 	println!("");
-	println!("Deployed:");
+	println!("Deploy Success:");
 	println!("");
-	println!(
-		"  Actors:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/actors"
-	);
-	println!("  Containers:      {hub_origin}/projects/{project_slug}/environments/{env_slug}/containers");
-	println!(
-		"  Functions:       {hub_origin}/projects/{project_slug}/environments/{env_slug}/functions"
-	);
-	println!(
-		"  Logs:            {hub_origin}/projects/{project_slug}/environments/{env_slug}/logs"
-	);
-	println!("  Version:         {hub_origin}/projects/{project_slug}/environments/{env_slug}/actor-versions");
+	if config.rivetkit.is_some() {
+		if let Some(endpoint) = &routes_output.rivetkit_endpoint {
+			println!("  Endpoint:        https://{endpoint}");
+		}
+	}
+	println!("  Dashboard:       {hub_origin}/projects/{project_slug}/environments/{env_slug}");
+	if config.rivetkit.is_some() {
+		println!("  Next Steps:      https://rivet.gg/docs/quickstart/workers");
+	} else {
+		println!("  Next Steps:      https://rivet.gg/docs/quickstart");
+	}
 	println!("");
 }
 
