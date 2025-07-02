@@ -26,6 +26,7 @@
 	},
 	"resolutions": {
 		"react": "^19",
-		"react-dom": "^19"
+		"react-dom": "^19",
+		"esbuild": "^0.25.5"
 	}
 }

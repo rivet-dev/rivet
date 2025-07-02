@@ -38,6 +38,7 @@ function Actor() {
 					ActorFeature.Config,
 					ActorFeature.Logs,
 					ActorFeature.State,
+					ActorFeature.Metrics,
 					ActorFeature.Connections,
 				]}
 			/>

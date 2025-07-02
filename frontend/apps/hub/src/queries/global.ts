@@ -2,7 +2,11 @@ import { ls } from "@/lib/ls";
 import { isRivetError } from "@/lib/utils";
 import { RivetClient } from "@rivet-gg/api-full";
 import { RivetClient as RivetEeClient } from "@rivet-gg/api-ee";
-import { type APIResponse, type Fetcher, fetcher } from "@rivet-gg/api/core";
+import {
+	type APIResponse,
+	type Fetcher,
+	fetcher,
+} from "@rivet-gg/api-full/core";
 import { getConfig, timing, toast } from "@rivet-gg/components";
 import { broadcastQueryClient } from "@tanstack/query-broadcast-client-experimental";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
@@ -133,7 +137,7 @@ const clientOptions: RivetClient.Options = {
 			...args,
 			withCredentials: true,
 			maxRetries: 0,
-			timeoutMs: 30_000 // 30 seconds
+			timeoutMs: 30_000, // 30 seconds
 		});
 
 		return response;

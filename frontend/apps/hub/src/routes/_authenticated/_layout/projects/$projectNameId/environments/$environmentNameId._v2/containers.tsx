@@ -39,7 +39,11 @@ function Actor() {
 	if (!actor) {
 		return (
 			<ActorNotFound
-				features={[ActorFeature.Config, ActorFeature.Logs]}
+				features={[
+					ActorFeature.Config,
+					ActorFeature.Logs,
+					ActorFeature.Metrics,
+				]}
 			/>
 		);
 	}

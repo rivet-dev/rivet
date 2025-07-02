@@ -61,6 +61,7 @@ export type LogsAtom = Atom<{
 }>;
 export type MetricsAtom = Atom<{
 	metrics: Metrics;
+	updatedAt: number;
 	// query status
 	status: string;
 }>;

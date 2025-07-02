@@ -261,6 +261,7 @@ export function ActorsProvider({
 
 							const metrics = atom({
 								metrics: { cpu: null, memory: null } as Metrics,
+								updatedAt: Date.now(),
 								status: "pending",
 							});
 							metrics.onMount = (set) => {
@@ -293,6 +294,7 @@ export function ActorsProvider({
 										...prev,
 										...data,
 										status: query.status,
+										updatedAt: Date.now(),
 									}));
 								}
 

@@ -52,8 +52,8 @@ export default defineConfig({
 		// Listen on a different port since we don't proxy WebSockets on /ui
 		hmr: {
 			port: 5080,
-			host: "127.0.0.1"
-		}
+			host: "127.0.0.1",
+		},
 	},
 	preview: {
 		port: 5080,
