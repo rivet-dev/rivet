@@ -14,7 +14,10 @@ use toolchain::{
 };
 use uuid::Uuid;
 
-use crate::util::task::{run_task, TaskOutputStyle};
+use crate::util::{
+	self,
+	task::{run_task, TaskOutputStyle},
+};
 
 pub struct DeployOpts<'a> {
 	pub ctx: &'a ToolchainCtx,
@@ -199,6 +202,8 @@ async fn setup_function_routes(
 	non_interactive: bool,
 ) -> Result<()> {
 	for (fn_name, function) in &config.functions {
+		let is_rivetkit = fn_name == util::rivetkit::SERVER_NAME;
+
 		// Determine default hostname based on project & env
 		let default_hostname = format!(
 			"{}-{}-{fn_name}.{}",
@@ -315,15 +320,15 @@ async fn setup_function_routes(
 				match keep_existing_routes {
 					Some(true) => {
 						println!("Skipping route sync for '{fn_name}' (non-interactive mode)");
-						1 // Keep existing route
+						1
 					}
 					Some(false) => {
 						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
-						0 // Sync route with config
+						0
 					}
 					None => {
 						println!("Auto-syncing route configuration for '{fn_name}' (non-interactive mode)");
-						0 // Default to sync in non-interactive mode
+						0
 					}
 				}
 			} else {
@@ -409,24 +414,27 @@ async fn setup_function_routes(
 
 			println!();
 
-			let choice_index = if non_interactive {
+			let choice_index = if is_rivetkit {
+				println!("Creating route for RietKit");
+				0
+			} else if non_interactive {
 				// In non-interactive mode, use auto_create_routes if provided, otherwise create by default
 				match skip_route_creation {
 					Some(true) => {
 						println!("Skipping route creation for '{fn_name}' (non-interactive mode)");
-						1 // Skip route creation
+						1
 					}
 					Some(false) => {
 						println!(
 							"Auto-creating route for function '{fn_name}' (non-interactive mode)"
 						);
-						0 // Create default route
+						0
 					}
 					None => {
 						println!(
 							"Auto-creating route for function '{fn_name}' (non-interactive mode)"
 						);
-						0 // Default to create in non-interactive mode
+						0
 					}
 				}
 			} else {
