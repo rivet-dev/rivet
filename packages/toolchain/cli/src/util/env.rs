@@ -33,13 +33,14 @@ pub async fn get_or_select(
 	}
 
 	// Prompt user for selection
-	select(ctx, false).await
+	select(ctx, false, None).await
 }
 
 /// Select an environment.
 ///
 /// Forcing selection will prompt the user for selection, even if there's only 1 item.
-pub async fn select(ctx: &toolchain::ToolchainCtx, force_select: bool) -> Result<String> {
+/// If env_name is provided, it will try to select that environment directly.
+pub async fn select(ctx: &toolchain::ToolchainCtx, force_select: bool, env_name: Option<&str>) -> Result<String> {
 	// Build selections
 	let mut envs = ctx
 		.project
@@ -52,6 +53,24 @@ pub async fn select(ctx: &toolchain::ToolchainCtx, force_select: bool) -> Result
 		})
 		.collect::<Vec<_>>();
 	envs.sort_by_key(|e| e.name.clone());
+
+	// If env_name is provided, try to find and select it directly
+	if let Some(env_name) = env_name {
+		if let Some(env) = envs.iter().find(|e| e.slug == env_name) {
+			// Update settings
+			run_task::<tasks::env::select::Task>(
+				TaskOutputStyle::None,
+				tasks::env::select::Input {
+					environment_id: env.id,
+				},
+			)
+			.await?;
+			
+			return Ok(env.slug.clone());
+		} else {
+			return Err(anyhow!("Environment '{}' not found", env_name));
+		}
+	}
 
 	// If only one env, don't prompt
 	if !force_select && envs.len() == 1 {
