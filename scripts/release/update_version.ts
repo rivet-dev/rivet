@@ -28,18 +28,18 @@ export async function updateVersion(opts: ReleaseOpts) {
 		},
 		{
 			path: "site/src/content/docs/install.mdx",
-			find: /rivet-cli@\d+\.\d+\.\d+/g,
+			find: /rivet-cli@.*/g,
 			replace: `rivet-cli@${opts.version}`,
 		},
 		{
 			path: "site/src/content/docs/install.mdx",
-			find: /RIVET_CLI_VERSION\s*=\s*"?v\d+\.\d+\.\d+"?/g,
-			replace: `RIVET_CLI_VERSION=v${opts.version}`,
+			find: /RIVET_CLI_VERSION=.*/g,
+			replace: `RIVET_CLI_VERSION=${opts.version}`,
 		},
 		{
 			path: "site/src/content/docs/install.mdx",
-			find: /\$env:RIVET_CLI_VERSION\s*=\s*"v\d+\.\d+\.\d+"/g,
-			replace: `$env:RIVET_CLI_VERSION = "v${opts.version}"`,
+			find: /\$env:RIVET_CLI_VERSION = ".*"/g,
+			replace: `$env:RIVET_CLI_VERSION = "${opts.version}"`,
 		},
 	];
 
