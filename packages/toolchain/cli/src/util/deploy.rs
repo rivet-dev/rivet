@@ -37,7 +37,8 @@ fn detect_package_manager(project_root: &Path) -> PackageManager {
 			install_cmd: "yarn install --frozen-lockfile".to_string(),
 			install_prod_cmd: "yarn install --production --frozen-lockfile".to_string(),
 			copy_files: vec!["package.json".to_string(), "yarn.lock".to_string()],
-			cache_mount: "--mount=type=cache,id=yarn,target=/usr/local/share/.cache/yarn".to_string(),
+			cache_mount: "--mount=type=cache,id=yarn,target=/usr/local/share/.cache/yarn"
+				.to_string(),
 		}
 	} else if project_root.join("bun.lockb").exists() || project_root.join("bun.lock").exists() {
 		// Determine which bun lockfile exists and use appropriate copy files
@@ -188,7 +189,11 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 			_rivet_actor_tempdirs.push(dockerfile_tempdir);
 
 			let server_path = rivetkit.server.clone();
-			tokio::fs::write(&dockerfile_path, generate_server_dockerfile(&project_root, server_path)).await?;
+			tokio::fs::write(
+				&dockerfile_path,
+				generate_server_dockerfile(&project_root, server_path),
+			)
+			.await?;
 			tokio::fs::write(&dockerignore_path, generate_server_dockerignore()).await?;
 
 			toolchain::config::build::docker::Build {
@@ -684,7 +689,10 @@ fn generate_actor_script(registry_path: String) -> String {
 fn generate_server_dockerfile(project_root: &std::path::Path, server_path: String) -> String {
 	// Detect package manager
 	let package_manager = detect_package_manager(project_root);
-	println!("[RivetKit] Detected package manager: {}", package_manager.name);
+	println!(
+		"[RivetKit] Detected package manager: {}",
+		package_manager.name
+	);
 
 	// Strip TypeScript extensions - Node.js will automatically resolve to the correct .js extension
 	let server_path_js = if server_path.ends_with(".ts") {
@@ -702,9 +710,12 @@ fn generate_server_dockerfile(project_root: &std::path::Path, server_path: Strin
 	generate_dockerfile_for_package_manager(&package_manager, &server_path_js)
 }
 
-fn generate_dockerfile_for_package_manager(package_manager: &PackageManager, server_path_js: &str) -> String {
+fn generate_dockerfile_for_package_manager(
+	package_manager: &PackageManager,
+	server_path_js: &str,
+) -> String {
 	let copy_files = package_manager.copy_files.join(" ");
-	
+
 	// Determine package manager specific configurations
 	let (base_image, setup_commands, build_cmd, runtime_cmd, add_deps_cmd) = match package_manager.name.as_str() {
 		"yarn" => (
@@ -738,18 +749,18 @@ fn generate_dockerfile_for_package_manager(package_manager: &PackageManager, ser
 	};
 
 	let mut dockerfile = String::new();
-	
+
 	// Builder stage
 	dockerfile.push_str(&format!("FROM {} AS builder\n\n", base_image));
 	dockerfile.push_str("WORKDIR /app\n\n");
 	dockerfile.push_str(&format!("# Copy package files\nCOPY {} ./\n\n", copy_files));
-	
+
 	// Setup package manager if needed
 	if !setup_commands.is_empty() {
 		dockerfile.push_str(setup_commands);
 		dockerfile.push_str("\n\n");
 	}
-	
+
 	// Install dependencies
 	if package_manager.name == "npm" {
 		dockerfile.push_str(&format!(
@@ -760,29 +771,31 @@ fn generate_dockerfile_for_package_manager(package_manager: &PackageManager, ser
 	} else {
 		dockerfile.push_str(&format!(
 			"RUN {} \\\n\techo \"[RivetKit] Installing dependencies with {}\"; \\\n\t{}\n\n",
-			package_manager.cache_mount,
-			package_manager.name,
-			package_manager.install_cmd
+			package_manager.cache_mount, package_manager.name, package_manager.install_cmd
 		));
 	}
-	
+
 	dockerfile.push_str("COPY . .\n\n");
 	dockerfile.push_str(&format!("RUN {}\n\n", build_cmd));
 	dockerfile.push_str("# ===\n\n");
-	
+
 	// Runtime stage
 	dockerfile.push_str(&format!("FROM {} AS runtime\n\n", base_image));
-	dockerfile.push_str("RUN addgroup -g 1001 -S rivet && \\\n\tadduser -S rivet -u 1001 -G rivet\n\n");
+	dockerfile
+		.push_str("RUN addgroup -g 1001 -S rivet && \\\n\tadduser -S rivet -u 1001 -G rivet\n\n");
 	dockerfile.push_str("WORKDIR /app\n\n");
-	
+
 	// Setup package manager in runtime if needed
 	if !setup_commands.is_empty() {
 		dockerfile.push_str(setup_commands);
 		dockerfile.push_str("\n\n");
 	}
-	
-	dockerfile.push_str(&format!("COPY --from=builder --chown=rivet:rivet /app/{} ./\n\n", copy_files));
-	
+
+	dockerfile.push_str(&format!(
+		"COPY --from=builder --chown=rivet:rivet /app/{} ./\n\n",
+		copy_files
+	));
+
 	// Install production dependencies
 	if package_manager.name == "npm" {
 		dockerfile.push_str(&format!(
@@ -800,17 +813,20 @@ fn generate_dockerfile_for_package_manager(package_manager: &PackageManager, ser
 			add_deps_cmd
 		));
 	}
-	
+
 	dockerfile.push_str("COPY --from=builder --chown=rivet:rivet /app/dist ./dist\n\n");
 	dockerfile.push_str("USER rivet\n\n");
-	
+
 	// Final command
 	if runtime_cmd == "bun run" {
-		dockerfile.push_str(&format!("CMD [\"bun\", \"run\", \"dist/{}\"]\n", server_path_js));
+		dockerfile.push_str(&format!(
+			"CMD [\"bun\", \"run\", \"dist/{}\"]\n",
+			server_path_js
+		));
 	} else {
 		dockerfile.push_str(&format!("CMD [\"node\", \"dist/{}\"]\n", server_path_js));
 	}
-	
+
 	dockerfile
 }
 

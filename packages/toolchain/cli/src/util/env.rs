@@ -40,7 +40,11 @@ pub async fn get_or_select(
 ///
 /// Forcing selection will prompt the user for selection, even if there's only 1 item.
 /// If env_name is provided, it will try to select that environment directly.
-pub async fn select(ctx: &toolchain::ToolchainCtx, force_select: bool, env_name: Option<&str>) -> Result<String> {
+pub async fn select(
+	ctx: &toolchain::ToolchainCtx,
+	force_select: bool,
+	env_name: Option<&str>,
+) -> Result<String> {
 	// Build selections
 	let mut envs = ctx
 		.project
@@ -65,7 +69,7 @@ pub async fn select(ctx: &toolchain::ToolchainCtx, force_select: bool, env_name:
 				},
 			)
 			.await?;
-			
+
 			return Ok(env.slug.clone());
 		} else {
 			return Err(anyhow!("Environment '{}' not found", env_name));

@@ -7,13 +7,13 @@ pub mod endpoint;
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Get the RivetKit endpoint
-    Endpoint(endpoint::Opts),
+	Endpoint(endpoint::Opts),
 }
 
 impl SubCommand {
-    pub async fn execute(&self) -> Result<()> {
-        match self {
-            SubCommand::Endpoint(opts) => opts.execute().await,
-        }
-    }
+	pub async fn execute(&self) -> Result<()> {
+		match self {
+			SubCommand::Endpoint(opts) => opts.execute().await,
+		}
+	}
 }
