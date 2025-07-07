@@ -975,8 +975,7 @@ impl Ctx {
 		// Delete entries that aren't in our valid images table
 		let deleted = sqlx::query(indoc!(
 			"
-			DELETE
-			FROM images_cache
+			DELETE FROM images_cache
 			WHERE image_id NOT IN (
 				SELECT image_id FROM __valid_images
 			)

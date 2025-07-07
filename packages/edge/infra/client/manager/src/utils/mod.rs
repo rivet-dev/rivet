@@ -15,8 +15,11 @@ use pegboard_config::Config;
 use sql::SqlitePoolExt;
 use sqlx::{
 	migrate::MigrateDatabase,
-	sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqlitePoolOptions, SqliteSynchronous},
-	Executor, Sqlite, SqlitePool,
+	sqlite::{
+		SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode, SqliteLockingMode,
+		SqlitePoolOptions, SqliteSynchronous,
+	},
+	Sqlite, SqlitePool,
 };
 use tokio::{
 	fs,
@@ -111,24 +114,19 @@ pub async fn init_sqlite_db(config: &Config) -> Result<SqlitePool> {
 async fn build_sqlite_pool(db_url: &str) -> Result<SqlitePool> {
 	let opts = db_url
 		.parse::<SqliteConnectOptions>()?
-		// Set synchronous mode to NORMAL for performance and data safety balance
-		.synchronous(SqliteSynchronous::Normal)
 		// Set busy timeout to 5 seconds to avoid "database is locked" errors
 		.busy_timeout(Duration::from_secs(5))
 		// Enable foreign key constraint enforcement
 		.foreign_keys(true)
 		// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
-		.auto_vacuum(SqliteAutoVacuum::Incremental);
+		.auto_vacuum(SqliteAutoVacuum::Incremental)
+		// Set synchronous mode to NORMAL for performance and data safety balance
+		.synchronous(SqliteSynchronous::Normal)
+		// Increases write performance
+		.journal_mode(SqliteJournalMode::Wal)
+		.locking_mode(SqliteLockingMode::Normal);
 
 	let pool = SqlitePoolOptions::new()
-		.after_connect(|conn, _meta| {
-			Box::pin(async move {
-				// NOTE: sqlx doesn't seem to have a WAL2 option so we set it with a PRAGMA query
-				conn.execute("PRAGMA journal_mode = WAL2").await?;
-
-				Ok(())
-			})
-		})
 		// Open connection immediately on startup
 		.min_connections(1)
 		.connect_with(opts)
@@ -212,7 +210,7 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		CREATE TABLE IF NOT EXISTS actors (
 			actor_id BLOB NOT NULL, -- UUID
 			generation INTEGER NOT NULL,
-			config BLOB NOT NULL,
+			config BLOB NOT NULL, -- JSONB
 
 			start_ts INTEGER NOT NULL,
 			running_ts INTEGER,
