@@ -515,7 +515,7 @@ impl SqlitePoolManager {
 			// by calculating the size ratio
 			let ratio = data.len() as f64 / total_data_size;
 			metrics::SQLITE_UPLOAD_DB_RATE
-				.with_label_values(&[&hex_key])
+				.with_label_values(&[])
 				.set(data.len() as f64 / (dt * ratio));
 		}
 
@@ -707,7 +707,7 @@ impl SqlitePoolManager {
 
 			let dt = start_instant.elapsed();
 			metrics::SQLITE_DOWNLOAD_DB_RATE
-				.with_label_values(&[&hex_key])
+				.with_label_values(&[])
 				.set(data_len as f64 / dt.as_secs_f64());
 
 			Ok(true)
