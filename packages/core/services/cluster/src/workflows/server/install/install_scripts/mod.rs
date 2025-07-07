@@ -216,7 +216,7 @@ pub async fn gen_initialize(
 			prometheus_targets.insert(
 				"worker".into(),
 				components::vector::PrometheusTarget {
-					endpoint: "http://127.0.0.1:8091".into(),
+					endpoint: "http://127.0.0.1:6431".into(),
 					scrape_interval: 15,
 				},
 			);
@@ -235,7 +235,7 @@ pub async fn gen_initialize(
 			prometheus_targets.insert(
 				"guard".into(),
 				components::vector::PrometheusTarget {
-					endpoint: "http://127.0.0.1:8091".into(),
+					endpoint: "http://127.0.0.1:6431".into(),
 					scrape_interval: 15,
 				},
 			);

@@ -212,7 +212,7 @@ async fn build_ws_url(config: &Config) -> Result<Url> {
 				.choose(&mut rng)
 				.context("No worker servers available from service discovery")?;
 
-			format!("ws://{lan_ip}:8082")
+			format!("ws://{lan_ip}:6422")
 		}
 		pegboard_config::Addresses::Static(addresses) => {
 			// Choose random server
