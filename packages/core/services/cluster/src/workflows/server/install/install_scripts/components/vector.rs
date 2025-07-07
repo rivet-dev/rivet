@@ -74,7 +74,7 @@ pub fn configure(namespace: &str, config: &Config, pool_type: PoolType) -> Globa
 				// Buffer to disk for durability & reduce memory usage
 				"buffer": {
 					"type": "disk",
-					"max_size": 2 * 1024 * 1024 * 1024,  // 2 GiB
+					"max_size": 2u64 * 1024 * 1024 * 1024,  // 2 GiB
 					"when_full": "block"
 				}
 			}

@@ -43,11 +43,7 @@ impl ImageDownloadHandler {
 			// The image download started at some point in the current runtime
 			Entry::Occupied(entry) => entry.get().clone(),
 			// The image is not currently being downloaded
-			Entry::Vacant(entry) => {
-				let entry = entry.insert_entry(Arc::new(Mutex::new(false)));
-
-				entry.get().clone()
-			}
+			Entry::Vacant(entry) => entry.insert(Arc::new(Mutex::new(false))).clone(),
 		};
 
 		drop(downloads_guard);

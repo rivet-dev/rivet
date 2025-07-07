@@ -705,10 +705,11 @@ struct ResolveArtifactsInput {
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ResolveArtifactsOutput {
 	artifact_url_stub: String,
 	fallback_artifact_url: Option<String>,
+	#[serde(default)]
 	artifact_size_bytes: u64,
 }
 
