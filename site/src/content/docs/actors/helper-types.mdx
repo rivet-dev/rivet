@@ -1,0 +1,62 @@
+# Helper Types
+
+Rivet provides several TypeScript helper types to make it easier to work with actors in a type-safe way.
+
+## `Context` Types
+
+When working with actors, you often need to access the context object. Rivet provides helper types to extract the context types from actor definitions.
+
+### `ActorContextOf<ActorDefinition>`
+
+Extracts the full actor context type from a actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
+
+```typescript
+import { actor, ActorContextOf } from "@rivetkit/actor";
+
+const chatRoom = actor({
+  state: { messages: [] },
+  actions: {
+    sendMessage: (c, message) => {
+      // ...
+    }
+  }
+});
+
+// Extract the chat room context type
+type ChatRoomContext = ActorContextOf<typeof chatRoom>;
+
+// Now you can use this type elsewhere
+function processChatRoomContext(context: ChatRoomContext) {
+  // Access context properties with full type safety
+  console.log(context.state.messages);
+  context.broadcast("newEvent", { type: "system" });
+}
+```
+
+### `ActionContextOf<ActorDefinition>`
+
+Extracts the action context type from a actor definition. This is the type of the context object (`c`) available in action handlers.
+
+```typescript
+import { actor, ActionContextOf } from "@rivetkit/actor";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c) => {
+      c.state.count++;
+      return c.state.count;
+    }
+  }
+});
+
+// Extract the action context type
+type CounterActionContext = ActionContextOf<typeof counter>;
+
+// Use in other functions that need to work with the action context
+function processCounterAction(context: CounterActionContext) {
+  // Access context with full type safety
+  context.state.count++;
+}
+```
+

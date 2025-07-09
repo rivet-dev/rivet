@@ -1,25 +1,18 @@
 "use client";
 import { DocsMobileNavigation } from "@/components/DocsMobileNavigation";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
-import {
-	Button,
-	Tooltip,
-	TooltipArrow,
-	TooltipContent,
-	TooltipPortal,
-	TooltipProvider,
-	TooltipTrigger,
-} from "@rivet-gg/components";
+import { Button } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
-import { Icon, faDiscord, faGithub } from "@rivet-gg/icons";
+import { Icon, faDiscord } from "@rivet-gg/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useState } from "react";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
 import { HeaderSearch } from "./HeaderSearch";
+import { GitHubDropdown } from "./GitHubDropdown";
 
 interface HeaderProps {
-	active: "product" | "docs" | "blog" | "pricing" | "solutions";
+	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions";
 	subnav?: ReactNode;
 	mobileBreadcrumbs?: ReactNode;
 }
@@ -56,14 +49,7 @@ export function Header({ active, subnav }: HeaderProps) {
 							<Icon icon={faDiscord} />
 						</Link>
 					</RivetHeader.NavItem>
-					<RivetHeader.NavItem asChild className="p-2">
-						<Link
-							href="https://github.com/rivet-gg/rivet"
-							target="_blank"
-						>
-							<Icon icon={faGithub} />
-						</Link>
-					</RivetHeader.NavItem>
+					<GitHubDropdown className="p-2" />
 					<Button
 						variant="outline"
 						asChild
@@ -75,78 +61,10 @@ export function Header({ active, subnav }: HeaderProps) {
 			}
 			mobileBreadcrumbs={<DocsMobileNavigation />}
 			breadcrumbs={
-				<div
-					className="flex items-center gap-6 font-v2 subpixel-antialiased"
-					ref={(node) =>
-						setRef(
-							node
-								?.closest("header")
-								?.querySelector("div:first-child") || null,
-						)
-					}
-				>
-					{/*<TooltipProvider delayDuration={0} skipDelayDuration={0}>
-						<Tooltip key="product">
-							<TooltipTrigger asChild>
-								<div>
-									<RivetHeader.NavItem className="flex items-center gap-1 py-2">
-										<Link
-											href="/docs"
-											aria-current={
-												active === "product"
-													? "page"
-													: undefined
-											}
-										>
-											Product
-										</Link>
-									</RivetHeader.NavItem>
-								</div>
-							</TooltipTrigger>
-							<TooltipPortal>
-								<TooltipContent
-									collisionPadding={32}
-									collisionBoundary={ref}
-									style={{
-										width: "calc(var(--radix-popper-available-width)",
-									}}
-									className="h-full max-h-[190px] max-w-[800px] bg-card p-4"
-								>
-									<TooltipArrow className="h-2.5 w-5 fill-border" />
-									<div className="h-full bg-card">
-										<HeaderPopupProductMenu />
-									</div>
-								</TooltipContent>
-							</TooltipPortal>
-						</Tooltip>
-						{* <Tooltip delayDuration={0} key='solutions'>
-              <TooltipTrigger asChild>
-                <div>
-                  <RivetHeader.NavItem asChild className='flex items-center gap-1 py-2'>
-                    <Link href='/docs' aria-current={active === 'solutions' ? 'page' : undefined}>
-                      Solutions
-                    </Link>
-                  </RivetHeader.NavItem>
-                </div>
-              </TooltipTrigger>
-              <TooltipPortal>
-                <TooltipContent
-                  collisionPadding={32}
-                  collisionBoundary={ref}
-                  style={{ width: 'calc(var(--radix-popper-available-width)' }}
-                  className='flex h-full min-h-[190px] max-w-[800px] bg-card p-4'>
-                  <TooltipArrow className='h-2.5 w-5 fill-border' />
-                  <div className='flex-1 justify-items-stretch bg-card'>
-                    <HeaderPopupSolutionsMenu />
-                  </div>
-                </TooltipContent>
-              </TooltipPortal>
-            </Tooltip> *}
-					</TooltipProvider>*/}
-
+				<div className="flex items-center font-v2 subpixel-antialiased">
 					<RivetHeader.NavItem
 						asChild
-						className="flex items-center gap-1 py-2"
+						className="flex items-center gap-1 px-2.5 py-2 first:pl-0"
 					>
 						<Link
 							href="/docs"
@@ -159,7 +77,20 @@ export function Header({ active, subnav }: HeaderProps) {
 					</RivetHeader.NavItem>
 					<RivetHeader.NavItem
 						asChild
-						className="flex items-center gap-1"
+						className="flex items-center gap-1 px-2.5 py-2"
+					>
+						<Link
+							href="/cloud"
+							aria-current={
+								active === "cloud" ? "page" : undefined
+							}
+						>
+							Cloud
+						</Link>
+					</RivetHeader.NavItem>
+					<RivetHeader.NavItem
+						asChild
+						className="flex items-center gap-1 px-2.5 py-2"
 					>
 						<Link
 							href="/changelog"
@@ -168,19 +99,6 @@ export function Header({ active, subnav }: HeaderProps) {
 							}
 						>
 							Changelog
-						</Link>
-					</RivetHeader.NavItem>
-					<RivetHeader.NavItem
-						asChild
-						className="flex items-center gap-1"
-					>
-						<Link
-							href="/pricing"
-							aria-current={
-								active === "pricing" ? "page" : undefined
-							}
-						>
-							Pricing
 						</Link>
 					</RivetHeader.NavItem>
 				</div>

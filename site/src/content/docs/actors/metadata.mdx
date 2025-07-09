@@ -1,0 +1,82 @@
+# Metadata
+
+Metadata provides information about the currently running actor.
+
+## Region
+
+Region can be accessed from the context object via `c.region`.
+
+<Warning>`c.region` is only supported on Rivet at the moment.</Warning>
+
+## Tags
+
+Tags can be accessed from the context object via `c.tags`.
+
+For example:
+
+<CodeGroup>
+
+```typescript chat_room.ts
+import { actor } from "@rivetkit/actor";
+
+const chatRoom = actor({
+  state: {
+    messages: []
+  },
+  
+  actions: {
+    // Method used to get the channel ID
+    getChannelId: (c) => {
+      return c.tags['channel'];
+    },
+    
+    addMessage: (c, message) => {
+      // Use the channel for logging or filtering
+      const channel = c.tags['channel'] || 'default';
+      console.log(`Adding message to channel: ${channel}`);
+      
+      c.state.messages.push({
+        channel,
+        message,
+        timestamp: Date.now()
+      });
+      
+      c.broadcast('newMessage', { channel, message });
+    }
+  }
+});
+
+export default chatRoom;
+```
+
+```typescript client.ts
+import { createClient } from "rivetkit/client";
+import type { App } from "./src/index";
+
+const client = createClient<App>("http://localhost:8080");
+
+// Connect to a specific channel
+const randomChannel = await client.chatRoom.get({ channel: "random" });
+
+// Check the channel ID
+const channelId = await randomChannel.getChannelId();
+console.log("Connected to channel:", channelId); // "random"
+
+// Or connect with multiple parameters
+const teamChannel = await client.chatRoom.get({
+  channel: "team-chat",
+  teamId: "engineering"
+});
+```
+
+</CodeGroup>
+
+## Actor Name
+
+You can access the actor name with:
+
+```typescript
+const actorName = c.name;
+```
+
+This is useful when you need to know which actor type is running, especially if you have generic utility functions that are shared between different actor implementations.

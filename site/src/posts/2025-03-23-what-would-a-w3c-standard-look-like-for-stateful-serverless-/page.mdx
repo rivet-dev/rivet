@@ -40,7 +40,7 @@ export default {
 }
 ```
 
-On the other hand, **stateful serverless provides an infinitely running process with storage**. An example implementation on [RivetKit](https://rivetkit.org/introduction) would look like this:
+On the other hand, **stateful serverless provides an infinitely running process with storage**. An example implementation on Rivet Actors would look like this:
 
 ```typescript
 // Once created, this DurableObject will exist indefinitely
@@ -410,7 +410,7 @@ export const counter = actor({
 
 </CodeGroup>
 
-The `onmessage` handler is very similar to the `fetch` handler in a Durable Object or an [Action](https://rivetkit.org/concepts/actions) in RivetKit.
+The `onmessage` handler is very similar to the `fetch` handler in a Durable Object or an [Action](/docs/actors/actions) in RivetKit.
 
 The key differences are:
 
@@ -1317,7 +1317,7 @@ Please add feedback as a issue or pull request on the [proposal GitHub](https://
 
 ### Reference Implementation
 
-Once a general specification is implemented, a reference specification is trivial to implement on any of the providers previously mentioned. A compatibility layer could be implemented on the existing work with [RivetKit drivers](https://rivetkit.org/drivers/overview).
+Once a general specification is implemented, a reference specification is trivial to implement on any of the providers previously mentioned. A compatibility layer could be implemented on the existing work with Rivet drivers.
 
 ## Survey: Help Shape the Specification
 

@@ -1,0 +1,270 @@
+# React Quickstart
+
+Build real-time React applications with Rivet Actors
+
+<Steps>
+<Step title="Install Dependencies">
+
+```sh
+npm install @rivetkit/actor @rivetkit/react
+```
+
+</Step>
+
+<Step title="Create Backend Actor">
+
+Create your actor registry on the backend:
+
+```ts backend/registry.ts
+import { actor, setup } from "@rivetkit/actor";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, amount: number = 1) => {
+			c.state.count += amount;
+			c.broadcast("countChanged", c.state.count);
+			return c.state.count;
+		},
+		getCount: (c) => c.state.count,
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+</Step>
+
+<Step title="Setup Backend Server">
+
+Start a server to run your actors:
+
+```ts backend/server.ts
+import { registry } from "./registry";
+registry.runServer();
+```
+
+</Step>
+
+<Step title="Create React Frontend">
+
+Set up your React application:
+
+```tsx frontend/App.tsx
+import { useState } from "react";
+import { createClient, createRivetKit } from "@rivetkit/react";
+import type { registry } from "../backend/registry";
+
+// Create typed client
+const client = createClient<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit(client);
+
+function App() {
+	const [count, setCount] = useState(0);
+	const [counterName, setCounterName] = useState("my-counter");
+
+	// Connect to the counter actor
+	const counter = useActor({
+		name: "counter",
+		key: [counterName],
+	});
+
+	// Listen for real-time count updates
+	counter.useEvent("countChanged", (newCount: number) => {
+		setCount(newCount);
+	});
+
+	const increment = async () => {
+		// Call actor action through the connection
+		await counter.connection?.increment(1);
+	};
+
+	const incrementBy = async (amount: number) => {
+		await counter.connection?.increment(amount);
+	};
+
+	return (
+		<div style={{ padding: "2rem" }}>
+			<h1>Rivet Counter</h1>
+			<h2>Count: {count}</h2>
+			
+			<div style={{ marginBottom: "1rem" }}>
+				<label>
+					Counter Name:
+					<input
+						type="text"
+						value={counterName}
+						onChange={(e) => setCounterName(e.target.value)}
+						style={{ marginLeft: "0.5rem", padding: "0.25rem" }}
+					/>
+				</label>
+			</div>
+
+			<div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+				<button onClick={increment}>
+					+1
+				</button>
+				<button onClick={() => incrementBy(5)}>
+					+5
+				</button>
+				<button onClick={() => incrementBy(10)}>
+					+10
+				</button>
+			</div>
+
+			<div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
+				<p>Connection Status: {counter.isConnected ? "Connected" : "Disconnected"}</p>
+				<p>Try opening multiple tabs to see real-time sync.</p>
+			</div>
+		</div>
+	);
+}
+
+export default App;
+```
+
+</Step>
+
+<Step title="Setup Vite Configuration">
+
+Configure Vite for development:
+
+```ts vite.config.ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+  },
+})
+```
+
+</Step>
+
+<Step title="Run Your Application">
+
+Start both the backend and frontend:
+
+**Terminal 1**: Start the backend
+
+```sh Backend
+npx tsx --watch backend/server.ts
+```
+
+**Terminal 2**: Start the frontend
+
+```sh Frontend  
+npx vite
+```
+
+Open `http://localhost:5173` in your browser. Try opening multiple tabs to see real-time sync in action.
+
+</Step>
+
+<Step title="Deploy">
+
+By default, Rivet stores actor state on the local file system and will not scale in production.
+
+The following providers let you deploy & scale Rivet:
+
+<Tabs>
+
+<Tab title="Redis">
+
+For production with Redis storage, install the Redis driver:
+
+```sh
+npm install @rivetkit/redis
+```
+
+Then configure the driver:
+
+```ts server.ts
+import { registry } from "./registry";
+
+const { client, serve } = registry.createServer({
+  driver: createRedisDriver()
+});
+
+// ... rest of server setup ...
+```
+
+Your backend can now be deployed to your cloud provider of choice.
+
+</Tab>
+
+<Tab title="Cloudflare Workers">
+
+Deploy to Cloudflare Workers, install the Cloudflare Workers driver:
+
+```sh
+npm install @rivetkit/cloudflare-workers
+```
+
+Update your `server.ts` to support Cloudflare Workers:
+
+  ```ts server.ts
+  import { createServerHandler } from "@rivetkit/cloudflare-workers";
+  import { registry } from "./registry";
+
+  const { handler, ActorHandler } = createServerHandler(registry);
+  export { handler as default, ActorHandler };
+  ```
+
+Update your configuration file to support `ACTOR_DO` and `ACTOR_KV` bindings:
+
+```json wrangler.json
+{
+  "name": "my-rivetkit-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ActorHandler"]
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ACTOR_DO",
+        "class_name": "ActorHandler"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ACTOR_KV",
+      "id": "your_namespace_id"
+    }
+  ]
+}
+```
+
+Finally, deploy:
+
+```sh
+wrangler deploy
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+</Steps>
+
+## Configuration Options
+
+### Add Your Own Backend Endpoints
+
+Add custom HTTP endpoints alongside your actors to handle additional business logic, authentication, and integrations with external services.
+
+See [backend quickstart](/docs/actors/quickstart-backend) for more information.
+

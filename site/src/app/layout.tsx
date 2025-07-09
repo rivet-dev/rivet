@@ -13,9 +13,9 @@ else if (process.env.CF_PAGES_URL)
 
 export const metadata: Metadata = {
 	metadataBase,
-	title: "Rivet - Scalable. Stateful. Serverless.",
+	title: "Rivet - The open-source alternative to Durable Objects",
 	description:
-		"Rivet is the platform to build realtime, edge, or agent applications.No limitations of Redis or timeouts of Lambda. Open-source & self-hostable.",
+		"Rivet Actors is a library that provides durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
 	twitter: {
 		site: "@rivetgg",
 		card: "summary_large_image",

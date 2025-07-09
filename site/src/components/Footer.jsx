@@ -19,14 +19,12 @@ import {
 
 const footer = {
 	product: [
-		{ name: "Functions", href: "/docs/functions" },
 		{ name: "Actors", href: "/docs/actors" },
-		{ name: "Containers", href: "/docs/containers" },
 	],
 	devs: [
-		{ name: "Documentation", href: "/docs" },
+		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
-		{ name: "API Reference", href: "/docs/api" },
+		// { name: "API Reference", href: "/docs/api" },
 		{ name: "Changelog", href: "/changelog" },
 		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
 	],

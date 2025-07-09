@@ -1,0 +1,87 @@
+# Schedule
+
+Scheduling is used to trigger events in the future. The actor scheduler is like `setTimeout`, except the timeout will persist even if the actor restarts, upgrades, or crashes.
+
+## Use Cases
+
+Scheduling is helpful for long-running timeouts like month-long billing periods or account trials.
+
+## Scheduling
+
+### `c.schedule.after(duration, fn, ...args)`
+
+Schedules a function to be executed after a specified duration. This function persists across actor restarts, upgrades, or crashes.
+
+Parameters:
+
+- `duration` (number): The delay in milliseconds.
+- `fn` (string): The name of the action to be executed.
+- `...args` (unknown[]): Additional arguments to pass to the function.
+
+### `c.schedule.at(timestamp, fn, ...args)`
+
+Schedules a function to be executed at a specific timestamp. This function persists across actor restarts, upgrades, or crashes.
+
+Parameters:
+
+- `timestamp` (number): The exact time in milliseconds since the Unix epoch when the function should be executed.
+- `fn` (string): The name of the action to be executed.
+- `...args` (unknown[]): Additional arguments to pass to the function.
+
+## Scheduling Private Actions
+
+Currently, scheduling can only trigger public actions. If the scheduled action is private, it needs to be secured with something like a token.
+
+## Full Example
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const reminderService = actor({
+  state: {
+    reminders: {}
+  },
+  
+  actions: {
+    setReminder: (c, userId, message, delayMs) => {
+      const reminderId = crypto.randomUUID();
+      
+      // Store the reminder in state
+      c.state.reminders[reminderId] = {
+        userId,
+        message,
+        scheduledFor: Date.now() + delayMs
+      };
+      
+      // Schedule the sendReminder action to run after the delay
+      c.after(delayMs, "sendReminder", reminderId);
+      
+      return { reminderId };
+    },
+    
+    sendReminder: (c, reminderId) => {
+      const reminder = c.state.reminders[reminderId];
+      if (!reminder) return;
+      
+      // Find the user's connection if they're online
+      const userConn = c.conns.find(
+        conn => conn.state.userId === reminder.userId
+      );
+      
+      if (userConn) {
+        // Send the reminder to the user
+        userConn.send("reminder", {
+          message: reminder.message,
+          scheduledAt: reminder.scheduledFor
+        });
+      } else {
+        // If user is offline, store reminder for later delivery
+        // ...
+      }
+      
+      // Clean up the processed reminder
+      delete c.state.reminders[reminderId];
+    }
+  }
+});
+```

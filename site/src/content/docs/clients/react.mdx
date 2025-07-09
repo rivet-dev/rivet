@@ -1,0 +1,642 @@
+# React
+
+Build real-time React applications with Rivet Actors
+
+Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
+
+## Installation
+
+Install the Rivet React package:
+
+```bash
+npm install @rivetkit/actor @rivetkit/react
+```
+
+## Basic Usage
+
+<Steps>
+<Step title="Create Actor Registry">
+First, set up your actor registry (typically in your backend):
+
+```typescript
+// backend/registry.ts
+import { actor, setup } from "@rivetkit/actor";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number = 1) => {
+      c.state.count += amount;
+      c.broadcast("countChanged", c.state.count);
+      return c.state.count;
+    },
+    getCount: (c) => c.state.count,
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+</Step>
+
+<Step title="Set Up React Client">
+Create a typed client and Rivet hooks:
+
+```tsx
+// src/rivetkit.ts
+import { createClient, createRivetKit } from "@rivetkit/react";
+import type { registry } from "../backend/registry";
+
+export const client = createClient<typeof registry>("http://localhost:8080");
+export const { useActor } = createRivetKit(client);
+```
+</Step>
+
+<Step title="Use in Components">
+Connect to actors and listen for real-time updates:
+
+```tsx
+// src/App.tsx
+import { useState } from "react";
+import { useActor } from "./rivetkit";
+
+function App() {
+  const [count, setCount] = useState(0);
+  const [counterName, setCounterName] = useState("my-counter");
+
+  // Connect to the counter actor
+  const counter = useActor({
+    name: "counter",
+    key: [counterName],
+  });
+
+  // Listen for real-time count updates
+  counter.useEvent("countChanged", (newCount: number) => {
+    setCount(newCount);
+  });
+
+  const increment = async () => {
+    await counter.connection?.increment(1);
+  };
+
+  return (
+    <div style={{ padding: "2rem" }}>
+      <h1>Rivet Counter</h1>
+      <h2>Count: {count}</h2>
+      
+      <div style={{ marginBottom: "1rem" }}>
+        <label>
+          Counter Name:
+          <input
+            type="text"
+            value={counterName}
+            onChange={(e) => setCounterName(e.target.value)}
+            style={{ marginLeft: "0.5rem", padding: "0.25rem" }}
+          />
+        </label>
+      </div>
+
+      <button onClick={increment} disabled={!counter.isConnected}>
+        Increment
+      </button>
+
+      <div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
+        <p>Status: {counter.isConnected ? "Connected" : "Disconnected"}</p>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+```
+</Step>
+</Steps>
+
+## API Reference
+
+### `createRivetKit(client, options?)`
+
+Creates the Rivet hooks for React integration.
+
+```tsx
+import { createClient, createRivetKit } from "@rivetkit/react";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit(client);
+```
+
+#### Parameters
+
+- `client`: The Rivet client created with `createClient`
+- `options`: Optional configuration object
+
+#### Returns
+
+An object containing:
+- `useActor`: Hook for connecting to actors
+
+### `useActor(options)`
+
+Hook that connects to an actor and manages the connection lifecycle.
+
+```tsx
+const actor = useActor({
+  name: "actorName",
+  key: ["actor-id"],
+  params: { userId: "123" },
+  enabled: true
+});
+```
+
+#### Parameters
+
+- `options`: Object containing:
+  - `name`: The name of the actor type (string)
+  - `key`: Array of strings identifying the specific actor instance
+  - `params`: Optional parameters passed to the actor connection
+  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
+
+#### Returns
+
+Actor object with the following properties:
+- `connection`: The actor connection for calling actions, or `null` if not connected
+- `isConnected`: Boolean indicating if the actor is connected
+- `state`: Current actor state (if available)
+- `useEvent(eventName, handler)`: Method to subscribe to actor events
+
+### `actor.useEvent(eventName, handler)`
+
+Subscribe to events emitted by the actor.
+
+```tsx
+const actor = useActor({ name: "counter", key: ["my-counter"] });
+
+actor.useEvent("countChanged", (newCount: number) => {
+  console.log("Count changed:", newCount);
+});
+```
+
+#### Parameters
+
+- `eventName`: The name of the event to listen for (string)
+- `handler`: Function called when the event is emitted
+
+#### Lifecycle
+
+The event subscription is automatically managed:
+- Subscribes when the actor connects
+- Cleans up when the component unmounts or actor disconnects
+- Re-subscribes on reconnection
+
+## Advanced Patterns
+
+### Multiple Actors
+
+Connect to multiple actors in a single component:
+
+```tsx
+function Dashboard() {
+  const userProfile = useActor({
+    name: "userProfile", 
+    key: ["user-123"]
+  });
+  
+  const notifications = useActor({
+    name: "notifications",
+    key: ["user-123"]
+  });
+
+  userProfile.useEvent("profileUpdated", (profile) => {
+    console.log("Profile updated:", profile);
+  });
+
+  notifications.useEvent("newNotification", (notification) => {
+    console.log("New notification:", notification);
+  });
+
+  return (
+    <div>
+      <UserProfile actor={userProfile} />
+      <NotificationList actor={notifications} />
+    </div>
+  );
+}
+```
+
+### Conditional Connections
+
+Control when actors connect using the `enabled` option:
+
+```tsx
+function ConditionalActor() {
+  const [enabled, setEnabled] = useState(false);
+
+  const counter = useActor({
+    name: "counter",
+    key: ["conditional"],
+    enabled: enabled // Only connect when enabled
+  });
+
+  return (
+    <div>
+      <button onClick={() => setEnabled(!enabled)}>
+        {enabled ? "Disconnect" : "Connect"}
+      </button>
+      {enabled && counter.isConnected && (
+        <p>Count: {counter.state?.count}</p>
+      )}
+    </div>
+  );
+}
+```
+
+### Authentication
+
+Pass authentication parameters to actors:
+
+```tsx
+function AuthenticatedChat() {
+  const [authToken] = useAuthToken(); // Your auth hook
+  
+  const chatRoom = useActor({
+    name: "chatRoom",
+    key: ["general"],
+    params: {
+      authToken,
+      userId: getCurrentUserId()
+    }
+  });
+
+  chatRoom.useEvent("messageReceived", (message) => {
+    console.log("New message:", message);
+  });
+
+  const sendMessage = async (text: string) => {
+    await chatRoom.connection?.sendMessage(text);
+  };
+
+  return (
+    <div>
+      {/* Chat UI */}
+    </div>
+  );
+}
+```
+
+### Error Handling
+
+Handle connection errors gracefully:
+
+```tsx
+function ResilientCounter() {
+  const [error, setError] = useState<string | null>(null);
+  
+  const counter = useActor({
+    name: "counter",
+    key: ["resilient"]
+  });
+
+  counter.useEvent("error", (err) => {
+    setError(err.message);
+    // Clear error after 5 seconds
+    setTimeout(() => setError(null), 5000);
+  });
+
+  counter.useEvent("connected", () => {
+    setError(null);
+  });
+
+  return (
+    <div>
+      {error && (
+        <div style={{ color: "red", marginBottom: "1rem" }}>
+          Error: {error}
+        </div>
+      )}
+      <div>
+        Status: {counter.isConnected ? "Connected" : "Disconnected"}
+      </div>
+      {/* Rest of component */}
+    </div>
+  );
+}
+```
+
+### Custom Hooks
+
+Create reusable custom hooks for common patterns:
+
+```tsx
+// Custom hook for a counter with persistent state
+function useCounter(counterId: string) {
+  const [count, setCount] = useState(0);
+  
+  const counter = useActor({
+    name: "counter",
+    key: [counterId]
+  });
+
+  counter.useEvent("countChanged", setCount);
+
+  const increment = useCallback(async (amount = 1) => {
+    await counter.connection?.increment(amount);
+  }, [counter.connection]);
+
+  const reset = useCallback(async () => {
+    await counter.connection?.reset();
+  }, [counter.connection]);
+
+  return {
+    count,
+    increment,
+    reset,
+    isConnected: counter.isConnected
+  };
+}
+
+// Usage
+function App() {
+  const { count, increment, reset, isConnected } = useCounter("my-counter");
+
+  return (
+    <div>
+      <h2>Count: {count}</h2>
+      <button onClick={() => increment()} disabled={!isConnected}>
+        Increment
+      </button>
+      <button onClick={() => reset()} disabled={!isConnected}>
+        Reset
+      </button>
+    </div>
+  );
+}
+```
+
+### Real-time Collaboration
+
+Build collaborative features with multiple event listeners:
+
+```tsx
+function CollaborativeEditor() {
+  const [content, setContent] = useState("");
+  const [cursors, setCursors] = useState<Record<string, Position>>({});
+  
+  const document = useActor({
+    name: "document",
+    key: ["doc-123"],
+    params: { userId: getCurrentUserId() }
+  });
+
+  // Listen for content changes
+  document.useEvent("contentChanged", (newContent) => {
+    setContent(newContent);
+  });
+
+  // Listen for cursor movements
+  document.useEvent("cursorMoved", ({ userId, position }) => {
+    setCursors(prev => ({ ...prev, [userId]: position }));
+  });
+
+  // Listen for user join/leave
+  document.useEvent("userJoined", ({ userId }) => {
+    console.log(`${userId} joined the document`);
+  });
+
+  document.useEvent("userLeft", ({ userId }) => {
+    setCursors(prev => {
+      const { [userId]: _, ...rest } = prev;
+      return rest;
+    });
+  });
+
+  const updateContent = async (newContent: string) => {
+    await document.connection?.updateContent(newContent);
+  };
+
+  return (
+    <div>
+      <Editor 
+        content={content}
+        cursors={cursors}
+        onChange={updateContent}
+      />
+    </div>
+  );
+}
+```
+
+## Client Connection Options
+
+### Basic Client Setup
+
+Create a type-safe client to connect to your backend:
+
+```ts client.ts
+import { createClient } from "@rivetkit/actor/client";
+import type { registry } from "./registry";
+
+// Create typed client
+const client = createClient<typeof registry>("http://localhost:8080");
+
+// Use the counter actor directly
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+// Call actions
+const count = await counter.increment(3);
+console.log("New count:", count);
+
+// Get current state
+const currentCount = await counter.getCount();
+console.log("Current count:", currentCount);
+
+// Listen to real-time events
+const connection = counter.connect();
+connection.on("countChanged", (newCount) => {
+	console.log("Count changed:", newCount);
+});
+
+// Increment through connection
+await connection.increment(1);
+```
+
+### React Integration
+
+Use the React hooks for seamless integration:
+
+```tsx
+import { useState } from "react";
+import { createClient, createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit(client);
+
+function App() {
+	const [count, setCount] = useState(0);
+	const [counterName, setCounterName] = useState("test-counter");
+
+	const counter = useActor({
+		name: "counter",
+		key: [counterName],
+	});
+
+	counter.useEvent("countChanged", (newCount: number) => setCount(newCount));
+
+	const increment = async () => {
+		await counter.connection?.increment(1);
+	};
+
+	return (
+		<div>
+			<h1>Counter: {count}</h1>
+			<input
+				type="text"
+				value={counterName}
+				onChange={(e) => setCounterName(e.target.value)}
+				placeholder="Counter name"
+			/>
+			<button onClick={increment}>Increment</button>
+		</div>
+	);
+}
+```
+
+## Environment Configuration
+
+### Development vs Production
+
+Create environment-specific configurations:
+
+```ts config.ts
+const isDev = process.env.NODE_ENV !== "production";
+
+export const config = {
+	port: parseInt(process.env.PORT || "8080"),
+	rivetkit: {
+		driver: isDev
+			? {
+					topology: "standalone" as const,
+					actor: { type: "memory" as const },
+					manager: { type: "memory" as const },
+				}
+			: {
+					topology: "partition" as const,
+					actor: { type: "redis" as const, url: process.env.REDIS_URL! },
+					manager: { type: "redis" as const, url: process.env.REDIS_URL! },
+				},
+	},
+};
+```
+
+### Backend Configuration
+
+Update your server to use environment-based configuration:
+
+```ts server.ts
+import { registry } from "./registry";
+import { config } from "./config";
+
+const { client, serve } = registry.createServer(config.rivetkit);
+
+// ... rest of server setup
+```
+
+### Frontend Environment Variables
+
+Configure your frontend for different environments:
+
+```ts .env.local
+VITE_API_URL=http://localhost:8080
+VITE_WS_URL=ws://localhost:8080
+```
+
+```ts config/client.ts
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
+export const client = createClient<typeof registry>(API_URL);
+```
+
+## Authentication Integration
+
+### Protected Actors
+
+Add authentication to secure your actors:
+
+```ts registry.ts
+import { actor, setup } from "@rivetkit/actor";
+
+export const protectedCounter = actor({
+	onAuth: async (opts) => {
+		const token = opts.params.authToken || opts.req.headers.get("Authorization");
+		
+		if (!token) {
+			throw new Error("Authentication required");
+		}
+		
+		// Validate token and return user data
+		const user = await validateJWT(token);
+		return { userId: user.id, role: user.role };
+	},
+	
+	state: { count: 0 },
+	
+	actions: {
+		increment: (c, amount: number = 1) => {
+			// Access auth data via c.conn.auth
+			const { userId } = c.conn.auth;
+			
+			c.state.count += amount;
+			c.broadcast("countChanged", { count: c.state.count, userId });
+			return c.state.count;
+		},
+	},
+});
+```
+
+### React Authentication
+
+Connect authenticated actors in React:
+
+```tsx
+function AuthenticatedApp() {
+	const [authToken, setAuthToken] = useState<string | null>(null);
+
+	const counter = useActor({
+		name: "protectedCounter",
+		key: ["user-counter"],
+		params: {
+			authToken: authToken
+		},
+		enabled: !!authToken // Only connect when authenticated
+	});
+
+	const login = async () => {
+		const token = await authenticateUser();
+		setAuthToken(token);
+	};
+
+	if (!authToken) {
+		return <button onClick={login}>Login</button>;
+	}
+
+	return (
+		<div>
+			<h1>Authenticated Counter</h1>
+			{/* ... rest of authenticated UI */}
+		</div>
+	);
+}
+```
+
+Learn more about [authentication](/general/authentication).
+
+## Best Practices
+
+1. **Use Custom Hooks**: Extract actor logic into reusable custom hooks
+2. **Handle Loading States**: Always account for the initial loading state
+3. **Error Boundaries**: Implement error boundaries around actor components
+4. **Conditional Connections**: Use the `enabled` prop to control when actors connect
+5. **Event Cleanup**: Event listeners are automatically cleaned up, but be mindful of heavy operations in handlers
+6. **State Management**: Combine with React state for local UI state that doesn't need to be shared
+

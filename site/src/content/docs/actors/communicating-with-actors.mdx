@@ -1,0 +1,516 @@
+# Communicating with Actors
+
+Learn how to call actions and connect to actors from client applications
+
+This guide covers how to connect to and interact with actors from client applications using Rivet's JavaScript/TypeScript client library.
+
+## Client Setup
+
+### Creating a Client
+
+There are several ways to create a client for communicating with actors:
+
+<Tabs>
+	<Tab title="External Client">
+		For frontend applications or external services connecting to your Rivet backend:
+
+		```typescript
+		import { createClient } from "@rivetkit/actor/client";
+		import type { registry } from "./registry";
+
+		const client = createClient<typeof registry>("http://localhost:8080");
+		```
+
+		This client communicates over HTTP/WebSocket and requires authentication.
+	</Tab>
+
+	<Tab title="Server-side Client">
+		From your backend server that hosts the registry:
+
+		```typescript
+		import { registry } from "./registry";
+
+		const { client } = registry.createServer();
+		```
+
+		This client bypasses network calls and doesn't require authentication.
+	</Tab>
+
+	<Tab title="Actor-to-Actor">
+		From within an actor to communicate with other actors:
+
+		```typescript
+		const myActor = actor({
+			actions: {
+				callOtherActor: (c) => {
+					const client = c.client<typeof registry>();
+					return client.otherActor.getOrCreate(["id"]);
+				}
+			}
+		});
+		```
+
+		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
+	</Tab>
+</Tabs>
+
+### Client Configuration
+
+Configure the client with additional options:
+
+```typescript
+const client = createClient<typeof registry>("http://localhost:8080", {
+  // Data serialization format
+  encoding: "cbor", // or "json"
+  
+  // Network transports in order of preference
+  supportedTransports: ["websocket", "sse"]
+});
+```
+
+## Actor Handles
+
+### `get(tags, opts?)` - Find Existing Actor
+
+Returns a handle to an existing actor or `null` if it doesn't exist:
+
+```typescript
+// Get existing actor by tags
+const handle = client.myActor.get(["actor-id"]);
+
+if (handle) {
+  const result = await handle.someAction();
+} else {
+  console.log("Actor doesn't exist");
+}
+```
+
+### `getOrCreate(tags, input?, opts?)` - Find or Create Actor
+
+Returns a handle to an existing actor or creates a new one if it doesn't exist:
+
+```typescript
+// Get or create actor (synchronous)
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+// With initialization input
+const game = client.game.getOrCreate(["game-123"], {
+  gameMode: "tournament",
+  maxPlayers: 8,
+});
+
+// Call actions immediately
+const count = await counter.increment(5);
+```
+
+<Note>
+`get()` and `getOrCreate()` are synchronous and return immediately. The actor is created lazily when you first call an action.
+</Note>
+
+### `create(tags, input?, opts?)` - Create New Actor
+
+Explicitly creates a new actor instance, failing if one already exists:
+
+```typescript
+// Create new actor (async)
+const newGame = await client.game.create(["game-456"], {
+  gameMode: "classic",
+  maxPlayers: 4,
+});
+
+// Actor is guaranteed to be newly created
+await newGame.initialize();
+```
+
+### `getWithId(id, opts?)` - Find by Internal ID
+
+Connect to an actor using its internal system ID:
+
+```typescript
+// Connect by internal ID
+const actorId = "55425f42-82f8-451f-82c1-6227c83c9372";
+const actor = client.myActor.getWithId(actorId);
+
+await actor.performAction();
+```
+
+<Warning>
+Prefer using tags over internal IDs for actor discovery. IDs are primarily for debugging and advanced use cases.
+</Warning>
+
+## Actions
+
+### Calling Actions
+
+Once you have an actor handle, call actions directly. All action calls are async:
+
+```typescript
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+// Call action with no arguments
+const currentCount = await counter.getCount();
+
+// Call action with arguments
+const newCount = await counter.increment(5);
+
+// Call action with object parameter
+await counter.updateSettings({
+  step: 2,
+  maximum: 100,
+});
+```
+
+### Action Parameters
+
+Actions receive parameters exactly as defined in the actor:
+
+```typescript
+// Actor definition
+const chatRoom = actor({
+  actions: {
+    sendMessage: (c, userId: string, message: string, metadata?: object) => {
+      // Action implementation
+    }
+  }
+});
+
+// Client usage - parameters match exactly
+await chatRoom.sendMessage("user-123", "Hello!", { priority: "high" });
+```
+
+### Error Handling
+
+Handle action errors appropriately:
+
+```typescript
+try {
+  const result = await counter.increment(5);
+} catch (error) {
+  if (error.code === "RATE_LIMITED") {
+    console.log("Too many requests, try again later");
+  } else {
+    console.error("Action failed:", error.message);
+  }
+}
+```
+
+## Real-time Connections
+
+Real-time connections enable bidirectional communication between clients and actors through persistent connections. Rivet automatically negotiates between WebSocket (preferred for full duplex) and Server-Sent Events (SSE) as a fallback for restrictive environments.
+
+### `connect(params?)` - Establish Stateful Connection
+
+For real-time communication with events, use `.connect()`:
+
+```typescript
+const counter = client.counter.getOrCreate(["live-counter"]);
+const connection = counter.connect();
+
+// Listen for events
+connection.on("countChanged", (newCount: number) => {
+  console.log("Count updated:", newCount);
+});
+
+// Call actions through the connection
+const result = await connection.increment(1);
+
+// Clean up when done
+await connection.dispose();
+```
+
+### Events
+
+#### `on(eventName, callback)` - Listen for Events
+
+Listen for events from the actor:
+
+```typescript
+// Listen for chat messages
+connection.on("messageReceived", (message) => {
+  console.log(`${message.from}: ${message.text}`);
+});
+
+// Listen for game state updates
+connection.on("gameStateChanged", (gameState) => {
+  updateUI(gameState);
+});
+
+// Listen for player events
+connection.on("playerJoined", (player) => {
+  console.log(`${player.name} joined the game`);
+});
+```
+
+#### `once(eventName, callback)` - Listen Once
+
+Listen for an event only once:
+
+```typescript
+// Wait for game to start
+connection.once("gameStarted", () => {
+  console.log("Game has started!");
+});
+```
+
+#### `off(eventName, callback?)` - Stop Listening
+
+Remove event listeners:
+
+```typescript
+const messageHandler = (message) => console.log(message);
+
+// Add listener
+connection.on("messageReceived", messageHandler);
+
+// Remove specific listener
+connection.off("messageReceived", messageHandler);
+
+// Remove all listeners for event
+connection.off("messageReceived");
+```
+
+### `dispose()` - Clean Up Connection
+
+Always dispose of connections when finished to free up resources:
+
+```typescript
+const connection = actor.connect();
+
+try {
+  // Use the connection
+  connection.on("event", handler);
+  await connection.someAction();
+} finally {
+  // Clean up the connection
+  await connection.dispose();
+}
+
+// Or with automatic cleanup in React/frameworks
+useEffect(() => {
+  const connection = actor.connect();
+  
+  return () => {
+    connection.dispose();
+  };
+}, []);
+```
+
+**Important:** Disposing a connection:
+- Closes the underlying WebSocket or SSE connection
+- Removes all event listeners
+- Cancels any pending reconnection attempts
+- Prevents memory leaks in long-running applications
+
+### Transports
+
+Connections automatically negotiate the best available transport:
+
+#### WebSocket Transport
+- **Full duplex**: Client can send and receive
+- **Low latency**: Immediate bidirectional communication
+- **Preferred**: Used when available
+
+#### Server-Sent Events (SSE)
+- **Server-to-client**: Events only, actions via HTTP
+- **Fallback**: Used when WebSocket unavailable
+- **Compatibility**: Works in restrictive environments
+
+### Reconnections
+
+Connections automatically handle network failures with robust reconnection logic:
+
+**Automatic Behavior:**
+- **Exponential backoff**: Retry delays increase progressively to avoid overwhelming the server
+- **Action queuing**: Actions called while disconnected are queued and sent once reconnected
+- **Event resubscription**: Event listeners are automatically restored on reconnection
+- **State synchronization**: Connection state is preserved and synchronized after reconnection
+
+## Authentication
+
+### Connection Parameters
+
+Pass authentication data when connecting to actors:
+
+```typescript
+// With connection parameters
+const chat = client.chatRoom.getOrCreate(["general"]);
+const connection = chat.connect({
+  authToken: "jwt-token-here",
+  userId: "user-123",
+  displayName: "Alice"
+});
+
+// Parameters available in actor via onAuth hook
+// Or for action calls
+const result = await chat.sendMessage("Hello world!", {
+  authToken: "jwt-token-here"
+});
+```
+
+### onAuth Hook Validation
+
+Actors can validate authentication using the `onAuth` hook:
+
+```typescript
+import { actor, Forbidden } from "@rivetkit/actor";
+
+const protectedActor = actor({
+  onAuth: async (opts) => {
+    const { req, params } = opts;
+    
+    // Extract token from params or headers
+    const token = params.authToken || req.headers.get("Authorization");
+    
+    if (!token) {
+      throw new Forbidden("Authentication required");
+    }
+    
+    // Validate and return user data
+    const user = await validateJWT(token);
+    return { userId: user.id, role: user.role };
+  },
+  
+  actions: {
+    protectedAction: (c, data: string) => {
+      // Access auth data via c.conn.auth
+      const { userId, role } = c.conn.auth;
+      
+      if (role !== "admin") {
+        throw new Forbidden("Admin access required");
+      }
+      
+      return `Hello admin ${userId}`;
+    }
+  }
+});
+```
+
+Learn more about [authentication patterns](/general/authentication).
+
+## Type Safety
+
+Rivet provides end-to-end type safety between clients and actors:
+
+### Action Type Safety
+
+TypeScript validates action signatures and return types:
+
+```typescript
+// TypeScript knows the action signatures
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+const count: number = await counter.increment(5);   // ✓ Correct
+const invalid = await counter.increment("5");       // ✗ Type error
+
+// IDE autocomplete shows available actions
+counter./* <IDE shows: increment, decrement, getCount, reset> */
+```
+
+### Client Type Safety
+
+Import types from your registry for full type safety:
+
+```typescript
+import type { registry } from "./registry";
+
+// Client is fully typed
+const client = createClient<typeof registry>("http://localhost:8080");
+
+// IDE provides autocomplete for all actors
+client./* <shows: counter, chatRoom, gameRoom, etc.> */
+```
+
+## Best Practices
+
+### Actions vs Connections
+
+**Use Stateless Actions For:**
+- Simple request-response operations
+- One-off operations  
+- Server-side integration
+- Minimal overhead required
+
+```typescript
+// Good for simple operations
+const result = await counter.increment(1);
+const status = await server.getStatus();
+```
+
+**Use Stateful Connections For:**
+- Real-time updates needed
+- Multiple related operations
+- Event-driven interactions
+- Long-lived client sessions
+
+```typescript
+// Good for real-time features
+const connection = chatRoom.connect();
+connection.on("messageReceived", updateUI);
+await connection.sendMessage("Hello!");
+```
+
+### Resource Management
+
+Always clean up connections when finished:
+
+```typescript
+// Manual cleanup
+const connection = actor.connect();
+try {
+  // Use connection
+  connection.on("event", handler);
+  await connection.action();
+} finally {
+  await connection.dispose();
+}
+
+// Automatic cleanup with lifecycle
+connection.on("disconnected", () => {
+  console.log("Connection cleaned up");
+});
+```
+
+### Error Handling
+
+Implement proper error handling for both actions and connections:
+
+```typescript
+// Action error handling
+try {
+  const result = await counter.increment(5);
+} catch (error) {
+  if (error.code === "RATE_LIMITED") {
+    console.log("Rate limited, try again later");
+  } else if (error.code === "UNAUTHORIZED") {
+    redirectToLogin();
+  } else {
+    console.error("Action failed:", error.message);
+  }
+}
+
+// Connection error handling
+connection.on("error", (error) => {
+  console.error("Connection error:", error);
+  // Implement reconnection logic if needed
+});
+```
+
+### Performance Optimization
+
+Use appropriate patterns for optimal performance:
+
+```typescript
+// Batch multiple operations through a connection
+const connection = actor.connect();
+await Promise.all([
+  connection.operation1(),
+  connection.operation2(),
+  connection.operation3(),
+]);
+
+// Use getOrCreate for actors you expect to exist
+const existing = client.counter.getOrCreate(["known-counter"]);
+
+// Use create only when you need a fresh instance
+const fresh = await client.counter.create(["new-counter"]);
+```

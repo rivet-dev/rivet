@@ -1,0 +1,408 @@
+# Node.js & Bun Quickstart
+
+Get started with Rivet Actors in Node.js and Bun
+
+<Steps>
+<Step title="Install Rivet">
+
+```sh
+npm install @rivetkit/actor
+```
+
+</Step>
+
+<Step title="Create an Actor">
+
+Create a simple counter actor:
+
+```ts registry.ts
+import { actor, setup } from "@rivetkit/actor";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, amount: number = 1) => {
+			c.state.count += amount;
+			c.broadcast("countChanged", c.state.count);
+			return c.state.count;
+		},
+		getCount: (c) => c.state.count,
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+</Step>
+
+<Step title="Setup Server">
+
+Choose your preferred web framework:
+
+<CodeGroup>
+
+```ts Hono
+import { registry } from "./registry";
+import { Hono } from "hono";
+
+// Start Rivet with memory driver (for development)
+const { client, serve } = registry.createServer();
+
+// Setup Hono app
+const app = new Hono();
+
+// Example API endpoint
+app.post("/increment/:name", async (c) => {
+	const name = c.req.param("name");
+
+	// Get or create actor and call action
+	const counter = client.counter.getOrCreate(name);
+	const newCount = await counter.increment(1);
+
+	return c.json({ count: newCount });
+});
+
+// Start server with Rivet
+serve(app);
+```
+
+```ts Express.js
+import { registry } from "./registry";
+import express from "express";
+
+// Start Rivet
+const { client, handler } = registry.createServer();
+
+// Setup Express app
+const app = express();
+app.use(express.json());
+
+// Mount Rivet handler
+app.use("/registry", handler);
+
+// Example API endpoints
+app.post("/increment/:name", async (req, res) => {
+	const { name } = req.params;
+
+      const counter = client.counter.getOrCreate(name);
+      const newCount = await counter.increment(1);
+      
+      res.json({ count: newCount });
+});
+
+app.listen(8080, () => {
+	console.log("Server running at http://localhost:8080");
+});
+```
+
+```ts Elysia
+import { registry } from "./registry";
+import { Elysia } from "elysia";
+
+// Start Rivet
+const { client, handler } = registry.createServer();
+
+// Setup Elysia app
+const app = new Elysia()
+	.mount("/registry", handler)
+	.post("/increment/:name", async ({ params, body }) => {
+		const { name } = params;
+
+		const counter = client.counter.getOrCreate(name);
+		const newCount = await counter.increment(1);
+
+		return { count: newCount };
+	})
+	.listen(8080);
+
+console.log("Server running at http://localhost:8080");
+```
+
+</CodeGroup>
+
+<Info>
+The `/registry` endpoint is automatically mounted by Rivet and is required for client communication. When using `serve()` with Hono, this is handled automatically.
+</Info>
+
+</Step>
+
+<Step title="Run Server">
+
+<CodeGroup>
+
+```sh Node.js
+npx tsx --watch server.ts
+```
+
+```sh Bun
+bun --watch server.ts
+```
+
+</CodeGroup>
+
+Your server is now running at `http://localhost:8080`
+
+</Step>
+
+<Step title="Test Your Actor">
+
+Test your counter actor using HTTP requests:
+
+<CodeGroup>
+
+```ts JavaScript
+// Increment counter
+const response = await fetch("http://localhost:8080/increment/my-counter", {
+	method: "POST"
+});
+
+const result = await response.json();
+console.log("Count:", result.count); // 1
+```
+
+```sh curl
+# Increment counter
+curl -X POST http://localhost:8080/increment/my-counter
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Deploy">
+
+By default, Rivet stores actor state on the local file system and will not scale in production.
+
+The following providers let you deploy & scale Rivet:
+
+<Tabs>
+
+<Tab title="Redis">
+
+For production with Redis storage, install the Redis driver:
+
+```sh
+npm install @rivetkit/redis
+```
+
+Then configure the driver:
+
+```ts server.ts
+import { registry } from "./registry";
+
+const { client, serve } = registry.createServer({
+  driver: createRedisDriver()
+});
+
+// ... rest of server setup ...
+```
+
+Your backend can now be deployed to your cloud provider of choice.
+
+</Tab>
+
+<Tab title="Cloudflare Workers">
+
+Deploy to Cloudflare Workers, install the Cloudflare Workers driver:
+
+```sh
+npm install @rivetkit/cloudflare-workers
+```
+
+Update your `server.ts` to support Cloudflare Workers:
+
+<CodeGroup>
+
+  ```ts Hono
+  import { createServer } from "@rivetkit/cloudflare-workers";
+  import { Hono } from "hono";
+  import { registry } from "./registry";
+
+  const { client, createHandler } = createServer(registry);
+
+  // Setup router
+  const app = new Hono();
+
+  // ... etc ...
+
+  const { handler, ActorHandler } = createHandler(app);
+
+  export { handler as default, ActorHandler };
+  ```
+
+  ```ts No Router
+  import { createServerHandler } from "@rivetkit/cloudflare-workers";
+  import { registry } from "./registry";
+
+  const { handler, ActorHandler } = createServerHandler(registry);
+  export { handler as default, ActorHandler };
+  ```
+
+</CodeGroup>
+
+Update your configuration file to support `ACTOR_DO` and `ACTOR_KV` bindings:
+
+```json wrangler.json
+{
+  "name": "my-rivetkit-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ActorHandler"]
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ACTOR_DO",
+        "class_name": "ActorHandler"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ACTOR_KV",
+      "id": "your_namespace_id"
+    }
+  ]
+}
+```
+
+Finally, deploy:
+
+```sh
+wrangler deploy
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+</Steps>
+
+## Configuration Options
+
+### Connect Frontend To The Rivet Actor
+
+Create a type-safe client to connect from your frontend:
+
+<Tabs>
+
+<Tab title="JavaScript">
+
+```ts
+import { createClient } from "@rivetkit/actor/client";
+import type { registry } from "./registry";
+
+// Create typed client
+const client = createClient<typeof registry>("http://localhost:8080");
+
+// Use the counter actor directly
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+// Call actions
+const count = await counter.increment(3);
+console.log("New count:", count);
+
+// Get current state
+const currentCount = await counter.getCount();
+console.log("Current count:", currentCount);
+
+// Listen to real-time events
+const connection = counter.connect();
+connection.on("countChanged", (newCount) => {
+	console.log("Count changed:", newCount);
+});
+
+// Increment through connection
+await connection.increment(1);
+```
+
+See the [JavaScript client documentation](/clients/javascript) for more information.
+
+</Tab>
+
+<Tab title="React">
+
+```tsx
+import { useState } from "react";
+import { createClient, createRivetKit } from "@rivetkit/react";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit(client);
+
+function Counter() {
+	const [count, setCount] = useState(0);
+	
+	const counter = useActor({
+		name: "counter",
+		key: ["my-counter"]
+	});
+
+	counter.useEvent("countChanged", (newCount: number) => {
+		setCount(newCount);
+	});
+
+	const increment = async () => {
+		await counter.connection?.increment(1);
+	};
+
+	return (
+		<div>
+			<p>Count: {count}</p>
+			<button onClick={increment}>Increment</button>
+		</div>
+	);
+}
+```
+
+See the [React documentation](/clients/react) for more information.
+
+</Tab>
+
+<Tab title="Rust">
+
+```rust
+use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new(
+        "http://localhost:8080",
+        TransportKind::Sse,
+        EncodingKind::Json
+    );
+    
+    // Get or create counter actor
+    let options = GetOrCreateOptions::default();
+    let counter = client.get("counter", ["my-counter"].into(), options)?
+        .connect();
+    
+    // Subscribe to events
+    counter.on_event("countChanged", |args| {
+        let count = args[0].as_i64().unwrap();
+        println!("Count updated: {}", count);
+    }).await;
+    
+    // Call increment action
+    let result = counter.action("increment", vec![json!(1)]).await?;
+    println!("New count: {}", result);
+    
+    Ok(())
+}
+```
+
+See the [Rust client documentation](/clients/rust) for more information.
+
+</Tab>
+
+</Tabs>

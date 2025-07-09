@@ -49,7 +49,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import imgHub from "@/images/screenshots/rivet-hub.png";
-import { CtaSection } from "../CtaSection";
+import { CTASection } from "../(index)/sections/CTASection";
 
 // Feature Status Component
 interface FeatureStatusProps {
@@ -105,13 +105,14 @@ const HeroSection = () => {
 		<div className="mx-auto max-w-7xl pt-20 pb-40 px-6 lg:px-8">
 			<div className="text-center">
 				<h1 className="text-5xl font-bold tracking-tight text-white mb-6">
-					Rivet vs Cloudflare Workers
+					Rivet Actors vs Cloudflare Durable Objects
 				</h1>
 				<p className="text-xl text-white/70 max-w-3xl mx-auto">
-					Cloudflare revolutionized serverless computing with Workers.
+					Cloudflare Durable Objects provide stateful serverless computing
+					with vendor lock-in.
 					<br />
-					Rivet takes it to the next level with an open-source &
-					developer-friendly platform.
+					Rivet Actors gives you the same capabilities as an open-source library
+					that works with your existing infrastructure and technology stack.
 				</p>
 			</div>
 
@@ -131,7 +132,10 @@ const HeroSection = () => {
 							/>
 						</div>
 					</div>
-					<div className="relative h-[1px] bg-white/20 z-20 w-[120%] -left-[10%]" style={{ marginTop: "-1px", position: "relative" }} />
+					<div
+						className="relative h-[1px] bg-white/20 z-20 w-[120%] -left-[10%]"
+						style={{ marginTop: "-1px", position: "relative" }}
+					/>
 				</div>
 			</div>
 		</div>
@@ -149,21 +153,21 @@ const CombinedOverviewSection = () => {
 		},
 		{
 			icon: faCheck,
-			title: "Flexible deployment options",
+			title: "Works with your existing infrastructure",
 			description:
-				"When you need the flexibility to deploy to either Rivet Cloud or self-host on-premises",
+				"When you want to use actors with your existing deployment process on Kubernetes, AWS, VPS, or any infrastructure",
 		},
 		{
 			icon: faCheck,
-			title: "Works with mainstream technologies",
+			title: "Supports any language/technology",
 			description:
-				"When you need things to work out of the box without fuss using Node.js, Python, Bun, and more instead of proprietary runtimes",
+				"When you need things to work out of the box with any programming language, framework, or runtime instead of proprietary platforms",
 		},
 		{
 			icon: faCheck,
-			title: "Open-source",
+			title: "Provides monitoring and observability",
 			description:
-				"When you want freedom from vendor lock-in and the benefits of an open-source community under the Apache 2.0 license",
+				"When you need built-in monitoring for actors that integrates with your existing observability stack",
 		},
 		//{
 		//	icon: faCheck,
@@ -176,21 +180,21 @@ const CombinedOverviewSection = () => {
 	const cloudflareChoices = [
 		{
 			icon: faCheck,
-			title: "Global CDN is a priority",
+			title: "Already using Cloudflare ecosystem",
 			description:
-				"When content delivery and edge caching are your primary requirements",
+				"When you're already committed to Cloudflare Workers and want stateful capabilities",
 		},
 		{
 			icon: faCheck,
-			title: "Tight Cloudflare ecosystem integration",
+			title: "JavaScript/TypeScript only",
 			description:
-				"When you need seamless integration with Cloudflare's existing services and security features",
+				"When your team exclusively works with JavaScript/TypeScript and doesn't need other languages",
 		},
 		{
 			icon: faCheck,
-			title: "Prefer Cloudflare's proprietary runtime",
+			title: "Don't mind platform constraints",
 			description:
-				"When you prefer Cloudflare's specific runtime environment over Node.js, Python, and your tools of choice",
+				"When you're comfortable with Cloudflare's deployment process, monitoring limitations, and vendor lock-in",
 		},
 	];
 
@@ -205,45 +209,38 @@ const CombinedOverviewSection = () => {
 						<div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white mr-4">
 							<Icon icon={faRivet} className="text-2xl" />
 						</div>
-						<h3 className="text-2xl font-medium text-white">
-							Rivet
-						</h3>
+						<h3 className="text-2xl font-medium text-white">Rivet</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Rivet simplifies building complex applications with an
-						open-source and developer-first platform. With Rivet,
-						developers can easily build and deploy Functions,
-						Actors, and Containers — all with the language and tools
-						they already know.
+						Rivet Actors is an open-source library that brings the actor model
+						to your existing infrastructure. Build stateful, distributed applications
+						with any language and technology stack, deployed on your own infrastructure.
 					</p>
-					
-					<h4 className="text-xl font-medium text-white mb-6">When to choose Rivet</h4>
+
+					<h4 className="text-xl font-medium text-white mb-6">
+						When to choose Rivet Actors
+					</h4>
 					<div className="space-y-6 flex-grow">
 						{rivetChoices.map((choice, index) => (
 							<div key={index} className="flex gap-4">
 								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon
-										icon={choice.icon}
-										className="text-xl"
-									/>
+									<Icon icon={choice.icon} className="text-xl" />
 								</div>
 								<div>
 									<h3 className="text-lg font-medium text-white mb-1">
 										{choice.title}
 									</h3>
-									<p className="text-white/70">
-										{choice.description}
-									</p>
+									<p className="text-white/70">{choice.description}</p>
 								</div>
 							</div>
 						))}
 					</div>
 					<div className="mt-10 text-center">
 						<Link
-							href="https://hub.rivet.gg"
+							href="/docs/actors/quickstart-backend"
 							className="inline-flex items-center px-4 py-2 bg-white text-black rounded-md hover:bg-white/90 transition-colors"
 						>
-							Get started with Rivet{" "}
+							Get started with Rivet Actors{" "}
 							<Icon icon={faArrowRight} className="ml-2" />
 						</Link>
 					</div>
@@ -254,35 +251,30 @@ const CombinedOverviewSection = () => {
 							<Icon icon={faCloudflare} className="text-2xl" />
 						</div>
 						<h3 className="text-2xl font-medium text-white">
-							Cloudflare Workers
+							Cloudflare Durable Objects
 						</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Cloudflare Workers is a serverless platform that lets
-						you execute code at the edge across Cloudflare's global
-						network of data centers. Built on Cloudflare's
-						proprietary JavaScript runtime, Workers provides
-						powerful functionality for edge computing, caching, and
-						stateful workloads.
+						Cloudflare Durable Objects provide stateful serverless computing
+						that runs on Cloudflare's global edge network. Built on Cloudflare's
+						proprietary platform, Durable Objects offer strong consistency 
+						and state persistence for JavaScript/TypeScript applications.
 					</p>
-					
-					<h4 className="text-xl font-medium text-white mb-6">When to choose Cloudflare Workers</h4>
+
+					<h4 className="text-xl font-medium text-white mb-6">
+						When to choose Cloudflare Durable Objects
+					</h4>
 					<div className="space-y-6 flex-grow">
 						{cloudflareChoices.map((choice, index) => (
 							<div key={index} className="flex gap-4">
 								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon
-										icon={choice.icon}
-										className="text-xl"
-									/>
+									<Icon icon={choice.icon} className="text-xl" />
 								</div>
 								<div>
 									<h3 className="text-lg font-medium text-white mb-1">
 										{choice.title}
 									</h3>
-									<p className="text-white/70">
-										{choice.description}
-									</p>
+									<p className="text-white/70">{choice.description}</p>
 								</div>
 							</div>
 						))}
@@ -321,8 +313,7 @@ const ComparisonTable = () => {
 						status: "yes",
 						text: (
 							<>
-								Yes, Rivet is open-source with the Apache 2.0
-								license.{" "}
+								Yes, Rivet is open-source with the Apache 2.0 license.{" "}
 								<Link href="https://github.com/rivet-gg/rivet">
 									View on GitHub
 								</Link>
@@ -340,234 +331,13 @@ const ComparisonTable = () => {
 			],
 		},
 		{
-			groupTitle: "Hosting Options",
-			features: [
-				{
-					feature: "Cloud hosting",
-					rivet: {
-						status: "yes",
-						text: (
-							<>
-								Rivet Cloud with{" "}
-								<Link href="/docs/edge">
-									global edge network
-								</Link>
-							</>
-						),
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Global edge network of data centers",
-					},
-					importance:
-						"Managed cloud hosting simplifies operations and maintenance",
-				},
-				{
-					feature: "Choose underlying cloud provider",
-					rivet: {
-						status: "yes",
-						text: (
-							<>
-								Choice of cloud providers for Rivet Cloud (
-								<Link href="/sales">contact us</Link>)
-							</>
-						),
-					},
-					cloudflare: {
-						status: "no",
-						text: "Limited to Cloudflare's infrastructure",
-					},
-					importance:
-						"Choosing your cloud provider allows you to ensure you can run your backend in the same datacenter as your database & other services",
-				},
-				{
-					feature: "Bring-your-own-cloud deployment",
-					rivet: {
-						status: "yes",
-						text: (
-							<>
-								Support for hybrid cloud/on-premises deployment
-								(<Link href="/sales">contact us</Link>)
-							</>
-						),
-					},
-					cloudflare: {
-						status: "no",
-						text: "Cloud-only solution",
-					},
-					importance:
-						"Hybrid options enable flexible compliance with regulatory requirements",
-				},
-				{
-					feature: "Self-hosting",
-					rivet: {
-						status: "yes",
-						text: (
-							<>
-								Full support for{" "}
-								<Link href="/docs/self-hosting">
-									self-hosting on any infrastructure
-								</Link>
-							</>
-						),
-					},
-					cloudflare: {
-						status: "no",
-						text: "No self-hosting option",
-					},
-					importance:
-						"Self-hosting provides control over infrastructure and data sovereignty",
-				},
-				{
-					feature: "Deployment portability",
-					rivet: {
-						status: "yes",
-						text: "Move between self-hosted and cloud seamlessly",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Locked to Cloudflare infrastructure",
-					},
-					importance:
-						"Portability prevents vendor lock-in and enables flexible deployment options",
-				},
-			],
-		},
-		{
-			groupTitle: "Core Runtime",
-			features: [
-				{
-					feature: "Programming languages",
-					rivet: {
-						status: "yes",
-						text: "JavaScript, TypeScript, Python, Rust, and any language that can run in Docker",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "JavaScript, TypeScript, Python (limited support via WASM), Rust (via WASM)",
-					},
-					importance:
-						"More language options provide flexibility for diverse team skills and use cases",
-				},
-				{
-					feature: "Local development",
-					rivet: {
-						status: "yes",
-						text: "Fully consistent local environment with 1:1 production parity",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "Wrangler with some production differences",
-					},
-					importance:
-						"Predictable local development reduces bugs and deployment surprises",
-				},
-				{
-					feature: "Pricing model",
-					rivet: {
-						status: "yes",
-						text: "Pay for CPU & memory with predictable scaling",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "Pay-per-request with complex variables",
-					},
-					importance:
-						"Transparent pricing helps with forecasting and budgeting",
-				},
-			],
-		},
-		{
-			groupTitle: "Rivet Functions vs Cloudflare Workers",
-			features: [
-				{
-					feature: "Automatic SSL Management",
-					rivet: {
-						status: "yes",
-						text: "Built-in SSL certificate management",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "SSL certificates included",
-					},
-					importance:
-						"Automatic SSL management simplifies secure deployments",
-				},
-				{
-					feature: "DDoS Mitigation",
-					rivet: {
-						status: "yes",
-						text: "Advanced DDoS protection built-in",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Includes DDoS protection",
-					},
-					importance:
-						"Protection against distributed denial of service attacks ensures application availability",
-				},
-				{
-					feature: "Runs at edge",
-					rivet: {
-						status: "yes",
-						text: "Global edge deployment with low latency",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Extensive global edge network",
-					},
-					importance:
-						"Edge computing reduces latency and improves user experience globally",
-				},
-				{
-					feature: "Cold starts",
-					rivet: {
-						status: "yes",
-						text: "Optimized cold starts with predictable performance",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Fast cold start times",
-					},
-					importance:
-						"Fast cold starts ensure consistent user experience without delays",
-				},
-				{
-					feature: "Memory limits",
-					rivet: {
-						status: "yes",
-						text: "Configurable based on workload needs",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "128MB limit for Workers",
-					},
-					importance:
-						"Higher memory limits enable more complex processing within a single function",
-				},
-				{
-					feature: "CPU time limits",
-					rivet: {
-						status: "yes",
-						text: "Unrestricted",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "10ms (free), 5m (paid)",
-					},
-					importance:
-						"Generous CPU time allows for more complex operations without timing out",
-				},
-			],
-		},
-		{
 			groupTitle: "Rivet Actors vs Cloudflare Durable Objects",
 			features: [
 				{
 					feature: "Actor support",
 					rivet: {
 						status: "yes",
-						text: "First-class actor model with Rivet Actors",
+						text: "First-class actor model with Rivet Actors library",
 					},
 					cloudflare: {
 						status: "yes",
@@ -575,6 +345,58 @@ const ComparisonTable = () => {
 					},
 					importance:
 						"Actor model enables scalable stateful applications with state persistence, hibernation, and realtime",
+				},
+				{
+					feature: "Works with existing infrastructure",
+					rivet: {
+						status: "yes",
+						text: "Deploy actors on Kubernetes, AWS, VPS, or any infrastructure",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Locked to Cloudflare's infrastructure",
+					},
+					importance:
+						"Using your existing infrastructure avoids vendor lock-in and integrates with your current setup",
+				},
+				{
+					feature: "No changes to deploy process",
+					rivet: {
+						status: "yes",
+						text: "Import the library and deploy with your existing CI/CD",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Requires Cloudflare-specific deployment process",
+					},
+					importance:
+						"Keeping your existing deployment process reduces complexity and learning curve",
+				},
+				{
+					feature: "Language/technology support", 
+					rivet: {
+						status: "yes",
+						text: "Works with any language or technology stack",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Limited to JavaScript/TypeScript",
+					},
+					importance:
+						"Full language support lets you use your existing skills and codebase",
+				},
+				{
+					feature: "Integrates with existing monitoring",
+					rivet: {
+						status: "yes",
+						text: "Works with your existing observability stack",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Limited monitoring options, mostly Cloudflare-specific",
+					},
+					importance:
+						"Integration with existing monitoring reduces operational overhead",
 				},
 				{
 					feature: "KV Persistence",
@@ -781,24 +603,6 @@ const ComparisonTable = () => {
 			],
 		},
 		{
-			groupTitle: "Rivet Containers vs Cloudflare Containers",
-			features: [
-				{
-					feature: "Container support",
-					rivet: {
-						status: "yes",
-						text: "Rivet supports containers",
-					},
-					cloudflare: {
-						status: "coming-soon",
-						text: "Cloudflare Containers are in development, details TBD",
-					},
-					importance:
-						"Supports launching containers on-demand for use cases such as batch jobs, game servers, media encoding, and more",
-				},
-			],
-		},
-		{
 			groupTitle: "Platform",
 			features: [
 				{
@@ -926,25 +730,17 @@ const ComparisonTable = () => {
 							<th className="py-4 px-6 text-left text-sm font-medium">
 								<div className="flex items-center">
 									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white mr-2">
-										<Icon
-											icon={faRivet}
-											className="text-xs"
-										/>
+										<Icon icon={faRivet} className="text-xs" />
 									</div>
-									<span className="text-white">Rivet</span>
+									<span className="text-white">Rivet Actors</span>
 								</div>
 							</th>
 							<th className="py-4 px-6 text-left text-sm font-medium">
 								<div className="flex items-center">
 									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white/70 mr-2">
-										<Icon
-											icon={faCloudflare}
-											className="text-xs"
-										/>
+										<Icon icon={faCloudflare} className="text-xs" />
 									</div>
-									<span className="text-white/70">
-										Cloudflare Workers
-									</span>
+									<span className="text-white/70">Cloudflare Durable Objects</span>
 								</div>
 							</th>
 							<th className="py-4 px-6 text-left text-sm font-medium text-white/70">
@@ -981,9 +777,7 @@ const ComparisonTable = () => {
 										</td>
 										<td className="py-4 px-6 text-sm text-white/70">
 											<FeatureStatus
-												status={
-													feature.cloudflare.status
-												}
+												status={feature.cloudflare.status}
 												text={feature.cloudflare.text}
 											/>
 										</td>
@@ -1005,10 +799,16 @@ const ComparisonTable = () => {
 const MigrationSection = () => {
 	return (
 		<div className="mx-auto max-w-4xl py-12 px-6 lg:px-8 bg-zinc-900/50 rounded-lg border border-white/10">
-			<h2 className="text-2xl font-medium text-white mb-6">Migrating from Cloudflare Workers or have questions?</h2>
+			<h2 className="text-2xl font-medium text-white mb-6">
+				Migrating from Cloudflare Durable Objects or have questions?
+			</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					Looking to migrate your existing Cloudflare Workers applications to Rivet or have more questions about how Rivet can meet your needs? Our team can help make the transition smooth and seamless. We provide migration assistance, technical guidance, and dedicated support to ensure your experience with Rivet is successful.
+					Looking to migrate your existing Cloudflare Durable Objects to
+					Rivet Actors or have more questions about how Rivet Actors can meet your needs? Our
+					team can help make the transition smooth and seamless. We provide
+					migration assistance, technical guidance, and dedicated support to
+					ensure your experience with Rivet Actors is successful.
 				</p>
 				<div className="mt-6">
 					<Link
@@ -1030,14 +830,13 @@ const Conclusion = () => {
 			<h2 className="text-3xl font-medium text-white mb-6">Conclusion</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					While Cloudflare Workers excels at global CDN capabilities
-					and edge computing, Rivet offers an open-source and more
-					developer-friendly experience with flexible deployment
-					options, comprehensive local development tools, and powerful
-					stateful models through its actor system. Choose Rivet for
-					complex applications that benefit from open-source
-					flexibility, or Cloudflare when tight CDN integration is
-					your priority.
+					While Cloudflare Durable Objects provides stateful serverless computing
+					with vendor lock-in, Rivet Actors offers the same actor model capabilities
+					as an open-source library that works with your existing infrastructure.
+					Choose Rivet Actors when you want the power of actors without changing
+					your deployment process, technology stack, or being locked into a specific
+					platform. Choose Cloudflare Durable Objects when you're already committed 
+					to the Cloudflare ecosystem and don't mind the platform constraints.
 				</p>
 			</div>
 		</div>
@@ -1062,8 +861,9 @@ export default function RivetVsCloudflareWorkersPage() {
 
 				<Conclusion />
 				<MigrationSection />
-				<CtaSection />
+				<CTASection />
 			</div>
 		</div>
 	);
 }
+

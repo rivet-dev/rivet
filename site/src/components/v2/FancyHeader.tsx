@@ -1,6 +1,5 @@
 "use client";
 import { DocsMobileNavigation } from "@/components/DocsMobileNavigation";
-import { GitHubStars } from "@/components/GitHubStars";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import { Button, cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
@@ -10,38 +9,43 @@ import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
+import { GitHubDropdown } from "./GitHubDropdown";
 
 interface TextNavItemProps {
-  href: string;
-  children: ReactNode;
-  onMouseEnter?: () => void;
-  className?: string;
-  ariaCurrent?: boolean | "page" | "step" | "location" | "date" | "time";
+	href: string;
+	children: ReactNode;
+	onMouseEnter?: () => void;
+	className?: string;
+	ariaCurrent?: boolean | "page" | "step" | "location" | "date" | "time";
 }
 
-function TextNavItem({ href, children, onMouseEnter, className, ariaCurrent }: TextNavItemProps) {
-  return (
-    <div className={cn("px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200", className)}>
-      <RivetHeader.NavItem
-        asChild
-        onMouseEnter={onMouseEnter}
-      >
-        <Link
-          href={href}
-          className="text-white"
-          aria-current={ariaCurrent}
-        >
-          {children}
-        </Link>
-      </RivetHeader.NavItem>
-    </div>
-  );
+function TextNavItem({
+	href,
+	children,
+	onMouseEnter,
+	className,
+	ariaCurrent,
+}: TextNavItemProps) {
+	return (
+		<div
+			className={cn(
+				"px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200",
+				className,
+			)}
+		>
+			<RivetHeader.NavItem asChild onMouseEnter={onMouseEnter}>
+				<Link href={href} className="text-white" aria-current={ariaCurrent}>
+					{children}
+				</Link>
+			</RivetHeader.NavItem>
+		</div>
+	);
 }
 
 type Subnav = false | "product" | "solutions";
 
 interface FancyHeaderProps {
-	active?: "product" | "docs" | "blog" | "pricing";
+	active?: "product" | "docs" | "blog" | "cloud";
 	subnav?: ReactNode;
 	mobileBreadcrumbs?: ReactNode;
 }
@@ -52,11 +56,21 @@ export function FancyHeader({
 	mobileBreadcrumbs,
 }: FancyHeaderProps) {
 	const [isSubnavOpen, setIsSubnavOpen] = useState<Subnav>(false);
+	const [isScrolled, setIsScrolled] = useState(false);
 	const prev = useRef<Subnav>(false);
 
 	useEffect(() => {
 		prev.current = isSubnavOpen;
 	}, [isSubnavOpen]);
+
+	useEffect(() => {
+		const handleScroll = () => {
+			setIsScrolled(window.scrollY > 20);
+		};
+
+		window.addEventListener("scroll", handleScroll);
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, []);
 
 	const headerStyles = cn(
 		"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none",
@@ -73,13 +87,23 @@ export function FancyHeader({
 				className="fixed top-0 z-50  w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8"
 				onMouseLeave={() => setIsSubnavOpen(false)}
 			>
-				<motion.div className='relative before:pointer-events-none before:absolute  before:inset-[-1px] before:z-20  before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] md:before:block'>
+				<motion.div
+					className={cn(
+						"hero-bg-exclude",
+						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
+						isScrolled || isSubnavOpen
+							? "before:border-white/10"
+							: "before:border-transparent",
+					)}
+				>
 					<motion.div
 						className={cn(
-							"absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl transition-all md:block",
+							"absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl transition-all duration-300 ease-in-out md:block",
 							isSubnavOpen
 								? "bg-background backdrop-blur-0 backdrop-saturate-0"
-								: "bg-background/80 backdrop-blur-lg",
+								: isScrolled
+									? "bg-background/80 backdrop-blur-lg"
+									: "bg-background backdrop-blur-none",
 						)}
 					/>
 					<RivetHeader
@@ -100,9 +124,7 @@ export function FancyHeader({
 						support={
 							<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 								<RivetHeader.NavItem asChild>
-									<Link href="https://hub.rivet.gg">
-										Sign In
-									</Link>
+									<Link href="https://hub.rivet.gg">Sign In</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
 									<Link href="/discord">Discord</Link>
@@ -114,25 +136,14 @@ export function FancyHeader({
 						}
 						links={
 							<div className="flex flex-row items-center">
-								<RivetHeader.NavItem
-									asChild
-									className="p-2 mr-4"
-								>
-									<Link
-										href="/discord"
-										className="text-white/90"
-									>
-										<Icon
-											icon={faDiscord}
-											className="drop-shadow-md"
-										/>
+								<RivetHeader.NavItem asChild className="p-2 mr-4">
+									<Link href="/discord" className="text-white/90">
+										<Icon icon={faDiscord} className="drop-shadow-md" />
 									</Link>
 								</RivetHeader.NavItem>
-								<GitHubStars 
-									className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" 
-								/>
-								<Link 
-									href="https://hub.rivet.gg" 
+								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
+								<Link
+									href="https://hub.rivet.gg"
 									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 								>
 									Sign In
@@ -166,26 +177,26 @@ export function FancyHeader({
                   onMouseEnter={() => setIsSubnavOpen('solutions')}>
                   <div className='text-white/90'>Solutions</div>
                 </RivetHeader.NavItem> */}
-								<TextNavItem 
+								<TextNavItem
 									href="/docs"
 									onMouseEnter={() => setIsSubnavOpen(false)}
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Documentation
 								</TextNavItem>
-								<TextNavItem 
+								<TextNavItem
+									href="/cloud"
+									onMouseEnter={() => setIsSubnavOpen(false)}
+									ariaCurrent={active === "cloud" ? "page" : undefined}
+								>
+									Cloud
+								</TextNavItem>
+								<TextNavItem
 									href="/changelog"
 									onMouseEnter={() => setIsSubnavOpen(false)}
 									ariaCurrent={active === "blog" ? "page" : undefined}
 								>
 									Changelog
-								</TextNavItem>
-								<TextNavItem 
-									href="/pricing"
-									onMouseEnter={() => setIsSubnavOpen(false)}
-									ariaCurrent={active === "pricing" ? "page" : undefined}
-								>
-									Pricing
 								</TextNavItem>
 							</div>
 						}
@@ -206,19 +217,13 @@ export function FancyHeader({
 									{isSubnavOpen === "product" ? (
 										<motion.div
 											key="product"
-											onMouseLeave={() =>
-												setIsSubnavOpen(false)
-											}
+											onMouseLeave={() => setIsSubnavOpen(false)}
 											className=" absolute inset-0"
 										>
 											<motion.div
 												initial={{
 													opacity: 0,
-													y:
-														prev.current ===
-														"solutions"
-															? -10
-															: 0,
+													y: prev.current === "solutions" ? -10 : 0,
 												}}
 												animate={{ opacity: 1, y: 0 }}
 												exit={{ opacity: 0, y: 0 }}

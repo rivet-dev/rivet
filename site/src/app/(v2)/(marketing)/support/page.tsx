@@ -64,7 +64,7 @@ export default function SupportPage() {
 					</a>
 					{/* Docs Tile */}
 					<a
-						href="https://rivet.gg/docs"
+						href="https://rivet.gg/docs/actors"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="group rounded-xl bg-white/2 border border-white/20 hover:border-white/40 shadow-sm transition-all duration-200 relative overflow-hidden h-[180px] flex flex-col items-center justify-center px-8"

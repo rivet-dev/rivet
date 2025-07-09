@@ -1,0 +1,44 @@
+export const keywords = ["Rivet", "open-source", "backend", "functions", "actors", "containers", "serverless", "stateful"]
+
+import { Icon, faActorsBorderless, faServer, faFunction } from '@rivet-gg/icons';
+
+# Rivet Cloud
+
+Rivet is the open-source serverless platform to scale complex backends anywhere like AI Agents, Real-Time Apps, and Multiplayer Games.
+
+## <Icon icon={faFunction} className="mr-2" /> Stateless Functions
+
+**Description**: Short-lived HTTP requests at the edge
+
+**State**: No persistent state (store state in [Actors](/docs/actors) or external database)
+
+**Use Cases**: APIs, edge computing, microservices
+
+**Replaces**: Cloudflare Workers, AWS Lambda, Google Cloud Run Functions
+
+[Get Started →](/docs/functions)
+
+## <Icon icon={faActorsBorderless} className="mr-2" /> Stateful Actors
+
+**Description**: Long running tasks with state persistence, hibernation, and realtime
+
+**State**: Yes, built-in state persistence (also works with external databases)
+
+**Use Cases**: AI agents, realtime apps, local-first sync, rate limiting, stream processing
+
+**Replaces**: Cloudflare Durable Objects, Redis, Socket.io, AWS Lambda + DynamoDB + EventBridge
+
+[Get Started →](/docs/actors)
+
+## <Icon icon={faServer} className="mr-2" /> Sandboxed Containers
+
+**Description**: Docker-like containers for CPU- or memory-intensive workloads
+
+**State**: No persistent state (store state in [Actors](/docs/actors) or external database)
+
+**Use Cases**: Sandboxed code execution, desktop/browser automation, game servers, FFmpeg, PDF processing
+
+**Replaces**: Kubernetes Batch Jobs, AWS Fargate, Google Cloud Run
+
+[Get Started →](/docs/containers)
+

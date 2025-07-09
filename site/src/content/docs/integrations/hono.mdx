@@ -1,0 +1,101 @@
+# Hono
+
+Integrate Rivet with Hono for ultra-fast web applications
+
+Hono is an ultra-fast web framework that works on any runtime. Rivet integrates seamlessly with Hono through the `serve()` method.
+
+<Card title="View Example on GitHub" icon="github" href="https://github.com/rivet-gg/rivetkit/tree/main/examples/hono" arrow horizontal>
+	Check out the complete example
+</Card>
+
+## Installation
+
+Install Hono alongside Rivet:
+
+```bash
+npm install hono
+```
+
+## Basic Setup
+
+<Steps>
+<Step title="Create Your Registry">
+Set up your Rivet Actor:
+
+```typescript
+// registry.ts
+import { actor, setup } from "@rivetkit/actor";
+
+export const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount: number = 1) => {
+      c.state.count += amount;
+      c.broadcast("countChanged", c.state.count);
+      return c.state.count;
+    },
+    getCount: (c) => c.state.count,
+  },
+});
+
+export const registry = setup({
+  use: { counter },
+});
+```
+</Step>
+
+<Step title="Integrate with Hono">
+Use Rivet's `serve()` method with your Hono app:
+
+```typescript
+// server.ts
+import { registry } from "./registry";
+import { Hono } from "hono";
+
+// Start Rivet
+const { client, serve } = registry.createServer();
+
+// Setup Hono app
+const app = new Hono();
+
+// Add your API routes
+app.post("/increment/:name", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const amount = body.amount || 1;
+  
+  try {
+    const counter = client.counter.getOrCreate([name]);
+    const newCount = await counter.increment(amount);
+    
+    return c.json({ success: true, count: newCount });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error.message 
+    }, 500);
+  }
+});
+
+app.get("/count/:name", async (c) => {
+  const name = c.req.param("name");
+  
+  try {
+    const counter = client.counter.getOrCreate([name]);
+    const count = await counter.getCount();
+    
+    return c.json({ name, count });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error.message 
+    }, 500);
+  }
+});
+
+// Start server with Rivet integration
+serve(app);
+```
+</Step>
+</Steps>
+
