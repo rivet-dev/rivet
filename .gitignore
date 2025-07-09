@@ -23,6 +23,7 @@
 **/target
 
 # Site
+site/out/
 site/public/rss/
 !site/public/rss/.gitkeep
 

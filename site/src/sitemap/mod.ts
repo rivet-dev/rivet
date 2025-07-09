@@ -157,7 +157,13 @@ export const sitemap = [
 			},
 			{
 				title: "Integrations",
+				// IMPORTANT: Also update integrations/index.mdx
 				pages: [
+					{
+						title: "Overview",
+						href: "/docs/integrations",
+						icon: faSquareInfo,
+					},
 					{
 						title: "Frontend & Clients",
 						icon: faCode,
@@ -435,9 +441,9 @@ export const sitemap = [
 								title: "Errors",
 								href: "/docs/cloud/api/errors",
 							},
-						]
+						],
 					},
-					...(apiData.groups as SidebarItem[]).map(x => {
+					...(apiData.groups as SidebarItem[]).map((x) => {
 						x.collapsible = true;
 						return x;
 					}),
@@ -478,4 +484,3 @@ export const sitemap = [
 	// 	],
 	// },
 ] satisfies Sitemap;
-

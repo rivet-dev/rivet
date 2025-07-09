@@ -234,11 +234,11 @@ const chatRoom = actor({
 })
 ```
 
-See the [auth documentation](https://rivet.gg/docs/rivetkit/auth) for more details.
+See the [auth documentation](/docs/general/auth) for more details.
 
 ### Better Auth Integration
 
-See the [RivetKit + Better Auth integration](https://rivet.gg/docs/rivetkit/integrations/better-auth).
+See the [RivetKit + Better Auth integration](/docs/integrations/better-auth).
 
 ### Communicating Between Actors
 
@@ -296,7 +296,7 @@ For example:
 const chatThread = client.chatThread.getOrCreate([roomId, threadId]);
 ```
 
-See the new [actor handles documentation](https://rivet.gg/docs/rivetkit/actors/handles).
+See the new [actor handles documentation](/docs/actors/communicating-with-actors).
 
 ### Pass Input to create
 
@@ -322,7 +322,7 @@ const newGame = await client.game.create(["game-456"], {
 });
 ```
 
-Read more about [creating actors](https://rivet.gg/docs/rivetkit/actors/creating).
+Read more about [creating actors](/docs/actors/communicating-with-actors).
 
 ### Stateless Communication With Actors
 
@@ -348,7 +348,7 @@ const result = await connection.increment(1);
 await connection.dispose();
 ```
 
-Read the new [connections documentation](https://rivet.gg/docs/rivetkit/actors/connections).
+Read the new [connections documentation](/docs/actors/connections).
 
 ### Secured Params & Input
 
@@ -356,7 +356,7 @@ Parameters & input data to actors are now end-to-end encrypted securely. Previou
 
 ### OpenAPI Spec
 
-RivetKit now provides an OpenAPI spec to integrate your own clients. Read the [specification documentation](https://rivet.gg/docs/rivetkit/openapi) and see the full [openapi.json](https://rivet.gg/docs/rivetkit/openapi.json).
+RivetKit now provides an OpenAPI spec to integrate your own clients. See the full [openapi.json](https://github.com/rivet-gg/rivetkit/blob/d21e3ec447654a921a72cb47c9dca480ce6d78df/docs/openapi.json).
 
 ## More Information
 
