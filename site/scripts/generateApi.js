@@ -5,7 +5,7 @@ import { resolve, join, dirname } from '@std/path';
 import dedent from 'dedent';
 
 const SPEC_PATH = resolve(import.meta.dirname, '../../sdks/api/full/openapi/openapi.yml');
-const OUTPUT_PATH = resolve(import.meta.dirname, '../src/content/docs/api');
+const OUTPUT_PATH = resolve(import.meta.dirname, '../src/content/docs/cloud/api');
 const ERRORS_PATH = join(OUTPUT_PATH, 'errors.mdx');
 const ERRORS_DIR_PATH = resolve(import.meta.dirname, '../../packages/common/formatted-error/errors');
 
