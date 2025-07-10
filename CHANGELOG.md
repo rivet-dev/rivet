@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.5.2](https://github.com/rivet-gg/rivet/compare/v25.5.1...v25.5.2) (2025-07-10)
+
+
+### Features
+
+* add skip_upgrade flag for actor deployments ([#2739](https://github.com/rivet-gg/rivet/issues/2739)) ([f3e1051](https://github.com/rivet-gg/rivet/commit/f3e1051a41dc4ed21adec3b7e2ec05beb9c06d5d))
+
+
+### Bug Fixes
+
+* fix ports ([#2729](https://github.com/rivet-gg/rivet/issues/2729)) ([e13ac80](https://github.com/rivet-gg/rivet/commit/e13ac80c95022dfa4f797a24cf2c52f35b3beb11))
+* make artifact size changes not break wf ([#2726](https://github.com/rivet-gg/rivet/issues/2726)) ([17620f8](https://github.com/rivet-gg/rivet/commit/17620f80b8670c2487a60d6317830aa33c13295b))
+* reduce cardinality of metrics ([#2691](https://github.com/rivet-gg/rivet/issues/2691)) ([e63f5c1](https://github.com/rivet-gg/rivet/commit/e63f5c1744b6304a7cab1952f57b2e44bb79b28d))
+* **release:** fix generate api path ([c9926da](https://github.com/rivet-gg/rivet/commit/c9926da7f8901ca35b84208dbbfa6e4228d5ade7))
+* **release:** fix replace install script version ([7e69fc0](https://github.com/rivet-gg/rivet/commit/7e69fc0026f4edb6d0e0e12add903b8784785bb2))
+* **site:** fix generate api path ([73a05a5](https://github.com/rivet-gg/rivet/commit/73a05a5c76bb730b3e9a7d7220ca70042d095d4d))
+* sqlite lock error ([#2672](https://github.com/rivet-gg/rivet/issues/2672)) ([e187b64](https://github.com/rivet-gg/rivet/commit/e187b64847f93eb79880a476da42861bc6ed06b8))
+
+
+### Chores
+
+* fix broken links ([#2734](https://github.com/rivet-gg/rivet/issues/2734)) ([a99678c](https://github.com/rivet-gg/rivet/commit/a99678ce3acd047647f2360c124f4f537636d324))
+* release 25.5.2 ([d8ffbf0](https://github.com/rivet-gg/rivet/commit/d8ffbf0c8e198a650f0a5d94584ea0e85d3498a3))
+* release 25.5.2 ([b210f39](https://github.com/rivet-gg/rivet/commit/b210f39177325b5b8cf4f70e18a89bf32ddb21f4))
+* **release:** update version to 25.5.2 ([88d4760](https://github.com/rivet-gg/rivet/commit/88d4760834de2bd92a5d5be17eb1e67a5e019acc))
+* **release:** update version to 25.5.2 ([5e03f9e](https://github.com/rivet-gg/rivet/commit/5e03f9eff94c706839889eaa1ec5a6e917d476fc))
+* update docs for rivetkit ([#2732](https://github.com/rivet-gg/rivet/issues/2732)) ([f0243da](https://github.com/rivet-gg/rivet/commit/f0243da833e81f3257ae3944e107450a2ffabfc9))
+
 ## [25.5.1](https://github.com/rivet-gg/rivet/compare/v25.4.1...v25.5.1) (2025-07-03)
 
 
