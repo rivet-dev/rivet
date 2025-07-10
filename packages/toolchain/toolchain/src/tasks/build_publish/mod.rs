@@ -25,6 +25,8 @@ pub struct Input {
 	pub version_name: String,
 	pub build_name: String,
 	pub runtime: config::build::Runtime,
+	#[serde(default)]
+	pub skip_upgrade: bool,
 }
 
 #[derive(Serialize)]
@@ -62,6 +64,7 @@ impl task::Task for Task {
 			input.build_name.clone(),
 			input.build_tags.clone(),
 			&input.runtime,
+			input.skip_upgrade,
 		)
 		.await?;
 
@@ -80,6 +83,7 @@ async fn build_and_upload(
 	build_name: String,
 	extra_build_tags: Option<HashMap<String, String>>,
 	runtime: &Runtime,
+	skip_upgrade: bool,
 ) -> Result<Uuid> {
 	task.log("");
 
@@ -168,18 +172,22 @@ async fn build_and_upload(
 	complete_res.context("complete_res")?;
 
 	// Upgrade actors
-	task.log(format!("[Upgrading Actors]"));
-	apis::actors_api::actors_upgrade_all(
-		&ctx.openapi_config_cloud,
-		models::ActorsUpgradeAllActorsRequest {
-			tags: Some(serde_json::to_value(&build_tags)?),
-			build: Some(build_id),
-			build_tags: None,
-		},
-		Some(&ctx.project.name_id),
-		Some(&env.slug),
-	)
-	.await?;
+	if !skip_upgrade {
+		task.log(format!("[Upgrading Actors]"));
+		apis::actors_api::actors_upgrade_all(
+			&ctx.openapi_config_cloud,
+			models::ActorsUpgradeAllActorsRequest {
+				tags: Some(serde_json::to_value(&build_tags)?),
+				build: Some(build_id),
+				build_tags: None,
+			},
+			Some(&ctx.project.name_id),
+			Some(&env.slug),
+		)
+		.await?;
+	} else {
+		task.log(format!("[Skipping Actor Upgrade]"));
+	}
 
 	let hub_origin = &ctx.bootstrap.origins.hub;
 	let project_slug = &ctx.project.name_id;

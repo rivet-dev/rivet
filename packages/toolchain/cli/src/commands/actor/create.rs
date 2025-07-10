@@ -203,6 +203,7 @@ impl Opts {
 				skip_route_creation: None,
 				keep_existing_routes: None,
 				non_interactive: false,
+				skip_upgrade: false,
 			})
 			.await?;
 

@@ -56,6 +56,10 @@ pub struct Opts {
 	#[clap(long)]
 	unstable_compression: Option<config::build::Compression>,
 
+	/// Skip upgrading actors
+	#[clap(long)]
+	skip_upgrade: bool,
+
 	// Docker options
 	/// Specify a pre-built Docker image instead of building from a Dockerfile
 	#[clap(long)]
@@ -170,6 +174,7 @@ impl Opts {
 				version_name,
 				build_name: self.name.clone(),
 				runtime,
+				skip_upgrade: self.skip_upgrade,
 			},
 		)
 		.await?;

@@ -30,6 +30,10 @@ pub struct Opts {
 	/// Run in non-interactive mode (no prompts)
 	#[clap(long)]
 	non_interactive: bool,
+
+	/// Skip upgrading actors
+	#[clap(long)]
+	skip_upgrade: bool,
 }
 
 impl Opts {
@@ -61,6 +65,7 @@ impl Opts {
 			skip_route_creation: self.skip_route_creation,
 			keep_existing_routes: self.keep_existing_routes,
 			non_interactive: self.non_interactive,
+			skip_upgrade: self.skip_upgrade,
 		})
 		.await?;
 
