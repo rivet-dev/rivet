@@ -27,17 +27,17 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `version:\n  header: "X-API-Version"\n  default: "${opts.version}"\n  values: ["${opts.version}"]`,
 		},
 		{
-			path: "site/src/content/docs/install.mdx",
+			path: "site/src/content/docs/cloud/install.mdx",
 			find: /rivet-cli@.*/g,
 			replace: `rivet-cli@${opts.version}`,
 		},
 		{
-			path: "site/src/content/docs/install.mdx",
+			path: "site/src/content/docs/cloud/install.mdx",
 			find: /RIVET_CLI_VERSION=.*/g,
 			replace: `RIVET_CLI_VERSION=${opts.version}`,
 		},
 		{
-			path: "site/src/content/docs/install.mdx",
+			path: "site/src/content/docs/cloud/install.mdx",
 			find: /\$env:RIVET_CLI_VERSION = ".*"/g,
 			replace: `$env:RIVET_CLI_VERSION = "${opts.version}"`,
 		},
