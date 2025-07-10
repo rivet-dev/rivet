@@ -236,7 +236,7 @@ async function generateApiDocs(indexContent = `# API\nRead documentation for all
   );
 
   await Deno.writeTextFile(
-    resolve(OUTPUT_PATH, '../../../generated/apiPages.json'),
+    resolve(OUTPUT_PATH, '../../../../generated/apiPages.json'),
     JSON.stringify({ groups: groupEntries }, null, 2)
   );
 }
