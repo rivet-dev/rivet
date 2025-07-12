@@ -39,68 +39,23 @@ async fn fdb_sqlite_nats_driver() {
 	// .await
 	// .unwrap();
 
-	// let res = db
-	// 	.find_workflow(
-	// 		"workflow_name",
-	// 		&json!({
-	// 			"bald": "eagle",
-	// 			"fat": "man"
-	// 		}),
-	// 	)
-	// 	.await
-	// 	.unwrap();
-	// tracing::info!(?res);
+	let workflow_id = ctx.workflow(def::Input { })
+	.dispatch()
+	.await
+	.unwrap();
 
-	// db.update_workflow_tags(
-	// 	workflow_id,
-	// 	"workflow_name",
-	// 	&json!({
-	// 		"bald": "eagle",
-	// 		"fat": "man"
-	// 	}),
-	// )
-	// .await
-	// .unwrap();
+	let ctx2 = ctx.clone();
+	tokio::spawn(async move {
+		tokio::time::sleep(Duration::from_millis(110)).await;
 
-	// let res = db
-	// 	.find_workflow(
-	// 		"workflow_name",
-	// 		&json!({
-	// 			"bald": "eagle",
-	// 			"fat": "man"
-	// 		}),
-	// 	)
-	// 	.await
-	// 	.unwrap();
-	// tracing::info!(?res);
-
-	if std::env::var("SPAWN_WF").unwrap_or_default() == "1" {
-		for _ in 0..1 {
-			let ctx2 = ctx.clone();
-			tokio::spawn(async move {
-				ctx2.workflow(def::Input {})
-					.tag("foo", "bar")
-					.dispatch()
-					.await
-					.unwrap();
-			});
-		}
-	}
-
-	// let ctx2 = ctx.clone();
-	// tokio::spawn(async move {
-	// 	for _ in 0..10 {
-	// 		tokio::time::sleep(Duration::from_secs(2)).await;
-	// 		ctx2.signal(def::MySignal {
-	// 			test: Uuid::new_v4(),
-	// 		})
-	// 		.to_workflow::<def::Workflow>()
-	// 		.tag("foo", "bar")
-	// 		.send()
-	// 		.await
-	// 		.unwrap();
-	// 	}
-	// });
+		ctx2.signal(def::MySignal {
+			test: Uuid::new_v4(),
+		})
+		.to_workflow_id(workflow_id)
+		.send()
+		.await
+		.unwrap();
+	});
 
 	let worker = Worker::new(reg.clone(), db.clone());
 
@@ -120,43 +75,14 @@ mod def {
 	pub async fn test(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 		tracing::info!(w=?ctx.workflow_id(), "hello from workflow");
 
-		ctx.activity(TestActivityInput {
-			foo: "bar".to_string(),
-		})
-		.await?;
-
-		// let workflow_id = ctx.workflow_id();
-		// ctx.signal(MySignal {
-		// 	test: Uuid::new_v4(),
+		// ctx.activity(TestActivityInput {
+		// 	foo: "bar".to_string(),
 		// })
-		// .to_workflow_id(workflow_id)
-		// .send()
 		// .await?;
 
-		ctx.repeat(|ctx| {
-			async move {
-				let sig = ctx.listen_with_timeout::<MySignal>(5 * 1000).await?;
-				tracing::info!(?sig);
+		let sig = ctx.listen::<MySignal>().await?;
 
-				let start = std::time::Instant::now();
-
-				ctx.activity(TestActivityInput {
-					foo: "bar".to_string(),
-				})
-				.await?;
-
-				ctx.activity(TestActivityInput {
-					foo: "bar".to_string(),
-				})
-				.await?;
-
-				tracing::info!(dt=?start.elapsed(), "-------------");
-
-				Ok(Loop::<()>::Continue)
-			}
-			.boxed()
-		})
-		.await?;
+		tracing::info!(?sig, "signal recv ------------------");
 
 		Ok(())
 	}

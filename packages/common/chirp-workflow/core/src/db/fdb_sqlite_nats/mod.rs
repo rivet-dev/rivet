@@ -1915,9 +1915,9 @@ impl Database for DatabaseFdbSqliteNats {
 											limit: Some(1),
 											..(&pending_signal_subspace).into()
 										},
-										// NOTE: This does not have to be SERIALIZABLE because the conflict occurs
-										// with acking which is a separate row. See below
-										SNAPSHOT,
+										// NOTE: This is serializable because any insert into this subspace
+										// should cause a conflict and retry of this txn
+										SERIALIZABLE,
 									)
 								})
 								.collect::<Vec<_>>();
@@ -2245,7 +2245,7 @@ impl Database for DatabaseFdbSqliteNats {
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
 
-					// Write ray id ts
+					// Write ray id
 					let ray_id_key = keys::signal::RayIdKey::new(signal_id);
 					tx.set(
 						&self.subspace.pack(&ray_id_key),

@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{end_of_key_range, FormalKey, SNAPSHOT};
+use fdb_util::{end_of_key_range, FormalKey, SERIALIZABLE};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -80,9 +80,7 @@ pub(crate) async fn pegboard_actor_allocate_ingress_ports(
 						mode: StreamingMode::Iterator,
 						..(start_key, end_key.clone()).into()
 					},
-					// NOTE: This is not SERIALIZABLE because we don't want to conflict with all of the keys,
-					// just the one we choose
-					SNAPSHOT,
+					SERIALIZABLE,
 				);
 
 				// Continue iterating over the same stream until all of the required ports are found
@@ -111,9 +109,7 @@ pub(crate) async fn pegboard_actor_allocate_ingress_ports(
 												limit: Some(old_start as usize),
 												..(start_key, end_key.clone()).into()
 											},
-											// NOTE: This is not SERIALIZABLE because we don't want to conflict
-											// with all of the keys, just the one we choose
-											SNAPSHOT,
+											SERIALIZABLE,
 										);
 
 										continue;
