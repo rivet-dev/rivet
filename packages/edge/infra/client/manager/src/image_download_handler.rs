@@ -573,6 +573,11 @@ impl ImageDownloadHandler {
 		ctx: &Ctx,
 		image_config: &protocol::Image,
 	) -> Result<u64> {
+		// HEAD does not work if not using ATS
+		if std::env::var("__HACK__DISABLE_FETCH_IMAGE_SIZE").map_or(false, |x| x == "1") {
+			return Ok(0);
+		}
+
 		let addresses = self.get_image_addresses(ctx, image_config).await?;
 
 		let mut iter = addresses.into_iter();

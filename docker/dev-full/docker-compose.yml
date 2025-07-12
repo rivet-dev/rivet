@@ -211,6 +211,7 @@ services:
       - RIVET_SERVICE_NAME=rivet-client
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
       - RUST_LOG=debug,hyper=info
+      - __HACK__DISABLE_FETCH_IMAGE_SIZE=1
     stop_grace_period: 0s
     depends_on:
       # HACK: rivet-server dependency since we need to do a DNS lookup in entrypoint.sh for the iptables chain
