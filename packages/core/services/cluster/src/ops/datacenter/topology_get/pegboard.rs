@@ -58,7 +58,17 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		)
 		.to_string(),
 	)
-	.await?;
+	.await;
+
+	// Gracefully handle prometheus failure, fallback to no data
+	let prom_res = match prom_res {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?err, "failed to fetch pegboard prometheus metrics");
+
+			Default::default()
+		},
+	};
 
 	let mut stats_by_client_id = HashMap::new();
 

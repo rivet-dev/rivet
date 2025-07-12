@@ -207,6 +207,14 @@ async fn calculate_diff(
 		}),
 	)?;
 
+	if !topology_res.prometheus_fetched {
+		tracing::error!("prometheus could not be fetched, not scaling");
+
+		return Ok(CalculateDiffOutput {
+			actions: Vec::new(),
+		});
+	}
+
 	let dc = unwrap!(datacenter_res.datacenters.first());
 
 	// Build hashmap from topos for sorting

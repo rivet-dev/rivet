@@ -486,7 +486,7 @@ async fn fetch_server_metrics(
 								}}
 								[5m]
 							)
-							[3h]
+							[3h:]
 						)
 					)
 				)
@@ -518,7 +518,7 @@ async fn fetch_server_metrics(
 									device=~"(eth0|eth1)"
 								}}[1m]
 							)
-						) [3h])
+						) [3h:])
 					)
 				)
 				# Convert from B/s to Kb/s
