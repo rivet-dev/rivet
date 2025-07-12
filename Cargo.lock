@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "clickhouse-user-query"
-version = "25.4.2"
+version = "25.5.1"
 dependencies = [
  "clickhouse 0.12.2",
  "serde",
