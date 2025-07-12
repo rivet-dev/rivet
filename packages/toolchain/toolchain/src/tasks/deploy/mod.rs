@@ -18,7 +18,7 @@ pub struct Input {
 	pub filter_tags: Option<HashMap<String, String>>,
 	pub build_tags: Option<HashMap<String, String>>,
 	pub version_name: Option<String>,
-	pub skip_upgrade: bool,
+	pub upgrade: bool,
 }
 
 #[derive(Serialize)]
@@ -132,7 +132,7 @@ async fn perform_builds(
 				version_name: version_name.to_string(),
 				build_name: build_name.to_string(),
 				runtime: build.runtime.clone(),
-				skip_upgrade: input.skip_upgrade,
+				upgrade: input.upgrade,
 			},
 		)
 		.await?;

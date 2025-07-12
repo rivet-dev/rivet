@@ -31,9 +31,9 @@ pub struct Opts {
 	#[clap(long)]
 	non_interactive: bool,
 
-	/// Skip upgrading actors
+	/// Update existing actors with the new build after deploying
 	#[clap(long)]
-	skip_upgrade: bool,
+	upgrade: bool,
 }
 
 impl Opts {
@@ -65,7 +65,7 @@ impl Opts {
 			skip_route_creation: self.skip_route_creation,
 			keep_existing_routes: self.keep_existing_routes,
 			non_interactive: self.non_interactive,
-			skip_upgrade: self.skip_upgrade,
+			upgrade: self.upgrade,
 		})
 		.await?;
 

@@ -91,7 +91,7 @@ pub struct DeployOpts<'a> {
 	pub skip_route_creation: Option<bool>,
 	pub keep_existing_routes: Option<bool>,
 	pub non_interactive: bool,
-	pub skip_upgrade: bool,
+	pub upgrade: bool,
 }
 
 pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
@@ -258,7 +258,7 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 			filter_tags: opts.filter_tags.clone(),
 			build_tags: opts.build_tags.clone(),
 			version_name: opts.version.clone(),
-			skip_upgrade: opts.skip_upgrade,
+			upgrade: opts.upgrade,
 		},
 	)
 	.await?;

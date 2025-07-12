@@ -26,7 +26,7 @@ pub struct Input {
 	pub build_name: String,
 	pub runtime: config::build::Runtime,
 	#[serde(default)]
-	pub skip_upgrade: bool,
+	pub upgrade: bool,
 }
 
 #[derive(Serialize)]
@@ -64,7 +64,7 @@ impl task::Task for Task {
 			input.build_name.clone(),
 			input.build_tags.clone(),
 			&input.runtime,
-			input.skip_upgrade,
+			input.upgrade,
 		)
 		.await?;
 
@@ -83,7 +83,7 @@ async fn build_and_upload(
 	build_name: String,
 	extra_build_tags: Option<HashMap<String, String>>,
 	runtime: &Runtime,
-	skip_upgrade: bool,
+	upgrade: bool,
 ) -> Result<Uuid> {
 	task.log("");
 
@@ -171,8 +171,7 @@ async fn build_and_upload(
 	}
 	complete_res.context("complete_res")?;
 
-	// Upgrade actors
-	if !skip_upgrade {
+	if upgrade {
 		task.log(format!("[Upgrading Actors]"));
 		let res = apis::actors_api::actors_upgrade_all(
 			&ctx.openapi_config_cloud,
@@ -193,8 +192,6 @@ async fn build_and_upload(
 			res.count,
 			if res.count == 1 { "" } else { "s" }
 		));
-	} else {
-		task.log(format!("[Skipping Actor Upgrade]"));
 	}
 
 	let hub_origin = &ctx.bootstrap.origins.hub;
