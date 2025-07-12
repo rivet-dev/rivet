@@ -127,7 +127,7 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 
 	// Setup Rivetkit
 	let mut _rivet_actor_tempfiles = Vec::new();
-	let mut _rivet_actor_tempdirs = Vec::new();
+	// let mut _rivet_actor_tempdirs = Vec::new();
 	if let Some(rivetkit) = &root.rivetkit {
 		// Create service token
 		let service_token =
@@ -175,37 +175,42 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 		.await?;
 
 		// Determine server runtime
-		let function_build = if rivetkit.build.image.is_some()
-			|| rivetkit.build.dockerfile.is_some()
-		{
-			// Use user-provided Docker config
-			rivetkit.build.clone()
-		} else {
-			// Auto-generate server Dockerfile
-			//
-			// Has to be in the project path in order to use NPM dependencies
-			let dockerfile_tempdir = tempfile::Builder::new().prefix("rivet-server-").tempdir()?;
-			let dockerfile_path = dockerfile_tempdir.path().join("Dockerfile");
-			let dockerignore_path = dockerfile_tempdir.path().join("Dockerfile.dockerignore");
-			_rivet_actor_tempdirs.push(dockerfile_tempdir);
+		let function_build =
+			if rivetkit.build.image.is_some() || rivetkit.build.dockerfile.is_some() {
+				// Use user-provided Docker config
+				rivetkit.build.clone()
+			} else {
+				// Auto-generate server Dockerfile
+				//
+				// Has to be in the project path in order to use NPM dependencies
+				//
+				// Preserve the paths because we want to be able to let the user to test the Dockerfile
+				// that's printed out
+				let dockerfile_tempdir = tempfile::Builder::new()
+					.prefix("rivet-server-")
+					.tempdir()?
+					.into_path();
+				let dockerfile_path = dockerfile_tempdir.join("Dockerfile");
+				let dockerignore_path = dockerfile_tempdir.join("Dockerfile.dockerignore");
+				// _rivet_actor_tempdirs.push(dockerfile_tempdir);
 
-			let server_path = rivetkit.server.clone();
-			tokio::fs::write(
-				&dockerfile_path,
-				generate_server_dockerfile(&project_root, server_path),
-			)
-			.await?;
-			tokio::fs::write(&dockerignore_path, generate_server_dockerignore()).await?;
+				let server_path = rivetkit.server.clone();
+				tokio::fs::write(
+					&dockerfile_path,
+					generate_server_dockerfile(&project_root, server_path),
+				)
+				.await?;
+				tokio::fs::write(&dockerignore_path, generate_server_dockerignore()).await?;
 
-			toolchain::config::build::docker::Build {
-				dockerfile: Some(dockerfile_path.display().to_string()),
-				build_path: Some(project_root.display().to_string()),
-				image: None,
-				build_target: None,
-				build_args: None,
-				unstable: rivetkit.build.unstable.clone(),
-			}
-		};
+				toolchain::config::build::docker::Build {
+					dockerfile: Some(dockerfile_path.display().to_string()),
+					build_path: Some(project_root.display().to_string()),
+					image: None,
+					build_target: None,
+					build_args: None,
+					unstable: rivetkit.build.unstable.clone(),
+				}
+			};
 
 		// Add function
 		root.functions.insert(
@@ -716,8 +721,6 @@ fn generate_dockerfile_for_package_manager(
 	package_manager: &PackageManager,
 	server_path_js: &str,
 ) -> String {
-	let copy_files = package_manager.copy_files.join(" ");
-
 	// Determine package manager specific configurations
 	let (base_image, setup_commands, build_cmd, runtime_cmd, add_deps_cmd) = match package_manager.name.as_str() {
 		"yarn" => (
@@ -732,7 +735,7 @@ fn generate_dockerfile_for_package_manager(
 			"",
 			"bunx tsc --outDir dist/ --rootDir ./",
 			"bun run",
-			"bun add @hono/node-server @hono/node-ws"
+			"echo noop"
 		),
 		"pnpm" => (
 			"node:22-alpine",
@@ -753,6 +756,7 @@ fn generate_dockerfile_for_package_manager(
 	let mut dockerfile = String::new();
 
 	// Builder stage
+	let copy_files = package_manager.copy_files.join(" ");
 	dockerfile.push_str(&format!("FROM {} AS builder\n\n", base_image));
 	dockerfile.push_str("WORKDIR /app\n\n");
 	dockerfile.push_str(&format!("# Copy package files\nCOPY {} ./\n\n", copy_files));
@@ -793,9 +797,14 @@ fn generate_dockerfile_for_package_manager(
 		dockerfile.push_str("\n\n");
 	}
 
+	let app_copy_files = package_manager
+		.copy_files
+		.iter()
+		.map(|x| format!("/app/{x}"))
+		.collect::<Vec<_>>()
+		.join(" ");
 	dockerfile.push_str(&format!(
-		"COPY --from=builder --chown=rivet:rivet /app/{} ./\n\n",
-		copy_files
+		"COPY --from=builder --chown=rivet:rivet {app_copy_files} ./\n\n"
 	));
 
 	// Install production dependencies

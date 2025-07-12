@@ -36,6 +36,8 @@ const nodeCompatModules = [
 	//"url",
 	//"util/types",
 	//"zlib",
+	"fs",
+	"fs/promises",
 ];
 
 // Modules implemented via a mix of workerd APIs and polyfills.
@@ -47,6 +49,9 @@ const hybridNodeCompatModules = [
 	"process",
 	"util",
 ];
+
+const externalModules = nodeCompatModules.flatMap((p) => [p, `node:${p}`])
+console.log('modules', externalModules);
 
 export const rivetPreset: Preset = {
 	meta: {
@@ -86,5 +91,5 @@ export const rivetPreset: Preset = {
 		//process: "@cloudflare/unenv-preset/runtime/node/process/index",
 	},
 	polyfill: [],
-	external: nodeCompatModules.flatMap((p) => [p, `node:${p}`]),
+	externa: nodeCompatModules.flatMap((p) => [p, `node:${p}`]),
 };

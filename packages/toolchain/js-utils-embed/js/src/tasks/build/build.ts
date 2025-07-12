@@ -54,6 +54,8 @@ export async function build(input: Input): Promise<Output> {
 		stdLibBrowser[ `node:${packageName}` ] = packagePath;
 	}
 
+	console.log('foo')
+
 	const result = await esbuild.build({
 		absWorkingDir: input.projectRoot,
 		entryPoints: [input.entryPoint],
@@ -67,6 +69,11 @@ export async function build(input: Input): Promise<Output> {
 		inject: [stdLibInject],
 		plugins: [stdLibPlugin(stdLibBrowser)],
 		external: [
+			"node:*",
+			"node:fs",
+			"node:fs/promises",
+			"fs",
+			"fs/promises",
 			// Wasm must be loaded as a separate file manually, cannot be bundled
 			"*.wasm",
 			"*.wasm?module",
