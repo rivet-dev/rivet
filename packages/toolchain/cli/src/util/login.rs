@@ -15,7 +15,7 @@ pub fn inquire_self_hosting() -> Result<Option<String>> {
 
 	let api_endpoint = if !using_cloud {
 		let e = inquire::Text::new("What is the API endpoint?")
-			.with_default("http://localhost:8080")
+			.with_default("http://localhost:6420")
 			.with_validator(|input: &str| match url::Url::parse(input) {
 				Result::Ok(_) => StdResult::Ok(Validation::Valid),
 				Err(err) => StdResult::Ok(Validation::Invalid(format!("{err}").into())),

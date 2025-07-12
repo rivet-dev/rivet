@@ -1,7 +1,7 @@
 import type { Config } from "./types.ts";
 
 export const CONFIG: Config = {
-	rivetEndpoint: __ENV.RIVET_ENDPOINT || "http://localhost:8080",
+	rivetEndpoint: __ENV.RIVET_ENDPOINT || "http://localhost:6420",
 	rivetServiceToken: __ENV.RIVET_SERVICE_TOKEN || undefined,
 	rivetProject: __ENV.RIVET_PROJECT || "default",
 	rivetEnvironment: __ENV.RIVET_ENVIRONMENT || "default",

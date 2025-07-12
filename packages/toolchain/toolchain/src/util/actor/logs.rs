@@ -1,11 +1,9 @@
-use crate::{
-	rivet_api::{apis, models},
-	ToolchainCtx,
-};
+use crate::{rivet_api::apis, ToolchainCtx};
 use anyhow::*;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{DateTime, Utc};
 use clap::ValueEnum;
+use serde_json::json;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
@@ -63,18 +61,17 @@ async fn tail_streams(
 	stdout_fetched_tx: watch::Sender<bool>,
 	stderr_fetched_tx: watch::Sender<bool>,
 ) -> Result<()> {
-	// TODO: Update ot use ActorsQueryLogStream::All
 	tokio::try_join!(
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorsQueryLogStream::StdOut,
+			0, // stdout
 			stdout_fetched_tx
 		),
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorsQueryLogStream::StdErr,
+			1, // stderr
 			stderr_fetched_tx
 		),
 	)
@@ -85,7 +82,7 @@ async fn tail_streams(
 async fn tail_stream(
 	ctx: &ToolchainCtx,
 	opts: &TailOpts<'_>,
-	stream: models::ActorsQueryLogStream,
+	stream: i32, // 0 = stdout, 1 = stderr
 	log_fetched_tx: watch::Sender<bool>,
 ) -> Result<()> {
 	let mut watch_index: Option<String> = None;
@@ -95,8 +92,8 @@ async fn tail_stream(
 	// future doesn't exit.
 	match (&opts.stream, stream) {
 		(LogStream::All, _) => {}
-		(LogStream::StdOut, models::ActorsQueryLogStream::StdOut) => {}
-		(LogStream::StdErr, models::ActorsQueryLogStream::StdErr) => {}
+		(LogStream::StdOut, 0) => {}
+		(LogStream::StdErr, 1) => {}
 		_ => {
 			// Notify poll_actor_state
 			log_fetched_tx.send(true).ok();
@@ -107,15 +104,19 @@ async fn tail_stream(
 	}
 
 	loop {
+		// Build query expression for a single actor
+		let query_expr = json!({
+			"property": "actor_id",
+			"value": opts.actor_id.to_string(),
+			"case_sensitive": true
+		});
+		let query_json = serde_json::to_string(&query_expr)?;
+
 		let res = apis::actors_logs_api::actors_logs_get(
 			&ctx.openapi_config_cloud,
-			stream,
-			&serde_json::to_string(&vec![opts.actor_id])?,
+			&query_json,
 			Some(&ctx.project.name_id),
 			Some(opts.environment),
-			None,
-			None,
-			None,
 			watch_index.as_deref(),
 		)
 		.await
@@ -127,7 +128,15 @@ async fn tail_stream(
 			first_batch_fetched = true;
 		}
 
-		for (ts, line) in res.timestamps.iter().zip(res.lines.iter()) {
+		// Filter logs by stream type
+		for (i, (ts, line)) in res.timestamps.iter().zip(res.lines.iter()).enumerate() {
+			// Check if this log entry is from the stream we're interested in
+			if let Some(&log_stream) = res.streams.get(i) {
+				if log_stream != stream {
+					continue;
+				}
+			}
+
 			let Result::Ok(ts) = ts.parse::<DateTime<Utc>>() else {
 				eprintln!("Failed to parse timestamp: {ts} for line {line}");
 				continue;

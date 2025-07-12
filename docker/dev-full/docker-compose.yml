@@ -40,7 +40,7 @@ services:
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:6430/health/liveness"]
       interval: 2s
       timeout: 10s
       retries: 10
@@ -86,7 +86,7 @@ services:
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health/liveness"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:6430/health/liveness"]
       interval: 2s
       timeout: 10s
       retries: 10
