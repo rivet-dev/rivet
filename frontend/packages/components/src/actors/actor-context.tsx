@@ -122,6 +122,16 @@ export const actorRegionsAtom = atom<Region[]>([
 
 export const actorBuildsAtom = atom<Build[]>([]);
 
+export const actorEnvironmentAtom = atom<{ projectNameId: string; environmentNameId: string } | null>(null);
+
+export type ExportLogsHandler = (params: {
+	projectNameId: string;
+	environmentNameId: string;
+	queryJson: string;
+}) => Promise<{ url: string }>;
+
+export const exportLogsHandlerAtom = atom<ExportLogsHandler | null>(null);
+
 export const actorsInternalFilterAtom = atom<{
 	fn: (actor: Actor) => boolean;
 }>();

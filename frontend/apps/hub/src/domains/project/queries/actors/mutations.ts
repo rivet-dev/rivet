@@ -314,3 +314,22 @@ export const useDeleteRouteMutation = ({
 		},
 	});
 };
+
+export const useExportActorLogsMutation = () => {
+	return useMutation({
+		mutationFn: async ({
+			projectNameId,
+			environmentNameId,
+			queryJson,
+		}: {
+			projectNameId: string;
+			environmentNameId: string;
+			queryJson: string;
+		}) =>
+			rivetClient.actors.logs.export({
+				project: projectNameId,
+				environment: environmentNameId,
+				queryJson,
+			}),
+	});
+};
