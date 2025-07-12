@@ -1,12 +1,12 @@
 import { Icon, faQuestionSquare } from "@rivet-gg/icons";
-import { useActorsView } from "./actors-view-context-provider";
-import { actorFiltersAtom, type ActorFeature } from "./actor-context";
-import { ActorTabs } from "./actors-actor-details";
 import { useAtomValue, useSetAtom } from "jotai";
-import { useCallback } from "react";
 import { selectAtom } from "jotai/utils";
+import { useCallback } from "react";
 import { Button } from "../ui/button";
 import { FilterOp } from "../ui/filters";
+import { type ActorFeature, actorFiltersAtom } from "./actor-context";
+import { ActorTabs } from "./actors-actor-details";
+import { useActorsView } from "./actors-view-context-provider";
 
 export function ActorNotFound({
 	features = [],

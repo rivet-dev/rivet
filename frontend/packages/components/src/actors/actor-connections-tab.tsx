@@ -1,12 +1,12 @@
 import { LiveBadge, ScrollArea } from "@rivet-gg/components";
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+import type { Actor, ActorAtom } from "./actor-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import {
 	useActorConnections,
 	useActorWorkerStatus,
 } from "./worker/actor-worker-context";
-import type { Actor, ActorAtom } from "./actor-context";
-import { useAtomValue } from "jotai";
-import { selectAtom } from "jotai/utils";
 
 const selector = (a: Actor) => a.destroyedAt;
 

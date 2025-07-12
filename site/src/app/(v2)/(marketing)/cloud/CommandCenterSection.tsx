@@ -1,21 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import imgHub from "@/images/screenshots/rivet-hub.png";
 import {
-	faTerminal,
-	faChartLine,
-	faBug,
-	faHeartPulse,
-	faUserGroup,
-	faGaugeHigh,
 	faCodeBranch,
-	faLeaf,
-	faEye,
 	faFlask,
-	faMagnifyingGlass,
+	faTerminal,
+	faUserGroup,
 } from "@rivet-gg/icons";
-import { FeatureItem } from "./ServerlessLimitationsSection";
+import Image from "next/image";
+import type { FeatureItem } from "./ServerlessLimitationsSection";
 import { Feature } from "./components/Feature";
 
 // Command Center section
@@ -30,7 +23,8 @@ export const CommandCenterSection = () => {
 		{
 			name: "Preview Environments",
 			icon: faFlask,
-			description: "Test changes in isolated environments before deploying"
+			description:
+				"Test changes in isolated environments before deploying",
 		},
 		{
 			name: "Instant Rollbacks",
@@ -40,7 +34,7 @@ export const CommandCenterSection = () => {
 		{
 			name: "Team Access",
 			icon: faUserGroup,
-			description: "Collaborate securely with teammates"
+			description: "Collaborate securely with teammates",
 		},
 	];
 
@@ -53,13 +47,14 @@ export const CommandCenterSection = () => {
 					style={{ perspective: "2000px" }}
 				>
 					{/* Add a gradient overlay at the container level to fade out the entire element including border */}
-					<div 
-						className="absolute inset-0 z-[1] pointer-events-none" 
+					<div
+						className="absolute inset-0 z-[1] pointer-events-none"
 						style={{
-							background: "linear-gradient(90deg, hsl(var(--background) / 0) 66%, hsl(var(--background) / 0.95) 85%, hsl(var(--background) / 1) 100%)",
+							background:
+								"linear-gradient(90deg, hsl(var(--background) / 0) 66%, hsl(var(--background) / 0.95) 85%, hsl(var(--background) / 1) 100%)",
 						}}
 					/>
-					
+
 					<div
 						className="absolute border-2 border-white/10 rounded-md"
 						style={{

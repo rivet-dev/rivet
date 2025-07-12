@@ -1,3 +1,4 @@
+import { ErrorComponent } from "@/components/error-component";
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import {
 	type FunctionInvoke,
@@ -6,54 +7,28 @@ import {
 	routesQueryOptions,
 } from "@/domains/project/queries";
 import {
-	cn,
-	VirtualScrollArea,
-	WithTooltip,
-	FilterCreator,
 	Button,
-	toRecord,
-	ToggleGroup,
-	ToggleGroupItem,
-	ShimmerLine,
-	type FilterDefinitions,
-	type OnFiltersChange,
-	FilterValueSchema,
-	FilterOp,
-	createFiltersPicker,
-	createFiltersSchema,
-	OptionsProviderProps,
-	FilterValue,
 	Checkbox,
 	CommandGroup,
 	CommandItem,
-	SmallText,
+	FilterCreator,
+	type FilterDefinitions,
+	FilterOp,
+	type FilterValue,
 	LiveBadge,
+	type OnFiltersChange,
+	type OptionsProviderProps,
+	ShimmerLine,
+	SmallText,
+	ToggleGroup,
+	ToggleGroupItem,
+	VirtualScrollArea,
+	WithTooltip,
+	cn,
+	createFiltersPicker,
+	createFiltersSchema,
+	toRecord,
 } from "@rivet-gg/components";
-import {
-	useInfiniteQuery,
-	usePrefetchInfiniteQuery,
-	useQuery,
-} from "@tanstack/react-query";
-import {
-	createFileRoute,
-	Link,
-	type ErrorComponentProps,
-} from "@tanstack/react-router";
-import { zodValidator } from "@tanstack/zod-adapter";
-import { format } from "date-fns";
-import { forwardRef, useCallback, useMemo, useRef, useState } from "react";
-import { z } from "zod";
-import type { Virtualizer } from "@tanstack/react-virtual";
-import {
-	faAngleDown,
-	faAngleUp,
-	faFontCase,
-	faKey,
-	faRegex,
-	faSignal,
-	faSwap,
-	Icon,
-} from "@rivet-gg/icons";
 import {
 	ActorObjectInspector,
 	ActorRegion,
@@ -61,9 +36,32 @@ import {
 	getConsoleMessageVariant,
 	useActorsView,
 } from "@rivet-gg/components/actors";
-import { ErrorComponent } from "@/components/error-component";
+import {
+	Icon,
+	faAngleDown,
+	faAngleUp,
+	faFontCase,
+	faKey,
+	faRegex,
+	faSignal,
+	faSwap,
+} from "@rivet-gg/icons";
+import {
+	useInfiniteQuery,
+	usePrefetchInfiniteQuery,
+	useQuery,
+} from "@tanstack/react-query";
+import {
+	type ErrorComponentProps,
+	Link,
+	createFileRoute,
+} from "@tanstack/react-router";
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { zodValidator } from "@tanstack/zod-adapter";
+import { format } from "date-fns";
+import { forwardRef, useCallback, useRef, useState } from "react";
 import { useDebounceCallback } from "usehooks-ts";
-import { actors } from "@rivet-gg/api-full/serialization";
+import { z } from "zod";
 
 function ProjectFunctionsRoute() {
 	const { environmentNameId, projectNameId } = Route.useParams();

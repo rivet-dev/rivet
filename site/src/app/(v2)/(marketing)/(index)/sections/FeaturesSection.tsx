@@ -34,14 +34,17 @@ function FeatureCard({
 		<div className={`group relative ${className}`}>
 			<div className="h-full border border-white/10 rounded-xl p-6 overflow-hidden">
 				<div className="relative z-10">
-					<h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
+					<h3 className="text-lg font-semibold text-white mb-3">
+						{title}
+					</h3>
 					<p className="text-white/40 text-sm leading-relaxed mb-3">
 						{description}
 					</p>
 					{docLink && <DocsLink href={docLink} />}
 				</div>
 				<div
-					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${color === "orange-500"
+					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${
+						color === "orange-500"
 							? "bg-orange-500"
 							: color === "blue-500"
 								? "bg-blue-500"
@@ -56,7 +59,7 @@ function FeatureCard({
 												: color === "amber-500"
 													? "bg-amber-500"
 													: "bg-gray-500"
-						}`}
+					}`}
 				></div>
 			</div>
 		</div>
@@ -82,14 +85,17 @@ function LargeFeatureCard({
 		<div className={`group relative ${className}`}>
 			<div className="relative h-full border border-white/10 rounded-xl p-6 overflow-hidden">
 				<div className="relative z-10">
-					<h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
+					<h3 className="text-lg font-semibold text-white mb-3">
+						{title}
+					</h3>
 					<p className="text-white/40 text-sm leading-relaxed mb-3">
 						{description}
 					</p>
 					{docLink && <DocsLink href={docLink} />}
 				</div>
 				<div
-					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${color === "orange-500"
+					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${
+						color === "orange-500"
 							? "bg-orange-500"
 							: color === "blue-500"
 								? "bg-blue-500"
@@ -104,7 +110,7 @@ function LargeFeatureCard({
 												: color === "amber-500"
 													? "bg-amber-500"
 													: "bg-gray-500"
-						}`}
+					}`}
 				></div>
 			</div>
 		</div>
@@ -120,8 +126,8 @@ export function FeaturesSection() {
 						Built for Modern Applications
 					</h2>
 					<p className="text-lg sm:text-xl font-500 text-white/60 max-w-2xl mx-auto">
-						Everything you need to build fast, scalable, and real-time
-						applications without the complexity.
+						Everything you need to build fast, scalable, and
+						real-time applications without the complexity.
 					</p>
 				</div>
 

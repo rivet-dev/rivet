@@ -1,5 +1,6 @@
 import * as EditRouteForm from "@/domains/project/forms/route-edit-form";
 import type { DialogContentProps } from "@/hooks/use-dialog";
+import type { Rivet } from "@rivet-gg/api-full";
 import {
 	Button,
 	DialogFooter,
@@ -10,7 +11,6 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { routeQueryOptions, usePatchRouteMutation } from "../../queries";
-import type { Rivet } from "@rivet-gg/api-full";
 
 interface OptionalContentProps extends DialogContentProps {
 	projectNameId: string;

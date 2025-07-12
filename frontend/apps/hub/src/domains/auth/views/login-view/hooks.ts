@@ -1,6 +1,5 @@
 import type { SubmitHandler as FormSubmitHandler } from "@/domains/auth/forms/otp-form";
 import { useCompleteEmailVerificationMutation } from "@/domains/auth/queries";
-import { selfProfileQueryOptions } from "@/domains/user/queries";
 import { Rivet } from "@rivet-gg/api-full";
 import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";

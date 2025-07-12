@@ -6,12 +6,12 @@ import { clusterQueryOptions } from "@/domains/auth/queries/bootstrap";
 import type { Rivet } from "@rivet-gg/api-full";
 import { startOfMonth } from "date-fns";
 import { calculateUsedCredits } from "../../data/billing-calculate-usage";
+import { useProject } from "../../data/project-context";
 import {
 	projectBillingQueryOptions,
 	projectBillingUsageQueryOptions,
 	projectQueryOptions,
 } from "../../queries";
-import { useProject } from "../../data/project-context";
 
 interface BillingContextValue {
 	project: Rivet.cloud.GameFull;

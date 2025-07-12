@@ -1,12 +1,7 @@
-import { getConfig, timing, toast } from "@rivet-gg/components";
+import { toast } from "@rivet-gg/components";
 import { broadcastQueryClient } from "@tanstack/query-broadcast-client-experimental";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import {
-	MutationCache,
-	MutationObserver,
-	QueryCache,
-	QueryClient,
-} from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import superjson from "superjson";
 
 const queryCache = new QueryCache();

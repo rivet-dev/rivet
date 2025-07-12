@@ -1256,7 +1256,7 @@ pub async fn usage(
 pub struct QueryQuery {
 	#[serde(flatten)]
 	global: GlobalQuery,
-	query_json: String,
+	query_json: Option<String>,
 	cursor: Option<String>,
 }
 
@@ -1278,14 +1278,17 @@ pub async fn query(
 		)
 		.await?;
 
-	// Parse user query
-	let user_query_expr =
-		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&query.query_json) {
-			Ok(expr) => expr,
+	// Parse user query if provided
+	let user_query_expr = if let Some(query_json) = &query.query_json {
+		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(query_json) {
+			Ok(expr) => Some(expr),
 			Err(e) => {
 				bail_with!(API_BAD_QUERY, error = e.to_string());
 			}
-		};
+		}
+	} else {
+		None
+	};
 
 	// Parse cursor if provided
 	let cursor = if let Some(cursor_str) = &query.cursor {

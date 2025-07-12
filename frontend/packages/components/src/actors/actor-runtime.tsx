@@ -1,21 +1,21 @@
-import { Suspense } from "react";
-import { ActorBuild } from "./actor-build";
-import { ActorObjectInspector } from "./console/actor-inspector";
-import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
-import {
-	ActorFeature,
-	currentActorFeaturesAtom,
-	type Actor,
-	type ActorAtom,
-} from "./actor-context";
-import { selectAtom } from "jotai/utils";
+import equal from "fast-deep-equal";
 import { useAtomValue } from "jotai";
-import { Dd, Dl, Dt } from "../ui/typography";
-import { Flex } from "../ui/flex";
+import { selectAtom } from "jotai/utils";
+import { Suspense } from "react";
 import { formatDuration } from "../lib/formatter";
 import { toRecord } from "../lib/utils";
+import { Flex } from "../ui/flex";
 import { Skeleton } from "../ui/skeleton";
-import equal from "fast-deep-equal";
+import { Dd, Dl, Dt } from "../ui/typography";
+import { ActorBuild } from "./actor-build";
+import {
+	type Actor,
+	type ActorAtom,
+	ActorFeature,
+	currentActorFeaturesAtom,
+} from "./actor-context";
+import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
+import { ActorObjectInspector } from "./console/actor-inspector";
 
 const selector = (a: Actor) => ({
 	lifecycle: a.lifecycle,

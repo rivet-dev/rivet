@@ -1,25 +1,25 @@
-import { fromJs } from "esast-util-from-js";
-import { toJs } from "estree-util-to-js";
 import {
+	type InspectData,
 	type ToClient,
 	ToClientSchema,
-	type InspectData,
 	type ToServer,
 } from "actor-core/inspector/protocol/actor";
+import { fromJs } from "esast-util-from-js";
+import { toJs } from "estree-util-to-js";
 
-import type { ResponseOk, Request } from "actor-core/protocol/http";
+import type { Request, ResponseOk } from "actor-core/protocol/http";
 import {
 	type HighlighterCore,
 	createHighlighterCore,
 	createOnigurumaEngine,
 } from "shiki";
+import { endWithSlash } from "../../lib/utils";
 import {
 	MessageSchema,
 	type ReplErrorCode,
 	type Response,
 	ResponseSchema,
 } from "./actor-worker-schema";
-import { endWithSlash } from "../../lib/utils";
 
 class ReplError extends Error {
 	constructor(

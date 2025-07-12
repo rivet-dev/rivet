@@ -15,7 +15,7 @@ export const ChangelogItem = z.object({
 				twitter: z.string().optional(),
 				github: z.string().optional(),
 				bluesky: z.string().optional(),
-			})
+			}),
 		}),
 	),
 });

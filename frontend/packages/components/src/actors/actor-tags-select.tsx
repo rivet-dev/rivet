@@ -1,8 +1,8 @@
 import { Combobox } from "@rivet-gg/components";
-import { ActorTag } from "./actor-tags";
 import { useAtomValue } from "jotai";
-import { actorTagsAtom } from "./actor-context";
 import { useMemo } from "react";
+import { actorTagsAtom } from "./actor-context";
+import { ActorTag } from "./actor-tags";
 
 interface ActorTagsSelectProps {
 	value: Record<string, string>;

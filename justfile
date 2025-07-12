@@ -44,7 +44,7 @@ dev-logs-client-crashed:
 
 [group('dev')]
 dev-logs-runner:
-	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/runner/logs/*'
+	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/actors/*/logs/*'
 
 [group('dev')]
 dev-logs-server:

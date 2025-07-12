@@ -1,7 +1,7 @@
 import { connectionStateAtom } from "@/stores/manager";
-import { cn, DocsSheet, ShimmerLine } from "@rivet-gg/components";
-import { Header as RivetHeader, NavItem } from "@rivet-gg/components/header";
-import { faGithub, Icon } from "@rivet-gg/icons";
+import { DocsSheet, ShimmerLine, cn } from "@rivet-gg/components";
+import { NavItem, Header as RivetHeader } from "@rivet-gg/components/header";
+import { Icon, faGithub } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import type { PropsWithChildren, ReactNode } from "react";

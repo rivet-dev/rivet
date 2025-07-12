@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import {
 	Icon,
-	faCloud,
-	faServer,
-	faGithub,
 	faArrowRight,
+	faCloud,
+	faGithub,
+	faServer,
 } from "@rivet-gg/icons";
+import Link from "next/link";
 
 interface DeploymentOption {
 	icon: any;

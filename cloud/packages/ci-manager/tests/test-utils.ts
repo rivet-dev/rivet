@@ -1,8 +1,8 @@
-import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
-import { execSync } from "node:child_process";
-import * as tar from "tar";
 import { randomUUID } from "crypto";
+import { execSync } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import * as tar from "tar";
 
 export async function createFailingDockerContext(): Promise<Buffer> {
 	const tempDir = `/tmp/docker-context-fail-${Date.now()}-${Math.random().toString(36).substring(2)}`;
@@ -215,7 +215,10 @@ export async function pollBuildStatus(
 				build.status.type === "success" ||
 				build.status.type === "failure"
 			) {
-				return { status: build.status.type, buildId: build.status.data?.buildId };
+				return {
+					status: build.status.type,
+					buildId: build.status.data?.buildId,
+				};
 			}
 
 			if (attempt < maxAttempts - 1) {
@@ -273,7 +276,6 @@ export async function getBuildStatus(
 	const response = await fetch(`${baseUrl}/builds/${buildId}`);
 	return await response.json();
 }
-
 
 export async function testActorEndpoint(endpoint: string): Promise<any> {
 	const response = await fetch(`${endpoint}`, {
@@ -345,7 +347,9 @@ export async function waitForActorReady(endpoint: string): Promise<void> {
 				return;
 			}
 		} catch (error) {
-			console.log(`Waiting for actor to be ready... (attempt ${attempt + 1})`);
+			console.log(
+				`Waiting for actor to be ready... (attempt ${attempt + 1})`,
+			);
 		}
 
 		if (attempt < maxAttempts - 1) {
@@ -355,4 +359,3 @@ export async function waitForActorReady(endpoint: string): Promise<void> {
 
 	throw new Error(`Actor not ready after ${maxAttempts} attempts`);
 }
-

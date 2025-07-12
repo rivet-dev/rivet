@@ -38,6 +38,7 @@ fn main() -> Result<()> {
 		.context("failed to parse vector socket addr")?;
 	let actor_id = var("ACTOR_ID")?;
 	let env_id = Uuid::parse_str(&var("ENVIRONMENT_ID")?)?;
+	println!("Starting actor_id={actor_id} env_id={env_id} vector_socket_addr={} root_user_enabled={root_user_enabled}", vector_socket_addr.as_ref().map(|x| x.as_str()).unwrap_or("?"));
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 

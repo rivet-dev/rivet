@@ -567,7 +567,7 @@ paths:
         - name: query_json
           in: query
           description: JSON-encoded query expression for filtering actors
-          required: true
+          required: false
           schema:
             type: string
         - name: cursor
@@ -1401,7 +1401,7 @@ paths:
         - name: query_json
           in: query
           description: JSON-encoded query expression for filtering logs
-          required: true
+          required: false
           schema:
             type: string
         - name: watch_index
@@ -1521,8 +1521,6 @@ paths:
                 query_json:
                   type: string
                   description: JSON-encoded query expression for filtering logs
-              required:
-                - query_json
 components:
   schemas:
     ActorsGetActorResponse:

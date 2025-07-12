@@ -1,20 +1,20 @@
-import {
-	ToClientSchema,
-	type ToClient,
-	type ToServer,
-	type Actor as InspectorActor,
-} from "actor-core/inspector/protocol/manager";
 import { toast } from "@rivet-gg/components";
-import { atom } from "jotai";
-import { atomEffect } from "jotai-effect";
 import {
 	type Actor,
-	actorBuildsAtom,
 	ActorFeature,
+	actorBuildsAtom,
 	actorsAtom,
 	createActorAtom,
 } from "@rivet-gg/components/actors";
 import { createClient } from "actor-core/client";
+import {
+	type Actor as InspectorActor,
+	type ToClient,
+	ToClientSchema,
+	type ToServer,
+} from "actor-core/inspector/protocol/manager";
+import { atom } from "jotai";
+import { atomEffect } from "jotai-effect";
 
 const createConnection = ({
 	onMessage,

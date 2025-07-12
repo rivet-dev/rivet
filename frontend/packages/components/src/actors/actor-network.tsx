@@ -1,19 +1,19 @@
 import {
 	Button,
-	cn,
 	Dd,
 	DiscreteCopyButton,
 	Dl,
 	DocsSheet,
 	Dt,
 	Flex,
+	cn,
 } from "@rivet-gg/components";
 import { Icon, faBooks } from "@rivet-gg/icons";
-import { ActorObjectInspector } from "./console/actor-inspector";
-import { Fragment } from "react";
-import type { Actor, ActorAtom } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
+import { Fragment } from "react";
+import type { Actor, ActorAtom } from "./actor-context";
+import { ActorObjectInspector } from "./console/actor-inspector";
 
 const selector = (a: Actor) => a.network?.ports;
 

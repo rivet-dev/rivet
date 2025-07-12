@@ -151,7 +151,7 @@ Name | Type | Description  | Required | Notes
 
 ## actors_query
 
-> crate::models::ActorsQueryActorsResponse actors_query(query_json, project, environment, cursor)
+> crate::models::ActorsQueryActorsResponse actors_query(project, environment, query_json, cursor)
 
 
 Queries actors using a JSON-encoded query expression. Supports pagination with cursor-based navigation.
@@ -161,9 +161,9 @@ Queries actors using a JSON-encoded query expression. Supports pagination with c
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**query_json** | **String** | JSON-encoded query expression for filtering actors | [required] |
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
+**query_json** | Option<**String**> | JSON-encoded query expression for filtering actors |  |
 **cursor** | Option<**String**> | Cursor for pagination |  |
 
 ### Return type

@@ -6,7 +6,6 @@ import {
 	faExclamationCircle,
 	faSpinnerThird,
 	faWarning,
-	faXmark,
 } from "@rivet-gg/icons";
 import { format } from "date-fns";
 import { type ReactNode, forwardRef } from "react";

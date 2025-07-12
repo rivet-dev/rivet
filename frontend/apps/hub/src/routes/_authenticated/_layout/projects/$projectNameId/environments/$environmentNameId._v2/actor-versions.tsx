@@ -29,8 +29,8 @@ import { ActorTags } from "@rivet-gg/components/actors";
 import { Icon, faCheckCircle, faInfoCircle, faRefresh } from "@rivet-gg/icons";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
-	createFileRoute,
 	type ErrorComponentProps,
+	createFileRoute,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";

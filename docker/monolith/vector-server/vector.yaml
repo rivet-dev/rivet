@@ -59,6 +59,14 @@ transforms:
     condition:
       type: vrl
       source: .source == "pegboard_container_runner"
+      
+  actors_transform:
+    type: remap
+    inputs:
+      - actors
+    source: |
+      # Add namespace label to actor logs
+      .namespace = "rivet"
 
 sinks:
   prom_exporter:
@@ -78,7 +86,7 @@ sinks:
   clickhouse_actor_logs:
     type: clickhouse
     inputs:
-      - actors
+      - actors_transform
     compression: gzip
     endpoint: http://clickhouse:9300
     database: db_pegboard_actor_log

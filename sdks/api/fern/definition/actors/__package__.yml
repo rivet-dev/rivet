@@ -146,7 +146,7 @@ service:
           environment: optional<string>
           query_json:
             docs: JSON-encoded query expression for filtering actors
-            type: string
+            type: optional<string>
           cursor:
             docs: Cursor for pagination
             type: optional<string>

@@ -24,7 +24,8 @@ fn main() {
 
 	let key_path = KeyPath::new("datacenter_id".to_string());
 	let builder =
-		UserDefinedQueryBuilder::new_with_group_by(&schema, &query_expr, Some(&key_path)).unwrap();
+		UserDefinedQueryBuilder::new_with_group_by(&schema, Some(&query_expr), Some(&key_path))
+			.unwrap();
 
 	println!("Simple property GROUP BY:");
 	println!("WHERE clause: {}", builder.where_expr());
@@ -34,7 +35,8 @@ fn main() {
 	// Example 2: Group by map property with key
 	let key_path = KeyPath::with_map_key("tags".to_string(), "region".to_string());
 	let builder =
-		UserDefinedQueryBuilder::new_with_group_by(&schema, &query_expr, Some(&key_path)).unwrap();
+		UserDefinedQueryBuilder::new_with_group_by(&schema, Some(&query_expr), Some(&key_path))
+			.unwrap();
 
 	println!("Map property with key GROUP BY:");
 	println!("WHERE clause: {}", builder.where_expr());
@@ -42,7 +44,8 @@ fn main() {
 	println!();
 
 	// Example 3: No group by
-	let builder = UserDefinedQueryBuilder::new_with_group_by(&schema, &query_expr, None).unwrap();
+	let builder =
+		UserDefinedQueryBuilder::new_with_group_by(&schema, Some(&query_expr), None).unwrap();
 
 	println!("No GROUP BY:");
 	println!("WHERE clause: {}", builder.where_expr());

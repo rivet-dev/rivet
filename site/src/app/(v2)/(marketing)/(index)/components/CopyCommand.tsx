@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Icon, faArrowRight, faCopy, faCheck } from "@rivet-gg/icons";
+import { Icon, faArrowRight, faCheck, faCopy } from "@rivet-gg/icons";
 import clsx from "clsx";
+import { useState } from "react";
 
 interface CopyCommandProps {
 	children?: string;
@@ -65,4 +65,3 @@ export function CopyCommand({
 		</div>
 	);
 }
-

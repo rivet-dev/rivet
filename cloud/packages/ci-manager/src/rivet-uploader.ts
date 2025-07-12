@@ -1,7 +1,5 @@
+import { statSync } from "fs";
 import { RivetClient } from "@rivet-gg/api";
-import { warn } from "console";
-import { createReadStream, statSync } from "fs";
-import { readFile } from "fs/promises";
 
 export interface RivetUploadConfig {
 	token: string;
@@ -113,7 +111,7 @@ export async function uploadOCIBundleToRivet(
 async function uploadChunkWithRetry(
 	url: string,
 	buffer: Buffer,
-	maxRetries: number = 3,
+	maxRetries = 3,
 ): Promise<void> {
 	let lastError: Error | null = null;
 
@@ -232,4 +230,3 @@ async function patchBuildTags(
 		// Don't throw here to avoid failing the entire upload process
 	}
 }
-

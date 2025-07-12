@@ -1,5 +1,5 @@
 import { RivetClient } from "@rivet-gg/api";
-import { BuildStore } from "../build-store";
+import type { BuildStore } from "../build-store";
 import { serializeKanikoArguments } from "../common";
 
 export async function runRivetBuild(
@@ -57,7 +57,7 @@ export async function runRivetBuild(
 							dockerfilePath: build.dockerfilePath,
 							buildArgs: build.buildArgs,
 							buildTarget: build.buildTarget,
-						})
+						}),
 					},
 				},
 				network: {
@@ -81,8 +81,8 @@ export async function runRivetBuild(
 		buildStore.updateStatus(buildId, {
 			type: "running",
 			data: {
-				rivet: { actorId }
-			}
+				rivet: { actorId },
+			},
 		});
 
 		await pollActorStatus(

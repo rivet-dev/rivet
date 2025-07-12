@@ -1,4 +1,3 @@
-import { CommandPanel } from "@/components/command-panel";
 import { NavItem } from "@/components/header/nav-item";
 import { usePageLayout } from "@/lib/compute-page-layout";
 import { publicUrl } from "@/lib/utils";

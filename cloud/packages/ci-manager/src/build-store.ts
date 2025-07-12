@@ -1,8 +1,8 @@
-import { BuildInfo, BuildEvent, Status } from "./types";
 import { randomUUID } from "crypto";
+import { dirname, join } from "path";
 import { mkdir, rm } from "fs/promises";
-import { join, dirname } from "path";
 import { createNanoEvents } from "nanoevents";
+import type { BuildEvent, BuildInfo, Status } from "./types";
 
 export class BuildStore {
 	private builds = new Map<string, BuildInfo>();
@@ -12,7 +12,7 @@ export class BuildStore {
 		"status-change": (buildId: string, status: Status) => void;
 	}>();
 
-	constructor(tempDir: string = "/tmp/ci-builds") {
+	constructor(tempDir = "/tmp/ci-builds") {
 		this.tempDir = tempDir;
 	}
 
@@ -25,7 +25,7 @@ export class BuildStore {
 		dockerfilePath: string,
 		environmentId: string,
 		buildArgs: Record<string, string>,
-		buildTarget: string | undefined
+		buildTarget: string | undefined,
 	): string {
 		const id = randomUUID();
 		const contextPath = join(this.tempDir, id, "context.tar.gz");
@@ -94,7 +94,7 @@ export class BuildStore {
 		}
 	}
 
-	getContextPath(id: string): string | undefined{
+	getContextPath(id: string): string | undefined {
 		return this.builds.get(id)?.contextPath;
 	}
 

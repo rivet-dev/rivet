@@ -13,14 +13,14 @@ type ExportActorLogsRequest struct {
 	Project     *string `json:"project,omitempty"`
 	Environment *string `json:"environment,omitempty"`
 	// JSON-encoded query expression for filtering logs
-	QueryJson string `json:"query_json"`
+	QueryJson *string `json:"query_json,omitempty"`
 }
 
 type GetActorLogsRequestQuery struct {
 	Project     *string `json:"-"`
 	Environment *string `json:"-"`
 	// JSON-encoded query expression for filtering logs
-	QueryJson string `json:"-"`
+	QueryJson *string `json:"-"`
 	// A query parameter denoting the requests watch index.
 	WatchIndex *string `json:"-"`
 }

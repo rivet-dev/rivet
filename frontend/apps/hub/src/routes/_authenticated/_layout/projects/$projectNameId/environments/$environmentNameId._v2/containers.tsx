@@ -1,34 +1,34 @@
-import {
-	type Actor as StateActor,
-	ActorFeature,
-	ActorNotFound,
-	ActorsActorDetails,
-	ActorsActorEmptyDetails,
-	ActorsListFiltersSchema,
-	ActorsListPreview,
-	ActorsViewContext,
-	currentActorAtom,
-	pickActorListFilters,
-} from "@rivet-gg/components/actors";
+import { ErrorComponent } from "@/components/error-component";
+import { ActorsActorDetailsWrapper } from "@/domains/project/components/actors/actors-actor-details-wrapper";
+import { ActorsProvider } from "@/domains/project/components/actors/actors-provider";
 import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import { actorBuildsCountQueryOptions } from "@/domains/project/queries";
+import { useDialog } from "@/hooks/use-dialog";
+import type { Rivet } from "@rivet-gg/api-full";
+import { toRecord } from "@rivet-gg/components";
+import {
+	ActorFeature,
+	ActorNotFound,
+	ActorsActorEmptyDetails,
+	ActorsListFiltersSchema,
+	ActorsListPreview,
+	ActorsViewContext,
+	type Actor as StateActor,
+	currentActorAtom,
+	pickActorListFilters,
+} from "@rivet-gg/components/actors";
+import { GettingStarted } from "@rivet-gg/components/actors";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
-	createFileRoute,
 	type ErrorComponentProps,
+	createFileRoute,
 	useRouter,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
-import { z } from "zod";
-import { GettingStarted } from "@rivet-gg/components/actors";
 import { useAtomValue } from "jotai";
-import { useDialog } from "@/hooks/use-dialog";
-import { ErrorComponent } from "@/components/error-component";
-import { ActorsProvider } from "@/domains/project/components/actors/actors-provider";
-import type { Rivet } from "@rivet-gg/api-full";
-import { toRecord } from "@rivet-gg/components";
+import { z } from "zod";
 
 function Actor() {
 	const navigate = Route.useNavigate();
@@ -49,7 +49,7 @@ function Actor() {
 	}
 
 	return (
-		<ActorsActorDetails
+		<ActorsActorDetailsWrapper
 			actor={actor}
 			tab={tab}
 			onTabChange={(tab) => {

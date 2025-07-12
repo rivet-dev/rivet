@@ -11,11 +11,7 @@
 		"rivet-cli": "dist/cli.js"
 	},
 	"license": "Apache-2.0",
-	"files": [
-		"dist/cli.js",
-		"dist/postinstall.js",
-		"package.json"
-	],
+	"files": ["dist/cli.js", "dist/postinstall.js", "package.json"],
 	"sideEffects": false,
 	"preferGlobal": true,
 	"preferUnplugged": true,

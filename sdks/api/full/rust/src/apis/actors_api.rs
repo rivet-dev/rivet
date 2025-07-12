@@ -367,9 +367,9 @@ pub async fn actors_list(
 /// Queries actors using a JSON-encoded query expression. Supports pagination with cursor-based navigation.
 pub async fn actors_query(
 	configuration: &configuration::Configuration,
-	query_json: &str,
 	project: Option<&str>,
 	environment: Option<&str>,
+	query_json: Option<&str>,
 	cursor: Option<&str>,
 ) -> Result<crate::models::ActorsQueryActorsResponse, Error<ActorsQueryError>> {
 	let local_var_configuration = configuration;
@@ -388,7 +388,10 @@ pub async fn actors_query(
 		local_var_req_builder =
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
 	}
-	local_var_req_builder = local_var_req_builder.query(&[("query_json", &query_json.to_string())]);
+	if let Some(ref local_var_str) = query_json {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("query_json", &local_var_str.to_string())]);
+	}
 	if let Some(ref local_var_str) = cursor {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("cursor", &local_var_str.to_string())]);

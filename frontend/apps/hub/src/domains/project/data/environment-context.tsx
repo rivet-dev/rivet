@@ -1,7 +1,7 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { environmentByIdQueryOptions } from "../queries";
-import { type ReactNode, createContext, useContext } from "react";
 import type { Rivet } from "@rivet-gg/api-full";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { type ReactNode, createContext, useContext } from "react";
+import { environmentByIdQueryOptions } from "../queries";
 import { useProject } from "./project-context";
 
 export const EnvironmentContext = createContext<

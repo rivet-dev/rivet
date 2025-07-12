@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function HeroBackground() {
 	// Configuration object for all particle behavior constants
@@ -84,7 +84,8 @@ export function HeroBackground() {
 				(this.x - this.mouseX) ** 2 + (this.y - this.mouseY) ** 2,
 			);
 			if (mouseDistance < config.PATH_FORCE_RADIUS) {
-				const proximityFactor = 1 - mouseDistance / config.PATH_FORCE_RADIUS;
+				const proximityFactor =
+					1 - mouseDistance / config.PATH_FORCE_RADIUS;
 				totalOpacity += proximityFactor * 0.07; // Slightly less intense highlight
 			}
 
@@ -139,7 +140,8 @@ export function HeroBackground() {
 
 				// Calculate distance from this pulse's center (not always canvas center)
 				const particleDistance = Math.sqrt(
-					(this.x - pulse.centerX) ** 2 + (this.y - pulse.centerY) ** 2,
+					(this.x - pulse.centerX) ** 2 +
+						(this.y - pulse.centerY) ** 2,
 				);
 
 				// Check if the wave has reached this particle
@@ -152,7 +154,8 @@ export function HeroBackground() {
 
 					// Calculate how long the wave has been at this particle
 					const timeAtParticle =
-						timeSincePulseStart - (particleDistance / pulseSpeed) * 1000;
+						timeSincePulseStart -
+						(particleDistance / pulseSpeed) * 1000;
 
 					if (timeAtParticle >= 0 && timeAtParticle < pulseDuration) {
 						const pulsePhase = timeAtParticle / pulseDuration;
@@ -168,17 +171,20 @@ export function HeroBackground() {
 							} else {
 								// Falling phase: peak to 0 (base opacity already set above)
 								const fallProgress = (pulsePhase - 0.3) / 0.7;
-								pulseContribution = peakOpacity * (1 - fallProgress);
+								pulseContribution =
+									peakOpacity * (1 - fallProgress);
 							}
 						} else {
 							// Regular and click pulses: normal pulse behavior
 							if (pulsePhase < 0.3) {
 								// Rising phase: 0 to peak
-								pulseContribution = (pulsePhase / 0.3) * peakOpacity;
+								pulseContribution =
+									(pulsePhase / 0.3) * peakOpacity;
 							} else if (pulsePhase < 1) {
 								// Falling phase: peak to 0
 								const fallProgress = (pulsePhase - 0.3) / 0.7;
-								pulseContribution = peakOpacity * (1 - fallProgress);
+								pulseContribution =
+									peakOpacity * (1 - fallProgress);
 							}
 						}
 
@@ -230,7 +236,10 @@ export function HeroBackground() {
 		}
 
 		// Set canvas size to match full screen (excluding scrollbar)
-		canvas.width = typeof window !== "undefined" ? document.documentElement.clientWidth : 800;
+		canvas.width =
+			typeof window !== "undefined"
+				? document.documentElement.clientWidth
+				: 800;
 		canvas.height = containerHeight;
 
 		// Create grid-based particles
@@ -276,7 +285,7 @@ export function HeroBackground() {
 		const edgeMargin = 40; // Constant distance from edges
 
 		// Get exclusion zones from landing-hero direct children
-		let exclusionZones = getExclusionZones(wrapperRef.current);
+		const exclusionZones = getExclusionZones(wrapperRef.current);
 
 		// Calculate available space after accounting for edge margins
 		const availableWidth = canvas.width - 2 * edgeMargin;
@@ -287,7 +296,8 @@ export function HeroBackground() {
 		const maxRows = Math.floor(availableHeight / baseSpacing);
 
 		// Adjust spacing to distribute particles evenly with exact edge margins
-		const actualSpacingX = maxCols > 0 ? availableWidth / maxCols : baseSpacing;
+		const actualSpacingX =
+			maxCols > 0 ? availableWidth / maxCols : baseSpacing;
 		const actualSpacingY =
 			maxRows > 0 ? availableHeight / maxRows : baseSpacing;
 
@@ -332,11 +342,11 @@ export function HeroBackground() {
 
 		elements.forEach((element) => {
 			const rect = element.getBoundingClientRect();
-			
+
 			// Get canvas positioning relative to viewport
 			const canvas = canvasRef.current;
 			if (!canvas) return;
-			
+
 			// Get the actual canvas position in the viewport
 			const canvasRect = canvas.getBoundingClientRect();
 
@@ -393,7 +403,7 @@ export function HeroBackground() {
 		if (!wrapper) return;
 
 		const exclusionZones = getExclusionZones(wrapper);
-		
+
 		ctx.save();
 		ctx.strokeStyle = "red";
 		ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
@@ -401,9 +411,19 @@ export function HeroBackground() {
 
 		exclusionZones.forEach((zone) => {
 			// Draw filled rectangle
-			ctx.fillRect(zone.left, zone.top, zone.right - zone.left, zone.bottom - zone.top);
+			ctx.fillRect(
+				zone.left,
+				zone.top,
+				zone.right - zone.left,
+				zone.bottom - zone.top,
+			);
 			// Draw border
-			ctx.strokeRect(zone.left, zone.top, zone.right - zone.left, zone.bottom - zone.top);
+			ctx.strokeRect(
+				zone.left,
+				zone.top,
+				zone.right - zone.left,
+				zone.bottom - zone.top,
+			);
 		});
 
 		ctx.restore();
@@ -609,7 +629,10 @@ export function HeroBackground() {
 			}
 
 			// Set canvas size to match full screen (excluding scrollbar)
-			canvas.width = typeof window !== "undefined" ? document.documentElement.clientWidth : 800;
+			canvas.width =
+				typeof window !== "undefined"
+					? document.documentElement.clientWidth
+					: 800;
 			canvas.height = containerHeight;
 
 			// Recreate grid particles for new dimensions
@@ -655,12 +678,17 @@ export function HeroBackground() {
 					const addedNodes = Array.from(mutation.addedNodes).filter(
 						(node) => node.nodeType === Node.ELEMENT_NODE,
 					) as Element[];
-					const removedNodes = Array.from(mutation.removedNodes).filter(
+					const removedNodes = Array.from(
+						mutation.removedNodes,
+					).filter(
 						(node) => node.nodeType === Node.ELEMENT_NODE,
 					) as Element[];
 
 					// Check if any added/removed nodes are exclusion zones or contain them
-					const hasExclusionChanges = [...addedNodes, ...removedNodes].some(
+					const hasExclusionChanges = [
+						...addedNodes,
+						...removedNodes,
+					].some(
 						(node) =>
 							node.classList?.contains("hero-bg-exclude") ||
 							node.querySelector?.(".hero-bg-exclude"),
@@ -732,4 +760,3 @@ export function HeroBackground() {
 		</div>
 	);
 }
-

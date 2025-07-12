@@ -12,9 +12,7 @@ interface KanikoArguments {
 }
 
 // SAFETY: buildArgs keys never have equal signs or spaces
-function convertBuildArgsToArgs(
-	buildArgs: Record<string, string>,
-): string[] {
+function convertBuildArgsToArgs(buildArgs: Record<string, string>): string[] {
 	return Object.entries(buildArgs).flatMap(([key, value]) => [
 		`--build-arg`,
 		`${key}=${value}`,
@@ -34,10 +32,10 @@ export function serializeKanikoArguments(args: KanikoArguments): string {
 		"--no-push",
 		"--single-snapshot",
 		"--verbosity=info",
-	].map(arg => {
+	].map((arg) => {
 		// Args should never contain UNIT_SEP_CHAR, but we can
 		// escape it if they do.
-		return arg.replaceAll(UNIT_SEP_CHAR, "\\" + UNIT_SEP_CHAR)
+		return arg.replaceAll(UNIT_SEP_CHAR, "\\" + UNIT_SEP_CHAR);
 	});
 
 	return preparedArgs.join(UNIT_SEP_CHAR);

@@ -17,7 +17,7 @@ export interface GetActorLogsRequestQuery {
     /**
      * JSON-encoded query expression for filtering logs
      */
-    queryJson: string;
+    queryJson?: string;
     /**
      * A query parameter denoting the requests watch index.
      */

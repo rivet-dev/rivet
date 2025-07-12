@@ -6,7 +6,6 @@ import * as React from "react";
 import { faXmark } from "@rivet-gg/icons";
 import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
-import { DialogActivityIndicator } from "./dialog-activity-indicator";
 
 export type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root>;
 const Dialog = DialogPrimitive.Root;

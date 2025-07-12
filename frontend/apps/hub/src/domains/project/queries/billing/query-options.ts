@@ -74,7 +74,6 @@ export const projectBillingQueryOptions = (
 	});
 };
 
-
 export const portalBillingSessionQueryOptions = (
 	groupId: string,
 	intent: RivetEe.ee.cloud.groups.billing.CreateStripePortalSessionRequest["intent"],

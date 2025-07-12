@@ -1,8 +1,8 @@
 import { ScrollArea } from "@rivet-gg/components";
+import { useLayoutEffect, useRef } from "react";
 import { useActorDetailsSettings } from "../actor-details-settings";
 import { useActorReplCommands } from "../worker/actor-worker-context";
 import { ActorConsoleLog } from "./actor-console-log";
-import { useLayoutEffect, useRef } from "react";
 
 export function ActorConsoleLogs() {
 	const isScrolledToBottom = useRef(true);

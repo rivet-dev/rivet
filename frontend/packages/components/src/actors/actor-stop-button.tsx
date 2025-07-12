@@ -1,10 +1,10 @@
 import { Button, WithTooltip } from "@rivet-gg/components";
 import { Icon, faXmark } from "@rivet-gg/icons";
 
-import type { Actor, ActorAtom, DestroyActorAtom } from "./actor-context";
+import equal from "fast-deep-equal";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
-import equal from "fast-deep-equal";
+import type { Actor, ActorAtom, DestroyActorAtom } from "./actor-context";
 
 const selector = (a: Actor) => ({
 	destroyedAt: a.destroyedAt,

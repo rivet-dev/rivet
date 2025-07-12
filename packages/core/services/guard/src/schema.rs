@@ -79,8 +79,6 @@ pub static HTTP_REQUESTS_SCHEMA: Lazy<Schema> = Lazy::new(|| {
 		)
 		.unwrap()
 		.with_group_by(true),
-		Property::new("guard_cluster_id".to_string(), false, PropertyType::String).unwrap(),
-		Property::new("guard_server_id".to_string(), false, PropertyType::String).unwrap(),
 		Property::new(
 			"guard_response_body_bytes".to_string(),
 			false,
@@ -129,7 +127,6 @@ pub static HTTP_REQUESTS_SCHEMA: Lazy<Schema> = Lazy::new(|| {
 		Property::new("service_actor_id".to_string(), false, PropertyType::String)
 			.unwrap()
 			.with_group_by(true),
-		Property::new("service_server_id".to_string(), false, PropertyType::String).unwrap(),
 	])
 	.unwrap()
 });

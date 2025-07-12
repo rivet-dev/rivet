@@ -2,7 +2,7 @@ import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
 import type { Rivet } from "@rivet-gg/api-full";
-import { safe, logfmt, type LogFmtValue, toRecord } from "@rivet-gg/components";
+import { type LogFmtValue, logfmt, safe, toRecord } from "@rivet-gg/components";
 import { getActorStatus } from "@rivet-gg/components/actors";
 import {
 	type InfiniteData,
@@ -225,9 +225,13 @@ export const actorLogsQueryOptions = (
 				{
 					project,
 					environment,
-					actorIdsJson: JSON.stringify([actorId]),
+					queryJson: JSON.stringify({
+						string_equal: {
+							property: "actor_id",
+							value: actorId,
+						},
+					}),
 					watchIndex: getMetaWatchIndex(meta),
-					stream: "all",
 				},
 				{ abortSignal },
 			);
@@ -259,10 +263,12 @@ export const actorMetricsQueryOptions = (
 		projectNameId,
 		environmentNameId,
 		actorId,
+		timeWindowMs,
 	}: {
 		projectNameId: string;
 		environmentNameId: string;
 		actorId: string;
+		timeWindowMs?: number;
 	},
 	opts: { refetchInterval?: number } = {},
 ) => {
@@ -276,26 +282,25 @@ export const actorMetricsQueryOptions = (
 			"actor",
 			actorId,
 			"metrics",
+			timeWindowMs,
 		] as const,
 		queryFn: async ({
 			signal: abortSignal,
-			queryKey: [, project, , environment, , actorId],
+			queryKey: [, project, , environment, , actorId, , timeWindowMs],
 		}) => {
-			const pollOffset = 5_000;
-			const pollInterval = 10_000;
-
 			const now = Date.now();
-			const start = now - pollInterval * 5 - pollOffset; // Last minute + 2+ data points
-			const end = now - pollOffset; // Metrics have a minimum a 5 second latency based on poll interval
-
+			const lookbackMs = timeWindowMs || 15 * 60 * 1000; // Default to 15 minutes
+			// Calculate interval to target approximately 60 datapoints
+			const targetDatapoints = 60;
+			const dataInterval = Math.max(15_000, Math.floor(lookbackMs / targetDatapoints)); // Minimum 15 seconds
 			const response = await rivetClient.actors.metrics.get(
 				actorId,
 				{
 					project,
 					environment,
-					start,
-					end,
-					interval: pollInterval,
+					start: now - lookbackMs,
+					end: now,
+					interval: dataInterval,
 				},
 				{ abortSignal },
 			);
@@ -313,21 +318,21 @@ export const actorMetricsQueryOptions = (
 				response.metricNames.forEach((metricName, index) => {
 					const metricValues = response.metricValues[index];
 					const attributes = response.metricAttributes[index] || {};
-					
+
 					// Create the metric key based on the metric name and attributes
 					let metricKey = metricName;
-					
+
 					// Handle specific attribute mappings to match UI expectations
 					if (attributes.failure_type && attributes.scope) {
 						metricKey = `memory_failures_${attributes.failure_type}_${attributes.scope}`;
 					} else if (attributes.tcp_state) {
-						if (metricName.includes('tcp6')) {
+						if (metricName.includes("tcp6")) {
 							metricKey = `network_tcp6_usage_${attributes.tcp_state}`;
 						} else {
 							metricKey = `network_tcp_usage_${attributes.tcp_state}`;
 						}
 					} else if (attributes.udp_state) {
-						if (metricName.includes('udp6')) {
+						if (metricName.includes("udp6")) {
 							metricKey = `network_udp6_usage_${attributes.udp_state}`;
 						} else {
 							metricKey = `network_udp_usage_${attributes.udp_state}`;
@@ -336,20 +341,26 @@ export const actorMetricsQueryOptions = (
 						metricKey = `tasks_state_${attributes.state}`;
 					} else if (attributes.interface) {
 						// Handle network interface attributes
-						const baseMetric = metricName.replace(/^container_/, '');
+						const baseMetric = metricName.replace(
+							/^container_/,
+							"",
+						);
 						metricKey = `${baseMetric}_${attributes.interface}`;
 					} else if (attributes.device) {
 						// Handle filesystem device attributes
-						const baseMetric = metricName.replace(/^container_/, '');
+						const baseMetric = metricName.replace(
+							/^container_/,
+							"",
+						);
 						metricKey = `${baseMetric}_${attributes.device}`;
 					} else {
 						// Remove "container_" prefix to match UI expectations
-						metricKey = metricName.replace(/^container_/, '');
+						metricKey = metricName.replace(/^container_/, "");
 					}
-					
+
 					// Store raw time series data for rate calculations
 					rawData[metricKey] = metricValues || [];
-					
+
 					if (metricValues && metricValues.length > 0) {
 						// Get the latest non-zero value (last value is often 0)
 						let value = null;
@@ -373,7 +384,7 @@ export const actorMetricsQueryOptions = (
 			return {
 				metrics,
 				rawData,
-				interval: pollInterval,
+				interval: dataInterval,
 			};
 		},
 	});
@@ -684,35 +695,72 @@ export const logsAggregatedQueryOptions = ({
 			client,
 			queryKey: [_, project, __, environment, ___, search],
 		}) => {
-			const actors = await client.fetchInfiniteQuery({
-				...projectActorsQueryOptions({
-					projectNameId: project,
-					environmentNameId: environment,
-					includeDestroyed: true,
-					tags: {},
-				}),
-				pages: 10,
-			});
-
-			const allActors = actors.pages.flatMap((page) => page.actors || []);
-
-			const actorsMap = new Map<string, Rivet.actors.Actor>();
-			for (const actor of allActors) {
-				actorsMap.set(actor.id, actor);
+			let query = undefined;
+			if (search?.text) {
+				if (search.enableRegex) {
+					query = {
+						string_match_regex: {
+							property: "message",
+							pattern: search.enableRegex,
+							case_insensitive: !search.enableRegex,
+						},
+					};
+				} else {
+					query = {
+						string_contains: {
+							property: "message",
+							pattern: search.enableRegex,
+							case_insensitive: !search.enableRegex,
+						},
+					};
+				}
 			}
 
 			const logs = await rivetClient.actors.logs.get(
 				{
-					stream: "all",
 					project,
 					environment,
-					searchText: search?.text,
-					searchCaseSensitive: search?.caseSensitive,
-					searchEnableRegex: search?.enableRegex,
-					actorIdsJson: JSON.stringify(allActors.map((a) => a.id)),
+					queryJson: query ? JSON.stringify(query) : undefined,
 				},
-				{ abortSignal },
+				{
+					abortSignal,
+				},
 			);
+
+			// Fetch all actors that appear in the logs
+			const actorsMap = new Map<string, Rivet.actors.Actor>();
+
+			// Get unique actor IDs from logs
+			const uniqueActorIds = [...new Set(logs.actorIds)];
+
+			// Fetch actor details in parallel using TanStack Query for caching
+			const actorPromises = uniqueActorIds.map(async (actorId) => {
+				try {
+					// Use fetchQuery to leverage TanStack Query's caching
+					const data = await client.fetchQuery({
+						...actorQueryOptions({
+							projectNameId: project,
+							environmentNameId: environment,
+							actorId,
+						}),
+						staleTime: 60_000,
+					});
+					return data;
+				} catch (error) {
+					// If actor not found or error, return null
+					console.warn(`Failed to fetch actor ${actorId}:`, error);
+					return null;
+				}
+			});
+
+			const actors = await Promise.all(actorPromises);
+
+			// Populate the actors map
+			for (const actor of actors) {
+				if (actor) {
+					actorsMap.set(actor.actor.id, actor.actor);
+				}
+			}
 
 			const parsed = logs.lines.map((line, idx) => {
 				const actorIdx = logs.actorIndices[idx];

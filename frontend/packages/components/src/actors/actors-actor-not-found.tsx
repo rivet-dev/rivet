@@ -1,6 +1,6 @@
 // import { isRivetError } from "@/lib/utils";
 // import { RivetError } from "@rivet-gg/api";
-import { Icon, faCircleExclamation, faNotdef } from "@rivet-gg/icons";
+import { Icon, faCircleExclamation } from "@rivet-gg/icons";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 

@@ -1,4 +1,4 @@
-import { Button, DocsSheet, ScrollArea } from "@rivet-gg/components";
+import { Button, ScrollArea } from "@rivet-gg/components";
 import { Icon, faBooks } from "@rivet-gg/icons";
 import { ActorMetrics } from "./actor-metrics";
 import type { ActorAtom } from "./actor-context";

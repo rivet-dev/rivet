@@ -688,7 +688,14 @@ fn generate_actor_script(registry_path: String) -> String {
 		import {{ createActorHandler }} from "@rivetkit/actor/drivers/rivet";
 		import {{ registry }} from "{registry_path}";
 
-		export default createActorHandler(registry);
+		export default {{
+			async start() {{
+				console.log('started');
+				const handler = createActorHandler(registry);
+				console.log('handler', handler);
+				await new Promise(() => {{}})
+			}}
+		}}
 		"#,
 	)
 }

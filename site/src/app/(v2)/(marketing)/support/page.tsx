@@ -1,5 +1,5 @@
-import { faBook, faComments, faEnvelope, Icon } from "@rivet-gg/icons";
-import { Metadata } from "next";
+import { Icon, faBook, faComments, faEnvelope } from "@rivet-gg/icons";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
 	title: "Support - Rivet",

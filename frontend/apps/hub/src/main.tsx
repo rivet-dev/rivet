@@ -2,8 +2,8 @@ import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 import { App, router } from "./app";
 import "./index.css";
-import { rivetClient } from "./queries/global";
 import { initThirdPartyProviders } from "@rivet-gg/components";
+import { rivetClient } from "./queries/global";
 
 initThirdPartyProviders(router, import.meta.env.DEV);
 

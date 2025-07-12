@@ -73,11 +73,11 @@ function maybeOptimizePackage(binPath: string, toPath: string): void {
 async function download(version: string) {
 	const binaryFilename = computeBinaryFilename();
 	const url = artifactUrl(version, binaryFilename);
-	
+
 	console.log(`Downloading Rivet CLI ${version} for ${platform}-${arch}`);
 	console.log(`Binary: ${binaryFilename}`);
 	console.log(`URL: ${url}`);
-	
+
 	const response = await fetch(url);
 
 	if (!response.ok) {
@@ -112,7 +112,7 @@ async function download(version: string) {
 
 async function main() {
 	console.log("Starting Rivet CLI installation...");
-	
+
 	try {
 		await fs.promises.rm(RIVET_CLI_BINARY_PATH);
 		console.log("Cleaned up existing binary");

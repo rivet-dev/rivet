@@ -1,7 +1,7 @@
 {
-  "functions": {
-    "simple": {
-      "dockerfile": "Dockerfile"
-    }
-  }
+	"functions": {
+		"simple": {
+			"dockerfile": "Dockerfile"
+		}
+	}
 }

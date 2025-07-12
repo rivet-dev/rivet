@@ -1,21 +1,21 @@
-import { test, expect, beforeAll, afterAll } from "vitest";
+import { RivetClient } from "@rivet-gg/api";
 import { mkdir, rm } from "fs/promises";
+import { afterAll, beforeAll, expect, test } from "vitest";
 import { convertDockerTarToOCIBundle } from "../src/oci-converter";
 import {
-	uploadOCIBundleToRivet,
 	type RivetUploadConfig,
+	uploadOCIBundleToRivet,
 } from "../src/rivet-uploader";
-import { RivetClient } from "@rivet-gg/api";
 import {
 	createTestWebServerImage,
-	waitForActorReady,
 	testActorEndpoint,
+	waitForActorReady,
 } from "./test-utils";
 
 const TEST_DIR = "/tmp/upload-test";
 
 let rivetConfig: RivetUploadConfig;
-let testActorIds: string[] = [];
+const testActorIds: string[] = [];
 
 async function createRivetActor(
 	buildId: string,

@@ -1,20 +1,20 @@
-import { test, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "child_process";
-import { mkdir, rm } from "fs/promises";
 import { RivetClient } from "@rivet-gg/api";
+import { mkdir, rm } from "fs/promises";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import type { RivetUploadConfig } from "../src/rivet-uploader";
 import {
+	createActorFromBuild,
 	createTestWebServerContext,
 	pollBuildStatus,
-	waitForActorReady,
 	testActorEndpoint,
-	createActorFromBuild,
+	waitForActorReady,
 } from "./test-utils";
-import { type RivetUploadConfig } from "../src/rivet-uploader";
 
 const TEST_DIR = "/tmp/rivet-test";
 
 let rivetConfig: RivetUploadConfig;
-let testActorIds: string[] = [];
+const testActorIds: string[] = [];
 
 async function findCIManagerActor(
 	client: RivetClient,

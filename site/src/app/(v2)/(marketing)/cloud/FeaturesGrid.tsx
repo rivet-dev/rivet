@@ -1,19 +1,18 @@
-import Link from "next/link";
 import {
 	Icon,
+	faArrowRight,
 	faCode,
 	faLayerGroup,
 	faServer,
-	faArrowRight,
-	faCheck,
 } from "@rivet-gg/icons";
 import clsx from "clsx";
 import Image from "next/image";
-import GlobeSvg from "./images/globe.svg";
+import Link from "next/link";
 import ActorsSvg from "./images/actors.svg";
 import ContainerSvg from "./images/container.svg";
-import WorkflowSvg from "./images/workflow.svg";
 import DbSvg from "./images/db.svg";
+import GlobeSvg from "./images/globe.svg";
+import WorkflowSvg from "./images/workflow.svg";
 
 const WT = ({ children }) => <span className="text-white/90">{children}</span>;
 
@@ -130,7 +129,6 @@ const Feature = ({
 						))}
 						.
 					</p>
-
 
 					{/*<div className="mt-3 flex flex-wrap flex-col gap-0.5 text-sm">
 						{useCases.map((useCase, index) => (
@@ -257,7 +255,10 @@ export const FeaturesGrid = () => {
 					</span>{" "}
 					— integrated together into a single platform.
 				</p>
-				<Link href="/pricing" className="inline-flex items-center gap-2 mt-4 text-white/70 hover:text-white transition-colors">
+				<Link
+					href="/pricing"
+					className="inline-flex items-center gap-2 mt-4 text-white/70 hover:text-white transition-colors"
+				>
 					<span>See pricing</span>
 					<Icon icon={faArrowRight} />
 				</Link>

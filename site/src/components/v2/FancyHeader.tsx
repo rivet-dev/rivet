@@ -1,13 +1,13 @@
 "use client";
 import { DocsMobileNavigation } from "@/components/DocsMobileNavigation";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
-import { Button, cn } from "@rivet-gg/components";
+import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
+import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
 import { GitHubDropdown } from "./GitHubDropdown";
 
@@ -34,7 +34,11 @@ function TextNavItem({
 			)}
 		>
 			<RivetHeader.NavItem asChild onMouseEnter={onMouseEnter}>
-				<Link href={href} className="text-white" aria-current={ariaCurrent}>
+				<Link
+					href={href}
+					className="text-white"
+					aria-current={ariaCurrent}
+				>
 					{children}
 				</Link>
 			</RivetHeader.NavItem>
@@ -124,7 +128,9 @@ export function FancyHeader({
 						support={
 							<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 								<RivetHeader.NavItem asChild>
-									<Link href="https://hub.rivet.gg">Sign In</Link>
+									<Link href="https://hub.rivet.gg">
+										Sign In
+									</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
 									<Link href="/discord">Discord</Link>
@@ -136,9 +142,18 @@ export function FancyHeader({
 						}
 						links={
 							<div className="flex flex-row items-center">
-								<RivetHeader.NavItem asChild className="p-2 mr-4">
-									<Link href="/discord" className="text-white/90">
-										<Icon icon={faDiscord} className="drop-shadow-md" />
+								<RivetHeader.NavItem
+									asChild
+									className="p-2 mr-4"
+								>
+									<Link
+										href="/discord"
+										className="text-white/90"
+									>
+										<Icon
+											icon={faDiscord}
+											className="drop-shadow-md"
+										/>
 									</Link>
 								</RivetHeader.NavItem>
 								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
@@ -180,21 +195,27 @@ export function FancyHeader({
 								<TextNavItem
 									href="/docs"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									ariaCurrent={active === "docs" ? "page" : undefined}
+									ariaCurrent={
+										active === "docs" ? "page" : undefined
+									}
 								>
 									Documentation
 								</TextNavItem>
 								<TextNavItem
 									href="/cloud"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									ariaCurrent={active === "cloud" ? "page" : undefined}
+									ariaCurrent={
+										active === "cloud" ? "page" : undefined
+									}
 								>
 									Cloud
 								</TextNavItem>
 								<TextNavItem
 									href="/changelog"
 									onMouseEnter={() => setIsSubnavOpen(false)}
-									ariaCurrent={active === "blog" ? "page" : undefined}
+									ariaCurrent={
+										active === "blog" ? "page" : undefined
+									}
 								>
 									Changelog
 								</TextNavItem>
@@ -217,13 +238,19 @@ export function FancyHeader({
 									{isSubnavOpen === "product" ? (
 										<motion.div
 											key="product"
-											onMouseLeave={() => setIsSubnavOpen(false)}
+											onMouseLeave={() =>
+												setIsSubnavOpen(false)
+											}
 											className=" absolute inset-0"
 										>
 											<motion.div
 												initial={{
 													opacity: 0,
-													y: prev.current === "solutions" ? -10 : 0,
+													y:
+														prev.current ===
+														"solutions"
+															? -10
+															: 0,
 												}}
 												animate={{ opacity: 1, y: 0 }}
 												exit={{ opacity: 0, y: 0 }}

@@ -1,5 +1,5 @@
-import { RivetError } from "@rivet-gg/api-full";
 import { RivetError as RivetEeError } from "@rivet-gg/api-ee";
+import { RivetError } from "@rivet-gg/api-full";
 import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { z } from "zod";

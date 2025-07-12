@@ -1,9 +1,9 @@
-import { Icon, faServer, faActors, faFunction } from "@rivet-gg/icons";
+import { Icon, faActors, faFunction, faServer } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import type { ComponentProps } from "react";
-import { Button } from "../ui/button";
 import { DocsSheet } from "../docs-sheet";
 import { cn } from "../lib/utils";
+import { Button } from "../ui/button";
 
 export function ActorsResources() {
 	return (

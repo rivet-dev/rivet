@@ -6,6 +6,8 @@ import {
 } from "react-hook-form";
 import z from "zod";
 import { createSchemaForm } from "../../lib/create-schema-form";
+import { Button } from "../../ui/button";
+import { Combobox, type ComboboxOption as Option } from "../../ui/combobox";
 import {
 	FormControl,
 	FormFieldContext,
@@ -14,8 +16,6 @@ import {
 	FormMessage,
 } from "../../ui/form";
 import { Text } from "../../ui/typography";
-import { Button } from "../../ui/button";
-import { Combobox, type ComboboxOption as Option } from "../../ui/combobox";
 
 export const formSchema = z.object({
 	tags: z

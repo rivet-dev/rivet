@@ -1,9 +1,9 @@
 import { rivetClient } from "@/queries/global";
 import type { Rivet } from "@rivet-gg/api-full";
 import { queryOptions } from "@tanstack/react-query";
+import stripAnsi from "strip-ansi";
 import { getLiveLobbyStatus, getLobbyStatus } from "../../data/lobby-status";
 import { projectQueryOptions } from "../query-options";
-import stripAnsi from "strip-ansi";
 
 export const projectEnvironmentsQueryOptions = (projectId: string) => {
 	return queryOptions({
@@ -252,7 +252,9 @@ export const projectEnvironmentLogsLobbyLogsQueryOptions = (
 				);
 			return {
 				...response,
-				lines: response.lines.map((line) => stripAnsi(window.atob(line))),
+				lines: response.lines.map((line) =>
+					stripAnsi(window.atob(line)),
+				),
 			};
 		},
 	});

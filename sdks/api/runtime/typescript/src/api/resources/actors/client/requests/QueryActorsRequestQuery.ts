@@ -17,7 +17,7 @@ export interface QueryActorsRequestQuery {
     /**
      * JSON-encoded query expression for filtering actors
      */
-    queryJson: string;
+    queryJson?: string;
     /**
      * Cursor for pagination
      */

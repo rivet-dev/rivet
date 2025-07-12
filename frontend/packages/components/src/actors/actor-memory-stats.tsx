@@ -2,13 +2,13 @@ import { format } from "date-fns";
 import { filesize } from "filesize";
 import { useId } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { timing } from "../lib/timing";
 import {
 	type ChartConfig,
 	ChartContainer,
 	ChartTooltip,
 	ChartTooltipContent,
 } from "../ui/chart";
-import { timing } from "../lib/timing";
 
 interface ActorMemoryStatsProps {
 	metricsAt: number;
@@ -16,6 +16,7 @@ interface ActorMemoryStatsProps {
 	allocatedMemory?: number;
 	syncId?: string;
 	interval?: number;
+	isRunning?: boolean;
 }
 
 const chartConfig = {
@@ -31,18 +32,40 @@ export function ActorMemoryStats({
 	allocatedMemory,
 	metricsAt,
 	syncId,
+	isRunning = true,
 }: ActorMemoryStatsProps) {
-	const data = memory.map((value, i) => ({
-		x: `${(memory.length - i) * -interval}`,
+	// Filter out trailing zeros in the last 15 seconds only if actor is still running
+	let filteredMemory = [...memory];
+	if (isRunning) {
+		const secondsToCheck = 15;
+		const pointsToCheck = Math.ceil(secondsToCheck / interval);
+
+		// Find the last non-zero value and cut off any zeros after it
+		for (
+			let i = filteredMemory.length - 1;
+			i >= Math.max(0, filteredMemory.length - pointsToCheck);
+			i--
+		) {
+			if (filteredMemory[i] === 0) {
+				filteredMemory = filteredMemory.slice(0, i);
+			} else {
+				break;
+			}
+		}
+	}
+
+	const data = filteredMemory.map((value, i) => ({
+		x: `${(filteredMemory.length - i) * -interval}`,
 		value,
 		config: {
 			label: new Date(
-				metricsAt - (memory.length - i) * timing.seconds(interval),
+				metricsAt -
+					(filteredMemory.length - i) * timing.seconds(interval),
 			),
 		},
 	}));
 
-	const max = allocatedMemory || Math.max(...memory);
+	const max = allocatedMemory || Math.max(...filteredMemory);
 
 	const id = useId();
 

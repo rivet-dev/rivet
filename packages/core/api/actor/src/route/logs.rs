@@ -22,7 +22,7 @@ pub struct GetActorLogsQuery {
 	#[serde(flatten)]
 	pub global: GlobalQuery,
 	/// JSON-encoded user query expression for filtering logs
-	pub query_json: String,
+	pub query_json: Option<String>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -43,33 +43,19 @@ pub async fn get_logs(
 		)
 		.await?;
 
-	// Parse user query expression
-	let user_query_expr =
-		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&query.query_json) {
+	// Parse user query expression if provided
+	let user_query_expr = if let Some(query_json) = &query.query_json {
+		let expr = match serde_json::from_str::<clickhouse_user_query::QueryExpr>(query_json) {
 			Ok(expr) => expr,
 			Err(e) => {
-				bail_with!(ACTOR_LOGS_INVALID_QUERY_EXPR, error = e.to_string());
+				bail_with!(API_BAD_QUERY, error = e.to_string());
 			}
 		};
-
-	// Extract actor IDs from the query expression
-	let actor_ids = extract_actor_ids_from_query(&user_query_expr)?;
-	ensure_with!(!actor_ids.is_empty(), ACTOR_LOGS_NO_ACTOR_IDS);
-
-	// Filter to only valid actors for this game/env
-	let valid_actor_ids = assert::actor_for_env(&ctx, &actor_ids, game_id, env_id, None).await?;
-
-	// Exit early if no valid actors
-	ensure_with!(!valid_actor_ids.is_empty(), ACTOR_LOGS_NO_VALID_ACTOR_IDS);
-
-	// Use only the valid actor IDs from now on
-	let actor_ids = valid_actor_ids;
-
-	// Always return all stream types (both stdout and stderr)
-	let stream_types = vec![
-		pegboard::types::LogsStreamType::StdOut,
-		pegboard::types::LogsStreamType::StdErr,
-	];
+		Some(expr)
+	} else {
+		// No query provided, return empty result
+		None
+	};
 
 	// Timestamp to start the query at
 	let before_nts = util::timestamp::now() * 1_000_000;
@@ -77,8 +63,6 @@ pub async fn get_logs(
 	// Handle anchor
 	let logs_res = if let Some(anchor) = watch_index.as_i64()? {
 		let query_start = tokio::time::Instant::now();
-		let stream_types_clone = stream_types.clone();
-		let actor_ids_clone = actor_ids.clone();
 		let user_query_expr_clone = user_query_expr.clone();
 
 		// Poll for new logs
@@ -94,12 +78,10 @@ pub async fn get_logs(
 			let logs_res = ctx
 				.op(pegboard::ops::actor::log::read_with_query::Input {
 					env_id,
-					actor_ids: actor_ids_clone.clone(),
-					stream_types: stream_types_clone.clone(),
 					count: 64,
 					order_by: pegboard::ops::actor::log::read_with_query::Order::Desc,
 					query: pegboard::ops::actor::log::read_with_query::Query::AfterNts(anchor),
-					user_query_expr: Some(user_query_expr_clone.clone()),
+					user_query_expr: user_query_expr_clone.clone(),
 				})
 				.await?;
 
@@ -132,12 +114,10 @@ pub async fn get_logs(
 		// Read most recent logs
 		ctx.op(pegboard::ops::actor::log::read_with_query::Input {
 			env_id,
-			actor_ids: actor_ids.clone(),
-			stream_types: stream_types.clone(),
 			count: 256,
 			order_by: pegboard::ops::actor::log::read_with_query::Order::Desc,
 			query: pegboard::ops::actor::log::read_with_query::Query::BeforeNts(before_nts),
-			user_query_expr: Some(user_query_expr.clone()),
+			user_query_expr: user_query_expr.clone(),
 		})
 		.await?
 	};
@@ -210,54 +190,6 @@ pub async fn get_logs(
 	})
 }
 
-/// Helper function to extract actor IDs from a query expression
-fn extract_actor_ids_from_query(
-	expr: &clickhouse_user_query::QueryExpr,
-) -> GlobalResult<Vec<Uuid>> {
-	let mut actor_ids = Vec::new();
-	extract_actor_ids_recursive(expr, &mut actor_ids)?;
-	Ok(actor_ids)
-}
-
-fn extract_actor_ids_recursive(
-	expr: &clickhouse_user_query::QueryExpr,
-	actor_ids: &mut Vec<Uuid>,
-) -> GlobalResult<()> {
-	use clickhouse_user_query::QueryExpr;
-
-	match expr {
-		QueryExpr::And { exprs } | QueryExpr::Or { exprs } => {
-			for sub_expr in exprs {
-				extract_actor_ids_recursive(sub_expr, actor_ids)?;
-			}
-		}
-		QueryExpr::StringEqual {
-			property, value, ..
-		} => {
-			if property == "actor_id" {
-				if let Ok(uuid) = Uuid::parse_str(value) {
-					actor_ids.push(uuid);
-				}
-			}
-		}
-		QueryExpr::StringIn {
-			property, values, ..
-		} => {
-			if property == "actor_id" {
-				for value in values {
-					if let Ok(uuid) = Uuid::parse_str(value) {
-						actor_ids.push(uuid);
-					}
-				}
-			}
-		}
-		// Other expression types don't contain actor IDs
-		_ => {}
-	}
-
-	Ok(())
-}
-
 pub async fn get_logs_deprecated(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
@@ -273,9 +205,9 @@ pub async fn get_logs_deprecated(
 		property: "actor_id".to_string(),
 		map_key: None,
 		value: server_id.to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
-	let query_json = serde_json::to_string(&query_expr)?;
+	let query_json = Some(serde_json::to_string(&query_expr)?);
 
 	let logs_res = get_logs(ctx, watch_index, GetActorLogsQuery { global, query_json }).await?;
 	Ok(models::ServersGetServerLogsResponse {
@@ -307,74 +239,50 @@ pub async fn export_logs(
 		)
 		.await?;
 
-	// Parse user query expression
-	let user_query_expr =
-		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&body.query_json) {
+	// Parse user query expression if provided
+	let user_query_expr = if let Some(query_json) = &body.query_json {
+		let expr = match serde_json::from_str::<clickhouse_user_query::QueryExpr>(query_json) {
 			Ok(expr) => expr,
 			Err(e) => {
-				bail_with!(ACTOR_LOGS_INVALID_QUERY_EXPR, error = e.to_string());
+				bail_with!(API_BAD_QUERY, error = e.to_string());
 			}
 		};
-
-	// Extract actor IDs from the query expression
-	let actor_ids = extract_actor_ids_from_query(&user_query_expr)?;
-	ensure_with!(!actor_ids.is_empty(), ACTOR_LOGS_NO_ACTOR_IDS);
-
-	// Filter to only valid actors for this game/env
-	let valid_actor_ids = assert::actor_for_env(&ctx, &actor_ids, game_id, env_id, None).await?;
-
-	// Exit early if no valid actors
-	ensure_with!(!valid_actor_ids.is_empty(), ACTOR_LOGS_NO_VALID_ACTOR_IDS);
-
-	// Use only the valid actor IDs from now on
-	let actor_ids = valid_actor_ids;
+		Some(expr)
+	} else {
+		// No query provided, return empty result
+		return Ok(models::ActorsExportActorLogsResponse { url: String::new() });
+	};
 
 	// Read all logs (no limit)
 	let logs_res = ctx
 		.op(pegboard::ops::actor::log::read_with_query::Input {
 			env_id,
-			actor_ids: actor_ids.clone(),
-			stream_types: vec![
-				pegboard::types::LogsStreamType::StdOut,
-				pegboard::types::LogsStreamType::StdErr,
-			],
 			count: i64::MAX,
 			order_by: pegboard::ops::actor::log::read_with_query::Order::Asc,
 			query: pegboard::ops::actor::log::read_with_query::Query::All,
-			user_query_expr: Some(user_query_expr.clone()),
+			user_query_expr,
 		})
 		.await?;
 
-	// Build actor_ids map for lookup
-	let mut actor_id_to_string: std::collections::HashMap<Uuid, String> =
-		std::collections::HashMap::new();
-	for id in &actor_ids {
-		actor_id_to_string.insert(*id, id.to_string());
-	}
-
-	// Format logs as JSONL (JSON Lines)
+	// Format logs as plain text
 	let mut output = String::new();
 	for entry in &logs_res.entries {
-		let log_entry = serde_json::json!({
-			"timestamp": entry.ts / 1_000_000, // Convert to milliseconds
-			"actor_id": actor_id_to_string.get(&entry.actor_id).unwrap_or(&entry.actor_id.to_string()),
-			"stream": match entry.stream_type {
-				x if x == (pegboard::types::LogsStreamType::StdOut as u8) => "stdout",
-				x if x == (pegboard::types::LogsStreamType::StdErr as u8) => "stderr",
-				x => bail!("unknown stream type {x}")
-			},
-			"message": entry.message,
-		});
-		output.push_str(&serde_json::to_string(&log_entry)?);
-		output.push('\n');
+		let timestamp = util::timestamp::to_string(entry.ts / 1_000_000)?;
+		let stream_name = match entry.stream_type {
+			x if x == (pegboard::types::LogsStreamType::StdOut as u8) => "stdout",
+			x if x == (pegboard::types::LogsStreamType::StdErr as u8) => "stderr",
+			x => bail!("unknown stream type {x}"),
+		};
+		let message = String::from_utf8_lossy(&entry.message);
+		output.push_str(&format!("{} [{}] {}\n", timestamp, stream_name, message));
 	}
 
 	// Generate filename
 	let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-	let filename = format!("actor_logs_export_{}.jsonl", timestamp);
+	let filename = format!("actor_logs_export_{}.txt", timestamp);
 
 	// Upload to S3
-	let mime = "application/x-ndjson";
+	let mime = "text/plain";
 	let content_length = output.len();
 	let upload_res = op!([ctx] upload_prepare {
 		bucket: "bucket-actor-log-export".into(),
@@ -386,8 +294,10 @@ pub async fn export_logs(
 				..Default::default()
 			},
 		],
+		presigned_endpoint_kind: Some(backend::pkg::upload::prepare::EndpointKind::Internal as i32),
 	})
 	.await?;
+	let upload_id = unwrap!(upload_res.upload_id).as_uuid();
 
 	let presigned_req = unwrap!(upload_res.presigned_requests.first());
 
@@ -423,7 +333,7 @@ pub async fn export_logs(
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
-		.key(filename)
+		.key(format!("{upload_id}/{filename}"))
 		.presigned(
 			s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 				.expires_in(Duration::from_secs(60 * 60))

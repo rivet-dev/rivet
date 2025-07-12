@@ -70,7 +70,8 @@ export default async function BlogPage({ params: { slug } }) {
 		image,
 	} = await loadArticle(slug.join("/"));
 
-	const isTechnical = category.name === "Technical" || category.name === "Guide";
+	const isTechnical =
+		category.name === "Technical" || category.name === "Guide";
 
 	return (
 		<>

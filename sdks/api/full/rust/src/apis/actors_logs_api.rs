@@ -84,9 +84,9 @@ pub async fn actors_logs_export(
 /// Returns the logs for a given actor.
 pub async fn actors_logs_get(
 	configuration: &configuration::Configuration,
-	query_json: &str,
 	project: Option<&str>,
 	environment: Option<&str>,
+	query_json: Option<&str>,
 	watch_index: Option<&str>,
 ) -> Result<crate::models::ActorsGetActorLogsResponse, Error<ActorsLogsGetError>> {
 	let local_var_configuration = configuration;
@@ -105,7 +105,10 @@ pub async fn actors_logs_get(
 		local_var_req_builder =
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
 	}
-	local_var_req_builder = local_var_req_builder.query(&[("query_json", &query_json.to_string())]);
+	if let Some(ref local_var_str) = query_json {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("query_json", &local_var_str.to_string())]);
+	}
 	if let Some(ref local_var_str) = watch_index {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("watch_index", &local_var_str.to_string())]);

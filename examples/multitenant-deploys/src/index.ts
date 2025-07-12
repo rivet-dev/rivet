@@ -7,4 +7,3 @@ serve({
 	fetch: app.fetch,
 	port: Number(PORT),
 });
-

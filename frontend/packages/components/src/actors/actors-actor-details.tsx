@@ -6,9 +6,16 @@ import {
 	TabsTrigger,
 	cn,
 } from "@rivet-gg/components";
-import { memo, type ReactNode, Suspense } from "react";
+import { Icon, faQuestionSquare } from "@rivet-gg/icons";
+import { useAtomValue } from "jotai";
+import { type ReactNode, Suspense, memo } from "react";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
+import {
+	type ActorAtom,
+	ActorFeature,
+	currentActorFeaturesAtom,
+} from "./actor-context";
 import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorLogsTab } from "./actor-logs-tab";
 import { ActorMetricsTab } from "./actor-metrics-tab";
@@ -16,25 +23,30 @@ import { ActorStateTab } from "./actor-state-tab";
 import { AtomizedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
 import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
+import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
-import {
-	ActorFeature,
-	currentActorFeaturesAtom,
-	type ActorAtom,
-} from "./actor-context";
-import { useAtomValue } from "jotai";
-import { useActorsView } from "./actors-view-context-provider";
-import { faQuestionSquare, Icon } from "@rivet-gg/icons";
 
 interface ActorsActorDetailsProps {
 	tab?: string;
 	actor: ActorAtom;
 	onTabChange?: (tab: string) => void;
+	onExportLogs?: (
+		actorId: string,
+		typeFilter?: string,
+		filter?: string,
+	) => Promise<void>;
+	isExportingLogs?: boolean;
 }
 
 export const ActorsActorDetails = memo(
-	({ tab, onTabChange, actor }: ActorsActorDetailsProps) => {
+	({
+		tab,
+		onTabChange,
+		actor,
+		onExportLogs,
+		isExportingLogs,
+	}: ActorsActorDetailsProps) => {
 		const actorFeatures = useAtomValue(currentActorFeaturesAtom);
 		const supportsConsole = actorFeatures?.includes(ActorFeature.Console);
 
@@ -52,6 +64,8 @@ export const ActorsActorDetails = memo(
 							actor={actor}
 							tab={tab}
 							onTabChange={onTabChange}
+							onExportLogs={onExportLogs}
+							isExportingLogs={isExportingLogs}
 						/>
 
 						{supportsConsole ? <ActorConsole /> : null}
@@ -88,6 +102,8 @@ export function ActorTabs({
 	className,
 	disabled,
 	children,
+	onExportLogs,
+	isExportingLogs,
 }: {
 	disabled?: boolean;
 	tab?: string;
@@ -96,6 +112,12 @@ export function ActorTabs({
 	actor?: ActorAtom;
 	className?: string;
 	children?: ReactNode;
+	onExportLogs?: (
+		actorId: string,
+		typeFilter?: string,
+		filter?: string,
+	) => Promise<void>;
+	isExportingLogs?: boolean;
 }) {
 	const supportsState = features?.includes(ActorFeature.State);
 	const supportsLogs = features?.includes(ActorFeature.Logs);
@@ -170,7 +192,11 @@ export function ActorTabs({
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab actor={actor} />
+								<ActorLogsTab
+									actor={actor}
+									onExportLogs={onExportLogs}
+									isExporting={isExportingLogs}
+								/>
 							</Suspense>
 						</TabsContent>
 					) : null}

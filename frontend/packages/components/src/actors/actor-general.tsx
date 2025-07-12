@@ -1,11 +1,11 @@
 import { Dd, DiscreteCopyButton, Dl, Dt, Flex, cn } from "@rivet-gg/components";
 import { formatISO } from "date-fns";
-import { ActorRegion } from "./actor-region";
-import { ActorTags } from "./actor-tags";
-import type { Actor, ActorAtom } from "./actor-context";
+import equal from "fast-deep-equal";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
-import equal from "fast-deep-equal";
+import type { Actor, ActorAtom } from "./actor-context";
+import { ActorRegion } from "./actor-region";
+import { ActorTags } from "./actor-tags";
 
 const selector = (a: Actor) => ({
 	id: a.id,

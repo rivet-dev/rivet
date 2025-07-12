@@ -51,12 +51,10 @@ CREATE TABLE IF NOT EXISTS actors
     connectable_at DateTime64(9),
     finished_at DateTime64(9),
     destroyed_at DateTime64(9),
-    row_updated_at DateTime64(9),
-
-	INDEX idx_actor_id actor_id TYPE bloom_filter GRANULARITY 1
+    row_updated_at DateTime64(9)
 )
 ENGINE = ReplicatedReplacingMergeTree(row_updated_at)
-PARTITION BY (namespace, env_id, toStartOfHour(created_at))
-ORDER BY (env_id, created_at, actor_id)
+PARTITION BY (namespace, env_id, toStartOfMonth(created_at))
+ORDER BY (namespace, env_id, actor_id, row_updated_at)
 TTL toDate(multiIf(destroyed_at > 0, destroyed_at + toIntervalDay(90), toDateTime64('2099-12-31 23:59:59', 9)))
-SETTINGS index_granularity = 8192, ttl_only_drop_parts = 0;
+SETTINGS index_granularity = 4096, ttl_only_drop_parts = 0;

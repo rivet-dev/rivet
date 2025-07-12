@@ -62,11 +62,13 @@ pub fn run(
 			let (msg_tx, msg_rx) = smpsc::sync_channel::<log_shipper::ReceivedMessage>(
 				log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
 			);
+			let metadata = actor_config.metadata.deserialize()?;
 			let log_shipper = log_shipper::LogShipper {
 				actor_id,
 				shutdown_rx,
 				msg_rx,
 				vector_socket_addr: vector_socket_addr.clone(),
+				env_id: metadata.environment.env_id,
 			};
 			let log_shipper_thread = log_shipper.spawn();
 

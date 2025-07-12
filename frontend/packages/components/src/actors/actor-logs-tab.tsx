@@ -1,15 +1,25 @@
 import { LogsView, ToggleGroup, ToggleGroupItem } from "@rivet-gg/components";
 import { startTransition, useState } from "react";
+import type { ActorAtom } from "./actor-context";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorDownloadLogsButton } from "./actor-download-logs-button";
 import { ActorLogs, type LogsTypeFilter } from "./actor-logs";
-import type { ActorAtom } from "./actor-context";
 
 interface ActorLogsTabProps {
 	actor: ActorAtom;
+	onExportLogs?: (
+		actorId: string,
+		typeFilter?: string,
+		filter?: string,
+	) => Promise<void>;
+	isExporting?: boolean;
 }
 
-export function ActorLogsTab({ actor }: ActorLogsTabProps) {
+export function ActorLogsTab({
+	actor,
+	onExportLogs,
+	isExporting,
+}: ActorLogsTabProps) {
 	const [search, setSearch] = useState("");
 	const [logsFilter, setLogsFilter] = useState<LogsTypeFilter>("all");
 
@@ -64,6 +74,8 @@ export function ActorLogsTab({ actor }: ActorLogsTabProps) {
 						actor={actor}
 						typeFilter={logsFilter}
 						filter={search}
+						onExportLogs={onExportLogs}
+						isExporting={isExporting}
 					/>
 					<ActorDetailsSettingsButton />
 				</div>

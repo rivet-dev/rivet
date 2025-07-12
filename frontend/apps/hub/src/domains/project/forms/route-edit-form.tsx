@@ -2,19 +2,19 @@ import { bootstrapQueryOptions } from "@/domains/auth/queries/bootstrap";
 import { queryClient } from "@/queries/global";
 import {
 	Button,
+	Checkbox,
+	Code,
 	Combobox,
-	createSchemaForm,
+	type ComboboxOption,
 	FormControl,
+	FormDescription,
 	FormField,
 	FormFieldContext,
 	FormItem,
 	FormLabel,
 	FormMessage,
 	Input,
-	type ComboboxOption,
-	FormDescription,
-	Checkbox,
-	Code,
+	createSchemaForm,
 } from "@rivet-gg/components";
 import { Icon, faTrash } from "@rivet-gg/icons";
 import {

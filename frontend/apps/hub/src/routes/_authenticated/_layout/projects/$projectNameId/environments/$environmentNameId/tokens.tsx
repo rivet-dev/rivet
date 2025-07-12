@@ -1,4 +1,3 @@
-import { BillingPlans } from "@/domains/project/components/billing/billing-plans";
 import { useEnvironment } from "@/domains/project/data/environment-context";
 import { useProject } from "@/domains/project/data/project-context";
 import * as Layout from "@/domains/project/layouts/project-layout";
@@ -45,10 +44,7 @@ function EnvironmentTokensRoute() {
 function DevelopmentTokenCard() {
 	const environment = useEnvironment();
 	return (
-		<DocsCard
-			title="Development token"
-			href="https://rivet.gg/docs/tokens"
-		>
+		<DocsCard title="Development token" href="https://rivet.gg/docs/tokens">
 			<Text>
 				Development tokens are built to let you develop your project on
 				your local machine with access to production APIs.

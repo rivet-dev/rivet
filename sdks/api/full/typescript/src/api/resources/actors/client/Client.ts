@@ -1239,7 +1239,7 @@ export class Actors {
      *     })
      */
     public async query(
-        request: Rivet.actors.QueryActorsRequestQuery,
+        request: Rivet.actors.QueryActorsRequestQuery = {},
         requestOptions?: Actors.RequestOptions,
     ): Promise<Rivet.actors.QueryActorsResponse> {
         const { project, environment, queryJson, cursor } = request;
@@ -1252,7 +1252,10 @@ export class Actors {
             _queryParams["environment"] = environment;
         }
 
-        _queryParams["query_json"] = queryJson;
+        if (queryJson != null) {
+            _queryParams["query_json"] = queryJson;
+        }
+
         if (cursor != null) {
             _queryParams["cursor"] = cursor;
         }

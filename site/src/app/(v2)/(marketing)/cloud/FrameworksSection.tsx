@@ -1,22 +1,22 @@
-import Link from "next/link";
 import {
 	Icon,
-	faReact,
-	faVuejs,
 	faAngular,
-	faNodeJs,
-	faPython,
-	faPhp,
-	faJava,
-	faRust,
-	faSwift,
-	faJsSquare,
-	faHtml5,
 	faCss3Alt,
-	faGolang,
 	faDatabase,
 	faDocker,
+	faGolang,
+	faHtml5,
+	faJava,
+	faJsSquare,
+	faNodeJs,
+	faPhp,
+	faPython,
+	faReact,
+	faRust,
+	faSwift,
+	faVuejs,
 } from "@rivet-gg/icons";
+import Link from "next/link";
 
 // Frameworks section
 export const FrameworksSection = () => {

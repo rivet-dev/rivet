@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
 import os from "node:os";
+import { join } from "node:path";
 
 const platform = os.platform();
 
@@ -14,9 +14,13 @@ function computeTargetFilename() {
 }
 
 try {
-	execFileSync(join(__dirname, computeTargetFilename()), process.argv.slice(2), {
-		stdio: "inherit",
-	});
+	execFileSync(
+		join(__dirname, computeTargetFilename()),
+		process.argv.slice(2),
+		{
+			stdio: "inherit",
+		},
+	);
 } catch (error) {
 	if (error.status) {
 		process.exit(error.status);

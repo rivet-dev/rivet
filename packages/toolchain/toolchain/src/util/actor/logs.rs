@@ -114,7 +114,7 @@ async fn tail_stream(
 
 		let res = apis::actors_logs_api::actors_logs_get(
 			&ctx.openapi_config_cloud,
-			&query_json,
+			Some(query_json.as_str()),
 			Some(&ctx.project.name_id),
 			Some(opts.environment),
 			watch_index.as_deref(),

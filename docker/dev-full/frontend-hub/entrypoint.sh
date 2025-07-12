@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-npm i -g corepack
-corepack enable
-
 # Install packages
 cd /app
 yarn install

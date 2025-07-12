@@ -21,7 +21,6 @@ import {
 	faFunction,
 	faGear,
 	faGlobe,
-	faHammer,
 	faJoystick,
 	faKey,
 	faLink,

@@ -1,7 +1,7 @@
 import { Badge, Combobox } from "@rivet-gg/components";
 import { useAtomValue } from "jotai";
-import { actorBuildsAtom } from "./actor-context";
 import { useMemo } from "react";
+import { actorBuildsAtom } from "./actor-context";
 
 interface BuildSelectProps {
 	onValueChange: (value: string) => void;

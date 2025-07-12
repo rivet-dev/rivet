@@ -1,23 +1,20 @@
-import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
-import { logger } from "hono/logger";
-import { BuildStore } from "./build-store";
-import { runKanikoBuild } from "./kaniko-runner";
-import { createWriteStream, createReadStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
-import { dirname } from "path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { dirname } from "path";
 import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { logger } from "hono/logger";
+import { streamSSE } from "hono/streaming";
 import type { ReadableStream as WebReadableStream } from "stream/web";
+import { BuildStore } from "./build-store";
+import { runKanikoBuild } from "./kaniko-runner";
+import { convertDockerTarToOCIBundle } from "./oci-converter";
 import {
-	convertDockerTarToOCIBundle,
-} from "./oci-converter";
-import {
-	uploadOCIBundleToRivet,
 	type RivetUploadConfig,
+	uploadOCIBundleToRivet,
 } from "./rivet-uploader";
-import { UNIT_SEP_CHAR } from "./common";
 import { BuildRequestSchema } from "./types";
 
 async function processRivetUpload(
@@ -92,7 +89,7 @@ async function processRivetUpload(
 	}
 }
 
-export async function createServer(port: number = 3000) {
+export async function createServer(port = 3000) {
 	const app = new Hono();
 
 	app.use(logger());
@@ -105,10 +102,7 @@ export async function createServer(port: number = 3000) {
 			const body = await c.req.parseBody();
 			const parseResult = BuildRequestSchema.safeParse(body);
 			if (!parseResult.success) {
-				return c.json(
-					{ error: "Invalid build request format" },
-					400,
-				);
+				return c.json({ error: "Invalid build request format" }, 400);
 			}
 			const {
 				buildName,
@@ -116,16 +110,16 @@ export async function createServer(port: number = 3000) {
 				environmentId,
 				buildArgs,
 				buildTarget,
-				context: contextFile
+				context: contextFile,
 			} = parseResult.data;
 
 			// Create the build
 			const buildId = buildStore.createBuild(
-				buildName, 
-				dockerfilePath, 
-				environmentId, 
+				buildName,
+				dockerfilePath,
+				environmentId,
 				buildArgs,
-				buildTarget
+				buildTarget,
 			);
 			const contextPath = buildStore.getContextPath(buildId);
 

@@ -1,12 +1,12 @@
 import { ShimmerLine, VirtualScrollArea } from "@rivet-gg/components";
 import type { Virtualizer } from "@tanstack/react-virtual";
-import { memo, useCallback, useEffect, useRef } from "react";
-import { useResizeObserver } from "usehooks-ts";
-import { useActorDetailsSettings } from "./actor-details-settings";
-import { ActorConsoleMessage } from "./console/actor-console-message";
-import type { Actor, ActorAtom, Logs } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
+import { memo, useCallback, useEffect, useRef } from "react";
+import { useResizeObserver } from "usehooks-ts";
+import type { Actor, ActorAtom, Logs } from "./actor-context";
+import { useActorDetailsSettings } from "./actor-details-settings";
+import { ActorConsoleMessage } from "./console/actor-console-message";
 
 export type LogsTypeFilter = "all" | "output" | "errors";
 

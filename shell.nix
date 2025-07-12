@@ -26,6 +26,7 @@ in
 			git-lfs
 			jq
 			openssh  # ssh-keygen
+			go-migrate
 
 			# Compilers
 			clang

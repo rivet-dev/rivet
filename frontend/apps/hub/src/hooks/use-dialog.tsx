@@ -9,8 +9,8 @@ import {
 import {
 	type ComponentProps,
 	type ComponentType,
-	lazy,
 	Suspense,
+	lazy,
 	useCallback,
 	useMemo,
 	useState,

@@ -1,8 +1,8 @@
+import { Button } from "../../ui/button";
+import { DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
+import { useActorsView } from "../actors-view-context-provider";
 import * as GoToActorForm from "../form/go-to-actor-form";
 import type { DialogContentProps } from "../hooks";
-import { DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
-import { Button } from "../../ui/button";
-import { useActorsView } from "../actors-view-context-provider";
 
 interface ContentProps extends DialogContentProps {
 	onSubmit?: (actorId: string) => void;

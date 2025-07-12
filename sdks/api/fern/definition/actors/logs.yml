@@ -21,7 +21,7 @@ service:
           environment: optional<string>
           query_json:
             docs: JSON-encoded query expression for filtering logs
-            type: string
+            type: optional<string>
           watch_index:
             docs: A query parameter denoting the requests watch index.
             type: optional<string>
@@ -40,7 +40,7 @@ service:
             environment: optional<string>
             query_json:
               docs: JSON-encoded query expression for filtering logs
-              type: string
+              type: optional<string>
       response: ExportActorLogsResponse
 
 types:

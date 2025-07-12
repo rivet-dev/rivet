@@ -1,23 +1,12 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Button } from "@rivet-gg/components";
-import {
-	Icon,
-	faArrowRight,
-} from "@rivet-gg/icons";
-import { CopyCommand } from "./CopyCommand";
-import { TutorialsSection } from "./TutorialsSection";
 import { CommandCenterSection } from "./CommandCenterSection";
 import { CommunitySection } from "./CommunitySection";
-import { CtaSection } from "./CtaSection";
-import { MarketingButton } from "./MarketingButton";
 import { CtaButtons } from "./CtaButtons";
-import { PowerfulPrimitivesSection } from "./PowerfulPrimitivesSection";
-import { ServerlessLimitationsSection } from "./ServerlessLimitationsSection";
-import { RivetCloudSection } from "./RivetCloudSection";
-import { PerformanceSection } from "./PerformanceSection";
+import { CtaSection } from "./CtaSection";
 import { FeaturesGrid } from "./FeaturesGrid";
-import { FrameworksSection } from "./FrameworksSection";
+import { PerformanceSection } from "./PerformanceSection";
+import { PowerfulPrimitivesSection } from "./PowerfulPrimitivesSection";
+import { RivetCloudSection } from "./RivetCloudSection";
+import { ServerlessLimitationsSection } from "./ServerlessLimitationsSection";
 
 export default function IndexPage() {
 	// an empty div at the top of the page is a workaround for a bug in Next.js that causes the page to jump when the user navigates to it
@@ -49,8 +38,10 @@ export default function IndexPage() {
 // Hero component with title, subtitle, and CTA buttons
 const Hero = () => {
 	return (
-		<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-40"> 
-			<div className="mx-auto max-w-[1200px] md:px-8"> {/* Width/padding ocpied from FancyHeader */}
+		<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-40">
+			<div className="mx-auto max-w-[1200px] md:px-8">
+				{" "}
+				{/* Width/padding ocpied from FancyHeader */}
 				<div className="max-w-2xl mx-auto sm:mx-0">
 					{/* On-Prem CF Workers */}
 					{/*<div>
@@ -90,9 +81,10 @@ const Hero = () => {
 							<span className="text-white/90">AI agents</span>,{" "}
 							<span className="text-white/90">
 								complex workloads
-							</span>, and{" "}
-							<span className="text-white/90">backends</span>{" "}
-							— all on a frictionless cloud.
+							</span>
+							, and{" "}
+							<span className="text-white/90">backends</span> —
+							all on a frictionless cloud.
 							{/*<span className="text-white/80">
 								Open-source
 							</span> &{" "}

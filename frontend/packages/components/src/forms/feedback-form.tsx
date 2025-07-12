@@ -1,6 +1,7 @@
 import { Icon, faBug, faConciergeBell } from "@rivet-gg/icons";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
+import { createSchemaForm } from "../lib/create-schema-form";
 import {
 	FormControl,
 	FormField,
@@ -8,10 +9,9 @@ import {
 	FormLabel,
 	FormMessage,
 } from "../ui/form";
-import { createSchemaForm } from "../lib/create-schema-form";
-import { Textarea } from "../ui/textarea";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import { Textarea } from "../ui/textarea";
 
 export const formSchema = z.object({
 	type: z.union([z.literal("bug"), z.literal("feature")]),

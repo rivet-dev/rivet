@@ -18,16 +18,16 @@ pub struct ActorsLogsExportRequest {
     #[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
     /// JSON-encoded query expression for filtering logs
-    #[serde(rename = "query_json")]
-    pub query_json: String,
+    #[serde(rename = "query_json", skip_serializing_if = "Option::is_none")]
+    pub query_json: Option<String>,
 }
 
 impl ActorsLogsExportRequest {
-    pub fn new(query_json: String) -> ActorsLogsExportRequest {
+    pub fn new() -> ActorsLogsExportRequest {
         ActorsLogsExportRequest {
             project: None,
             environment: None,
-            query_json,
+            query_json: None,
         }
     }
 }

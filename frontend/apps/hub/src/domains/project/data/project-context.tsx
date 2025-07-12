@@ -1,9 +1,9 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { projectByIdQueryOptions } from "../queries";
-import { type ReactNode, createContext, useContext, useEffect } from "react";
-import type { Rivet } from "@rivet-gg/api-full";
-import { ls } from "@/lib/ls";
 import { useAuth } from "@/domains/auth/contexts/auth";
+import { ls } from "@/lib/ls";
+import type { Rivet } from "@rivet-gg/api-full";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { type ReactNode, createContext, useContext, useEffect } from "react";
+import { projectByIdQueryOptions } from "../queries";
 
 export const ProjectContext = createContext<Rivet.game.GameSummary | undefined>(
 	undefined,

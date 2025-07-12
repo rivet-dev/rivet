@@ -1,54 +1,19 @@
 "use client";
 
-import React from "react";
+import imgHub from "@/images/screenshots/rivet-hub.png";
 import {
 	Icon,
-	faRocket,
-	faFeather,
-	faServer,
-	faDatabase,
-	faGlobe,
-	faNetworkWired,
-	faGears,
-	faCloud,
-	faCode,
 	faArrowRight,
-	faTerminal,
-	faShieldAlt,
-	faBroadcastTower,
-	faCodeBranch,
-	faChartLine,
-	faTools,
-	faUserCog,
-	faLaptopCode,
-	faWindowRestore,
-	faClock,
-	faBoxOpen,
-	faClipboardList,
-	faSearch,
-	faExchangeAlt,
-	faLifeRing,
-	faHdd,
-	faEnvelope,
-	faLock,
-	faShieldCheck,
-	faDatabase as faDatabaseAlt,
-	faCog,
-	faDollarSign,
-	faFileExport,
-	faSyncAlt,
 	faCheck,
-	faRivet,
 	faCloudflare,
-	faXmark,
-	faMinus,
 	faHourglass,
-	faFunction,
-	faActorsBorderless,
+	faMinus,
+	faRivet,
+	faXmark,
 } from "@rivet-gg/icons";
-import Link from "next/link";
 import Image from "next/image";
-import imgHub from "@/images/screenshots/rivet-hub.png";
+import Link from "next/link";
+import React from "react";
 import { CTASection } from "../(index)/sections/CTASection";
 
 // Feature Status Component
@@ -108,11 +73,12 @@ const HeroSection = () => {
 					Rivet Actors vs Cloudflare Durable Objects
 				</h1>
 				<p className="text-xl text-white/70 max-w-3xl mx-auto">
-					Cloudflare Durable Objects provide stateful serverless computing
-					with vendor lock-in.
+					Cloudflare Durable Objects provide stateful serverless
+					computing with vendor lock-in.
 					<br />
-					Rivet Actors gives you the same capabilities as an open-source library
-					that works with your existing infrastructure and technology stack.
+					Rivet Actors gives you the same capabilities as an
+					open-source library that works with your existing
+					infrastructure and technology stack.
 				</p>
 			</div>
 
@@ -127,7 +93,10 @@ const HeroSection = () => {
 								alt="Rivet Hub dashboard"
 								fill
 								sizes="(max-width: 640px) 100vw, (max-width: 768px) 100vw, 1200px"
-								style={{ objectFit: "cover", objectPosition: "top" }}
+								style={{
+									objectFit: "cover",
+									objectPosition: "top",
+								}}
 								className="w-full h-auto"
 							/>
 						</div>
@@ -209,12 +178,15 @@ const CombinedOverviewSection = () => {
 						<div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white mr-4">
 							<Icon icon={faRivet} className="text-2xl" />
 						</div>
-						<h3 className="text-2xl font-medium text-white">Rivet</h3>
+						<h3 className="text-2xl font-medium text-white">
+							Rivet
+						</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Rivet Actors is an open-source library that brings the actor model
-						to your existing infrastructure. Build stateful, distributed applications
-						with any language and technology stack, deployed on your own infrastructure.
+						Rivet Actors is an open-source library that brings the
+						actor model to your existing infrastructure. Build
+						stateful, distributed applications with any language and
+						technology stack, deployed on your own infrastructure.
 					</p>
 
 					<h4 className="text-xl font-medium text-white mb-6">
@@ -224,13 +196,18 @@ const CombinedOverviewSection = () => {
 						{rivetChoices.map((choice, index) => (
 							<div key={index} className="flex gap-4">
 								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon icon={choice.icon} className="text-xl" />
+									<Icon
+										icon={choice.icon}
+										className="text-xl"
+									/>
 								</div>
 								<div>
 									<h3 className="text-lg font-medium text-white mb-1">
 										{choice.title}
 									</h3>
-									<p className="text-white/70">{choice.description}</p>
+									<p className="text-white/70">
+										{choice.description}
+									</p>
 								</div>
 							</div>
 						))}
@@ -255,10 +232,11 @@ const CombinedOverviewSection = () => {
 						</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Cloudflare Durable Objects provide stateful serverless computing
-						that runs on Cloudflare's global edge network. Built on Cloudflare's
-						proprietary platform, Durable Objects offer strong consistency 
-						and state persistence for JavaScript/TypeScript applications.
+						Cloudflare Durable Objects provide stateful serverless
+						computing that runs on Cloudflare's global edge network.
+						Built on Cloudflare's proprietary platform, Durable
+						Objects offer strong consistency and state persistence
+						for JavaScript/TypeScript applications.
 					</p>
 
 					<h4 className="text-xl font-medium text-white mb-6">
@@ -268,13 +246,18 @@ const CombinedOverviewSection = () => {
 						{cloudflareChoices.map((choice, index) => (
 							<div key={index} className="flex gap-4">
 								<div className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-green-500">
-									<Icon icon={choice.icon} className="text-xl" />
+									<Icon
+										icon={choice.icon}
+										className="text-xl"
+									/>
 								</div>
 								<div>
 									<h3 className="text-lg font-medium text-white mb-1">
 										{choice.title}
 									</h3>
-									<p className="text-white/70">{choice.description}</p>
+									<p className="text-white/70">
+										{choice.description}
+									</p>
 								</div>
 							</div>
 						))}
@@ -313,7 +296,8 @@ const ComparisonTable = () => {
 						status: "yes",
 						text: (
 							<>
-								Yes, Rivet is open-source with the Apache 2.0 license.{" "}
+								Yes, Rivet is open-source with the Apache 2.0
+								license.{" "}
 								<Link href="https://github.com/rivet-gg/rivet">
 									View on GitHub
 								</Link>
@@ -373,7 +357,7 @@ const ComparisonTable = () => {
 						"Keeping your existing deployment process reduces complexity and learning curve",
 				},
 				{
-					feature: "Language/technology support", 
+					feature: "Language/technology support",
 					rivet: {
 						status: "yes",
 						text: "Works with any language or technology stack",
@@ -730,17 +714,27 @@ const ComparisonTable = () => {
 							<th className="py-4 px-6 text-left text-sm font-medium">
 								<div className="flex items-center">
 									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white mr-2">
-										<Icon icon={faRivet} className="text-xs" />
+										<Icon
+											icon={faRivet}
+											className="text-xs"
+										/>
 									</div>
-									<span className="text-white">Rivet Actors</span>
+									<span className="text-white">
+										Rivet Actors
+									</span>
 								</div>
 							</th>
 							<th className="py-4 px-6 text-left text-sm font-medium">
 								<div className="flex items-center">
 									<div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-white/70 mr-2">
-										<Icon icon={faCloudflare} className="text-xs" />
+										<Icon
+											icon={faCloudflare}
+											className="text-xs"
+										/>
 									</div>
-									<span className="text-white/70">Cloudflare Durable Objects</span>
+									<span className="text-white/70">
+										Cloudflare Durable Objects
+									</span>
 								</div>
 							</th>
 							<th className="py-4 px-6 text-left text-sm font-medium text-white/70">
@@ -777,7 +771,9 @@ const ComparisonTable = () => {
 										</td>
 										<td className="py-4 px-6 text-sm text-white/70">
 											<FeatureStatus
-												status={feature.cloudflare.status}
+												status={
+													feature.cloudflare.status
+												}
 												text={feature.cloudflare.text}
 											/>
 										</td>
@@ -804,10 +800,11 @@ const MigrationSection = () => {
 			</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					Looking to migrate your existing Cloudflare Durable Objects to
-					Rivet Actors or have more questions about how Rivet Actors can meet your needs? Our
-					team can help make the transition smooth and seamless. We provide
-					migration assistance, technical guidance, and dedicated support to
+					Looking to migrate your existing Cloudflare Durable Objects
+					to Rivet Actors or have more questions about how Rivet
+					Actors can meet your needs? Our team can help make the
+					transition smooth and seamless. We provide migration
+					assistance, technical guidance, and dedicated support to
 					ensure your experience with Rivet Actors is successful.
 				</p>
 				<div className="mt-6">
@@ -830,13 +827,15 @@ const Conclusion = () => {
 			<h2 className="text-3xl font-medium text-white mb-6">Conclusion</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					While Cloudflare Durable Objects provides stateful serverless computing
-					with vendor lock-in, Rivet Actors offers the same actor model capabilities
-					as an open-source library that works with your existing infrastructure.
-					Choose Rivet Actors when you want the power of actors without changing
-					your deployment process, technology stack, or being locked into a specific
-					platform. Choose Cloudflare Durable Objects when you're already committed 
-					to the Cloudflare ecosystem and don't mind the platform constraints.
+					While Cloudflare Durable Objects provides stateful
+					serverless computing with vendor lock-in, Rivet Actors
+					offers the same actor model capabilities as an open-source
+					library that works with your existing infrastructure. Choose
+					Rivet Actors when you want the power of actors without
+					changing your deployment process, technology stack, or being
+					locked into a specific platform. Choose Cloudflare Durable
+					Objects when you're already committed to the Cloudflare
+					ecosystem and don't mind the platform constraints.
 				</p>
 			</div>
 		</div>
@@ -866,4 +865,3 @@ export default function RivetVsCloudflareWorkersPage() {
 		</div>
 	);
 }
-

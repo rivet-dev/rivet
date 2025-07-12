@@ -61,10 +61,7 @@ export function GitHubStars({
 			href={`https://github.com/${repo}`}
 			target="_blank"
 			rel="noreferrer"
-			className={cn(
-				"flex items-center gap-2",
-				className,
-			)}
+			className={cn("flex items-center gap-2", className)}
 			{...props}
 		>
 			<Icon icon={faGithub} />

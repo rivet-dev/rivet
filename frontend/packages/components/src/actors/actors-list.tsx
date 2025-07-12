@@ -1,11 +1,8 @@
 import {
 	Button,
 	Checkbox,
-	cn,
 	CommandGroup,
 	CommandItem,
-	createFiltersPicker,
-	createFiltersSchema,
 	DocsSheet,
 	FilterCreator,
 	type FilterDefinitions,
@@ -15,23 +12,12 @@ import {
 	ScrollArea,
 	ShimmerLine,
 	SmallText,
+	cn,
+	createFiltersPicker,
+	createFiltersSchema,
 } from "@rivet-gg/components";
-import { ActorsListRow } from "./actors-list-row";
-import { CreateActorButton } from "./create-actor-button";
-import { GoToActorButton } from "./go-to-actor-button";
-import { useSearch, useNavigate } from "@tanstack/react-router";
-import { useAtomValue, useSetAtom } from "jotai";
 import {
-	actorFiltersAtom,
-	actorFiltersCountAtom,
-	actorRegionsAtom,
-	actorsAtomsAtom,
-	actorsPaginationAtom,
-	actorsQueryAtom,
-	actorTagsAtom,
-	filteredActorsCountAtom,
-} from "./actor-context";
-import {
+	Icon,
 	faActors,
 	faCalendarCircleMinus,
 	faCalendarCirclePlus,
@@ -40,17 +26,30 @@ import {
 	faCode,
 	faGlobe,
 	faReact,
-	faRust,
 	faSignalBars,
 	faTag,
 	faTs,
-	Icon,
 } from "@rivet-gg/icons";
-import { useActorsView } from "./actors-view-context-provider";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useMemo } from "react";
-import { ActorTag } from "./actor-tags";
-import type { ActorStatus as ActorStatusType } from "./actor-status-indicator";
+import {
+	actorFiltersAtom,
+	actorFiltersCountAtom,
+	actorRegionsAtom,
+	actorTagsAtom,
+	actorsAtomsAtom,
+	actorsPaginationAtom,
+	actorsQueryAtom,
+	filteredActorsCountAtom,
+} from "./actor-context";
 import { ActorStatus } from "./actor-status";
+import type { ActorStatus as ActorStatusType } from "./actor-status-indicator";
+import { ActorTag } from "./actor-tags";
+import { ActorsListRow } from "./actors-list-row";
+import { useActorsView } from "./actors-view-context-provider";
+import { CreateActorButton } from "./create-actor-button";
+import { GoToActorButton } from "./go-to-actor-button";
 
 export function ActorsList() {
 	return (

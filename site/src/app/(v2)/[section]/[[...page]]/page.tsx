@@ -8,6 +8,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Comments } from "@/components/Comments";
 import { DocsNavigation } from "@/components/DocsNavigation";
 import { DocsTableOfContents } from "@/components/DocsTableOfContents";
 import { Prose } from "@/components/Prose";
@@ -18,7 +19,6 @@ import { Icon, faPencil } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VALID_SECTIONS, buildFullPath, buildPathComponents } from "./util";
-import { Comments } from "@/components/Comments";
 
 interface Param {
 	section: string;

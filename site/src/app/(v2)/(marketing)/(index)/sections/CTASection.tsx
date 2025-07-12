@@ -1,8 +1,8 @@
 "use client";
 
-import { MarketingButton } from "../components/MarketingButton";
-import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { MarketingButton } from "../components/MarketingButton";
 
 const CTA_TITLES = [
 	"Performance in every act — thanks to Rivet Actors.",
@@ -21,7 +21,7 @@ const CTA_TITLES = [
 	"Make your backend the main actor — with Rivet Actors.",
 	"Give your backend its big break — use Rivet Actors.",
 	"Serverless, with no intermissions — powered by Rivet Actors.",
-	"Set the stage for serverless success — with Rivet Actors."
+	"Set the stage for serverless success — with Rivet Actors.",
 ];
 
 export function CTASection() {

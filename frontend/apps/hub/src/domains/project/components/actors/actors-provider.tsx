@@ -1,43 +1,42 @@
 import { router } from "@/app";
-import { queryClient, rivetClient } from "@/queries/global";
+import { queryClient } from "@/queries/global";
+import type { Rivet } from "@rivet-gg/api-full";
 import { type FilterValue, toRecord } from "@rivet-gg/components";
 import {
-	currentActorIdAtom,
-	actorFiltersAtom,
-	actorsPaginationAtom,
-	actorsAtom,
-	getActorStatus,
+	type Actor,
 	type DestroyActor,
-	actorRegionsAtom,
-	actorBuildsAtom,
-	createActorAtom,
 	type Logs,
 	type Metrics,
-	actorsQueryAtom,
-	actorsInternalFilterAtom,
-	type Actor,
+	actorBuildsAtom,
 	actorEnvironmentAtom,
-	exportLogsHandlerAtom,
+	actorFiltersAtom,
+	actorRegionsAtom,
+	actorsAtom,
+	actorsInternalFilterAtom,
+	actorsPaginationAtom,
+	actorsQueryAtom,
+	createActorAtom,
+	currentActorIdAtom,
+	getActorStatus,
 } from "@rivet-gg/components/actors";
 import {
 	InfiniteQueryObserver,
-	QueryObserver,
 	MutationObserver,
+	QueryObserver,
 } from "@tanstack/react-query";
-//import { createClient } from "actor-core/client";
-import { atom, createStore, Provider, type PrimitiveAtom } from "jotai";
 import equal from "fast-deep-equal";
+//import { createClient } from "actor-core/client";
+import { type PrimitiveAtom, Provider, atom, createStore } from "jotai";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-	projectActorsQueryOptions,
-	createActorEndpoint,
-	destroyActorMutationOptions,
+	actorBuildsQueryOptions,
 	actorLogsQueryOptions,
 	actorMetricsQueryOptions,
 	actorRegionsQueryOptions,
-	actorBuildsQueryOptions,
+	createActorEndpoint,
+	destroyActorMutationOptions,
+	projectActorsQueryOptions,
 } from "../../queries";
-import type { Rivet } from "@rivet-gg/api-full";
 
 interface ActorsProviderProps {
 	actorId: string | undefined;
@@ -84,17 +83,6 @@ export function ActorsProvider({
 	useEffect(() => {
 		store.set(actorEnvironmentAtom, { projectNameId, environmentNameId });
 	}, [projectNameId, environmentNameId]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
-	useEffect(() => {
-		store.set(exportLogsHandlerAtom, async ({ projectNameId, environmentNameId, queryJson }) => {
-			return rivetClient.actors.logs.export({
-				project: projectNameId,
-				environment: environmentNameId,
-				queryJson,
-			});
-		});
-	}, []);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: store is not a dependency
 	useEffect(() => {
@@ -285,11 +273,14 @@ export function ActorsProvider({
 							metrics.onMount = (set) => {
 								const metricsObserver = new QueryObserver(
 									queryClient,
-									actorMetricsQueryOptions({
-										projectNameId,
-										environmentNameId,
-										actorId: actor.id,
-									}, { refetchInterval: 5000 }),
+									actorMetricsQueryOptions(
+										{
+											projectNameId,
+											environmentNameId,
+											actorId: actor.id,
+										},
+										{ refetchInterval: 5000 },
+									),
 								);
 
 								type MetricsQuery = {

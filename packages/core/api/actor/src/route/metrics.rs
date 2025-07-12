@@ -94,10 +94,37 @@ pub async fn get_metrics(
 
 	let actor_prefix = format!("/system.slice/pegboard-actor-{}-", actor_id);
 
+	// Available gauge metrics:
+	// - container_cpu_load_average_10s
+	// - container_file_descriptors
+	// - container_last_seen
+	// - container_memory_usage_bytes
+	// - container_memory_working_set_bytes
+	// - container_memory_cache
+	// - container_memory_rss
+	// - container_memory_swap
+	// - container_memory_mapped_file
+	// - container_memory_max_usage_bytes
+	// - container_network_tcp_usage_total
+	// - container_network_tcp6_usage_total
+	// - container_network_udp_usage_total
+	// - container_network_udp6_usage_total
+	// - container_sockets
+	// - container_spec_cpu_period
+	// - container_spec_cpu_shares
+	// - container_spec_memory_limit_bytes
+	// - container_spec_memory_reservation_limit_bytes
+	// - container_spec_memory_swap_limit_bytes
+	// - container_start_time_seconds
+	// - container_tasks_state
+	// - container_threads
+	// - container_threads_max
+	// - container_processes
+
 	// Query gauge metrics (current values)
 	let gauge_query = indoc! {"
 		SELECT
-			toUInt32(floor((toUnixTimestamp(TimeUnix) - ?) / ?)) as time_bucket_index,
+			toUInt32((toUnixTimestamp(toStartOfInterval(TimeUnix, INTERVAL ? second)) - ?) / ?) as time_bucket_index,
 			MetricName as metric_name,
 			max(Value) as value,
 			COALESCE(Attributes['tcp_state'], '') as tcp_state,
@@ -112,31 +139,7 @@ pub async fn get_metrics(
 			TimeUnix >= fromUnixTimestamp(?)
 			AND TimeUnix <= fromUnixTimestamp(?)
 			AND MetricName IN [
-				'container_cpu_load_average_10s',
-				'container_file_descriptors',
-				'container_last_seen',
-				'container_memory_usage_bytes',
-				'container_memory_working_set_bytes',
-				'container_memory_cache',
-				'container_memory_rss',
-				'container_memory_swap',
-				'container_memory_mapped_file',
-				'container_memory_max_usage_bytes',
-				'container_network_tcp_usage_total',
-				'container_network_tcp6_usage_total',
-				'container_network_udp_usage_total',
-				'container_network_udp6_usage_total',
-				'container_sockets',
-				'container_spec_cpu_period',
-				'container_spec_cpu_shares',
-				'container_spec_memory_limit_bytes',
-				'container_spec_memory_reservation_limit_bytes',
-				'container_spec_memory_swap_limit_bytes',
-				'container_start_time_seconds',
-				'container_tasks_state',
-				'container_threads',
-				'container_threads_max',
-				'container_processes'
+				'container_memory_usage_bytes'
 			]
 			AND has(Attributes, 'id')
 			AND startsWith(Attributes['id'], ?)
@@ -146,6 +149,7 @@ pub async fn get_metrics(
 
 	let gauge_future = clickhouse
 		.query(&gauge_query)
+		.bind(interval_seconds)
 		.bind(start_seconds)
 		.bind(interval_seconds)
 		.bind(start_seconds)
@@ -153,10 +157,30 @@ pub async fn get_metrics(
 		.bind(&actor_prefix)
 		.fetch_all::<MetricRow>();
 
+	// Available sum metrics:
+	// - container_cpu_schedstat_run_periods_total
+	// - container_cpu_schedstat_run_seconds_total
+	// - container_cpu_schedstat_runqueue_seconds_total
+	// - container_cpu_system_seconds_total
+	// - container_cpu_user_seconds_total
+	// - container_cpu_usage_seconds_total
+	// - container_memory_failcnt
+	// - container_memory_failures_total
+	// - container_fs_reads_bytes_total
+	// - container_fs_writes_bytes_total
+	// - container_network_receive_bytes_total
+	// - container_network_receive_errors_total
+	// - container_network_receive_packets_dropped_total
+	// - container_network_receive_packets_total
+	// - container_network_transmit_bytes_total
+	// - container_network_transmit_errors_total
+	// - container_network_transmit_packets_dropped_total
+	// - container_network_transmit_packets_total
+
 	// Query sum metrics (rates/counters)
 	let sum_query = indoc! {"
 		SELECT
-			toUInt32(floor((toUnixTimestamp(TimeUnix) - ?) / ?)) as time_bucket_index,
+			toUInt32((toUnixTimestamp(toStartOfInterval(TimeUnix, INTERVAL ? second)) - ?) / ?) as time_bucket_index,
 			MetricName as metric_name,
 			max(Value) as value,
 			COALESCE(Attributes['tcp_state'], '') as tcp_state,
@@ -171,24 +195,7 @@ pub async fn get_metrics(
 			TimeUnix >= fromUnixTimestamp(?)
 			AND TimeUnix <= fromUnixTimestamp(?)
 			AND MetricName IN [
-				'container_cpu_schedstat_run_periods_total',
-				'container_cpu_schedstat_run_seconds_total',
-				'container_cpu_schedstat_runqueue_seconds_total',
-				'container_cpu_system_seconds_total',
-				'container_cpu_user_seconds_total',
-				'container_cpu_usage_seconds_total',
-				'container_memory_failcnt',
-				'container_memory_failures_total',
-				'container_fs_reads_bytes_total',
-				'container_fs_writes_bytes_total',
-				'container_network_receive_bytes_total',
-				'container_network_receive_errors_total',
-				'container_network_receive_packets_dropped_total',
-				'container_network_receive_packets_total',
-				'container_network_transmit_bytes_total',
-				'container_network_transmit_errors_total',
-				'container_network_transmit_packets_dropped_total',
-				'container_network_transmit_packets_total'
+				'container_cpu_usage_seconds_total'
 			]
 			AND has(Attributes, 'id')
 			AND startsWith(Attributes['id'], ?)
@@ -198,6 +205,7 @@ pub async fn get_metrics(
 
 	let sum_future = clickhouse
 		.query(&sum_query)
+		.bind(interval_seconds)
 		.bind(start_seconds)
 		.bind(interval_seconds)
 		.bind(start_seconds)

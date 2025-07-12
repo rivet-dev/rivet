@@ -1,11 +1,11 @@
 import * as crypto from "node:crypto";
 import path from "node:path";
+// @ts-expect-error types are missing
+import { viteShikiTransformer } from "@rivet-gg/components/vite";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
-// @ts-expect-error types are missing
-import { viteShikiTransformer } from "@rivet-gg/components/vite";
 import { defineConfig } from "vite";
 // @ts-expect-error types are missing
 import vitePluginFaviconsInject from "vite-plugin-favicons-inject";

@@ -96,7 +96,7 @@ async fn test_simple_query_execution() {
 	};
 
 	// Build query
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	// Execute query
 	let query = setup.client.query(&format!(
@@ -138,10 +138,10 @@ async fn test_map_key_query_execution() {
 		property: "metadata".to_string(),
 		map_key: Some("tier".to_string()),
 		value: "premium".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",
@@ -195,7 +195,7 @@ async fn test_complex_and_or_query_execution() {
 						property: "metadata".to_string(),
 						map_key: Some("tier".to_string()),
 						value: "premium".to_string(),
-						case_sensitive: true,
+						case_insensitive: false,
 					},
 				],
 			},
@@ -207,7 +207,7 @@ async fn test_complex_and_or_query_execution() {
 		],
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",
@@ -250,11 +250,11 @@ async fn test_sql_injection_protection() {
 		property: "metadata".to_string(),
 		map_key: Some("'; DROP TABLE test_users; --".to_string()),
 		value: "malicious".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
 	// The builder should reject the SQL injection attempt
-	let builder_result = UserDefinedQueryBuilder::new(&schema, &query_expr);
+	let builder_result = UserDefinedQueryBuilder::new(&schema, Some(&query_expr));
 	assert!(builder_result.is_err());
 	assert!(matches!(
 		builder_result,
@@ -266,10 +266,10 @@ async fn test_sql_injection_protection() {
 		property: "metadata".to_string(),
 		map_key: Some("safe_key".to_string()),
 		value: "test_value".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let safe_builder = UserDefinedQueryBuilder::new(&schema, &safe_query_expr);
+	let safe_builder = UserDefinedQueryBuilder::new(&schema, Some(&safe_query_expr));
 	assert!(safe_builder.is_ok());
 
 	let safe_builder = safe_builder.unwrap();
@@ -322,7 +322,7 @@ async fn test_json_serialization_roundtrip() {
 				property: "metadata".to_string(),
 				map_key: Some("tier".to_string()),
 				value: "premium".to_string(),
-				case_sensitive: true,
+				case_insensitive: false,
 			},
 		],
 	};
@@ -334,8 +334,9 @@ async fn test_json_serialization_roundtrip() {
 	let deserialized_query: QueryExpr = serde_json::from_str(&json).unwrap();
 
 	// Build queries from both and verify they're identical
-	let original_builder = UserDefinedQueryBuilder::new(&schema, &original_query).unwrap();
-	let deserialized_builder = UserDefinedQueryBuilder::new(&schema, &deserialized_query).unwrap();
+	let original_builder = UserDefinedQueryBuilder::new(&schema, Some(&original_query)).unwrap();
+	let deserialized_builder =
+		UserDefinedQueryBuilder::new(&schema, Some(&deserialized_query)).unwrap();
 
 	assert_eq!(
 		original_builder.where_expr(),
@@ -396,7 +397,7 @@ async fn test_numeric_query_execution() {
 		value: 80.0,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",
@@ -440,7 +441,7 @@ async fn test_numeric_less_or_equal_query() {
 		value: 90.0,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",
@@ -482,10 +483,10 @@ async fn test_string_in_query_execution() {
 		property: "metadata".to_string(),
 		map_key: Some("region".to_string()),
 		values: vec!["us-east".to_string(), "eu".to_string()],
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",
@@ -529,7 +530,7 @@ async fn test_number_not_in_query_execution() {
 		values: vec![67.2, 88.9],
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 
 	let query = setup.client.query(&format!(
 		"SELECT id FROM test_users WHERE {}",

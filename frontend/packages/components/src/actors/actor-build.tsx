@@ -1,10 +1,10 @@
-import { Flex, Dt, Dd, Dl, DiscreteCopyButton } from "@rivet-gg/components";
-import { ActorTags } from "./actor-tags";
+import { Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@rivet-gg/components";
 import { formatISO } from "date-fns";
-import { actorBuildsAtom, type Actor, type ActorAtom } from "./actor-context";
-import { selectAtom } from "jotai/utils";
 import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
 import { useCallback } from "react";
+import { type Actor, type ActorAtom, actorBuildsAtom } from "./actor-context";
+import { ActorTags } from "./actor-tags";
 
 const buildIdSelector = (a: Actor) => a.runtime?.build;
 

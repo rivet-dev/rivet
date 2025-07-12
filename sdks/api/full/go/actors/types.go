@@ -56,7 +56,7 @@ type QueryActorsRequestQuery struct {
 	Project     *string `json:"-"`
 	Environment *string `json:"-"`
 	// JSON-encoded query expression for filtering actors
-	QueryJson string `json:"-"`
+	QueryJson *string `json:"-"`
 	// Cursor for pagination
 	Cursor *string `json:"-"`
 }

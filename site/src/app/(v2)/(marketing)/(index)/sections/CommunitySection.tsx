@@ -1,5 +1,11 @@
+import {
+	Icon,
+	faBluesky,
+	faDiscord,
+	faGithub,
+	faXTwitter,
+} from "@rivet-gg/icons";
 import Link from "next/link";
-import { Icon, faDiscord, faXTwitter, faGithub, faBluesky } from "@rivet-gg/icons";
 
 export function CommunitySection() {
 	const communityLinks = [
@@ -37,7 +43,8 @@ export function CommunitySection() {
 					Join the Community
 				</h2>
 				<p className="text-lg font-500 text-white/40 max-w-2xl mx-auto">
-					Join thousands of developers building with Rivet Actors today
+					Join thousands of developers building with Rivet Actors
+					today
 				</p>
 			</div>
 
@@ -51,11 +58,12 @@ export function CommunitySection() {
 						rel="noopener noreferrer"
 					>
 						<Icon icon={link.icon} className="w-6 h-6 text-white" />
-						<span className="text-white font-medium text-sm">{link.label}</span>
+						<span className="text-white font-medium text-sm">
+							{link.label}
+						</span>
 					</Link>
 				))}
 			</div>
 		</div>
 	);
 }
-

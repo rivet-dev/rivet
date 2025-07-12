@@ -1,7 +1,7 @@
 "use client";
 
 import { Icon } from "@rivet-gg/icons";
-import { FeatureItem } from "../ServerlessLimitationsSection";
+import type { FeatureItem } from "../ServerlessLimitationsSection";
 
 interface FeatureProps {
 	feature: FeatureItem;
@@ -9,7 +9,7 @@ interface FeatureProps {
 
 export function Feature({ feature }: FeatureProps) {
 	const title = feature.title || feature.name;
-	
+
 	return (
 		<div className="p-5 text-md">
 			<div className="flex items-center gap-3 mb-3 text-white/90">

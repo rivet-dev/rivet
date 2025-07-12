@@ -111,7 +111,7 @@ pub async fn pegboard_actor_usage_get_aggregated(
 
 	// Add user query filter if provided
 	let user_query_builder = if let Some(ref query_expr) = input.user_query_expr {
-		let builder = UserDefinedQueryBuilder::new(&ACTOR_SCHEMA, query_expr)
+		let builder = UserDefinedQueryBuilder::new(&ACTOR_SCHEMA, Some(query_expr))
 			.map_err(Into::<GlobalError>::into)?;
 		where_conditions.push(format!("({})", builder.where_expr()));
 		Some(builder)
@@ -125,6 +125,8 @@ pub async fn pegboard_actor_usage_get_aggregated(
 		"SELECT {} FROM actors WHERE {}{} SETTINGS date_time_output_format = 'iso'",
 		select_clause, where_clause, group_by_clause
 	);
+
+	tracing::debug!(query = ?query_str, "querying actors aggregated");
 
 	let mut query = client
 		.query(&query_str)

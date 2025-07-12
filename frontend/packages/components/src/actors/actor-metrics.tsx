@@ -1,4 +1,4 @@
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { selectAtom } from "jotai/utils";
 import equal from "fast-deep-equal";
 import { useState, useMemo } from "react";
@@ -8,24 +8,80 @@ import { ActorMemoryStats } from "./actor-memory-stats";
 import { Dd, Dl, Dt } from "../ui/typography";
 import { Button } from "../ui/button";
 import { Flex } from "../ui/flex";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { actorMetricsTimeWindowAtom, actorEnvironmentAtom } from "./actor-context";
+import { useQuery } from "@tanstack/react-query";
+import { actorMetricsQueryOptions } from "@/domains/project/queries/actors/query-options";
 
 const selector = (a: Actor) => ({
 	metrics: a.metrics,
 	status: a.status,
+	resources: a.resources,
+	id: a.id,
 });
+
+const timeWindowOptions = [
+	{ label: "5 minutes", value: "5m", milliseconds: 5 * 60 * 1000 },
+	{ label: "15 minutes", value: "15m", milliseconds: 15 * 60 * 1000 },
+	{ label: "30 minutes", value: "30m", milliseconds: 30 * 60 * 1000 },
+	{ label: "1 hour", value: "1h", milliseconds: 60 * 60 * 1000 },
+	{ label: "3 hours", value: "3h", milliseconds: 3 * 60 * 60 * 1000 },
+	{ label: "6 hours", value: "6h", milliseconds: 6 * 60 * 60 * 1000 },
+	{ label: "12 hours", value: "12h", milliseconds: 12 * 60 * 60 * 1000 },
+	{ label: "24 hours", value: "24h", milliseconds: 24 * 60 * 60 * 1000 },
+	{ label: "2 days", value: "2d", milliseconds: 2 * 24 * 60 * 60 * 1000 },
+];
 
 export interface ActorMetricsProps {
 	actor: ActorAtom;
 }
 
 export function ActorMetrics({ actor }: ActorMetricsProps) {
-	const { metrics, status } = useAtomValue(
+	const { metrics, status, resources, id } = useAtomValue(
 		selectAtom(actor, selector, equal),
 	);
-	const metricsData = useAtomValue(metrics);
+	const defaultMetricsData = useAtomValue(metrics);
 	const [showAdvanced, setShowAdvanced] = useState(false);
+	
+	const timeWindowMs = useAtomValue(actorMetricsTimeWindowAtom);
+	const setTimeWindowMs = useSetAtom(actorMetricsTimeWindowAtom);
+	const environment = useAtomValue(actorEnvironmentAtom);
+	
+	const currentTimeWindow = timeWindowOptions.find(option => option.milliseconds === timeWindowMs) || timeWindowOptions[1];
+	const [timeWindow, setTimeWindow] = useState(currentTimeWindow.value);
 
 	const isActorRunning = status === "running";
+	
+	// Create a query for time window-specific metrics
+	const { data: customMetricsData, status: customMetricsStatus } = useQuery({
+		...actorMetricsQueryOptions(
+			{
+				projectNameId: environment?.projectNameId || "",
+				environmentNameId: environment?.environmentNameId || "",
+				actorId: id,
+				timeWindowMs: timeWindowMs,
+			},
+			{ refetchInterval: 5000 }
+		),
+		enabled: !!environment && !!id,
+	});
+	
+	// Use custom metrics if available, otherwise fall back to default
+	const metricsData = customMetricsData ? {
+		metrics: customMetricsData.metrics,
+		rawData: customMetricsData.rawData,
+		interval: customMetricsData.interval,
+		status: customMetricsStatus,
+		updatedAt: Date.now(),
+	} : defaultMetricsData;
+
+	const handleTimeWindowChange = (value: string) => {
+		setTimeWindow(value);
+		const selectedOption = timeWindowOptions.find(option => option.value === value);
+		if (selectedOption) {
+			setTimeWindowMs(selectedOption.milliseconds);
+		}
+	};
 
 	const formatBytes = (bytes: number | null | undefined) => {
 		if (!isActorRunning || bytes === null || bytes === undefined)
@@ -57,7 +113,7 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 	// Calculate CPU percentage using time series data points
 	const cpuPercentage = useMemo(() => {
 		if (!isActorRunning) {
-			return "n/a";
+			return "Stopped";
 		}
 
 		const data = metricsData;
@@ -70,7 +126,7 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 			return "n/a";
 		}
 
-		// Find two non-zero consecutive data points to calculate rate
+		// Find the last valid CPU rate from the most recent data points
 		let cpuRate = 0;
 		for (let i = cpuValues.length - 1; i > 0; i--) {
 			const currentCpu = cpuValues[i];
@@ -96,19 +152,20 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 
 	const calculateMemoryPercentage = (
 		usage: number | null | undefined,
-		limit: number | null | undefined,
 	) => {
 		if (
 			!isActorRunning ||
 			usage === null ||
 			usage === undefined ||
-			limit === null ||
-			limit === undefined ||
-			limit === 0
+			!resources ||
+			!resources.memory ||
+			resources.memory === 0
 		) {
 			return null;
 		}
-		return (usage / limit) * 100;
+		// Convert usage from bytes to MB and compare with resources.memory (which is in MB)
+		const usageMB = usage / (1024 * 1024);
+		return (usageMB / resources.memory) * 100;
 	};
 
 	const isLoading = metricsData.status === "pending";
@@ -137,12 +194,25 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 
 	const memoryPercentage = calculateMemoryPercentage(
 		data.memory_usage_bytes,
-		data.spec_memory_limit_bytes,
 	);
 
 	return (
 		<div className="px-4 my-8">
-			<h3 className="mb-4 font-semibold">Container Metrics</h3>
+			<div className="flex items-center justify-between mb-4">
+				<h3 className="font-semibold">Container Metrics</h3>
+				<Select value={timeWindow} onValueChange={handleTimeWindowChange}>
+					<SelectTrigger className="w-32">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{timeWindowOptions.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
 
 			{/* Main Metrics */}
 			<div className="mb-6">
@@ -151,15 +221,17 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 						<Dt className="text-sm font-medium">CPU Usage</Dt>
 						<Dd className="text-lg font-semibold flex flex-col gap-1">
 							<span>{cpuPercentage}</span>
-							{cpuPercentage !== "n/a" ? (
+							{metricsData.rawData?.cpu_usage_seconds_total &&
+							metricsData.rawData.cpu_usage_seconds_total.length > 0 ? (
 								<ActorCpuStats
 									syncId="actor-stats"
 									interval={metricsData.interval / 1000}
 									metricsAt={metricsData.updatedAt}
 									cpu={
 										metricsData.rawData
-											?.cpu_usage_seconds_total ?? []
+											.cpu_usage_seconds_total ?? []
 									}
+									isRunning={isActorRunning}
 								/>
 							) : null}
 						</Dd>
@@ -175,18 +247,20 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 									</span>
 								)}
 							</span>
-							{memoryPercentage !== null ? (
+							{metricsData.rawData?.memory_usage_bytes &&
+							metricsData.rawData.memory_usage_bytes.length > 0 ? (
 								<ActorMemoryStats
 									syncId="actor-stats"
 									interval={metricsData.interval / 1000}
 									metricsAt={metricsData.updatedAt}
 									memory={
 										metricsData.rawData
-											?.memory_usage_bytes ?? []
+											.memory_usage_bytes ?? []
 									}
 									allocatedMemory={
-										data.spec_memory_limit_bytes ?? 0
+										resources?.memory ? resources.memory * 1024 * 1024 : 0
 									}
+									isRunning={isActorRunning}
 								/>
 							) : null}
 						</Dd>
@@ -194,20 +268,8 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 				</Dl>
 			</div>
 
-			{/* Advanced Section Toggle */}
-			<div className="mb-4">
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => setShowAdvanced(!showAdvanced)}
-					className="text-xs"
-				>
-					{showAdvanced ? "Hide" : "Show"} Advanced (Experimental)
-				</Button>
-			</div>
-
 			{/* Advanced Metrics */}
-			{showAdvanced && (
+			{false && (
 				<Flex gap="4" direction="col" className="text-xs">
 					{/* CPU & Performance */}
 					<div>
@@ -302,22 +364,14 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 						</Dl>
 					</div>
 
-					{/* Memory Limits */}
+					{/* Resource Limits */}
 					<div>
-						<h4 className="font-medium mb-2">Memory Limits</h4>
+						<h4 className="font-medium mb-2">Resource Limits</h4>
 						<Dl>
 							<Dt>Memory Limit</Dt>
-							<Dd>{formatBytes(data.spec_memory_limit_bytes)}</Dd>
-							<Dt>Memory Reservation Limit</Dt>
-							<Dd>
-								{formatBytes(
-									data.spec_memory_reservation_limit_bytes,
-								)}
-							</Dd>
-							<Dt>Memory Swap Limit</Dt>
-							<Dd>
-								{formatBytes(data.spec_memory_swap_limit_bytes)}
-							</Dd>
+							<Dd>{resources?.memory ? `${resources.memory} MB` : "n/a"}</Dd>
+							<Dt>CPU Limit</Dt>
+							<Dd>{resources?.cpu ? `${resources.cpu / 1000} cores` : "n/a"}</Dd>
 						</Dl>
 					</div>
 
@@ -483,7 +537,9 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 							</Dd>
 							<Dt>Close Wait</Dt>
 							<Dd>
-								{formatNumber(data.network_tcp_usage_closewait)}
+								{formatNumber(
+									data.network_tcp_usage_closewait,
+								)}
 							</Dd>
 							<Dt>Closing</Dt>
 							<Dd>
@@ -639,10 +695,6 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 							<Dd>{formatTimestamp(data.last_seen)}</Dd>
 							<Dt>Start Time</Dt>
 							<Dd>{formatTimestamp(data.start_time_seconds)}</Dd>
-							<Dt>CPU Shares</Dt>
-							<Dd>{formatNumber(data.spec_cpu_shares)}</Dd>
-							<Dt>CPU Period</Dt>
-							<Dd>{formatNumber(data.spec_cpu_period)}</Dd>
 						</Dl>
 					</div>
 				</Flex>

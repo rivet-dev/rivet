@@ -1,6 +1,6 @@
-import { PlatformIcons } from "../components/PlatformIcons";
-import { MarketingButton } from "../components/MarketingButton";
 import { CopyCommand } from "../components/CopyCommand";
+import { MarketingButton } from "../components/MarketingButton";
+import { PlatformIcons } from "../components/PlatformIcons";
 
 export function HeroSection() {
 	return (
@@ -18,12 +18,25 @@ export function HeroSection() {
 							</h1>
 							<p className="hero-bg-exclude max-w-3xl text-xl sm:text-2xl leading-[1.2] tracking-tight font-400 text-white/40 mx-auto text-xl leading-7 text-white/40 font-normal w-max max-w-full mb-10 transition-colors duration-200 tracking-[-0.025em]">
 								Rivet Actors is a library that provides{" "}
-								<span className="text-white/90">durable state</span>,{" "}
-								<span className="text-white/90">realtime</span>, and{" "}
-								<span className="text-white/90">scalability</span>.<br />
-								Easily <span className="text-white/90">self-hostable</span> and
-								works with{" "}
-								<span className="text-white/90">your infrastructure</span>.
+								<span className="text-white/90">
+									durable state
+								</span>
+								,{" "}
+								<span className="text-white/90">realtime</span>,
+								and{" "}
+								<span className="text-white/90">
+									scalability
+								</span>
+								.<br />
+								Easily{" "}
+								<span className="text-white/90">
+									self-hostable
+								</span>{" "}
+								and works with{" "}
+								<span className="text-white/90">
+									your infrastructure
+								</span>
+								.
 							</p>
 						</div>
 
@@ -44,12 +57,18 @@ export function HeroSection() {
 									Get Started
 								</MarketingButton>
 
-								<MarketingButton href="https://github.com/rivet-gg/rivetkit/tree/main/examples" target="_blank">
+								<MarketingButton
+									href="https://github.com/rivet-gg/rivetkit/tree/main/examples"
+									target="_blank"
+								>
 									See Examples
 								</MarketingButton>
 							</div>
 
-							<CopyCommand command="npm install @rivetkit/actors" className="hero-bg-exclude" />
+							<CopyCommand
+								command="npm install @rivetkit/actors"
+								className="hero-bg-exclude"
+							/>
 						</div>
 					</div>
 				</div>

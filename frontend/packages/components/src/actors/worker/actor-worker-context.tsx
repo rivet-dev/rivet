@@ -1,3 +1,5 @@
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
 import {
 	type ReactNode,
 	createContext,
@@ -7,12 +9,10 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { ActorWorkerContainer } from "./actor-worker-container";
-import { assertNonNullable } from "../../lib/utils";
-import { ActorFeature, type Actor, type ActorAtom } from "../actor-context";
-import { selectAtom } from "jotai/utils";
-import { useAtomValue } from "jotai";
 import { toast } from "sonner";
+import { assertNonNullable } from "../../lib/utils";
+import { type Actor, type ActorAtom, ActorFeature } from "../actor-context";
+import { ActorWorkerContainer } from "./actor-worker-container";
 
 export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
 	null,

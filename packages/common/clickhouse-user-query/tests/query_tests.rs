@@ -6,7 +6,7 @@ fn test_query_expr_serde() {
 		property: "user_id".to_string(),
 		map_key: None,
 		value: "12345".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
 	// Test serialization
@@ -42,7 +42,7 @@ fn test_complex_query_serde() {
 				property: "status".to_string(),
 				map_key: None,
 				values: vec!["premium".to_string(), "verified".to_string()],
-				case_sensitive: true,
+				case_insensitive: false,
 			},
 		],
 	};
@@ -70,7 +70,7 @@ fn test_query_expr_creation() {
 				property: "user_id".to_string(),
 				map_key: None,
 				value: "12345".to_string(),
-				case_sensitive: true,
+				case_insensitive: false,
 			},
 			QueryExpr::BoolEqual {
 				property: "active".to_string(),
@@ -94,7 +94,7 @@ fn test_map_key_query() {
 		property: "metadata".to_string(),
 		map_key: Some("key".to_string()),
 		value: "value".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
 	match query {
@@ -169,7 +169,7 @@ fn test_string_in_query() {
 		property: "status".to_string(),
 		map_key: None,
 		values: vec!["active".to_string(), "pending".to_string()],
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
 	match query {
@@ -190,7 +190,7 @@ fn test_string_not_in_query() {
 		property: "status".to_string(),
 		map_key: None,
 		values: vec!["disabled".to_string(), "archived".to_string()],
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
 	// Test serialization

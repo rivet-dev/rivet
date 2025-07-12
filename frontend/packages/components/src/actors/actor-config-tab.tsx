@@ -1,9 +1,9 @@
 import { Button, DocsSheet, ScrollArea } from "@rivet-gg/components";
 import { Icon, faBooks } from "@rivet-gg/icons";
+import type { ActorAtom } from "./actor-context";
 import { ActorGeneral } from "./actor-general";
 import { ActorNetwork } from "./actor-network";
 import { ActorRuntime } from "./actor-runtime";
-import type { ActorAtom } from "./actor-context";
 
 interface ActorConfigTabProps {
 	actor: ActorAtom;

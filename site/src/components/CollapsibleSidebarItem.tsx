@@ -29,9 +29,7 @@ export function CollapsibleSidebarItem({
 				{item.icon ? (
 					<Icon icon={item.icon} className="mr-2 size-3.5" />
 				) : null}
-				<span className="truncate">
-					{item.title}
-				</span>
+				<span className="truncate">{item.title}</span>
 				<motion.span
 					variants={{
 						open: { rotateZ: 0 },

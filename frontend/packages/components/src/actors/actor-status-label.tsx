@@ -1,6 +1,6 @@
-import type { Actor, ActorAtom } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
+import type { Actor, ActorAtom } from "./actor-context";
 import type { ActorStatus } from "./actor-status-indicator";
 
 export const ACTOR_STATUS_LABEL_MAP = {

@@ -25,10 +25,9 @@ import {
 } from "@rivet-gg/components/actors";
 import {
 	Icon,
-	faChrome,
 	faBrave,
+	faChrome,
 	faReact,
-	faRust,
 	faSafari,
 	faTs,
 } from "@rivet-gg/icons";
@@ -40,14 +39,14 @@ import { useEffect } from "react";
 import { z } from "zod";
 // @ts-expect-error types are missing
 import devNpm, { source as devNpmSource } from "../../content/dev-npm.sh?shiki";
-import devYarn, {
-	source as devYarnSource,
-	// @ts-expect-error types are missing
-} from "../../content/dev-yarn.sh?shiki";
 import devPnpm, {
 	source as devPnpmSource,
 	// @ts-expect-error types are missing
 } from "../../content/dev-pnpm.sh?shiki";
+import devYarn, {
+	source as devYarnSource,
+	// @ts-expect-error types are missing
+} from "../../content/dev-yarn.sh?shiki";
 
 import devBun, {
 	source as devBunSource,

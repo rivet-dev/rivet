@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { BuildStore } from "../build-store";
-import { serializeKanikoArguments, UNIT_SEP_CHAR } from "../common";
+import type { BuildStore } from "../build-store";
+import { serializeKanikoArguments } from "../common";
 
 export async function runDockerBuild(
 	buildStore: BuildStore,
@@ -20,16 +20,14 @@ export async function runDockerBuild(
 		"--rm",
 		"--network=host",
 		"-e",
-		`KANIKO_ARGS=${
-			serializeKanikoArguments({
-				contextUrl,
-				outputUrl,
-				destination: `${buildId}:latest`,
-				dockerfilePath: build.dockerfilePath,
-				buildArgs: build.buildArgs,
-				buildTarget: build.buildTarget,
-			})
-		}`,
+		`KANIKO_ARGS=${serializeKanikoArguments({
+			contextUrl,
+			outputUrl,
+			destination: `${buildId}:latest`,
+			dockerfilePath: build.dockerfilePath,
+			buildArgs: build.buildArgs,
+			buildTarget: build.buildTarget,
+		})}`,
 		"ci-runner",
 	];
 
@@ -40,12 +38,12 @@ export async function runDockerBuild(
 
 	buildStore.updateStatus(buildId, {
 		type: "running",
-		data: { docker: {} }
+		data: { docker: {} },
 	});
 
 	return new Promise<void>((resolve, reject) => {
 		const dockerProcess = spawn("docker", kanikoArgs, {
-			stdio: ["pipe", "pipe", "pipe"]
+			stdio: ["pipe", "pipe", "pipe"],
 		});
 
 		buildStore.setContainerProcess(buildId, dockerProcess);
@@ -71,7 +69,10 @@ export async function runDockerBuild(
 		});
 
 		dockerProcess.on("close", (code) => {
-			buildStore.addLog(buildId, `Docker process closed with exit code: ${code}`);
+			buildStore.addLog(
+				buildId,
+				`Docker process closed with exit code: ${code}`,
+			);
 			buildStore.updateStatus(buildId, { type: "finishing", data: {} });
 
 			if (code === 0) {
@@ -90,7 +91,10 @@ export async function runDockerBuild(
 		});
 
 		dockerProcess.on("error", (error) => {
-			buildStore.addLog(buildId, `Docker process error: ${error.message}`);
+			buildStore.addLog(
+				buildId,
+				`Docker process error: ${error.message}`,
+			);
 			buildStore.updateStatus(buildId, {
 				type: "failure",
 				data: { reason: `Failed to start kaniko: ${error.message}` },
@@ -99,5 +103,3 @@ export async function runDockerBuild(
 		});
 	});
 }
-
-

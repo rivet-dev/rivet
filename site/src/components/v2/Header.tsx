@@ -7,9 +7,8 @@ import { Icon, faDiscord } from "@rivet-gg/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useState } from "react";
-import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
-import { HeaderSearch } from "./HeaderSearch";
 import { GitHubDropdown } from "./GitHubDropdown";
+import { HeaderSearch } from "./HeaderSearch";
 
 interface HeaderProps {
 	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions";

@@ -1,11 +1,11 @@
-import * as shiki from "shiki";
 import { transformerNotationFocus } from "@shikijs/transformers";
+import * as shiki from "shiki";
 
 /**
- * 
+ *
  * @returns {import("vite").Plugin}
  */
-export async function viteShikiTransformer(){
+export async function viteShikiTransformer() {
 	const cssVariableTheme = shiki.createCssVariablesTheme({
 		name: "css-variables",
 		variablePrefix: "--shiki-",
@@ -13,7 +13,7 @@ export async function viteShikiTransformer(){
 		fontStyle: true,
 	});
 
-	let highlighter
+	let highlighter;
 	return {
 		name: "shiki",
 		async transform(code, id) {

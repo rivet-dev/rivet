@@ -1,16 +1,16 @@
 import { CancelledError } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ls } from "../../lib/utils";
 import ActorWorker from "./actor-repl.worker?worker";
 import {
 	type CodeMessage,
 	type FormattedCode,
 	type InitMessage,
-	type Log,
 	type InspectData,
+	type Log,
 	ResponseSchema,
 	type SetStateMessage,
 } from "./actor-worker-schema";
-import { toast } from "sonner";
-import { ls } from "../../lib/utils";
 
 export type ReplCommand = {
 	logs: Log[];

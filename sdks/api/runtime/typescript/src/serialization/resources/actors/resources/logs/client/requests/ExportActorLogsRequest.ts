@@ -12,13 +12,13 @@ export const ExportActorLogsRequest: core.serialization.Schema<
 > = core.serialization.object({
     project: core.serialization.string().optional(),
     environment: core.serialization.string().optional(),
-    queryJson: core.serialization.property("query_json", core.serialization.string()),
+    queryJson: core.serialization.property("query_json", core.serialization.string().optional()),
 });
 
 export declare namespace ExportActorLogsRequest {
     export interface Raw {
         project?: string | null;
         environment?: string | null;
-        query_json: string;
+        query_json?: string | null;
     }
 }

@@ -72,7 +72,7 @@ async function stopWatching(query: Query) {
 			.getQueryCache()
 			.find({ queryKey: [...query.queryKey, "watch"] });
 		if (watchQuery) {
-			watchQuery.cancel({silent: true});
+			watchQuery.cancel({ silent: true });
 			queryClient.getQueryCache().remove(watchQuery);
 			watchQuery.destroy();
 		}

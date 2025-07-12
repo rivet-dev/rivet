@@ -59,7 +59,7 @@ export class Logs {
      *     })
      */
     public async get(
-        request: Rivet.actors.GetActorLogsRequestQuery,
+        request: Rivet.actors.GetActorLogsRequestQuery = {},
         requestOptions?: Logs.RequestOptions,
     ): Promise<Rivet.actors.GetActorLogsResponse> {
         const { project, environment, queryJson, watchIndex } = request;
@@ -72,7 +72,10 @@ export class Logs {
             _queryParams["environment"] = environment;
         }
 
-        _queryParams["query_json"] = queryJson;
+        if (queryJson != null) {
+            _queryParams["query_json"] = queryJson;
+        }
+
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
@@ -216,7 +219,7 @@ export class Logs {
      *     })
      */
     public async export(
-        request: Rivet.actors.ExportActorLogsRequest,
+        request: Rivet.actors.ExportActorLogsRequest = {},
         requestOptions?: Logs.RequestOptions,
     ): Promise<Rivet.actors.ExportActorLogsResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({

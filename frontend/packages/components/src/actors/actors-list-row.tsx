@@ -6,20 +6,20 @@ import {
 	cn,
 	toRecord,
 } from "@rivet-gg/components";
+import { Icon, faTag, faTags } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
-import { memo } from "react";
-import { ActorRegion } from "./actor-region";
-import { AtomizedActorStatusIndicator } from "./actor-status-indicator";
-import { ActorTags } from "./actor-tags";
-import {
-	isCurrentActorAtom,
-	type Actor,
-	type ActorAtom,
-} from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
-import { faTag, faTags, Icon } from "@rivet-gg/icons";
+import { memo } from "react";
+import {
+	type Actor,
+	type ActorAtom,
+	isCurrentActorAtom,
+} from "./actor-context";
+import { ActorRegion } from "./actor-region";
+import { AtomizedActorStatusIndicator } from "./actor-status-indicator";
 import { AtomizedActorStatusLabel } from "./actor-status-label";
+import { ActorTags } from "./actor-tags";
 
 interface ActorsListRowProps {
 	className?: string;

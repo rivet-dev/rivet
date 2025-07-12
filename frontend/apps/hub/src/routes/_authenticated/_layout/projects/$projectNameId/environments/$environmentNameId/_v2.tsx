@@ -1,7 +1,8 @@
-import { CommandPanel } from "@/components/command-panel";
 import { Button, cn } from "@rivet-gg/components";
 import { ActorsLayout, useActorsLayout } from "@rivet-gg/components/actors";
 import {
+	Icon,
+	type IconProp,
 	faActorsBorderless,
 	faBarsStaggered,
 	faCodeBranch,
@@ -9,11 +10,9 @@ import {
 	faFunction,
 	faServer,
 	faSidebar,
-	Icon,
-	type IconProp,
 } from "@rivet-gg/icons";
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
+import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 
 const SIDEBAR: {
 	label: string;

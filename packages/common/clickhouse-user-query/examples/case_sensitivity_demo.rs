@@ -17,9 +17,9 @@ fn main() {
 		property: "username".to_string(),
 		map_key: None,
 		value: "JohnDoe".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
-	let builder1 = UserDefinedQueryBuilder::new(&schema, &query1).unwrap();
+	let builder1 = UserDefinedQueryBuilder::new(&schema, Some(&query1)).unwrap();
 	println!("   Query: {}", builder1.where_expr());
 	println!("   -> Will match: 'JohnDoe'");
 	println!("   -> Won't match: 'johndoe', 'JOHNDOE'\n");
@@ -30,9 +30,9 @@ fn main() {
 		property: "username".to_string(),
 		map_key: None,
 		value: "JohnDoe".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
-	let builder2 = UserDefinedQueryBuilder::new(&schema, &query2).unwrap();
+	let builder2 = UserDefinedQueryBuilder::new(&schema, Some(&query2)).unwrap();
 	println!("   Query: {}", builder2.where_expr());
 	println!("   -> Will match: 'JohnDoe', 'johndoe', 'JOHNDOE', 'jOhNdOe'\n");
 
@@ -42,9 +42,9 @@ fn main() {
 		property: "email".to_string(),
 		map_key: None,
 		pattern: "^[A-Z].*@example\\.com$".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
-	let builder3 = UserDefinedQueryBuilder::new(&schema, &query3).unwrap();
+	let builder3 = UserDefinedQueryBuilder::new(&schema, Some(&query3)).unwrap();
 	println!("   Query: {}", builder3.where_expr());
 	println!("   Pattern: ^[A-Z].*@example\\.com$");
 	println!("   -> Will match: 'Admin@example.com'");
@@ -56,9 +56,9 @@ fn main() {
 		property: "email".to_string(),
 		map_key: None,
 		pattern: "admin|support".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
-	let builder4 = UserDefinedQueryBuilder::new(&schema, &query4).unwrap();
+	let builder4 = UserDefinedQueryBuilder::new(&schema, Some(&query4)).unwrap();
 	println!("   Query: {}", builder4.where_expr());
 	println!("   Pattern: admin|support (with (?i) prefix)");
 	println!("   -> Will match: 'admin@test.com', 'ADMIN@test.com', 'Support@test.com'\n");
@@ -69,9 +69,9 @@ fn main() {
 		property: "username".to_string(),
 		map_key: None,
 		values: vec!["Admin".to_string(), "Support".to_string()],
-		case_sensitive: false,
+		case_insensitive: true,
 	};
-	let builder5 = UserDefinedQueryBuilder::new(&schema, &query5).unwrap();
+	let builder5 = UserDefinedQueryBuilder::new(&schema, Some(&query5)).unwrap();
 	println!("   Query: {}", builder5.where_expr());
 	println!("   -> Will match: 'admin', 'ADMIN', 'support', 'SUPPORT'\n");
 
@@ -83,17 +83,17 @@ fn main() {
 				property: "username".to_string(),
 				map_key: None,
 				value: "Admin".to_string(),
-				case_sensitive: false, // Case-insensitive username
+				case_insensitive: true, // Case-insensitive username
 			},
 			QueryExpr::StringMatchRegex {
 				property: "tags".to_string(),
 				map_key: Some("role".to_string()),
 				pattern: "^(Admin|Manager)$".to_string(),
-				case_sensitive: true, // Case-sensitive role
+				case_insensitive: false, // Case-sensitive role
 			},
 		],
 	};
-	let builder6 = UserDefinedQueryBuilder::new(&schema, &query6).unwrap();
+	let builder6 = UserDefinedQueryBuilder::new(&schema, Some(&query6)).unwrap();
 	println!("   Query: {}", builder6.where_expr());
 	println!("   -> Username matches 'admin' (any case)");
 	println!("   -> Role must be exactly 'Admin' or 'Manager' (case-sensitive)");

@@ -33,11 +33,24 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
+	// Determine endpoint kind from request or use defaults
+	let endpoint_kind_internal = s3_util::EndpointKind::Internal;
+
+	let endpoint_kind_external = ctx
+		.presigned_endpoint_kind
+		.map(|k| match k {
+			0 => s3_util::EndpointKind::Internal,
+			1 => s3_util::EndpointKind::EdgeInternal,
+			2 => s3_util::EndpointKind::External,
+			_ => s3_util::EndpointKind::External,
+		})
+		.unwrap_or(s3_util::EndpointKind::External);
+
 	// This client is used for making requests directly to S3
 	let s3_client_internal = s3_util::Client::with_bucket_and_endpoint(
 		ctx.config(),
 		&ctx.bucket,
-		s3_util::EndpointKind::Internal,
+		endpoint_kind_internal,
 	)
 	.await?;
 
@@ -45,7 +58,7 @@ async fn handle(
 	let s3_client_external = s3_util::Client::with_bucket_and_endpoint(
 		ctx.config(),
 		&ctx.bucket,
-		s3_util::EndpointKind::External,
+		endpoint_kind_external,
 	)
 	.await?;
 

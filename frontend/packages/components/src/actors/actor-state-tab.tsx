@@ -1,11 +1,11 @@
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+import type { Actor, ActorAtom } from "./actor-context";
 import { ActorEditableState } from "./actor-editable-state";
 import {
 	useActorState,
 	useActorWorkerStatus,
 } from "./worker/actor-worker-context";
-import type { Actor, ActorAtom } from "./actor-context";
-import { useAtomValue } from "jotai";
-import { selectAtom } from "jotai/utils";
 
 const selector = (a: Actor) => a.destroyedAt;
 

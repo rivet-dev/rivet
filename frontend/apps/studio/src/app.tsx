@@ -6,18 +6,18 @@ import {
 	TooltipProvider,
 	getConfig,
 } from "@rivet-gg/components";
-import { PageLayout } from "@rivet-gg/components/layout";
-import * as Sentry from "@sentry/react";
-import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { Suspense } from "react";
-import { routeTree } from "./routeTree.gen";
-import { withAtomEffect } from "jotai-effect";
 import {
 	actorFiltersAtom,
 	currentActorIdAtom,
 	pickActorListFilters,
 } from "@rivet-gg/components/actors";
+import { PageLayout } from "@rivet-gg/components/layout";
+import * as Sentry from "@sentry/react";
+import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { useAtom } from "jotai";
+import { withAtomEffect } from "jotai-effect";
+import { Suspense } from "react";
+import { routeTree } from "./routeTree.gen";
 
 declare module "@tanstack/react-router" {
 	interface Register {

@@ -719,7 +719,9 @@ func (c *Client) Query(ctx context.Context, request *actors.QueryActorsRequestQu
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
-	queryParams.Add("query_json", fmt.Sprintf("%v", request.QueryJson))
+	if request.QueryJson != nil {
+		queryParams.Add("query_json", fmt.Sprintf("%v", *request.QueryJson))
+	}
 	if request.Cursor != nil {
 		queryParams.Add("cursor", fmt.Sprintf("%v", *request.Cursor))
 	}

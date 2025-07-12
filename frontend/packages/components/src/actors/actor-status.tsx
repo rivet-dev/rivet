@@ -1,4 +1,5 @@
 import { cn } from "@rivet-gg/components";
+import type { ActorAtom } from "./actor-context";
 import {
 	ActorStatusIndicator,
 	type ActorStatus as ActorStatusType,
@@ -8,7 +9,6 @@ import {
 	ActorStatusLabel,
 	AtomizedActorStatusLabel,
 } from "./actor-status-label";
-import type { ActorAtom } from "./actor-context";
 
 interface ActorStatusProps {
 	className?: string;

@@ -1,37 +1,34 @@
-import Link from "next/link";
 import Image from "next/image";
-
-// Platform images
-import rivetWhiteLogo from "../images/platforms/rivet-white.svg";
-import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
+import Link from "next/link";
+import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
 import bunLogo from "../images/platforms/bun.svg";
-import nodejsLogo from "../images/platforms/nodejs.svg";
-import redisLogo from "../images/platforms/redis.svg";
+import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
 import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
-import vercelLogo from "../images/platforms/vercel.svg";
-import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
-import supabaseLogo from "../images/platforms/supabase.svg";
+import nodejsLogo from "../images/platforms/nodejs.svg";
 import postgresLogo from "../images/platforms/postgres.svg";
+import redisLogo from "../images/platforms/redis.svg";
+import supabaseLogo from "../images/platforms/supabase.svg";
+import vercelLogo from "../images/platforms/vercel.svg";
 
+import javascriptLogo from "../images/clients/javascript.svg";
+import nextjsLogo from "../images/clients/nextjs.svg";
 // Client images
 import reactLogo from "../images/clients/react.svg";
-import javascriptLogo from "../images/clients/javascript.svg";
-import typescriptLogo from "../images/clients/typescript.svg";
 import rustLogo from "../images/clients/rust.svg";
-import nextjsLogo from "../images/clients/nextjs.svg";
+import typescriptLogo from "../images/clients/typescript.svg";
 import vueLogo from "../images/clients/vue.svg";
 
+import betterAuthLogo from "../images/integrations/better-auth.svg";
+import elysiaLogo from "../images/integrations/elysia.svg";
+import expressLogo from "../images/integrations/express.svg";
 // Integration images
 import honoLogo from "../images/integrations/hono.svg";
-import expressLogo from "../images/integrations/express.svg";
-import elysiaLogo from "../images/integrations/elysia.svg";
-import vitestLogo from "../images/integrations/vitest.svg";
-import betterAuthLogo from "../images/integrations/better-auth.svg";
 import livestoreLogo from "../images/integrations/livestore.svg";
-import zerosyncLogo from "../images/integrations/zerosync.svg";
 import tinybaseLogo from "../images/integrations/tinybase.svg";
+import vitestLogo from "../images/integrations/vitest.svg";
 import yjsLogo from "../images/integrations/yjs.svg";
+import zerosyncLogo from "../images/integrations/zerosync.svg";
 
 interface TechLinkProps {
 	href: string;
@@ -43,20 +40,37 @@ interface TechLinkProps {
 }
 
 function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
-	const baseClasses = "relative flex items-center gap-2.5 px-3 py-2.5 bg-white/2 border border-white/20 rounded-lg hover:bg-white/10 hover:border-white/40 transition-all duration-200 group";
-	
-	const linkProps = external ? {
-		target: "_blank",
-		rel: "noopener noreferrer"
-	} : {};
-	
-	const statusText = status === "coming-soon" ? "On The Roadmap" : status === "help-wanted" ? "Help Wanted" : status === "available-in-july" ? "Available In July" : "";
-	const statusClass = status === "coming-soon" || status === "available-in-july" ? "bg-[#ff4f00] text-white" : status === "help-wanted" ? "bg-[#0059ff] text-white" : "";
-	
+	const baseClasses =
+		"relative flex items-center gap-2.5 px-3 py-2.5 bg-white/2 border border-white/20 rounded-lg hover:bg-white/10 hover:border-white/40 transition-all duration-200 group";
+
+	const linkProps = external
+		? {
+				target: "_blank",
+				rel: "noopener noreferrer",
+			}
+		: {};
+
+	const statusText =
+		status === "coming-soon"
+			? "On The Roadmap"
+			: status === "help-wanted"
+				? "Help Wanted"
+				: status === "available-in-july"
+					? "Available In July"
+					: "";
+	const statusClass =
+		status === "coming-soon" || status === "available-in-july"
+			? "bg-[#ff4f00] text-white"
+			: status === "help-wanted"
+				? "bg-[#0059ff] text-white"
+				: "";
+
 	return (
 		<Link href={href} className={baseClasses} {...linkProps}>
 			{status && (
-				<span className={`absolute -top-1.5 -right-1.5 text-[10px] px-1.5 py-0.5 rounded ${statusClass} font-medium`}>
+				<span
+					className={`absolute -top-1.5 -right-1.5 text-[10px] px-1.5 py-0.5 rounded ${statusClass} font-medium`}
+				>
 					{statusText}
 				</span>
 			)}
@@ -100,8 +114,9 @@ export function TechSection() {
 						</h2>
 						<div className="space-y-4">
 							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Deploy Rivet Actors anywhere - from serverless platforms to your own
-								infrastructure with Rivet's flexible runtime options.
+								Deploy Rivet Actors anywhere - from serverless
+								platforms to your own infrastructure with
+								Rivet's flexible runtime options.
 							</p>
 							<p className="text-lg font-500 text-white/40 leading-relaxed">
 								Don't see the runtime you want?{" "}
@@ -209,8 +224,8 @@ export function TechSection() {
 						</h2>
 						<div className="space-y-4">
 							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Seamlessly integrate Rivet with your favorite frameworks,
-								languages, and tools.
+								Seamlessly integrate Rivet with your favorite
+								frameworks, languages, and tools.
 							</p>
 							<p className="text-lg font-500 text-white/40 leading-relaxed">
 								Don't see what you need?{" "}

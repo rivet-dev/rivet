@@ -1,6 +1,6 @@
+import dgram from "dgram";
 import { RivetClient } from "@rivet-gg/api";
 import WebSocket from "ws";
-import dgram from 'dgram';
 
 // Can be opt since they're not required for dev
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT;
@@ -63,11 +63,11 @@ async function run() {
 				},
 				...(BUILD_NAME === "ws-container"
 					? {
-						resources: {
-							cpu: 100,
-							memory: 100,
-						},
-					}
+							resources: {
+								cpu: 100,
+								memory: 100,
+							},
+						}
 					: {}),
 			},
 		});
@@ -154,7 +154,7 @@ async function run() {
 		});
 
 		// UDP
-		let res = await client.actor.get(actor.id, {
+		const res = await client.actor.get(actor.id, {
 			project: RIVET_PROJECT,
 			environment: RIVET_ENVIRONMENT,
 		});
@@ -165,10 +165,10 @@ async function run() {
 		console.log("UDP server address:", udpServer);
 
 		// Create a UDP socket
-		const udpClient = dgram.createSocket('udp4');
+		const udpClient = dgram.createSocket("udp4");
 
 		// Send a message to the UDP echo server
-		const message = Buffer.from('Hello UDP server!');
+		const message = Buffer.from("Hello UDP server!");
 		udpClient.send(message, udpPort.port, udpPort.hostname, (err) => {
 			if (err) {
 				console.error("Error sending UDP message:", err);
@@ -179,18 +179,18 @@ async function run() {
 		});
 
 		// Listen for a response
-		udpClient.on('message', (msg, rinfo) => {
+		udpClient.on("message", (msg, rinfo) => {
 			console.log(`UDP message received: ${msg.toString()}`);
 			console.log(`From: ${rinfo.address}:${rinfo.port}`);
 			udpClient.close();
 		});
 
-		udpClient.on('error', (err) => {
+		udpClient.on("error", (err) => {
 			console.error("UDP client error:", err);
 			udpClient.close();
 		});
 
-		udpClient.on('close', () => {
+		udpClient.on("close", () => {
 			console.log("UDP connection closed");
 		});
 

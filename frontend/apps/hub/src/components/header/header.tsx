@@ -13,12 +13,12 @@ import { ErrorBoundary } from "@sentry/react";
 import { Link } from "@tanstack/react-router";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs";
 import { MobileBreadcrumbs } from "../breadcrumbs/mobile-breadcrumbs";
+import { CommandPanel } from "../command-panel";
 import { Changelog } from "./changelog";
 import { HeaderRouteLoader } from "./header-route-loader";
 import { HeaderSubNav } from "./header-sub-nav";
 import { MobileHeaderSubNav } from "./mobile-header-sub-nav";
 import { NavItem } from "./nav-item";
-import { CommandPanel } from "../command-panel";
 
 const UserProfileButton = () => {
 	const { profile } = useAuth();

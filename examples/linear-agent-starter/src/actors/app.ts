@@ -1,9 +1,9 @@
 import { setup } from "actor-core";
-import { oauthSession } from "./oauth-session";
+import { createClient } from "actor-core/client";
+import { BASE_PATH, PORT } from "../config";
 import { issueAgent } from "./issue-agent";
 import { linearAppUser } from "./linear-app-user";
-import { createClient } from "actor-core/client";
-import { PORT, BASE_PATH } from "../config";
+import { oauthSession } from "./oauth-session";
 
 export const app = setup({
 	actors: { issueAgent, oauthSession, linearAppUser },

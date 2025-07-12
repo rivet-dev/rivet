@@ -28,7 +28,7 @@ export default function () {
 
 	let actorId: string | undefined;
 	try {
-		let start = Date.now();
+		const start = Date.now();
 		console.log("creating actor");
 
 		// Create actor

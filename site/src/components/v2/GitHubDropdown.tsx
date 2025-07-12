@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@rivet-gg/components";
-import { Icon, faGithub, faArrowRight } from "@rivet-gg/icons";
+import { Icon, faArrowRight, faGithub } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 
 interface GitHubDropdownProps extends React.HTMLAttributes<HTMLDivElement> {}
@@ -17,15 +17,21 @@ function formatNumber(num: number): string {
 	return num.toString();
 }
 
-export function GitHubDropdown({
-	className,
-	...props
-}: GitHubDropdownProps) {
-	const [rivetStars, setRivetStars] = useState<RepoData>({ stars: 0, loading: true });
-	const [rivetKitStars, setRivetKitStars] = useState<RepoData>({ stars: 0, loading: true });
+export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
+	const [rivetStars, setRivetStars] = useState<RepoData>({
+		stars: 0,
+		loading: true,
+	});
+	const [rivetKitStars, setRivetKitStars] = useState<RepoData>({
+		stars: 0,
+		loading: true,
+	});
 	const [isOpen, setIsOpen] = useState(false);
 
-	const fetchStars = async (repo: string, setter: (data: RepoData) => void) => {
+	const fetchStars = async (
+		repo: string,
+		setter: (data: RepoData) => void,
+	) => {
 		const cacheKey = `github-stars-${repo}`;
 		const cachedData = sessionStorage.getItem(cacheKey);
 
@@ -38,7 +44,9 @@ export function GitHubDropdown({
 		}
 
 		try {
-			const response = await fetch(`https://api.github.com/repos/${repo}`);
+			const response = await fetch(
+				`https://api.github.com/repos/${repo}`,
+			);
 			if (!response.ok) throw new Error("Failed to fetch");
 			const data = await response.json();
 			const newStars = data.stargazers_count;
@@ -74,9 +82,9 @@ export function GitHubDropdown({
 			<button
 				className={cn(
 					"flex items-center gap-2 transition-colors",
-					className?.includes("text-white") 
-						? "text-white/90 hover:text-white" 
-						: "text-muted-foreground hover:text-foreground"
+					className?.includes("text-white")
+						? "text-white/90 hover:text-white"
+						: "text-muted-foreground hover:text-foreground",
 				)}
 				aria-expanded={isOpen}
 				aria-haspopup="true"
@@ -89,12 +97,14 @@ export function GitHubDropdown({
 
 			{isOpen && (
 				<div className="absolute left-0 top-full pt-1 w-48 z-50">
-					<div className={cn(
-						"rounded-md border shadow-lg",
-						className?.includes("text-white")
-							? "border-white/10 bg-background/95 backdrop-blur-sm"
-							: "border-border bg-card"
-					)}>
+					<div
+						className={cn(
+							"rounded-md border shadow-lg",
+							className?.includes("text-white")
+								? "border-white/10 bg-background/95 backdrop-blur-sm"
+								: "border-border bg-card",
+						)}
+					>
 						<div className="py-1">
 							<a
 								href="https://github.com/rivet-gg/rivetkit"
@@ -104,21 +114,28 @@ export function GitHubDropdown({
 									"group flex items-center justify-between px-4 py-2 text-sm transition-colors",
 									className?.includes("text-white")
 										? "text-white/90 hover:bg-white/5 hover:text-white"
-										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
 								<div className="flex flex-col items-start">
 									<span>Rivet Actors</span>
-									<span className={cn(
-										"text-xs",
-										className?.includes("text-white")
-											? "text-white/70"
-											: "text-muted-foreground"
-									)}>
-										{rivetKitStars.loading ? "..." : `${formatNumber(rivetKitStars.stars)} stars`}
+									<span
+										className={cn(
+											"text-xs",
+											className?.includes("text-white")
+												? "text-white/70"
+												: "text-muted-foreground",
+										)}
+									>
+										{rivetKitStars.loading
+											? "..."
+											: `${formatNumber(rivetKitStars.stars)} stars`}
 									</span>
 								</div>
-								<Icon icon={faArrowRight} className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<Icon
+									icon={faArrowRight}
+									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
+								/>
 							</a>
 							<a
 								href="https://github.com/rivet-gg/rivet"
@@ -128,21 +145,28 @@ export function GitHubDropdown({
 									"group flex items-center justify-between px-4 py-2 text-sm transition-colors",
 									className?.includes("text-white")
 										? "text-white/90 hover:bg-white/5 hover:text-white"
-										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
 								<div className="flex flex-col items-start">
 									<span>Rivet Cloud</span>
-									<span className={cn(
-										"text-xs",
-										className?.includes("text-white")
-											? "text-white/70"
-											: "text-muted-foreground"
-									)}>
-										{rivetStars.loading ? "..." : `${formatNumber(rivetStars.stars)} stars`}
+									<span
+										className={cn(
+											"text-xs",
+											className?.includes("text-white")
+												? "text-white/70"
+												: "text-muted-foreground",
+										)}
+									>
+										{rivetStars.loading
+											? "..."
+											: `${formatNumber(rivetStars.stars)} stars`}
 									</span>
 								</div>
-								<Icon icon={faArrowRight} className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<Icon
+									icon={faArrowRight}
+									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
+								/>
 							</a>
 						</div>
 					</div>

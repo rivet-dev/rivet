@@ -1,19 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import {
 	Icon,
+	faBluesky,
 	faDiscord,
 	faGithub,
-	faTwitter,
-	faBluesky,
-    faXTwitter,
+	faXTwitter,
 } from "@rivet-gg/icons";
+import Link from "next/link";
 
 // Community section
 export const CommunitySection = () => {
 	const platforms = [
-		{ name: "Discord", icon: faDiscord, href: "https://discord.gg/aXYfyNxYVn" },
+		{
+			name: "Discord",
+			icon: faDiscord,
+			href: "https://discord.gg/aXYfyNxYVn",
+		},
 		{
 			name: "Discussions",
 			icon: faGithub,

@@ -1,4 +1,4 @@
-import * as ActorCreateForm from "../form/actor-create-form";
+import { useAtomValue } from "jotai";
 import {
 	DialogDescription,
 	DialogFooter,
@@ -6,10 +6,10 @@ import {
 	DialogTitle,
 } from "../../ui/dialog";
 import { Flex } from "../../ui/flex";
-import { useAtomValue } from "jotai";
 import { createActorAtom } from "../actor-context";
-import type { DialogContentProps } from "../hooks";
 import { useActorsView } from "../actors-view-context-provider";
+import * as ActorCreateForm from "../form/actor-create-form";
+import type { DialogContentProps } from "../hooks";
 
 interface ContentProps extends DialogContentProps {}
 

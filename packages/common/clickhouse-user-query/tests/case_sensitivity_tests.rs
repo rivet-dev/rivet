@@ -22,10 +22,10 @@ fn test_string_equal_case_sensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		value: "Test".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "name = ?");
 }
 
@@ -36,10 +36,10 @@ fn test_string_equal_case_insensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		value: "Test".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "LOWER(name) = LOWER(?)");
 }
 
@@ -50,10 +50,10 @@ fn test_string_not_equal_case_sensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		value: "Test".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "name != ?");
 }
 
@@ -64,10 +64,10 @@ fn test_string_not_equal_case_insensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		value: "Test".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "LOWER(name) != LOWER(?)");
 }
 
@@ -78,10 +78,10 @@ fn test_string_in_case_sensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		values: vec!["Foo".to_string(), "Bar".to_string()],
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "name IN (?, ?)");
 }
 
@@ -92,10 +92,10 @@ fn test_string_in_case_insensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		values: vec!["Foo".to_string(), "Bar".to_string()],
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "LOWER(name) IN (LOWER(?), LOWER(?))");
 }
 
@@ -106,10 +106,10 @@ fn test_string_not_in_case_sensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		values: vec!["Foo".to_string(), "Bar".to_string()],
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "name NOT IN (?, ?)");
 }
 
@@ -120,10 +120,10 @@ fn test_string_not_in_case_insensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		values: vec!["Foo".to_string(), "Bar".to_string()],
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(
 		builder.where_expr(),
 		"LOWER(name) NOT IN (LOWER(?), LOWER(?))"
@@ -137,10 +137,10 @@ fn test_string_match_regex_case_sensitive() {
 		property: "description".to_string(),
 		map_key: None,
 		pattern: "^Test.*end$".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "match(description, ?)");
 }
 
@@ -151,10 +151,10 @@ fn test_string_match_regex_case_insensitive() {
 		property: "description".to_string(),
 		map_key: None,
 		pattern: "^test.*end$".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	// The pattern should have (?i) prepended for case-insensitive matching
 	assert_eq!(builder.where_expr(), "match(description, ?)");
 	// Note: The actual pattern bound will be "(?i)^test.*end$"
@@ -167,10 +167,10 @@ fn test_map_key_with_case_sensitivity() {
 		property: "tags".to_string(),
 		map_key: Some("category".to_string()),
 		value: "Important".to_string(),
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "LOWER(tags['category']) = LOWER(?)");
 }
 
@@ -181,10 +181,10 @@ fn test_regex_with_map_key() {
 		property: "tags".to_string(),
 		map_key: Some("status".to_string()),
 		pattern: "active|pending".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "match(tags['status'], ?)");
 }
 
@@ -197,18 +197,18 @@ fn test_complex_query_with_mixed_case_sensitivity() {
 				property: "name".to_string(),
 				map_key: None,
 				value: "TestUser".to_string(),
-				case_sensitive: true, // exact match
+				case_insensitive: false, // exact match
 			},
 			QueryExpr::StringMatchRegex {
 				property: "description".to_string(),
 				map_key: None,
 				pattern: "admin|manager".to_string(),
-				case_sensitive: false, // case-insensitive regex
+				case_insensitive: true, // case-insensitive regex
 			},
 		],
 	};
 
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
 	assert_eq!(builder.where_expr(), "(name = ? AND match(description, ?))");
 }
 
@@ -219,10 +219,10 @@ fn test_string_in_with_empty_values_case_insensitive() {
 		property: "name".to_string(),
 		map_key: None,
 		values: vec![],
-		case_sensitive: false,
+		case_insensitive: true,
 	};
 
-	let result = UserDefinedQueryBuilder::new(&schema, &query);
+	let result = UserDefinedQueryBuilder::new(&schema, Some(&query));
 	assert!(matches!(result, Err(UserQueryError::EmptyArrayValues(_))));
 }
 
@@ -241,12 +241,69 @@ fn test_regex_property_type_mismatch() {
 		property: "count".to_string(), // This is a number property
 		map_key: None,
 		pattern: "\\d+".to_string(),
-		case_sensitive: true,
+		case_insensitive: false,
 	};
 
-	let result = UserDefinedQueryBuilder::new(&schema, &query);
+	let result = UserDefinedQueryBuilder::new(&schema, Some(&query));
 	assert!(matches!(
 		result,
 		Err(UserQueryError::PropertyTypeMismatch(_, _, _))
 	));
+}
+
+#[test]
+fn test_string_contains_case_sensitive() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringContains {
+		property: "name".to_string(),
+		map_key: None,
+		value: "Test".to_string(),
+		case_insensitive: false,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
+	assert_eq!(builder.where_expr(), "name LIKE ?");
+}
+
+#[test]
+fn test_string_contains_case_insensitive() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringContains {
+		property: "name".to_string(),
+		map_key: None,
+		value: "Test".to_string(),
+		case_insensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
+	assert_eq!(builder.where_expr(), "name ILIKE ?");
+}
+
+#[test]
+fn test_string_contains_with_special_characters() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringContains {
+		property: "description".to_string(),
+		map_key: None,
+		value: "test%pattern_with\\backslash".to_string(),
+		case_insensitive: false,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
+	assert_eq!(builder.where_expr(), "description LIKE ?");
+	// The actual bound value will be "%test\\%pattern\\_with\\\\backslash%"
+}
+
+#[test]
+fn test_string_contains_with_map_key() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringContains {
+		property: "tags".to_string(),
+		map_key: Some("category".to_string()),
+		value: "Important".to_string(),
+		case_insensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, Some(&query)).unwrap();
+	assert_eq!(builder.where_expr(), "tags['category'] ILIKE ?");
 }

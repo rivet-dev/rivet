@@ -1,10 +1,10 @@
+import type { Rivet } from "@rivet-gg/api";
+import { isAfter, isBefore } from "date-fns";
 import { type Atom, atom } from "jotai";
 import { atomFamily, splitAtom } from "jotai/utils";
-import type { Rivet } from "@rivet-gg/api";
 import { toRecord } from "../lib/utils";
-import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
 import { FilterOp, type FilterValue } from "../ui/filters";
-import { isAfter, isBefore } from "date-fns";
+import { ACTOR_FRAMEWORK_TAG_VALUE } from "./actor-tags";
 
 export enum ActorFeature {
 	Logs = "logs",
@@ -122,15 +122,12 @@ export const actorRegionsAtom = atom<Region[]>([
 
 export const actorBuildsAtom = atom<Build[]>([]);
 
-export const actorEnvironmentAtom = atom<{ projectNameId: string; environmentNameId: string } | null>(null);
-
-export type ExportLogsHandler = (params: {
+export const actorEnvironmentAtom = atom<{
 	projectNameId: string;
 	environmentNameId: string;
-	queryJson: string;
-}) => Promise<{ url: string }>;
+} | null>(null);
 
-export const exportLogsHandlerAtom = atom<ExportLogsHandler | null>(null);
+export const actorMetricsTimeWindowAtom = atom<number>(15 * 60 * 1000); // Default to 15 minutes
 
 export const actorsInternalFilterAtom = atom<{
 	fn: (actor: Actor) => boolean;

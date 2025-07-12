@@ -11,7 +11,6 @@ import {
 } from "@/domains/project/queries";
 import {
 	type QueryClient,
-	QueryErrorResetBoundary,
 	useSuspenseQueries,
 	useSuspenseQuery,
 } from "@tanstack/react-query";

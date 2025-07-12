@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@rivet-gg/components";
-import { Icon, faGithub, faArrowRight } from "@rivet-gg/icons";
+import { Icon, faArrowRight, faGithub } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 
 interface GitHubStarsDropdownProps
@@ -22,11 +22,20 @@ export function GitHubStarsDropdown({
 	className,
 	...props
 }: GitHubStarsDropdownProps) {
-	const [rivetStars, setRivetStars] = useState<RepoData>({ stars: 0, loading: true });
-	const [rivetKitStars, setRivetKitStars] = useState<RepoData>({ stars: 0, loading: true });
+	const [rivetStars, setRivetStars] = useState<RepoData>({
+		stars: 0,
+		loading: true,
+	});
+	const [rivetKitStars, setRivetKitStars] = useState<RepoData>({
+		stars: 0,
+		loading: true,
+	});
 	const [isOpen, setIsOpen] = useState(false);
 
-	const fetchStars = async (repo: string, setter: (data: RepoData) => void) => {
+	const fetchStars = async (
+		repo: string,
+		setter: (data: RepoData) => void,
+	) => {
 		const cacheKey = `github-stars-${repo}`;
 		const cachedData = sessionStorage.getItem(cacheKey);
 
@@ -39,7 +48,9 @@ export function GitHubStarsDropdown({
 		}
 
 		try {
-			const response = await fetch(`https://api.github.com/repos/${repo}`);
+			const response = await fetch(
+				`https://api.github.com/repos/${repo}`,
+			);
 			if (!response.ok) throw new Error("Failed to fetch");
 			const data = await response.json();
 			const newStars = data.stargazers_count;
@@ -96,10 +107,15 @@ export function GitHubStarsDropdown({
 								<div className="flex flex-col items-start">
 									<span>Rivet Actors</span>
 									<span className="text-white/70 text-xs">
-										{rivetKitStars.loading ? "..." : `${formatNumber(rivetKitStars.stars)} stars`}
+										{rivetKitStars.loading
+											? "..."
+											: `${formatNumber(rivetKitStars.stars)} stars`}
 									</span>
 								</div>
-								<Icon icon={faArrowRight} className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<Icon
+									icon={faArrowRight}
+									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
+								/>
 							</a>
 							<a
 								href="https://github.com/rivet-gg/rivet"
@@ -110,10 +126,15 @@ export function GitHubStarsDropdown({
 								<div className="flex flex-col items-start">
 									<span>Rivet Cloud</span>
 									<span className="text-white/70 text-xs">
-										{rivetStars.loading ? "..." : `${formatNumber(rivetStars.stars)} stars`}
+										{rivetStars.loading
+											? "..."
+											: `${formatNumber(rivetStars.stars)} stars`}
 									</span>
 								</div>
-								<Icon icon={faArrowRight} className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<Icon
+									icon={faArrowRight}
+									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
+								/>
 							</a>
 						</div>
 					</div>

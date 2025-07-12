@@ -1,89 +1,40 @@
 import { Button, WithTooltip } from "@rivet-gg/components";
 import { Icon, faSave } from "@rivet-gg/icons";
-import { type LogsTypeFilter } from "./actor-logs";
+import { useAtomValue } from "jotai";
 import type { ActorAtom } from "./actor-context";
-import { actorEnvironmentAtom, exportLogsHandlerAtom } from "./actor-context";
-import { atom, useAtom, useAtomValue } from "jotai";
-import { useState } from "react";
-
-const downloadLogsAtom = atom(
-	null,
-	async (
-		get,
-		_set,
-		{
-			actorId,
-			typeFilter,
-			filter,
-		}: {
-			actorId: string;
-			typeFilter?: LogsTypeFilter;
-			filter?: string;
-		},
-	) => {
-		const environment = get(actorEnvironmentAtom);
-		const exportHandler = get(exportLogsHandlerAtom);
-
-		if (!environment || !exportHandler) {
-			throw new Error("Environment or export handler not available");
-		}
-
-		// Build query JSON for the API
-		// Based on the GET logs endpoint usage, we need to build a query
-		const query: any = {
-			actorIds: [actorId],
-		};
-
-		// Add stream filter based on typeFilter
-		if (typeFilter === "output") {
-			query.stream = 0; // stdout
-		} else if (typeFilter === "errors") {
-			query.stream = 1; // stderr
-		}
-
-		// Add text search if filter is provided
-		if (filter) {
-			query.searchText = filter;
-		}
-
-		const result = await exportHandler({
-			projectNameId: environment.projectNameId,
-			environmentNameId: environment.environmentNameId,
-			queryJson: JSON.stringify(query),
-		});
-
-		// Open the presigned URL in a new tab to download
-		window.open(result.url, "_blank");
-	},
-);
+import type { LogsTypeFilter } from "./actor-logs";
 
 interface ActorDownloadLogsButtonProps {
 	actor: ActorAtom;
 	typeFilter?: LogsTypeFilter;
 	filter?: string;
+	onExportLogs?: (
+		actorId: string,
+		typeFilter?: string,
+		filter?: string,
+	) => Promise<void>;
+	isExporting?: boolean;
 }
 
 export function ActorDownloadLogsButton({
 	actor,
 	typeFilter,
 	filter,
+	onExportLogs,
+	isExporting = false,
 }: ActorDownloadLogsButtonProps) {
-	const [isDownloading, setIsDownloading] = useState(false);
-	const [, downloadLogs] = useAtom(downloadLogsAtom);
 	const actorData = useAtomValue(actor);
 
 	const handleDownload = async () => {
+		if (!onExportLogs) {
+			console.warn("No export handler provided");
+			return;
+		}
+
 		try {
-			setIsDownloading(true);
-			await downloadLogs({
-				actorId: actorData.id,
-				typeFilter,
-				filter,
-			});
+			await onExportLogs(actorData.id, typeFilter, filter);
 		} catch (error) {
-			console.error("Failed to download logs:", error);
-		} finally {
-			setIsDownloading(false);
+			console.error("Failed to export logs:", error);
 		}
 	};
 
@@ -97,11 +48,11 @@ export function ActorDownloadLogsButton({
 					aria-label="Export logs"
 					size="icon-sm"
 					onClick={handleDownload}
-					disabled={isDownloading}
+					disabled={isExporting || !onExportLogs}
 				>
 					<Icon
 						icon={faSave}
-						className={isDownloading ? "animate-pulse" : ""}
+						className={isExporting ? "animate-pulse" : ""}
 					/>
 				</Button>
 			}

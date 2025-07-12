@@ -34,81 +34,109 @@ pub enum QueryExpr {
 	},
 	BoolEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: bool,
 	},
 	BoolNotEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: bool,
 	},
 	StringEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: String,
-		case_sensitive: bool,
+		#[serde(default)]
+		case_insensitive: bool,
 	},
 	StringNotEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: String,
-		case_sensitive: bool,
+		#[serde(default)]
+		case_insensitive: bool,
 	},
 	StringIn {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		values: Vec<String>,
-		case_sensitive: bool,
+		#[serde(default)]
+		case_insensitive: bool,
 	},
 	StringNotIn {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		values: Vec<String>,
-		case_sensitive: bool,
+		#[serde(default)]
+		case_insensitive: bool,
+	},
+	StringContains {
+		property: String,
+		#[serde(default)]
+		map_key: Option<String>,
+		value: String,
+		#[serde(default)]
+		case_insensitive: bool,
 	},
 	StringMatchRegex {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		pattern: String,
-		case_sensitive: bool,
+		#[serde(default)]
+		case_insensitive: bool,
 	},
 	NumberEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},
 	NumberNotEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},
 	NumberIn {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		values: Vec<f64>,
 	},
 	NumberNotIn {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		values: Vec<f64>,
 	},
 	NumberLess {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},
 	NumberLessOrEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},
 	NumberGreater {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},
 	NumberGreaterOrEqual {
 		property: String,
+		#[serde(default)]
 		map_key: Option<String>,
 		value: f64,
 	},

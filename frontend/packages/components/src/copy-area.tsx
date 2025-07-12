@@ -1,6 +1,6 @@
 "use client";
 
-import { Slot, Slottable } from "@radix-ui/react-slot";
+import { Slot } from "@radix-ui/react-slot";
 import { Icon, faCopy } from "@rivet-gg/icons";
 import {
 	type ComponentProps,

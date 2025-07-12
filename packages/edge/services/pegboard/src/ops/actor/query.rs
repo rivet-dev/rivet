@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use clickhouse_user_query::{KeyPath, QueryExpr, UserDefinedQueryBuilder};
+use clickhouse_user_query::{QueryExpr, UserDefinedQueryBuilder};
 use std::collections::HashMap;
 
 use crate::schema::ACTOR_SCHEMA;
@@ -7,7 +7,7 @@ use crate::schema::ACTOR_SCHEMA;
 #[derive(Debug)]
 pub struct Input {
 	pub env_id: Uuid,
-	pub user_query_expr: QueryExpr,
+	pub user_query_expr: Option<QueryExpr>,
 	pub cursor: Option<QueryCursor>,
 	pub limit: u32,
 }
@@ -52,10 +52,16 @@ pub struct ActorQueryResult {
 pub async fn pegboard_actor_query(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let clickhouse = ctx.clickhouse().await?;
 
-	// Build user query filter
-	let builder = UserDefinedQueryBuilder::new(&ACTOR_SCHEMA, &input.user_query_expr)
-		.map_err(|e| GlobalError::raw(e))?;
-	let user_query_where = format!("AND ({})", builder.where_expr());
+	// Build user query filter if provided
+	let (user_query_where, user_query_builder) = if let Some(ref query_expr) = input.user_query_expr
+	{
+		let builder = UserDefinedQueryBuilder::new(&ACTOR_SCHEMA, Some(query_expr))
+			.map_err(|e| GlobalError::raw(e))?;
+		let where_clause = format!("AND ({})", builder.where_expr());
+		(where_clause, Some(builder))
+	} else {
+		(String::new(), None)
+	};
 
 	// Build cursor condition if provided
 	let cursor_condition = if let Some(cursor) = &input.cursor {
@@ -122,8 +128,10 @@ pub async fn pegboard_actor_query(ctx: &OperationCtx, input: &Input) -> GlobalRe
 		.bind(input.env_id)
 		.bind(input.limit);
 
-	// Bind user query parameters
-	query_builder = builder.bind_to(query_builder);
+	// Bind user query parameters if present
+	if let Some(builder) = user_query_builder {
+		query_builder = builder.bind_to(query_builder);
+	}
 
 	let rows = query_builder
 		.fetch_all::<ActorRow>()

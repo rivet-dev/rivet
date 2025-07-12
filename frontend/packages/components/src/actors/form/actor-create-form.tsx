@@ -11,11 +11,6 @@ import { JsonCode } from "@rivet-gg/components/code-mirror";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 
-import {
-	Tags as TagsInput,
-	formSchema as tagsFormSchema,
-} from "./build-tags-form";
-import { RegionSelect } from "../region-select";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
 	actorCustomTagKeys,
@@ -24,6 +19,11 @@ import {
 	actorTagValuesAtom,
 } from "../actor-context";
 import { BuildSelect } from "../build-select";
+import { RegionSelect } from "../region-select";
+import {
+	Tags as TagsInput,
+	formSchema as tagsFormSchema,
+} from "./build-tags-form";
 
 const jsonValid = z.custom<string>((value) => {
 	try {

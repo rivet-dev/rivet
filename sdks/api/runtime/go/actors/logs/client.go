@@ -49,7 +49,9 @@ func (c *Client) Get(ctx context.Context, request *actors.GetActorLogsRequestQue
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
-	queryParams.Add("query_json", fmt.Sprintf("%v", request.QueryJson))
+	if request.QueryJson != nil {
+		queryParams.Add("query_json", fmt.Sprintf("%v", *request.QueryJson))
+	}
 	if request.WatchIndex != nil {
 		queryParams.Add("watch_index", fmt.Sprintf("%v", *request.WatchIndex))
 	}

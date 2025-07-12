@@ -2,9 +2,9 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import {
-	forwardRef,
 	type MouseEventHandler,
 	type PropsWithChildren,
+	forwardRef,
 } from "react";
 import { toast } from "sonner";
 

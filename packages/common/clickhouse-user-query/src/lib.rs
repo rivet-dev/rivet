@@ -24,7 +24,7 @@
 //!             property: "user_id".to_string(),
 //!             map_key: None,
 //!             value: "12345".to_string(),
-//!             case_sensitive: true,
+//!             case_insensitive: false,
 //!         },
 //!         QueryExpr::BoolEqual {
 //!             property: "active".to_string(),
@@ -40,7 +40,7 @@
 //! };
 //!
 //! // Create the safe query builder
-//! let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+//! let builder = UserDefinedQueryBuilder::new(&schema, Some(&query_expr)).unwrap();
 //!
 //! // Use with ClickHouse client (commented out since clickhouse client not available in tests)
 //! // let query = clickhouse::Client::default()

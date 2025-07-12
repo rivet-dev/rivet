@@ -21,13 +21,12 @@ enum BindValue {
 }
 
 impl UserDefinedQueryBuilder {
-	pub fn new(schema: &Schema, expr: &QueryExpr) -> Result<Self> {
+	pub fn new(schema: &Schema, expr: Option<&QueryExpr>) -> Result<Self> {
 		let mut builder = QueryBuilder::new(schema);
-		let where_clause = builder.build_where_clause(expr)?;
-
-		if where_clause.trim().is_empty() {
-			return Err(UserQueryError::EmptyQuery);
-		}
+		let where_clause = match expr {
+			Some(e) => builder.build_where_clause(e)?,
+			None => "true".to_string(),
+		};
 
 		Ok(Self {
 			where_clause,
@@ -38,15 +37,14 @@ impl UserDefinedQueryBuilder {
 
 	pub fn new_with_group_by(
 		schema: &Schema,
-		expr: &QueryExpr,
+		expr: Option<&QueryExpr>,
 		group_by: Option<&KeyPath>,
 	) -> Result<Self> {
 		let mut builder = QueryBuilder::new(schema);
-		let where_clause = builder.build_where_clause(expr)?;
-
-		if where_clause.trim().is_empty() {
-			return Err(UserQueryError::EmptyQuery);
-		}
+		let where_clause = match expr {
+			Some(e) => builder.build_where_clause(e)?,
+			None => "true".to_string(),
+		};
 
 		let group_by_clause = if let Some(key_path) = group_by {
 			let validated_column = builder.validate_group_by_key_path(key_path)?;
@@ -137,37 +135,37 @@ impl<'a> QueryBuilder<'a> {
 				property,
 				map_key,
 				value,
-				case_sensitive,
+				case_insensitive,
 			} => {
 				self.validate_property_access(property, map_key, &PropertyType::String)?;
 				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::String(value.clone()));
-				if *case_sensitive {
-					Ok(format!("{} = ?", column))
-				} else {
+				if *case_insensitive {
 					Ok(format!("LOWER({}) = LOWER(?)", column))
+				} else {
+					Ok(format!("{} = ?", column))
 				}
 			}
 			QueryExpr::StringNotEqual {
 				property,
 				map_key,
 				value,
-				case_sensitive,
+				case_insensitive,
 			} => {
 				self.validate_property_access(property, map_key, &PropertyType::String)?;
 				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::String(value.clone()));
-				if *case_sensitive {
-					Ok(format!("{} != ?", column))
-				} else {
+				if *case_insensitive {
 					Ok(format!("LOWER({}) != LOWER(?)", column))
+				} else {
+					Ok(format!("{} != ?", column))
 				}
 			}
 			QueryExpr::StringIn {
 				property,
 				map_key,
 				values,
-				case_sensitive,
+				case_insensitive,
 			} => {
 				if values.is_empty() {
 					return Err(UserQueryError::EmptyArrayValues("StringIn".to_string()));
@@ -178,18 +176,18 @@ impl<'a> QueryBuilder<'a> {
 				for value in values {
 					self.bind_values.push(BindValue::String(value.clone()));
 				}
-				if *case_sensitive {
-					Ok(format!("{} IN ({})", column, placeholders))
-				} else {
+				if *case_insensitive {
 					let lower_placeholders = vec!["LOWER(?)"; values.len()].join(", ");
 					Ok(format!("LOWER({}) IN ({})", column, lower_placeholders))
+				} else {
+					Ok(format!("{} IN ({})", column, placeholders))
 				}
 			}
 			QueryExpr::StringNotIn {
 				property,
 				map_key,
 				values,
-				case_sensitive,
+				case_insensitive,
 			} => {
 				if values.is_empty() {
 					return Err(UserQueryError::EmptyArrayValues("StringNotIn".to_string()));
@@ -200,11 +198,34 @@ impl<'a> QueryBuilder<'a> {
 				for value in values {
 					self.bind_values.push(BindValue::String(value.clone()));
 				}
-				if *case_sensitive {
-					Ok(format!("{} NOT IN ({})", column, placeholders))
-				} else {
+				if *case_insensitive {
 					let lower_placeholders = vec!["LOWER(?)"; values.len()].join(", ");
 					Ok(format!("LOWER({}) NOT IN ({})", column, lower_placeholders))
+				} else {
+					Ok(format!("{} NOT IN ({})", column, placeholders))
+				}
+			}
+			QueryExpr::StringContains {
+				property,
+				map_key,
+				value,
+				case_insensitive,
+			} => {
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
+				// In ClickHouse, we'll use the LIKE operator with % wildcards
+				// We need to escape special LIKE characters in the value
+				let escaped_value = value
+					.replace("\\", "\\\\")
+					.replace("%", "\\%")
+					.replace("_", "\\_");
+				let like_pattern = format!("%{}%", escaped_value);
+				self.bind_values.push(BindValue::String(like_pattern));
+				if *case_insensitive {
+					// Use ILIKE for case-insensitive matching in ClickHouse
+					Ok(format!("{} ILIKE ?", column))
+				} else {
+					Ok(format!("{} LIKE ?", column))
 				}
 			}
 			QueryExpr::NumberEqual {
@@ -303,18 +324,18 @@ impl<'a> QueryBuilder<'a> {
 				property,
 				map_key,
 				pattern,
-				case_sensitive,
+				case_insensitive,
 			} => {
 				self.validate_property_access(property, map_key, &PropertyType::String)?;
 				let column = self.build_column_reference(property, map_key)?;
-				if *case_sensitive {
-					self.bind_values.push(BindValue::String(pattern.clone()));
-					Ok(format!("match({}, ?)", column))
-				} else {
+				if *case_insensitive {
 					// For case-insensitive regex, prepend (?i) to the pattern
 					let case_insensitive_pattern = format!("(?i){}", pattern);
 					self.bind_values
 						.push(BindValue::String(case_insensitive_pattern));
+					Ok(format!("match({}, ?)", column))
+				} else {
+					self.bind_values.push(BindValue::String(pattern.clone()));
 					Ok(format!("match({}, ?)", column))
 				}
 			}

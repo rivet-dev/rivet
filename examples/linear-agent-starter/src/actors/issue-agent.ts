@@ -1,9 +1,9 @@
-import { ActionContextOf, actor } from "actor-core";
-import { LinearClient } from "@linear/sdk";
-import { actorClient } from "./app";
-import { WebhookIssue, WebhookComment } from "../linear-types";
-import { CoreMessage, generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
+import { LinearClient } from "@linear/sdk";
+import { type ActionContextOf, actor } from "actor-core";
+import { type CoreMessage, generateText } from "ai";
+import type { WebhookComment, WebhookIssue } from "../linear-types";
+import { actorClient } from "./app";
 
 interface IssueAgentState {
 	messages: CoreMessage[];

@@ -37,5 +37,5 @@ await RIVET.actors.logs.export({
 
 ## Schema
 <JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{},"required":[]}} defs={API_SCHEMA.definitions}/>
-<JsonSchemaPreview className='not-prose mt-4' title='Request' schema={{"type":"object","properties":{"project":{"type":"string"},"environment":{"type":"string"},"query_json":{"type":"string","description":"JSON-encoded query expression for filtering logs"}},"required":["query_json"]}} defs={API_SCHEMA.definitions}/>
+<JsonSchemaPreview className='not-prose mt-4' title='Request' schema={{"type":"object","properties":{"project":{"type":"string"},"environment":{"type":"string"},"query_json":{"type":"string","description":"JSON-encoded query expression for filtering logs"}}}} defs={API_SCHEMA.definitions}/>
 <JsonSchemaPreview className='not-prose mt-4' title='Response' schema={{"$ref":"#/components/schemas/ActorsExportActorLogsResponse"}} defs={API_SCHEMA.definitions}/>

@@ -14,6 +14,15 @@ message Request {
 	// User ID that created this upload. This is used for reporting purposes
 	// in case some bad content was included in the user upload.
 	optional rivet.common.Uuid user_id = 3;
+
+	// Override the endpoint kind presigned requests
+	optional EndpointKind presigned_endpoint_kind = 5;
+}
+
+enum EndpointKind {
+	INTERNAL = 0;
+	EDGE_INTERNAL = 1;
+	EXTERNAL = 2;
 }
 
 message Response {

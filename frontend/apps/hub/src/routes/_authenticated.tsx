@@ -1,7 +1,8 @@
 import { useAuth } from "@/domains/auth/contexts/auth";
+import { LoginView } from "@/domains/auth/views/login-view/login-view";
 import { useDialog } from "@/hooks/use-dialog";
-import { FullscreenLoading } from "@rivet-gg/components";
 import * as Layout from "@/layouts/page-centered";
+import { FullscreenLoading } from "@rivet-gg/components";
 import {
 	Outlet,
 	createFileRoute,
@@ -10,7 +11,6 @@ import {
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
-import { LoginView } from "@/domains/auth/views/login-view/login-view";
 
 function Authenticated() {
 	const auth = useAuth();

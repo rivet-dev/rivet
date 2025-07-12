@@ -1,8 +1,8 @@
-import { Hono } from "hono";
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { promisify } from "node:util";
+import { Hono } from "hono";
 import temp from "temp";
 
 const execAsync = promisify(exec);
@@ -101,7 +101,7 @@ app.post("/deploy/:appId", async (c) => {
 				build_path: "./project/",
 				dockerfile: "./Dockerfile",
 				unstable: {
-					build_method: "remote"
+					build_method: "remote",
 				},
 				build_args: {
 					// See MY_ENV_VAR build args in Dockerfile

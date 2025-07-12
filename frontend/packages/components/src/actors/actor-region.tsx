@@ -1,13 +1,13 @@
-import { cn, Flex, WithTooltip } from "@rivet-gg/components";
+import { Flex, WithTooltip } from "@rivet-gg/components";
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+import { useCallback } from "react";
 import {
 	REGION_LABEL,
 	RegionIcon,
 	getRegionKey,
 } from "../matchmaker/lobby-region";
-import { actorRegionsAtom, type Actor } from "./actor-context";
-import { selectAtom } from "jotai/utils";
-import { useAtomValue } from "jotai";
-import { useCallback } from "react";
+import { actorRegionsAtom } from "./actor-context";
 
 interface ActorRegionProps {
 	regionId?: string;

@@ -41,7 +41,7 @@ Name | Type | Description  | Required | Notes
 
 ## actors_logs_get
 
-> crate::models::ActorsGetActorLogsResponse actors_logs_get(query_json, project, environment, watch_index)
+> crate::models::ActorsGetActorLogsResponse actors_logs_get(project, environment, query_json, watch_index)
 
 
 Returns the logs for a given actor.
@@ -51,9 +51,9 @@ Returns the logs for a given actor.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**query_json** | **String** | JSON-encoded query expression for filtering logs | [required] |
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
+**query_json** | Option<**String**> | JSON-encoded query expression for filtering logs |  |
 **watch_index** | Option<**String**> | A query parameter denoting the requests watch index. |  |
 
 ### Return type

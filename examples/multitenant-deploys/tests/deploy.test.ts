@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { app } from "../src/app";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
+import { describe, expect, it } from "vitest";
+import { app } from "../src/app";
 
 describe("Deploy Endpoint", () => {
 	it("should deploy an application and return endpoint", async () => {

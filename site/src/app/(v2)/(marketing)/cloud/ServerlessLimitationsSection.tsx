@@ -1,21 +1,14 @@
 "use client";
 
 import {
-	Icon,
-	faRocket,
 	faClock,
-	faGlobe,
-	faGears,
-	faServer,
-	faShieldAlt,
-	faScaleBalanced,
 	faCode,
-	faWrench,
-	faCloud,
-	faTerminal,
+	faGears,
+	faGlobe,
 	faNetworkWired,
+	faRocketLaunch,
 	faTag,
-    faRocketLaunch,
+	faTerminal,
 } from "@rivet-gg/icons";
 import { Feature } from "./components/Feature";
 
@@ -31,7 +24,8 @@ export const ServerlessLimitationsSection = () => {
 		{
 			icon: faClock,
 			title: "Unlimited Execution Time",
-			description: "No arbitrary timeout limits for your long-running processes",
+			description:
+				"No arbitrary timeout limits for your long-running processes",
 		},
 		{
 			icon: faRocketLaunch,
@@ -41,12 +35,14 @@ export const ServerlessLimitationsSection = () => {
 		{
 			icon: faCode,
 			title: "Docker Compatibility",
-			description: "Works with anything that runs in Docker - no proprietary runtimes",
+			description:
+				"Works with anything that runs in Docker - no proprietary runtimes",
 		},
 		{
 			icon: faTerminal,
 			title: "Local Development",
-			description: "Run a full Rivet instance with one command or in Docker Compose",
+			description:
+				"Run a full Rivet instance with one command or in Docker Compose",
 		},
 		{
 			icon: faNetworkWired,
@@ -56,17 +52,20 @@ export const ServerlessLimitationsSection = () => {
 		{
 			icon: faGlobe,
 			title: "Control Where Code Runs",
-			description: "Deploy near users or data centers for optimal performance",
+			description:
+				"Deploy near users or data centers for optimal performance",
 		},
 		{
 			icon: faGears,
 			title: "Customizable Rollouts",
-			description: "Control exactly how and when your services are updated",
+			description:
+				"Control exactly how and when your services are updated",
 		},
 		{
 			icon: faTag,
 			title: "Tagged Resources",
-			description: "Organize and manage resources with powerful tagging system",
+			description:
+				"Organize and manage resources with powerful tagging system",
 		},
 	];
 
@@ -83,10 +82,10 @@ export const ServerlessLimitationsSection = () => {
 			</div>
 
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-					{features.map((feature, index) => (
-						<Feature key={index} feature={feature} />
-					))}
-				</div>
+				{features.map((feature, index) => (
+					<Feature key={index} feature={feature} />
+				))}
+			</div>
 		</div>
 	);
 };

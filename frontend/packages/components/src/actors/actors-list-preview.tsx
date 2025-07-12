@@ -1,4 +1,3 @@
-import { cn, ls } from "../lib/utils";
 import { Icon, faGripDotsVertical } from "@rivet-gg/icons";
 import {
 	animate,
@@ -16,6 +15,7 @@ import {
 	useLayoutEffect,
 	useState,
 } from "react";
+import { cn, ls } from "../lib/utils";
 import { ActorsLayoutContextProvider } from "./actors-layout-context";
 import { ActorsListPanel } from "./actors-list-panel";
 

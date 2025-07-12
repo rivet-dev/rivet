@@ -1,55 +1,46 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
 import {
 	Icon,
-	faServer,
+	faArrowsTurnRight,
+	faClock,
 	faCode,
-	faLayerGroup,
-	faRobot,
-	faLinear,
-	faDatabase,
-	faArrowsToCircle,
-	faGamepad,
-	faSync,
-	faFileCode,
-	faStream,
-	faImage,
-	faNetworkWired,
-	faTasks,
-	faChartLine,
 	faCogs,
-	faChevronLeft,
-	faChevronRight,
+	faCourtSport,
+	faDatabase,
+	faFileCode,
 	faFilePdf,
-	faWaveSine,
+	faGamepad,
+	faImage,
+	faLinear,
 	faOven,
 	faPhone,
-	faClock,
-	faCourtSport,
-	faArrowsSpin,
-	faArrowsTurnRight,
+	faRobot,
+	faServer,
+	faSync,
+	faWaveSine,
 } from "@rivet-gg/icons";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 
+import imgBatchJobs from "./images/diagrams/batch-jobs.svg";
 // Import all diagram images
 import imgCodingAgent from "./images/diagrams/coding-agent.svg";
-import imgLinearAgent from "./images/diagrams/linear-agent.svg";
-import imgVoiceAgent from "./images/diagrams/voice-agent.svg";
-import imgSandboxedCode from "./images/diagrams/sandboxed-code.svg";
-import imgMcpServer from "./images/diagrams/mcp-server.svg";
-import imgLocalFirstSync from "./images/diagrams/local-first-sync.svg";
 import imgCollaborativeDocuments from "./images/diagrams/collaborative-documents.svg";
-import imgMultiplayerGameServers from "./images/diagrams/multiplayer-game-servers.svg";
-import imgLiveEvents from "./images/diagrams/live-events.svg";
-import imgFfmpegConversion from "./images/diagrams/ffmpeg-conversion.svg";
-import imgPdfTextExtraction from "./images/diagrams/pdf-text-extraction.svg";
-import imgBatchJobs from "./images/diagrams/batch-jobs.svg";
-import imgPerTenantDatabase from "./images/diagrams/per-tenant-database.svg";
-import imgScheduledTasks from "./images/diagrams/scheduled-tasks.svg";
-import imgManagedCi from "./images/diagrams/managed-ci.svg";
-import imgStreamProcessing from "./images/diagrams/stream-processing.svg";
 import imgEtlPipeline from "./images/diagrams/etl-pipeline.svg";
+import imgFfmpegConversion from "./images/diagrams/ffmpeg-conversion.svg";
+import imgLinearAgent from "./images/diagrams/linear-agent.svg";
+import imgLiveEvents from "./images/diagrams/live-events.svg";
+import imgLocalFirstSync from "./images/diagrams/local-first-sync.svg";
+import imgManagedCi from "./images/diagrams/managed-ci.svg";
+import imgMcpServer from "./images/diagrams/mcp-server.svg";
+import imgMultiplayerGameServers from "./images/diagrams/multiplayer-game-servers.svg";
+import imgPdfTextExtraction from "./images/diagrams/pdf-text-extraction.svg";
+import imgPerTenantDatabase from "./images/diagrams/per-tenant-database.svg";
+import imgSandboxedCode from "./images/diagrams/sandboxed-code.svg";
+import imgScheduledTasks from "./images/diagrams/scheduled-tasks.svg";
+import imgStreamProcessing from "./images/diagrams/stream-processing.svg";
+import imgVoiceAgent from "./images/diagrams/voice-agent.svg";
 
 interface TabItem {
 	id: string;
@@ -383,7 +374,7 @@ export const PowerfulPrimitivesSection = () => {
 		setShowLeftArrow(container.scrollLeft > 0);
 		setShowRightArrow(
 			container.scrollLeft <
-			container.scrollWidth - container.clientWidth - 5, // 5px buffer
+				container.scrollWidth - container.clientWidth - 5, // 5px buffer
 		);
 	};
 
@@ -454,10 +445,11 @@ export const PowerfulPrimitivesSection = () => {
 										{group.items.map((tab) => (
 											<button
 												key={tab.id}
-												className={`w-full flex items-center justify-start gap-2 px-3.5 py-2.5 rounded-md transition-all text-xs ${activeTab === tab.id
+												className={`w-full flex items-center justify-start gap-2 px-3.5 py-2.5 rounded-md transition-all text-xs ${
+													activeTab === tab.id
 														? "bg-zinc-900 text-white border border-zinc-500 shadow-inner shadow-zinc-800"
 														: "text-white/50 hover:text-white hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700/50"
-													}`}
+												}`}
 												onClick={() =>
 													setActiveTab(tab.id)
 												}

@@ -18,9 +18,7 @@ import {
 } from "@rivet-gg/icons";
 
 const footer = {
-	product: [
-		{ name: "Actors", href: "/docs/actors" },
-	],
+	product: [{ name: "Actors", href: "/docs/actors" }],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -210,7 +208,7 @@ function SmallPrint() {
 										<span
 											className={clsx(
 												item.highlight &&
-												"text-violet-200 drop-shadow-[0_0_10px_rgba(221,214,254,0.5)]",
+													"text-violet-200 drop-shadow-[0_0_10px_rgba(221,214,254,0.5)]",
 											)}
 										>
 											{item.name}
@@ -252,7 +250,9 @@ function SmallPrint() {
 					rights reserved.
 				</p>
 				<p className="text-xs leading-5 text-white/30">
-					Cloudflare® and Durable Objects™ are trademarks of Cloudflare, Inc. No affiliation or endorsement implied. References used for comparison purposes only.
+					Cloudflare® and Durable Objects™ are trademarks of
+					Cloudflare, Inc. No affiliation or endorsement implied.
+					References used for comparison purposes only.
 				</p>
 			</div>
 		</div>

@@ -1,6 +1,6 @@
 import { Button, type ButtonProps } from "@rivet-gg/components";
-import { portalBillingSessionQueryOptions } from "../../queries";
 import { useQuery } from "@tanstack/react-query";
+import { portalBillingSessionQueryOptions } from "../../queries";
 
 interface BillingPortalButtonProps extends ButtonProps {
 	groupId: string;

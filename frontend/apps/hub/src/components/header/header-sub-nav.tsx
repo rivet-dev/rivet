@@ -1,11 +1,7 @@
 import { useAuth } from "@/domains/auth/contexts/auth";
 import { Skeleton, cn } from "@rivet-gg/components";
 import { ErrorBoundary } from "@sentry/react";
-import {
-	useMatches,
-	useMatchRoute,
-	useRouterState,
-} from "@tanstack/react-router";
+import { useMatchRoute, useMatches } from "@tanstack/react-router";
 import { Suspense, useContext } from "react";
 import { MobileBreadcrumbsContext } from "../breadcrumbs/mobile-breadcrumbs";
 import { HeaderEnvironmentLinks } from "./links/header-environment-links";

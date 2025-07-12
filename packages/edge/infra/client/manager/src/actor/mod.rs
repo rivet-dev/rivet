@@ -205,7 +205,7 @@ impl Actor {
 		ctx: &Arc<Ctx>,
 		ports: protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "spawning");
+		tracing::info!(actor_id=?self.actor_id, env_id=?self.metadata.environment.env_id, generation=?self.generation, "spawning");
 
 		let mut runner_env = vec![
 			(

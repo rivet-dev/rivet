@@ -4,36 +4,28 @@
  * Useful for quick iteration on the server.
  */
 
-import { describe, it, expect, beforeAll, afterAll, test } from "vitest";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { writeFile } from "fs/promises";
-import getPort from "get-port";
-import { createServer } from "../src/server";
 import { RivetClient } from "@rivet-gg/api";
+import getPort from "get-port";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { RivetUploadConfig } from "../src/rivet-uploader";
+import { createServer } from "../src/server";
 import {
-	createSampleDockerContext,
+	createActorFromBuild,
+	createBuildWithContext,
 	createFailingDockerContext,
 	createTestWebServerContext,
-	createBuildWithContext,
 	getBuildStatus,
 	pollBuildStatus,
-	downloadOutputTar,
-	waitForActorReady,
 	testActorEndpoint,
-	createActorFromBuild,
 } from "./test-utils";
-import { convertDockerTarToOCIBundle } from "../src/oci-converter";
-import {
-	uploadOCIBundleToRivet,
-	type RivetUploadConfig,
-} from "../src/rivet-uploader";
 
 describe("Docker", () => {
 	let server: any;
 	let baseUrl: string;
 	let rivetConfig: RivetUploadConfig = undefined as any;
-	let testActorIds: string[] = [];
+	const testActorIds: string[] = [];
 
 	beforeAll(async () => {
 		// Build the ci-manager dockerfile before starting tests

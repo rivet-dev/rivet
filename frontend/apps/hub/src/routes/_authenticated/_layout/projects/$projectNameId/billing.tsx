@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { useProject } from "@/domains/project/data/project-context";
 import { BillingView } from "@/domains/project/views/billing-view";
 import { guardEnterprise } from "@/lib/guards";
-import { useProject } from "@/domains/project/data/project-context";
 
 function ProjectBillingRoute() {
 	const { gameId: projectId } = useProject();

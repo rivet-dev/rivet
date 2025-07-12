@@ -22,10 +22,10 @@ import {
 	isNotFound,
 	useRouter,
 } from "@tanstack/react-router";
+import posthog from "posthog-js";
 import { useEffect } from "react";
 import { NetworkIssueError } from "./network-issue-error";
 import { NotFoundComponent } from "./not-found-component";
-import posthog from "posthog-js";
 
 export const ErrorComponent = ({
 	error,

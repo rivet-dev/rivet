@@ -1,8 +1,8 @@
 import { Ping, cn } from "@rivet-gg/components";
-import type { Actor, ActorAtom } from "./actor-context";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import type { ComponentPropsWithRef } from "react";
+import type { Actor, ActorAtom } from "./actor-context";
 
 export type ActorStatus =
 	| "starting"

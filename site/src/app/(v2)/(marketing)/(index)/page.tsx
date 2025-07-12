@@ -1,11 +1,11 @@
 import { HeroBackground } from "./components/HeroBackground";
-import { HeroSection } from "./sections/HeroSection";
-import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
-import { FeaturesSection } from "./sections/FeaturesSection";
-import { TechSection } from "./sections/TechSection";
-import { StudioSection } from "./sections/StudioSection";
-import { CommunitySection } from "./sections/CommunitySection";
 import { CTASection } from "./sections/CTASection";
+import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
+import { CommunitySection } from "./sections/CommunitySection";
+import { FeaturesSection } from "./sections/FeaturesSection";
+import { HeroSection } from "./sections/HeroSection";
+import { StudioSection } from "./sections/StudioSection";
+import { TechSection } from "./sections/TechSection";
 
 export default function IndexPage() {
 	return (

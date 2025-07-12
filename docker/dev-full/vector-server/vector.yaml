@@ -60,6 +60,14 @@ transforms:
       type: vrl
       source: .source == "pegboard_container_runner"
       
+  actors_transform:
+    type: remap
+    inputs:
+      - actors
+    source: |
+      # Add namespace label to actor logs
+      .namespace = "rivet"
+      
   clickhouse_dynamic_events_filter:
     type: filter
     inputs:
@@ -107,7 +115,7 @@ sinks:
   clickhouse_actor_logs:
     type: clickhouse
     inputs:
-      - actors
+      - actors_transform
     compression: gzip
     database: db_pegboard_actor_log
     endpoint: http://clickhouse:8123

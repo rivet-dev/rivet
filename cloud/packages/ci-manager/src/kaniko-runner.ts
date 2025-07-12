@@ -1,7 +1,7 @@
-import { BuildStore } from "./build-store";
-import { mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { BuildStore } from "./build-store";
 import { runDockerBuild } from "./executors/docker";
 import { runRivetBuild } from "./executors/rivet";
 
@@ -20,8 +20,8 @@ export async function runKanikoBuild(
 	buildStore.updateStatus(buildId, {
 		type: "running",
 		data: {
-			noRunner: {}
-		}
+			noRunner: {},
+		},
 	});
 
 	const executionMode = process.env.KANIKO_EXECUTION_MODE || "docker";

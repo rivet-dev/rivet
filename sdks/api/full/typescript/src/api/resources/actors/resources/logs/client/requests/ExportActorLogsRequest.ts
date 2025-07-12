@@ -14,5 +14,5 @@ export interface ExportActorLogsRequest {
     project?: string;
     environment?: string;
     /** JSON-encoded query expression for filtering logs */
-    queryJson: string;
+    queryJson?: string;
 }
