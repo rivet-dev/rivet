@@ -105,6 +105,7 @@ async fn archive_oci_bundle(
 			cmd: Option<Vec<String>>,
 			entrypoint: Option<Vec<String>>,
 			env: Vec<String>,
+			#[serde(default)]
 			user: String,
 			#[serde(default)]
 			working_dir: String,
@@ -328,7 +329,7 @@ fn copy_container_to_rootfs(
 		// us
 		let old_path_bytes = entry.path_bytes().to_vec();
 		let old_path = UnixPath::new(old_path_bytes.as_ref() as &[u8]);
-		let old_path_relative = old_path.strip_prefix("/")?;
+		let old_path_relative = old_path.strip_prefix("/").unwrap_or(&old_path);
 		let new_path = root_path.join(old_path_relative);
 		let new_path_std = new_path.try_as_ref().context(format!(
 			"failed to convert unix path to os path: {new_path:?}"
@@ -372,7 +373,7 @@ fn copy_container_to_rootfs(
 				let old_link = UnixPath::new(old_link.as_ref() as &[u8]);
 
 				if old_link.is_absolute() {
-					let old_link_relative = old_link.strip_prefix("/")?;
+					let old_link_relative = old_link.strip_prefix("/").unwrap_or(&old_link);
 					let new_link = root_path.join(old_link_relative);
 					let new_link_std = new_link.try_as_ref().context(format!(
 						"failed to convert unix path to os path: {new_link:?}"
