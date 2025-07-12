@@ -67,7 +67,7 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 			tracing::error!(?err, "failed to fetch pegboard prometheus metrics");
 
 			Default::default()
-		},
+		}
 	};
 
 	let mut stats_by_client_id = HashMap::new();

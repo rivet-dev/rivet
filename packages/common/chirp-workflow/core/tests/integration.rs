@@ -39,10 +39,7 @@ async fn fdb_sqlite_nats_driver() {
 	// .await
 	// .unwrap();
 
-	let workflow_id = ctx.workflow(def::Input { })
-	.dispatch()
-	.await
-	.unwrap();
+	let workflow_id = ctx.workflow(def::Input {}).dispatch().await.unwrap();
 
 	let ctx2 = ctx.clone();
 	tokio::spawn(async move {

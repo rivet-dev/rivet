@@ -5,13 +5,17 @@
 		"url": "https://github.com/rivet-gg/rivet.git",
 		"directory": "frontend/packages/cli"
 	},
-	"version": "25.5.2",
+	"version": "25.5.3",
 	"bin": {
 		"rivet": "dist/cli.js",
 		"rivet-cli": "dist/cli.js"
 	},
 	"license": "Apache-2.0",
-	"files": ["dist/cli.js", "dist/postinstall.js", "package.json"],
+	"files": [
+		"dist/cli.js",
+		"dist/postinstall.js",
+		"package.json"
+	],
 	"sideEffects": false,
 	"preferGlobal": true,
 	"preferUnplugged": true,

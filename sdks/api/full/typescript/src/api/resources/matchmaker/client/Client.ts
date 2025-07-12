@@ -15,7 +15,7 @@ export declare namespace Matchmaker {
         baseUrl?: core.Supplier<string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.5.2";
+        xApiVersion?: "25.5.3";
         fetcher?: core.FetchFunction;
     }
 }
