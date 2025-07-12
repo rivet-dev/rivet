@@ -70,7 +70,7 @@ pub async fn pegboard_actor_list_for_env(
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 				if input.include_destroyed || !data.is_destroyed {
-					// Compute intersection between ds tags and input tags
+					// Compute intersection between actor tags and input tags
 					let tags_match = input
 						.tags
 						.iter()

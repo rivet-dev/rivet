@@ -194,6 +194,14 @@ async function run() {
 			console.log("UDP connection closed");
 		});
 
+		// await client.actor.upgrade(actor.id, {
+		// 	project: RIVET_PROJECT,
+		// 	environment: RIVET_ENVIRONMENT,
+		// 	body: {
+		// 		buildTags: { name: BUILD_NAME, current: "true" },
+		// 	}
+		// });
+
 		console.log("Sleeping forever so you can debug");
 		await new Promise((resolve) => setTimeout(resolve, 100_000_000));
 	} catch (error) {

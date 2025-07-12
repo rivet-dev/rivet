@@ -726,6 +726,9 @@ impl Actor {
 			protocol::ImageKind::JavaScript => {}
 		}
 
+		// Allow time for vector to pick up logs before they are deleted
+		tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
 		// Delete entire actor dir. Note that for actors using KV storage, it is persisted elsewhere and will
 		// not be deleted by this (see `persist_storage` in the runner protocol).
 		if let Err(err) = tokio::fs::remove_dir_all(&actor_path).await {

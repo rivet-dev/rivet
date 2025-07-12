@@ -174,10 +174,12 @@ async fn build_and_upload(
 	// Upgrade actors
 	if !skip_upgrade {
 		task.log(format!("[Upgrading Actors]"));
-		apis::actors_api::actors_upgrade_all(
+		let res = apis::actors_api::actors_upgrade_all(
 			&ctx.openapi_config_cloud,
 			models::ActorsUpgradeAllActorsRequest {
-				tags: Some(serde_json::to_value(&build_tags)?),
+				tags: Some(json!({
+					build::tags::NAME: build_name,
+				})),
 				build: Some(build_id),
 				build_tags: None,
 			},
@@ -185,6 +187,12 @@ async fn build_and_upload(
 			Some(&env.slug),
 		)
 		.await?;
+
+		task.log(format!(
+			"[Upgraded {} Actor{}]",
+			res.count,
+			if res.count == 1 { "" } else { "s" }
+		));
 	} else {
 		task.log(format!("[Skipping Actor Upgrade]"));
 	}
