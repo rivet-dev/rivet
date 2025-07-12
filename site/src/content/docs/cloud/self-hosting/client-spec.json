@@ -156,9 +156,31 @@
       },
       "additionalProperties": false
     },
+    "HostEntry": {
+      "type": "object",
+      "required": [
+        "hostname",
+        "ip"
+      ],
+      "properties": {
+        "hostname": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "Images": {
       "type": "object",
       "properties": {
+        "max_cache_size": {
+          "description": "Bytes. Defaults to 64 GiB.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "pull_addresses": {
           "$ref": "#/definitions/Addresses"
         }
@@ -260,6 +282,13 @@
         "container_runner_binary_path": {
           "type": "string"
         },
+        "custom_hosts": {
+          "description": "Custom host entries to append to /etc/hosts in actor containers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HostEntry"
+          }
+        },
         "flavor": {
           "$ref": "#/definitions/ClientFlavor"
         },
@@ -274,6 +303,10 @@
         },
         "use_mounts": {
           "description": "Whether or not to use a mount for actor file systems.",
+          "type": "boolean"
+        },
+        "use_resource_constraints": {
+          "description": "Whether or not to use resource constraints on containers.\n\nYou should enable this if you see this error in development:\n\n``` cannot enter cgroupv2 \"/sys/fs/cgroup/test\" with domain controllers -- it is in an invalid state ````",
           "type": "boolean"
         }
       },

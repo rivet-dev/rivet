@@ -23,6 +23,14 @@
       "additionalProperties": {
         "$ref": "#/definitions/Function"
       }
+    },
+    "rivetkit": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/RivetKit"
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -49,18 +57,18 @@
     "Build": {
       "type": "object",
       "properties": {
-        "build_args": {
+        "buildArgs": {
           "description": "Build arguments to pass to the build.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
-        "build_path": {
+        "buildPath": {
           "description": "Directory to build the Docker image from.",
           "type": "string"
         },
-        "build_target": {
+        "buildTarget": {
           "description": "Build target to upload.",
           "type": "string"
         },
@@ -95,11 +103,11 @@
         "unstable": {
           "default": {
             "minify": null,
-            "analyze_result": null,
-            "esbuild_log_level": null,
+            "analyzeResult": null,
+            "esbuildLogLevel": null,
             "compression": null,
-            "dump_build": null,
-            "no_bundler": null
+            "dumpBuild": null,
+            "noBundler": null
           },
           "allOf": [
             {
@@ -124,6 +132,13 @@
           "enum": [
             "native"
           ]
+        },
+        {
+          "description": "Use Rivet Cloud for building.",
+          "type": "string",
+          "enum": [
+            "remote"
+          ]
         }
       ]
     },
@@ -133,14 +148,14 @@
           "description": "Legacy option. Docker image archive output from `docker save`. Slower lobby start times.",
           "type": "string",
           "enum": [
-            "docker_image"
+            "dockerImage"
           ]
         },
         {
           "description": "OCI bundle archive derived from a generated Docker image. Optimized for fast lobby start times.",
           "type": "string",
           "enum": [
-            "oci_bundle"
+            "ociBundle"
           ]
         }
       ]
@@ -176,7 +191,7 @@
       "properties": {
         "networking": {
           "default": {
-            "internal_port": null
+            "internalPort": null
           },
           "allOf": [
             {
@@ -195,10 +210,20 @@
             }
           ]
         },
-        "route_subpaths": {
+        "routeSubpaths": {
           "type": "boolean"
         },
-        "strip_prefix": {
+        "runtime": {
+          "default": {
+            "environment": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/FunctionRuntime"
+            }
+          ]
+        },
+        "stripPrefix": {
           "default": null,
           "type": "boolean"
         },
@@ -213,10 +238,21 @@
     "FunctionNetworking": {
       "type": "object",
       "properties": {
-        "internal_port": {
+        "internalPort": {
           "type": "integer",
           "format": "uint16",
           "minimum": 0.0
+        }
+      }
+    },
+    "FunctionRuntime": {
+      "type": "object",
+      "properties": {
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -239,13 +275,103 @@
         }
       }
     },
+    "RivetKit": {
+      "type": "object",
+      "required": [
+        "registry",
+        "server"
+      ],
+      "properties": {
+        "buildArgs": {
+          "description": "Build arguments to pass to the build.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "buildPath": {
+          "description": "Directory to build the Docker image from.",
+          "type": "string"
+        },
+        "buildTarget": {
+          "description": "Build target to upload.",
+          "type": "string"
+        },
+        "dockerfile": {
+          "description": "Dockerfile to build.",
+          "type": "string"
+        },
+        "image": {
+          "description": "Existing image tag to upload.",
+          "type": "string"
+        },
+        "networking": {
+          "default": {
+            "internalPort": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/FunctionNetworking"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "registry": {
+          "type": "string"
+        },
+        "resources": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Resources"
+            }
+          ]
+        },
+        "routeSubpaths": {
+          "type": "boolean"
+        },
+        "runtime": {
+          "default": {
+            "environment": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/FunctionRuntime"
+            }
+          ]
+        },
+        "server": {
+          "type": "string"
+        },
+        "stripPrefix": {
+          "default": null,
+          "type": "boolean"
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "unstable": {
+          "description": "Unstable features.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Unstable"
+            }
+          ]
+        }
+      }
+    },
     "Unstable": {
       "type": "object",
       "properties": {
-        "allow_root": {
+        "allowRoot": {
           "type": "boolean"
         },
-        "build_method": {
+        "buildMethod": {
           "$ref": "#/definitions/BuildMethod"
         },
         "bundle": {
@@ -260,22 +386,22 @@
     "Unstable2": {
       "type": "object",
       "properties": {
-        "analyze_result": {
+        "analyzeResult": {
           "type": "boolean"
         },
         "compression": {
           "$ref": "#/definitions/Compression"
         },
-        "dump_build": {
+        "dumpBuild": {
           "type": "boolean"
         },
-        "esbuild_log_level": {
+        "esbuildLogLevel": {
           "type": "string"
         },
         "minify": {
           "type": "boolean"
         },
-        "no_bundler": {
+        "noBundler": {
           "type": "boolean"
         }
       },

@@ -29,17 +29,24 @@ pub struct Actor {
 	actor_id: Uuid,
 	generation: u32,
 	config: protocol::ActorConfig,
+	metadata: protocol::ActorMetadata,
 
 	runner: Mutex<Option<runner::Handle>>,
 	exited: Mutex<bool>,
 }
 
 impl Actor {
-	pub fn new(actor_id: Uuid, generation: u32, config: protocol::ActorConfig) -> Arc<Self> {
+	pub fn new(
+		actor_id: Uuid,
+		generation: u32,
+		config: protocol::ActorConfig,
+		metadata: protocol::ActorMetadata,
+	) -> Arc<Self> {
 		Arc::new(Actor {
 			actor_id,
 			generation,
 			config,
+			metadata,
 
 			runner: Mutex::new(None),
 			exited: Mutex::new(false),
@@ -50,12 +57,14 @@ impl Actor {
 		actor_id: Uuid,
 		generation: u32,
 		config: protocol::ActorConfig,
+		metadata: protocol::ActorMetadata,
 		runner: runner::Handle,
 	) -> Arc<Self> {
 		Arc::new(Actor {
 			actor_id,
 			generation,
 			config,
+			metadata,
 
 			runner: Mutex::new(Some(runner)),
 			exited: Mutex::new(false),
@@ -209,6 +218,10 @@ impl Actor {
 				.to_string(),
 			),
 			("ACTOR_ID", self.actor_id.to_string()),
+			(
+				"ENVIRONMENT_ID",
+				self.metadata.environment.env_id.to_string(),
+			),
 		];
 		if let Some(vector) = &ctx.config().vector {
 			runner_env.push(("VECTOR_SOCKET_ADDR", vector.address.to_string()));

@@ -190,10 +190,11 @@
           "driver": "redis"
         },
         "tunnel": {
-          "public_host": "127.0.0.1:8003"
+          "public_host": "127.0.0.1:6423"
         },
         "ui": {
           "enable": null,
+          "proxy_origin": null,
           "public_origin": null,
           "public_origin_regex": null
         },
@@ -1671,7 +1672,7 @@
         },
         "tunnel": {
           "default": {
-            "public_host": "127.0.0.1:8003"
+            "public_host": "127.0.0.1:6423"
           },
           "allOf": [
             {
@@ -1682,6 +1683,7 @@
         "ui": {
           "default": {
             "enable": null,
+            "proxy_origin": null,
             "public_origin": null,
             "public_origin_regex": null
           },
@@ -1926,6 +1928,11 @@
         "enable": {
           "description": "Enables serving the UI automatically.\n\nIf disabled, the UI can be hosted separately.",
           "type": "boolean"
+        },
+        "proxy_origin": {
+          "description": "Origin to proxy UI requests to. This should be the server serving the actula files fro the frontend.\n\nThis is frequently either Vite for a development setup or Nginx for a simple setup.",
+          "type": "string",
+          "format": "uri"
         },
         "public_origin": {
           "description": "The origin URL for the UI.",

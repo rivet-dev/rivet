@@ -4,6 +4,7 @@ use crate::types::LogsStreamType;
 
 #[derive(Debug)]
 pub struct Input {
+	pub env_id: Uuid,
 	pub actor_ids: Vec<Uuid>,
 	pub stream_types: Vec<LogsStreamType>,
 	pub count: i64,
@@ -92,26 +93,13 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 			ts,
 			message,
 			stream_type,
-			actor_id_str
-		FROM (
-			SELECT
-				ts,
-				message,
-				stream_type,
-				toString(actor_id) as actor_id_str
-			FROM
-				db_pegboard_actor_log.actor_logs
-			UNION ALL
-			SELECT
-				ts,
-				message,
-				stream_type,
-				actor_id as actor_id_str
-			FROM
-				db_pegboard_actor_log.actor_logs2
-		)
+			actor_id as actor_id_str
+		FROM
+			db_pegboard_actor_log.actor_logs3
 		WHERE
-			actor_id_str IN ?
+			namespace = ?
+			AND env_id = ?
+			AND actor_id_str IN ?
 			AND stream_type IN ?
 			-- Apply timestamp filtering based on query type
 			AND (
@@ -152,6 +140,8 @@ pub async fn pegboard_actor_log_read(ctx: &OperationCtx, input: &Input) -> Globa
 	// Build query with all parameters and safety restrictions
 	let query_builder = clickhouse
 		.query(&query)
+		.bind(&ctx.config().server()?.rivet.namespace)
+		.bind(input.env_id)
 		.bind(&actor_id_strings)
 		.bind(stream_type_values)
 		// Query type parameters

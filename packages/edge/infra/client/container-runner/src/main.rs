@@ -2,6 +2,7 @@ use std::{fs, path::Path, sync::mpsc, time::Duration};
 
 use anyhow::*;
 use utils::var;
+use uuid::Uuid;
 
 mod container;
 mod log_shipper;
@@ -36,6 +37,7 @@ fn main() -> Result<()> {
 		.transpose()
 		.context("failed to parse vector socket addr")?;
 	let actor_id = var("ACTOR_ID")?;
+	let env_id = Uuid::parse_str(&var("ENVIRONMENT_ID")?)?;
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
@@ -48,6 +50,7 @@ fn main() -> Result<()> {
 			msg_rx,
 			vector_socket_addr,
 			actor_id,
+			env_id,
 		};
 		let log_shipper_thread = log_shipper.spawn();
 		(Some(msg_tx), Some(log_shipper_thread))

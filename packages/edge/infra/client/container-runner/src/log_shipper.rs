@@ -3,6 +3,7 @@ use std::{io::Write, net::TcpStream, sync::mpsc, thread::JoinHandle};
 use anyhow::*;
 use serde::Serialize;
 use serde_json;
+use uuid::Uuid;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
@@ -37,6 +38,8 @@ pub struct LogShipper {
 	pub vector_socket_addr: String,
 
 	pub actor_id: String,
+
+	pub env_id: Uuid,
 }
 
 impl LogShipper {
@@ -91,7 +94,7 @@ impl LogShipper {
 		while let Result::Ok(message) = self.msg_rx.recv() {
 			let vector_message = VectorMessage::Actors {
 				actor_id: self.actor_id.as_str(),
-				task: "main", // Backwards compatibility with logs
+				env_id: self.env_id,
 				stream_type: message.stream_type as u8,
 				ts: message.ts,
 				message: message.message.as_str(),
@@ -114,7 +117,7 @@ enum VectorMessage<'a> {
 	#[serde(rename = "actors")]
 	Actors {
 		actor_id: &'a str,
-		task: &'a str,
+		env_id: Uuid,
 		stream_type: u8,
 		ts: u64,
 		message: &'a str,

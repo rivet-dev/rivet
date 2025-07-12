@@ -96,6 +96,7 @@ pub async fn get_logs(
 			// frequently and should not return a significant amount of logs.
 			let logs_res = ctx
 				.op(pegboard::ops::actor::log::read::Input {
+					env_id,
 					actor_ids: actor_ids_clone.clone(),
 					stream_types: stream_types_clone.clone(),
 					count: 64,
@@ -136,6 +137,7 @@ pub async fn get_logs(
 		// Read most recent logs
 
 		ctx.op(pegboard::ops::actor::log::read::Input {
+			env_id,
 			actor_ids: actor_ids.clone(),
 			stream_types: stream_types.clone(),
 			count: 256,

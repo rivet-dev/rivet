@@ -111,7 +111,7 @@ sinks:
     compression: gzip
     database: db_pegboard_actor_log
     endpoint: http://clickhouse:8123
-    table: actor_logs2
+    table: actor_logs3
     auth:
       strategy: basic
       user: vector

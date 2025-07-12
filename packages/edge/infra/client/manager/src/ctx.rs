@@ -421,6 +421,8 @@ impl Ctx {
 				generation,
 				config,
 			} => {
+				let metadata = config.metadata.deserialize()?;
+
 				let mut actors = self.actors.write().await;
 
 				if actors.contains_key(&(actor_id, generation)) {
@@ -430,7 +432,7 @@ impl Ctx {
 						"actor with this actor id + generation already exists, ignoring start command",
 					);
 				} else {
-					let actor = Actor::new(actor_id, generation, *config);
+					let actor = Actor::new(actor_id, generation, *config, metadata);
 
 					// Insert actor
 					actors.insert((actor_id, generation), actor);
@@ -718,6 +720,7 @@ impl Ctx {
 
 			let config = serde_json::from_slice::<protocol::ActorConfig>(&row.config)?;
 			let generation = row.generation.try_into()?;
+			let metadata = config.metadata.deserialize()?;
 
 			match &isolate_runner {
 				Some(isolate_runner) if pid == isolate_runner.pid().as_raw() => {}
@@ -736,7 +739,7 @@ impl Ctx {
 			}
 
 			// Clean up actor. We run `cleanup_setup` instead of `cleanup` because `cleanup` publishes events.
-			let actor = Actor::new(row.actor_id, generation, config);
+			let actor = Actor::new(row.actor_id, generation, config, metadata);
 			actor.cleanup_setup(self).await;
 		}
 
@@ -878,6 +881,7 @@ impl Ctx {
 
 			let config = serde_json::from_slice::<protocol::ActorConfig>(&row.config)?;
 			let generation = row.generation.try_into()?;
+			let metadata = config.metadata.deserialize()?;
 
 			let runner = match &isolate_runner {
 				// We have to clone the existing isolate runner handle instead of creating a new one so it
@@ -901,7 +905,7 @@ impl Ctx {
 				},
 			};
 
-			let actor = Actor::with_runner(row.actor_id, generation, config, runner);
+			let actor = Actor::with_runner(row.actor_id, generation, config, metadata, runner);
 			let actor = actors_guard
 				.entry((row.actor_id, generation))
 				.or_insert(actor);
