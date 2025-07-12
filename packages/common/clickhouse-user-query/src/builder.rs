@@ -3,12 +3,13 @@ use clickhouse::sql::Identifier;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, UserQueryError};
-use crate::query::QueryExpr;
+use crate::query::{KeyPath, QueryExpr};
 use crate::schema::{PropertyType, Schema};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserDefinedQueryBuilder {
 	where_clause: String,
+	group_by_clause: Option<String>,
 	bind_values: Vec<BindValue>,
 }
 
@@ -17,7 +18,6 @@ enum BindValue {
 	Bool(bool),
 	String(String),
 	Number(f64),
-	ArrayString(Vec<String>),
 }
 
 impl UserDefinedQueryBuilder {
@@ -31,6 +31,33 @@ impl UserDefinedQueryBuilder {
 
 		Ok(Self {
 			where_clause,
+			group_by_clause: None,
+			bind_values: builder.bind_values,
+		})
+	}
+
+	pub fn new_with_group_by(
+		schema: &Schema,
+		expr: &QueryExpr,
+		group_by: Option<&KeyPath>,
+	) -> Result<Self> {
+		let mut builder = QueryBuilder::new(schema);
+		let where_clause = builder.build_where_clause(expr)?;
+
+		if where_clause.trim().is_empty() {
+			return Err(UserQueryError::EmptyQuery);
+		}
+
+		let group_by_clause = if let Some(key_path) = group_by {
+			let validated_column = builder.validate_group_by_key_path(key_path)?;
+			Some(validated_column)
+		} else {
+			None
+		};
+
+		Ok(Self {
+			where_clause,
+			group_by_clause,
 			bind_values: builder.bind_values,
 		})
 	}
@@ -41,7 +68,6 @@ impl UserDefinedQueryBuilder {
 				BindValue::Bool(v) => query.bind(*v),
 				BindValue::String(v) => query.bind(v),
 				BindValue::Number(v) => query.bind(*v),
-				BindValue::ArrayString(v) => query.bind(v),
 			};
 		}
 		query
@@ -49,6 +75,10 @@ impl UserDefinedQueryBuilder {
 
 	pub fn where_expr(&self) -> &str {
 		&self.where_clause
+	}
+
+	pub fn group_by_expr(&self) -> Option<&str> {
+		self.group_by_clause.as_deref()
 	}
 }
 
@@ -85,135 +115,208 @@ impl<'a> QueryBuilder<'a> {
 			}
 			QueryExpr::BoolEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Bool)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Bool)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Bool(*value));
 				Ok(format!("{} = ?", column))
 			}
 			QueryExpr::BoolNotEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Bool)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Bool)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Bool(*value));
 				Ok(format!("{} != ?", column))
 			}
 			QueryExpr::StringEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
+				case_sensitive,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::String)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::String(value.clone()));
-				Ok(format!("{} = ?", column))
+				if *case_sensitive {
+					Ok(format!("{} = ?", column))
+				} else {
+					Ok(format!("LOWER({}) = LOWER(?)", column))
+				}
 			}
 			QueryExpr::StringNotEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
+				case_sensitive,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::String)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::String(value.clone()));
-				Ok(format!("{} != ?", column))
+				if *case_sensitive {
+					Ok(format!("{} != ?", column))
+				} else {
+					Ok(format!("LOWER({}) != LOWER(?)", column))
+				}
 			}
-			QueryExpr::ArrayContains {
+			QueryExpr::StringIn {
 				property,
-				subproperty,
+				map_key,
 				values,
+				case_sensitive,
 			} => {
 				if values.is_empty() {
-					return Err(UserQueryError::EmptyArrayValues(
-						"ArrayContains".to_string(),
-					));
+					return Err(UserQueryError::EmptyArrayValues("StringIn".to_string()));
 				}
-				self.validate_property_access(property, subproperty, &PropertyType::ArrayString)?;
-				let column = self.build_column_reference(property, subproperty)?;
-				self.bind_values
-					.push(BindValue::ArrayString(values.clone()));
-				Ok(format!("hasAny({}, ?)", column))
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
+				let placeholders = vec!["?"; values.len()].join(", ");
+				for value in values {
+					self.bind_values.push(BindValue::String(value.clone()));
+				}
+				if *case_sensitive {
+					Ok(format!("{} IN ({})", column, placeholders))
+				} else {
+					let lower_placeholders = vec!["LOWER(?)"; values.len()].join(", ");
+					Ok(format!("LOWER({}) IN ({})", column, lower_placeholders))
+				}
 			}
-			QueryExpr::ArrayDoesNotContain {
+			QueryExpr::StringNotIn {
 				property,
-				subproperty,
+				map_key,
 				values,
+				case_sensitive,
 			} => {
 				if values.is_empty() {
-					return Err(UserQueryError::EmptyArrayValues(
-						"ArrayDoesNotContain".to_string(),
-					));
+					return Err(UserQueryError::EmptyArrayValues("StringNotIn".to_string()));
 				}
-				self.validate_property_access(property, subproperty, &PropertyType::ArrayString)?;
-				let column = self.build_column_reference(property, subproperty)?;
-				self.bind_values
-					.push(BindValue::ArrayString(values.clone()));
-				Ok(format!("NOT hasAny({}, ?)", column))
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
+				let placeholders = vec!["?"; values.len()].join(", ");
+				for value in values {
+					self.bind_values.push(BindValue::String(value.clone()));
+				}
+				if *case_sensitive {
+					Ok(format!("{} NOT IN ({})", column, placeholders))
+				} else {
+					let lower_placeholders = vec!["LOWER(?)"; values.len()].join(", ");
+					Ok(format!("LOWER({}) NOT IN ({})", column, lower_placeholders))
+				}
 			}
 			QueryExpr::NumberEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} = ?", column))
 			}
 			QueryExpr::NumberNotEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} != ?", column))
 			}
+			QueryExpr::NumberIn {
+				property,
+				map_key,
+				values,
+			} => {
+				if values.is_empty() {
+					return Err(UserQueryError::EmptyArrayValues("NumberIn".to_string()));
+				}
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
+				let placeholders = vec!["?"; values.len()].join(", ");
+				for value in values {
+					self.bind_values.push(BindValue::Number(*value));
+				}
+				Ok(format!("{} IN ({})", column, placeholders))
+			}
+			QueryExpr::NumberNotIn {
+				property,
+				map_key,
+				values,
+			} => {
+				if values.is_empty() {
+					return Err(UserQueryError::EmptyArrayValues("NumberNotIn".to_string()));
+				}
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
+				let placeholders = vec!["?"; values.len()].join(", ");
+				for value in values {
+					self.bind_values.push(BindValue::Number(*value));
+				}
+				Ok(format!("{} NOT IN ({})", column, placeholders))
+			}
 			QueryExpr::NumberLess {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} < ?", column))
 			}
 			QueryExpr::NumberLessOrEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} <= ?", column))
 			}
 			QueryExpr::NumberGreater {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} > ?", column))
 			}
 			QueryExpr::NumberGreaterOrEqual {
 				property,
-				subproperty,
+				map_key,
 				value,
 			} => {
-				self.validate_property_access(property, subproperty, &PropertyType::Number)?;
-				let column = self.build_column_reference(property, subproperty)?;
+				self.validate_property_access(property, map_key, &PropertyType::Number)?;
+				let column = self.build_column_reference(property, map_key)?;
 				self.bind_values.push(BindValue::Number(*value));
 				Ok(format!("{} >= ?", column))
+			}
+			QueryExpr::StringMatchRegex {
+				property,
+				map_key,
+				pattern,
+				case_sensitive,
+			} => {
+				self.validate_property_access(property, map_key, &PropertyType::String)?;
+				let column = self.build_column_reference(property, map_key)?;
+				if *case_sensitive {
+					self.bind_values.push(BindValue::String(pattern.clone()));
+					Ok(format!("match({}, ?)", column))
+				} else {
+					// For case-insensitive regex, prepend (?i) to the pattern
+					let case_insensitive_pattern = format!("(?i){}", pattern);
+					self.bind_values
+						.push(BindValue::String(case_insensitive_pattern));
+					Ok(format!("match({}, ?)", column))
+				}
 			}
 		}
 	}
@@ -221,7 +324,7 @@ impl<'a> QueryBuilder<'a> {
 	fn validate_property_access(
 		&self,
 		property: &str,
-		subproperty: &Option<String>,
+		map_key: &Option<String>,
 		expected_type: &PropertyType,
 	) -> Result<()> {
 		let prop = self
@@ -229,10 +332,8 @@ impl<'a> QueryBuilder<'a> {
 			.get_property(property)
 			.ok_or_else(|| UserQueryError::PropertyNotFound(property.to_string()))?;
 
-		if subproperty.is_some() && !prop.supports_subproperties {
-			return Err(UserQueryError::SubpropertiesNotSupported(
-				property.to_string(),
-			));
+		if map_key.is_some() && !prop.is_map {
+			return Err(UserQueryError::MapKeysNotSupported(property.to_string()));
 		}
 
 		if &prop.ty != expected_type {
@@ -246,51 +347,78 @@ impl<'a> QueryBuilder<'a> {
 		Ok(())
 	}
 
-	fn build_column_reference(
-		&self,
-		property: &str,
-		subproperty: &Option<String>,
-	) -> Result<String> {
+	fn build_column_reference(&self, property: &str, map_key: &Option<String>) -> Result<String> {
 		let property_ident = Identifier(property);
 
-		match subproperty {
-			Some(subprop) => {
-				// Validate subproperty name for safe charset
-				Self::validate_subproperty_name(subprop)?;
+		match map_key {
+			Some(key) => {
+				// Validate map_key name for safe charset
+				Self::validate_map_key_name(key)?;
 
 				// For ClickHouse Map access, use string literal syntax
 				Ok(format!(
 					"{}[{}]",
 					property_ident.0,
-					format!("'{}'", subprop.replace("'", "\\'"))
+					format!("'{}'", key.replace("'", "\\'"))
 				))
 			}
 			None => Ok(property_ident.0.to_string()),
 		}
 	}
 
-	/// Validates that a subproperty name only contains safe characters for database queries
-	fn validate_subproperty_name(name: &str) -> Result<()> {
+	/// Validates that a map_key name only contains safe characters for database queries
+	fn validate_map_key_name(name: &str) -> Result<()> {
 		// Check if empty
 		if name.is_empty() {
-			return Err(UserQueryError::InvalidSubpropertyName(name.to_string()));
+			return Err(UserQueryError::InvalidMapKeyName(name.to_string()));
 		}
 
 		// Check length (reasonable limit for database identifiers)
 		if name.len() > 64 {
-			return Err(UserQueryError::InvalidSubpropertyName(name.to_string()));
+			return Err(UserQueryError::InvalidMapKeyName(name.to_string()));
 		}
 
 		// Only allow alphanumeric characters and underscores (SQL-safe)
 		if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-			return Err(UserQueryError::InvalidSubpropertyName(name.to_string()));
+			return Err(UserQueryError::InvalidMapKeyName(name.to_string()));
 		}
 
 		// Must not start with a number (SQL identifier rule)
 		if name.chars().next().unwrap().is_numeric() {
-			return Err(UserQueryError::InvalidSubpropertyName(name.to_string()));
+			return Err(UserQueryError::InvalidMapKeyName(name.to_string()));
 		}
 
 		Ok(())
+	}
+
+	fn validate_group_by_key_path(&self, key_path: &KeyPath) -> Result<String> {
+		let prop = self
+			.schema
+			.get_property(&key_path.property)
+			.ok_or_else(|| UserQueryError::PropertyNotFound(key_path.property.to_string()))?;
+
+		// Check if property can be grouped by
+		if !prop.can_group_by {
+			return Err(UserQueryError::PropertyCannotBeGroupedBy(
+				key_path.property.to_string(),
+			));
+		}
+
+		// If there's a map key, the property must be a map
+		if key_path.map_key.is_some() && !prop.is_map {
+			return Err(UserQueryError::MapKeysNotSupported(
+				key_path.property.to_string(),
+			));
+		}
+
+		// If the property is a map but no key is provided, it cannot be used in GROUP BY
+		if prop.is_map && key_path.map_key.is_none() {
+			return Err(UserQueryError::MapPropertyCannotBeGroupedBy(
+				key_path.property.to_string(),
+			));
+		}
+
+		// Build the column reference for GROUP BY
+		self.build_column_reference(&key_path.property, &key_path.map_key)
 	}
 }

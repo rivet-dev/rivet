@@ -1173,3 +1173,262 @@ async fn resolve_dc(
 		Ok(dc.name_id.clone())
 	}
 }
+
+// MARK: GET /actors/usage
+#[derive(Debug, Clone, Deserialize)]
+pub struct UsageQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
+	start: i64,               // Start timestamp in milliseconds
+	end: i64,                 // End timestamp in milliseconds
+	interval: i64,            // Time bucket interval in milliseconds
+	group_by: Option<String>, // JSON-encoded KeyPath
+	query_json: Option<String>,
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn usage(
+	ctx: Ctx<Auth>,
+	_watch_index: WatchIndexQuery,
+	query: UsageQuery,
+) -> GlobalResult<models::ActorsGetActorUsageResponse> {
+	let CheckOutput { game_id, .. } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: false,
+				opt_auth: false,
+			},
+		)
+		.await?;
+
+	// Parse user query if provided
+	let user_query_expr = if let Some(query_json) = &query.query_json {
+		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&query_json) {
+			Ok(expr) => Some(expr),
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = e.to_string());
+			}
+		}
+	} else {
+		None
+	};
+
+	// Parse group by key path if provided
+	let group_by = if let Some(group_by_json) = &query.group_by {
+		match serde_json::from_str::<clickhouse_user_query::KeyPath>(&group_by_json) {
+			Ok(key_path) => Some(key_path),
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = format!("Invalid group_by: {}", e));
+			}
+		}
+	} else {
+		None
+	};
+
+	let usage_res = ctx
+		.op(pegboard::ops::actor::usage::get::Input {
+			env_id: game_id,
+			start_ms: query.start,
+			end_ms: query.end,
+			interval_ms: query.interval,
+			group_by,
+			user_query_expr,
+		})
+		.await?;
+
+	Ok(models::ActorsGetActorUsageResponse {
+		metric_names: usage_res.metric_names,
+		metric_attributes: usage_res
+			.metric_attributes
+			.into_iter()
+			.map(|attrs| attrs.into_iter().collect::<HashMap<_, _>>())
+			.collect(),
+		metric_types: usage_res.metric_types,
+		metric_values: usage_res.metric_values,
+	})
+}
+
+// MARK: GET /actors/query
+#[derive(Debug, Clone, Deserialize)]
+pub struct QueryQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
+	query_json: String,
+	cursor: Option<String>,
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn query(
+	ctx: Ctx<Auth>,
+	_watch_index: WatchIndexQuery,
+	query: QueryQuery,
+) -> GlobalResult<models::ActorsQueryActorsResponse> {
+	let CheckOutput { game_id, .. } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: false,
+				opt_auth: false,
+			},
+		)
+		.await?;
+
+	// Parse user query
+	let user_query_expr =
+		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&query.query_json) {
+			Ok(expr) => expr,
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = e.to_string());
+			}
+		};
+
+	// Parse cursor if provided
+	let cursor = if let Some(cursor_str) = &query.cursor {
+		match serde_json::from_str::<pegboard::ops::actor::query::QueryCursor>(cursor_str) {
+			Ok(c) => Some(c),
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = format!("Invalid cursor: {}", e));
+			}
+		}
+	} else {
+		None
+	};
+
+	let query_res = ctx
+		.op(pegboard::ops::actor::query::Input {
+			env_id: game_id,
+			user_query_expr,
+			cursor,
+			limit: 32, // Same limit as list_actors
+		})
+		.await?;
+
+	// Resolve datacenter names
+	let clusters_res = ctx
+		.op(cluster::ops::get_for_game::Input {
+			game_ids: vec![game_id],
+		})
+		.await?;
+	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
+
+	let datacenter_ids = query_res
+		.actors
+		.iter()
+		.map(|a| a.datacenter_id)
+		.collect::<HashSet<_>>()
+		.into_iter()
+		.collect::<Vec<_>>();
+
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input { datacenter_ids })
+		.await?;
+
+	let datacenter_map = dc_res
+		.datacenters
+		.into_iter()
+		.map(|dc| (dc.datacenter_id, dc))
+		.collect::<HashMap<_, _>>();
+
+	// Convert actors to API models
+	let actors = query_res
+		.actors
+		.into_iter()
+		.map(|actor| {
+			// Get datacenter name
+			let dc = datacenter_map.get(&actor.datacenter_id);
+			let region = dc.map(|d| d.name_id.clone()).unwrap_or_default();
+
+			// Convert timestamp to ISO string
+			let created_at =
+				chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(actor.created_at)
+					.to_rfc3339();
+			let started_at = actor
+				.started_at
+				.map(|ts| chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(ts).to_rfc3339());
+			let connectable_at = actor
+				.connectable_at
+				.map(|ts| chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(ts).to_rfc3339());
+			let destroyed_at = actor
+				.destroyed_at
+				.map(|ts| chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(ts).to_rfc3339());
+
+			// Convert network mode
+			let network_mode = match actor.network_mode {
+				0 => models::ActorsNetworkMode::Bridge,
+				1 => models::ActorsNetworkMode::Host,
+				_ => models::ActorsNetworkMode::Bridge,
+			};
+
+			// Convert network ports
+			let ports = actor
+				.network_ports
+				.into_iter()
+				.map(|(name, port)| {
+					// TODO: This needs more complete port conversion logic
+					(
+						name,
+						models::ActorsPort {
+							internal_port: Some(port.internal_port as i32),
+							protocol: models::ActorsPortProtocol::Http,
+							routing: Box::new(models::ActorsPortRouting {
+								guard: if port.routing_guard {
+									Some(json!({}))
+								} else {
+									None
+								},
+								host: if port.routing_host {
+									Some(json!({}))
+								} else {
+									None
+								},
+							}),
+							hostname: None,
+							port: None,
+							path: None,
+							url: None,
+						},
+					)
+				})
+				.collect();
+
+			models::ActorsActor {
+				id: actor.actor_id,
+				region,
+				created_at,
+				started_at,
+				destroyed_at,
+				lifecycle: Box::new(models::ActorsLifecycle {
+					kill_timeout: Some(actor.kill_timeout),
+					durable: Some(actor.durable),
+				}),
+				network: Box::new(models::ActorsNetwork {
+					mode: network_mode,
+					ports,
+				}),
+				resources: Box::new(models::ActorsResources {
+					cpu: actor.selected_cpu_millicores as i32,
+					memory: actor.selected_memory_mib as i32,
+				}),
+				runtime: Box::new(models::ActorsRuntime {
+					build: actor.build_id,
+					arguments: None,
+					environment: None,
+				}),
+				tags: Some(actor.tags.into_iter().collect()),
+			}
+		})
+		.collect();
+
+	// Serialize cursor if present
+	let cursor_str = query_res.cursor.map(|c| serde_json::to_string(&c).unwrap());
+
+	Ok(models::ActorsQueryActorsResponse {
+		actors,
+		pagination: Box::new(models::Pagination { cursor: cursor_str }),
+	})
+}

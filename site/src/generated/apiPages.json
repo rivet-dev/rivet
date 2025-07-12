@@ -19,9 +19,24 @@
           "sortingKey": "/actors/logs get"
         },
         {
+          "title": "actors.logs.export",
+          "href": "/docs/api/actors/logs/export",
+          "sortingKey": "/actors/logs/export post"
+        },
+        {
+          "title": "actors.query",
+          "href": "/docs/api/actors/query",
+          "sortingKey": "/actors/query get"
+        },
+        {
           "title": "actors.upgradeAll",
           "href": "/docs/api/actors/upgrade-all",
           "sortingKey": "/actors/upgrade post"
+        },
+        {
+          "title": "actors.usage",
+          "href": "/docs/api/actors/usage",
+          "sortingKey": "/actors/usage get"
         },
         {
           "title": "actors.destroy",
@@ -97,6 +112,11 @@
           "title": "routes.list",
           "href": "/docs/api/routes/list",
           "sortingKey": "/routes get"
+        },
+        {
+          "title": "routes.history",
+          "href": "/docs/api/routes/history",
+          "sortingKey": "/routes/history get"
         },
         {
           "title": "routes.delete",

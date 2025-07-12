@@ -52,6 +52,15 @@ type GetActorsRequestQuery struct {
 	Cursor           *string       `json:"-"`
 }
 
+type QueryActorsRequestQuery struct {
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	// JSON-encoded query expression for filtering actors
+	QueryJson string `json:"-"`
+	// Cursor for pagination
+	Cursor *string `json:"-"`
+}
+
 type Actor struct {
 	Id          uuid.UUID      `json:"id"`
 	Region      string         `json:"region"`
@@ -569,4 +578,19 @@ func (u *UpgradeAllActorsRequestQuery) UnmarshalJSON(data []byte) error {
 
 func (u *UpgradeAllActorsRequestQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.Body)
+}
+
+type GetActorUsageRequestQuery struct {
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	// Start timestamp in milliseconds
+	Start int `json:"-"`
+	// End timestamp in milliseconds
+	End int `json:"-"`
+	// Time bucket interval in milliseconds
+	Interval int `json:"-"`
+	// JSON-encoded KeyPath for grouping results (e.g. {"property":"datacenter_id"} or {"property":"tags","map_key":"region"})
+	GroupBy *string `json:"-"`
+	// JSON-encoded query expression for filtering actors
+	QueryJson *string `json:"-"`
 }

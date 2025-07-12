@@ -27,6 +27,13 @@ Actor failed to create.
 The provided list of actor IDs is not in a valid JSON format. Please provide a valid JSON array of UUIDs.
 
 
+## Invalid Query Expression
+
+<Summary>{`ACTOR_LOGS_INVALID_QUERY_EXPR`}</Summary>
+
+The provided query expression is not in a valid format. Please provide a valid JSON-encoded query expression.
+
+
 ## No Actor Ids
 
 <Summary>{`ACTOR_LOGS_NO_ACTOR_IDS`}</Summary>
@@ -493,6 +500,54 @@ The requested project could not be found.
 
 The requested region was not found.
 
+
+## Field Not Groupable
+
+<Summary>{`REQUEST_QUERY_FIELD_NOT_GROUPABLE`}</Summary>
+
+The specified field exists but cannot be used in GROUP BY operations.
+
+## Causes
+
+- Field is not marked as groupable in the schema
+- Field type doesn't support grouping
+- Using a computed or derived field that can't be grouped
+
+## Field Not Map
+
+<Summary>{`REQUEST_QUERY_FIELD_NOT_MAP`}</Summary>
+
+The specified field is not a map type but a map key was provided.
+
+## Causes
+
+- Trying to access a map key on a non-map field
+- Field type mismatch in query
+- Incorrect field path syntax
+
+## Invalid Group By Field
+
+<Summary>{`REQUEST_QUERY_INVALID_GROUP_BY_FIELD`}</Summary>
+
+The specified field does not exist in the schema and cannot be used for grouping.
+
+## Causes
+
+- Field name is misspelled
+- Field doesn't exist in the schema
+- Using a field that's not available for grouping
+
+## Map Requires Key
+
+<Summary>{`REQUEST_QUERY_MAP_REQUIRES_KEY`}</Summary>
+
+Map properties require a map key to be specified when used in GROUP BY.
+
+## Causes
+
+- Using a map field in GROUP BY without specifying a key
+- Missing map key in the KeyPath structure
+- Attempting to group by the entire map instead of a specific key
 
 ## Hostname Already Exists
 

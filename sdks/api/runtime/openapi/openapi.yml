@@ -449,6 +449,177 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ActorsUpgradeAllActorsRequest'
+  /actors/usage:
+    get:
+      description: >-
+        Returns time series data for actor usage metrics. Allows filtering and
+        grouping by various actor properties.
+      operationId: actors_usage
+      tags:
+        - Actors
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: start
+          in: query
+          description: Start timestamp in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: end
+          in: query
+          description: End timestamp in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: interval
+          in: query
+          description: Time bucket interval in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: group_by
+          in: query
+          description: >-
+            JSON-encoded KeyPath for grouping results (e.g.
+            {"property":"datacenter_id"} or
+            {"property":"tags","map_key":"region"})
+          required: false
+          schema:
+            type: string
+        - name: query_json
+          in: query
+          description: JSON-encoded query expression for filtering actors
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorsGetActorUsageResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /actors/query:
+    get:
+      description: >-
+        Queries actors using a JSON-encoded query expression. Supports
+        pagination with cursor-based navigation.
+      operationId: actors_query
+      tags:
+        - Actors
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: query_json
+          in: query
+          description: JSON-encoded query expression for filtering actors
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: Cursor for pagination
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorsQueryActorsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /builds/{build}:
     get:
       description: Get a build.
@@ -1114,6 +1285,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /routes/history:
+    get:
+      description: >-
+        Returns time series data for HTTP requests routed to actors. Allows
+        filtering and grouping by various request properties.
+      operationId: routes_history
+      tags:
+        - Routes
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: start
+          in: query
+          description: Start timestamp in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: end
+          in: query
+          description: End timestamp in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: interval
+          in: query
+          description: Time bucket interval in milliseconds
+          required: true
+          schema:
+            type: integer
+        - name: query_json
+          in: query
+          description: JSON-encoded query expression for filtering requests
+          required: false
+          schema:
+            type: string
+        - name: group_by
+          in: query
+          description: >-
+            JSON-encoded KeyPath for grouping results (e.g.
+            {"property":"client_request_host"} or
+            {"property":"tags","map_key":"version"})
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutesHistoryResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /actors/logs:
     get:
       description: Returns the logs for a given actor.
@@ -1131,31 +1398,12 @@ paths:
           required: false
           schema:
             type: string
-        - name: stream
+        - name: query_json
           in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/ActorsQueryLogStream'
-        - name: actor_ids_json
-          in: query
+          description: JSON-encoded query expression for filtering logs
           required: true
           schema:
             type: string
-        - name: search_text
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: search_case_sensitive
-          in: query
-          required: false
-          schema:
-            type: boolean
-        - name: search_enable_regex
-          in: query
-          required: false
-          schema:
-            type: boolean
         - name: watch_index
           in: query
           description: A query parameter denoting the requests watch index.
@@ -1206,6 +1454,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /actors/logs/export:
+    post:
+      description: >-
+        Exports logs for the given actors to an S3 bucket and returns a
+        presigned URL to download.
+      operationId: actors_logs_export
+      tags:
+        - ActorsLogs
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorsExportActorLogsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  type: string
+                environment:
+                  type: string
+                query_json:
+                  type: string
+                  description: JSON-encoded query expression for filtering logs
+              required:
+                - query_json
 components:
   schemas:
     ActorsGetActorResponse:
@@ -1320,6 +1637,48 @@ components:
           items:
             $ref: '#/components/schemas/ActorsActor'
           description: A list of actors for the project associated with the token.
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+      required:
+        - actors
+        - pagination
+    ActorsGetActorUsageResponse:
+      type: object
+      properties:
+        metric_names:
+          type: array
+          items:
+            type: string
+        metric_attributes:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+        metric_types:
+          type: array
+          items:
+            type: string
+        metric_values:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+      required:
+        - metric_names
+        - metric_attributes
+        - metric_types
+        - metric_values
+    ActorsQueryActorsResponse:
+      type: object
+      properties:
+        actors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActorsActor'
+          description: A list of actors matching the query
         pagination:
           $ref: '#/components/schemas/Pagination'
       required:
@@ -1450,6 +1809,35 @@ components:
     RoutesDeleteRouteResponse:
       type: object
       properties: {}
+    RoutesHistoryResponse:
+      type: object
+      properties:
+        metric_names:
+          type: array
+          items:
+            type: string
+        metric_attributes:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+        metric_types:
+          type: array
+          items:
+            type: string
+        metric_values:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+      required:
+        - metric_names
+        - metric_attributes
+        - metric_types
+        - metric_values
     ActorsActor:
       type: object
       properties:
@@ -1643,12 +2031,14 @@ components:
         - streams
         - actor_indices
         - watch
-    ActorsQueryLogStream:
-      type: string
-      enum:
-        - std_out
-        - std_err
-        - all
+    ActorsExportActorLogsResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Presigned URL to download the exported logs
+      required:
+        - url
     BuildsBuild:
       type: object
       properties:

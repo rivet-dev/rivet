@@ -11,3 +11,5 @@ export * from "./UpgradeActorResponse";
 export * from "./UpgradeAllActorsRequest";
 export * from "./UpgradeAllActorsResponse";
 export * from "./ListActorsResponse";
+export * from "./GetActorUsageResponse";
+export * from "./QueryActorsResponse";

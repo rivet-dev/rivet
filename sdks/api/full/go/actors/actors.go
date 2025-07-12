@@ -132,6 +132,38 @@ func (g *GetActorResponse) String() string {
 	return fmt.Sprintf("%#v", g)
 }
 
+type GetActorUsageResponse struct {
+	MetricNames      []string            `json:"metric_names,omitempty"`
+	MetricAttributes []map[string]string `json:"metric_attributes,omitempty"`
+	MetricTypes      []string            `json:"metric_types,omitempty"`
+	MetricValues     [][]float64         `json:"metric_values,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (g *GetActorUsageResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler GetActorUsageResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GetActorUsageResponse(value)
+	g._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GetActorUsageResponse) String() string {
+	if len(g._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
+}
+
 type ListActorsResponse struct {
 	// A list of actors for the project associated with the token.
 	Actors     []*Actor        `json:"actors,omitempty"`
@@ -161,6 +193,37 @@ func (l *ListActorsResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", l)
+}
+
+type QueryActorsResponse struct {
+	// A list of actors matching the query
+	Actors     []*Actor        `json:"actors,omitempty"`
+	Pagination *sdk.Pagination `json:"pagination,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (q *QueryActorsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler QueryActorsResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*q = QueryActorsResponse(value)
+	q._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (q *QueryActorsResponse) String() string {
+	if len(q._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(q._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(q); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", q)
 }
 
 type UpgradeActorRequest struct {

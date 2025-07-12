@@ -4,6 +4,7 @@ use rivet_operation::prelude::*;
 use route::{ops::delete, ops::get, ops::list_for_env, ops::upsert};
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::HashMap;
 use util::timestamp;
 
 use crate::auth::{Auth, CheckOpts, CheckOutput};
@@ -158,4 +159,84 @@ pub async fn delete(
 	.await?;
 
 	Ok(json!({}))
+}
+
+// MARK: GET /routes/history
+#[derive(Debug, Clone, Deserialize)]
+pub struct HistoryQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
+	start: i64,
+	end: i64,
+	interval: i64,
+	query_json: Option<String>,
+	group_by: Option<String>, // JSON-encoded KeyPath
+}
+
+pub async fn history(
+	ctx: Ctx<Auth>,
+	_watch_index: WatchIndexQuery,
+	query: HistoryQuery,
+) -> GlobalResult<models::RoutesHistoryResponse> {
+	let CheckOutput { .. } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
+
+	// Get server namespace
+	let namespace = ctx.config().server()?.rivet.namespace.clone();
+
+	// Parse user query if provided
+	let user_query_expr = if let Some(query_json) = &query.query_json {
+		match serde_json::from_str::<clickhouse_user_query::QueryExpr>(&query_json) {
+			Ok(expr) => Some(expr),
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = e.to_string());
+			}
+		}
+	} else {
+		None
+	};
+
+	// Parse group by key path if provided
+	let group_by = if let Some(group_by_json) = &query.group_by {
+		match serde_json::from_str::<clickhouse_user_query::KeyPath>(&group_by_json) {
+			Ok(key_path) => Some(key_path),
+			Err(e) => {
+				bail_with!(API_BAD_QUERY, error = format!("Invalid group_by: {}", e));
+			}
+		}
+	} else {
+		None
+	};
+
+	// Call the guard operation to get history data
+	let history_res = ctx
+		.op(core_guard::ops::routes_history::Input {
+			namespace,
+			user_query_expr,
+			group_by,
+			start_ms: query.start,
+			end_ms: query.end,
+			interval_ms: query.interval,
+		})
+		.await?;
+
+	Ok(models::RoutesHistoryResponse {
+		metric_names: history_res.metric_names,
+		metric_attributes: history_res
+			.metric_attributes
+			.into_iter()
+			.map(|attrs| attrs.into_iter().collect::<HashMap<_, _>>())
+			.collect(),
+		metric_types: history_res.metric_types,
+		metric_values: history_res.metric_values,
+	})
 }

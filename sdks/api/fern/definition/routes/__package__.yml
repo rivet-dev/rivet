@@ -49,6 +49,34 @@ service:
           environment: optional<string>
       response: DeleteRouteResponse
 
+    history:
+      path: /history
+      method: GET
+      docs: >-
+        Returns time series data for HTTP requests routed to actors.
+        Allows filtering and grouping by various request properties.
+      request:
+        name: HistoryQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+          start:
+            docs: Start timestamp in milliseconds
+            type: integer
+          end:
+            docs: End timestamp in milliseconds
+            type: integer
+          interval:
+            docs: Time bucket interval in milliseconds
+            type: integer
+          query_json:
+            docs: JSON-encoded query expression for filtering requests
+            type: optional<string>
+          group_by:
+            docs: JSON-encoded KeyPath for grouping results (e.g. {"property":"client_request_host"} or {"property":"tags","map_key":"version"})
+            type: optional<string>
+      response: HistoryResponse
+
 types:
   ListRoutesResponse:
     properties:
@@ -71,3 +99,10 @@ types:
       
   DeleteRouteResponse:
     properties: {}
+
+  HistoryResponse:
+    properties:
+      metric_names: list<string>
+      metric_attributes: list<map<string, string>>
+      metric_types: list<string>
+      metric_values: list<list<double>>

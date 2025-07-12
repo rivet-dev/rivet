@@ -67,6 +67,19 @@ pub enum ActorsListError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`actors_query`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ActorsQueryError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`actors_upgrade`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -84,6 +97,19 @@ pub enum ActorsUpgradeError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ActorsUpgradeAllError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`actors_usage`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ActorsUsageError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -264,6 +290,47 @@ pub async fn actors_list(configuration: &configuration::Configuration, project: 
     }
 }
 
+/// Queries actors using a JSON-encoded query expression. Supports pagination with cursor-based navigation.
+pub async fn actors_query(configuration: &configuration::Configuration, query_json: &str, project: Option<&str>, environment: Option<&str>, cursor: Option<&str>) -> Result<crate::models::ActorsQueryActorsResponse, Error<ActorsQueryError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/actors/query", local_var_configuration.base_path);
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_str) = project {
+        local_var_req_builder = local_var_req_builder.query(&[("project", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment {
+        local_var_req_builder = local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+    }
+    local_var_req_builder = local_var_req_builder.query(&[("query_json", &query_json.to_string())]);
+    if let Some(ref local_var_str) = cursor {
+        local_var_req_builder = local_var_req_builder.query(&[("cursor", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        serde_json::from_str(&local_var_content).map_err(Error::from)
+    } else {
+        let local_var_entity: Option<ActorsQueryError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
 /// Upgrades a dynamic actor.
 pub async fn actors_upgrade(configuration: &configuration::Configuration, actor: &str, actors_upgrade_actor_request: crate::models::ActorsUpgradeActorRequest, project: Option<&str>, environment: Option<&str>) -> Result<serde_json::Value, Error<ActorsUpgradeError>> {
     let local_var_configuration = configuration;
@@ -335,6 +402,52 @@ pub async fn actors_upgrade_all(configuration: &configuration::Configuration, ac
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
         let local_var_entity: Option<ActorsUpgradeAllError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
+/// Returns time series data for actor usage metrics. Allows filtering and grouping by various actor properties.
+pub async fn actors_usage(configuration: &configuration::Configuration, start: i32, end: i32, interval: i32, project: Option<&str>, environment: Option<&str>, group_by: Option<&str>, query_json: Option<&str>) -> Result<crate::models::ActorsGetActorUsageResponse, Error<ActorsUsageError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/actors/usage", local_var_configuration.base_path);
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_str) = project {
+        local_var_req_builder = local_var_req_builder.query(&[("project", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment {
+        local_var_req_builder = local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+    }
+    local_var_req_builder = local_var_req_builder.query(&[("start", &start.to_string())]);
+    local_var_req_builder = local_var_req_builder.query(&[("end", &end.to_string())]);
+    local_var_req_builder = local_var_req_builder.query(&[("interval", &interval.to_string())]);
+    if let Some(ref local_var_str) = group_by {
+        local_var_req_builder = local_var_req_builder.query(&[("group_by", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = query_json {
+        local_var_req_builder = local_var_req_builder.query(&[("query_json", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        serde_json::from_str(&local_var_content).map_err(Error::from)
+    } else {
+        let local_var_entity: Option<ActorsUsageError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

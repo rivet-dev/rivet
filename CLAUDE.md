@@ -1,2 +1,4 @@
 - Do not use cat, hexdump, perl, or sed. Always edit files directly.
 - If attempting to use Cargo, use `nix-shell --command 'cargo ...'`
+- Public API specs live in sdks/api/fern/
+- When modifying sdks/api/fern/, run ./scripts/fern/gen.sh to regenerate the related libraries

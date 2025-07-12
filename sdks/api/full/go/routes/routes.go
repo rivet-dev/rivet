@@ -35,6 +35,38 @@ func (d *DeleteRouteResponse) String() string {
 	return fmt.Sprintf("%#v", d)
 }
 
+type HistoryResponse struct {
+	MetricNames      []string            `json:"metric_names,omitempty"`
+	MetricAttributes []map[string]string `json:"metric_attributes,omitempty"`
+	MetricTypes      []string            `json:"metric_types,omitempty"`
+	MetricValues     [][]float64         `json:"metric_values,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (h *HistoryResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler HistoryResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*h = HistoryResponse(value)
+	h._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (h *HistoryResponse) String() string {
+	if len(h._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(h._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(h); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", h)
+}
+
 type ListRoutesResponse struct {
 	Routes []*Route `json:"routes,omitempty"`
 

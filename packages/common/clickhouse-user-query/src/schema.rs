@@ -20,18 +20,27 @@ impl Schema {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Property {
 	pub name: String,
-	pub supports_subproperties: bool,
+	pub is_map: bool,
+	/// The type of values in the property. For map properties, this is the type of the map values.
 	pub ty: PropertyType,
+	/// Whether this property can be used in GROUP BY clauses
+	pub can_group_by: bool,
 }
 
 impl Property {
-	pub fn new(name: String, supports_subproperties: bool, ty: PropertyType) -> Result<Self> {
+	pub fn new(name: String, is_map: bool, ty: PropertyType) -> Result<Self> {
 		validate_property_name(&name)?;
 		Ok(Self {
 			name,
-			supports_subproperties,
+			is_map,
 			ty,
+			can_group_by: false,
 		})
+	}
+
+	pub fn with_group_by(mut self, can_group_by: bool) -> Self {
+		self.can_group_by = can_group_by;
+		self
 	}
 }
 
@@ -40,7 +49,6 @@ pub enum PropertyType {
 	Bool,
 	String,
 	Number,
-	ArrayString,
 }
 
 impl PropertyType {
@@ -49,7 +57,6 @@ impl PropertyType {
 			PropertyType::Bool => "bool",
 			PropertyType::String => "string",
 			PropertyType::Number => "number",
-			PropertyType::ArrayString => "array[string]",
 		}
 	}
 }

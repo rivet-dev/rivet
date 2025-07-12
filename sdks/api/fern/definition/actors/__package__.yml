@@ -105,6 +105,53 @@ service:
         body: UpgradeAllActorsRequest
       response: UpgradeAllActorsResponse
 
+    usage:
+      path: /usage
+      method: GET
+      docs: >-
+        Returns time series data for actor usage metrics.
+        Allows filtering and grouping by various actor properties.
+      request:
+        name: GetActorUsageRequestQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+          start:
+            docs: Start timestamp in milliseconds
+            type: integer
+          end:
+            docs: End timestamp in milliseconds
+            type: integer
+          interval:
+            docs: Time bucket interval in milliseconds
+            type: integer
+          group_by:
+            docs: JSON-encoded KeyPath for grouping results (e.g. {"property":"datacenter_id"} or {"property":"tags","map_key":"region"})
+            type: optional<string>
+          query_json:
+            docs: JSON-encoded query expression for filtering actors
+            type: optional<string>
+      response: GetActorUsageResponse
+    
+    query:
+      path: /query
+      method: GET
+      docs: >-
+        Queries actors using a JSON-encoded query expression.
+        Supports pagination with cursor-based navigation.
+      request:
+        name: QueryActorsRequestQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+          query_json:
+            docs: JSON-encoded query expression for filtering actors
+            type: string
+          cursor:
+            docs: Cursor for pagination
+            type: optional<string>
+      response: QueryActorsResponse
+
 types:
   GetActorResponse:
     properties:
@@ -174,6 +221,20 @@ types:
     properties:
       actors:
         docs: A list of actors for the project associated with the token.
+        type: list<localCommons.Actor>
+      pagination: commons.Pagination
+
+  GetActorUsageResponse:
+    properties:
+      metric_names: list<string>
+      metric_attributes: list<map<string, string>>
+      metric_types: list<string>
+      metric_values: list<list<double>>
+
+  QueryActorsResponse:
+    properties:
+      actors:
+        docs: A list of actors matching the query
         type: list<localCommons.Actor>
       pagination: commons.Pagination
 

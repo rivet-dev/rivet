@@ -4,3 +4,4 @@ export * as logs from "./logs";
 export * from "./logs/types";
 export * as metrics from "./metrics";
 export * from "./metrics/types";
+export * from "./logs/client/requests";

@@ -2,11 +2,18 @@ use clickhouse_user_query::*;
 
 fn create_test_schema() -> Schema {
 	Schema::new(vec![
-		Property::new("prop_a".to_string(), false, PropertyType::String).unwrap(),
-		Property::new("prop_b".to_string(), true, PropertyType::String).unwrap(),
-		Property::new("bool_prop".to_string(), false, PropertyType::Bool).unwrap(),
-		Property::new("number_prop".to_string(), false, PropertyType::Number).unwrap(),
-		Property::new("array_prop".to_string(), false, PropertyType::ArrayString).unwrap(),
+		Property::new("prop_a".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("prop_b".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("bool_prop".to_string(), false, PropertyType::Bool)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("number_prop".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
 	])
 	.unwrap()
 }
@@ -16,8 +23,9 @@ fn test_simple_string_equal() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
 		property: "prop_a".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: "foo".to_string(),
+		case_sensitive: true,
 	};
 
 	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
@@ -25,12 +33,13 @@ fn test_simple_string_equal() {
 }
 
 #[test]
-fn test_subproperty_access() {
+fn test_map_key_access() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
 		property: "prop_b".to_string(),
-		subproperty: Some("sub".to_string()),
+		map_key: Some("sub".to_string()),
 		value: "bar".to_string(),
+		case_sensitive: true,
 	};
 
 	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
@@ -44,12 +53,13 @@ fn test_and_query() {
 		exprs: vec![
 			QueryExpr::StringEqual {
 				property: "prop_a".to_string(),
-				subproperty: None,
+				map_key: None,
 				value: "foo".to_string(),
+				case_sensitive: true,
 			},
 			QueryExpr::BoolEqual {
 				property: "bool_prop".to_string(),
-				subproperty: None,
+				map_key: None,
 				value: true,
 			},
 		],
@@ -60,25 +70,13 @@ fn test_and_query() {
 }
 
 #[test]
-fn test_array_contains() {
-	let schema = create_test_schema();
-	let query = QueryExpr::ArrayContains {
-		property: "array_prop".to_string(),
-		subproperty: None,
-		values: vec!["val1".to_string(), "val2".to_string()],
-	};
-
-	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
-	assert_eq!(builder.where_expr(), "hasAny(array_prop, ?)");
-}
-
-#[test]
 fn test_property_not_found() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
 		property: "nonexistent".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: "foo".to_string(),
+		case_sensitive: true,
 	};
 
 	let result = UserDefinedQueryBuilder::new(&schema, &query);
@@ -90,7 +88,7 @@ fn test_type_mismatch() {
 	let schema = create_test_schema();
 	let query = QueryExpr::BoolEqual {
 		property: "prop_a".to_string(), // This is a string property
-		subproperty: None,
+		map_key: None,
 		value: true,
 	};
 
@@ -102,18 +100,19 @@ fn test_type_mismatch() {
 }
 
 #[test]
-fn test_subproperties_not_supported() {
+fn test_map_keys_not_supported() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
-		property: "prop_a".to_string(), // This doesn't support subproperties
-		subproperty: Some("sub".to_string()),
+		property: "prop_a".to_string(), // This doesn't support map keys
+		map_key: Some("sub".to_string()),
 		value: "foo".to_string(),
+		case_sensitive: true,
 	};
 
 	let result = UserDefinedQueryBuilder::new(&schema, &query);
 	assert!(matches!(
 		result,
-		Err(UserQueryError::SubpropertiesNotSupported(_))
+		Err(UserQueryError::MapKeysNotSupported(_))
 	));
 }
 
@@ -122,8 +121,9 @@ fn test_invalid_property_name() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
 		property: "prop-with-dashes".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: "foo".to_string(),
+		case_sensitive: true,
 	};
 
 	// Invalid property names are now caught as "not found" since schema validation
@@ -136,15 +136,16 @@ fn test_invalid_property_name() {
 }
 
 #[test]
-fn test_subproperty_with_safe_chars() {
+fn test_map_key_with_safe_chars() {
 	let schema = create_test_schema();
 	let query = QueryExpr::StringEqual {
-		property: "prop_b".to_string(), // This supports subproperties
-		subproperty: Some("sub_with_underscores123".to_string()),
+		property: "prop_b".to_string(), // This supports map keys
+		map_key: Some("sub_with_underscores123".to_string()),
 		value: "foo".to_string(),
+		case_sensitive: true,
 	};
 
-	// Subproperties with safe characters (alphanumeric + underscore) should work
+	// Map keys with safe characters (alphanumeric + underscore) should work
 	let builder_result = UserDefinedQueryBuilder::new(&schema, &query);
 	assert!(builder_result.is_ok());
 
@@ -156,24 +157,11 @@ fn test_subproperty_with_safe_chars() {
 }
 
 #[test]
-fn test_empty_array_values() {
-	let schema = create_test_schema();
-	let query = QueryExpr::ArrayContains {
-		property: "array_prop".to_string(),
-		subproperty: None,
-		values: vec![],
-	};
-
-	let result = UserDefinedQueryBuilder::new(&schema, &query);
-	assert!(matches!(result, Err(UserQueryError::EmptyArrayValues(_))));
-}
-
-#[test]
 fn test_number_greater() {
 	let schema = create_test_schema();
 	let query = QueryExpr::NumberGreater {
 		property: "number_prop".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: 42.5,
 	};
 
@@ -186,7 +174,7 @@ fn test_number_less_or_equal() {
 	let schema = create_test_schema();
 	let query = QueryExpr::NumberLessOrEqual {
 		property: "number_prop".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: 100.0,
 	};
 
@@ -195,18 +183,19 @@ fn test_number_less_or_equal() {
 }
 
 #[test]
-fn test_number_with_subproperty() {
+fn test_number_with_map_key() {
 	let schema = Schema::new(vec![Property::new(
 		"metrics".to_string(),
 		true,
 		PropertyType::Number,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
 	let query = QueryExpr::NumberEqual {
 		property: "metrics".to_string(),
-		subproperty: Some("score".to_string()),
+		map_key: Some("score".to_string()),
 		value: 95.5,
 	};
 
@@ -219,7 +208,7 @@ fn test_number_type_mismatch() {
 	let schema = create_test_schema();
 	let query = QueryExpr::NumberGreater {
 		property: "prop_a".to_string(), // This is a String type, not Number
-		subproperty: None,
+		map_key: None,
 		value: 42.0,
 	};
 
@@ -231,10 +220,10 @@ fn test_number_type_mismatch() {
 }
 
 #[test]
-fn test_subproperty_validation_valid_names() {
+fn test_map_key_validation_valid_names() {
 	let schema = create_test_schema();
 
-	// Valid subproperty names
+	// Valid map key names
 	let valid_names = vec![
 		"valid_name",
 		"valid123",
@@ -248,24 +237,25 @@ fn test_subproperty_validation_valid_names() {
 	for name in valid_names {
 		let query = QueryExpr::StringEqual {
 			property: "prop_b".to_string(),
-			subproperty: Some(name.to_string()),
+			map_key: Some(name.to_string()),
 			value: "test".to_string(),
+			case_sensitive: true,
 		};
 
 		let result = UserDefinedQueryBuilder::new(&schema, &query);
 		assert!(
 			result.is_ok(),
-			"Valid subproperty name '{}' should be accepted",
+			"Valid map key name '{}' should be accepted",
 			name
 		);
 	}
 }
 
 #[test]
-fn test_subproperty_validation_invalid_names() {
+fn test_map_key_validation_invalid_names() {
 	let schema = create_test_schema();
 
-	// Invalid subproperty names
+	// Invalid map key names
 	let long_name = "a".repeat(65);
 	let invalid_names = vec![
 		"",              // Empty
@@ -304,26 +294,27 @@ fn test_subproperty_validation_invalid_names() {
 	for name in invalid_names {
 		let query = QueryExpr::StringEqual {
 			property: "prop_b".to_string(),
-			subproperty: Some(name.to_string()),
+			map_key: Some(name.to_string()),
 			value: "test".to_string(),
+			case_sensitive: true,
 		};
 
 		let result = UserDefinedQueryBuilder::new(&schema, &query);
 		assert!(
 			result.is_err(),
-			"Invalid subproperty name '{}' should be rejected",
+			"Invalid map key name '{}' should be rejected",
 			name
 		);
 		assert!(
-			matches!(result, Err(UserQueryError::InvalidSubpropertyName(_))),
-			"Invalid subproperty name '{}' should return InvalidSubpropertyName error",
+			matches!(result, Err(UserQueryError::InvalidMapKeyName(_))),
+			"Invalid map key name '{}' should return InvalidMapKeyName error",
 			name
 		);
 	}
 }
 
 #[test]
-fn test_subproperty_validation_sql_injection_attempts() {
+fn test_map_key_validation_sql_injection_attempts() {
 	let schema = create_test_schema();
 
 	// SQL injection attempts
@@ -345,8 +336,9 @@ fn test_subproperty_validation_sql_injection_attempts() {
 	for attempt in injection_attempts {
 		let query = QueryExpr::StringEqual {
 			property: "prop_b".to_string(),
-			subproperty: Some(attempt.to_string()),
+			map_key: Some(attempt.to_string()),
 			value: "test".to_string(),
+			case_sensitive: true,
 		};
 
 		let result = UserDefinedQueryBuilder::new(&schema, &query);
@@ -356,9 +348,260 @@ fn test_subproperty_validation_sql_injection_attempts() {
 			attempt
 		);
 		assert!(
-			matches!(result, Err(UserQueryError::InvalidSubpropertyName(_))),
-			"SQL injection attempt '{}' should return InvalidSubpropertyName error",
+			matches!(result, Err(UserQueryError::InvalidMapKeyName(_))),
+			"SQL injection attempt '{}' should return InvalidMapKeyName error",
 			attempt
 		);
 	}
+}
+
+#[test]
+fn test_string_in() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringIn {
+		property: "prop_a".to_string(),
+		map_key: None,
+		values: vec!["foo".to_string(), "bar".to_string()],
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	assert_eq!(builder.where_expr(), "prop_a IN (?, ?)");
+}
+
+#[test]
+fn test_string_not_in() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringNotIn {
+		property: "prop_a".to_string(),
+		map_key: None,
+		values: vec!["foo".to_string(), "bar".to_string()],
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	assert_eq!(builder.where_expr(), "prop_a NOT IN (?, ?)");
+}
+
+#[test]
+fn test_number_in() {
+	let schema = create_test_schema();
+	let query = QueryExpr::NumberIn {
+		property: "number_prop".to_string(),
+		map_key: None,
+		values: vec![42.0, 84.0, 168.0],
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	assert_eq!(builder.where_expr(), "number_prop IN (?, ?, ?)");
+}
+
+#[test]
+fn test_number_not_in() {
+	let schema = create_test_schema();
+	let query = QueryExpr::NumberNotIn {
+		property: "number_prop".to_string(),
+		map_key: None,
+		values: vec![1.0, 2.0],
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	assert_eq!(builder.where_expr(), "number_prop NOT IN (?, ?)");
+}
+
+#[test]
+fn test_string_in_with_map_key() {
+	let schema = Schema::new(vec![Property::new(
+		"metadata".to_string(),
+		true,
+		PropertyType::String,
+	)
+	.unwrap()
+	.with_group_by(false)])
+	.unwrap();
+
+	let query = QueryExpr::StringIn {
+		property: "metadata".to_string(),
+		map_key: Some("category".to_string()),
+		values: vec!["premium".to_string(), "basic".to_string()],
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query).unwrap();
+	assert_eq!(builder.where_expr(), "metadata['category'] IN (?, ?)");
+}
+
+#[test]
+fn test_empty_in_values() {
+	let schema = create_test_schema();
+	let query = QueryExpr::StringIn {
+		property: "prop_a".to_string(),
+		map_key: None,
+		values: vec![],
+		case_sensitive: true,
+	};
+
+	let result = UserDefinedQueryBuilder::new(&schema, &query);
+	assert!(matches!(result, Err(UserQueryError::EmptyArrayValues(_))));
+}
+
+#[test]
+fn test_group_by_simple() {
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("status".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
+	.unwrap();
+
+	let query = QueryExpr::StringEqual {
+		property: "status".to_string(),
+		map_key: None,
+		value: "active".to_string(),
+		case_sensitive: true,
+	};
+
+	let builder =
+		UserDefinedQueryBuilder::new_with_group_by(&schema, &query, &["user_id".to_string()])
+			.unwrap();
+	assert_eq!(builder.where_expr(), "status = ?");
+	assert_eq!(builder.group_by_expr(), Some("user_id"));
+}
+
+#[test]
+fn test_group_by_multiple_columns() {
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("status".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("region".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+	])
+	.unwrap();
+
+	let query = QueryExpr::StringEqual {
+		property: "status".to_string(),
+		map_key: None,
+		value: "active".to_string(),
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new_with_group_by(
+		&schema,
+		&query,
+		&["user_id".to_string(), "region".to_string()],
+	)
+	.unwrap();
+	assert_eq!(builder.group_by_expr(), Some("user_id, region"));
+}
+
+#[test]
+fn test_group_by_property_not_groupable() {
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
+	.unwrap();
+
+	let query = QueryExpr::NumberGreater {
+		property: "score".to_string(),
+		map_key: None,
+		value: 50.0,
+	};
+
+	let result =
+		UserDefinedQueryBuilder::new_with_group_by(&schema, &query, &["score".to_string()]);
+	assert!(matches!(
+		result,
+		Err(UserQueryError::PropertyCannotBeGroupedBy(_))
+	));
+}
+
+#[test]
+fn test_group_by_map_property_rejected() {
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+	])
+	.unwrap();
+
+	let query = QueryExpr::StringEqual {
+		property: "user_id".to_string(),
+		map_key: None,
+		value: "user123".to_string(),
+		case_sensitive: true,
+	};
+
+	let result =
+		UserDefinedQueryBuilder::new_with_group_by(&schema, &query, &["metadata".to_string()]);
+	assert!(matches!(
+		result,
+		Err(UserQueryError::MapPropertyCannotBeGroupedBy(_))
+	));
+}
+
+#[test]
+fn test_group_by_property_not_found() {
+	let schema = Schema::new(vec![Property::new(
+		"user_id".to_string(),
+		false,
+		PropertyType::String,
+	)
+	.unwrap()
+	.with_group_by(true)])
+	.unwrap();
+
+	let query = QueryExpr::StringEqual {
+		property: "user_id".to_string(),
+		map_key: None,
+		value: "user123".to_string(),
+		case_sensitive: true,
+	};
+
+	let result = UserDefinedQueryBuilder::new_with_group_by(
+		&schema,
+		&query,
+		&["unknown_column".to_string()],
+	);
+	assert!(matches!(result, Err(UserQueryError::PropertyNotFound(_))));
+}
+
+#[test]
+fn test_group_by_empty_allowed() {
+	let schema = Schema::new(vec![Property::new(
+		"user_id".to_string(),
+		false,
+		PropertyType::String,
+	)
+	.unwrap()
+	.with_group_by(true)])
+	.unwrap();
+
+	let query = QueryExpr::StringEqual {
+		property: "user_id".to_string(),
+		map_key: None,
+		value: "user123".to_string(),
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new_with_group_by(&schema, &query, &[]).unwrap();
+	assert_eq!(builder.group_by_expr(), None);
 }

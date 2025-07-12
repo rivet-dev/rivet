@@ -7,6 +7,7 @@ pub mod metrics;
 #[cfg(feature = "ops")]
 pub mod ops;
 pub mod protocol;
+pub mod schema;
 pub mod system_info;
 pub mod types;
 pub mod util;

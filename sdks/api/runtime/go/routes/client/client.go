@@ -301,3 +301,101 @@ func (c *Client) Delete(ctx context.Context, id string, request *routes.DeleteRo
 	}
 	return response, nil
 }
+
+// Returns time series data for HTTP requests routed to actors. Allows filtering and grouping by various request properties.
+func (c *Client) History(ctx context.Context, request *routes.HistoryQuery) (*routes.HistoryResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "routes/history"
+
+	queryParams := make(url.Values)
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
+	}
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	queryParams.Add("start", fmt.Sprintf("%v", request.Start))
+	queryParams.Add("end", fmt.Sprintf("%v", request.End))
+	queryParams.Add("interval", fmt.Sprintf("%v", request.Interval))
+	if request.QueryJson != nil {
+		queryParams.Add("query_json", fmt.Sprintf("%v", *request.QueryJson))
+	}
+	if request.GroupBy != nil {
+		queryParams.Add("group_by", fmt.Sprintf("%v", *request.GroupBy))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *routes.HistoryResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodGet,
+			Headers:      c.header,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}

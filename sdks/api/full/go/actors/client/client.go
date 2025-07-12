@@ -605,3 +605,194 @@ func (c *Client) UpgradeAll(ctx context.Context, request *actors.UpgradeAllActor
 	}
 	return response, nil
 }
+
+// Returns time series data for actor usage metrics. Allows filtering and grouping by various actor properties.
+func (c *Client) Usage(ctx context.Context, request *actors.GetActorUsageRequestQuery) (*actors.GetActorUsageResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "actors/usage"
+
+	queryParams := make(url.Values)
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
+	}
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	queryParams.Add("start", fmt.Sprintf("%v", request.Start))
+	queryParams.Add("end", fmt.Sprintf("%v", request.End))
+	queryParams.Add("interval", fmt.Sprintf("%v", request.Interval))
+	if request.GroupBy != nil {
+		queryParams.Add("group_by", fmt.Sprintf("%v", *request.GroupBy))
+	}
+	if request.QueryJson != nil {
+		queryParams.Add("query_json", fmt.Sprintf("%v", *request.QueryJson))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *actors.GetActorUsageResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodGet,
+			Headers:      c.header,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Queries actors using a JSON-encoded query expression. Supports pagination with cursor-based navigation.
+func (c *Client) Query(ctx context.Context, request *actors.QueryActorsRequestQuery) (*actors.QueryActorsResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "actors/query"
+
+	queryParams := make(url.Values)
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
+	}
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	queryParams.Add("query_json", fmt.Sprintf("%v", request.QueryJson))
+	if request.Cursor != nil {
+		queryParams.Add("cursor", fmt.Sprintf("%v", *request.Cursor))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *actors.QueryActorsResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodGet,
+			Headers:      c.header,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}

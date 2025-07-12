@@ -52,7 +52,6 @@ impl TestSetup {
                 id String,
                 active Bool,
                 metadata Map(String, String),
-                tags Array(String),
                 age UInt32,
                 score Float64
             ) ENGINE = Memory",
@@ -63,13 +62,15 @@ impl TestSetup {
 
 		// Insert test data
 		self.client
-            .query("INSERT INTO test_users VALUES 
-                ('user1', true, {'region': 'us-east', 'tier': 'premium'}, ['verified', 'premium'], 25, 95.5),
-                ('user2', false, {'region': 'us-west', 'tier': 'basic'}, ['basic'], 30, 67.2),
-                ('user3', true, {'region': 'eu', 'tier': 'premium'}, ['verified', 'premium', 'beta'], 22, 88.9)")
-            .execute()
-            .await
-            .expect("Failed to insert test data");
+			.query(
+				"INSERT INTO test_users VALUES 
+                ('user1', true, {'region': 'us-east', 'tier': 'premium'}, 25, 95.5),
+                ('user2', false, {'region': 'us-west', 'tier': 'basic'}, 30, 67.2),
+                ('user3', true, {'region': 'eu', 'tier': 'premium'}, 22, 88.9)",
+			)
+			.execute()
+			.await
+			.expect("Failed to insert test data");
 	}
 }
 
@@ -83,13 +84,14 @@ async fn test_simple_query_execution() {
 		false,
 		PropertyType::Bool,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
 	// Create query
 	let query_expr = QueryExpr::BoolEqual {
 		property: "active".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: true,
 	};
 
@@ -118,7 +120,7 @@ async fn test_simple_query_execution() {
 }
 
 #[tokio::test]
-async fn test_subproperty_query_execution() {
+async fn test_map_key_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema with map support
@@ -127,14 +129,16 @@ async fn test_subproperty_query_execution() {
 		true,
 		PropertyType::String,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
 	// Query for premium tier users
 	let query_expr = QueryExpr::StringEqual {
 		property: "metadata".to_string(),
-		subproperty: Some("tier".to_string()),
+		map_key: Some("tier".to_string()),
 		value: "premium".to_string(),
+		case_sensitive: true,
 	};
 
 	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
@@ -160,80 +164,45 @@ async fn test_subproperty_query_execution() {
 }
 
 #[tokio::test]
-async fn test_array_contains_query_execution() {
-	let setup = TestSetup::new().await;
-
-	// Create schema with array support
-	let schema = Schema::new(vec![Property::new(
-		"tags".to_string(),
-		false,
-		PropertyType::ArrayString,
-	)
-	.unwrap()])
-	.unwrap();
-
-	// Query for users with specific tags
-	let query_expr = QueryExpr::ArrayContains {
-		property: "tags".to_string(),
-		subproperty: None,
-		values: vec!["verified".to_string(), "beta".to_string()],
-	};
-
-	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
-
-	let query = setup.client.query(&format!(
-		"SELECT id FROM test_users WHERE {}",
-		builder.where_expr()
-	));
-	let query = builder.bind_to(query);
-
-	let result: Vec<String> = query
-		.fetch_all::<UserRow>()
-		.await
-		.expect("Query execution failed")
-		.into_iter()
-		.map(|user| user.id)
-		.collect();
-
-	// Should return user1 and user3 (have verified) and user3 (has beta)
-	assert_eq!(result.len(), 2);
-	assert!(result.contains(&"user1".to_string()));
-	assert!(result.contains(&"user3".to_string()));
-}
-
-#[tokio::test]
 async fn test_complex_and_or_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create comprehensive schema
 	let schema = Schema::new(vec![
-		Property::new("active".to_string(), false, PropertyType::Bool).unwrap(),
-		Property::new("metadata".to_string(), true, PropertyType::String).unwrap(),
-		Property::new("tags".to_string(), false, PropertyType::ArrayString).unwrap(),
+		Property::new("active".to_string(), false, PropertyType::Bool)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
 	])
 	.unwrap();
 
-	// Complex query: (active = true AND metadata['tier'] = 'premium') OR tags contains 'beta'
+	// Complex query: (active = true AND metadata['tier'] = 'premium') OR score > 85
 	let query_expr = QueryExpr::Or {
 		exprs: vec![
 			QueryExpr::And {
 				exprs: vec![
 					QueryExpr::BoolEqual {
 						property: "active".to_string(),
-						subproperty: None,
+						map_key: None,
 						value: true,
 					},
 					QueryExpr::StringEqual {
 						property: "metadata".to_string(),
-						subproperty: Some("tier".to_string()),
+						map_key: Some("tier".to_string()),
 						value: "premium".to_string(),
+						case_sensitive: true,
 					},
 				],
 			},
-			QueryExpr::ArrayContains {
-				property: "tags".to_string(),
-				subproperty: None,
-				values: vec!["beta".to_string()],
+			QueryExpr::NumberGreater {
+				property: "score".to_string(),
+				map_key: None,
+				value: 85.0,
 			},
 		],
 	};
@@ -256,7 +225,7 @@ async fn test_complex_and_or_query_execution() {
 
 	// Should return:
 	// - user1 (active=true AND tier=premium)
-	// - user3 (active=true AND tier=premium AND has beta tag)
+	// - user3 (active=true AND tier=premium, and score=88.9 > 85)
 	assert_eq!(result.len(), 2);
 	assert!(result.contains(&"user1".to_string()));
 	assert!(result.contains(&"user3".to_string()));
@@ -272,14 +241,16 @@ async fn test_sql_injection_protection() {
 		true,
 		PropertyType::String,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
-	// Attempt SQL injection in subproperty
+	// Attempt SQL injection in map key
 	let query_expr = QueryExpr::StringEqual {
 		property: "metadata".to_string(),
-		subproperty: Some("'; DROP TABLE test_users; --".to_string()),
+		map_key: Some("'; DROP TABLE test_users; --".to_string()),
 		value: "malicious".to_string(),
+		case_sensitive: true,
 	};
 
 	// The builder should reject the SQL injection attempt
@@ -287,14 +258,15 @@ async fn test_sql_injection_protection() {
 	assert!(builder_result.is_err());
 	assert!(matches!(
 		builder_result,
-		Err(UserQueryError::InvalidSubpropertyName(_))
+		Err(UserQueryError::InvalidMapKeyName(_))
 	));
 
-	// Test with a valid subproperty name to ensure normal operation works
+	// Test with a valid map key name to ensure normal operation works
 	let safe_query_expr = QueryExpr::StringEqual {
 		property: "metadata".to_string(),
-		subproperty: Some("safe_key".to_string()),
+		map_key: Some("safe_key".to_string()),
 		value: "test_value".to_string(),
+		case_sensitive: true,
 	};
 
 	let safe_builder = UserDefinedQueryBuilder::new(&schema, &safe_query_expr);
@@ -329,8 +301,12 @@ async fn test_json_serialization_roundtrip() {
 
 	// Create schema
 	let schema = Schema::new(vec![
-		Property::new("active".to_string(), false, PropertyType::Bool).unwrap(),
-		Property::new("metadata".to_string(), true, PropertyType::String).unwrap(),
+		Property::new("active".to_string(), false, PropertyType::Bool)
+			.unwrap()
+			.with_group_by(false),
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
 	])
 	.unwrap();
 
@@ -339,13 +315,14 @@ async fn test_json_serialization_roundtrip() {
 		exprs: vec![
 			QueryExpr::BoolEqual {
 				property: "active".to_string(),
-				subproperty: None,
+				map_key: None,
 				value: true,
 			},
 			QueryExpr::StringEqual {
 				property: "metadata".to_string(),
-				subproperty: Some("tier".to_string()),
+				map_key: Some("tier".to_string()),
 				value: "premium".to_string(),
+				case_sensitive: true,
 			},
 		],
 	};
@@ -408,13 +385,14 @@ async fn test_numeric_query_execution() {
 		false,
 		PropertyType::Number,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
 	// Query for users with score greater than 80
 	let query_expr = QueryExpr::NumberGreater {
 		property: "score".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: 80.0,
 	};
 
@@ -451,13 +429,14 @@ async fn test_numeric_less_or_equal_query() {
 		false,
 		PropertyType::Number,
 	)
-	.unwrap()])
+	.unwrap()
+	.with_group_by(false)])
 	.unwrap();
 
 	// Query for users with score <= 90
 	let query_expr = QueryExpr::NumberLessOrEqual {
 		property: "score".to_string(),
-		subproperty: None,
+		map_key: None,
 		value: 90.0,
 	};
 
@@ -482,4 +461,93 @@ async fn test_numeric_less_or_equal_query() {
 	assert!(result.contains(&"user2".to_string()));
 	assert!(result.contains(&"user3".to_string()));
 	assert!(!result.contains(&"user1".to_string()));
+}
+
+#[tokio::test]
+async fn test_string_in_query_execution() {
+	let setup = TestSetup::new().await;
+
+	// Create schema
+	let schema = Schema::new(vec![Property::new(
+		"metadata".to_string(),
+		true,
+		PropertyType::String,
+	)
+	.unwrap()
+	.with_group_by(false)])
+	.unwrap();
+
+	// Query for users with specific regions
+	let query_expr = QueryExpr::StringIn {
+		property: "metadata".to_string(),
+		map_key: Some("region".to_string()),
+		values: vec!["us-east".to_string(), "eu".to_string()],
+		case_sensitive: true,
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+
+	let query = setup.client.query(&format!(
+		"SELECT id FROM test_users WHERE {}",
+		builder.where_expr()
+	));
+	let query = builder.bind_to(query);
+
+	let result: Vec<String> = query
+		.fetch_all::<UserRow>()
+		.await
+		.expect("Query execution failed")
+		.into_iter()
+		.map(|user| user.id)
+		.collect();
+
+	// Should return user1 (us-east) and user3 (eu), but not user2 (us-west)
+	assert_eq!(result.len(), 2);
+	assert!(result.contains(&"user1".to_string()));
+	assert!(result.contains(&"user3".to_string()));
+	assert!(!result.contains(&"user2".to_string()));
+}
+
+#[tokio::test]
+async fn test_number_not_in_query_execution() {
+	let setup = TestSetup::new().await;
+
+	// Create schema
+	let schema = Schema::new(vec![Property::new(
+		"score".to_string(),
+		false,
+		PropertyType::Number,
+	)
+	.unwrap()
+	.with_group_by(false)])
+	.unwrap();
+
+	// Query for users with score not in specific values
+	let query_expr = QueryExpr::NumberNotIn {
+		property: "score".to_string(),
+		map_key: None,
+		values: vec![67.2, 88.9],
+	};
+
+	let builder = UserDefinedQueryBuilder::new(&schema, &query_expr).unwrap();
+
+	let query = setup.client.query(&format!(
+		"SELECT id FROM test_users WHERE {}",
+		builder.where_expr()
+	));
+	let query = builder.bind_to(query);
+
+	let result: Vec<String> = query
+		.fetch_all::<UserRow>()
+		.await
+		.expect("Query execution failed")
+		.into_iter()
+		.map(|user| user.id)
+		.collect();
+
+	// Should return only user1 (95.5), not user2 (67.2) or user3 (88.9)
+	assert_eq!(result.len(), 1);
+	assert!(result.contains(&"user1".to_string()));
+	assert!(!result.contains(&"user2".to_string()));
+	assert!(!result.contains(&"user3".to_string()));
 }

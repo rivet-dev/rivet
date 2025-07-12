@@ -54,10 +54,13 @@ user-get.workspace = true
 user-identity-get.workspace = true
 user-team-list.workspace = true
 route.workspace = true
+upload-prepare.workspace = true
+core-guard = { path = "../../services/guard" }
+clickhouse-user-query.workspace = true
+reqwest = "0.11"
 
 [dev-dependencies]
 rivet-connection.workspace = true
-reqwest = "0.11"
 
 cdn-namespace-domain-create.workspace = true
 cloud-namespace-token-development-create.workspace = true

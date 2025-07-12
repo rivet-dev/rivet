@@ -14,6 +14,21 @@ type DeleteRouteQuery struct {
 	Environment *string `json:"-"`
 }
 
+type HistoryQuery struct {
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	// Start timestamp in milliseconds
+	Start int `json:"-"`
+	// End timestamp in milliseconds
+	End int `json:"-"`
+	// Time bucket interval in milliseconds
+	Interval int `json:"-"`
+	// JSON-encoded query expression for filtering requests
+	QueryJson *string `json:"-"`
+	// JSON-encoded KeyPath for grouping results (e.g. {"property":"client_request_host"} or {"property":"tags","map_key":"version"})
+	GroupBy *string `json:"-"`
+}
+
 type ListRoutesQuery struct {
 	Project     *string `json:"-"`
 	Environment *string `json:"-"`

@@ -14,7 +14,7 @@
 //!     Property::new("user_id".to_string(), false, PropertyType::String).unwrap(),
 //!     Property::new("metadata".to_string(), true, PropertyType::String).unwrap(),
 //!     Property::new("active".to_string(), false, PropertyType::Bool).unwrap(),
-//!     Property::new("tags".to_string(), false, PropertyType::ArrayString).unwrap(),
+//!     Property::new("score".to_string(), false, PropertyType::Number).unwrap(),
 //! ]).unwrap();
 //!
 //! // Build a complex query expression
@@ -22,18 +22,19 @@
 //!     exprs: vec![
 //!         QueryExpr::StringEqual {
 //!             property: "user_id".to_string(),
-//!             subproperty: None,
+//!             map_key: None,
 //!             value: "12345".to_string(),
+//!             case_sensitive: true,
 //!         },
 //!         QueryExpr::BoolEqual {
 //!             property: "active".to_string(),
-//!             subproperty: None,
+//!             map_key: None,
 //!             value: true,
 //!         },
-//!         QueryExpr::ArrayContains {
-//!             property: "tags".to_string(),
-//!             subproperty: None,
-//!             values: vec!["premium".to_string(), "verified".to_string()],
+//!         QueryExpr::NumberGreater {
+//!             property: "score".to_string(),
+//!             map_key: None,
+//!             value: 90.0,
 //!         },
 //!     ],
 //! };
@@ -51,7 +52,7 @@
 // Re-export all public types for convenience
 pub use builder::UserDefinedQueryBuilder;
 pub use error::{Result, UserQueryError};
-pub use query::QueryExpr;
+pub use query::{KeyPath, QueryExpr};
 pub use schema::{Property, PropertyType, Schema};
 
 pub mod builder;

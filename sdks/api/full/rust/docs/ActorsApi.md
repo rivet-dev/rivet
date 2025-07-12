@@ -8,8 +8,10 @@ Method | HTTP request | Description
 [**actors_destroy**](ActorsApi.md#actors_destroy) | **DELETE** /actors/{actor} | 
 [**actors_get**](ActorsApi.md#actors_get) | **GET** /actors/{actor} | 
 [**actors_list**](ActorsApi.md#actors_list) | **GET** /actors | 
+[**actors_query**](ActorsApi.md#actors_query) | **GET** /actors/query | 
 [**actors_upgrade**](ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
 [**actors_upgrade_all**](ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
+[**actors_usage**](ActorsApi.md#actors_usage) | **GET** /actors/usage | 
 
 
 
@@ -147,6 +149,39 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
+## actors_query
+
+> crate::models::ActorsQueryActorsResponse actors_query(query_json, project, environment, cursor)
+
+
+Queries actors using a JSON-encoded query expression. Supports pagination with cursor-based navigation.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**query_json** | **String** | JSON-encoded query expression for filtering actors | [required] |
+**project** | Option<**String**> |  |  |
+**environment** | Option<**String**> |  |  |
+**cursor** | Option<**String**> | Cursor for pagination |  |
+
+### Return type
+
+[**crate::models::ActorsQueryActorsResponse**](ActorsQueryActorsResponse.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
 ## actors_upgrade
 
 > serde_json::Value actors_upgrade(actor, actors_upgrade_actor_request, project, environment)
@@ -207,6 +242,42 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## actors_usage
+
+> crate::models::ActorsGetActorUsageResponse actors_usage(start, end, interval, project, environment, group_by, query_json)
+
+
+Returns time series data for actor usage metrics. Allows filtering and grouping by various actor properties.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**start** | **i32** | Start timestamp in milliseconds | [required] |
+**end** | **i32** | End timestamp in milliseconds | [required] |
+**interval** | **i32** | Time bucket interval in milliseconds | [required] |
+**project** | Option<**String**> |  |  |
+**environment** | Option<**String**> |  |  |
+**group_by** | Option<**String**> | JSON-encoded KeyPath for grouping results (e.g. {\"property\":\"datacenter_id\"} or {\"property\":\"tags\",\"map_key\":\"region\"}) |  |
+**query_json** | Option<**String**> | JSON-encoded query expression for filtering actors |  |
+
+### Return type
+
+[**crate::models::ActorsGetActorUsageResponse**](ActorsGetActorUsageResponse.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

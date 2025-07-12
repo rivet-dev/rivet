@@ -5,8 +5,8 @@
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
 import * as Rivet from "../../../../../index";
-import * as serializers from "../../../../../../serialization/index";
 import urlJoin from "url-join";
+import * as serializers from "../../../../../../serialization/index";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Logs {
@@ -54,11 +54,7 @@ export class Logs {
      *     await client.actors.logs.get({
      *         project: "string",
      *         environment: "string",
-     *         stream: "std_out",
-     *         actorIdsJson: "string",
-     *         searchText: "string",
-     *         searchCaseSensitive: true,
-     *         searchEnableRegex: true,
+     *         queryJson: "string",
      *         watchIndex: "string"
      *     })
      */
@@ -66,16 +62,7 @@ export class Logs {
         request: Rivet.actors.GetActorLogsRequestQuery,
         requestOptions?: Logs.RequestOptions,
     ): Promise<Rivet.actors.GetActorLogsResponse> {
-        const {
-            project,
-            environment,
-            stream,
-            actorIdsJson,
-            searchText,
-            searchCaseSensitive,
-            searchEnableRegex,
-            watchIndex,
-        } = request;
+        const { project, environment, queryJson, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (project != null) {
             _queryParams["project"] = project;
@@ -85,22 +72,7 @@ export class Logs {
             _queryParams["environment"] = environment;
         }
 
-        _queryParams["stream"] = serializers.actors.QueryLogStream.jsonOrThrow(stream, {
-            unrecognizedObjectKeys: "strip",
-        });
-        _queryParams["actor_ids_json"] = actorIdsJson;
-        if (searchText != null) {
-            _queryParams["search_text"] = searchText;
-        }
-
-        if (searchCaseSensitive != null) {
-            _queryParams["search_case_sensitive"] = searchCaseSensitive.toString();
-        }
-
-        if (searchEnableRegex != null) {
-            _queryParams["search_enable_regex"] = searchEnableRegex.toString();
-        }
-
+        _queryParams["query_json"] = queryJson;
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }
@@ -216,6 +188,148 @@ export class Logs {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/logs.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * Exports logs for the given actors to an S3 bucket and returns a presigned URL to download.
+     *
+     * @param {Rivet.actors.ExportActorLogsRequest} request
+     * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.actors.logs.export({
+     *         project: "string",
+     *         environment: "string",
+     *         queryJson: "string"
+     *     })
+     */
+    public async export(
+        request: Rivet.actors.ExportActorLogsRequest,
+        requestOptions?: Logs.RequestOptions,
+    ): Promise<Rivet.actors.ExportActorLogsResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)) ??
+                    environments.RivetEnvironment.Production,
+                "/actors/logs/export",
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "25.5.2",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            body: serializers.actors.ExportActorLogsRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.actors.ExportActorLogsResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            switch (_response.error.statusCode) {
+                case 500:
+                    throw new Rivet.InternalError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                case 429:
+                    throw new Rivet.RateLimitError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                case 403:
+                    throw new Rivet.ForbiddenError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                case 408:
+                    throw new Rivet.UnauthorizedError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                case 404:
+                    throw new Rivet.NotFoundError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                case 400:
+                    throw new Rivet.BadRequestError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        }),
+                    );
+                default:
+                    throw new errors.RivetError({
+                        statusCode: _response.error.statusCode,
+                        body: _response.error.body,
+                    });
+            }
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/logs/export.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

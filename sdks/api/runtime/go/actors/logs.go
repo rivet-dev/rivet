@@ -9,16 +9,50 @@ import (
 	core "sdk/core"
 )
 
+type ExportActorLogsRequest struct {
+	Project     *string `json:"project,omitempty"`
+	Environment *string `json:"environment,omitempty"`
+	// JSON-encoded query expression for filtering logs
+	QueryJson string `json:"query_json"`
+}
+
 type GetActorLogsRequestQuery struct {
-	Project             *string        `json:"-"`
-	Environment         *string        `json:"-"`
-	Stream              QueryLogStream `json:"-"`
-	ActorIdsJson        string         `json:"-"`
-	SearchText          *string        `json:"-"`
-	SearchCaseSensitive *bool          `json:"-"`
-	SearchEnableRegex   *bool          `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	// JSON-encoded query expression for filtering logs
+	QueryJson string `json:"-"`
 	// A query parameter denoting the requests watch index.
 	WatchIndex *string `json:"-"`
+}
+
+type ExportActorLogsResponse struct {
+	// Presigned URL to download the exported logs
+	Url string `json:"url"`
+
+	_rawJSON json.RawMessage
+}
+
+func (e *ExportActorLogsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ExportActorLogsResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*e = ExportActorLogsResponse(value)
+	e._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (e *ExportActorLogsResponse) String() string {
+	if len(e._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(e._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(e); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", e)
 }
 
 type GetActorLogsResponse struct {
@@ -61,29 +95,4 @@ func (g *GetActorLogsResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", g)
-}
-
-type QueryLogStream string
-
-const (
-	QueryLogStreamStdOut QueryLogStream = "std_out"
-	QueryLogStreamStdErr QueryLogStream = "std_err"
-	QueryLogStreamAll    QueryLogStream = "all"
-)
-
-func NewQueryLogStreamFromString(s string) (QueryLogStream, error) {
-	switch s {
-	case "std_out":
-		return QueryLogStreamStdOut, nil
-	case "std_err":
-		return QueryLogStreamStdErr, nil
-	case "all":
-		return QueryLogStreamAll, nil
-	}
-	var t QueryLogStream
-	return "", fmt.Errorf("%s is not a valid %T", s, t)
-}
-
-func (q QueryLogStream) Ptr() *QueryLogStream {
-	return &q
 }

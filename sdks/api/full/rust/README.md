@@ -29,8 +29,11 @@ Class | Method | HTTP request | Description
 *ActorsApi* | [**actors_destroy**](docs/ActorsApi.md#actors_destroy) | **DELETE** /actors/{actor} | 
 *ActorsApi* | [**actors_get**](docs/ActorsApi.md#actors_get) | **GET** /actors/{actor} | 
 *ActorsApi* | [**actors_list**](docs/ActorsApi.md#actors_list) | **GET** /actors | 
+*ActorsApi* | [**actors_query**](docs/ActorsApi.md#actors_query) | **GET** /actors/query | 
 *ActorsApi* | [**actors_upgrade**](docs/ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
 *ActorsApi* | [**actors_upgrade_all**](docs/ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
+*ActorsApi* | [**actors_usage**](docs/ActorsApi.md#actors_usage) | **GET** /actors/usage | 
+*ActorsLogsApi* | [**actors_logs_export**](docs/ActorsLogsApi.md#actors_logs_export) | **POST** /actors/logs/export | 
 *ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/logs | 
 *ActorsMetricsApi* | [**actors_metrics_get**](docs/ActorsMetricsApi.md#actors_metrics_get) | **GET** /actors/{actor}/metrics/history | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
@@ -156,6 +159,7 @@ Class | Method | HTTP request | Description
 *RegionsApi* | [**regions_list**](docs/RegionsApi.md#regions_list) | **GET** /regions | 
 *RegionsApi* | [**regions_recommend**](docs/RegionsApi.md#regions_recommend) | **GET** /regions/recommend | 
 *RoutesApi* | [**routes_delete**](docs/RoutesApi.md#routes_delete) | **DELETE** /routes/{id} | 
+*RoutesApi* | [**routes_history**](docs/RoutesApi.md#routes_history) | **GET** /routes/history | 
 *RoutesApi* | [**routes_list**](docs/RoutesApi.md#routes_list) | **GET** /routes | 
 *RoutesApi* | [**routes_update**](docs/RoutesApi.md#routes_update) | **PUT** /routes/{id} | 
 *ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
@@ -181,17 +185,20 @@ Class | Method | HTTP request | Description
  - [ActorsCreateActorRuntimeNetworkRequest](docs/ActorsCreateActorRuntimeNetworkRequest.md)
  - [ActorsCreateActorRuntimeRequest](docs/ActorsCreateActorRuntimeRequest.md)
  - [ActorsEndpointType](docs/ActorsEndpointType.md)
+ - [ActorsExportActorLogsResponse](docs/ActorsExportActorLogsResponse.md)
  - [ActorsGetActorLogsResponse](docs/ActorsGetActorLogsResponse.md)
  - [ActorsGetActorMetricsResponse](docs/ActorsGetActorMetricsResponse.md)
  - [ActorsGetActorResponse](docs/ActorsGetActorResponse.md)
+ - [ActorsGetActorUsageResponse](docs/ActorsGetActorUsageResponse.md)
  - [ActorsLifecycle](docs/ActorsLifecycle.md)
  - [ActorsListActorsResponse](docs/ActorsListActorsResponse.md)
+ - [ActorsLogsExportRequest](docs/ActorsLogsExportRequest.md)
  - [ActorsNetwork](docs/ActorsNetwork.md)
  - [ActorsNetworkMode](docs/ActorsNetworkMode.md)
  - [ActorsPort](docs/ActorsPort.md)
  - [ActorsPortProtocol](docs/ActorsPortProtocol.md)
  - [ActorsPortRouting](docs/ActorsPortRouting.md)
- - [ActorsQueryLogStream](docs/ActorsQueryLogStream.md)
+ - [ActorsQueryActorsResponse](docs/ActorsQueryActorsResponse.md)
  - [ActorsResources](docs/ActorsResources.md)
  - [ActorsRuntime](docs/ActorsRuntime.md)
  - [ActorsUpgradeActorRequest](docs/ActorsUpgradeActorRequest.md)
@@ -476,6 +483,7 @@ Class | Method | HTTP request | Description
  - [RegionsListRegionsResponse](docs/RegionsListRegionsResponse.md)
  - [RegionsRecommendRegionResponse](docs/RegionsRecommendRegionResponse.md)
  - [RegionsRegion](docs/RegionsRegion.md)
+ - [RoutesHistoryResponse](docs/RoutesHistoryResponse.md)
  - [RoutesListRoutesResponse](docs/RoutesListRoutesResponse.md)
  - [RoutesRoute](docs/RoutesRoute.md)
  - [RoutesRouteTarget](docs/RoutesRouteTarget.md)

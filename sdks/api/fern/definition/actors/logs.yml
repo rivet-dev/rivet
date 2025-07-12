@@ -19,15 +19,29 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          stream: QueryLogStream
-          actor_ids_json: string
-          search_text: optional<string>
-          search_case_sensitive: optional<boolean>
-          search_enable_regex: optional<boolean>
+          query_json:
+            docs: JSON-encoded query expression for filtering logs
+            type: string
           watch_index:
             docs: A query parameter denoting the requests watch index.
             type: optional<string>
       response: GetActorLogsResponse
+
+    export:
+      path: /logs/export
+      method: POST
+      docs: >-
+        Exports logs for the given actors to an S3 bucket and returns a presigned URL to download.
+      request:
+        name: ExportActorLogsRequest
+        body:
+          properties:
+            project: optional<string>
+            environment: optional<string>
+            query_json:
+              docs: JSON-encoded query expression for filtering logs
+              type: string
+      response: ExportActorLogsResponse
 
 types:
   GetActorLogsResponse:
@@ -53,8 +67,8 @@ types:
         type: list<integer>
       watch: commons.WatchResponse
 
-  QueryLogStream:
-    enum:
-      - std_out
-      - std_err
-      - all
+  ExportActorLogsResponse:
+    properties:
+      url:
+        docs: Presigned URL to download the exported logs
+        type: string

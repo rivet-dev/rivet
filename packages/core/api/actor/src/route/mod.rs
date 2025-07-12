@@ -83,6 +83,30 @@ define_router! {
 			),
 		},
 
+		"actors" / "usage": {
+			GET: actors::usage(
+				query: actors::UsageQuery,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
+		"actors" / "query": {
+			GET: actors::query(
+				query: actors::QueryQuery,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
 		"actors" / Uuid: {
 			GET: actors::get(
 				query: actors::GlobalEndpointTypeQuery,
@@ -122,6 +146,18 @@ define_router! {
 			GET: logs::get_logs(
 				query: logs::GetActorLogsQuery,
 				opt_auth: true,
+			),
+		},
+
+		"actors" / "logs" / "export": {
+			POST: logs::export_logs(
+				body: models::ActorsLogsExportRequest,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 10, bucket: duration::minutes(1) },
+					],
+				},
 			),
 		},
 
@@ -212,6 +248,18 @@ define_router! {
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
+		"routes" / "history": {
+			GET: routes::history(
+				query: routes::HistoryQuery,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
 					],
 				},
 			),

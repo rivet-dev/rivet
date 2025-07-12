@@ -49,17 +49,7 @@ func (c *Client) Get(ctx context.Context, request *actors.GetActorLogsRequestQue
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
-	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
-	queryParams.Add("actor_ids_json", fmt.Sprintf("%v", request.ActorIdsJson))
-	if request.SearchText != nil {
-		queryParams.Add("search_text", fmt.Sprintf("%v", *request.SearchText))
-	}
-	if request.SearchCaseSensitive != nil {
-		queryParams.Add("search_case_sensitive", fmt.Sprintf("%v", *request.SearchCaseSensitive))
-	}
-	if request.SearchEnableRegex != nil {
-		queryParams.Add("search_enable_regex", fmt.Sprintf("%v", *request.SearchEnableRegex))
-	}
+	queryParams.Add("query_json", fmt.Sprintf("%v", request.QueryJson))
 	if request.WatchIndex != nil {
 		queryParams.Add("watch_index", fmt.Sprintf("%v", *request.WatchIndex))
 	}
@@ -128,6 +118,85 @@ func (c *Client) Get(ctx context.Context, request *actors.GetActorLogsRequestQue
 			URL:          endpointURL,
 			Method:       http.MethodGet,
 			Headers:      c.header,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Exports logs for the given actors to an S3 bucket and returns a presigned URL to download.
+func (c *Client) Export(ctx context.Context, request *actors.ExportActorLogsRequest) (*actors.ExportActorLogsResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "actors/logs/export"
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *actors.ExportActorLogsResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodPost,
+			Headers:      c.header,
+			Request:      request,
 			Response:     &response,
 			ErrorDecoder: errorDecoder,
 		},
