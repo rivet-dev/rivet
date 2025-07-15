@@ -130,14 +130,14 @@ export function PlatformIcons() {
 					<Link
 						key={index}
 						href={platform.href}
-						className="group relative flex items-center justify-center w-[60px] h-[60px] p-4 transition-all duration-200"
+						className="group relative flex items-center justify-center w-[60px] h-[60px] p-3 transition-all duration-200"
 					>
 						<Image
 							src={platform.src}
 							alt={platform.alt}
 							width={32}
 							height={32}
-							className="object-contain grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-200"
+							className="object-contain grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-200"
 						/>
 						<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
 							{platform.tooltip}
