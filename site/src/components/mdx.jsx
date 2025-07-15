@@ -301,23 +301,13 @@ export const ExperimentalFeature = () => {
 	);
 };
 
-export const Card = ({ href, ...props }) => {
-	if (href) {
-		return (
-			<Link href={href} className="h-full">
-				<CtaCard className="h-full" {...props} />
-			</Link>
-		);
-	} else {
-		return <CtaCard className="h-full" {...props} />;
-	}
-};
-
 export const CardGroup = ({ children }) => {
 	return (
 		<div className="not-prose grid gap-4 md:grid-cols-2">{children}</div>
 	);
 };
+
+export { Card } from "@/components/Card";
 
 export const SchemaPreview = ({ schema }) => {
 	return (

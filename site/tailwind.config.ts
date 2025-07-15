@@ -35,6 +35,24 @@ const config = {
 						"--tw-prose-invert-pre-bg": "rgb(0 0 0 / 50%)",
 						"--tw-prose-invert-th-borders": "hsl(var(--border))",
 						"--tw-prose-invert-td-borders": "hsl(var(--border))",
+						h1: {
+							fontWeight: "600",
+						},
+						h2: {
+							fontWeight: "600",
+						},
+						h3: {
+							fontWeight: "600",
+						},
+						h4: {
+							fontWeight: "600",
+						},
+						h5: {
+							fontWeight: "600",
+						},
+						h6: {
+							fontWeight: "600",
+						},
 						code: {
 							fontSize: "inherit",
 							fontWeight: "inherit",

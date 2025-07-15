@@ -8,7 +8,7 @@ const withMDX = nextMDX(config);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  trailingSlash: true,
+  trailingSlash: false,
   reactStrictMode: true,
   transpilePackages: ['@rivet-gg/components', '@rivet-gg/icons'],
   typescript: {

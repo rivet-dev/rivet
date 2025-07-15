@@ -1,6 +1,7 @@
 "use client";
 
 import type { SidebarItem, SidebarSection } from "@/lib/sitemap";
+import { cn } from "@rivet-gg/components";
 import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
@@ -9,50 +10,71 @@ import { type ReactNode, useState } from "react";
 interface CollapsibleSidebarItemProps {
 	item: SidebarSection;
 	children?: ReactNode;
+	level?: number;
 }
 
 export function CollapsibleSidebarItem({
 	item,
 	children,
+	level = 0,
 }: CollapsibleSidebarItemProps) {
 	const pathname = usePathname() || "";
-	const isCurrent = findActiveItem(item.pages, pathname) !== null;
-	const [isOpen, setIsOpen] = useState(() => isCurrent);
+	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
+	const isCurrent = false; // Never highlight collapsible sections themselves
+	const [isOpen, setIsOpen] = useState(() => hasActiveChild);
+	
+	const getPaddingClass = (level: number) => {
+		switch (level) {
+			case 0: return "pl-3 pr-3";
+			case 1: return "pl-6 pr-3";
+			case 2: return "pl-9 pr-3";
+			default: return "pl-12 pr-3";
+		}
+	};
+	
 	return (
 		<div>
 			<button
 				type="button"
-				className="flex w-full appearance-none items-center px-2 py-1 text-sm text-muted-foreground transition-colors data-[active]:text-foreground"
+				className={cn(
+					"flex w-full appearance-none items-center justify-between border-l-2 border-l-border py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 data-[active]:text-foreground data-[active]:border-l-orange-500",
+					getPaddingClass(level),
+				)}
 				data-active={isCurrent ? true : undefined}
 				onClick={() => setIsOpen((open) => !open)}
 			>
-				{item.icon ? (
-					<Icon icon={item.icon} className="mr-2 size-3.5" />
-				) : null}
-				<span className="truncate">{item.title}</span>
+				<div className="flex items-center truncate">
+					{item.icon ? (
+						<Icon
+							icon={item.icon}
+							className="mr-2 size-3.5 flex-shrink-0"
+						/>
+					) : null}
+					<span className="truncate">{item.title}</span>
+				</div>
 				<motion.span
 					variants={{
 						open: { rotateZ: 0 },
 						closed: { rotateZ: "-90deg" },
 					}}
-					initial={isCurrent ? "open" : "closed"}
+					initial={hasActiveChild ? "open" : "closed"}
 					animate={isOpen ? "open" : "closed"}
-					className="ml-2 mr-2 inline-block w-2.5"
+					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
-					<Icon icon={faChevronDown} className="size-auto" />
+					<Icon icon={faChevronDown} className="w-3 h-3" />
 				</motion.span>
 			</button>
 			<motion.div
-				className="overflow-hidden pl-3"
-				initial={isCurrent ? "open" : "closed"}
+				className="overflow-hidden"
+				initial={hasActiveChild ? "open" : "closed"}
 				variants={{
 					open: { height: "auto", opacity: 1 },
 					closed: { height: 0, opacity: 0 },
 				}}
 				animate={isOpen ? "open" : "closed"}
 				transition={{
-					opacity: isOpen ? { delay: 0.1 } : {},
-					height: !isOpen ? { delay: 0.1 } : {},
+					opacity: isOpen ? { delay: 0.05 } : {},
+					height: !isOpen ? { delay: 0.05 } : {},
 					duration: 0.2,
 				}}
 			>

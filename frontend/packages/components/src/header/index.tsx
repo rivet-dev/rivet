@@ -58,12 +58,14 @@ export function Header({
 	return (
 		<header
 			className={cn(
-				"bg-background/60 border-b-border sticky top-0 z-10 flex flex-col items-center border-b py-2 backdrop-blur",
+				"bg-background/60 border-b-border sticky top-0 z-10 flex flex-col items-center border-b backdrop-blur",
+				"pt-2",
+				subnav ? "pb-0" : "pb-2",
 				className,
 			)}
 		>
 			{addons}
-			<div className="w-full px-8 flex min-h-10 flex-col justify-center gap-4">
+			<div className="w-full px-8 flex min-h-10 flex-col justify-center">
 				<div className="flex w-full items-center gap-4">
 					<Sheet>
 						<SheetTrigger asChild>
