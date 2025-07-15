@@ -1,13 +1,13 @@
 "use client";
 import { DocsMobileNavigation } from "@/components/DocsMobileNavigation";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
-import { cn } from "@rivet-gg/components";
+import { Button, cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
 import { Icon, faDiscord } from "@rivet-gg/icons";
-import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
 import { GitHubDropdown } from "./GitHubDropdown";
 
@@ -77,7 +77,8 @@ export function FancyHeader({
 	}, []);
 
 	const headerStyles = cn(
-		"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none",
+		"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none transition-all hover:opacity-100",
+		isScrolled ? "opacity-100" : "opacity-80",
 	);
 	return (
 		<>
@@ -248,7 +249,7 @@ export function FancyHeader({
 													opacity: 0,
 													y:
 														prev.current ===
-														"solutions"
+															"solutions"
 															? -10
 															: 0,
 												}}

@@ -28,11 +28,12 @@
 	},
 	"include": [
 		"next-env.d.ts",
+		"next.config.ts",
 		"**/*.ts",
 		"**/*.tsx",
 		".next/types/**/*.ts",
 		"src/components/Header.jsx",
 		"src/components/Navigation.jsx"
 	],
-	"exclude": ["node_modules", "game/server"]
+	"exclude": ["node_modules"]
 }

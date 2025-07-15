@@ -6,6 +6,7 @@ import { mdxAnnotations } from "mdx-annotations";
 import rehypeMdxTitle from "rehype-mdx-title";
 import * as shiki from "shiki";
 import { visit } from "unist-util-visit";
+import theme from "../lib/textmate-code-theme";
 
 function rehypeParseCodeBlocks() {
 	return (tree) => {
@@ -37,20 +38,13 @@ function rehypeParseCodeBlocks() {
 	};
 }
 
-const cssVariableTheme = shiki.createCssVariablesTheme({
-	name: "css-variables",
-	variablePrefix: "--shiki-",
-	variableDefaults: {},
-	fontStyle: true,
-});
-
 /** @type {import("shiki").Highlighter} */
 let highlighter;
 
 function rehypeShiki() {
 	return async (tree) => {
 		highlighter ??= await shiki.getSingletonHighlighter({
-			theme: cssVariableTheme,
+			themes: [theme],
 			langs: [
 				"bash",
 				"batch",
@@ -86,7 +80,7 @@ function rehypeShiki() {
 				if (node.properties.language) {
 					textNode.value = highlighter.codeToHtml(textNode.value, {
 						lang: node.properties.language,
-						theme: cssVariableTheme,
+						theme: theme.name,
 						transformers: [transformerNotationFocus()],
 					});
 				}

@@ -1,6 +1,6 @@
-import { recmaPlugins } from "./recma.mjs";
-import { rehypePlugins } from "./rehype.mjs";
-import { remarkPlugins } from "./remark.mjs";
+import { recmaPlugins } from "./recma";
+import { rehypePlugins } from "./rehype";
+import { remarkPlugins } from "./remark";
 
 /**
  * @type {import('@next/mdx').NextMDXOptions}

@@ -9,9 +9,9 @@
 		"format": "prettier --write .",
 		"create-article": "vite-node scripts/generateArticle.js",
 		"generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
-		"prebuild": "yarn prebuild:navigation && yarn prebuild:examples",
-		"prebuild:navigation": "node scripts/generateNavigation.mjs",
-		"prebuild:examples": "node scripts/generateExamples.mjs"
+		"prebuild": "yarn gen:navigation",
+		"gen:navigation": "tsx scripts/generateNavigation.ts",
+		"gen:examples": "node scripts/generateExamples.mjs"
 	},
 	"browserslist": "defaults, not ie <= 11",
 	"dependencies": {
@@ -33,7 +33,6 @@
 		"@rivet-gg/icons": "workspace:*",
 		"@shikijs/transformers": "^1.17.6",
 		"@sindresorhus/slugify": "^2.1.1",
-		"@stackblitz/sdk": "^1.11.0",
 		"@tailwindcss/forms": "^0.5.3",
 		"@tailwindcss/typography": "^0.5.8",
 		"@types/json-schema": "^7.0.15",
@@ -53,6 +52,7 @@
 		"flexsearch": "^0.7.31",
 		"focus-visible": "^5.2.0",
 		"framer-motion": "*",
+		"jszip": "^3.10.1",
 		"mdast-util-to-string": "^3.2.0",
 		"mdx-annotations": "^0.1.1",
 		"next": "^15.2.4",
@@ -80,6 +80,7 @@
 		"socket.io": "^4.7.1",
 		"socket.io-client": "^4.7.1",
 		"tailwindcss": "^3.3.0",
+		"tm-themes": "^1.10.7",
 		"unified": "^10.1.2",
 		"unist-util-filter": "^4.0.1",
 		"unist-util-visit": "^4.1.1",

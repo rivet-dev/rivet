@@ -1,34 +1,38 @@
-import Image from "next/image";
 import Link from "next/link";
-import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
-import bunLogo from "../images/platforms/bun.svg";
+import Image from "next/image";
+
+// Platform images
+import rivetWhiteLogo from "../images/platforms/rivet-white.svg";
 import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
+import bunLogo from "../images/platforms/bun.svg";
+import nodejsLogo from "../images/platforms/nodejs.svg";
+import redisLogo from "../images/platforms/redis.svg";
 import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
-import nodejsLogo from "../images/platforms/nodejs.svg";
-import postgresLogo from "../images/platforms/postgres.svg";
-import redisLogo from "../images/platforms/redis.svg";
-import supabaseLogo from "../images/platforms/supabase.svg";
 import vercelLogo from "../images/platforms/vercel.svg";
+import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
+import supabaseLogo from "../images/platforms/supabase.svg";
+import postgresLogo from "../images/platforms/postgres.svg";
 
-import javascriptLogo from "../images/clients/javascript.svg";
-import nextjsLogo from "../images/clients/nextjs.svg";
 // Client images
 import reactLogo from "../images/clients/react.svg";
-import rustLogo from "../images/clients/rust.svg";
+import javascriptLogo from "../images/clients/javascript.svg";
 import typescriptLogo from "../images/clients/typescript.svg";
+import rustLogo from "../images/clients/rust.svg";
+import nextjsLogo from "../images/clients/nextjs.svg";
 import vueLogo from "../images/clients/vue.svg";
 
-import betterAuthLogo from "../images/integrations/better-auth.svg";
-import elysiaLogo from "../images/integrations/elysia.svg";
-import expressLogo from "../images/integrations/express.svg";
 // Integration images
 import honoLogo from "../images/integrations/hono.svg";
-import livestoreLogo from "../images/integrations/livestore.svg";
-import tinybaseLogo from "../images/integrations/tinybase.svg";
+import expressLogo from "../images/integrations/express.svg";
+import elysiaLogo from "../images/integrations/elysia.svg";
+import trpcLogo from "../images/integrations/trpc.svg";
 import vitestLogo from "../images/integrations/vitest.svg";
-import yjsLogo from "../images/integrations/yjs.svg";
+import betterAuthLogo from "../images/integrations/better-auth.svg";
+import livestoreLogo from "../images/integrations/livestore.svg";
 import zerosyncLogo from "../images/integrations/zerosync.svg";
+import tinybaseLogo from "../images/integrations/tinybase.svg";
+import yjsLogo from "../images/integrations/yjs.svg";
 
 interface TechLinkProps {
 	href: string;
@@ -45,9 +49,9 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 
 	const linkProps = external
 		? {
-				target: "_blank",
-				rel: "noopener noreferrer",
-			}
+			target: "_blank",
+			rel: "noopener noreferrer",
+		}
 		: {};
 
 	const statusText =
@@ -179,9 +183,9 @@ export function TechSection() {
 							/>
 							<TechLink
 								href="/docs/actors/quickstart-backend"
-								name="Cloudflare"
+								name="Durable Objects"
 								icon={cloudflareWorkersLogo}
-								alt="Cloudflare"
+								alt="Cloudflare Durable Objects"
 							/>
 						</TechSubSection>
 
@@ -307,6 +311,12 @@ export function TechSection() {
 								name="Elysia"
 								icon={elysiaLogo}
 								alt="Elysia"
+							/>
+							<TechLink
+								href="/docs/integrations/trpc"
+								name="tRPC"
+								icon={trpcLogo}
+								alt="tRPC"
 							/>
 							<TechLink
 								href="/docs/general/testing"

@@ -1,24 +1,25 @@
 import { HeroBackground } from "./components/HeroBackground";
-import { CTASection } from "./sections/CTASection";
-import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
-import { CommunitySection } from "./sections/CommunitySection";
-import { FeaturesSection } from "./sections/FeaturesSection";
 import { HeroSection } from "./sections/HeroSection";
-import { StudioSection } from "./sections/StudioSection";
+import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
+import { FeaturesSection } from "./sections/FeaturesSection";
 import { TechSection } from "./sections/TechSection";
+import { StudioSection } from "./sections/StudioSection";
+import { CommunitySection } from "./sections/CommunitySection";
+import { CTASection } from "./sections/CTASection";
+import { PlatformIcons } from "./components/PlatformIcons";
 
 export default function IndexPage() {
 	return (
 		<>
 			<div />
 
-			<HeroBackground />
+			{/*<HeroBackground />*/}
 
 			{/* Content */}
 			<main className="min-h-screen w-full max-w-[1500px] mx-auto px-4 md:px-8">
 				<HeroSection />
 
-				<div className="py-24 sm:py-32">
+				<div className="pb-24 sm:pb-32">
 					<CodeSnippetsSection />
 				</div>
 

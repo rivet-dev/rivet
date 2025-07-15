@@ -31,6 +31,8 @@ export async function generateNavigation() {
   }
 
   await writeFile('./src/generated/routes.json', JSON.stringify({ pages }, null, 2), 'utf8');
+
+	console.log(`Generated ${Object.keys(pages).length} pages`)
 }
 
 async function processPage({ path }) {
@@ -68,4 +70,4 @@ async function processPage({ path }) {
   };
 }
 
-await generateNavigation();
+generateNavigation();

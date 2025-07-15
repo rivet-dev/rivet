@@ -224,12 +224,12 @@ export function HeroBackground() {
 
 		// Get landing elements for positioning
 		const landingHero =
+			document.querySelector(".landing-hero") ||
 			document.querySelector(".hero-section") ||
 			document.querySelector("[data-hero-section]");
 
 		// Calculate container height
-		let containerHeight =
-			typeof window !== "undefined" ? window.innerHeight : 800; // Default to viewport height
+		let containerHeight = 600; // Fixed height to match HeroSection
 
 		if (landingHero) {
 			containerHeight = landingHero.offsetHeight;
@@ -617,12 +617,12 @@ export function HeroBackground() {
 
 			// Get landing elements for positioning
 			const landingHero =
+				document.querySelector(".landing-hero") ||
 				document.querySelector(".hero-section") ||
 				document.querySelector("[data-hero-section]");
 
 			// Calculate container height
-			let containerHeight =
-				typeof window !== "undefined" ? window.innerHeight : 800; // Default to viewport height
+			let containerHeight = 600; // Fixed height to match HeroSection
 
 			if (landingHero) {
 				containerHeight = landingHero.offsetHeight;
@@ -738,7 +738,7 @@ export function HeroBackground() {
 				top: 0,
 				left: 0,
 				width: "100%",
-				height: "100vh",
+				height: "600px",
 				overflow: "hidden",
 				pointerEvents: "none",
 				zIndex: -1,

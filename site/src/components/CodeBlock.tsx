@@ -1,4 +1,5 @@
 import * as shiki from "shiki";
+import theme from "@/lib/textmate-code-theme";
 
 const LANGS: shiki.BundledLanguage[] = [
 	"bash",
@@ -21,13 +22,6 @@ const LANGS: shiki.BundledLanguage[] = [
 	"rust",
 ];
 
-const theme = shiki.createCssVariablesTheme({
-	name: "css-variables",
-	variablePrefix: "--shiki-",
-	variableDefaults: {},
-	fontStyle: true,
-});
-
 let highlighter: shiki.Highlighter;
 
 export async function CodeBlock({
@@ -41,7 +35,7 @@ export async function CodeBlock({
 
 	const out = highlighter.codeToHtml(code, {
 		lang,
-		theme,
+		theme: theme.name,
 	});
 
 	return (

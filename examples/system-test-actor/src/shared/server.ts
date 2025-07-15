@@ -7,14 +7,14 @@ export function createAndStartServer(
 	getUpgradeWebSocket: GetUpgradeWebSocketFn,
 ): { app: Hono; port: number } {
 	// Setup auto-exit timer
-	setTimeout(() => {
-		console.error(
-			"Actor should've been destroyed by now. Automatically exiting.",
-		);
-
-		if (typeof Deno !== "undefined") Deno.exit(1);
-		else process.exit(1);
-	}, 60 * 1000);
+	// setTimeout(() => {
+	// 	console.error(
+	// 		"Actor should've been destroyed by now. Automatically exiting.",
+	// 	);
+	//
+	// 	if (typeof Deno !== "undefined") Deno.exit(1);
+	// 	else process.exit(1);
+	// }, 60 * 1000);
 
 	let tickIndex = 0;
 	setInterval(() => {

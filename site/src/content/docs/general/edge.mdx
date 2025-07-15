@@ -1,48 +1,36 @@
 # Edge Networking
 
-Actors run near your users on your provider's global network (if supported).
+Actors automatically run near your users on your provider's global network.
+
+<Note title="Partial platform support">
+	At the moment, edge networking is only supported on Rivet Cloud & Cloudflare Workers. More self-hosted platforms are on the roadmap.
+</Note>
 
 ## Region selection
 
 ### Automatic region selection
 
-By default, actors will choose the optimal region based on the client's location.
+By default, actors will choose the nearest region based on the client's location.
 
-<Note>
-	Under the hood, Rivet uses [Anycast routing](https://en.wikipedia.org/wiki/Anycast) to automatically find
-	the best location for the client to connect to without relying on slow & expensive manual pinging process.
-</Note>
+Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.org/wiki/Anycast) to automatically find the best location for the client to connect to without relying on a slow manual pinging process.
 
 ### Manual region selection
 
 The region a actor is created in can be overridden using region options:
 
 ```typescript client.ts
-import { createClient } from "rivetkit/client";
+import { createClient } from "@rivetkit/actors/client";
 import type { App } from "./src/index";
 
-const client = createClient<App>("http://localhost:8080");
+const client = createClient<App>(/* endpoint */);
 
 // Create actor in a specific region
 const actor = await client.example.get({
-  options: {
-    create: {
-      region: "atl"
-    }
+  create: {
+    region: "atl"
   }
 });
 ```
 
-See [Create & Manage Actors](/docs/actors/communicating-with-actors) for more information.
+See [Create  Manage Actors](/actors/communicating-with-actors) for more information.
 
-## Available regions
-
-See available regions [here](/docs/general/edge.mdx).
-
-### Fetching region list
-
-It's common to need to display a list of available regions in your application.
-
-When deployed to Rivet, you can fetch a full list of regions with the `GET https://api.rivet.gg/regions` HTTP endpoint. See API documentation [here](https://rivet.gg/docs/api/actor/regions/list).
-
-We don't recommend hard-coding the region list. This allows you to develop your application with a local development cluster.
