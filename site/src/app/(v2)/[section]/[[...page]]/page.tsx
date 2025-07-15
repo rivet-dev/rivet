@@ -82,7 +82,7 @@ export async function generateMetadata({
 
 export default async function CatchAllCorePage({ params: { section, page } }) {
 	if (!VALID_SECTIONS.includes(section)) {
-		notFound();
+		return notFound();
 	}
 
 	const path = buildPathComponents(section, page);

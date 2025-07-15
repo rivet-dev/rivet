@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 	metadataBase,
 	title: "Rivet - The open-source alternative to Durable Objects",
 	description:
-		"Rivet Actors is a library that provides durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
+		"Rivet is a library for long-lived processes with durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
 	twitter: {
 		site: "@rivetgg",
 		card: "summary_large_image",

@@ -54,7 +54,7 @@ export const sitemap = [
 		sidebar: [
 			{
 				title: "Actors",
-				icon: faActorsBorderless,
+				//icon: faActorsBorderless,
 				pages: [
 					{
 						title: "Overview",
