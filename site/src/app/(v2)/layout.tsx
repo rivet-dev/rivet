@@ -1,6 +1,6 @@
 import { EmbedDetector } from "@/components/EmbedDetector";
 import { Footer } from "@/components/Footer";
-import "@/styles/v2.css";
+import "@/styles/main.css";
 import { Suspense } from "react";
 
 export default function Layout({ children }) {

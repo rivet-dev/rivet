@@ -29,6 +29,7 @@
 	"include": [
 		"next-env.d.ts",
 		"next.config.ts",
+		"tailwind.config.ts",
 		"**/*.ts",
 		"**/*.tsx",
 		".next/types/**/*.ts",
