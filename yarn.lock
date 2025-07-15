@@ -1280,6 +1280,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@corex/deepmerge@npm:^4.0.43":
+  version: 4.0.43
+  resolution: "@corex/deepmerge@npm:4.0.43"
+  checksum: 10c0/3dc31721d10c0552c667392e01a67034d9f39417d275fb2f986140592fbdb5cbcf5ac82b45bcbaf9747fd659017bc7857283019d11929e8b03e8966934ab34b9
+  languageName: node
+  linkType: hard
+
 "@cspotcode/source-map-support@npm:^0.8.0":
   version: 0.8.1
   resolution: "@cspotcode/source-map-support@npm:0.8.1"
@@ -2609,6 +2616,13 @@ __metadata:
   version: 15.3.2
   resolution: "@next/env@npm:15.3.2"
   checksum: 10c0/bebc8acbe2fdaadc8cc9ae6dbf4fe1a2e183e1bc417742213ae6d246f8be9416b2af8e703e2faa1792c167245ea1918547c62cf7be88c35429f3494e71e4b429
+  languageName: node
+  linkType: hard
+
+"@next/env@npm:^13.4.3":
+  version: 13.5.11
+  resolution: "@next/env@npm:13.5.11"
+  checksum: 10c0/5274248b8f53fe5ec330d55c771387645aaa85adf4de41b6e770e884d8bf1f5417509bbdc22edecd0e0882f5e6d5e6b8d1214a7471d5c1183ae3e6f0bfa359d3
   languageName: node
   linkType: hard
 
@@ -13495,7 +13509,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimist@npm:^1.2.0, minimist@npm:^1.2.3, minimist@npm:^1.2.6":
+"minimist@npm:^1.2.0, minimist@npm:^1.2.3, minimist@npm:^1.2.6, minimist@npm:^1.2.8":
   version: 1.2.8
   resolution: "minimist@npm:1.2.8"
   checksum: 10c0/19d3fcdca050087b84c2029841a093691a91259a47def2f18222f41e7645a0b7c44ef4b40e88a1e58a40c84d2ef0ee6047c55594d298146d0eb3f6b737c20ce6
@@ -13771,6 +13785,23 @@ __metadata:
     next: ">=10.0.0"
     react: ">=17.0.0"
   checksum: 10c0/c6b4ee1eb4145a7c126c3c436e124ace5c2ae9e516aa1721487d89a201f7249317b8380649ff76c2b8434d2b87d2c59f6c0d5277ba83851f0f6c2e2dedbfe051
+  languageName: node
+  linkType: hard
+
+"next-sitemap@npm:^4.2.3":
+  version: 4.2.3
+  resolution: "next-sitemap@npm:4.2.3"
+  dependencies:
+    "@corex/deepmerge": "npm:^4.0.43"
+    "@next/env": "npm:^13.4.3"
+    fast-glob: "npm:^3.2.12"
+    minimist: "npm:^1.2.8"
+  peerDependencies:
+    next: "*"
+  bin:
+    next-sitemap: bin/next-sitemap.mjs
+    next-sitemap-cjs: bin/next-sitemap.cjs
+  checksum: 10c0/8a367c9db84ca249797ec900d06c267434265bf635a82bc0896d35bc0ce85eee0cf115d4340baa93dd20fde081e513115d38776b5e8a5b3fb604c7b34a8542ea
   languageName: node
   linkType: hard
 
@@ -15832,6 +15863,7 @@ __metadata:
     mdx-annotations: "npm:^0.1.1"
     next: "npm:^15.2.4"
     next-router-mock: "npm:^0.9.7"
+    next-sitemap: "npm:^4.2.3"
     postcss: "npm:^8.4.24"
     postcss-focus-visible: "npm:^6.0.4"
     posthog-js: "npm:^1.206"

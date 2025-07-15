@@ -2,4 +2,5 @@
 set -euf
 
 yarn install
-npx next build && cp _redirects out/_redirects
+yarn build
+cp _redirects out/_redirects

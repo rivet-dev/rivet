@@ -16,7 +16,7 @@ export function HeroSection() {
 								{/*Library for building stateful applications and distributed systems*/}
 								The open-source alternative to Durable Objects
 							</h1>
-							<p className="hero-bg-exclude max-w-3xl text-xl sm:text-2xl leading-[1.2] tracking-tight font-400 text-white/40 mx-auto text-xl leading-7 text-white/40 font-normal w-max max-w-full mb-10 transition-colors duration-200 tracking-[-0.025em]">
+							<p className="hero-bg-exclude max-w-3xl text-xl sm:text-2xl leading-[1.2] tracking-normal font-300 text-white/40 mx-auto text-xl leading-7 text-white/40 font-normal w-max max-w-full mb-10 transition-colors duration-200">
 								Rivet Actors is a library that provides{" "}
 								<span className="text-white/90">
 									durable state

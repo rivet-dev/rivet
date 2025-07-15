@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // Auto-generate navigation
 // TODO Move to server component
 import "./scripts/generateNavigation.mjs";
@@ -6,6 +7,12 @@ import path from "node:path";
 import url from "node:url";
 import nextMDX from "@next/mdx";
 import { config } from "./src/mdx/mdx.mjs";
+=======
+import path from 'node:path';
+import url from 'node:url';
+import nextMDX from '@next/mdx';
+import { config } from './src/mdx/mdx.mjs';
+>>>>>>> dfe7ea378 (chore: add sitemap)
 
 const withMDX = nextMDX(config);
 
