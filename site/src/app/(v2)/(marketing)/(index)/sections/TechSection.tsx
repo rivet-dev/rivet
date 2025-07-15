@@ -97,11 +97,76 @@ interface TechSubSectionProps {
 
 function TechSubSection({ title, children }: TechSubSectionProps) {
 	return (
-		<div className="ml-auto max-w-md">
+		<div className="mx-auto lg:ml-auto max-w-full lg:max-w-md">
 			<h3 className="text-lg font-600 text-white/80 mb-3">{title}</h3>
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+			<div className="grid grid-cols-1 grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2.5">
 				{children}
 			</div>
+		</div>
+	);
+}
+
+interface TechSectionGroupProps {
+	children: React.ReactNode;
+}
+
+function TechSectionGroup({ children }: TechSectionGroupProps) {
+	return (
+		<div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+			{children}
+		</div>
+	);
+}
+
+interface TechSectionTextProps {
+	heading: string;
+	description: string;
+	linkText: string;
+	linkHref: string;
+	linkExternal?: boolean;
+}
+
+function TechSectionText({ heading, description, linkText, linkHref, linkExternal }: TechSectionTextProps) {
+	const linkProps = linkExternal
+		? {
+			target: "_blank",
+			rel: "noopener noreferrer",
+		}
+		: {};
+
+	return (
+		<div className="space-y-6">
+			<h2 className="text-4xl sm:text-5xl font-700 text-white">
+				{heading}
+			</h2>
+			<div className="space-y-4">
+				<p className="text-lg font-500 text-white/40 leading-relaxed">
+					{description}
+				</p>
+				<p className="text-lg font-500 text-white/40 leading-relaxed">
+					Don't see what you need?{" "}
+					<Link
+						href={linkHref}
+						className="text-white/80 hover:text-white transition-colors underline"
+						{...linkProps}
+					>
+						{linkText}
+					</Link>
+					.
+				</p>
+			</div>
+		</div>
+	);
+}
+
+interface TechSectionSubsectionsProps {
+	children: React.ReactNode;
+}
+
+function TechSectionSubsections({ children }: TechSectionSubsectionsProps) {
+	return (
+		<div className="space-y-8">
+			{children}
 		</div>
 	);
 }
@@ -110,32 +175,15 @@ export function TechSection() {
 	return (
 		<div className="mx-auto max-w-7xl">
 			<div className="space-y-28">
-				{/* Runs Anywhere Section */}
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-					<div className="space-y-6">
-						<h2 className="text-4xl sm:text-5xl font-700 text-white">
-							Runs Anywhere
-						</h2>
-						<div className="space-y-4">
-							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Deploy Rivet Actors anywhere - from serverless
-								platforms to your own infrastructure with
-								Rivet's flexible runtime options.
-							</p>
-							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Don't see the runtime you want?{" "}
-								<Link
-									href="/docs/cloud"
-									className="text-white/80 hover:text-white transition-colors underline"
-								>
-									Add your own
-								</Link>
-								.
-							</p>
-						</div>
-					</div>
+				<TechSectionGroup>
+					<TechSectionText
+						heading="Runs Anywhere"
+						description="Deploy Rivet Actors anywhere - from serverless platforms to your own infrastructure with Rivet's flexible runtime options."
+						linkText="Add your own"
+						linkHref="/docs/cloud"
+					/>
 
-					<div className="space-y-8">
+					<TechSectionSubsections>
 						<TechSubSection title="Compute">
 							<TechLink
 								href="/docs/actors/quickstart-backend"
@@ -217,36 +265,19 @@ export function TechSection() {
 								alt="Memory"
 							/>
 						</TechSubSection>
-					</div>
-				</div>
+					</TechSectionSubsections>
+				</TechSectionGroup>
 
-				{/* Works With Your Tools Section */}
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-					<div className="space-y-6">
-						<h2 className="text-4xl sm:text-5xl font-700 text-white">
-							Works With Your Tools
-						</h2>
-						<div className="space-y-4">
-							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Seamlessly integrate Rivet with your favorite
-								frameworks, languages, and tools.
-							</p>
-							<p className="text-lg font-500 text-white/40 leading-relaxed">
-								Don't see what you need?{" "}
-								<Link
-									href="https://github.com/rivet-gg/rivetkit/issues/new"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="text-white/80 hover:text-white transition-colors underline"
-								>
-									Request an integration
-								</Link>
-								.
-							</p>
-						</div>
-					</div>
+				<TechSectionGroup>
+					<TechSectionText
+						heading="Works With Your Tools"
+						description="Seamlessly integrate Rivet with your favorite frameworks, languages, and tools."
+						linkText="Request an integration"
+						linkHref="https://github.com/rivet-gg/rivetkit/issues/new"
+						linkExternal
+					/>
 
-					<div className="space-y-8">
+					<TechSectionSubsections>
 						<TechSubSection title="Frameworks">
 							<TechLink
 								href="/docs/clients/react"
@@ -375,8 +406,8 @@ export function TechSection() {
 								status="help-wanted"
 							/>
 						</TechSubSection>
-					</div>
-				</div>
+					</TechSectionSubsections>
+				</TechSectionGroup>
 			</div>
 		</div>
 	);

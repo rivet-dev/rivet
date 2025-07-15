@@ -84,7 +84,9 @@ export function Header({
 					className={cn(
 						"hero-bg-exclude",
 						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
-						isScrolled ? "before:border-white/10" : "before:border-transparent",
+						isScrolled
+							? "before:border-white/10"
+							: "before:border-transparent",
 					)}
 				>
 					<div
@@ -113,7 +115,9 @@ export function Header({
 						support={
 							<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 								<RivetHeader.NavItem asChild>
-									<Link href="https://hub.rivet.gg">Sign In</Link>
+									<Link href="https://hub.rivet.gg">
+										Sign In
+									</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
 									<Link href="/discord">Discord</Link>
@@ -154,19 +158,25 @@ export function Header({
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<TextNavItem
 									href="/docs"
-									ariaCurrent={active === "docs" ? "page" : undefined}
+									ariaCurrent={
+										active === "docs" ? "page" : undefined
+									}
 								>
 									Documentation
 								</TextNavItem>
 								<TextNavItem
 									href="/cloud"
-									ariaCurrent={active === "cloud" ? "page" : undefined}
+									ariaCurrent={
+										active === "cloud" ? "page" : undefined
+									}
 								>
 									Cloud
 								</TextNavItem>
 								<TextNavItem
 									href="/changelog"
-									ariaCurrent={active === "blog" ? "page" : undefined}
+									ariaCurrent={
+										active === "blog" ? "page" : undefined
+									}
 								>
 									Changelog
 								</TextNavItem>
@@ -182,8 +192,9 @@ export function Header({
 	return (
 		<RivetHeader
 			className={cn(
-				"pb-4 [&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
-				subnav ? "md:pt-4 md:pb-0" : "md:py-4"
+				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
+				// 0 padding on bottom for larger screens when subnav is showing
+				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
 			)}
 			logo={
 				<Link href="/">
@@ -216,18 +227,9 @@ export function Header({
 					<div className="mr-4">
 						<HeaderSearch />
 					</div>
-					<RivetHeader.NavItem
-						asChild
-						className="p-2 mr-4"
-					>
-						<Link
-							href="/discord"
-							className="text-white/90"
-						>
-							<Icon
-								icon={faDiscord}
-								className="drop-shadow-md"
-							/>
+					<RivetHeader.NavItem asChild className="p-2 mr-4">
+						<Link href="/discord" className="text-white/90">
+							<Icon icon={faDiscord} className="drop-shadow-md" />
 						</Link>
 					</RivetHeader.NavItem>
 					<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
@@ -268,17 +270,17 @@ export function Header({
 
 function DocsMobileNavigation() {
 	const pathname = usePathname() || "";
-	
+
 	const docsLinks = [
 		{ href: "/docs", label: "Actors" },
 		{ href: "/docs/cloud", label: "Cloud" },
 	];
-	
+
 	const otherLinks = [
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
 	];
-	
+
 	return (
 		<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 			{/* Docs section */}
@@ -286,24 +288,20 @@ function DocsMobileNavigation() {
 			<div className="border-l border-white/20">
 				{docsLinks.map(({ href, label }) => (
 					<div key={href} className="ml-4">
-						<RivetHeader.NavItem
-							asChild
-						>
-							<ActiveLink href={href}>
-								{label}
-							</ActiveLink>
+						<RivetHeader.NavItem asChild>
+							<ActiveLink href={href}>{label}</ActiveLink>
 						</RivetHeader.NavItem>
 					</div>
 				))}
 			</div>
-			
+
 			{/* Other links */}
 			{otherLinks.map(({ href, external, label }) => (
-				<RivetHeader.NavItem
-					key={href}
-					asChild
-				>
-					<ActiveLink href={href} target={external ? "_blank" : undefined}>
+				<RivetHeader.NavItem key={href} asChild>
+					<ActiveLink
+						href={href}
+						target={external ? "_blank" : undefined}
+					>
 						{label}
 					</ActiveLink>
 				</RivetHeader.NavItem>
