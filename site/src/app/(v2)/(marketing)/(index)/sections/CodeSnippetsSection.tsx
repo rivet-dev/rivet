@@ -1,4 +1,4 @@
-import CodeSnippets from "../components/CodeSnippets";
+import CodeSnippets from "../components/code-snippets";
 
 export function CodeSnippetsSection() {
 	return (

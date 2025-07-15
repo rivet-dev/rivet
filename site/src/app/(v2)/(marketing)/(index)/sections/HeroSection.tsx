@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export function HeroSection() {
 	return (
-		<div className="relative isolate overflow-hidden mt-[73px] landing-hero flex flex-col">
+		<div className="relative isolate mt-[73px] landing-hero flex flex-col px-4 sm:px-6">
 			<div className="h-16 sm:h-20" />
 
 			<div className="mx-auto md:px-8 flex flex-col h-full">
@@ -13,7 +13,7 @@ export function HeroSection() {
 				<div className="flex-grow flex flex-col justify-center">
 					<div className="max-w-7xl mx-auto text-center">
 						{/* Title */}
-						<h1 className="hero-bg-exclude text-3xl sm:text-4xl md:text-5xl font-700 text-white leading-[1.3] sm:leading-[1.1] tracking-normal leading-[60px] font-normal tracking-[-0.03em]inline-block max-w-full">
+						<h1 className="hero-bg-exclude text-4xl md:text-5xl font-normal text-white leading-[1.3] sm:leading-[1.1] tracking-[-0.03em] max-w-full">
 							{/*Lightweight library for building modern backends*/}
 							{/*Library for building stateful applications and distributed systems*/}
 							The open-source alternative to Durable Objects
@@ -21,7 +21,7 @@ export function HeroSection() {
 
 						<div className="h-5" />
 
-						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-[1.2] tracking-normal font-300 text-white/40 mx-auto leading-7 text-white/40 font-normal w-max max-w-full transition-colors duration-200">
+						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
 							Rivet is a library for long-lived processes with{" "}
 							<span className="text-white/90">durable state</span>
 							, <span className="text-white/90">realtime</span>,

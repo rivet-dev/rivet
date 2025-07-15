@@ -34,6 +34,7 @@ import {
 	faTag,
 	faTowerBroadcast,
 	faVialCircleCheck,
+    faForward,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -63,7 +64,7 @@ export const sitemap = [
 					},
 					{
 						title: "Quickstart",
-						icon: faFunction,
+						icon: faForward,
 						collapsible: true,
 						pages: [
 							{

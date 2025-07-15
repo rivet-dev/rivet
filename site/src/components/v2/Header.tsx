@@ -1,5 +1,7 @@
 "use client";
-import { DocsMobileNavigation } from "@/components/DocsMobileNavigation";
+import { ActiveLink } from "@/components/ActiveLink";
+import { Tree } from "@/components/DocsNavigation";
+import { sitemap } from "@/sitemap/mod";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
@@ -7,6 +9,7 @@ import { Icon, faDiscord } from "@rivet-gg/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 
@@ -260,5 +263,51 @@ export function Header({
 				</div>
 			}
 		/>
+	);
+}
+
+function DocsMobileNavigation() {
+	const pathname = usePathname() || "";
+	
+	const docsLinks = [
+		{ href: "/docs", label: "Actors" },
+		{ href: "/docs/cloud", label: "Cloud" },
+	];
+	
+	const otherLinks = [
+		{ href: "/changelog", label: "Changelog" },
+		{ href: "/pricing", label: "Pricing" },
+	];
+	
+	return (
+		<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
+			{/* Docs section */}
+			<div className="text-white/40">Documentation</div>
+			<div className="border-l border-white/20">
+				{docsLinks.map(({ href, label }) => (
+					<div key={href} className="ml-4">
+						<RivetHeader.NavItem
+							asChild
+						>
+							<ActiveLink href={href}>
+								{label}
+							</ActiveLink>
+						</RivetHeader.NavItem>
+					</div>
+				))}
+			</div>
+			
+			{/* Other links */}
+			{otherLinks.map(({ href, external, label }) => (
+				<RivetHeader.NavItem
+					key={href}
+					asChild
+				>
+					<ActiveLink href={href} target={external ? "_blank" : undefined}>
+						{label}
+					</ActiveLink>
+				</RivetHeader.NavItem>
+			))}
+		</div>
 	);
 }

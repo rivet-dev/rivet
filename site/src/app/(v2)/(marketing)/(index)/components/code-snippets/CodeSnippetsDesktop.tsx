@@ -2,35 +2,17 @@
 
 import { useState, useEffect } from "react";
 import {
-	faFilePen,
-	faRobot,
-	faMessage,
-	faDatabase,
-	faGaugeHigh,
-	faWaveSine,
-	faGamepad,
-	faRotate,
-	faBuilding,
-	faCode,
 	faFolder,
 	faFolderOpen,
-	faFile,
 	faChevronRight,
 	faChevronDown,
-	faNpm,
-	faFlask,
-	faBeaker,
-	faReact,
-	faBracketsCurly,
-	faJs,
 	faGithub,
-	faArrowUpRightFromSquare,
-	faDownload,
-	faCopy,
-	faCheck,
-	Icon,
 	faFileZip,
 	faBolt,
+	faCopy,
+	faCheck,
+	faCode,
+	Icon,
 } from "@rivet-gg/icons";
 import {
 	examples,
@@ -39,29 +21,10 @@ import {
 } from "@/data/examples/examples";
 import * as shiki from "shiki";
 import theme from "@/lib/textmate-code-theme";
-import JSZip from "jszip";
 import clsx from "clsx";
+import { EXAMPLE_ICON_MAP, createExampleActions, getFileIcon } from "./utils";
 
 const EDITOR_HEIGHT = 800;
-
-function getFileIcon(fileName: string) {
-	// Check for specific file names first
-	if (fileName === "package.json") return faNpm;
-	if (fileName === "tsconfig.json") return faBracketsCurly;
-
-	// Check for test files first (before other extensions)
-	if (fileName.includes(".test.") || fileName.includes(".spec."))
-		return faFlask;
-
-	// Check for file extensions
-	if (fileName.endsWith(".tsx")) return faReact;
-	if (fileName.endsWith(".ts")) return faJs;
-	if (fileName.endsWith(".js") || fileName.endsWith(".jsx")) return faCode;
-	if (fileName.endsWith(".json")) return faBracketsCurly;
-
-	// Default file icon
-	return faFile;
-}
 
 interface FileTreeNode {
 	name: string;
@@ -216,18 +179,6 @@ function FileTreeItem({
 	);
 }
 
-const EXAMPLE_ICON_MAP: Record<string, any> = {
-	"ai-agent": faRobot,
-	"chat-room": faMessage,
-	crdt: faFilePen,
-	database: faDatabase,
-	rate: faGaugeHigh,
-	stream: faWaveSine,
-	game: faGamepad,
-	sync: faRotate,
-	tenant: faBuilding,
-};
-
 interface TabProps {
 	children: React.ReactNode;
 	isActive: boolean;
@@ -323,41 +274,8 @@ interface BottomBarProps {
 
 function BottomBar({ activeExample }: BottomBarProps) {
 	const exampleData = examples.find((ex) => ex.id === activeExample)!;
-
-	const handleOpenGithub = () => {
-		window.open(
-			`https://github.com/rivet-gg/rivetkit/tree/main/examples/${activeExample}`,
-			"_blank",
-		);
-	};
-
-	const handleOpenStackBlitz = () => {
-		// Use StackBlitz JavaScript SDK to open the GitHub project
-		const stackBlitzUrl = `https://stackblitz.com/github/rivet-gg/rivetkit/tree/main/examples/${activeExample}`;
-		window.open(stackBlitzUrl, "_blank");
-	};
-
-	const handleDownloadZip = async () => {
-		const zip = new JSZip();
-
-		// Add all files from the example to the zip
-		Object.entries(exampleData.files).forEach(([filePath, fileContent]) => {
-			zip.file(filePath, fileContent);
-		});
-
-		// Generate the zip file
-		const zipBlob = await zip.generateAsync({ type: "blob" });
-
-		// Create download link
-		const url = URL.createObjectURL(zipBlob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = `${activeExample}.zip`;
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	};
+	const { handleOpenGithub, handleOpenStackBlitz, handleDownloadZip } = 
+		createExampleActions(activeExample, exampleData.files);
 
 	return (
 		<div className="border-t border-white/10 bg-white/[0.02] p-2">
@@ -469,7 +387,7 @@ function CodeEditor({ activeExample, activeStateType }: CodeEditorProps) {
 		<div className="w-full flex flex-col">
 			<div className={`h-[${EDITOR_HEIGHT}px] w-full flex`}>
 				{/* Left sidebar - File tree */}
-				<div className="w-64 border-r border-white/10 bg-white/[0.02]">
+				<div className="w-[160px] flex-shrink-0 border-r border-white/10 bg-white/[0.02]">
 					<div className="p-2 overflow-auto h-full">
 						{fileTree.map((node) => (
 							<FileTreeItem
@@ -515,18 +433,21 @@ function CodeEditor({ activeExample, activeStateType }: CodeEditorProps) {
 	);
 }
 
-export default function CodeSnippets() {
-	const [activeExample, setActiveExample] = useState<string>(examples[0].id);
-	const [activeStateType, setActiveStateType] =
-		useState<StateTypeTab>("memory");
+interface CodeSnippetsDesktopProps {
+	activeExample: string;
+	setActiveExample: (example: string) => void;
+	activeStateType: StateTypeTab;
+	setActiveStateType: (state: StateTypeTab) => void;
+}
 
+export default function CodeSnippetsDesktop({
+	activeExample,
+	setActiveExample,
+	activeStateType,
+	setActiveStateType,
+}: CodeSnippetsDesktopProps) {
 	return (
-		<div className="bg-white/2 border border-white/10 rounded-2xl overflow-hidden">
-			<div className="py-2 border-b border-white/5">
-				<h2 className="text-center text-white/40 text-600 text-sm font-medium">
-					Examples
-				</h2>
-			</div>
+		<>
 			<TabGroup
 				examples={examples}
 				activeExample={activeExample}
@@ -538,6 +459,6 @@ export default function CodeSnippets() {
 				activeExample={activeExample}
 				activeStateType={activeStateType}
 			/>
-		</div>
+		</>
 	);
 }
