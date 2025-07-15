@@ -47,7 +47,7 @@ export function HeroSection() {
 						{/* CTA Buttons */}
 						<div className="hero-bg-exclude flex flex-col sm:flex-row items-center justify-center gap-4">
 							<MarketingButton
-								href="/docs/actors#quickstart"
+								href="/docs/actors/quickstart"
 								primary
 							>
 								Quickstart — 5 minutes

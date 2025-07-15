@@ -34,7 +34,7 @@ import {
 	faTag,
 	faTowerBroadcast,
 	faVialCircleCheck,
-    faForward,
+	faForward,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -66,15 +66,16 @@ export const sitemap = [
 						title: "Quickstart",
 						icon: faForward,
 						collapsible: true,
+						href: "/docs/actors/quickstart",
 						pages: [
 							{
-								title: "Backend",
-								href: "/docs/actors/quickstart-backend",
+								title: "Node.js & Bun",
+								href: "/docs/actors/quickstart/backend",
 								icon: faNodeJs,
 							},
 							{
 								title: "React",
-								href: "/docs/actors/quickstart-react",
+								href: "/docs/actors/quickstart/react",
 								icon: faReact,
 							},
 						],

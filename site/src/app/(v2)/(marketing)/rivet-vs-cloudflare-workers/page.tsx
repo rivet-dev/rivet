@@ -224,7 +224,7 @@ const CombinedOverviewSection = () => {
 					</div>
 					<div className="mt-10 text-center">
 						<Link
-							href="/docs/actors/quickstart-backend"
+							href="/docs/actors/quickstart/backend"
 							className="inline-flex items-center px-4 py-2 bg-white text-black rounded-md hover:bg-white/90 transition-colors"
 						>
 							Get started with Rivet Actors{" "}

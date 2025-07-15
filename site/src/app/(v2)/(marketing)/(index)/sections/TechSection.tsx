@@ -186,13 +186,13 @@ export function TechSection() {
 					<TechSectionSubsections>
 						<TechSubSection title="Compute">
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="Node.js"
 								icon={nodejsLogo}
 								alt="Node.js"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="Bun"
 								icon={bunLogo}
 								alt="Bun"
@@ -230,7 +230,7 @@ export function TechSection() {
 								status="help-wanted"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="Durable Objects"
 								icon={cloudflareWorkersLogo}
 								alt="Cloudflare Durable Objects"
@@ -239,7 +239,7 @@ export function TechSection() {
 
 						<TechSubSection title="Storage">
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="Redis"
 								icon={redisLogo}
 								alt="Redis"
@@ -253,13 +253,13 @@ export function TechSection() {
 								status="coming-soon"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="File System"
 								icon={fileSystemLogo}
 								alt="File System"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart-backend"
+								href="/docs/actors/quickstart/backend"
 								name="Memory"
 								icon={memoryLogo}
 								alt="Memory"

@@ -32,13 +32,13 @@ export function PlatformIcons() {
 		//   tooltip: "Rivet"
 		// },
 		{
-			href: "/docs/actors/quickstart-backend",
+			href: "/docs/actors/quickstart/backend",
 			src: nodejsLogo,
 			alt: "Node.js",
 			tooltip: "Node.js",
 		},
 		{
-			href: "/docs/actors/quickstart-backend",
+			href: "/docs/actors/quickstart/backend",
 			src: bunLogo,
 			alt: "Bun",
 			tooltip: "Bun",
