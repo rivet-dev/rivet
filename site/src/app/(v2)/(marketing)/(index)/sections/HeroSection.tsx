@@ -47,13 +47,13 @@ export function HeroSection() {
 						{/* CTA Buttons */}
 						<div className="hero-bg-exclude flex flex-col sm:flex-row items-center justify-center gap-4">
 							<MarketingButton
-								href="/docs/actors#getting-started"
+								href="/docs/actors#quickstart"
 								primary
 							>
 								Quickstart — 5 minutes
 							</MarketingButton>
 
-							<MarketingButton href="/sales" target="_blank">
+							<MarketingButton href="/talk-to-an-engineer">
 								Talk to an engineer
 							</MarketingButton>
 						</div>

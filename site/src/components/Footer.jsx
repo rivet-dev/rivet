@@ -33,6 +33,7 @@ const footer = {
 			href: "/rivet-vs-cloudflare-workers",
 		},
 		{ name: "Pricing", href: "/pricing" },
+		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.gg/press-kit.zip" },

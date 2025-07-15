@@ -3,7 +3,7 @@
 import posthog from "posthog-js";
 import { useState } from "react";
 
-export function SalesForm() {
+export function TalkToAnEngineerForm() {
 	const [isSubmitted, setIsSubmitted] = useState(false);
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -15,7 +15,7 @@ export function SalesForm() {
 		console.log(data);
 
 		posthog.capture("survey sent", {
-			$survey_id: "0193928a-4799-0000-8fc4-455382e21359",
+			$survey_id: "01980f18-06a9-0000-e1e1-a5886e9012d0",
 			...data,
 		});
 		setIsSubmitted(true);
@@ -27,8 +27,8 @@ export function SalesForm() {
 				<span className="text-2xl text-white mb-2 block">
 					Thank you for your interest!
 				</span>
-				We will get back to you within the next few days. In the
-				meantime, feel free to explore our{" "}
+				We will get back to you promptly. In the meantime, feel free to
+				explore our{" "}
 				<a href="/docs" className="text-[#FF5C00] hover:underline">
 					documentation
 				</a>{" "}
@@ -49,36 +49,19 @@ export function SalesForm() {
 			onSubmit={handleSubmit}
 		>
 			<div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
-				<div>
+				<div className="sm:col-span-2">
 					<label
-						htmlFor="first-name"
+						htmlFor="email"
 						className="block text-sm/6 font-semibold text-white"
 					>
-						First name
+						Email
 					</label>
 					<div className="mt-2.5">
 						<input
-							id="first-name"
-							name="$survey_response_27cd441e-3b34-4ea3-b2cf-e22b847046d9"
-							type="text"
-							autoComplete="given-name"
-							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
-						/>
-					</div>
-				</div>
-				<div>
-					<label
-						htmlFor="last-name"
-						className="block text-sm/6 font-semibold text-white"
-					>
-						Last name
-					</label>
-					<div className="mt-2.5">
-						<input
-							id="last-name"
-							name="$survey_response_effaa684-34bb-468e-80fb-29b693d564d5"
-							type="text"
-							autoComplete="family-name"
+							id="email"
+							name="$survey_response_0417ebe5-969d-41a9-8150-f702c42681ff"
+							type="email"
+							autoComplete="email"
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
 						/>
 					</div>
@@ -93,7 +76,7 @@ export function SalesForm() {
 					<div className="mt-2.5">
 						<input
 							id="company"
-							name="$survey_response_feaa095f-16a0-47f0-871d-361d2a446c2c"
+							name="$survey_response_74c3d31a-880f-4e89-8cac-e03ad3422cce"
 							type="text"
 							autoComplete="organization"
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
@@ -102,35 +85,69 @@ export function SalesForm() {
 				</div>
 				<div className="sm:col-span-2">
 					<label
-						htmlFor="email"
+						htmlFor="role"
 						className="block text-sm/6 font-semibold text-white"
 					>
-						Email
+						Role
 					</label>
 					<div className="mt-2.5">
 						<input
-							id="email"
-							name="$survey_response_c954c48d-b373-475e-8eb5-0023ed18182b"
-							type="email"
-							autoComplete="email"
+							id="role"
+							name="$survey_response_8bbdb054-6679-4d05-9685-f9f50d7b080b"
+							type="text"
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
+							placeholder="e.g., CTO, Lead Engineer, Software Developer"
 						/>
 					</div>
 				</div>
 				<div className="sm:col-span-2">
 					<label
-						htmlFor="message"
+						htmlFor="current-stack"
 						className="block text-sm/6 font-semibold text-white"
 					>
-						Message
+						Current Stack
 					</label>
 					<div className="mt-2.5">
 						<textarea
-							id="message"
-							name="$survey_response_8974a198-041d-494b-945e-d829d192be2b"
+							id="current-stack"
+							name="$survey_response_f585f0b9-f680-4b28-87f7-0d8f08fd0b14"
+							rows={3}
+							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
+							placeholder="Tell us about your current technology stack and infrastructure"
+						/>
+					</div>
+				</div>
+				<div className="sm:col-span-2">
+					<label
+						htmlFor="what-to-talk-about"
+						className="block text-sm/6 font-semibold text-white"
+					>
+						What do you want to talk about?
+					</label>
+					<div className="mt-2.5">
+						<textarea
+							id="what-to-talk-about"
+							name="$survey_response_3cdc5e4a-81f2-46e5-976b-15f8c2c8986f"
 							rows={4}
 							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
-							placeholder="I would like Rivet to help solve for my company..."
+							placeholder="Describe your technical challenges, questions, or what you'd like to discuss with our engineer"
+						/>
+					</div>
+				</div>
+				<div className="sm:col-span-2">
+					<label
+						htmlFor="where-heard"
+						className="block text-sm/6 font-semibold text-white"
+					>
+						Where did you hear about us?
+					</label>
+					<div className="mt-2.5">
+						<input
+							id="where-heard"
+							name="$survey_response_99519796-e67d-4a20-8ad4-ae5b7bb3e16d"
+							type="text"
+							className="block w-full rounded-md bg-[#121212] px-3.5 py-2 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-white/40 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-[#FF5C00]"
+							placeholder="e.g., X, LinkedIn, Google, a colleague, etc."
 						/>
 					</div>
 				</div>

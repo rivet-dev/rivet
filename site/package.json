@@ -60,7 +60,7 @@
 		"next-sitemap": "^4.2.3",
 		"postcss": "^8.4.24",
 		"postcss-focus-visible": "^6.0.4",
-		"posthog-js": "^1.206",
+		"posthog-js": "^1.257.0",
 		"react": "*",
 		"react-chartjs-2": "^5.2.0",
 		"react-github-btn": "^1.4.0",
