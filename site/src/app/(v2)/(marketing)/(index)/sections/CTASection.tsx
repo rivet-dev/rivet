@@ -56,10 +56,10 @@ export function CTASection() {
 
 			<div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
 				<MarketingButton href="/docs/actors" primary>
-					Get Started
+					Get started
 				</MarketingButton>
-				<MarketingButton href="https://github.com/rivet-gg/rivetkit/tree/main/examples">
-					See Examples
+				<MarketingButton href="/sales">
+					Talk to an engineer
 				</MarketingButton>
 			</div>
 		</div>

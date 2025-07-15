@@ -54,14 +54,11 @@ export function HeroSection() {
 									href="/docs/actors#getting-started"
 									primary
 								>
-									Get Started
+									Get started
 								</MarketingButton>
 
-								<MarketingButton
-									href="https://github.com/rivet-gg/rivetkit/tree/main/examples"
-									target="_blank"
-								>
-									See Examples
+								<MarketingButton href="/sales" target="_blank">
+									Talk to an engineer
 								</MarketingButton>
 							</div>
 

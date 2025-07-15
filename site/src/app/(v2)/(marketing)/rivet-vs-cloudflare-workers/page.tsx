@@ -73,8 +73,8 @@ const HeroSection = () => {
 					Rivet Actors vs Cloudflare Durable Objects
 				</h1>
 				<p className="text-xl text-white/70 max-w-3xl mx-auto">
-					Cloudflare Durable Objects provide stateful serverless
-					computing with vendor lock-in.
+					Cloudflare Durable Objects provide stateful serverless computing with
+					vendor lock-in.
 					<br />
 					Rivet Actors gives you the same capabilities as an
 					open-source library that works with your existing
@@ -128,15 +128,21 @@ const CombinedOverviewSection = () => {
 		},
 		{
 			icon: faCheck,
-			title: "Supports any language/technology",
+			title: "Technology flexibility",
 			description:
-				"When you need things to work out of the box with any programming language, framework, or runtime instead of proprietary platforms",
+				"When you want to use your existing frameworks and libraries without platform-specific constraints",
 		},
 		{
 			icon: faCheck,
 			title: "Provides monitoring and observability",
 			description:
 				"When you need built-in monitoring for actors that integrates with your existing observability stack",
+		},
+		{
+			icon: faCheck,
+			title: "Rich ecosystem of integrations",
+			description:
+				"When you want a comprehensive ecosystem with ready-to-use integrations for popular frameworks and tools",
 		},
 		//{
 		//	icon: faCheck,
@@ -157,13 +163,19 @@ const CombinedOverviewSection = () => {
 			icon: faCheck,
 			title: "JavaScript/TypeScript only",
 			description:
-				"When your team exclusively works with JavaScript/TypeScript and doesn't need other languages",
+				"When your team exclusively works with Cloudflare's limited JavaScript/TypeScript runtime and doesn't need access to the broader npm ecosystem",
 		},
 		{
 			icon: faCheck,
 			title: "Don't mind platform constraints",
 			description:
 				"When you're comfortable with Cloudflare's deployment process, monitoring limitations, and vendor lock-in",
+		},
+		{
+			icon: faCheck,
+			title: "Prefer low-level primitives",
+			description:
+				"When you want raw primitives and don't need a rich ecosystem of framework integrations",
 		},
 	];
 
@@ -178,15 +190,13 @@ const CombinedOverviewSection = () => {
 						<div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-white mr-4">
 							<Icon icon={faRivet} className="text-2xl" />
 						</div>
-						<h3 className="text-2xl font-medium text-white">
-							Rivet
-						</h3>
+						<h3 className="text-2xl font-medium text-white">Rivet Actors</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Rivet Actors is an open-source library that brings the
-						actor model to your existing infrastructure. Build
-						stateful, distributed applications with any language and
-						technology stack, deployed on your own infrastructure.
+						Rivet Actors is an open-source library that brings the actor model
+						to your existing infrastructure. Build stateful, distributed
+						applications with your preferred technology stack, deployed on your
+						own infrastructure.
 					</p>
 
 					<h4 className="text-xl font-medium text-white mb-6">
@@ -232,11 +242,10 @@ const CombinedOverviewSection = () => {
 						</h3>
 					</div>
 					<p className="text-white/70 mb-8">
-						Cloudflare Durable Objects provide stateful serverless
-						computing that runs on Cloudflare's global edge network.
-						Built on Cloudflare's proprietary platform, Durable
-						Objects offer strong consistency and state persistence
-						for JavaScript/TypeScript applications.
+						Cloudflare Durable Objects provide stateful serverless computing
+						that runs on Cloudflare's global edge network. Built on Cloudflare's
+						proprietary platform, Durable Objects offer strong consistency and
+						state persistence for JavaScript/TypeScript applications.
 					</p>
 
 					<h4 className="text-xl font-medium text-white mb-6">
@@ -315,21 +324,8 @@ const ComparisonTable = () => {
 			],
 		},
 		{
-			groupTitle: "Rivet Actors vs Cloudflare Durable Objects",
+			groupTitle: "Infrastructure",
 			features: [
-				{
-					feature: "Actor support",
-					rivet: {
-						status: "yes",
-						text: "First-class actor model with Rivet Actors library",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Durable Objects for stateful workloads",
-					},
-					importance:
-						"Actor model enables scalable stateful applications with state persistence, hibernation, and realtime",
-				},
 				{
 					feature: "Works with existing infrastructure",
 					rivet: {
@@ -344,7 +340,20 @@ const ComparisonTable = () => {
 						"Using your existing infrastructure avoids vendor lock-in and integrates with your current setup",
 				},
 				{
-					feature: "No changes to deploy process",
+					feature: "Data sovereignty and VPC isolation",
+					rivet: {
+						status: "yes",
+						text: "Full control over data residency and network isolation within your VPC",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Data processed on Cloudflare's global network with limited control",
+					},
+					importance:
+						"Data sovereignty ensures compliance with data governance requirements and maintains complete network isolation",
+				},
+				{
+					feature: "Works with existing deploy processes",
 					rivet: {
 						status: "yes",
 						text: "Import the library and deploy with your existing CI/CD",
@@ -357,17 +366,17 @@ const ComparisonTable = () => {
 						"Keeping your existing deployment process reduces complexity and learning curve",
 				},
 				{
-					feature: "Language/technology support",
+					feature: "Technology flexibility",
 					rivet: {
 						status: "yes",
-						text: "Works with any language or technology stack",
+						text: "Works with your existing technology stack and frameworks",
 					},
 					cloudflare: {
 						status: "partial",
-						text: "Limited to JavaScript/TypeScript",
+						text: "Limited to Cloudflare's limited JavaScript/TypeScript runtime, not compatible with many npm packages",
 					},
 					importance:
-						"Full language support lets you use your existing skills and codebase",
+						"Technology flexibility lets you use your existing skills and codebase",
 				},
 				{
 					feature: "Integrates with existing monitoring",
@@ -381,6 +390,24 @@ const ComparisonTable = () => {
 					},
 					importance:
 						"Integration with existing monitoring reduces operational overhead",
+				},
+			],
+		},
+		{
+			groupTitle: "Runtime",
+			features: [
+				{
+					feature: "Actor support",
+					rivet: {
+						status: "yes",
+						text: "First-class actor model with Rivet Actors library",
+					},
+					cloudflare: {
+						status: "yes",
+						text: "Durable Objects for stateful workloads",
+					},
+					importance:
+						"Actor model enables scalable stateful applications with state persistence, hibernation, and realtime",
 				},
 				{
 					feature: "KV Persistence",
@@ -422,6 +449,237 @@ const ComparisonTable = () => {
 						"Higher memory limits allow more complex stateful applications",
 				},
 				{
+					feature: "Automatic connection handling",
+					rivet: {
+						status: "yes",
+						text: "Optionally provides abstraction over HTTP, WebSockets, and SSE with intelligent failure and reconnection handling",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Requires low-level implementation of connection management",
+					},
+					importance:
+						"Automatic connection handling reduces development time and improves reliability",
+				},
+				{
+					feature: "Event broadcasting",
+					rivet: {
+						status: "yes",
+						text: "Built-in event broadcasting to specific connections or all actors",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Requires complex setup or third-party solutions like PartyKit",
+					},
+					importance:
+						"Native event system enables real-time features with minimal setup",
+				},
+				{
+					feature: "Built-in scheduling",
+					rivet: {
+						status: "yes",
+						text: "Powerful built-in scheduling system",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Requires boilerplate on top of Alarms API",
+					},
+					importance:
+						"Native scheduling reduces complexity and improves reliability for time-based operations",
+				},
+				{
+					feature: "Testing support",
+					rivet: {
+						status: "yes",
+						text: "Full Vitest support with mocking and fake timers",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Limited Vitest support due to custom runtime constraints",
+					},
+					importance:
+						"Comprehensive testing capabilities ensure code quality and reliability",
+				},
+				{
+					feature: "Customizable actor lifecycle",
+					rivet: {
+						status: "yes",
+						text: "Flexible draining mechanism with configurable lifecycle management",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "60s grace period",
+					},
+					importance:
+						"Customizable lifecycle management allows for graceful state transfers and prevents data loss",
+				},
+				{
+					feature: "Control over actor upgrades",
+					rivet: {
+						status: "yes",
+						text: "Full control based on your existing rollout mechanisms",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Only allows controlling gradual deployment percentages, not specific Durable Object versions",
+					},
+					importance:
+						"Controlled upgrades ensure smooth transitions without service disruption tailored to your application's architecture",
+				},
+				{
+					feature: "Actor creation with input data",
+					rivet: {
+						status: "yes",
+						text: "Pass initialization data when creating actors",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Cannot pass input data during Durable Object creation",
+					},
+					importance:
+						"Ability to initialize actors with data simplifies setup and reduces boilerplate",
+				},
+				{
+					feature: "Actor shutdown control",
+					rivet: {
+						status: "yes",
+						text: "Clean shutdown API for actors",
+					},
+					cloudflare: {
+						status: "partial",
+						text: "Requires deleteAll with custom logic and error-prone boilerplate",
+					},
+					importance:
+						"Proper shutdown control ensures graceful cleanup and prevents resource leaks",
+				},
+				{
+					feature: "Monitoring",
+					rivet: {
+						status: "yes",
+						text: "Built-in monitoring for development and production",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Custom monitoring required",
+					},
+					importance:
+						"Integrated monitoring simplifies operations and debugging",
+				},
+				{
+					feature: "Logging",
+					rivet: {
+						status: "yes",
+						text: "Suports your existing logging infrastructure",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Provides no logging for Durable Objects",
+					},
+					importance:
+						"Built-in logging reduces setup time and operational complexity",
+				},
+				{
+					feature: "Metadata access",
+					rivet: {
+						status: "yes",
+						text: "Built-in metadata API",
+					},
+					cloudflare: {
+						status: "no",
+						text: "Custom implementation required",
+					},
+					importance:
+						"Direct access to metadata such as tags, region, and more simplifies management and deployment",
+				},
+				// {
+				// 	feature: "REST API",
+				// 	rivet: {
+				// 		status: "yes",
+				// 		text: "Full REST API for actor management",
+				// 	},
+				// 	cloudflare: {
+				// 		status: "no",
+				// 		text: "No RESTful API for Durable Objects",
+				// 	},
+				// 	importance:
+				// 		"REST API enables programmatic management and integration with external tools",
+				// },
+				// {
+				// 	feature: "Actor discovery",
+				// 	rivet: {
+				// 		status: "yes",
+				// 		text: "Flexible tagging system for organizing, querying, and monitoring actors",
+				// 	},
+				// 	cloudflare: {
+				// 		status: "partial",
+				// 		text: "String-based lookup",
+				// 	},
+				// 	importance:
+				// 		"Tagging enables more sophisticated service discovery patterns",
+				// },
+			],
+		},
+		// {
+		// 	groupTitle: "Platform",
+		// 	features: [
+		// 		{
+		// 			feature: "Instant rollback to versions",
+		// 			rivet: {
+		// 				status: "yes",
+		// 				text: "One-click rollback to previous versions",
+		// 			},
+		// 			cloudflare: {
+		// 				status: "yes",
+		// 				text: "Version rollback supported",
+		// 			},
+		// 			importance:
+		// 				"Quick rollback capabilities minimize downtime and recover from problematic deployments",
+		// 		},
+		// 		{
+		// 			feature: "Built-in monitoring & logging",
+		// 			rivet: {
+		// 				status: "yes",
+		// 				text: "Comprehensive monitoring and logging for all services",
+		// 			},
+		// 			cloudflare: {
+		// 				status: "partial",
+		// 				text: "Limited for Workers, not supported for Durable Objects",
+		// 			},
+		// 			importance:
+		// 				"Integrated monitoring and logging simplifies troubleshooting and performance optimization",
+		// 		},
+		// 		{
+		// 			feature: "User-uploaded builds",
+		// 			rivet: {
+		// 				status: "yes",
+		// 				text: "Full support for user-uploaded builds and multi-tenancy",
+		// 			},
+		// 			cloudflare: {
+		// 				status: "yes",
+		// 				text: "Cloudflare for Platforms",
+		// 			},
+		// 			importance:
+		// 				"Enables building platforms where your users can upload their own code to run on your infrastructure",
+		// 		},
+		// 		{
+		// 			feature: "Tagging for builds, actors, and containers",
+		// 			rivet: {
+		// 				status: "yes",
+		// 				text: "Comprehensive tagging system for all resources",
+		// 			},
+		// 			cloudflare: {
+		// 				status: "no",
+		// 				text: "No built-in tagging system",
+		// 			},
+		// 			importance:
+		// 				"Tagging is important for organization, cost allocation, and managing user-uploaded builds",
+		// 		},
+		// 	],
+		// },
+		{
+			groupTitle: "Developer Tooling",
+			features: [
+				{
 					feature: "State inspector",
 					rivet: {
 						status: "yes",
@@ -461,185 +719,17 @@ const ComparisonTable = () => {
 						"Visibility into active connections helps diagnose client-side issues and monitor usage patterns",
 				},
 				{
-					feature: "REST API",
+					feature: "Actor listing and management",
 					rivet: {
 						status: "yes",
-						text: "Full REST API for actor management",
-					},
-					cloudflare: {
-						status: "no",
-						text: "No RESTful API for Durable Objects",
-					},
-					importance:
-						"REST API enables programmatic management and integration with external tools",
-				},
-				{
-					feature: "Metadata access",
-					rivet: {
-						status: "yes",
-						text: "Built-in metadata API",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Custom implementation required",
-					},
-					importance:
-						"Direct access to metadata such as tags, region, and more simplifies management and deployment",
-				},
-				{
-					feature: "Graceful shutdown",
-					rivet: {
-						status: "yes",
-						text: "3-hour draining window",
+						text: "Browse and manage active actors with full interaction capabilities",
 					},
 					cloudflare: {
 						status: "partial",
-						text: "60s grace period",
+						text: "Can list Durable Objects but cannot interact with them",
 					},
 					importance:
-						"Draining period allows for graceful state transfers and prevents data loss",
-				},
-				{
-					feature: "Connection protocols",
-					rivet: {
-						status: "yes",
-						text: "HTTP, WebSockets, TCP, and UDP support",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "HTTP and WebSockets only",
-					},
-					importance:
-						"More protocol options support diverse application requirements",
-				},
-				{
-					feature: "Actor networking",
-					rivet: {
-						status: "yes",
-						text: "Actors have dedicated hostnames that can be accessed via Functions or directly (without a middle man)",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "Durable Objects have limited networking functionality, can only be access via Workers",
-					},
-					importance:
-						"Customizable networking enables more flexibility in why types of workloads your actors can serve & compatibility with existing tooling",
-				},
-				{
-					feature: "Actor discovery",
-					rivet: {
-						status: "yes",
-						text: "Flexible tagging system for organizing, querying, and monitoring actors",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "String-based lookup",
-					},
-					importance:
-						"Tagging enables more sophisticated service discovery patterns",
-				},
-				{
-					feature: "Control over actor upgrades",
-					rivet: {
-						status: "yes",
-						text: (
-							<>
-								Full control with{" "}
-								<Link href="/docs/api/actors/upgrade">
-									dedicated upgrade APIs
-								</Link>
-							</>
-						),
-					},
-					cloudflare: {
-						status: "no",
-						text: "Only allows controlling gradual deployment percentages, not specific Durable Object versions",
-					},
-					importance:
-						"Controlled upgrades ensure smooth transitions without service disruption tailored to your application's architecture",
-				},
-				{
-					feature: "Monitoring",
-					rivet: {
-						status: "yes",
-						text: "Built-in monitoring for development and production",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Custom monitoring required",
-					},
-					importance:
-						"Integrated monitoring simplifies operations and debugging",
-				},
-				{
-					feature: "Logging",
-					rivet: {
-						status: "yes",
-						text: "Comprehensive logging included",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Complex setup depending on configuration",
-					},
-					importance:
-						"Built-in logging reduces setup time and operational complexity",
-				},
-			],
-		},
-		{
-			groupTitle: "Platform",
-			features: [
-				{
-					feature: "Instant rollback to versions",
-					rivet: {
-						status: "yes",
-						text: "One-click rollback to previous versions",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Version rollback supported",
-					},
-					importance:
-						"Quick rollback capabilities minimize downtime and recover from problematic deployments",
-				},
-				{
-					feature: "Built-in monitoring & logging",
-					rivet: {
-						status: "yes",
-						text: "Comprehensive monitoring and logging for all services",
-					},
-					cloudflare: {
-						status: "partial",
-						text: "Limited for Workers, not supported for Durable Objects",
-					},
-					importance:
-						"Integrated monitoring and logging simplifies troubleshooting and performance optimization",
-				},
-				{
-					feature: "User-uploaded builds",
-					rivet: {
-						status: "yes",
-						text: "Full support for user-uploaded builds and multi-tenancy",
-					},
-					cloudflare: {
-						status: "yes",
-						text: "Cloudflare for Platforms",
-					},
-					importance:
-						"Enables building platforms where your users can upload their own code to run on your infrastructure",
-				},
-				{
-					feature: "Tagging for builds, actors, and containers",
-					rivet: {
-						status: "yes",
-						text: "Comprehensive tagging system for all resources",
-					},
-					cloudflare: {
-						status: "no",
-						text: "No built-in tagging system",
-					},
-					importance:
-						"Tagging is important for organization, cost allocation, and managing user-uploaded builds",
+						"Being able to list and interact with live actors enables debugging and operational management",
 				},
 			],
 		},
@@ -659,19 +749,19 @@ const ComparisonTable = () => {
 					importance:
 						"Clear documentation accelerates learning and implementation",
 				},
-				{
-					feature: "Local development with multiple apps",
-					rivet: {
-						status: "yes",
-						text: "Unified local development experience for managing multiple apps",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Requires tmux or similar for running multiple Wrangler instances in parallel",
-					},
-					importance:
-						"Local development experience for multiple apps (i.e. microservices) reduces developer friction with configuration & improves developer collaboration.",
-				},
+				// {
+				// 	feature: "Local development with multiple apps",
+				// 	rivet: {
+				// 		status: "yes",
+				// 		text: "Unified local development experience for managing multiple apps",
+				// 	},
+				// 	cloudflare: {
+				// 		status: "no",
+				// 		text: "Requires tmux or similar for running multiple Wrangler instances in parallel",
+				// 	},
+				// 	importance:
+				// 		"Local development experience for multiple apps (i.e. microservices) reduces developer friction with configuration & improves developer collaboration.",
+				// },
 				{
 					feature: "Compatible with Docker Compose",
 					rivet: {
@@ -685,19 +775,19 @@ const ComparisonTable = () => {
 					importance:
 						"Integration with Docker Compose enables use with your existing development workflows and tools",
 				},
-				{
-					feature: "Observability for debugging",
-					rivet: {
-						status: "yes",
-						text: "Built-in obervability with tools available both localy and in Rivet Cloud",
-					},
-					cloudflare: {
-						status: "no",
-						text: "Requires additional setup",
-					},
-					importance:
-						"Immediate visibility into application behavior speeds debugging",
-				},
+				// {
+				// 	feature: "Observability for debugging",
+				// 	rivet: {
+				// 		status: "yes",
+				// 		text: "Built-in obervability with tools available both localy and in Rivet Cloud",
+				// 	},
+				// 	cloudflare: {
+				// 		status: "no",
+				// 		text: "Requires additional setup",
+				// 	},
+				// 	importance:
+				// 		"Immediate visibility into application behavior speeds debugging",
+				// },
 			],
 		},
 	];
@@ -800,19 +890,18 @@ const MigrationSection = () => {
 			</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					Looking to migrate your existing Cloudflare Durable Objects
-					to Rivet Actors or have more questions about how Rivet
-					Actors can meet your needs? Our team can help make the
-					transition smooth and seamless. We provide migration
-					assistance, technical guidance, and dedicated support to
-					ensure your experience with Rivet Actors is successful.
+					Looking to migrate your existing Cloudflare Durable Objects to Rivet
+					Actors or have more questions about how Rivet Actors can meet your
+					needs? Our team can help make the transition smooth and seamless. We
+					provide migration assistance, technical guidance, and dedicated
+					support to ensure your experience with Rivet Actors is successful.
 				</p>
 				<div className="mt-6">
 					<Link
 						href="/sales"
 						className="inline-flex items-center px-5 py-2.5 bg-white text-black rounded-md hover:bg-white/90 transition-colors no-underline"
 					>
-						Contact Us
+						Talk to an engineer
 					</Link>
 				</div>
 			</div>
@@ -827,15 +916,14 @@ const Conclusion = () => {
 			<h2 className="text-3xl font-medium text-white mb-6">Conclusion</h2>
 			<div className="prose prose-invert max-w-none">
 				<p>
-					While Cloudflare Durable Objects provides stateful
-					serverless computing with vendor lock-in, Rivet Actors
-					offers the same actor model capabilities as an open-source
-					library that works with your existing infrastructure. Choose
-					Rivet Actors when you want the power of actors without
-					changing your deployment process, technology stack, or being
-					locked into a specific platform. Choose Cloudflare Durable
-					Objects when you're already committed to the Cloudflare
-					ecosystem and don't mind the platform constraints.
+					While Cloudflare Durable Objects provides stateful serverless
+					computing with vendor lock-in, Rivet Actors offers the same actor
+					model capabilities as an open-source library that works with your
+					existing infrastructure. Choose Rivet Actors when you want the power
+					of actors without changing your deployment process, technology stack,
+					or being locked into a specific platform. Choose Cloudflare Durable
+					Objects when you're already committed to the Cloudflare ecosystem and
+					don't mind the platform constraints.
 				</p>
 			</div>
 		</div>
@@ -860,7 +948,12 @@ export default function RivetVsCloudflareWorkersPage() {
 
 				<Conclusion />
 				<MigrationSection />
-				<CTASection />
+				
+				<div className="h-[1px] bg-white/20 mt-20" />
+				
+				<div className="py-52 sm:py-60">
+					<CTASection />
+				</div>
 			</div>
 		</div>
 	);
