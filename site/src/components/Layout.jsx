@@ -21,7 +21,7 @@ export function Layout({
 }) {
 	return (
 		<div>
-			<Header active={pathname === "/pricing" ? "pricing" : ""} />
+			<Header active={pathname === "/pricing" ? "pricing" : ""} variant="full-width" />
 
 			{/* Body */}
 			{/* <div className={clsx('relative', navigation.tabs ? 'pt-navigation' : 'pt-14')}> */}

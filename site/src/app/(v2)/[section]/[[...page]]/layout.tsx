@@ -38,10 +38,10 @@ export default function Layout({ params: { section, page }, children }) {
 	const path = buildPathComponents(section, page);
 	return (
 		<>
-			<Header active="docs" subnav={<Subnav path={path} />} />
+			<Header active="docs" subnav={<Subnav path={path} />} variant="full-width" />
 			<div className="w-full">
 				<div
-					className="md:grid-cols-docs mx-auto flex w-full flex-col justify-center md:grid md:px-6"
+					className="md:grid-cols-docs-no-sidebar lg:grid-cols-docs mx-auto flex w-full flex-col justify-center md:grid"
 					style={{ "--header-height": "6.5rem" } as CSSProperties}
 				>
 					{children}

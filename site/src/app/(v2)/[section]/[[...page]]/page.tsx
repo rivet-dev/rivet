@@ -8,7 +8,6 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Comments } from "@/components/Comments";
 import { DocsNavigation } from "@/components/DocsNavigation";
 import { DocsTableOfContents } from "@/components/DocsTableOfContents";
 import { Prose } from "@/components/Prose";
@@ -19,6 +18,8 @@ import { Icon, faPencil } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VALID_SECTIONS, buildFullPath, buildPathComponents } from "./util";
+import { Comments } from "@/components/Comments";
+import clsx from "clsx";
 
 interface Param {
 	section: string;
@@ -97,42 +98,48 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 
 	return (
 		<>
-			<aside className="hidden md:block">
+			<aside className="hidden lg:block border-r">
 				{foundTab?.tab.sidebar ? (
 					<DocsNavigation sidebar={foundTab.tab.sidebar} />
 				) : null}
 			</aside>
-			<main className="md:mx-auto mt-8 w-full max-w-prose px-8 pb-8">
-				<Prose as="article">
-					{parentPage && (
-						<div className="eyebrow h-5 text-primary text-sm font-semibold">
-							{parentPage.title}
-						</div>
+			<div className="flex justify-center w-full">
+				<div className="flex gap-8 max-w-6xl w-full">
+					<main className="w-full py-8 px-8 lg:mx-0 mx-auto max-w-prose lg:max-w-none">
+						<Prose as="article" className="max-w-prose lg:max-w-prose mx-auto">
+							{parentPage && (
+								<div className="eyebrow h-5 text-primary text-sm font-semibold">
+									{parentPage.title}
+								</div>
+							)}
+							<Content />
+						</Prose>
+						<div className="border-t mt-8 mb-2" />
+						<Button
+							variant="ghost"
+							asChild
+							startIcon={<Icon icon={faPencil} />}
+						>
+							<a
+								href={`https://github.com/rivet-gg/rivet/edit/main/site/src/content/${componentSourcePath}`}
+								target="_blank"
+								rel="noreferrer"
+							>
+								Suggest changes to this page
+							</a>
+						</Button>
+						<Comments />
+					</main>
+					{tableOfContents && (
+						<aside className="hidden xl:block w-64 min-w-0 flex-shrink-0 pb-4">
+							<DocsTableOfContents
+								className="lg:max-h-content"
+								tableOfContents={tableOfContents}
+							/>
+						</aside>
 					)}
-					<Content />
-				</Prose>
-				<div className="border-t mt-8 mb-2" />
-				<Button
-					variant="ghost"
-					asChild
-					startIcon={<Icon icon={faPencil} />}
-				>
-					<a
-						href={`https://github.com/rivet-gg/rivet/edit/main/site/src/content/${componentSourcePath}`}
-						target="_blank"
-						rel="noreferrer"
-					>
-						Suggest changes to this page
-					</a>
-				</Button>
-				<Comments />
-			</main>
-			<aside className="-order-1 mx-auto w-full min-w-0 max-w-3xl flex-shrink-0 pb-4 pl-4 md:order-none xl:mx-0">
-				<DocsTableOfContents
-					className="lg:max-h-content"
-					tableOfContents={tableOfContents}
-				/>
-			</aside>
+				</div>
+			</div>
 		</>
 	);
 }

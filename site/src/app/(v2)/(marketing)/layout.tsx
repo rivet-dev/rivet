@@ -1,9 +1,9 @@
-import { FancyHeader } from "@/components/v2/FancyHeader";
+import { Header } from "@/components/v2/Header";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
 	return (
 		<>
-			<FancyHeader />
+			<Header variant="floating" />
 			{children}
 		</>
 	);

@@ -1,9 +1,9 @@
-import { FancyHeader } from "@/components/v2/FancyHeader";
+import { Header } from "@/components/v2/Header";
 
 export default function Layout({ children }) {
 	return (
 		<>
-			<FancyHeader active="blog" />
+			<Header active="blog" variant="floating" />
 			{children}
 		</>
 	);

@@ -13,7 +13,8 @@ const config = {
 				sans: ["Open Sans", ...defaultTheme.fontFamily.sans],
 			},
 			gridTemplateColumns: {
-				docs: "minmax(0, 20rem) 65ch minmax(0, 20rem)",
+				docs: "20rem 1fr",
+				"docs-no-sidebar": "1fr",
 			},
 			typography: ({ theme }) => ({
 				DEFAULT: {

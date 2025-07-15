@@ -277,7 +277,7 @@ function TabGroup({
 		<div className="border-b border-white/10">
 			{/* Example Tabs */}
 			<div className="p-2 border-b border-white/5">
-				<div className="flex items-center gap-2 flex-1">
+				<div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
 					{examplesWithIcons.map((example) => (
 						<Tab
 							key={example.id}

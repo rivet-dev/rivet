@@ -4,14 +4,16 @@ import routes from "@/generated/routes.json";
 import type { SidebarItem } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faArrowUpRight } from "@rivet-gg/icons";
+import clsx from "clsx";
 import type { PropsWithChildren, ReactNode } from "react";
 
 interface TreeItemProps {
+	index: number;
 	item: SidebarItem;
 	level?: number;
 }
 
-function TreeItem({ item, level = 0 }: TreeItemProps) {
+function TreeItem({ index, item, level = 0 }: TreeItemProps) {
 	if (
 		"collapsible" in item &&
 		"title" in item &&
@@ -28,7 +30,12 @@ function TreeItem({ item, level = 0 }: TreeItemProps) {
 	if ("title" in item && "pages" in item) {
 		return (
 			<div>
-				<p className="mt-2 py-2 text-sm font-semibold">
+				<p
+					className={clsx(
+						"mb-2 text-sm font-semibold",
+						index > 0 ? "mt-4" : undefined,
+					)}
+				>
 					{item.icon ? (
 						<Icon icon={item.icon} className="mr-2 size-3.5" />
 					) : null}
@@ -68,7 +75,7 @@ export function Tree({ pages, className, level = 0 }: TreeProps) {
 					// biome-ignore lint/suspicious/noArrayIndexKey: FIXME: used only for static content
 					key={index}
 				>
-					<TreeItem item={item} level={level} />
+					<TreeItem index={index} item={item} level={level} />
 				</li>
 			))}
 		</ul>
@@ -90,13 +97,17 @@ export function NavLink({
 }>) {
 	const getPaddingClass = (level: number) => {
 		switch (level) {
-			case 0: return "pl-3 pr-3";
-			case 1: return "pl-6 pr-3";
-			case 2: return "pl-9 pr-3";
-			default: return "pl-12 pr-3";
+			case 0:
+				return "pl-3 pr-3";
+			case 1:
+				return "pl-6 pr-3";
+			case 2:
+				return "pl-9 pr-3";
+			default:
+				return "pl-12 pr-3";
 		}
 	};
-	
+
 	return (
 		<ActiveLink
 			strict
@@ -115,7 +126,7 @@ export function NavLink({
 
 export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
 	return (
-		<div className="top-header sticky pr-4 text-white md:max-h-content md:overflow-y-auto md:pb-4 md:pt-8">
+		<div className="top-header sticky text-white md:max-h-content md:overflow-y-auto pl-8 pr-6 py-6">
 			<Tree pages={sidebar} />
 		</div>
 	);

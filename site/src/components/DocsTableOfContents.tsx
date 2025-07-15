@@ -204,13 +204,6 @@ export function DocsTableOfContents({
 			)}
 		>
 			<div className="relative">
-				<motion.h2
-					layout="position"
-					className="mb-1 px-2 py-1 text-sm font-semibold"
-				>
-					On this page
-				</motion.h2>
-
 				<div className="relative">
 					<Tree sections={tableOfContents} isActive={isActive} />
 				</div>

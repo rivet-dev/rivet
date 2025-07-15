@@ -1,8 +1,9 @@
-import { FancyHeader } from "@/components/v2/FancyHeader";
+import { Button } from "@rivet-gg/components";
+import { Header } from "@/components/v2/Header";
 
 async function getOssFriends() {
 	const res = await fetch("https://formbricks.com/api/oss-friends", {
-		next: { revalidate: 3600 }, // Revalidate every hour
+		next: { revalidate: 3600 } // Revalidate every hour
 	});
 	const data = await res.json();
 	return data.data;
@@ -13,18 +14,19 @@ export default async function OssFriendsPage() {
 
 	return (
 		<>
-			<FancyHeader />
+			<Header variant="floating" />
 			<div className="bg-black">
 				<div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
 					<div className="mx-auto max-w-2xl text-center">
 						<h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
 							{"Rivet's"}{" "}
-							<span className="text-white">Open Source</span>{" "}
+							<span className="text-white">
+								Open Source
+							</span>{" "}
 							Friends
 						</h1>
 						<p className="mt-6 text-lg leading-8 text-gray-300">
-							Other companies whose code & culture mirrors that at
-							Rivet.
+							Other companies whose code & culture mirrors that at Rivet.
 						</p>
 					</div>
 
@@ -50,4 +52,4 @@ export default async function OssFriendsPage() {
 			</div>
 		</>
 	);
-}
+} 
