@@ -6,6 +6,7 @@ import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
+import { normalizePath } from "@/lib/normalizePath";
 
 interface CollapsibleSidebarItemProps {
 	item: SidebarSection;
@@ -86,7 +87,7 @@ export function CollapsibleSidebarItem({
 
 function findActiveItem(pages: SidebarItem[], href: string) {
 	for (const page of pages) {
-		if ("href" in page && page.href === href) {
+		if ("href" in page && normalizePath(page.href) === normalizePath(href)) {
 			return page;
 		}
 		if ("pages" in page) {

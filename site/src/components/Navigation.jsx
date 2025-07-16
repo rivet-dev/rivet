@@ -10,6 +10,7 @@ import { useIsInsideMobileNavigation } from "@/components/MobileNavigation";
 import { ActiveSectionMarker } from "@/components/TableOfContents";
 import { Tag } from "@/components/Tag";
 import { usePathname } from "next/navigation";
+import { normalizePath } from "@/lib/normalizePath";
 
 function TopLevelNavItem({ href, target, children }) {
 	return (
@@ -75,12 +76,12 @@ function NavigationGroup({ group, className }) {
 								layout="position"
 								className="relative"
 							>
-								{link.href === pathname ? (
+								{normalizePath(link.href) === normalizePath(pathname) ? (
 									<ActiveSectionMarker prefix="navigation" />
 								) : null}
 								<NavLink
 									href={link.href}
-									active={link.href === pathname}
+									active={normalizePath(link.href) === normalizePath(pathname)}
 								>
 									{page.title}
 								</NavLink>
