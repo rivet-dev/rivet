@@ -2485,6 +2485,98 @@ Use `state` when:
 State is constrained to the available memory.
 
 Only JSON-serializable types can be stored in state. In serverless runtimes that support it (Rivet, Cloudflare Workers), state is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
+## Node.js & Bun
+
+# Node.js & Bun
+
+The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications.
+
+## Quickstart
+
+    Create a new Node.js project with TypeScript support:
+
+      ```sh npm
+      mkdir my-app
+      cd my-app
+      npm init -y
+      npm pkg set type=module
+      ```
+      
+      ```sh pnpm
+      mkdir my-app
+      cd my-app
+      pnpm init
+      pnpm pkg set type=module
+      ```
+      
+      ```sh yarn
+      mkdir my-app
+      cd my-app
+      yarn init -y
+      yarn pkg set type=module
+      ```
+      
+      ```sh bun
+      mkdir my-app
+      cd my-app
+      bun init -y
+      ```
+
+    Install the Rivet client and Node.js platform packages:
+
+      ```sh npm
+      npm install @rivetkit/actor
+      ```
+      
+      ```sh pnpm
+      pnpm add @rivetkit/actor
+      ```
+      
+      ```sh yarn
+      yarn add @rivetkit/actor
+      ```
+      
+      ```sh bun
+      bun add @rivetkit/actor
+      ```
+
+    Create a file `src/client.ts` in your project to connect to your actor:
+
+    ```typescript src/client.ts
+    async function main() 
+
+    main().catch(console.error);
+    ```
+
+    In a separate terminal, run your client code:
+
+      ```sh npm
+      npx tsx src/client.ts
+      ```
+      
+      ```sh pnpm
+      pnpm exec tsx src/client.ts
+      ```
+      
+      ```sh yarn
+      yarn tsx src/client.ts
+      ```
+      
+      ```sh bun
+      bun run src/client.ts
+      ```
+
+    You should see output like:
+    ```
+    Event: 5
+    Action: 5
+    ```
+
+    Run it again to see the state update.
+
+## Next Steps
+
+For more information on communicating with actors, including event handling and RPC calls, see [Communicating with Actors](/docs/actors/communicating-with-actors).
 ## React
 
 # React
@@ -2983,6 +3075,50 @@ The Rivet Rust client provides a way to connect to and interact with actors from
     ```
 
     Run it again to see the state update.
+## Architecture
+
+# Architecture
+
+Rivet supports three topologies that define how actors are distributed and scale.
+
+	Each platform configures a default topology appropriate for that environment. In most cases, you can rely on these defaults unless you have specific distribution needs.
+
+## Configuration
+
+```typescript
+const config = ;
+```
+
+## Types of Topologies
+
+### Standalone
+
+- **How it works**: Runs all actors in a single process
+- **When to use**: Development, testing, simple apps with low traffic
+- **Limitations**: No horizontal scaling, single point of failure
+- **Default on**: Node.js, Bun
+
+### Partition
+
+- **How it works**: Each actor has its own isolated process. Clients connect directly to the actor for optimal performance.
+- **When to use**: Production environments needing horizontal scaling
+- **Limitations**: Minimal - balanced performance and availability for most use cases
+- **Default on**: Rivet, Cloudflare Workers
+
+### Coordinate
+
+- **How it works**: Creates a peer-to-peer network between multiple servers with leader election with multiple actors running on each server. Clients connect to any server and data is transmitted to the leader over a pubsub server.
+- **When to use**: High-availability scenarios needing redundancy and failover
+- **Limitations**: Added complexity, performance overhead, requires external data source
+- **Default on**: _None_
+
+## Choosing a Topology
+
+In most cases, use your platform's default:
+
+1. **Standalone**: Simple, great for development
+2. **Partition**: Best scaling & cost for production
+3. **Coordinate**: Good for specialized deployment scenarios
 ## Authentication
 
 # Authentication
@@ -3438,38 +3574,9 @@ if (process.env.NODE_ENV === "development") );
 4. **Enable Credentials**: Needed for authentication  
 5. **Cache Preflight Requests**: Use appropriate `maxAge` values
 6. **Environment-Specific Config**: Different settings for dev/prod
-## Edge Networking
+## Documentation for LLMs & AI
 
-# Edge Networking
-
-Actors automatically run near your users on your provider's global network.
-
-	At the moment, edge networking is only supported on Rivet Cloud & Cloudflare Workers. More self-hosted platforms are on the roadmap.
-
-## Region selection
-
-### Automatic region selection
-
-By default, actors will choose the nearest region based on the client's location.
-
-Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.org/wiki/Anycast) to automatically find the best location for the client to connect to without relying on a slow manual pinging process.
-
-### Manual region selection
-
-The region a actor is created in can be overridden using region options:
-
-```typescript client.ts
-const client = createClient(/* endpoint */);
-
-// Create actor in a specific region
-const actor = await client.example.get(
-});
-```
-
-See [Create  Manage Actors](/actors/communicating-with-actors) for more information.
-## LLMs & AI Integration
-
-# LLMs & AI Integration
+# Documentation for LLMs & AI
 
 Rivet provides optimized documentation formats specifically designed for Large Language Models (LLMs) and AI integration tools.
 
@@ -3538,32 +3645,35 @@ const complete = await fetch('https://rivet.gg/llms-full.txt').then(r => r.text(
 // Get specific page as markdown
 const actorsDoc = await fetch('https://rivet.gg/docs/actors.md').then(r => r.text());
 ```
+## Edge Networking
 
-### Embeddings and Vector Databases
+# Edge Networking
 
-The individual `.md` files are perfect for creating embeddings:
+Actors automatically run near your users on your provider's global network.
 
-```python
-import requests
+	At the moment, edge networking is only supported on Rivet Cloud & Cloudflare Workers. More self-hosted platforms are on the roadmap.
 
-# Fetch a specific page
-response = requests.get('https://rivet.gg/docs/actors/state.md')
-markdown_content = response.text
+## Region selection
 
-# Use with your embedding model
-embeddings = embed_model.encode(markdown_content)
+### Automatic region selection
+
+By default, actors will choose the nearest region based on the client's location.
+
+Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.org/wiki/Anycast) to automatically find the best location for the client to connect to without relying on a slow manual pinging process.
+
+### Manual region selection
+
+The region a actor is created in can be overridden using region options:
+
+```typescript client.ts
+const client = createClient(/* endpoint */);
+
+// Create actor in a specific region
+const actor = await client.example.get(
+});
 ```
 
-## Content Processing
-
-All generated files are processed to:
-- Remove MDX-specific syntax
-- Strip imports and exports
-- Start from the first H1 heading
-- Maintain clean markdown formatting
-- Exclude cloud-specific documentation (focused on open-source)
-
-This ensures maximum compatibility with AI tools and LLMs while maintaining readability and structure.
+See [Create  Manage Actors](/actors/communicating-with-actors) for more information.
 ## Logging
 
 # Logging
@@ -4027,6 +4137,11 @@ The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you 
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
+## Webhooks
+
+# Webhooks
+
+TODO
 ## Better Auth
 
 # Better Auth

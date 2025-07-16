@@ -70,6 +70,9 @@ const config = {
 			spacing: {
 				header: "var(--header-height, 3.5rem)",
 			},
+			top: {
+				header: "var(--header-height, 3.5rem)",
+			},
 			scrollMargin: {
 				header: "calc(var(--header-height, 3.5rem) + 1rem)",
 			},

@@ -1,5 +1,5 @@
-import { AlgoliaSearch } from "./AlgoliaSearch";
+import { TypesenseSearch } from "./TypesenseSearch";
 
 export function HeaderSearch() {
-	return <AlgoliaSearch />;
+	return <TypesenseSearch />;
 }

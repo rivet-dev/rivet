@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import Typesense from "typesense";
 
 interface DocsPage {
 	title: string;
@@ -156,6 +157,99 @@ async function getAllGuides(): Promise<string[]> {
 	return guides.sort();
 }
 
+async function initializeTypesenseClient() {
+	const typesenseHost = process.env.TYPESENSE_HOST;
+	const typesensePort = process.env.TYPESENSE_PORT || 443;
+	const typesenseProtocol = process.env.TYPESENSE_PROTOCOL || "https";
+	const typesenseApiKey = process.env.TYPESENSE_API_KEY;
+	const typesenseCollectionName = process.env.TYPESENSE_COLLECTION_NAME || "rivet-docs";
+
+	if (!typesenseHost || !typesenseApiKey) {
+		console.log("Typesense credentials not provided, skipping search indexing");
+		return null;
+	}
+
+	const client = new Typesense.Client({
+		nodes: [
+			{
+				host: typesenseHost,
+				port: typesensePort ? Number(typesensePort) : 8108,
+				protocol: typesenseProtocol,
+			},
+		],
+		apiKey: typesenseApiKey,
+		connectionTimeoutSeconds: 5,
+	});
+
+	return { client, collectionName: typesenseCollectionName };
+}
+
+async function setupTypesenseCollection(client: Typesense.Client, collectionName: string) {
+	const schema = {
+		name: collectionName,
+		fields: [
+			{ name: "id", type: "string" },
+			{ name: "title", type: "string" },
+			{ name: "content", type: "string" },
+			{ name: "url", type: "string" },
+			{ name: "hierarchy", type: "object", optional: true },
+		],
+		enable_nested_fields: true,
+	};
+
+	try {
+		// Check if collection exists
+		await client.collections(collectionName).retrieve();
+		console.log(`Collection ${collectionName} exists, updating schema...`);
+		try {
+			await client.collections(collectionName).update(schema);
+			console.log(`Updated collection: ${collectionName}`);
+		} catch (updateError) {
+			console.log(`Failed to update schema, recreating collection...`);
+			await client.collections(collectionName).delete();
+			await client.collections().create(schema);
+			console.log(`Recreated collection: ${collectionName}`);
+		}
+	} catch (error) {
+		// Collection doesn't exist, create it
+		console.log(`Collection ${collectionName} doesn't exist, creating...`);
+		await client.collections().create(schema);
+		console.log(`Created collection: ${collectionName}`);
+	}
+}
+
+async function indexDocumentsToTypesense(client: Typesense.Client, collectionName: string, pages: DocsPage[]) {
+	if (!client) return;
+
+	const siteUrl = "https://rivet.gg";
+	const documents = pages.map((page, index) => ({
+		id: `doc_${index}`,
+		title: page.title,
+		content: page.content,
+		url: `${siteUrl}/docs/${page.cleanPath}`,
+		hierarchy: {
+			lvl0: "Documentation",
+			lvl1: page.title,
+		},
+	}));
+
+	try {
+		// Clear existing documents first
+		try {
+			await client.collections(collectionName).documents().delete({ filter_by: "id:*" });
+			console.log(`Cleared existing documents from collection: ${collectionName}`);
+		} catch (error) {
+			console.log("No existing documents to clear or error clearing:", error);
+		}
+
+		// Import new documents
+		await client.collections(collectionName).documents().import(documents);
+		console.log(`Indexed ${documents.length} documents to Typesense`);
+	} catch (error) {
+		console.error("Error indexing documents to Typesense:", error);
+	}
+}
+
 async function generateMarkdownAndLlms() {
 	const docsDir = path.join(process.cwd(), "src/content/docs");
 	const files = await getAllDocsFiles(docsDir);
@@ -175,6 +269,9 @@ async function generateMarkdownAndLlms() {
 
 	// Sort pages by path for consistent ordering
 	pages.sort((a, b) => a.path.localeCompare(b.path));
+
+	// Initialize Typesense client
+	const typesenseConfig = await initializeTypesenseClient();
 
 	// Create public/docs directory for markdown files
 	const markdownOutputDir = path.join(process.cwd(), "public/docs");
@@ -238,6 +335,12 @@ async function generateMarkdownAndLlms() {
 	// Write LLM files to public directory
 	await fs.writeFile(path.join(process.cwd(), "public/llms.txt"), llmsTxtContent);
 	await fs.writeFile(path.join(process.cwd(), "public/llms-full.txt"), llmsFullTxtContent);
+
+	// Index documents to Typesense if configured
+	if (typesenseConfig) {
+		await setupTypesenseCollection(typesenseConfig.client, typesenseConfig.collectionName);
+		await indexDocumentsToTypesense(typesenseConfig.client, typesenseConfig.collectionName, pages);
+	}
 
 	console.log(`Generated llms.txt with ${allUrls.length} URLs (${pages.length} docs, ${blogPosts.length} blog posts, ${guides.length} guides)`);
 	console.log(`Generated llms-full.txt with ${pages.length} pages`);
