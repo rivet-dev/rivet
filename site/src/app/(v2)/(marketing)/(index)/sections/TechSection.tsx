@@ -126,7 +126,13 @@ interface TechSectionTextProps {
 	linkExternal?: boolean;
 }
 
-function TechSectionText({ heading, description, linkText, linkHref, linkExternal }: TechSectionTextProps) {
+function TechSectionText({
+	heading,
+	description,
+	linkText,
+	linkHref,
+	linkExternal,
+}: TechSectionTextProps) {
 	const linkProps = linkExternal
 		? {
 			target: "_blank",
@@ -164,11 +170,7 @@ interface TechSectionSubsectionsProps {
 }
 
 function TechSectionSubsections({ children }: TechSectionSubsectionsProps) {
-	return (
-		<div className="space-y-8">
-			{children}
-		</div>
-	);
+	return <div className="space-y-8">{children}</div>;
 }
 
 export function TechSection() {
@@ -278,12 +280,30 @@ export function TechSection() {
 					/>
 
 					<TechSectionSubsections>
-						<TechSubSection title="Frameworks">
+						<TechSubSection title="Frontend & Clients">
+							<TechLink
+								href="/docs/clients/javascript"
+								name="JavaScript"
+								icon={javascriptLogo}
+								alt="JavaScript"
+							/>
+							<TechLink
+								href="/docs/clients/javascript"
+								name="TypeScript"
+								icon={typescriptLogo}
+								alt="TypeScript"
+							/>
 							<TechLink
 								href="/docs/clients/react"
 								name="React"
 								icon={reactLogo}
 								alt="React"
+							/>
+							<TechLink
+								href="/docs/clients/rust"
+								name="Rust"
+								icon={rustLogo}
+								alt="Rust"
 							/>
 							<TechLink
 								href="https://github.com/rivet-gg/rivetkit/issues/904"
@@ -303,28 +323,7 @@ export function TechSection() {
 							/>
 						</TechSubSection>
 
-						<TechSubSection title="Clients">
-							<TechLink
-								href="/docs/clients/javascript"
-								name="JavaScript"
-								icon={javascriptLogo}
-								alt="JavaScript"
-							/>
-							<TechLink
-								href="/docs/clients/javascript"
-								name="TypeScript"
-								icon={typescriptLogo}
-								alt="TypeScript"
-							/>
-							<TechLink
-								href="/docs/clients/rust"
-								name="Rust"
-								icon={rustLogo}
-								alt="Rust"
-							/>
-						</TechSubSection>
-
-						<TechSubSection title="Integrations">
+						<TechSubSection title="Backend">
 							<TechLink
 								href="/docs/integrations/hono"
 								name="Hono"
@@ -349,19 +348,27 @@ export function TechSection() {
 								icon={trpcLogo}
 								alt="tRPC"
 							/>
+						</TechSubSection>
+
+						<TechSubSection title="Auth">
 							<TechLink
-								href="/docs/general/testing"
+								href="/docs/integrations/better-auth"
+								name="Better Auth"
+								icon={betterAuthLogo}
+								alt="Better Auth"
+							/>
+						</TechSubSection>
+
+						<TechSubSection title="Testing">
+							<TechLink
+								href="/docs/integrations/vitest"
 								name="Vitest"
 								icon={vitestLogo}
 								alt="Vitest"
 							/>
-							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/906"
-								name="Better Auth"
-								icon={betterAuthLogo}
-								alt="Better Auth"
-								external
-							/>
+						</TechSubSection>
+
+						<TechSubSection title="AI">
 							<TechLink
 								href="https://github.com/rivet-gg/rivetkit/issues/907"
 								name="AI SDK"
@@ -372,7 +379,7 @@ export function TechSection() {
 							/>
 						</TechSubSection>
 
-						<TechSubSection title="Local-First Sync">
+						<TechSubSection title="Sync">
 							<TechLink
 								href="https://github.com/rivet-gg/rivetkit/issues/908"
 								name="LiveStore"

@@ -9,12 +9,14 @@
 		"format": "prettier --write .",
 		"create-article": "vite-node scripts/generateArticle.js",
 		"generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
-		"prebuild": "yarn gen:navigation",
+		"prebuild": "yarn gen:navigation && yarn gen:markdown",
 		"gen:navigation": "tsx scripts/generateNavigation.ts",
-		"gen:examples": "node scripts/generateExamples.mjs"
+		"gen:examples": "node scripts/generateExamples.mjs",
+		"gen:markdown": "tsx scripts/generateMarkdownAndLlms.ts"
 	},
 	"browserslist": "defaults, not ie <= 11",
 	"dependencies": {
+		"@algolia/autocomplete-js": "^1.17.4",
 		"@fortawesome/fontawesome-svg-core": "^6.5.2",
 		"@fortawesome/free-brands-svg-icons": "^6.5.2",
 		"@fortawesome/free-solid-svg-icons": "^6.5.2",
@@ -27,7 +29,6 @@
 		"@mdx-js/react": "^3.1.0",
 		"@next/mdx": "^15.1.7",
 		"@next/third-parties": "latest",
-		"@orama/react-components": "^0.5.0",
 		"@rivet-gg/api": "^0.0.1-rc19",
 		"@rivet-gg/components": "workspace:*",
 		"@rivet-gg/icons": "workspace:^",
@@ -37,6 +38,7 @@
 		"@tailwindcss/typography": "^0.5.8",
 		"@types/json-schema": "^7.0.15",
 		"acorn": "^8.8.1",
+		"algoliasearch": "^4.24.0",
 		"autoprefixer": "^10.4.7",
 		"chart.js": "^4.4.2",
 		"chartjs-adapter-date-fns": "^3.0.0",

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import imgStudio from "@/images/screenshots/rivet-hub.png";
+import { Icon } from "@rivet-gg/icons";
 import {
 	faTerminal,
 	faChartLine,
@@ -32,10 +33,7 @@ function Feature({ feature }: FeatureProps) {
 	return (
 		<div className="p-5 text-md">
 			<div className="flex items-center gap-3 mb-3 text-white/90">
-				<div className="w-5 h-5">
-					{/* Simple icon placeholder since we don't have the Icon component */}
-					<div className="w-full h-full bg-white/20 rounded" />
-				</div>
+				<Icon icon={feature.icon} className="w-5 h-5 text-white" />
 				<span className="font-medium text-white">{title}</span>
 			</div>
 			<p className="text-white/60">{feature.description}</p>

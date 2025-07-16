@@ -35,6 +35,7 @@ import {
 	faTowerBroadcast,
 	faVialCircleCheck,
 	faForward,
+    faSquareBinary,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -237,6 +238,11 @@ export const sitemap = [
 						title: "Testing",
 						href: "/docs/general/testing",
 						icon: faVialCircleCheck,
+					},
+					{
+						title: "Docs for LLMs",
+						href: "/docs/general/docs-for-llms",
+						icon: faSquareBinary,
 					},
 					{
 						title: "More",

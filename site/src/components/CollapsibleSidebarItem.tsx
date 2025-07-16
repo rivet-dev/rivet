@@ -5,24 +5,51 @@ import { cn } from "@rivet-gg/components";
 import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useEffect } from "react";
 import { normalizePath } from "@/lib/normalizePath";
+import { useNavigationState } from "@/providers/NavigationStateProvider";
 
 interface CollapsibleSidebarItemProps {
 	item: SidebarSection;
 	children?: ReactNode;
 	level?: number;
+	parentPath?: string;
 }
 
 export function CollapsibleSidebarItem({
 	item,
 	children,
 	level = 0,
+	parentPath = "",
 }: CollapsibleSidebarItemProps) {
 	const pathname = usePathname() || "";
+	const { isOpen, setIsOpen, toggleOpen } = useNavigationState();
 	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
 	const isCurrent = false; // Never highlight collapsible sections themselves
-	const [isOpen, setIsOpen] = useState(() => hasActiveChild);
+	
+	const itemId = useMemo(() => {
+		return parentPath ? `${parentPath}.${item.title}` : item.title;
+	}, [parentPath, item.title]);
+	
+	const isItemOpen = isOpen(itemId);
+	
+	// Initialize state based on whether this section contains the active page
+	// but only if no saved state exists
+	useEffect(() => {
+		try {
+			const savedStates = localStorage.getItem("rivet-navigation-state");
+			const hasNoSavedState = !savedStates || !JSON.parse(savedStates).hasOwnProperty(itemId);
+			
+			if (hasActiveChild && hasNoSavedState) {
+				setIsOpen(itemId, true);
+			}
+		} catch (error) {
+			// If localStorage is not available or parsing fails, fall back to default behavior
+			if (hasActiveChild) {
+				setIsOpen(itemId, true);
+			}
+		}
+	}, [itemId, hasActiveChild, setIsOpen]);
 	
 	const getPaddingClass = (level: number) => {
 		switch (level) {
@@ -42,7 +69,7 @@ export function CollapsibleSidebarItem({
 					getPaddingClass(level),
 				)}
 				data-active={isCurrent ? true : undefined}
-				onClick={() => setIsOpen((open) => !open)}
+				onClick={() => toggleOpen(itemId)}
 			>
 				<div className="flex items-center truncate">
 					{item.icon ? (
@@ -59,7 +86,7 @@ export function CollapsibleSidebarItem({
 						closed: { rotateZ: "-90deg" },
 					}}
 					initial={hasActiveChild ? "open" : "closed"}
-					animate={isOpen ? "open" : "closed"}
+					animate={isItemOpen ? "open" : "closed"}
 					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
 					<Icon icon={faChevronDown} className="w-3 h-3" />
@@ -72,10 +99,10 @@ export function CollapsibleSidebarItem({
 					open: { height: "auto", opacity: 1 },
 					closed: { height: 0, opacity: 0 },
 				}}
-				animate={isOpen ? "open" : "closed"}
+				animate={isItemOpen ? "open" : "closed"}
 				transition={{
-					opacity: isOpen ? { delay: 0.05 } : {},
-					height: !isOpen ? { delay: 0.05 } : {},
+					opacity: isItemOpen ? { delay: 0.05 } : {},
+					height: !isItemOpen ? { delay: 0.05 } : {},
 					duration: 0.2,
 				}}
 			>

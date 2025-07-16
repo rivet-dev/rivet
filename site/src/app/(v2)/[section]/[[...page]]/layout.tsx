@@ -5,6 +5,7 @@ import { Button } from "@rivet-gg/components";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { buildFullPath, buildPathComponents } from "./util";
+import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 
 function Subnav({ path }: { path: string[] }) {
 	const fullPath = buildFullPath(path);
@@ -37,7 +38,7 @@ function Subnav({ path }: { path: string[] }) {
 export default function Layout({ params: { section, page }, children }) {
 	const path = buildPathComponents(section, page);
 	return (
-		<>
+		<NavigationStateProvider>
 			<Header active="docs" subnav={<Subnav path={path} />} variant="full-width" />
 			<div className="w-full">
 				<div
@@ -47,6 +48,6 @@ export default function Layout({ params: { section, page }, children }) {
 					{children}
 				</div>
 			</div>
-		</>
+		</NavigationStateProvider>
 	);
 }
