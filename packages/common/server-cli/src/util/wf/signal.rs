@@ -26,7 +26,7 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 				.timestamp_millis_opt(signal.create_ts)
 				.single()
 				.context("invalid ts")?;
-			let date = datetime.format("%Y-%m-%d %H:%M:%S");
+			let date = datetime.format("%Y-%m-%d %H:%M:%S%.3f");
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
@@ -35,16 +35,32 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 					.timestamp_millis_opt(ack_ts)
 					.single()
 					.context("invalid ts")?;
-				let date = datetime.format("%Y-%m-%d %H:%M:%S");
+				let date = datetime.format("%Y-%m-%d %H:%M:%S%.3f");
 
 				println!("  {} {}", style("ack'd at").bold(), style(date).magenta());
-			}
+			}			
 
 			println!(
 				"  {} {}",
 				style("state").bold(),
 				display_state(&signal.state)
 			);
+
+			if let Some(tags) = &signal.tags {
+				println!(
+					"  {} {}",
+					style("tags").bold(),
+					&indent_string(&colored_json(&tags)?, "    ", true)
+				);
+			}
+
+			if let Some(workflow_id) = &signal.workflow_id {
+				println!(
+					"  {} {}",
+					style("to workflow id").bold(),
+					workflow_id,
+				);
+			}
 
 			println!(
 				"  {} {}",

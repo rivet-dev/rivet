@@ -56,7 +56,7 @@ impl DatabaseCrdbNats {
 			Ok(conn)
 		} else {
 			// Create a new connection
-			self.pool.acquire().await.map_err(WorkflowError::Sqlx)
+			self.pool.acquire().await.map_err(WorkflowError::ConnSqlx)
 		}
 	}
 

@@ -1548,7 +1548,8 @@ impl Database for DatabaseFdbSqliteNats {
 		// Evict databases before releasing lease
 		self.evict_wf_sqlite(workflow_id).await?;
 
-		self.pools
+		let wrote_to_wake_idx = self
+			.pools
 			.fdb()?
 			.run(|tx, _mc| {
 				async move {
@@ -1569,9 +1570,11 @@ impl Database for DatabaseFdbSqliteNats {
 						SERIALIZABLE,
 					);
 
-					let (_, tag_keys, wake_deadline_entry) = tokio::try_join!(
+					let (wrote_to_wake_idx, tag_keys, wake_deadline_entry) = tokio::try_join!(
 						// Check for other workflows waiting on this one, wake all
 						async {
+							let mut wrote_to_wake_idx = false;
+
 							while let Some(entry) = stream.try_next().await? {
 								let sub_workflow_wake_key = self
 									.subspace
@@ -1599,9 +1602,11 @@ impl Database for DatabaseFdbSqliteNats {
 
 								// Clear secondary index
 								tx.clear(entry.key());
+
+								wrote_to_wake_idx = true;
 							}
 
-							Result::<_, fdb::FdbBindingError>::Ok(())
+							Result::<_, fdb::FdbBindingError>::Ok(wrote_to_wake_idx)
 						},
 						// Read tags
 						async {
@@ -1695,13 +1700,16 @@ impl Database for DatabaseFdbSqliteNats {
 						keys::workflow::WorkerInstanceIdKey::new(workflow_id);
 					tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
-					Ok(())
+					Ok(wrote_to_wake_idx)
 				}
 			})
 			.custom_instrument(tracing::info_span!("complete_workflows_tx"))
 			.await?;
 
-		self.wake_worker();
+		// Wake worker again in case some other workflow was waiting for this one to complete
+		if wrote_to_wake_idx {
+			self.wake_worker();
+		}
 
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::COMPLETE_WORKFLOW_DURATION
@@ -1849,14 +1857,24 @@ impl Database for DatabaseFdbSqliteNats {
 			.custom_instrument(tracing::info_span!("commit_workflow_tx"))
 			.await?;
 
-		// Wake worker again if the deadline is before the next tick
-		if let Some(deadline_ts) = wake_deadline_ts {
-			if deadline_ts
-				<= rivet_util::timestamp::now() + self.worker_poll_interval().as_millis() as i64
-			{
-				self.wake_worker();
-			}
-		}
+		// Always wake the worker immediately again. This is an IMPORTANT implementation detail to prevent
+		// race conditions with workflow sleep. Imagine the scenario:
+		//
+		// 1. workflow is between user code and commit
+		// 2. worker reads wake condition for said workflow but cannot run it because it is already leased
+		// 3. workflow commits
+		//
+		// This will result in the workflow sleeping instead of immediately running again.
+		//
+		// Adding this wake_worker call ensures that if the workflow has a valid wake condition before commit
+		// then it will immediately wake up again.
+		//
+		// This is simpler than having this commit_workflow fn read wake conditions because:
+		// - the wake conditions are not indexed by wf id
+		// - would involve informing the worker to restart the workflow in memory instead of the usual
+		//   workflow lifecycle
+		// - the worker is already designed to pull wake conditions frequently
+		self.wake_worker();
 
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::COMMIT_WORKFLOW_DURATION
@@ -2266,7 +2284,7 @@ impl Database for DatabaseFdbSqliteNats {
 					let wake_signal_key =
 						keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
 
-					// If the workflow is currently listening for this signal, wake it
+					// If the workflow currently has a wake signal key for this signal, wake it
 					if tx
 						.get(&self.subspace.pack(&wake_signal_key), SERIALIZABLE)
 						.await?

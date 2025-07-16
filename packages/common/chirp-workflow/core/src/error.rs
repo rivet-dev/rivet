@@ -144,6 +144,9 @@ pub enum WorkflowError {
 	#[error("sql error: {0}")]
 	Sqlx(#[from] sqlx::Error),
 
+	#[error("failed to create sql connection: {0}")]
+	ConnSqlx(sqlx::Error),
+
 	#[error("fdb error: {0}")]
 	Fdb(#[from] fdb::FdbBindingError),
 

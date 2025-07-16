@@ -112,6 +112,10 @@ impl Worker {
 
 	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut sigterm: Signal) {
+		// For an accurate count of how many remaining workflows there are, retain before checking length
+		self.running_workflows
+			.retain(|_, wf| !wf.handle.is_finished());
+
 		// Shutdown sequence
 		tracing::info!(
 			duration=?SHUTDOWN_DURATION,

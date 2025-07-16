@@ -65,7 +65,7 @@ impl Opts {
 			rivet_migrate::up(config.clone(), &run_config.sql_services).await?;
 		}
 
-		// Select services t orun
+		// Select services to run
 		let services = if self.services.is_empty() {
 			// Run all services
 			run_config.services.clone()

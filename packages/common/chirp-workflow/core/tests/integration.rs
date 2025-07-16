@@ -1,16 +1,33 @@
 use std::time::Duration;
 
 use chirp_workflow::prelude::*;
-// use serde_json::json;
-// use uuid::Uuid;
 
-mod common;
-use common::*;
+#[test]
+fn fdb_sqlite_nats_driver() {
+	// SAFETY: No other threads exist yet
+	unsafe {
+		std::env::set_var("RUST_LOG", "DEBUG");
+		std::env::set_var("RUST_LOG_ANSI_COLOR", "1");
+		std::env::set_var("RIVET_OTEL_ENABLED", "1");
+		std::env::set_var("RIVET_OTEL_SAMPLER_RATIO", "1");
+		std::env::set_var("RIVET_SERVICE_NAME", "test");
+		std::env::set_var("RIVET_OTEL_ENDPOINT", "http://127.0.0.1:4317");
+	}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn fdb_sqlite_nats_driver() {
-	setup_tracing();
+	// Build runtime
+	chirp_workflow::prelude::__rivet_runtime::run(
+		chirp_workflow::prelude::tracing::Instrument::instrument(
+			async move {
+				tracing::info!("test starting");
+				fdb_sqlite_nats_driver_inner().await;
+				tracing::info!("test finished");
+			},
+			chirp_workflow::prelude::tracing::info_span!("fdb_sqlite_nats_driver"),
+		),
+	);
+}
 
+async fn fdb_sqlite_nats_driver_inner() {
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",
 		true,
@@ -62,8 +79,6 @@ async fn fdb_sqlite_nats_driver() {
 
 mod def {
 	use chirp_workflow::prelude::*;
-	use futures_util::FutureExt;
-	use sqlx::Acquire;
 
 	#[derive(Debug, Serialize, Deserialize)]
 	pub struct Input {}

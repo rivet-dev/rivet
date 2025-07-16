@@ -332,7 +332,7 @@ async fn update_ping_thread_inner(
 			continue;
 		}
 
-		// TODO: Parallelize
+		// TODO: Parallelize on the op level
 		// Update ping in fdb idx for each client
 		for (client_id, flavor, workflow_id) in clients {
 			let Some(workflow_id) = workflow_id else {

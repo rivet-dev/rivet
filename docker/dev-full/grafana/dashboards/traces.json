@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 56,
+  "id": 21,
   "links": [],
   "panels": [
     {
@@ -175,298 +175,11 @@
           },
           "pluginVersion": "4.0.6",
           "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
+          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
           "refId": "A"
         }
       ],
       "title": "Traces per Service",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 10
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse-traces"
-          },
-          "editorType": "sql",
-          "format": 0,
-          "meta": {
-            "builderOptions": {
-              "aggregates": [
-                {
-                  "aggregateType": "count",
-                  "column": ""
-                }
-              ],
-              "columns": [
-                {
-                  "hint": "time",
-                  "name": "Timestamp",
-                  "type": "DateTime64(9)"
-                }
-              ],
-              "database": "otel",
-              "filters": [
-                {
-                  "condition": "AND",
-                  "filterType": "custom",
-                  "hint": "time",
-                  "key": "Timestamp",
-                  "operator": "WITH IN DASHBOARD TIME RANGE",
-                  "restrictToFields": [
-                    {
-                      "label": "Timestamp",
-                      "name": "Timestamp",
-                      "picklistValues": [],
-                      "type": "DateTime64(9)"
-                    }
-                  ],
-                  "type": "datetime"
-                }
-              ],
-              "groupBy": [
-                "ServiceName"
-              ],
-              "limit": 10000,
-              "mode": "trend",
-              "orderBy": [],
-              "queryType": "timeseries",
-              "table": "otel_traces"
-            }
-          },
-          "pluginVersion": "4.0.6",
-          "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  quantile(0.99)(Duration)/1000000 AS p99\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ( Timestamp  >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\nGROUP BY time, ServiceName\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
-          "refId": "A"
-        }
-      ],
-      "title": "Service Performance - p99",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 24,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 19
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse-traces"
-          },
-          "editorType": "sql",
-          "format": 0,
-          "meta": {
-            "builderOptions": {
-              "aggregates": [
-                {
-                  "aggregateType": "count",
-                  "column": ""
-                }
-              ],
-              "columns": [
-                {
-                  "hint": "time",
-                  "name": "Timestamp",
-                  "type": "DateTime64(9)"
-                }
-              ],
-              "database": "otel",
-              "filters": [
-                {
-                  "condition": "AND",
-                  "filterType": "custom",
-                  "hint": "time",
-                  "key": "Timestamp",
-                  "operator": "WITH IN DASHBOARD TIME RANGE",
-                  "restrictToFields": [
-                    {
-                      "label": "Timestamp",
-                      "name": "Timestamp",
-                      "picklistValues": [],
-                      "type": "DateTime64(9)"
-                    }
-                  ],
-                  "type": "datetime"
-                }
-              ],
-              "groupBy": [
-                "ServiceName"
-              ],
-              "limit": 10000,
-              "mode": "trend",
-              "orderBy": [],
-              "queryType": "timeseries",
-              "table": "otel_traces"
-            }
-          },
-          "pluginVersion": "4.0.6",
-          "queryType": "timeseries",
-          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
-          "refId": "A"
-        }
-      ],
-      "title": "Error rates",
       "type": "timeseries"
     },
     {
@@ -491,7 +204,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               }
             ]
           }
@@ -505,7 +219,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 207
+                "value": 77
               },
               {
                 "id": "links",
@@ -526,7 +240,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 129
+                "value": 130
               },
               {
                 "id": "links",
@@ -606,14 +320,62 @@
                 "value": 234
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": " "
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 49
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Span Name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 168
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URI/workflow_id/actor_id"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 920
+              }
+            ]
           }
         ]
       },
       "gridPos": {
-        "h": 15,
-        "w": 12,
+        "h": 13,
+        "w": 24,
         "x": 0,
-        "y": 28
+        "y": 10
       },
       "id": 4,
       "options": {
@@ -671,9 +433,9 @@
               "table": "otel_traces"
             }
           },
-          "pluginVersion": "4.8.2",
+          "pluginVersion": "4.9.0",
           "queryType": "table",
-          "rawSql": "SELECT\r\n  min(Timestamp) as Ts,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  argMin(SpanName, Timestamp) as `Span Name`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
+          "rawSql": "SELECT\r\n  (argMin(StatusCode, Timestamp) = 'Error' ? '⚠️' : '') as ` `,\r\n  min(Timestamp) as Ts,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  argMin(SpanName, Timestamp) as `Span Name`,\r\n  argMin(coalesce(NULLIF(SpanAttributes['uri'], ''), NULLIF(SpanAttributes['workflow_id'], ''), SpanAttributes['actor_id']), Timestamp) as `URI/workflow_id/actor_id`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
           "refId": "A"
         }
       ],
@@ -690,10 +452,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 15,
-        "w": 12,
-        "x": 12,
-        "y": 28
+        "h": 17,
+        "w": 24,
+        "x": 0,
+        "y": 23
       },
       "id": 6,
       "options": {
@@ -823,7 +585,7 @@
           },
           "pluginVersion": "4.0.6",
           "queryType": "traces",
-          "rawSql": "WITH '${trace_id}' as trace_id, (SELECT min(Start) FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_start, (SELECT max(End) + 1 FROM \"otel\".\"otel_traces_trace_id_ts\" WHERE TraceId = trace_id) as trace_end SELECT \"TraceId\" as traceID, \"SpanId\" as spanID, \"ParentSpanId\" as parentSpanID, \"ServiceName\" as serviceName, \"SpanName\" as operationName, \"Timestamp\" as startTime, multiply(\"Duration\", 0.000001) as duration, arrayMap(key -> map('key', key, 'value',\"SpanAttributes\"[key]), mapKeys(\"SpanAttributes\")) as tags, arrayMap(key -> map('key', key, 'value',\"ResourceAttributes\"[key]), mapKeys(\"ResourceAttributes\")) as serviceTags FROM \"otel\".\"otel_traces\" WHERE traceID = trace_id AND startTime >= trace_start AND startTime <= trace_end AND ( Duration > 0 ) ORDER BY Timestamp DESC, Duration DESC LIMIT 1000",
+          "rawSql": "WITH\n\t'${trace_id}' as trace_id,\n\t(SELECT min(Start) FROM otel.otel_traces_trace_id_ts WHERE TraceId = trace_id) as trace_start,\n\t(SELECT max(End) + 1 FROM otel.otel_traces_trace_id_ts WHERE TraceId = trace_id) as trace_end\nSELECT\n\tTraceId as traceID,\n\tSpanId as spanID,\n\tParentSpanId as parentSpanID,\n\tServiceName as serviceName,\n\tSpanName as operationName, Timestamp as startTime,\n\tmultiply(Duration, 0.000001) as duration,\n\tarrayMap(key -> map('key', key, 'value', SpanAttributes[key]), mapKeys(SpanAttributes)) as tags,\n\tarrayMap(key -> map('key', key, 'value', ResourceAttributes[key]), mapKeys(ResourceAttributes)) as serviceTags,\n\tarrayMap((name, timestamp, attributes) -> tuple(name, toString(multiply(toUnixTimestamp64Nano(timestamp), 0.000001)), arrayMap( key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(name String, timestamp String, fields Array(Map(String, String))), `Events.Name`, `Events.Timestamp`, `Events.Attributes`) AS logs,\n\tarrayMap((traceID, spanID, attributes) -> tuple(traceID, spanID, arrayMap(key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(traceID String, spanID String, tags Array(Map(String, String))), `Links.TraceId`, `Links.SpanId`, `Links.Attributes`) AS references\nFROM otel.otel_traces\nWHERE\n\ttraceID = trace_id AND startTime >= trace_start AND startTime <= trace_end AND ( Duration > 0 )\nORDER BY Timestamp DESC, Duration DESC\nLIMIT 1000",
           "refId": "A"
         }
       ],
@@ -831,91 +593,235 @@
       "type": "traces"
     },
     {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 43
-      },
-      "id": 10,
-      "panels": [],
-      "title": "Logs",
-      "type": "row"
-    },
-    {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
+      "description": "",
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 24,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 40
       },
-      "id": 11,
+      "id": 8,
       "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.5.2",
       "targets": [
         {
-          "builderOptions": {
-            "columns": [
-              {
-                "hint": "time",
-                "name": "Timestamp",
-                "type": "DateTime64(9)"
-              },
-              {
-                "hint": "log_level",
-                "name": "SeverityText",
-                "type": "LowCardinality(String)"
-              },
-              {
-                "hint": "log_message",
-                "name": "Body",
-                "type": "String"
-              }
-            ],
-            "database": "otel",
-            "filters": [],
-            "limit": 1000,
-            "meta": {
-              "logMessageLike": "",
-              "otelVersion": "latest"
-            },
-            "mode": "list",
-            "orderBy": [],
-            "queryType": "logs",
-            "table": "otel_logs"
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse-traces"
           },
+          "editorType": "sql",
+          "format": 0,
+          "meta": {
+            "builderOptions": {
+              "aggregates": [
+                {
+                  "aggregateType": "count",
+                  "column": ""
+                }
+              ],
+              "columns": [
+                {
+                  "hint": "time",
+                  "name": "Timestamp",
+                  "type": "DateTime64(9)"
+                }
+              ],
+              "database": "otel",
+              "filters": [
+                {
+                  "condition": "AND",
+                  "filterType": "custom",
+                  "hint": "time",
+                  "key": "Timestamp",
+                  "operator": "WITH IN DASHBOARD TIME RANGE",
+                  "restrictToFields": [
+                    {
+                      "label": "Timestamp",
+                      "name": "Timestamp",
+                      "picklistValues": [],
+                      "type": "DateTime64(9)"
+                    }
+                  ],
+                  "type": "datetime"
+                }
+              ],
+              "groupBy": [
+                "ServiceName"
+              ],
+              "limit": 10000,
+              "mode": "trend",
+              "orderBy": [],
+              "queryType": "timeseries",
+              "table": "otel_traces"
+            }
+          },
+          "pluginVersion": "4.0.6",
+          "queryType": "timeseries",
+          "rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
+          "refId": "A"
+        }
+      ],
+      "title": "Error rates",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
+      "id": 10,
+      "panels": [
+        {
           "datasource": {
             "type": "grafana-clickhouse-datasource",
             "uid": "clickhouse"
           },
-          "editorType": "builder",
-          "format": 2,
-          "pluginVersion": "4.0.6",
-          "rawSql": "SELECT Timestamp as timestamp, Body as body, SeverityText as level FROM \"otel\".\"otel_logs\" LIMIT 1000",
-          "refId": "A"
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 61
+          },
+          "id": 11,
+          "options": {
+            "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "pluginVersion": "11.5.2",
+          "targets": [
+            {
+              "builderOptions": {
+                "columns": [
+                  {
+                    "hint": "time",
+                    "name": "Timestamp",
+                    "type": "DateTime64(9)"
+                  },
+                  {
+                    "hint": "log_level",
+                    "name": "SeverityText",
+                    "type": "LowCardinality(String)"
+                  },
+                  {
+                    "hint": "log_message",
+                    "name": "Body",
+                    "type": "String"
+                  }
+                ],
+                "database": "otel",
+                "filters": [],
+                "limit": 1000,
+                "meta": {
+                  "logMessageLike": "",
+                  "otelVersion": "latest"
+                },
+                "mode": "list",
+                "orderBy": [],
+                "queryType": "logs",
+                "table": "otel_logs"
+              },
+              "datasource": {
+                "type": "grafana-clickhouse-datasource",
+                "uid": "clickhouse"
+              },
+              "editorType": "builder",
+              "format": 2,
+              "pluginVersion": "4.0.6",
+              "rawSql": "SELECT Timestamp as timestamp, Body as body, SeverityText as level FROM \"otel\".\"otel_logs\" LIMIT 1000",
+              "refId": "A"
+            }
+          ],
+          "title": "Trace Logs",
+          "type": "logs"
         }
       ],
-      "title": "Trace Logs",
-      "type": "logs"
+      "title": "Logs",
+      "type": "row"
     }
   ],
   "preload": false,
@@ -1068,6 +974,6 @@
   "timezone": "America/Los_Angeles",
   "title": "Traces",
   "uid": "8klBUGfVk",
-  "version": 5,
+  "version": 2,
   "weekStart": ""
 }

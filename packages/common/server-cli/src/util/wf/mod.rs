@@ -58,7 +58,7 @@ pub async fn print_workflows(
 				.timestamp_millis_opt(workflow.create_ts)
 				.single()
 				.context("invalid ts")?;
-			let date = datetime.format("%Y-%m-%d %H:%M:%S");
+			let date = datetime.format("%Y-%m-%d %H:%M:%S%.3f");
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
@@ -66,6 +66,12 @@ pub async fn print_workflows(
 				"  {} {}",
 				style("state").bold(),
 				display_state(&workflow.state)
+			);
+
+			println!(
+				"  {} {}",
+				style("tags").bold(),
+				&indent_string(&colored_json(&workflow.tags)?, "    ", true)
 			);
 
 			if let Some(error) = workflow.error {
