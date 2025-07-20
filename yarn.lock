@@ -146,17 +146,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@asteasolutions/zod-to-openapi@npm:^7.3.0":
-  version: 7.3.3
-  resolution: "@asteasolutions/zod-to-openapi@npm:7.3.3"
-  dependencies:
-    openapi3-ts: "npm:^4.1.2"
-  peerDependencies:
-    zod: ^3.20.2
-  checksum: 10c0/8c097609fa40088d76c32ab65582b73f24578cfc383090ee78a718a9e1ef442f7b6aecaa853cdff92ad6b70d8b9961613a10e8bbd14cba79e381b590cf53a68d
-  languageName: node
-  linkType: hard
-
 "@aws-crypto/crc32@npm:5.2.0":
   version: 5.2.0
   resolution: "@aws-crypto/crc32@npm:5.2.0"
@@ -1675,29 +1664,6 @@ __metadata:
     "@hono/node-server": ^1.11.1
     hono: ^4.6.0
   checksum: 10c0/7bd8f72af2dae0319fbe1ffa831f65456ec3342d7607bfb45d4071d8412c9c2e8faa533d6dcf49c603508e4d353b65920da618d07d5a129e6634793298f2f940
-  languageName: node
-  linkType: hard
-
-"@hono/zod-openapi@npm:^0.19.6":
-  version: 0.19.8
-  resolution: "@hono/zod-openapi@npm:0.19.8"
-  dependencies:
-    "@asteasolutions/zod-to-openapi": "npm:^7.3.0"
-    "@hono/zod-validator": "npm:^0.7.0"
-  peerDependencies:
-    hono: ">=4.3.6"
-    zod: 3.*
-  checksum: 10c0/f2af759a18d784908ff220685f1eafb4aaaf8933dbd1aa268dc0a42aa3f104a32865d46d0e01f8511cd47d224c509de2d03254539b1f9de5a5886610cf0f86ca
-  languageName: node
-  linkType: hard
-
-"@hono/zod-validator@npm:^0.7.0":
-  version: 0.7.0
-  resolution: "@hono/zod-validator@npm:0.7.0"
-  peerDependencies:
-    hono: ">=3.9.0"
-    zod: ^3.25.0
-  checksum: 10c0/8e362358348ef84a889ada450bba0a0c5b6109dacf74189153622f947e1fb66e161ef8772f169efe49d737e837d490c33efbbe094e5bb3e7a55dccd62848acd6
   languageName: node
   linkType: hard
 
@@ -7500,11 +7466,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"actor-core@npm:0.9.0-rc.1":
-  version: 0.9.0-rc.1
-  resolution: "actor-core@npm:0.9.0-rc.1"
+"actor-core@file:./frontend/packages/actor-core.tgz::locator=rivet%40workspace%3A.":
+  version: 0.7.7
+  resolution: "actor-core@file:./frontend/packages/actor-core.tgz#./frontend/packages/actor-core.tgz::hash=cf9e1e&locator=rivet%40workspace%3A."
   dependencies:
-    "@hono/zod-openapi": "npm:^0.19.6"
     cbor-x: "npm:^1.6.0"
     hono: "npm:^4.7.0"
     invariant: "npm:^2.2.4"
@@ -7521,30 +7486,7 @@ __metadata:
       optional: true
   bin:
     actor-core: ./dist/cli/mod.cjs
-  checksum: 10c0/07db1f0a783e53f25a7814da427203578748ca41ad5e35e648d071ad9e742dbe74eefd4f60e878aaa278de2e750def6f9b287d0942bed8928c8e7516bee06e18
-  languageName: node
-  linkType: hard
-
-"actor-core@npm:^0.6.2":
-  version: 0.6.3
-  resolution: "actor-core@npm:0.6.3"
-  dependencies:
-    cbor-x: "npm:^1.6.0"
-    hono: "npm:^4.7.0"
-    on-change: "npm:^5.0.1"
-    p-retry: "npm:^6.2.1"
-    zod: "npm:^3.24.1"
-  peerDependencies:
-    eventsource: ^3.0.5
-    ws: ^8.0.0
-  peerDependenciesMeta:
-    eventsource:
-      optional: true
-    ws:
-      optional: true
-  bin:
-    actor-core: ./dist/cli/mod.cjs
-  checksum: 10c0/4530252688961f39957cca6f6ac2edfd1a6a52f8dac0cc8cebff23a170084089fb56180e0041f2c458681d8033c3205aa4467f10c8da0c4297777153528dcebd
+  checksum: 10c0/7dbe3885982d29a4709cdeb019e18ca38ccbd256ad11a47c56240208ab3e0f9e18b92a551d42bbbd1efec24db12e0539f0ab1495049778c5da7ef8c18cd60c73
   languageName: node
   linkType: hard
 
@@ -13955,15 +13897,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openapi3-ts@npm:^4.1.2":
-  version: 4.4.0
-  resolution: "openapi3-ts@npm:4.4.0"
-  dependencies:
-    yaml: "npm:^2.5.0"
-  checksum: 10c0/900b834279fc8a43c545728ad75ec7c26934ec5344225b60d1e1c0df44d742d7e7379aea18d9034e03031f079d3308ba5a68600682eece3ed41cdbdd10346a9e
-  languageName: node
-  linkType: hard
-
 "openid-client@npm:^6.5.0":
   version: 6.5.0
   resolution: "openid-client@npm:6.5.0"
@@ -18973,7 +18906,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yaml@npm:^2.3.1, yaml@npm:^2.3.4, yaml@npm:^2.5.0":
+"yaml@npm:^2.3.1, yaml@npm:^2.3.4":
   version: 2.8.0
   resolution: "yaml@npm:2.8.0"
   bin:

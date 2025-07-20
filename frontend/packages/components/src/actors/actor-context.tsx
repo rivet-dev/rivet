@@ -84,6 +84,14 @@ export type Region = Rivet.actor.Region;
 
 // global atoms
 export const currentActorIdAtom = atom<string | undefined>(undefined);
+
+export const currentActorQueryAtom = atom<{
+	isLoading: boolean;
+	error: string | null;
+}>({
+	isLoading: false,
+	error: null,
+});
 export const actorsQueryAtom = atom<{
 	isLoading: boolean;
 	error: string | null;

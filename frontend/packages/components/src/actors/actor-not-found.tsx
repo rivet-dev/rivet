@@ -4,9 +4,14 @@ import { selectAtom } from "jotai/utils";
 import { useCallback } from "react";
 import { Button } from "../ui/button";
 import { FilterOp } from "../ui/filters";
-import { type ActorFeature, actorFiltersAtom } from "./actor-context";
+import {
+	type ActorFeature,
+	actorFiltersAtom,
+	currentActorQueryAtom,
+} from "./actor-context";
 import { ActorTabs } from "./actors-actor-details";
 import { useActorsView } from "./actors-view-context-provider";
+import { ShimmerLine } from "../shimmer-line";
 
 export function ActorNotFound({
 	features = [],
@@ -21,17 +26,28 @@ export function ActorNotFound({
 		),
 	);
 
+	const { isLoading } = useAtomValue(currentActorQueryAtom);
+
 	return (
 		<div className="flex flex-col h-full flex-1">
-			<ActorTabs disabled features={features}>
-				<div className="flex text-center text-foreground flex-1 justify-center items-center flex-col gap-2">
-					<Icon icon={faQuestionSquare} className="text-4xl" />
-					<p className="max-w-[400px]">{copy.actorNotFound}</p>
-					<p className="max-w-[400px] text-sm text-muted-foreground">
-						{copy.actorNotFoundDescription}
-					</p>
+			<ActorTabs disabled features={features} className="relative">
+				<div className="flex text-center text-foreground flex-1 justify-center items-center flex-col relative gap-2">
+					{!isLoading ? (
+						<>
+							<Icon
+								icon={faQuestionSquare}
+								className="text-4xl"
+							/>
+							<p className="max-w-[400px]">
+								{copy.actorNotFound}
+							</p>
+							<p className="max-w-[400px] text-sm text-muted-foreground">
+								{copy.actorNotFoundDescription}
+							</p>
+						</>
+					) : null}
 
-					{!hasDevMode ? (
+					{!hasDevMode && !isLoading ? (
 						<Button
 							className="mt-3"
 							variant="outline"
@@ -49,6 +65,7 @@ export function ActorNotFound({
 							{copy.showHiddenActors}
 						</Button>
 					) : null}
+					{isLoading ? <ShimmerLine className="top-0" /> : null}
 				</div>
 			</ActorTabs>
 		</div>

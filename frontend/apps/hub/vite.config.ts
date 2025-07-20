@@ -7,8 +7,6 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig } from "vite";
 import vitePluginFaviconsInject from "vite-plugin-favicons-inject";
-// @ts-ignore
-import { config as mdxConfig } from "../../../site/src/mdx/mdx.mjs";
 
 // These are only needed in CI. They'll be undefined in dev.
 const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
@@ -18,13 +16,6 @@ const GIT_SHA = process.env.CF_PAGES_COMMIT_SHA;
 export default defineConfig({
 	base: "./",
 	plugins: [
-		{
-			enforce: "pre",
-			...mdx({
-				remarkPlugins: mdxConfig.options.remarkPlugins,
-				rehypePlugins: mdxConfig.options.rehypePlugins,
-			}),
-		},
 		react(),
 		TanStackRouterVite(),
 		vitePluginFaviconsInject(
