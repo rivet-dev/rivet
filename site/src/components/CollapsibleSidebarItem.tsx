@@ -85,7 +85,6 @@ export function CollapsibleSidebarItem({
 						open: { rotateZ: 0 },
 						closed: { rotateZ: "-90deg" },
 					}}
-					initial={hasActiveChild ? "open" : "closed"}
 					animate={isItemOpen ? "open" : "closed"}
 					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
@@ -94,7 +93,6 @@ export function CollapsibleSidebarItem({
 			</button>
 			<motion.div
 				className="overflow-hidden"
-				initial={hasActiveChild ? "open" : "closed"}
 				variants={{
 					open: { height: "auto", opacity: 1 },
 					closed: { height: 0, opacity: 0 },

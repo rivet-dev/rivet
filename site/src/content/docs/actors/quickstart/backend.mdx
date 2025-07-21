@@ -1,3 +1,5 @@
+import { Hosting } from "@/components/docs/Hosting";
+
 # Node.js & Bun Quickstart
 
 Get started with Rivet Actors in Node.js and Bun
@@ -15,7 +17,7 @@ npm install @rivetkit/actor
 
 Create a simple counter actor:
 
-```ts registry.ts
+```ts {{"title":"registry.ts"}}
 import { actor, setup } from "@rivetkit/actor";
 
 export const counter = actor({
@@ -43,7 +45,7 @@ Choose your preferred web framework:
 
 <CodeGroup>
 
-```ts Hono
+```ts {{"title":"Hono"}}
 import { registry } from "./registry";
 import { Hono } from "hono";
 
@@ -68,7 +70,7 @@ app.post("/increment/:name", async (c) => {
 serve(app);
 ```
 
-```ts Express.js
+```ts {{"title":"Express.js"}}
 import { registry } from "./registry";
 import express from "express";
 
@@ -97,7 +99,7 @@ app.listen(8080, () => {
 });
 ```
 
-```ts Elysia
+```ts {{"title":"Elysia"}}
 import { registry } from "./registry";
 import { Elysia } from "elysia";
 
@@ -132,11 +134,11 @@ The `/registry` endpoint is automatically mounted by Rivet and is required for c
 
 <CodeGroup>
 
-```sh Node.js
+```sh {{"title":"Node.js"}}
 npx tsx --watch server.ts
 ```
 
-```sh Bun
+```sh {{"title":"Bun"}}
 bun --watch server.ts
 ```
 
@@ -152,7 +154,7 @@ Test your counter actor using HTTP requests:
 
 <CodeGroup>
 
-```ts JavaScript
+```ts {{"title":"JavaScript"}}
 // Increment counter
 const response = await fetch("http://localhost:8080/increment/my-counter", {
 	method: "POST"
@@ -173,115 +175,7 @@ curl -X POST http://localhost:8080/increment/my-counter
 
 <Step title="Deploy">
 
-By default, Rivet stores actor state on the local file system and will not scale in production.
-
-The following providers let you deploy & scale Rivet:
-
-<Tabs>
-
-<Tab title="Redis">
-
-For production with Redis storage, install the Redis driver:
-
-```sh
-npm install @rivetkit/redis
-```
-
-Then configure the driver:
-
-```ts server.ts
-import { registry } from "./registry";
-
-const { client, serve } = registry.createServer({
-  driver: createRedisDriver()
-});
-
-// ... rest of server setup ...
-```
-
-Your backend can now be deployed to your cloud provider of choice.
-
-</Tab>
-
-<Tab title="Cloudflare Workers">
-
-Deploy to Cloudflare Workers, install the Cloudflare Workers driver:
-
-```sh
-npm install @rivetkit/cloudflare-workers
-```
-
-Update your `server.ts` to support Cloudflare Workers:
-
-<CodeGroup>
-
-  ```ts Hono
-  import { createServer } from "@rivetkit/cloudflare-workers";
-  import { Hono } from "hono";
-  import { registry } from "./registry";
-
-  const { client, createHandler } = createServer(registry);
-
-  // Setup router
-  const app = new Hono();
-
-  // ... etc ...
-
-  const { handler, ActorHandler } = createHandler(app);
-
-  export { handler as default, ActorHandler };
-  ```
-
-  ```ts No Router
-  import { createServerHandler } from "@rivetkit/cloudflare-workers";
-  import { registry } from "./registry";
-
-  const { handler, ActorHandler } = createServerHandler(registry);
-  export { handler as default, ActorHandler };
-  ```
-
-</CodeGroup>
-
-Update your configuration file to support `ACTOR_DO` and `ACTOR_KV` bindings:
-
-```json wrangler.json
-{
-  "name": "my-rivetkit-app",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-20",
-  "compatibility_flags": ["nodejs_compat"],
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_classes": ["ActorHandler"]
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "ACTOR_DO",
-        "class_name": "ActorHandler"
-      }
-    ]
-  },
-  "kv_namespaces": [
-    {
-      "binding": "ACTOR_KV",
-      "id": "your_namespace_id"
-    }
-  ]
-}
-```
-
-Finally, deploy:
-
-```sh
-wrangler deploy
-```
-
-</Tab>
-
-</Tabs>
+<Hosting />
 
 </Step>
 
@@ -297,7 +191,7 @@ Create a type-safe client to connect from your frontend:
 
 <Tab title="JavaScript">
 
-```ts
+```ts {{"title":"client.ts"}}
 import { createClient } from "@rivetkit/actor/client";
 import type { registry } from "./registry";
 
@@ -331,7 +225,7 @@ See the [JavaScript client documentation](/clients/javascript) for more informat
 
 <Tab title="React">
 
-```tsx
+```tsx {{"title":"Counter.tsx"}}
 import { useState } from "react";
 import { createClient, createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
@@ -370,7 +264,7 @@ See the [React documentation](/clients/react) for more information.
 
 <Tab title="Rust">
 
-```rust
+```rust {{"title":"main.rs"}}
 use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
 use serde_json::json;
 

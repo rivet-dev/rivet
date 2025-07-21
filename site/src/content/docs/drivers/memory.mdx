@@ -1,0 +1,50 @@
+# Memory
+
+The Memory driver stores all actor state and communication in memory, making it ideal for testing, development, and prototyping scenarios where persistence is not required.
+
+<Info>
+The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, use the [Redis driver](/docs/drivers/redis).
+</Info>
+
+## Feature Support
+
+| Feature | Supported |
+| --- | --- |
+| Horizontal scaling | No |
+| WebSockets | Yes |
+| SSE | Yes |
+| Edge | No |
+| Scheduling | Yes |
+
+## Setup
+
+<Steps>
+<Step title="Install packages">
+
+The Memory driver is included with `@rivetkit/actor` - no additional packages needed:
+
+```bash
+npm install @rivetkit/actor
+```
+
+</Step>
+
+<Step title="Configure the driver">
+
+Create and use the Memory driver:
+
+```typescript {{"title":"server.ts"}}
+import { createMemoryDriver } from "@rivetkit/actor";
+import { registry } from "./registry";
+
+const driver = createMemoryDriver();
+const { serve, client } = registry.runServer({ driver });
+
+// ...rest of your server...
+```
+
+The Memory driver requires no configuration options.
+
+</Step>
+</Steps>
+

@@ -7,6 +7,7 @@ interface CardProps extends PropsWithChildren<{ className?: string }> {
 	title?: string;
 	icon?: any;
 	href?: string;
+	target?: string;
 }
 
 export function Card({
@@ -15,6 +16,7 @@ export function Card({
 	title,
 	icon,
 	href,
+	target,
 }: CardProps) {
 	const content = (
 		<div
@@ -48,7 +50,7 @@ export function Card({
 
 	if (href) {
 		return (
-			<Link href={href} className="block group">
+			<Link href={href} className="block group" target={target}>
 				{content}
 			</Link>
 		);

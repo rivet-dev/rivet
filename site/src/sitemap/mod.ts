@@ -45,6 +45,8 @@ import {
 	faSlidersHSquare,
 	faArrowsLeftRight,
 	faSitemap,
+	faScrewdriverWrench,
+	faInfoSquare,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -298,6 +300,68 @@ export const sitemap = [
 							{
 								title: "Vitest",
 								href: "/docs/integrations/vitest",
+							},
+						],
+					},
+				],
+			},
+			{
+				title: "Self-Hosting",
+				// IMPORTANT: Also update integrations/index.mdx
+				pages: [
+					{
+						title: "Overview",
+						icon: faInfoSquare,
+						href: "/docs/general/self-hosting",
+					},
+					{
+						title: "Hosting Providers",
+						icon: faServer,
+						collapsible: true,
+						pages: [
+							{
+								title: "Railway",
+								href: "/docs/hosting-providers/rivet",
+							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/hosting-providers/cloudflare-workers",
+							},
+							{
+								title: "Rivet Cloud (Enterprise)",
+								href: "/docs/hosting-providers/rivet-cloud",
+							},
+
+							// TODO: AWS
+							// TODO: Cloudflare Workers
+							// TODO: Railway
+							// TODO: Vercel
+							// TODO: Hetzner
+							// TODO: Coolify
+							// TODO: AWS ECS
+							// TODO: Rivet
+						],
+					},
+					{
+						title: "Drivers",
+						icon: faScrewdriverWrench,
+						collapsible: true,
+						pages: [
+							{
+								title: "Redis",
+								href: "/docs/drivers/redis",
+							},
+							{
+								title: "File System",
+								href: "/docs/drivers/file-system",
+							},
+							{
+								title: "Memory",
+								href: "/docs/drivers/memory",
+							},
+							{
+								title: "Build Your Own",
+								href: "/docs/drivers/build-your-own",
 							},
 						],
 					},

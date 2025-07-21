@@ -1,3 +1,5 @@
+import { Hosting } from "@/components/docs/Hosting";
+
 # React Quickstart
 
 Build real-time React applications with Rivet Actors
@@ -15,7 +17,7 @@ npm install @rivetkit/actor @rivetkit/react
 
 Create your actor registry on the backend:
 
-```ts backend/registry.ts
+```ts {{"title":"backend/registry.ts"}}
 import { actor, setup } from "@rivetkit/actor";
 
 export const counter = actor({
@@ -41,7 +43,7 @@ export const registry = setup({
 
 Start a server to run your actors:
 
-```ts backend/server.ts
+```ts {{"title":"backend/server.ts"}}
 import { registry } from "./registry";
 registry.runServer();
 ```
@@ -52,7 +54,7 @@ registry.runServer();
 
 Set up your React application:
 
-```tsx frontend/App.tsx
+```tsx {{"title":"frontend/App.tsx"}}
 import { useState } from "react";
 import { createClient, createRivetKit } from "@rivetkit/react";
 import type { registry } from "../backend/registry";
@@ -131,7 +133,7 @@ export default App;
 
 Configure Vite for development:
 
-```ts vite.config.ts
+```ts {{"title":"vite.config.ts"}}
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -167,94 +169,7 @@ Open `http://localhost:5173` in your browser. Try opening multiple tabs to see r
 
 <Step title="Deploy">
 
-By default, Rivet stores actor state on the local file system and will not scale in production.
-
-The following providers let you deploy & scale Rivet:
-
-<Tabs>
-
-<Tab title="Redis">
-
-For production with Redis storage, install the Redis driver:
-
-```sh
-npm install @rivetkit/redis
-```
-
-Then configure the driver:
-
-```ts server.ts
-import { registry } from "./registry";
-
-const { client, serve } = registry.createServer({
-  driver: createRedisDriver()
-});
-
-// ... rest of server setup ...
-```
-
-Your backend can now be deployed to your cloud provider of choice.
-
-</Tab>
-
-<Tab title="Cloudflare Workers">
-
-Deploy to Cloudflare Workers, install the Cloudflare Workers driver:
-
-```sh
-npm install @rivetkit/cloudflare-workers
-```
-
-Update your `server.ts` to support Cloudflare Workers:
-
-  ```ts server.ts
-  import { createServerHandler } from "@rivetkit/cloudflare-workers";
-  import { registry } from "./registry";
-
-  const { handler, ActorHandler } = createServerHandler(registry);
-  export { handler as default, ActorHandler };
-  ```
-
-Update your configuration file to support `ACTOR_DO` and `ACTOR_KV` bindings:
-
-```json wrangler.json
-{
-  "name": "my-rivetkit-app",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-20",
-  "compatibility_flags": ["nodejs_compat"],
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_classes": ["ActorHandler"]
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "ACTOR_DO",
-        "class_name": "ActorHandler"
-      }
-    ]
-  },
-  "kv_namespaces": [
-    {
-      "binding": "ACTOR_KV",
-      "id": "your_namespace_id"
-    }
-  ]
-}
-```
-
-Finally, deploy:
-
-```sh
-wrangler deploy
-```
-
-</Tab>
-
-</Tabs>
+<Hosting />
 
 </Step>
 
