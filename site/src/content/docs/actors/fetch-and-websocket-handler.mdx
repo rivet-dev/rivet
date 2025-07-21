@@ -1,0 +1,237 @@
+# Fetch and WebSocket Handler
+
+Actors can handle HTTP requests and WebSocket connections through the `onFetch` and `onWebSocket` handlers.
+
+For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/events) provide high-level connection handling that's easier to work with. However, raw handlers are required when implementing custom use cases or integrating external libraries that need direct access to the underlying HTTP `Request`/`Response` objects or WebSocket connections.
+
+## HTTP Request Handling with `onFetch`
+
+The `onFetch` handler processes HTTP requests sent to your actor. It receives the actor context and a standard `Request` object.
+
+<Tabs>
+<Tab title="Raw HTTP Handling">
+
+```typescript
+import { type ActorContext, actor } from "@rivetkit/core";
+
+export const httpActor = actor({
+    state: {
+        requestCount: 0,
+    },
+    onAuth() {
+        return {}; // Allow public access
+    },
+    onFetch(ctx, request) {
+        const url = new URL(request.url);
+        ctx.state.requestCount++;
+
+        if (url.pathname === "/api/hello") {
+            return new Response(JSON.stringify({ message: "Hello from actor!" }), {
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        if (url.pathname === "/api/echo" && request.method === "POST") {
+            return new Response(request.body, {
+                headers: request.headers,
+            });
+        }
+
+        // Return 404 for unhandled paths
+        return new Response("Not Found", { status: 404 });
+    },
+    actions: {},
+});
+```
+
+</Tab>
+<Tab title="Using Hono">
+
+```typescript
+import { type ActorContext, actor } from "@rivetkit/core";
+import { Hono } from "hono";
+
+export const honoActor = actor({
+    state: {
+        requestCount: 0,
+    },
+    createVars(ctx) {
+        const app = new Hono();
+        
+        // Set up Hono routes
+        app.get("/api/hello", (c) => {
+            return c.json({ message: "Hello from Hono!" });
+        });
+
+        app.post("/api/echo", async (c) => {
+            const body = await c.req.json();
+            return c.json(body);
+        });
+
+        app.get("/api/stats", (c) => {
+            return c.json({ requestCount: ctx.state.requestCount });
+        });
+
+        return { app };
+    },
+    onAuth() {
+        return {}; // Allow public access
+    },
+    async onFetch(ctx, request) {
+        ctx.state.requestCount++;
+        
+        // Pass request to Hono app
+        return await ctx.vars.app.fetch(request);
+    },
+    actions: {},
+});
+```
+
+</Tab>
+</Tabs>
+
+<Note>
+	WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
+
+	Server-Sent Events (SSE) streaming and other streaming responses are not supported in coordinated topologies.
+</Note>
+
+## WebSocket Handling with `onWebSocket`
+
+The `onWebSocket` handler manages WebSocket connections. It receives the actor context, a `WebSocket` object, and the initial `Request`.
+
+```typescript
+export const websocketActor = actor({
+    state: {
+        connectionCount: 0,
+    },
+    onAuth() {
+        return {}; // Allow all connections
+    },
+    onWebSocket(ctx, websocket, request) {
+        ctx.state.connectionCount++;
+
+        // Connection is already open, can send immediately
+        websocket.send(JSON.stringify({
+            type: "welcome",
+            connectionCount: ctx.state.connectionCount,
+        }));
+
+        websocket.addEventListener("message", (event) => {
+            // Echo messages back
+            websocket.send(event.data);
+        });
+
+        websocket.addEventListener("close", () => {
+            ctx.state.connectionCount--;
+        });
+    },
+    actions: {},
+});
+```
+
+## Authentication
+
+Authentication is handled through the `onAuth` handler. The `onAuth` handler is executed on the server before the request is sent to the actor, reducing resource load on the actor by filtering out unauthorized requests early.
+
+See the [authentication documentation](/docs/actors/auth) for detailed information on implementing authentication patterns.
+
+## Accessing Your Handlers
+
+There are three ways to access your actor's fetch and WebSocket handlers:
+
+### Option A: From Frontend with RivetKit Client
+
+Use the RivetKit client to make direct HTTP requests or WebSocket connections:
+
+```typescript
+import { createClient } from "@rivetkit/core/client";
+
+const client = createClient("http://localhost:8080");
+
+// HTTP requests
+const actor = client.myActor.getOrCreate(["key"]);
+const response = await actor.fetch("api/hello", {
+    method: "GET"
+});
+
+// WebSocket connections
+const ws = await actor.websocket("/");
+```
+
+### Option B: From Frontend via Direct RivetKit Router Access
+
+You can access your actor handlers directly through the mounted RivetKit router. The router automatically handles the required headers for authentication and routing.
+
+#### HTTP Requests
+
+For HTTP requests, the router expects these headers:
+- `X-RivetKit-Actor-Query`: JSON-encoded actor query
+- `X-RivetKit-Encoding`: Encoding type (usually "json")
+- `X-RivetKit-Conn-Params`: JSON-encoded connection parameters (optional)
+
+```typescript
+// Direct HTTP request to actor
+const response = await fetch("http://localhost:8080/registry/actors/myActor/http/api/hello", {
+    method: "GET",
+    headers: {
+        "X-RivetKit-Actor-Query": JSON.stringify({
+            getOrCreateForKey: { name: "myActor", key: "default" }
+        }),
+        "X-RivetKit-Encoding": "json",
+        "X-RivetKit-Conn-Params": JSON.stringify({ apiKey: "your-api-key" })
+    }
+});
+```
+
+#### WebSocket Connections
+
+For WebSocket connections, authentication data is passed via WebSocket subprotocols:
+
+```typescript
+// Direct WebSocket connection to actor
+const protocols = [
+    `query.${encodeURIComponent(JSON.stringify({
+        getOrCreateForKey: { name: "myActor", key: "default" }
+    }))}`,
+    `encoding.json`,
+    `conn_params.${encodeURIComponent(JSON.stringify({ apiKey: "your-api-key" }))}`
+];
+
+const ws = new WebSocket("ws://localhost:8080/registry/actors/myActor/ws/", protocols);
+```
+
+### Option C: From Backend via RivetKit Client
+
+You can use the RivetKit client's built-in methods for raw HTTP and WebSocket access:
+
+```typescript
+import { createClient } from "@rivetkit/core/client";
+
+const client = createClient("http://localhost:8080");
+
+// HTTP requests using .fetch() method
+const actor = client.myActor.getOrCreate(["key"]);
+const response = await actor.fetch("api/hello", {
+    method: "GET"
+});
+const data = await response.json();
+
+// WebSocket connections using .websocket() method
+const ws = await actor.websocket("custom/path");
+ws.addEventListener("message", (event) => {
+    console.log("Message:", event.data);
+});
+
+// Also works with actor connections
+const conn = actor.connect();
+const connResponse = await conn.fetch("api/hello");
+const connWs = await conn.websocket();
+```
+
+<Info>
+	It's not possible to use the global `fetch` method or global WebSocket class to connect to an actor. This is because actors do not have traditional network interfaces to communicate with.
+
+	The `Request`, `Response`, and `WebSocket` types returned from `.fetch()` and `.websocket()` comply with the W3C specification and will work wherever you pass them.
+</Info>
+

@@ -371,6 +371,78 @@ const chatRoom = actor({
 });
 ```
 
+### `onFetch`
+
+The `onFetch` hook handles HTTP requests sent to your actor. It receives the actor context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const apiActor = actor({
+  state: { requestCount: 0 },
+  
+  onFetch: (c, request) => {
+    const url = new URL(request.url);
+    c.state.requestCount++;
+    
+    if (url.pathname === "/api/status") {
+      return new Response(JSON.stringify({
+        status: "ok",
+        requestCount: c.state.requestCount
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    
+    // Return void to continue to default routing
+    return;
+  },
+  
+  actions: { /* ... */ }
+});
+```
+
+### `onWebSocket`
+
+The `onWebSocket` hook handles WebSocket connections to your actor. It receives the actor context, a `WebSocket` object, and the initial `Request`. Use this to set up WebSocket event listeners and handle real-time communication.
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const realtimeActor = actor({
+  state: { connectionCount: 0 },
+  
+  onWebSocket: (c, websocket, request) => {
+    c.state.connectionCount++;
+    
+    // Send welcome message
+    websocket.send(JSON.stringify({
+      type: "welcome",
+      connectionCount: c.state.connectionCount
+    }));
+    
+    // Handle incoming messages
+    websocket.addEventListener("message", (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === "ping") {
+        websocket.send(JSON.stringify({
+          type: "pong",
+          timestamp: Date.now()
+        }));
+      }
+    });
+    
+    // Handle connection close
+    websocket.addEventListener("close", () => {
+      c.state.connectionCount--;
+    });
+  },
+  
+  actions: { /* ... */ }
+});
+```
+
 ## Destroying Actors
 
 Actors can be shut down gracefully with `c.shutdown()`. Clients will be gracefully disconnected.

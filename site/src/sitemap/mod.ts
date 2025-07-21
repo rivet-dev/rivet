@@ -36,6 +36,7 @@ import {
 	faVialCircleCheck,
 	faForward,
     faSquareBinary,
+    faLink,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -114,6 +115,11 @@ export const sitemap = [
 								title: "Communicating between Actors",
 								href: "/docs/actors/communicating-between-actors",
 								icon: faArrowRightArrowLeft,
+							},
+							{
+								title: "Fetch & WebSocket Handler",
+								href: "/docs/actors/fetch-and-websocket-handler",
+								icon: faLink,
 							},
 							{
 								title: "Connections",
