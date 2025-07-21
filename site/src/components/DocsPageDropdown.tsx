@@ -35,7 +35,7 @@ export function DocsPageDropdown({
 	const [isOpen, setIsOpen] = useState(false);
 	const [markdownContent, setMarkdownContent] = useState<string>("");
 
-	// Load markdown content when component mounts
+	// Load markdown content when component mounts (still needed for copy functionality)
 	useEffect(() => {
 		const loadMarkdown = async () => {
 			try {
@@ -76,14 +76,19 @@ export function DocsPageDropdown({
 		window.open(`/${markdownPath}.md`, "_blank");
 	};
 
+	const generateAIPrompt = () => {
+		const markdownUrl = `${window.location.origin}/${markdownPath}.md`;
+		return `Read this document so I can ask questions about it: ${markdownUrl}`;
+	};
+
 	const openInChatGPT = () => {
-		const prompt = `Please help me understand and answer questions about this documentation page:\n\nTitle: ${title}\n\nContent:\n${markdownContent}`;
+		const prompt = generateAIPrompt();
 		const chatGPTUrl = `https://chat.openai.com/?q=${encodeURIComponent(prompt)}`;
 		window.open(chatGPTUrl, "_blank");
 	};
 
 	const openInClaude = () => {
-		const prompt = `Please help me understand and answer questions about this documentation page:\n\nTitle: ${title}\n\nContent:\n${markdownContent}`;
+		const prompt = generateAIPrompt();
 		const claudeUrl = `https://claude.ai/chat?q=${encodeURIComponent(prompt)}`;
 		window.open(claudeUrl, "_blank");
 	};
