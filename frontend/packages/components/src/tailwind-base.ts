@@ -44,13 +44,12 @@ const config = {
 		},
 		extend: {
 			fontFamily: {
-				// TODO: We haven't configured importing this font
-				//"mono-console": [
-				//	"Consolas",
-				//	"Lucida Console",
-				//	"Courier New",
-				//	"monospace",
-				//],
+				"mono-console": [
+					"Consolas",
+					"Lucida Console",
+					"Courier New",
+					"monospace",
+				],
 			},
 			data: {
 				active: 'status~="active"',
