@@ -1,0 +1,182 @@
+# Input Parameters
+
+Pass initialization data to actors when creating instances
+
+Actors can receive input parameters when created, allowing for flexible initialization and configuration. Input is passed during actor creation and is available in lifecycle hooks.
+
+## Passing Input to Actors
+
+Input is provided when creating actor instances using the `input` property:
+
+```typescript
+// Client side - create with input
+const game = await client.game.create(["game-123"], {
+  input: {
+    gameMode: "tournament",
+    maxPlayers: 8,
+    difficulty: "hard",
+  }
+});
+
+// getOrCreate can also accept input (used only if creating)
+const gameHandle = client.game.getOrCreate(["game-456"], {
+  createWithInput: {
+    gameMode: "casual",
+    maxPlayers: 4,
+  }
+});
+```
+
+## Accessing Input in Lifecycle Hooks
+
+Input is available in lifecycle hooks via the `opts.input` parameter:
+
+```typescript
+const chatRoom = actor({
+  createState: (c, opts) => ({
+    name: opts.input?.roomName ?? "Unnamed Room",
+    isPrivate: opts.input?.isPrivate ?? false,
+    maxUsers: opts.input?.maxUsers ?? 50,
+    users: {},
+    messages: [],
+  }),
+  
+  onCreate: (c, opts) => {
+    console.log(`Creating room: ${opts.input?.roomName}`);
+    
+    // Setup external services based on input
+    if (opts.input?.isPrivate) {
+      setupPrivateRoomLogging(opts.input.roomName);
+    }
+  },
+  
+  actions: {
+    // Input remains accessible in actions via initial state
+    getRoomInfo: (c) => ({
+      name: c.state.name,
+      isPrivate: c.state.isPrivate,
+      maxUsers: c.state.maxUsers,
+      currentUsers: Object.keys(c.state.users).length,
+    }),
+  },
+});
+```
+
+## Input Validation
+
+You can validate input parameters in the `createState` or `onCreate` hooks:
+
+```typescript
+import { z } from "zod";
+
+const GameInputSchema = z.object({
+  gameMode: z.enum(["casual", "tournament", "ranked"]),
+  maxPlayers: z.number().min(2).max(16),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+});
+
+const game = actor({
+  createState: (c, opts) => {
+    // Validate input
+    const input = GameInputSchema.parse(opts.input);
+    
+    return {
+      gameMode: input.gameMode,
+      maxPlayers: input.maxPlayers,
+      difficulty: input.difficulty ?? "medium",
+      players: {},
+      gameState: "waiting",
+    };
+  },
+  
+  actions: {
+    // Actions can access the validated input via state
+    getGameInfo: (c) => ({
+      gameMode: c.state.gameMode,
+      maxPlayers: c.state.maxPlayers,
+      difficulty: c.state.difficulty,
+      currentPlayers: Object.keys(c.state.players).length,
+    }),
+  },
+});
+```
+
+## Input vs Connection Parameters
+
+Input parameters are different from connection parameters:
+
+- **Input**:
+  - Passed when creating the actor instance
+  - Use for actor-wide configuration
+  - Available in lifecycle hooks
+- **Connection parameters**:
+  - Passed when connecting to an existing actor
+  - Used for connection-specific configuration
+  - Available in connection hooks
+
+```typescript
+// Actor creation with input
+const room = await client.chatRoom.create(["room-123"], {
+  input: {
+    roomName: "General Discussion",
+    isPrivate: false,
+  },
+  params: {
+    userId: "user-456",
+    displayName: "John Doe",
+  }
+});
+```
+
+## Input Best Practices
+
+### Use Type Safety
+
+Define input types to ensure type safety:
+
+```typescript
+interface GameInput {
+  gameMode: "casual" | "tournament" | "ranked";
+  maxPlayers: number;
+  difficulty?: "easy" | "medium" | "hard";
+}
+
+const game = actor({
+  createState: (c, opts: { input?: GameInput }) => ({
+    gameMode: opts.input?.gameMode ?? "casual",
+    maxPlayers: opts.input?.maxPlayers ?? 4,
+    difficulty: opts.input?.difficulty ?? "medium",
+  }),
+  
+  actions: {
+    // Actions are now type-safe
+  },
+});
+```
+
+### Store Input in State
+
+If you need to access input data in actions, store it in the actor's state:
+
+```typescript
+const game = actor({
+  createState: (c, opts) => ({
+    // Store input configuration in state
+    config: {
+      gameMode: opts.input?.gameMode ?? "casual",
+      maxPlayers: opts.input?.maxPlayers ?? 4,
+      difficulty: opts.input?.difficulty ?? "medium",
+    },
+    // Runtime state
+    players: {},
+    gameState: "waiting",
+  }),
+  
+  actions: {
+    getConfig: (c) => c.state.config,
+    updateDifficulty: (c, difficulty: string) => {
+      c.state.config.difficulty = difficulty;
+    },
+  },
+});
+```

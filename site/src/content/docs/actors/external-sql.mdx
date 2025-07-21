@@ -28,13 +28,21 @@ There are several options for places to host your SQL database:
 -   [AWS RDS](https://aws.amazon.com/rds/)
 -   [Google Cloud SQL](https://cloud.google.com/sql)
 
-## Example
+## Examples
 
-Here's a basic example of how you might set up a connection to a PostgreSQL database using the `pg` library:
+### Basic PostgreSQL Connection
 
-```typescript actor.ts
-import { actor } from "@rivetkit/actor";
+Here's a basic example of a user actor that creates a database record on start and tracks request counts:
+
+<CodeGroup>
+```typescript {{ "title": "registry.ts" }}
+import { actor, setup } from "@rivetkit/actor";
 import { Pool } from "pg";
+
+interface ActorInput {
+  username: string;
+  email: string;
+}
 
 // Create a database connection pool
 const pool = new Pool({
@@ -45,75 +53,110 @@ const pool = new Pool({
   port: 5432,
 });
 
-// Create the actor
-const databaseActor = actor({
-  state: {
-    // Local state if needed
-    lastQueryTime: 0
+// Create the user actor
+export const userActor = actor({
+  createState: (opts: { input: ActorInput }) => ({
+    requestCount: 0,
+    username: opts.input.username,
+    email: opts.input.email,
+    lastActive: Date.now()
+  }),
+  
+  // Insert user into database when actor starts
+  onStart: async (c, opts) => {
+    const result = await pool.query(
+      "INSERT INTO users (username, email, created_at) VALUES ($1, $2, $3)",
+      [c.state.username, c.state.email, c.state.lastActive]
+    );
   },
   
-  // Initialize any resources
-  onStart: (c) => {
-    console.log("Database actor started");
-  },
-  
-  // Clean up resources if needed
-  onShutdown: async (c) => {
-    await pool.end();
-    console.log("Database connections closed");
-  },
-  
-  // Define actions
   actions: {
-    // Example action to fetch data from database
-    fetchData: async (c) => {
-      try {
-        const result = await pool.query("SELECT * FROM your_table");
-        c.state.lastQueryTime = Date.now();
-        return result.rows;
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        throw new Error("Failed to fetch data");
-      }
+    // Update user information
+    updateUser: async (c, email: string) => {
+      c.state.requestCount++;
+      c.state.email = email;
+      c.state.lastActive = Date.now();
+      
+      await pool.query(
+        "UPDATE users SET email = $1 WHERE username = $3",
+        [email, c.state.username]
+      );
+      
+      return { requestCount: c.state.requestCount };
     },
     
-    // Example action to insert data into database
-    insertData: async (c, data) => {
-      try {
-        await pool.query(
-          "INSERT INTO your_table (column1, column2) VALUES ($1, $2)", 
-          [data.value1, data.value2]
-        );
-        
-        c.state.lastQueryTime = Date.now();
-        return { success: true };
-      } catch (error) {
-        console.error("Error inserting data:", error);
-        throw new Error("Failed to insert data");
-      }
+    // Get user data
+    getUser: async (c) => {
+      c.state.requestCount++;
+      c.state.lastActive = Date.now();
+      
+      return {
+        username: c.actorKey,
+        email: c.state.email,
+        requestCount: c.state.requestCount,
+        lastActive: c.state.lastActive
+      };
     }
   }
 });
 
-export default databaseActor;
+export const registry = setup({
+  use: { userActor },
+});
 ```
 
-## With Drizzle ORM
+```typescript {{ "title": "client.ts" }}
+import { createClient } from "@rivetkit/actor/client";
+import type { registry } from "./registry";
 
-Here's an example using Drizzle ORM for more type-safe database operations:
+const client = createClient<typeof registry>("http://localhost:8080");
 
-```typescript actor.ts
-import { actor } from "@rivetkit/actor";
+// Create user
+const alice = await client.userActor.create("alice", {
+  input: {
+    username: "alice",
+    email: "alice@example.com"
+  }
+});
+
+alice.updateUser("alice2@example.com");
+
+const userData = await alice.getUser();
+console.log("User data:", userData);
+
+// Create another user
+const bob = await client.userActor.create("bob", {
+  input: {
+    email: "bob@example.com"
+  }
+});
+const bobData = await bob.getUser();
+```
+</CodeGroup>
+
+### Using Drizzle ORM
+
+Here's the same user actor pattern using Drizzle ORM for more type-safe database operations:
+
+<CodeGroup>
+```typescript {{ "title": "registry.ts" }}
+import { actor, setup } from "@rivetkit/actor";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 import { Pool } from "pg";
+
+interface ActorInput {
+  username: string;
+  email: string;
+}
 
 // Define your schema
 const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow()
+  username: text("username").primaryKey(),
+  email: text("email"),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastActive: timestamp("last_active").defaultNow()
 });
 
 // Create a database connection
@@ -124,47 +167,86 @@ const pool = new Pool({
 // Initialize Drizzle with the pool
 const db = drizzle(pool);
 
-// Create the actor
-const userActor = actor({
-  state: {
-    // Actor state (frequently accessed data can be cached here)
-    userCache: {}
+// Create the user actor
+export const userActor = actor({
+  createState: (opts: { input: ActorInput }) => ({
+    requestCount: 0,
+    username: opts.input.username,
+    email: opts.input.email,
+    lastActive: Date.now()
+  }),
+  
+  // Insert user into database when actor starts
+  onStart: async (c, opts) => {
+    const result = await db.insert(users).values({
+      username: c.state.username,
+      email: c.state.email,
+      createdAt: new Date(c.state.lastActive)
+    });
   },
   
   actions: {
-    // Get a user by ID
-    getUser: async (c, userId) => {
-      // Check cache first
-      if (c.state.userCache[userId]) {
-        return c.state.userCache[userId];
-      }
+    // Update user information
+    updateUser: async (c, email: string) => {
+      c.state.requestCount++;
+      c.state.email = email;
+      c.state.lastActive = Date.now();
       
-      // Query the database
-      const result = await db.select().from(users).where(eq(users.id, userId));
+      await db.update(users)
+        .set({
+          email
+        })
+        .where(eq(users.username, c.state.username));
       
-      if (result.length === 0) {
-        throw new Error(`User ${userId} not found`);
-      }
-      
-      // Cache the result
-      c.state.userCache[userId] = result[0];
-      return result[0];
+      return { requestCount: c.state.requestCount };
     },
     
-    // Create a new user
-    createUser: async (c, userData) => {
-      const result = await db.insert(users).values({
-        name: userData.name,
-        email: userData.email
-      }).returning();
+    // Get user data
+    getUser: async (c) => {
+      c.state.requestCount++;
+      c.state.lastActive = Date.now();
       
-      // Broadcast the new user event
-      c.broadcast("userCreated", result[0]);
-      
-      return result[0];
+      return {
+        username: c.state.username,
+        email: c.state.email,
+        requestCount: c.state.requestCount,
+        lastActive: c.state.lastActive
+      };
     }
   }
 });
 
-export default userActor;
+export const registry = setup({
+  use: { userActor },
+});
 ```
+
+```typescript {{ "title": "client.ts" }}
+import { createClient } from "@rivetkit/actor/client";
+import type { registry } from "./registry";
+
+const client = createClient<typeof registry>("http://localhost:8080");
+
+// Create user
+const alice = await client.userActor.create("alice", {
+  input: {
+    username: "alice",
+    email: "alice@example.com"
+  }
+});
+
+alice.updateUser("alice2@example.com");
+
+const userData = await alice.getUser();
+console.log("User data:", userData);
+
+// Create another user
+const bob = await client.userActor.create("bob", {
+  input: {
+    username: "bob",
+    email: "bob@example.com"
+  }
+});
+const bobData = await bob.getUser();
+```
+</CodeGroup>

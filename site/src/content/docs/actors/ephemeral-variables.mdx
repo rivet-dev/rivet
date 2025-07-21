@@ -12,6 +12,8 @@ There are two ways to define an actor's initial vars:
 
 <Tab title="Static Initial Variables">
 
+Define an actor vars as a constant value:
+
 ```typescript
 import { actor } from "@rivetkit/actor";
 
@@ -31,13 +33,13 @@ const counter = actor({
 });
 ```
 
-<Warning>
-When using static `vars`, all values must be compatible with `structuredClone()`. If you need to use non-serializable objects, use `createVars` instead, which allows you to create these objects on the fly.
-</Warning>
+This value will be cloned for every new actor using `structuredClone`.
 
 </Tab>
 
 <Tab title="Dynamic Initial Variables">
+
+Create actor state dynamically on each actors' start:
 
 ```typescript
 import { actor } from "@rivetkit/actor";
@@ -105,7 +107,7 @@ const counter = actor({
 
 ## When to Use `vars` vs `state`
 
-In practice, most actors will use both: `state` for critical business data and `vars` for ephemeral, non-serializable, or performance-sensitive data.
+In practice, most actors will use both: `state` for critical business data and `vars` for ephemeral or non-serializable data.
 
 Use `vars` when:
 

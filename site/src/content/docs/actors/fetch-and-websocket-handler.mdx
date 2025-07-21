@@ -539,6 +539,37 @@ If you are using the server-side client, then authentication is skipped by defau
 See the [authentication documentation](/docs/general/authentication) for detailed information on implementing authentication patterns.
 
 
+## State Saves
+
+State changes in `onFetch` and `onWebSocket` handlers are automatically saved after the handler finishes executing.
+
+For `onWebSocket` handlers specifically, you'll need to manually save state using `c.saveState()` while the WebSocket connection is open if you want state changes to be persisted immediately. This is because WebSocket connections can remain open for extended periods, and state changes made during event handlers (like `message` events) won't be automatically saved until the connection closes.
+
+```typescript
+export const websocketActor = actor({
+    state: { messageCount: 0, lastMessage: "" },
+    actions: {},
+    onWebSocket(ctx, websocket) {
+        websocket.addEventListener("message", (event) => {
+            // Update state
+            ctx.state.messageCount++;
+            ctx.state.lastMessage = event.data;
+            
+            // Manually save state to persist changes immediately
+            ctx.saveState();
+            
+            // Echo messages back
+            websocket.send(JSON.stringify({
+                messageCount: ctx.state.messageCount,
+                echo: event.data
+            }));
+        });
+    },
+});
+```
+
+For more details on state management, see [State](/docs/actors/state).
+
 ## W3C Compliance
 
 It's not possible to use the global `fetch` method or global WebSocket class to connect to an actor. This is because actors do not have traditional network interfaces to communicate with.

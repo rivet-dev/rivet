@@ -33,14 +33,6 @@ function createParamsForFile(section, file): Param {
 	const step3 = step2.split("/");
 	const step4 = step3.filter((x) => x.length > 0);
 	
-	if (file.includes("quickstart")) {
-		console.log(`    QUICKSTART DEBUG for ${file}:`);
-		console.log(`      Original: "${file}"`);
-		console.log(`      After replace index.mdx: "${step1}"`);
-		console.log(`      After replace .mdx: "${step2}"`);
-		console.log(`      After split: [${step3.map(s => `"${s}"`).join(", ")}]`);
-		console.log(`      After filter: [${step4.map(s => `"${s}"`).join(", ")}]`);
-	}
 	
 	return {
 		section,
@@ -170,38 +162,20 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 
 export async function generateStaticParams() {
 	const staticParams: Param[] = [];
-	console.log("=== generateStaticParams DEBUG ===");
-	console.log("VALID_SECTIONS:", VALID_SECTIONS);
 	
 	for (const section of VALID_SECTIONS) {
 		const dir = path.join(process.cwd(), "src", "content", section);
-		console.log(`\nProcessing section: ${section}`);
-		console.log(`Directory: ${dir}`);
 
 		const dirs = await fs.readdir(dir, { recursive: true });
 		const files = dirs.filter((file) => file.endsWith(".mdx"));
-		console.log(`Found ${files.length} .mdx files:`, files);
 
 		const sectionParams = files.map((file) => {
 			const param = createParamsForFile(section, file);
-			console.log(`  ${file} -> section: "${param.section}", page: [${param.page.map(p => `"${p}"`).join(", ")}]`);
 			return param;
 		});
 
 		staticParams.push(...sectionParams);
 	}
 
-	console.log(`\nTotal static params generated: ${staticParams.length}`);
-	console.log("Looking for /docs/actors/quickstart...");
-	
-	const quickstartParam = staticParams.find(p => 
-		p.section === "docs" && 
-		p.page.length === 2 && 
-		p.page[0] === "actors" && 
-		p.page[1] === "quickstart"
-	);
-	console.log("Found quickstart param:", quickstartParam);
-
-	console.log("=== END DEBUG ===\n");
 	return staticParams;
 }

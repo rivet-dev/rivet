@@ -8,7 +8,7 @@ When working with actors, you often need to access the context object. Rivet pro
 
 ### `ActorContextOf<ActorDefinition>`
 
-Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
+Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in [lifecycle hooks](/docs/actors/lifecycle) and in [actions](/docs/actors/actions).
 
 ```typescript
 import { actor, ActorContextOf } from "@rivetkit/actor";
@@ -16,46 +16,44 @@ import { actor, ActorContextOf } from "@rivetkit/actor";
 const chatRoom = actor({
   state: { messages: [] },
   actions: {
+  onStart: (c, message) => {
+    // Can ActorContext be used in lifecycle hooks
+    exampleFunction(c, "Actor started");
+  },
+  actions: {
     sendMessage: (c, message) => {
-      // ...
+      // Can ActorContext also be used in actions
+      processChatRoomContext(c, mssage);
     }
   }
 });
 
-// Extract the chat room context type
-type ChatRoomContext = ActorContextOf<typeof chatRoom>;
-
 // Now you can use this type elsewhere
-function processChatRoomContext(context: ChatRoomContext) {
-  // Access context properties with full type safety
+function logMessage(context: ActorContextOf<typeof chatRoom>, message: string) {
   console.log(context.state.messages);
-  context.broadcast("newEvent", { type: "system" });
+  context.broadcast("newEvent", { type: "system", message });
 }
 ```
 
 ### `ActionContextOf<ActorDefinition>`
 
-Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in action handlers.
+Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in [actions](/docs/actors/actions). This cannot be used in [lifecycle hooks](/docs/actors/lifecycle).
 
 ```typescript
 import { actor, ActionContextOf } from "@rivetkit/actor";
 
-const counter = actor({
+const counterWithProcessing = actor({
   state: { count: 0 },
   actions: {
     increment: (c) => {
-      c.state.count++;
+      // Use our helper function to process the context
+      processCounterAction(c);
       return c.state.count;
     }
   }
 });
 
-// Extract the action context type
-type CounterActionContext = ActionContextOf<typeof counter>;
-
-// Use in other functions that need to work with the action context
-function processCounterAction(context: CounterActionContext) {
-  // Access context with full type safety
+function processCounterAction(context: ActionContextOf<typeof counter>) {
   context.state.count++;
 }
 ```

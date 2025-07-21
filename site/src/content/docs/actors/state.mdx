@@ -15,6 +15,8 @@ There are two ways to define an actor's initial state:
 
 <Tab title="Static Initial State">
 
+Define an actor state as a constant value:
+
 ```typescript
 import { actor } from "@rivetkit/actor";
 
@@ -29,9 +31,13 @@ const counter = actor({
 });
 ```
 
+This value will be cloned for every new actor using `structuredClone`.
+
 </Tab>
 
 <Tab title="Dynamic Initial State">
+
+Create actor state dynamically on each actors' creation:
 
 ```typescript
 import { actor } from "@rivetkit/actor";
@@ -85,9 +91,11 @@ Only state stored in the `state` object will be persisted. Any other variables o
 
 ## State Saves
 
-Actors automatically handle persisting state transparently. This happens at the end of every action if the state has changed.
+Actors automatically handle persisting state transparently. This happens at the end of every action if the state has changed. State is also automatically saved after `onFetch` and `onWebSocket` handlers finish executing.
 
-In the rare occasion you need to force a state change mid-action, you can use `c.saveState()`. This should only be used if your action makes an important state change that needs to be persisted before the action completes.
+For `onWebSocket` handlers specifically, you'll need to manually save state using `c.saveState()` while the WebSocket connection is open if you want state changes to be persisted immediately. This is because WebSocket connections can remain open for extended periods, and state changes made during event handlers (like `message` events) won't be automatically saved until the connection closes.
+
+In other cases where you need to force a state change mid-action, you can use `c.saveState()`. This should only be used if your action makes an important state change that needs to be persisted before the action completes.
 
 ```typescript
 import { actor } from "@rivetkit/actor";

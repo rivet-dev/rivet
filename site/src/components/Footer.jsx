@@ -136,7 +136,7 @@ function SmallPrint() {
 					{/* Logo */}
 					<Image className="size-12" src={imgLogo} alt="Rivet" />
 					<p className="text-sm leading-6 text-gray-300">
-						Run and scale realtime applications
+						The open-source alternative to Durable Objects
 					</p>
 
 					{/* Social */}

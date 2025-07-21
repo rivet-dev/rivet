@@ -198,7 +198,7 @@ async function generateApiDocs(indexContent = `# API\nRead documentation for all
       // Create page entry
       const pageEntry = {
         title: title.split('.').join('.'), // Remove group prefix from title
-        href: `/docs/api/${docName}`,
+        href: `/docs/cloud/api/${docName}`,
         sortingKey
       };
       

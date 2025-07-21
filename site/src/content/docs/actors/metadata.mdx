@@ -2,22 +2,52 @@
 
 Metadata provides information about the currently running actor.
 
+## Actor ID
+
+Get the unique instance ID of the actor:
+
+```typescript
+const actorId = c.actorId;
+```
+
+## Actor Name
+
+Get the actor type name:
+
+```typescript
+const actorName = c.name;
+```
+
+This is useful when you need to know which actor type is running, especially if you have generic utility functions that are shared between different actor implementations.
+
+## Actor Key
+
+Get the actor key used to identify this actor instance:
+
+```typescript
+const actorKey = c.key;
+```
+
+The key is used to route requests to the correct actor instance and can include parameters passed when creating the actor.
+
+Learn more about using keys for actor addressing and configuration in the [keys documentation](/docs/actors/keys).
+
 ## Region
 
 Region can be accessed from the context object via `c.region`.
 
+```typescript
+const region = c.region;
+```
+
 <Warning>`c.region` is only supported on Rivet at the moment.</Warning>
 
-## Tags
-
-Tags can be accessed from the context object via `c.tags`.
-
-For example:
+## Example Usage
 
 <CodeGroup>
 
-```typescript chat_room.ts
-import { actor } from "@rivetkit/actor";
+```typescript {{"title":"registry.ts"}}
+import { actor, setup } from "@rivetkit/actor";
 
 const chatRoom = actor({
   state: {
@@ -25,58 +55,35 @@ const chatRoom = actor({
   },
   
   actions: {
-    // Method used to get the channel ID
-    getChannelId: (c) => {
-      return c.tags['channel'];
-    },
-    
-    addMessage: (c, message) => {
-      // Use the channel for logging or filtering
-      const channel = c.tags['channel'] || 'default';
-      console.log(`Adding message to channel: ${channel}`);
-      
-      c.state.messages.push({
-        channel,
-        message,
-        timestamp: Date.now()
-      });
-      
-      c.broadcast('newMessage', { channel, message });
+    // Get actor metadata
+    getMetadata: (c) => {
+      return {
+        actorId: c.actorId,
+        name: c.name,
+        key: c.key,
+        region: c.region
+      };
     }
   }
 });
 
-export default chatRoom;
-```
-
-```typescript client.ts
-import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
-
-const client = createClient<App>("http://localhost:8080");
-
-// Connect to a specific channel
-const randomChannel = await client.chatRoom.get({ channel: "random" });
-
-// Check the channel ID
-const channelId = await randomChannel.getChannelId();
-console.log("Connected to channel:", channelId); // "random"
-
-// Or connect with multiple parameters
-const teamChannel = await client.chatRoom.get({
-  channel: "team-chat",
-  teamId: "engineering"
+export const registry = setup({
+  use: { chatRoom }
 });
 ```
 
-</CodeGroup>
+```typescript {{"title":"client.ts"}}
+import { createClient } from "@rivetkit/actor/client";
+import type { registry } from "./registry";
 
-## Actor Name
+const client = createClient<typeof registry>("http://localhost:8080");
 
-You can access the actor name with:
+// Connect to a chat room
+const chatRoom = await client.chatRoom.get("general");
 
-```typescript
-const actorName = c.name;
+// Get actor metadata
+const metadata = await chatRoom.getMetadata();
+console.log("Actor metadata:", metadata);
 ```
 
-This is useful when you need to know which actor type is running, especially if you have generic utility functions that are shared between different actor implementations.
+</CodeGroup>

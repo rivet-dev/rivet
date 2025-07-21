@@ -41,7 +41,10 @@ import {
 	faMemory,
 	faArrowsTurnToDots,
 	faArrowsTurnRight,
-    faFileImport,
+	faFileImport,
+	faSlidersHSquare,
+	faArrowsLeftRight,
+	faSitemap,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -117,54 +120,102 @@ export const sitemap = [
 								icon: faCode,
 							},
 							{
-								title: "Actor-Actor Communication",
-								href: "/docs/actors/communicating-between-actors",
-								icon: faArrowsTurnToDots,
+								title: "Lifecycle & Config",
+								icon: faSlidersHSquare,
+								collapsible: true,
+								pages: [
+									{
+										title: "Lifecycle",
+										href: "/docs/actors/lifecycle",
+										//icon: faRotate,
+									},
+									{
+										title: "Input Parameters",
+										href: "/docs/actors/input",
+										//icon: faFileImport,
+									},
+									{
+										title: "Keys",
+										href: "/docs/actors/keys",
+										//icon: faKey,
+									},
+									{
+										title: "Metadata",
+										href: "/docs/actors/metadata",
+										//icon: faTag,
+									},
+									{
+										title: "Helper Types",
+										href: "/docs/actors/helper-types",
+										//icon: faCode,
+									},
+								],
 							},
 							{
-								title: "Connections",
-								href: "/docs/actors/connections",
-								icon: faNetworkWired,
+								title: "Communication",
+								icon: faArrowRightArrowLeft,
+								collapsible: true,
+								pages: [
+									{
+										title: "Authentication",
+										href: "/docs/actors/authentication",
+										//icon: faFingerprint,
+									},
+									{
+										title: "Connections",
+										href: "/docs/actors/connections",
+										//icon: faNetworkWired,
+									},
+									{
+										title: "Actor-Actor Communication",
+										href: "/docs/actors/communicating-between-actors",
+										//icon: faArrowsTurnToDots,
+									},
+									{
+										title: "Fetch & WebSocket Handler",
+										href: "/docs/actors/fetch-and-websocket-handler",
+										//icon: faLink,
+									},
+								],
 							},
 							{
-								title: "Lifecycle",
-								href: "/docs/actors/lifecycle",
-								icon: faRotate,
+								title: "State Management",
+								icon: faFloppyDisk,
+								collapsible: true,
+								pages: [
+									{
+										title: "Variables",
+										href: "/docs/actors/ephemeral-variables",
+										//icon: faMemory,
+									},
+									{
+										title: "Sharing & Joining State",
+										href: "/docs/actors/sharing-and-joining-state",
+										//icon: faMerge,
+									},
+									{
+										title: "External SQL",
+										href: "/docs/actors/external-sql",
+										//icon: faDatabase,
+									},
+								],
 							},
 							{
-								title: "Fetch & WebSocket Handler",
-								href: "/docs/actors/fetch-and-websocket-handler",
-								icon: faLink,
+								title: "Architecture",
+								icon: faSitemap,
+								collapsible: true,
+								pages: [
+									{
+										title: "Scaling & Concurrency",
+										href: "/docs/actors/scaling",
+										//icon: faMaximize,
+									},
+								],
 							},
 							{
-								title: "Metadata",
-								href: "/docs/actors/metadata",
-								icon: faTag,
-							},
-							{
-								title: "Sharing & Joining State",
-								href: "/docs/actors/sharing-and-joining-state",
-								icon: faMerge,
-							},
-							{
-								title: "Variables",
-								href: "/docs/actors/ephemeral-veriables",
-								icon: faMemory,
-							},
-							{
-								title: "Helper Types",
-								href: "/docs/actors/helper-types",
-								icon: faCode,
-							},
-							{
-								title: "External SQL",
-								href: "/docs/actors/external-sql",
-								icon: faDatabase,
-							},
-							{
-								title: "Scaling",
-								href: "/docs/actors/scaling",
-								icon: faMaximize,
+								title: "Testing",
+								href: "/docs/actors/testing",
+								icon: faVialCircleCheck,
 							},
 						],
 					},
@@ -255,16 +306,6 @@ export const sitemap = [
 			{
 				title: "Reference",
 				pages: [
-					{
-						title: "Authentication",
-						href: "/docs/general/authentication",
-						icon: faFingerprint,
-					},
-					{
-						title: "Testing",
-						href: "/docs/general/testing",
-						icon: faVialCircleCheck,
-					},
 					{
 						title: "Docs for LLMs",
 						href: "/docs/general/docs-for-llms",

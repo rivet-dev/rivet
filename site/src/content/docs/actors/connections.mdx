@@ -10,6 +10,16 @@ For example:
 
 <CodeGroup>
 
+```typescript {{"title":"client.ts"}}
+import { createClient } from "rivetkit/client";
+import type { App } from "./src/index";
+
+const client = createClient<App>("http://localhost:8080");
+const gameRoom = await client.gameRoom.get({
+  params: { authToken: "supersekure" }
+});
+```
+
 ```typescript {{"title":"actor.ts"}}
 import { actor } from "@rivetkit/actor";
 
@@ -35,15 +45,6 @@ const gameRoom = actor({
 });
 ```
 
-```typescript {{"title":"client.ts"}}
-import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
-
-const client = createClient<App>("http://localhost:8080");
-const gameRoom = await client.gameRoom.get({
-  params: { authToken: "supersekure" }
-});
-```
 
 </CodeGroup>
 
@@ -77,10 +78,12 @@ There are two ways to define an actor's connection state:
 		  }
 		});
 		```
+
+		This value will be cloned for every new connection using `structuredClone`.
 	</Tab>
 
 	<Tab title="createConnState function">
-		Create connection state dynamically with a function. The data returned is used as the initial state of the connection. The connection state can be accessed through `conn.state`.
+		Create connection state dynamically with a function called for each connection:
 
 		```typescript
 		import { actor } from "@rivetkit/actor";
@@ -113,7 +116,7 @@ There are two ways to define an actor's connection state:
 	</Tab>
 </Tabs>
 
-## Lifecycle Hooks
+## Connection Lifecycle Hooks
 
 The connection lifecycle has several hooks:
 
@@ -178,7 +181,6 @@ const secureRoom = actor({
 });
 ```
 
-<Tip>
 If you need to wait for the disconnection to complete, you can use `await`:
 
 ```typescript
@@ -186,7 +188,6 @@ await c.conn.disconnect('Too many requests');
 ```
 
 This ensures the underlying network connections close cleanly before continuing.
-</Tip>
 
 ## Connection Error Handling
 

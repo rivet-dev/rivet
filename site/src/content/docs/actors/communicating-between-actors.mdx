@@ -4,8 +4,6 @@ Learn how actors can call other actors and share data
 
 Actors can communicate with each other using the server-side actor client, enabling complex workflows and data sharing between different actor instances.
 
-The client maintains full type safety across actor boundaries.
-
 <Note>
 We recommend reading the [clients documentation](/docs/actors/clients) first. This guide focuses specifically on communication between actors.
 </Note>
@@ -166,32 +164,5 @@ Process multiple items in parallel:
 const results = await Promise.all(
   items.map(item => client.processor.getOrCreate([item.type]).process(item))
 );
-```
-
-## Testing
-
-Mock the server-side actor client for unit testing:
-
-```typescript
-const mockClient = {
-  inventory: {
-    getOrCreate: () => ({
-      reserveStock: jest.fn().mockResolvedValue(true)
-    })
-  },
-  payment: {
-    getOrCreate: () => ({
-      processPayment: jest.fn().mockResolvedValue({ success: true, transactionId: "123" })
-    })
-  },
-};
-
-// Test with mocked dependencies
-const result = await orderProcessor.processOrder.call(
-  { client: () => mockClient, state: { orders: [] } },
-  { id: "order-1", customerId: "user-123", quantity: 2, amount: 100 }
-);
-
-expect(result.success).toBe(true);
 ```
 
