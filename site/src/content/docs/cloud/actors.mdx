@@ -21,8 +21,8 @@ Add the `@rivet-gg/actor` package to your project for comprehensive TypeScript d
 npm install -S @rivet-gg/actor
 ```
 
-<Note title="This package is optional">
-  You can use Rivet actors without this package, but you'll need to define your own types.
+<Note>
+  **This package is optional.** You can use Rivet actors without this package, but you'll need to define your own types.
 </Note>
 
 Every actor must export a default object with an async `start` function. Here's a simple HTTP server example:
@@ -55,7 +55,7 @@ What this code does:
 - Sets up a route that returns the actor ID and region information
 - Keeps the actor running indefinitely by returning a promise that never resolves
 
-<Tip title="Using classes">
+<Tip>
 	You can also use a class with a static method for your entrypoint:
 
 	```ts {{"file": "src/index.ts"}}

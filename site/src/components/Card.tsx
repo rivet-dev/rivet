@@ -56,3 +56,9 @@ export function Card({
 
 	return content;
 }
+
+export const CardGroup = ({ children }: PropsWithChildren) => {
+	return (
+		<div className="not-prose grid gap-4 md:grid-cols-2">{children}</div>
+	);
+};

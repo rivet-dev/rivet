@@ -54,7 +54,7 @@ USER rivet
 CMD ["node", "server.js"]
 ```
 
-<Note title="Ports & environment variables will be passed via the Rivet API">
+<Note>
 	We'll pass the ports & env vars used in the Dockerfile in _Step 3_. Read more in the API docs for [actors.create](/docs/api/actors/create).
 </Note>
 
@@ -132,7 +132,7 @@ const { actor } = await client.actors.create({
 console.log("Created container:", actor.id);
 ```
 
-<Note title="API naming">
+<Note>
   While this feature is called "Containers" in the UI and documentation, the underlying API uses the term "actors" (e.g., `client.actors.create`). This is because there is a lot of overlap between the actor & container APIs.
 </Note>
 

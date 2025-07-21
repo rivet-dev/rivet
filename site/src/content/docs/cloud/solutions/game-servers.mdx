@@ -18,8 +18,8 @@ We'll package your existing game server to run on Rivet. Depending on your chose
 <Tabs>
 <Tab title="Container Runtime">
 
-<Info title="Determining port to listen on">
-Your existing game server code (`server.js`) should read environment variables for port configuration. Read more [here](/docs/networking#environment-variable-naming).
+<Info>
+**Durability is disabled by default**: Your existing game server code (`server.js`) should read environment variables for port configuration. Read more [here](/docs/networking#environment-variable-naming).
 </Info>
 
 ```dockerfile {{ "title": "Dockerfile" }}
@@ -117,8 +117,8 @@ Install the Rivet CLI [here](/docs/install). Then deploy your game server to Riv
 rivet deploy
 ```
 
-<Note title="This will not create a server">
-This uploads your game server code to Rivet but doesn't start any instances yet. Your code is now available to be launched on-demand.
+<Note>
+	**This will not create a server.** This uploads your game server code to Rivet but doesn't start any instances yet. Your code is now available to be launched on-demand.
 </Note>
 
 ### Step 4 (optional): Starting game server instances with a backend API
@@ -173,8 +173,8 @@ async function createGameServer(gameMode, mapName) {
 }
 ```
 
-<Note title="Only call Rivet API from your backend">
-	The Rivet API requires a private _Service Token_ and should only be called from your backend. Do not make this service token public.
+<Note>
+	**Only call Rivet API from your backend.** The Rivet API requires a private _Service Token_ and should only be called from your backend. Do not make this service token public.
 </Note>
 
 ### Step 5 (optional): Connecting players to your game server
@@ -206,7 +206,7 @@ app.post('/join-game', async (req, res) => {
 });
 ```
 
-<Note title="Caching server URLs">
+<Note>
   We recommend storing the connection URL returned from `actors.create` instead of calling `actors.list` for every API call.
 </Note>
 

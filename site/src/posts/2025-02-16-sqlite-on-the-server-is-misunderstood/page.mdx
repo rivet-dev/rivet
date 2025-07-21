@@ -76,7 +76,7 @@ Sharded databases power almost every large tech company because they provide:
 - Horizontal scalability by partitioning data across nodes.
 - Optimized writes for high-ingestion workloads
 
-<Tip title="Fun Fact">
+<Tip>
   Apple runs the world's largest known number of Cassandra/ScyllaDB instances [with roughly 300,000 nodes as of 2022](https://x.com/erickramirezau/status/1578063811495477248). Almost all large companies have shared that they also run massive clusters of partitioned databases in the thousands of nodes.
 </Tip>
 
@@ -186,8 +186,8 @@ function getMessages(channelId: string) {
 - **Full Power of SQL migrations**: SQLite provides the full power of SQL migrations & leveraging existing migrations tools such as Drizzle & Prisma.
 - **Lazy schema migrations**: Changing schema is tricky at scale. Assuming your migrations are lightweight, they can be executed on demand after the SQLite database is opened at the cost of a slightly higher p99 after deploys.
 
-<Tip title="Who are the Turso founders?">
-It's no coincidence that the founders of Turso used to work at ScyllaDB, where they saw firsthand the complexities of large-scale partitioned databases on a daily basis.
+<Tip>
+**Who are the Turso founders?** It's no coincidence that the founders of Turso used to work at ScyllaDB, where they saw firsthand the complexities of large-scale partitioned databases on a daily basis.
 </Tip>
 
 ## Where SQLite Still Falls Short

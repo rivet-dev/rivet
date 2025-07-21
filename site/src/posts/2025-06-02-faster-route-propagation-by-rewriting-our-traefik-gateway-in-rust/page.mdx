@@ -290,7 +290,9 @@ Rivet Guard can do:
 		2. Send URL To Client
 		3. Client Connects To URL
 
-<Note title="What if I don't send URL to the client over WAN?">
+<Note>
+	**What if I don't send URL to the client over WAN?**
+
 	This sequence assumes that a container URL has to be sent back to the client over WAN,  which adds a full round trip. This is a common pattern for container workloads like game servers, desktop automation, and code sandboxes. Even if you don't need to share the URL to a container publicly, this still significantly cuts latency given that your backend needs time to process the response in parallel with the container starting.
 </Note>
 
