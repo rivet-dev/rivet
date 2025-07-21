@@ -2,37 +2,30 @@
 
 Learn how actors can call other actors and share data
 
-Actors can communicate with each other using the inline client, enabling complex workflows and data sharing between different actor instances.
+Actors can communicate with each other using the server-side actor client, enabling complex workflows and data sharing between different actor instances.
+
+The client maintains full type safety across actor boundaries.
 
 <Note>
-This guide focuses on communication between actors within the same application. For connecting to actors from client applications, see [Communicating with Actors](/docs/actors/communicating-with-actors).
+We recommend reading the [clients documentation](/docs/actors/clients) first. This guide focuses specifically on communication between actors.
 </Note>
 
-## Using the Inline Client
+## Using the Server-Side Actor Client
 
-The inline client allows actors to call other actors within the same registry. Access it via `c.client()` in your actor actions:
+The server-side actor client allows actors to call other actors within the same registry. Access it via `c.client()` in your actor context:
 
 ```typescript
 import { actor } from "@rivetkit/actor";
-import type { registry } from "./registry";
 
-export const orderProcessor = actor({
-  state: { orders: [] as Order[] },
+const orderProcessor = actor({
+  state: { orders: [] },
   
   actions: {
-    processOrder: async (c, order: Order) => {
-      // Get the inline client with registry types
+    processOrder: async (c, order) => {
       const client = c.client<typeof registry>();
       
-      // Call another actor to check inventory
-      const inventory = client.inventory.getOrCreate([order.productId]);
-      const available = await inventory.checkStock(order.quantity);
-      
-      if (!available) {
-        throw new UserError("Insufficient stock");
-      }
-      
       // Reserve the stock
+      const inventory = client.inventory.getOrCreate(["main"]);
       await inventory.reserveStock(order.quantity);
       
       // Process payment through payment actor
@@ -40,49 +33,9 @@ export const orderProcessor = actor({
       const result = await payment.processPayment(order.amount);
       
       // Update order state
-      c.state.orders.push({
-        ...order,
-        status: "processed",
-        paymentId: result.paymentId,
-      });
+      c.state.orders.push({ ...order, status: "completed", paymentResult: result });
       
       return { success: true, orderId: order.id };
-    }
-  }
-});
-```
-
-## Communication Patterns
-
-The inline client supports the same communication patterns as external clients. See [Communicating with Actors - Actor Handles](/docs/actors/communicating-with-actors#actor-handles) for details on:
-
-- `getOrCreate()` for stateless request-response
-- `.connect()` for real-time communication with events
-- `get()` and `create()` for explicit actor lifecycle management
-
-## Error Handling
-
-Handle errors gracefully when calling other actors. Error handling works the same as with external clients - see [Communicating with Actors - Error Handling](/docs/actors/communicating-with-actors#error-handling) for details.
-
-```typescript
-export const orderActor = actor({
-  state: { orders: [] },
-  
-  actions: {
-    createOrder: async (c, orderData: CreateOrderData) => {
-      const client = c.client<typeof registry>();
-      
-      try {
-        const inventory = client.inventory.getOrCreate([orderData.productId]);
-        await inventory.validateOrder(orderData);
-        
-        const order = { id: generateId(), ...orderData, status: "validated" };
-        c.state.orders.push(order);
-        return order;
-        
-      } catch (error) {
-        throw new UserError(`Order validation failed: ${error.message}`);
-      }
     }
   }
 });
@@ -95,24 +48,29 @@ export const orderActor = actor({
 Use a coordinator actor to manage complex workflows:
 
 ```typescript
-export const workflowActor = actor({
-  state: { workflows: new Map() },
+import { actor } from "@rivetkit/actor";
+
+const workflowActor = actor({
+  state: { workflows: [] },
   
   actions: {
-    executeUserOnboarding: async (c, userId: string) => {
+    executeWorkflow: async (c, workflowId) => {
       const client = c.client<typeof registry>();
       
-      // Coordinate multiple actors for complex workflow
-      const user = client.user.getOrCreate([userId]);
-      await user.createProfile();
+      // Step 1: Initialize data
+      const dataProcessor = client.dataProcessor.getOrCreate(["main"]);
+      const data = await dataProcessor.initialize(workflowId);
       
-      const notification = client.notification.getOrCreate(["system"]);
-      await notification.sendWelcomeEmail(userId);
+      // Step 2: Process through multiple actors
+      const validator = client.validator.getOrCreate(["main"]);
+      const validationResult = await validator.validate(data);
       
-      const preferences = client.preferences.getOrCreate([userId]);
-      await preferences.setDefaults();
+      // Step 3: Finalize
+      const finalizer = client.finalizer.getOrCreate(["main"]);
+      const result = await finalizer.finalize(validationResult);
       
-      return { status: "completed" };
+      c.state.workflows.push({ workflowId, result, completedAt: Date.now() });
+      return result;
     }
   }
 });
@@ -123,21 +81,35 @@ export const workflowActor = actor({
 Collect data from multiple actors:
 
 ```typescript
-export const analyticsActor = actor({
+import { actor } from "@rivetkit/actor";
+
+const analyticsActor = actor({
   state: { reports: [] },
   
   actions: {
-    generateUserReport: async (c, userId: string) => {
+    generateReport: async (c, reportType) => {
       const client = c.client<typeof registry>();
       
-      // Collect data from multiple sources in parallel
-      const [profile, orders, preferences] = await Promise.all([
-        client.user.getOrCreate([userId]).getProfile(),
-        client.orders.getOrCreate([userId]).getHistory(),
-        client.preferences.getOrCreate([userId]).getAll(),
+      // Collect data from multiple sources
+      const userMetrics = client.userMetrics.getOrCreate(["main"]);
+      const orderMetrics = client.orderMetrics.getOrCreate(["main"]);
+      const systemMetrics = client.systemMetrics.getOrCreate(["main"]);
+      
+      const [users, orders, system] = await Promise.all([
+        userMetrics.getStats(),
+        orderMetrics.getStats(),
+        systemMetrics.getStats()
       ]);
       
-      return { profile, orders, preferences };
+      const report = {
+        id: crypto.randomUUID(),
+        type: reportType,
+        data: { users, orders, system },
+        generatedAt: Date.now()
+      };
+      
+      c.state.reports.push(report);
+      return report;
     }
   }
 });
@@ -148,58 +120,46 @@ export const analyticsActor = actor({
 Use connections to listen for events from other actors:
 
 ```typescript
-export const auditLogActor = actor({
+import { actor } from "@rivetkit/actor";
+
+const auditLogActor = actor({
   state: { logs: [] },
   
   actions: {
-    startAuditing: async (c, userId: string) => {
+    startAuditing: async (c) => {
       const client = c.client<typeof registry>();
-      const user = client.user.getOrCreate([userId]);
-      const connection = user.connect();
       
-      // Listen for events from the user actor
-      connection.on("profileUpdated", (profile) => {
-        c.state.logs.push({
-          type: "profile_update",
-          userId,
-          timestamp: Date.now(),
-          data: profile,
+      // Connect to multiple actors to listen for events
+      const userActor = client.userActor.getOrCreate(["main"]).connect();
+      const orderActor = client.orderActor.getOrCreate(["main"]).connect();
+      
+      // Listen for user events
+      userActor.on("userCreated", (user) => {
+        c.state.logs.push({ 
+          event: "userCreated", 
+          data: user, 
+          timestamp: Date.now() 
         });
       });
       
-      return { status: "auditing_started" };
+      // Listen for order events
+      orderActor.on("orderCompleted", (order) => {
+        c.state.logs.push({ 
+          event: "orderCompleted", 
+          data: order, 
+          timestamp: Date.now() 
+        });
+      });
+      
+      return { status: "auditing started" };
     }
   }
 });
 ```
 
-## Advanced Features
+### Batch Operations
 
-### Type Safety
-
-The inline client maintains full type safety across actor boundaries:
-
-```typescript
-export const typedActor = actor({
-  actions: {
-    processData: async (c) => {
-      const client = c.client<typeof registry>();
-      
-      // TypeScript validates action signatures
-      const counter = client.counter.getOrCreate(["stats"]);
-      
-      const count: number = await counter.increment(1);  // ✓ 
-      const invalid = await counter.increment("1");      // ✗ Type error
-      
-      return count;
-    }
-  }
-});
-```
-
-### Performance Optimization
-
-**Batch Operations**: Process multiple items in parallel:
+Process multiple items in parallel:
 
 ```typescript
 // Process items in parallel
@@ -208,35 +168,30 @@ const results = await Promise.all(
 );
 ```
 
-**Connection Reuse**: Reuse connections for multiple operations:
+## Testing
 
-```typescript
-const connection = client.targetActor.getOrCreate(["shared"]).connect();
-try {
-  for (const op of operations) {
-    await connection.performOperation(op);
-  }
-} finally {
-  await connection.dispose();
-}
-```
-
-### Testing
-
-Mock the inline client for unit testing:
+Mock the server-side actor client for unit testing:
 
 ```typescript
 const mockClient = {
   inventory: {
-    getOrCreate: jest.fn().mockReturnValue({
-      checkStock: jest.fn().mockResolvedValue(true),
-    }),
+    getOrCreate: () => ({
+      reserveStock: jest.fn().mockResolvedValue(true)
+    })
+  },
+  payment: {
+    getOrCreate: () => ({
+      processPayment: jest.fn().mockResolvedValue({ success: true, transactionId: "123" })
+    })
   },
 };
 
 // Test with mocked dependencies
 const result = await orderProcessor.processOrder.call(
-  { client: () => mockClient },
-  orderData
+  { client: () => mockClient, state: { orders: [] } },
+  { id: "order-1", customerId: "user-123", quantity: 2, amount: 100 }
 );
+
+expect(result.success).toBe(true);
 ```
+

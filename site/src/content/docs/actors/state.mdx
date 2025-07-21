@@ -9,7 +9,7 @@ applications or for storing relational data. Read more [here](/docs/actors/exter
 
 ## Initializing State
 
-There are two ways to define a actor's initial state:
+There are two ways to define an actor's initial state:
 
 <Tabs>
 
@@ -81,9 +81,7 @@ const counter = actor({
 });
 ```
 
-<Note>
 Only state stored in the `state` object will be persisted. Any other variables or properties outside of this are not persisted.
-</Note>
 
 ## State Saves
 
@@ -123,138 +121,25 @@ const criticalProcess = actor({
 
 ## State Isolation
 
-Each actor's state is completely isolated, meaning it cannot be accessed directly by other actors or clients. This allows actors to maintain a high level of security and data integrity, ensuring that state changes are controlled and predictable.
+Each actor's state is completely isolated, meaning it cannot be accessed directly by other actors or clients.
 
-To interact with a actor's state, you must use [Actions](/docs/actors/actions). Actions provide a controlled way to read from and write to the state.
+To interact with an actor's state, you must use [Actions](/docs/actors/actions). Actions provide a controlled way to read from and write to the state.
 
-## Sharing State Between Actors
-
-If you need a shared state between multiple actors, you have two options:
-
-1. Create a actor that holds the shared state that other actors can make action calls to
-2. Use an external database, see [External SQL Databases](/docs/actors/external-sql)
+If you need a shared state between multiple actors, see [sharing and joining state](/docs/actors/sharing-and-joining-state).
 
 ## Ephemeral Variables
 
-In addition to persisted state, Rivet provides a way to store ephemeral data that is not saved to permanent storage using `vars`. This is useful for temporary data that only needs to exist while the actor is running or data that cannot be serialized.
+In addition to persisted state, actors can store ephemeral data that is not saved to permanent storage using `vars`. This is useful for temporary data or non-serializable objects like database connections or event emitters.
 
-`vars` is designed to complement `state`, not replace it. Most actors should use both: `state` for critical business data and `vars` for ephemeral or non-serializable data.
-
-### Initializing Variables
-
-There are two ways to define a actor's initial vars:
-
-<Tabs>
-
-<Tab title="Static Initial Variables">
-
-```typescript
-import { actor } from "@rivetkit/actor";
-
-// Define vars as a constant
-const counter = actor({
-  state: { count: 0 },
-  
-  // Define ephemeral variables
-  vars: { 
-    lastAccessTime: 0,
-    emitter: createNanoEvents()
-  },
-  
-  actions: {
-    // ...
-  }
-});
-```
-
-<Warning>
-When using static `vars`, all values must be compatible with `structuredClone()`. If you need to use non-serializable objects, use `createVars` instead, which allows you to create these objects on the fly.
-</Warning>
-
-</Tab>
-
-<Tab title="Dynamic Initial Variables">
-
-```typescript
-import { actor } from "@rivetkit/actor";
-
-// Define vars with initialization logic
-const counter = actor({
-  state: { count: 0 },
-  
-  // Define vars using a creation function
-  createVars: () => {
-    return { 
-      lastAccessTime: Date.now(),
-      emitter: createNanoEvents()
-    };
-  },
-  
-  actions: {
-    // ...
-  }
-});
-```
-
-</Tab>
-
-</Tabs>
-
-### Using Variables
-
-Vars can be accessed and modified through the context object with `c.vars`:
-
-```typescript
-import { actor } from "@rivetkit/actor";
-import { createNanoEvents } from "nanoevents";
-
-const counter = actor({
-  // Persistent state - saved to storage
-  state: { count: 0 },
-  
-  // Create ephemeral objects that won't be serialized
-  createVars: () => {
-    // Create an event emitter (can't be serialized)
-    const emitter = createNanoEvents();
-    
-    // Set up event listener directly in createVars
-    emitter.on('count-changed', (newCount) => {
-      console.log(`Count changed to: ${newCount}`);
-    });
-    
-    return { emitter };
-  },
-  
-  actions: {
-    increment: (c) => {
-      // Update persistent state
-      c.state.count += 1;
-      
-      // Use non-serializable emitter
-      c.vars.emitter.emit('count-changed', c.state.count);
-      
-      return c.state.count;
-    }
-  }
-});
-```
-
-### When to Use `vars` vs `state`
-
-In practice, most actors will use both: `state` for critical business data and `vars` for ephemeral, non-serializable, or performance-sensitive data.
-
-Use `vars` when:
-
-- You need to store temporary data that doesn't need to survive restarts
-- You need to maintain runtime-only references that can't be serialized (database connections, event emitters, class instances, etc.)
-
-Use `state` when:
-
-- The data must be preserved across actor sleeps, restarts, updates, or crashes
-- The information is essential to the actor's core functionality and business logic
+For complete documentation on ephemeral variables, see [Ephemeral Variables](/docs/actors/ephemeral-variables).
 
 ## Limitations
 
-State is constrained to the available memory.
+State is currently constrained to the available memory on the machine.
 
 Only JSON-serializable types can be stored in state. In serverless runtimes that support it (Rivet, Cloudflare Workers), state is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
+
+<Note>
+SQLite in Rivet Actors (coming soon) will provide a way of dynamically querying data with in-memory performance without being constrained to memory limits.
+</Note>
+

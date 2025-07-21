@@ -35,8 +35,12 @@ import {
 	faTowerBroadcast,
 	faVialCircleCheck,
 	faForward,
-    faSquareBinary,
-    faLink,
+	faSquareBinary,
+	faLink,
+	faMerge,
+	faMemory,
+	faArrowsTurnToDots,
+	faArrowsTurnRight,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -107,14 +111,14 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
-								title: "Communicating with Actors",
-								href: "/docs/actors/communicating-with-actors",
-								icon: faArrowRightArrowLeft,
+								title: "Clients",
+								href: "/docs/actors/clients",
+								icon: faCode,
 							},
 							{
-								title: "Communicating between Actors",
+								title: "Actor-Actor Communication",
 								href: "/docs/actors/communicating-between-actors",
-								icon: faArrowRightArrowLeft,
+								icon: faArrowsTurnToDots,
 							},
 							{
 								title: "Fetch & WebSocket Handler",
@@ -135,6 +139,16 @@ export const sitemap = [
 								title: "Metadata",
 								href: "/docs/actors/metadata",
 								icon: faTag,
+							},
+							{
+								title: "Sharing & Joining State",
+								href: "/docs/actors/sharing-and-joining-state",
+								icon: faMerge,
+							},
+							{
+								title: "Variables",
+								href: "/docs/actors/ephemeral-veriables",
+								icon: faMemory,
 							},
 							{
 								title: "Helper Types",

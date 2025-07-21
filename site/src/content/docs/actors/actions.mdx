@@ -1,15 +1,18 @@
 # Actions
 
-Actions are how clients & other actors communicate with actors. Actions are defined as functions in the actor configuration and can be called from clients.
+Actions are how your backend, frontend, or other actors can communicate with actors. Actions are defined as functions in the actor configuration and can be called from clients.
 
-<Tip>
-Actions are very lightweight. They can be called hundreds of times per second to send realtime data to the
-actor.
-</Tip>
+Actions are very lightweight. They can be called thousands of times per second safely.
+
+Actions are executed via HTTP requests or via WebSockets if [using `.connect()`](/docs/actors/connections).
+
+<Note>
+For advanced use cases that require direct access to HTTP requests or WebSocket connections, see [raw HTTP and WebSocket handling](/docs/actors/fetch-and-websocket-handler).
+</Note>
 
 ## Writing Actions
 
-Actions are defined in the `actions` object when creating a actor:
+Actions are defined in the `actions` object when creating an actor:
 
 ```typescript
 import { actor } from "@rivetkit/actor";
@@ -27,51 +30,65 @@ const mathUtils = actor({
 
 Each action receives a context object (commonly named `c`) as its first parameter, which provides access to state, connections, and other utilities. Additional parameters follow after that.
 
-### Private Helper Functions
+## Calling Actions
 
-You can define helper functions outside the actions object to keep your code organized. These functions cannot be called directly by clients:
+Actions can be called in different ways depending on your use case:
 
-```typescript
-import { actor } from "@rivetkit/actor";
+<Tabs>
+<Tab title="Frontend (createClient)">
 
-// Private helper function - not callable by clients
-const calculateFee = (amount) => {
-  return amount * 0.05;
-};
+```typescript {{"title":"frontend.ts"}}
+import { createClient } from "rivetkit/client";
+import type { App } from "./src/index";
 
-const paymentProcessor = actor({
-  state: { 
-    transactions: [] 
-  },
+const client = createClient<App>("http://localhost:8080");
+const counter = await client.counter.getOrCreate();
+const result = await counter.increment(42);
+console.log(result); // The value returned by the action
+```
+
+Learn more about [communicating with actors from the frontend](/docs/actors/communicating-with-actors).
+
+</Tab>
+<Tab title="Backend (registry.runServer)">
+
+```typescript {{"title":"server.ts"}}
+import { setup } from "@rivetkit/actor";
+
+const registry = setup({
+  use: { counter }
+});
+
+const { client, serve } = registry.runServer();
+
+// Use the client to call actions
+const counter = await client.counter.getOrCreate();
+const result = await counter.increment(42);
+console.log(result);
+```
+
+Learn more about [communicating with actors from the backend](/docs/actors/communicating-with-actors).
+
+</Tab>
+<Tab title="Actor-to-Actor (c.client())">
+
+```typescript {{"title":"actor.ts"}}
+const actorA = actor({
+  state: {},
   actions: {
-    // Public action - callable by clients
-    processPayment: (c, amount) => {
-      const fee = calculateFee(amount);
-      // Process payment logic...
-      c.state.transactions.push({ amount, fee });
-      return { amount, fee };
+    callOtherActor: async (c) => {
+      const client = c.client();
+      const counter = await client.counter.getOrCreate();
+      return await counter.increment(10);
     }
   }
 });
 ```
 
-### Streaming Return Data
+Learn more about [communicating between actors](/docs/actors/communicating-between-actors).
 
-Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
-
-## Calling Actions
-
-Calling actions from the client is simple:
-
-```typescript
-import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
-
-const client = createClient<App>("http://localhost:8080");
-const counter = await client.counter.get();
-const result = await counter.increment(42);
-console.log(result); // The value returned by the action
-```
+</Tab>
+</Tabs>
 
 <Note>
 Calling actions from the client are async and require an `await`, even if the action itself is not async.
@@ -83,7 +100,7 @@ The actor client includes type safety out of the box. When you use `createClient
 
 <CodeGroup>
 
-```typescript src/index.ts
+```typescript {{"title":"registry.ts"}}
 import { setup } from "@rivetkit/actor";
 
 // Create simple counter
@@ -103,7 +120,7 @@ const registry = setup({
 });
 ```
 
-```typescript client.ts
+```typescript {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
 import type { App } from "./src/index";
 
@@ -134,7 +151,7 @@ For example:
 
 <CodeGroup>
 
-```typescript actor.ts
+```typescript {{"title":"actor.ts"}}
 import { actor, UserError } from "@rivetkit/actor";
 
 const user = actor({
@@ -158,7 +175,7 @@ const user = actor({
 });
 ```
 
-```typescript client.ts
+```typescript {{"title":"client.ts"}}
 try {
   await userActor.registerUser("extremely_long_username_that_exceeds_limit");
 } catch (error) {
@@ -178,11 +195,11 @@ All other errors will return an error with the code `internal_error` to the clie
 
 ## Schema Validation
 
-Data schemas are not validated by default. For production applications, use a library like [zod](https://zod.dev/) to validate input types.
+If passing data to an actor from the frontend, use a library like [Zod](https://zod.dev/) to validate input data.
 
 For example, to validate action parameters:
 
-```typescript
+```typescript {{"title":"actor.ts"}}
 import { actor, UserError } from "@rivetkit/actor";
 import { z } from "zod";
 
@@ -211,15 +228,18 @@ const counter = actor({
 });
 ```
 
-<Note>
-  Native runtime type validation is coming soon to Rivet.
-</Note>
-
 ## Authentication
 
-By default, clients can call all actions on a actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/general/authentication).
+By default, actors' actions are only accessible from your server-side client.
 
-## Using `ActionContext` Type Externally
+In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/general/authentication). Read more about the [types of clients](/docs/actors/clients)
+
+## Streaming Return Data
+
+Actions have a single return value. To stream realtime data in response to an action, use [events](/docs/actors/events).
+
+
+## Using `ActionContext` Externally
 
 When writing complex logic for actions, you may want to extract parts of your implementation into separate helper functions. When doing this, you'll need a way to properly type the context parameter.
 
@@ -233,7 +253,7 @@ const counter = actor({
   
   actions: {
     increment: (c) => {
-      return incrementCount(c);
+      incrementCount(c);
     }
   }
 });
@@ -241,8 +261,8 @@ const counter = actor({
 // Simple helper function with typed context
 function incrementCount(c: ActionContextOf<typeof counter>) {
   c.state.count += 1;
-  return c.state.count;
 }
 ```
 
-See [Helper Types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other type utilities.
+See [helper types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other utility types.
+

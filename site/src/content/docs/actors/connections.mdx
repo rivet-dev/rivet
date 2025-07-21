@@ -4,7 +4,7 @@ Connections represent client connections to your actor. They provide a way to ha
 
 ## Parameters
 
-When clients connect to a actor, they can pass connection parameters that are handled during the connection process.
+When clients connect to an actor, they can pass connection parameters that are handled during the connection process.
 
 For example:
 
@@ -49,7 +49,7 @@ const gameRoom = await client.gameRoom.get({
 
 ## Connection State
 
-There are two ways to define a actor's connection state:
+There are two ways to define an actor's connection state:
 
 <Tabs>
 	<Tab title="connState constant">
@@ -187,6 +187,66 @@ await c.conn.disconnect('Too many requests');
 
 This ensures the underlying network connections close cleanly before continuing.
 </Tip>
+
+## Connection Error Handling
+
+Handle connection errors using the `.onError()` method:
+
+<CodeGroup>
+
+```typescript {{"title":"TypeScript"}}
+const connection = actor.connect();
+
+connection.onError((error) => {
+  console.error('Connection error:', error);
+  showErrorMessage(error.message);
+  
+  // Handle specific error types
+  if (error.code === 'UNAUTHORIZED') {
+    redirectToLogin();
+  } else if (error.code === 'ACTOR_NOT_FOUND') {
+    showActorNotFoundError();
+  }
+});
+```
+
+```tsx {{"title":"React"}}
+import { useState, useEffect } from "react";
+import { useActor } from "./rivetkit";
+
+function ConnectionErrorHandler() {
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+
+  const actor = useActor({
+    name: "chatRoom",
+    key: ["general"]
+  });
+
+  useEffect(() => {
+    if (!actor.connection) return;
+
+    const unsubscribe = actor.connection.onError((error) => {
+      console.error('Connection error:', error);
+      setConnectionError(error.message);
+      setErrorCode(error.code);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setConnectionError(null);
+        setErrorCode(null);
+      }, 5000);
+    });
+
+    // Clean up error handler when component unmounts
+    return unsubscribe;
+  }, [actor.connection]);
+
+  // ...rest of component...
+}
+```
+
+</CodeGroup>
 
 ## Offline & Auto-Reconnection
 

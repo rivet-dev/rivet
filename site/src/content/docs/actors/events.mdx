@@ -1,12 +1,8 @@
 # Events
 
-Real-time communication between actors and clients
-
 Events enable real-time communication from actors to clients. While clients use actions to send data to actors, events allow actors to push updates to connected clients instantly.
 
-<Info>
-Events work through persistent connections (WebSocket or SSE). Clients establish connections using `.connect()` and then listen for events with `.on()`.
-</Info>
+Events work through persistent connections such as WebSocket or SSE.
 
 ## Publishing Events from Actors
 
@@ -38,16 +34,6 @@ const chatRoom = actor({
       
       return message;
     },
-    
-    deleteMessage: (c, messageId: string) => {
-      const messageIndex = c.state.messages.findIndex(m => m.id === messageId);
-      if (messageIndex !== -1) {
-        c.state.messages.splice(messageIndex, 1);
-        
-        // Notify all clients about deletion
-        c.broadcast('messageDeleted', { messageId });
-      }
-    }
   }
 });
 ```
@@ -55,6 +41,42 @@ const chatRoom = actor({
 ### Sending to Specific Connections
 
 Send events to individual connections using `conn.send(eventName, data)`:
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const gameRoom = actor({
+  state: { 
+    players: {} as Record<string, {health: number, position: {x: number, y: number}}>
+  },
+  
+  createConnState: (c, { params }) => ({
+    playerId: params.playerId,
+    role: params.role || "player"
+  }),
+  
+  actions: {
+    sendPrivateMessage: (c, targetPlayerId: string, message: string) => {
+      // Find the target player's connection
+      const targetConn = c.conns.find(conn => 
+        conn.state.playerId === targetPlayerId
+      );
+      
+      if (targetConn) {
+        targetConn.send('privateMessage', {
+          from: c.conn.state.playerId,
+          message,
+          timestamp: Date.now()
+        });
+      } else {
+        throw new Error("Player not found or not connected");
+      }
+    }
+  }
+});
+```
+
+Send events to all connections except the sender:
 
 ```typescript
 import { actor } from "@rivetkit/actor";
@@ -83,66 +105,6 @@ const gameRoom = actor({
           }
         }
       }
-    },
-    
-    sendPrivateMessage: (c, targetPlayerId: string, message: string) => {
-      // Find the target player's connection
-      const targetConn = c.conns.find(conn => 
-        conn.state.playerId === targetPlayerId
-      );
-      
-      if (targetConn) {
-        targetConn.send('privateMessage', {
-          from: c.conn.state.playerId,
-          message,
-          timestamp: Date.now()
-        });
-      } else {
-        throw new Error("Player not found or not connected");
-      }
-    }
-  }
-});
-```
-
-### Event Filtering by Connection State
-
-Filter events based on connection properties:
-
-```typescript
-import { actor } from "@rivetkit/actor";
-
-const newsRoom = actor({
-  state: { 
-    articles: [] as Array<{id: string, category: string, content: string, level: 'public' | 'premium'}>
-  },
-  
-  createConnState: (c, { params }) => ({
-    userId: params.userId,
-    subscription: params.subscription || 'free' // 'free', 'premium'
-  }),
-  
-  actions: {
-    publishArticle: (c, article: {category: string, content: string, level: 'public' | 'premium'}) => {
-      const newArticle = {
-        id: crypto.randomUUID(),
-        ...article,
-        timestamp: Date.now()
-      };
-      
-      c.state.articles.push(newArticle);
-      
-      // Send to appropriate subscribers only
-      for (const conn of c.conns) {
-        const canAccess = article.level === 'public' || 
-                         conn.state.subscription === 'premium';
-        
-        if (canAccess) {
-          conn.send('newArticle', newArticle);
-        }
-      }
-      
-      return newArticle;
     }
   }
 });
@@ -156,7 +118,9 @@ Clients must establish a connection to receive events from actors. Use `.connect
 
 Use `connection.on(eventName, callback)` to listen for events:
 
-```typescript
+<CodeGroup>
+
+```typescript {{"title":"TypeScript"}}
 import { createClient } from "@rivetkit/actor/client";
 import type { registry } from "./registry";
 
@@ -172,20 +136,40 @@ connection.on('messageReceived', (message) => {
   displayMessage(message);
 });
 
-connection.on('messageDeleted', ({ messageId }) => {
-  console.log(`Message ${messageId} was deleted`);
-  removeMessageFromUI(messageId);
-});
-
 // Call actions through the connection
 await connection.sendMessage("user-123", "Hello everyone!");
 ```
+
+```tsx {{"title":"React"}}
+import { useState } from "react";
+import { useActor } from "./rivetkit";
+
+function ChatRoom() {
+  const [messages, setMessages] = useState<Array<{id: string, userId: string, text: string}>>([]);
+
+  const chatRoom = useActor({
+    name: "chatRoom",
+    key: ["general"]
+  });
+
+  // Listen for events
+  chatRoom.useEvent("messageReceived", (message) => {
+    setMessages(prev => [...prev, message]);
+  });
+
+  // ...rest of component...
+}
+```
+
+</CodeGroup>
 
 ### One-time Event Listeners
 
 Use `connection.once(eventName, callback)` for events that should only trigger once:
 
-```typescript
+<CodeGroup>
+
+```typescript {{"title":"TypeScript"}}
 const gameRoom = client.gameRoom.getOrCreate(["room-456"]);
 const connection = gameRoom.connect({
   playerId: "player-789",
@@ -197,195 +181,92 @@ connection.once('gameStarted', () => {
   console.log('Game has started!');
   showGameInterface();
 });
-
-// Listen for game events continuously
-connection.on('playerMoved', ({ playerId, position }) => {
-  updatePlayerPosition(playerId, position);
-});
-
-connection.on('privateMessage', ({ from, message }) => {
-  showPrivateMessage(from, message);
-});
 ```
+
+```tsx {{"title":"React"}}
+import { useState, useEffect } from "react";
+import { useActor } from "./rivetkit";
+
+function GameLobby() {
+  const [gameStarted, setGameStarted] = useState(false);
+
+  const gameRoom = useActor({
+    name: "gameRoom",
+    key: ["room-456"],
+    params: {
+      playerId: "player-789",
+      role: "player"
+    }
+  });
+
+  // Listen for game start (only once)
+  useEffect(() => {
+    if (!gameRoom.connection) return;
+    
+    const handleGameStart = () => {
+      console.log('Game has started!');
+      setGameStarted(true);
+    };
+
+    gameRoom.connection.once('gameStarted', handleGameStart);
+  }, [gameRoom.connection]);
+
+  // ...rest of component...
+}
+```
+
+</CodeGroup>
 
 ### Removing Event Listeners
 
-Use `connection.off()` to remove event listeners:
+Use the callback returned from `.on()` to remove event listeners:
 
-```typescript
-const messageHandler = (message) => {
-  console.log("Received:", message);
-};
+<CodeGroup>
 
+```typescript {{"title":"TypeScript"}}
 // Add listener
-connection.on('messageReceived', messageHandler);
+const unsubscribe = connection.on('messageReceived', (message) => {
+  console.log("Received:", message);
+});
 
-// Remove specific listener
-connection.off('messageReceived', messageHandler);
-
-// Remove all listeners for an event
-connection.off('messageReceived');
-
-// Remove all listeners
-connection.off();
+// Remove listener
+unsubscribe();
 ```
 
-### React Integration
-
-Rivet's React hooks provide a convenient way to handle events in React components:
-
-```tsx
+```tsx {{"title":"React"}}
+import { useState, useEffect } from "react";
 import { useActor } from "./rivetkit";
-import { useState } from "react";
 
-function ChatRoom() {
-  const [messages, setMessages] = useState([]);
-  
+function ConditionalListener() {
+  const [isListening, setIsListening] = useState(false);
+  const [messages, setMessages] = useState<string[]>([]);
+
   const chatRoom = useActor({
     name: "chatRoom",
     key: ["general"]
   });
 
-  // Listen for new messages
-  chatRoom.useEvent("messageReceived", (message) => {
-    setMessages(prev => [...prev, message]);
-  });
+  useEffect(() => {
+    if (!chatRoom.connection || !isListening) return;
 
-  // Listen for deleted messages
-  chatRoom.useEvent("messageDeleted", ({ messageId }) => {
-    setMessages(prev => prev.filter(m => m.id !== messageId));
-  });
+    // Add listener
+    const unsubscribe = chatRoom.connection.on('messageReceived', (message) => {
+      setMessages(prev => [...prev, `${message.userId}: ${message.text}`]);
+    });
 
-  const sendMessage = async (text: string) => {
-    await chatRoom.connection?.sendMessage("user-123", text);
-  };
+    // Cleanup - remove listener when component unmounts or listening stops
+    return () => {
+      unsubscribe();
+    };
+  }, [chatRoom.connection, isListening]);
 
-  return (
-    <div>
-      {messages.map(message => (
-        <div key={message.id}>
-          <strong>{message.userId}:</strong> {message.text}
-        </div>
-      ))}
-      <MessageInput onSend={sendMessage} />
-    </div>
-  );
+  // ...rest of component...
 }
 ```
 
-## Connection Lifecycle Events
+</CodeGroup>
 
-Connections emit lifecycle events you can listen to:
+## More About Connections
 
-```typescript
-const connection = actor.connect();
-
-connection.on('connected', () => {
-  console.log('Connected to actor');
-  enableUI();
-});
-
-connection.on('disconnected', () => {
-  console.log('Lost connection to actor');
-  showReconnectingIndicator();
-});
-
-connection.on('reconnected', () => {
-  console.log('Reconnected to actor');
-  hideReconnectingIndicator();
-});
-
-connection.on('error', (error) => {
-  console.error('Connection error:', error);
-  showErrorMessage(error.message);
-});
-```
-
-## Advanced Event Patterns
-
-### Event Buffering
-
-Events are automatically buffered during disconnections and replayed on reconnection:
-
-```typescript
-const connection = actor.connect();
-
-// Events sent while disconnected are queued
-connection.on('importantUpdate', (data) => {
-  // This will still be called for events sent during disconnection
-  // once the connection is reestablished
-  handleImportantUpdate(data);
-});
-```
-
-### Connection Parameters
-
-Pass parameters when connecting to provide context to the actor:
-
-```typescript
-const gameRoom = client.gameRoom.getOrCreate(["competitive-room"]);
-const connection = gameRoom.connect({
-  playerId: getCurrentPlayerId(),
-  skillLevel: getUserSkillLevel(),
-  authToken: getAuthToken()
-});
-
-// The actor can use these parameters in its onBeforeConnect hook
-// or access them via c.conn.params in actions
-```
-
-### Conditional Event Handling
-
-Handle events conditionally based on connection state:
-
-```typescript
-connection.on('playerMoved', ({ playerId, position }) => {
-  // Only update if it's not our own player
-  if (playerId !== getCurrentPlayerId()) {
-    updatePlayerPosition(playerId, position);
-  }
-});
-
-connection.on('newArticle', (article) => {
-  // Handle based on article level and user subscription
-  if (article.level === 'premium' && !hasSubscription()) {
-    showUpgradePrompt();
-  } else {
-    displayArticle(article);
-  }
-});
-```
-
-## Error Handling
-
-Handle event-related errors gracefully:
-
-```typescript
-try {
-  const connection = actor.connect();
-  
-  connection.on('messageReceived', (message) => {
-    try {
-      validateMessage(message);
-      displayMessage(message);
-    } catch (error) {
-      console.error('Invalid message format:', error);
-      // Handle malformed event data
-    }
-  });
-  
-} catch (error) {
-  console.error('Failed to establish connection:', error);
-  showConnectionError();
-}
-```
-
-## Best Practices
-
-1. **Always use connections for events**: Events only work through `.connect()`, not direct action calls
-2. **Handle connection lifecycle**: Listen for connection, disconnection, and error events
-3. **Clean up listeners**: Remove event listeners when components unmount
-4. **Validate event data**: Don't assume event payloads are always correctly formatted
-5. **Use React hooks**: For React apps, use `useActor` and `actor.useEvent` for automatic cleanup
-6. **Buffer critical events**: Design actors to resend important events on reconnection if needed
+For more details on actor connections, including connection lifecycle, authentication, and advanced connection patterns, see the [Connections documentation](/docs/actors/connections).
 

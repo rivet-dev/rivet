@@ -8,7 +8,7 @@ When working with actors, you often need to access the context object. Rivet pro
 
 ### `ActorContextOf<ActorDefinition>`
 
-Extracts the full actor context type from a actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
+Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
 
 ```typescript
 import { actor, ActorContextOf } from "@rivetkit/actor";
@@ -35,7 +35,7 @@ function processChatRoomContext(context: ChatRoomContext) {
 
 ### `ActionContextOf<ActorDefinition>`
 
-Extracts the action context type from a actor definition. This is the type of the context object (`c`) available in action handlers.
+Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in action handlers.
 
 ```typescript
 import { actor, ActionContextOf } from "@rivetkit/actor";

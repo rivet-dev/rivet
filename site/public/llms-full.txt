@@ -15,7 +15,7 @@ actor.
 
 ## Writing Actions
 
-Actions are defined in the `actions` object when creating a actor:
+Actions are defined in the `actions` object when creating an actor:
 
 ```typescript
 const mathUtils = actor(,
@@ -146,7 +146,7 @@ const counter = actor(,
 
 ## Authentication
 
-By default, clients can call all actions on a actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/general/authentication).
+By default, clients can call all actions on an actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/general/authentication).
 
 ## Using `ActionContext` Type Externally
 
@@ -732,7 +732,7 @@ Connections represent client connections to your actor. They provide a way to ha
 
 ## Parameters
 
-When clients connect to a actor, they can pass connection parameters that are handled during the connection process.
+When clients connect to an actor, they can pass connection parameters that are handled during the connection process.
 
 For example:
 
@@ -758,7 +758,7 @@ const gameRoom = await client.gameRoom.get(
 
 ## Connection State
 
-There are two ways to define a actor's connection state:
+There are two ways to define an actor's connection state:
 
 		Define connection state as a constant value:
 
@@ -1205,7 +1205,7 @@ When working with actors, you often need to access the context object. Rivet pro
 
 ### `ActorContextOf`
 
-Extracts the full actor context type from a actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
+Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in lifecycle hooks such as `onCreate`, `onStart`, etc.
 
 ```typescript
 const chatRoom = actor(,
@@ -1223,7 +1223,7 @@ function processChatRoomContext(context: ChatRoomContext) );
 
 ### `ActionContextOf`
 
-Extracts the action context type from a actor definition. This is the type of the context object (`c`) available in action handlers.
+Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in action handlers.
 
 ```typescript
 const counter = actor(,
@@ -2336,7 +2336,7 @@ applications or for storing relational data. Read more [here](/docs/actors/exter
 
 ## Initializing State
 
-There are two ways to define a actor's initial state:
+There are two ways to define an actor's initial state:
 
 ```typescript
 // Simple state with a constant
@@ -2403,13 +2403,13 @@ const criticalProcess = actor(,
 
 Each actor's state is completely isolated, meaning it cannot be accessed directly by other actors or clients. This allows actors to maintain a high level of security and data integrity, ensuring that state changes are controlled and predictable.
 
-To interact with a actor's state, you must use [Actions](/docs/actors/actions). Actions provide a controlled way to read from and write to the state.
+To interact with an actor's state, you must use [Actions](/docs/actors/actions). Actions provide a controlled way to read from and write to the state.
 
 ## Sharing State Between Actors
 
 If you need a shared state between multiple actors, you have two options:
 
-1. Create a actor that holds the shared state that other actors can make action calls to
+1. Create an actor that holds the shared state that other actors can make action calls to
 2. Use an external database, see [External SQL Databases](/docs/actors/external-sql)
 
 ## Ephemeral Variables
@@ -2420,7 +2420,7 @@ In addition to persisted state, Rivet provides a way to store ephemeral data tha
 
 ### Initializing Variables
 
-There are two ways to define a actor's initial vars:
+There are two ways to define an actor's initial vars:
 
 ```typescript
 // Define vars as a constant
@@ -3663,7 +3663,7 @@ Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.
 
 ### Manual region selection
 
-The region a actor is created in can be overridden using region options:
+The region an actor is created in can be overridden using region options:
 
 ```typescript client.ts
 const client = createClient(/* endpoint */);

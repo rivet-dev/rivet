@@ -34,6 +34,7 @@ const OUTPUT_FILE = 'examples.ts';
 // - Local-First Sync
 // - Multi-Tenant Database
 // - Scheduling
+// - Raw Fetch
 const EXAMPLE_METADATA = {
   "ai-agent": { 
     icon: "faRobot", 

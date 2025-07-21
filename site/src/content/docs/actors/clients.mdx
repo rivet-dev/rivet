@@ -1,8 +1,12 @@
-# Communicating with Actors
+# Actor Clients
 
 Learn how to call actions and connect to actors from client applications
 
-This guide covers how to connect to and interact with actors from client applications using Rivet's JavaScript/TypeScript client library.
+This guide covers how to connect to and interact with actors from client applications using Rivet's TypeScript client library.
+
+<Tip>
+	Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
+</Tip>
 
 ## Client Setup
 
@@ -11,71 +15,97 @@ This guide covers how to connect to and interact with actors from client applica
 There are several ways to create a client for communicating with actors:
 
 <Tabs>
-	<Tab title="External Client">
-		For frontend applications or external services connecting to your Rivet backend:
-
-		```typescript
-		import { createClient } from "@rivetkit/actor/client";
-		import type { registry } from "./registry";
-
-		const client = createClient<typeof registry>("http://localhost:8080");
-		```
-
-		This client communicates over HTTP/WebSocket and requires authentication.
-	</Tab>
-
 	<Tab title="Server-side Client">
 		From your backend server that hosts the registry:
 
-		```typescript
+		```typescript {{"title":"server.ts"}}
 		import { registry } from "./registry";
 
-		const { client } = registry.createServer();
+		const { client, serve } = registry.createServer();
+
+		const app = new Hono();
+
+		app.post("/foo", () => {
+			const response = await client.myActor.getOrCreate("my-id").bar();
+			return c.json(response);
+		});
+
+		serve(app);
 		```
 
-		This client bypasses network calls and doesn't require authentication.
+		This client doesn't [require authentication](/docs/general/authentication).
 	</Tab>
 
 	<Tab title="Actor-to-Actor">
 		From within an actor to communicate with other actors:
 
-		```typescript
+		```typescript {{"title":"actor.ts"}}
 		const myActor = actor({
 			actions: {
 				callOtherActor: (c) => {
 					const client = c.client<typeof registry>();
-					return client.otherActor.getOrCreate(["id"]);
+					return await client.otherActor.getOrCreate("my-id").foo();
 				}
 			}
 		});
 		```
 
+		This client doesn't [require authentication](/docs/general/authentication).
+
 		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
+	</Tab>
+
+	<Tab title="External Client">
+		For frontend applications or external services connecting to your Rivet backend:
+
+		```typescript {{"title":"client.ts"}}
+		import { createClient } from "@rivetkit/actor/client";
+		import type { registry } from "./registry";  // IMPORTANT: Must use `type`
+
+		const client = createClient<typeof registry>("http://localhost:8080");
+
+		const response = await client.otherActor.getOrCreate().foo();
+		```
+
+		Configure the client with additional options:
+
+		```typescript {{"tilte":"client.ts"}}
+		const client = createClient<typeof registry>("http://localhost:8080", {
+		  // Data serialization format
+		  encoding: "cbor", // or "json"
+		  
+		  // Network transport
+		  transport: "websocket",  // or "sse"
+		});
+		```
+
+		This client [requires authentication](/docs/general/authentication).
+
+		<Note>
+			Use `import type` when importing the registry type in order to
+			avoid accidentally bundling your backend code.
+
+			```typescript {{"title":"client.ts"}}
+			// ✅ Do this
+			import type { registry } from "./registry"
+
+			// 🚫 Not this
+			import { registry } from "./registry"
+			```
+		</Note>
 	</Tab>
 </Tabs>
 
-### Client Configuration
+## `ActorClient`
 
-Configure the client with additional options:
+The `ActorClient` provides methods for finding and creating actors. All methods return an `ActorHandle` that you can use to call actions or establish connections.
 
-```typescript
-const client = createClient<typeof registry>("http://localhost:8080", {
-  // Data serialization format
-  encoding: "cbor", // or "json"
-  
-  // Network transports in order of preference
-  supportedTransports: ["websocket", "sse"]
-});
-```
-
-## Actor Handles
-
-### `get(tags, opts?)` - Find Existing Actor
+### `get(key?, opts?)` - Find Existing Actor
 
 Returns a handle to an existing actor or `null` if it doesn't exist:
 
 ```typescript
-// Get existing actor by tags
+// Get existing actor by key
 const handle = client.myActor.get(["actor-id"]);
 
 if (handle) {
@@ -85,7 +115,7 @@ if (handle) {
 }
 ```
 
-### `getOrCreate(tags, input?, opts?)` - Find or Create Actor
+### `getOrCreate(key?, opts?)` - Find or Create Actor
 
 Returns a handle to an existing actor or creates a new one if it doesn't exist:
 
@@ -95,8 +125,10 @@ const counter = client.counter.getOrCreate(["my-counter"]);
 
 // With initialization input
 const game = client.game.getOrCreate(["game-123"], {
-  gameMode: "tournament",
-  maxPlayers: 8,
+  createWithInput: {
+    gameMode: "tournament",
+    maxPlayers: 8,
+  }
 });
 
 // Call actions immediately
@@ -107,100 +139,61 @@ const count = await counter.increment(5);
 `get()` and `getOrCreate()` are synchronous and return immediately. The actor is created lazily when you first call an action.
 </Note>
 
-### `create(tags, input?, opts?)` - Create New Actor
+### `create(key?, opts?)` - Create New Actor
 
 Explicitly creates a new actor instance, failing if one already exists:
 
 ```typescript
 // Create new actor (async)
 const newGame = await client.game.create(["game-456"], {
-  gameMode: "classic",
-  maxPlayers: 4,
+  input: {
+    gameMode: "classic",
+    maxPlayers: 4,
+  }
 });
 
 // Actor is guaranteed to be newly created
 await newGame.initialize();
 ```
 
-### `getWithId(id, opts?)` - Find by Internal ID
+### `getForId(id, opts?)` - Find by Internal ID
 
 Connect to an actor using its internal system ID:
 
 ```typescript
 // Connect by internal ID
 const actorId = "55425f42-82f8-451f-82c1-6227c83c9372";
-const actor = client.myActor.getWithId(actorId);
+const actor = client.myActor.getForId(actorId);
 
 await actor.performAction();
 ```
 
 <Warning>
-Prefer using tags over internal IDs for actor discovery. IDs are primarily for debugging and advanced use cases.
+Prefer using keys over internal IDs for actor discovery. IDs are primarily for debugging and advanced use cases.
 </Warning>
 
-## Actions
+## `ActorHandle`
+
+An `ActorHandle` represents a reference to an actor instance and provides methods for calling actions and establishing connections. You get an `ActorHandle` from the `ActorClient` methods like `get()`, `getOrCreate()`, and `create()`.
 
 ### Calling Actions
 
-Once you have an actor handle, call actions directly. All action calls are async:
+You can call actions directly on an `ActorHandle`:
 
 ```typescript
 const counter = client.counter.getOrCreate(["my-counter"]);
 
-// Call action with no arguments
-const currentCount = await counter.getCount();
-
-// Call action with arguments
-const newCount = await counter.increment(5);
-
-// Call action with object parameter
-await counter.updateSettings({
-  step: 2,
-  maximum: 100,
-});
+// Call actions directly
+const count = await counter.increment(5);
+const currentValue = await counter.getCount();
+await counter.reset();
 ```
 
-### Action Parameters
-
-Actions receive parameters exactly as defined in the actor:
-
-```typescript
-// Actor definition
-const chatRoom = actor({
-  actions: {
-    sendMessage: (c, userId: string, message: string, metadata?: object) => {
-      // Action implementation
-    }
-  }
-});
-
-// Client usage - parameters match exactly
-await chatRoom.sendMessage("user-123", "Hello!", { priority: "high" });
-```
-
-### Error Handling
-
-Handle action errors appropriately:
-
-```typescript
-try {
-  const result = await counter.increment(5);
-} catch (error) {
-  if (error.code === "RATE_LIMITED") {
-    console.log("Too many requests, try again later");
-  } else {
-    console.error("Action failed:", error.message);
-  }
-}
-```
-
-## Real-time Connections
-
-Real-time connections enable bidirectional communication between clients and actors through persistent connections. Rivet automatically negotiates between WebSocket (preferred for full duplex) and Server-Sent Events (SSE) as a fallback for restrictive environments.
+Actions called on an `ActorHandle` are stateless - each call is independent and doesn't maintain a persistent connection to the actor.
 
 ### `connect(params?)` - Establish Stateful Connection
 
-For real-time communication with events, use `.connect()`:
+To open a stateful connection using `ActorConn`, call `.connect()`:
 
 ```typescript
 const counter = client.counter.getOrCreate(["live-counter"]);
@@ -218,9 +211,27 @@ const result = await connection.increment(1);
 await connection.dispose();
 ```
 
-### Events
+## `ActorConn`
 
-#### `on(eventName, callback)` - Listen for Events
+Real-time connections enable bidirectional communication between clients and actors through persistent connections. Rivet automatically negotiates between WebSocket (preferred for full duplex) and Server-Sent Events (SSE) as a fallback for restrictive environments.
+
+For more information on connections, see the [connections documentation](/docs/actors/connections). For more information on handling events, see the [events documentation](/docs/actors/events).
+
+### Calling Actions
+
+You can also call actions through an `ActorConn`, just like with an `ActorHandle`:
+
+```typescript
+const connection = counter.connect();
+
+// Call actions through the connection
+const count = await connection.increment(5);
+const currentValue = await connection.getCount();
+```
+
+See the [ActorHandle section](#calling-actions) for more details on calling actions.
+
+### `on(eventName, callback)` - Listen for Events
 
 Listen for events from the actor:
 
@@ -241,7 +252,7 @@ connection.on("playerJoined", (player) => {
 });
 ```
 
-#### `once(eventName, callback)` - Listen Once
+### `once(eventName, callback)` - Listen Once
 
 Listen for an event only once:
 
@@ -250,23 +261,6 @@ Listen for an event only once:
 connection.once("gameStarted", () => {
   console.log("Game has started!");
 });
-```
-
-#### `off(eventName, callback?)` - Stop Listening
-
-Remove event listeners:
-
-```typescript
-const messageHandler = (message) => console.log(message);
-
-// Add listener
-connection.on("messageReceived", messageHandler);
-
-// Remove specific listener
-connection.off("messageReceived", messageHandler);
-
-// Remove all listeners for event
-connection.off("messageReceived");
 ```
 
 ### `dispose()` - Clean Up Connection
@@ -300,20 +294,6 @@ useEffect(() => {
 - Removes all event listeners
 - Cancels any pending reconnection attempts
 - Prevents memory leaks in long-running applications
-
-### Transports
-
-Connections automatically negotiate the best available transport:
-
-#### WebSocket Transport
-- **Full duplex**: Client can send and receive
-- **Low latency**: Immediate bidirectional communication
-- **Preferred**: Used when available
-
-#### Server-Sent Events (SSE)
-- **Server-to-client**: Events only, actions via HTTP
-- **Fallback**: Used when WebSocket unavailable
-- **Compatibility**: Works in restrictive environments
 
 ### Reconnections
 
