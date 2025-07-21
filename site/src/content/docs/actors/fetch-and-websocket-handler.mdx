@@ -10,6 +10,8 @@ For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/ev
 
 The `onFetch` handler processes HTTP requests sent to your actor. It receives the actor context and a standard `Request` object.
 
+WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
+
 <Tabs>
 <Tab title="Raw HTTP Handling">
 
@@ -91,9 +93,7 @@ export const honoActor = actor({
 </Tab>
 </Tabs>
 
-<Note>
-	WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
-</Note>
+Also see the [raw fetch handler example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-fetch-handler).
 
 <Tip>
 	`onFetch` can be used to expose Server-Sent Events from Rivet Actors.
@@ -122,6 +122,8 @@ export const websocketActor = actor({
     },
 });
 ```
+
+Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
 
 ## Accessing Your Handlers
 
