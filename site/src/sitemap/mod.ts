@@ -41,6 +41,7 @@ import {
 	faMemory,
 	faArrowsTurnToDots,
 	faArrowsTurnRight,
+    faFileImport,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -121,11 +122,6 @@ export const sitemap = [
 								icon: faArrowsTurnToDots,
 							},
 							{
-								title: "Fetch & WebSocket Handler",
-								href: "/docs/actors/fetch-and-websocket-handler",
-								icon: faLink,
-							},
-							{
 								title: "Connections",
 								href: "/docs/actors/connections",
 								icon: faNetworkWired,
@@ -134,6 +130,11 @@ export const sitemap = [
 								title: "Lifecycle",
 								href: "/docs/actors/lifecycle",
 								icon: faRotate,
+							},
+							{
+								title: "Fetch & WebSocket Handler",
+								href: "/docs/actors/fetch-and-websocket-handler",
+								icon: faLink,
 							},
 							{
 								title: "Metadata",
@@ -197,6 +198,11 @@ export const sitemap = [
 								title: "Rust",
 								href: "/docs/clients/rust",
 								icon: faRust,
+							},
+							{
+								title: "OpenAPI",
+								href: "/docs/clients/openapi",
+								icon: faFileImport,
 							},
 						],
 					},

@@ -443,6 +443,117 @@ const realtimeActor = actor({
 });
 ```
 
+### `onAuth`
+
+The `onAuth` hook is called on the HTTP server before clients can interact with the actor. This hook is required for any public HTTP endpoint access and is used to validate client credentials and return authentication data that will be available on connections.
+
+This hook runs on the HTTP server (not the actor) to reduce load and prevent denial of service attacks against individual actors. Only called for public endpoints - calls to actors from within the backend do not trigger this handler.
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const secureActor = actor({
+  // Authentication handler - runs on HTTP server
+  onAuth: async (opts) => {
+    const authHeader = opts.req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new Error("Missing or invalid authorization header");
+    }
+    
+    const token = authHeader.slice(7);
+    
+    // Validate token with your auth service
+    const user = await validateAuthToken(token);
+    if (!user) {
+      throw new Error("Invalid authentication token");
+    }
+    
+    // Return auth data (must be serializable)
+    return {
+      userId: user.id,
+      role: user.role,
+      permissions: user.permissions
+    };
+  },
+  
+  state: { activeUsers: {} },
+  
+  onConnect: (c) => {
+    // Access auth data from onAuth
+    const userId = c.conn.auth.userId;
+    const role = c.conn.auth.role;
+    
+    console.log(`User ${userId} with role ${role} connected`);
+    
+    c.state.activeUsers[userId] = {
+      role,
+      connectedAt: Date.now()
+    };
+  },
+  
+  actions: {
+    adminAction: (c) => {
+      // Check permissions from auth data
+      if (c.conn.auth.role !== "admin") {
+        throw new Error("Unauthorized: admin role required");
+      }
+      
+      return { message: "Admin action completed" };
+    }
+  }
+});
+```
+
+### `onBeforeActionResponse`
+
+The `onBeforeActionResponse` hook is called before sending an action response to the client. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
+
+```typescript
+import { actor } from "@rivetkit/actor";
+
+const loggingActor = actor({
+  state: { requestCount: 0 },
+  
+  onBeforeActionResponse: (c, actionName, args, output) => {
+    // Log action calls
+    console.log(`Action ${actionName} called with args:`, args);
+    console.log(`Action ${actionName} returned:`, output);
+    
+    // Add metadata to all responses
+    return {
+      data: output,
+      metadata: {
+        actionName,
+        timestamp: Date.now(),
+        requestId: crypto.randomUUID(),
+        userId: c.conn.auth?.userId
+      }
+    };
+  },
+  
+  actions: {
+    getUserData: (c, userId: string) => {
+      c.state.requestCount++;
+      
+      // This will be wrapped with metadata by onBeforeActionResponse
+      return {
+        userId,
+        profile: { name: "John Doe", email: "john@example.com" },
+        lastActive: Date.now()
+      };
+    },
+    
+    getStats: (c) => {
+      // This will also be wrapped with metadata
+      return {
+        requestCount: c.state.requestCount,
+        uptime: process.uptime()
+      };
+    }
+  }
+});
+```
+
 ## Destroying Actors
 
 Actors can be shut down gracefully with `c.shutdown()`. Clients will be gracefully disconnected.
@@ -522,11 +633,31 @@ import { actor } from "@rivetkit/actor";
 import { z } from "zod";
 
 const counter = actor({
+  // Authentication handler (runs on HTTP server)
+  onAuth: async (opts) => {
+    const authHeader = opts.req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new Error("Missing authorization header");
+    }
+    
+    const token = authHeader.slice(7);
+    const user = await validateAuthToken(token);
+    if (!user) {
+      throw new Error("Invalid auth token");
+    }
+    
+    return {
+      userId: user.id,
+      role: user.role
+    };
+  },
+  
   // Initialize state with input
   createState: (c, opts) => ({
     count: opts.input?.initialCount ?? 0,
     stepSize: opts.input?.stepSize ?? 1,
     name: opts.input?.name ?? "Unnamed Counter",
+    requestCount: 0,
   }),
   
   // Initialize actor (run setup that doesn't affect initial state)
@@ -542,13 +673,10 @@ const counter = actor({
   
   // Dynamically create connection state based on params
   createConnState: (c, { params }) => {
-    // Get auth info from validation
-    const authToken = params.authToken;
-    const authInfo = validateAuthToken(authToken);
-    
+    // Auth data is available from onAuth
     return {
-      userId: authInfo?.userId || "anonymous",
-      role: authInfo?.role || "guest"
+      userId: c.conn.auth.userId,
+      role: c.conn.auth.role
     };
   },
   
@@ -565,20 +693,9 @@ const counter = actor({
   },
   
   onBeforeConnect: (c, { params }) => {
-    // Validate auth token
-    const authToken = params.authToken;
-    if (!authToken) {
-      throw new Error('Missing auth token');
-    }
-    
-    // Validate with your API and determine the user
-    const authInfo = validateAuthToken(authToken);
-    if (!authInfo) {
-      throw new Error('Invalid auth token');
-    }
-    
-    // If validation succeeds, connection proceeds
-    // Connection state will be set by createConnState
+    // Additional validation can be done here if needed
+    // Auth was already validated in onAuth
+    console.log(`User ${c.conn.auth.userId} attempting to connect`);
   },
   
   onConnect: (c) => {
@@ -587,6 +704,21 @@ const counter = actor({
   
   onDisconnect: (c) => {
     console.log(`User ${c.conn.state.userId} disconnected from "${c.state.name}"`);
+  },
+  
+  // Transform all action responses
+  onBeforeActionResponse: (c, actionName, args, output) => {
+    c.state.requestCount++;
+    
+    return {
+      data: output,
+      metadata: {
+        action: actionName,
+        timestamp: Date.now(),
+        userId: c.conn.auth.userId,
+        requestNumber: c.state.requestCount
+      }
+    };
   },
   
   // Define actions
@@ -599,7 +731,7 @@ const counter = actor({
     
     reset: (c) => {
       // Check if user has admin role
-      if (c.conn.state.role !== "admin") {
+      if (c.conn.auth.role !== "admin") {
         throw new Error("Unauthorized: requires admin role");
       }
       
@@ -611,6 +743,7 @@ const counter = actor({
       name: c.state.name,
       count: c.state.count,
       stepSize: c.state.stepSize,
+      totalRequests: c.state.requestCount,
     }),
   }
 });

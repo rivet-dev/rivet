@@ -26,6 +26,8 @@
 site/out/
 site/public/rss/
 !site/public/rss/.gitkeep
+# Generated Markdown
+site/public/docs/
 
 site/src/generated/
 !site/src/generated/errorPages.json

@@ -327,7 +327,7 @@ async function generateMarkdownAndLlms() {
 	const llmsFullTxtContent = [
 		"# Rivet Documentation - Complete",
 		"",
-		"This file contains the complete documentation for Rivet, a backend-as-a-service platform for building multiplayer games and real-time applications.",
+		"This file contains the complete documentation for Rivet, an open-source alternative to Durable Objects.",
 		"",
 		...pages.map((page) => `## ${page.title}\n\n${page.content}`),
 	].join("\n");

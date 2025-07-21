@@ -5,6 +5,13 @@ Learn how to call actions and connect to actors from client applications
 This guide covers how to connect to and interact with actors from client applications using Rivet's TypeScript client library.
 
 <Tip>
+	The client is completely optional. If you prefer to write your own networking logic, you can either:
+
+	- Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
+	- Write your own HTTP endpoints and use the client returned from `registry.runServer` (see below)
+</Tip>
+
+<Tip>
 	Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
 </Tip>
 
@@ -191,6 +198,64 @@ await counter.reset();
 
 Actions called on an `ActorHandle` are stateless - each call is independent and doesn't maintain a persistent connection to the actor.
 
+### `fetch(input, init?)` - Raw HTTP Requests
+
+Make direct HTTP requests to the actor's `onFetch` handler:
+
+```typescript
+const actor = client.myActor.getOrCreate(["key"]);
+
+// GET request
+const response = await actor.fetch("/api/hello", {
+  method: "GET"
+});
+const data = await response.json();
+
+// POST request with body
+const postResponse = await actor.fetch("/api/echo", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "Hello world" })
+});
+
+// Can also pass a Request object
+const request = new Request("/api/data", { method: "GET" });
+const requestResponse = await actor.fetch(request);
+```
+
+See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
+
+<Note>
+For most use cases, actions provide a higher-level API that's easier to work with than raw HTTP handlers.
+</Note>
+
+### `websocket(path?, protocols?)` - Raw WebSocket Connections
+
+Create direct WebSocket connections to the actor's `onWebSocket` handler:
+
+```typescript
+const actor = client.myActor.getOrCreate(["key"]);
+
+// Basic WebSocket connection
+const ws = await actor.websocket();
+ws.addEventListener("message", (event) => {
+  console.log("Message:", event.data);
+});
+ws.send("Hello WebSocket!");
+
+// WebSocket with custom path
+const streamWs = await actor.websocket("/stream");
+
+// WebSocket with protocols
+const protocolWs = await actor.websocket("/", ["chat", "v1"]);
+```
+
+See [Fetch & WebSocket Handler](/docs/actors/fetch-and-websocket-handler) documentation for more information.
+
+<Note>
+For most use cases, actions & events provide a higher-level API that's easier to work with than raw HTTP handlers.
+</Note>
+
 ### `connect(params?)` - Establish Stateful Connection
 
 To open a stateful connection using `ActorConn`, call `.connect()`:
@@ -229,7 +294,13 @@ const count = await connection.increment(5);
 const currentValue = await connection.getCount();
 ```
 
-See the [ActorHandle section](#calling-actions) for more details on calling actions.
+### Reconnections
+
+Connections automatically handle network failures with built-in reconnection logic:
+
+- **Exponential backoff**: Retry delays increase progressively to avoid overwhelming the server
+- **Action queuing**: Actions called while disconnected are queued and sent once reconnected
+- **Event resubscription**: Event listeners are automatically restored on reconnection
 
 ### `on(eventName, callback)` - Listen for Events
 
@@ -295,16 +366,6 @@ useEffect(() => {
 - Cancels any pending reconnection attempts
 - Prevents memory leaks in long-running applications
 
-### Reconnections
-
-Connections automatically handle network failures with robust reconnection logic:
-
-**Automatic Behavior:**
-- **Exponential backoff**: Retry delays increase progressively to avoid overwhelming the server
-- **Action queuing**: Actions called while disconnected are queued and sent once reconnected
-- **Event resubscription**: Event listeners are automatically restored on reconnection
-- **State synchronization**: Connection state is preserved and synchronized after reconnection
-
 ## Authentication
 
 ### Connection Parameters
@@ -313,18 +374,18 @@ Pass authentication data when connecting to actors:
 
 ```typescript
 // With connection parameters
-const chat = client.chatRoom.getOrCreate(["general"]);
-const connection = chat.connect({
-  authToken: "jwt-token-here",
-  userId: "user-123",
-  displayName: "Alice"
+const chat = client.chatRoom.getOrCreate(["general"], {
+  params: {
+    authToken: "jwt-token-here",
+    userId: "user-123",
+    displayName: "Alice"
+  }
 });
 
-// Parameters available in actor via onAuth hook
+const connection = chat.connect();
+
 // Or for action calls
-const result = await chat.sendMessage("Hello world!", {
-  authToken: "jwt-token-here"
-});
+const result = await chat.sendMessage("Hello world!");
 ```
 
 ### onAuth Hook Validation
@@ -332,21 +393,27 @@ const result = await chat.sendMessage("Hello world!", {
 Actors can validate authentication using the `onAuth` hook:
 
 ```typescript
-import { actor, Forbidden } from "@rivetkit/actor";
+import { actor, UserError } from "@rivetkit/actor";
 
 const protectedActor = actor({
   onAuth: async (opts) => {
-    const { req, params } = opts;
+    const { req, params, intents } = opts;
     
     // Extract token from params or headers
     const token = params.authToken || req.headers.get("Authorization");
     
     if (!token) {
-      throw new Forbidden("Authentication required");
+      throw new UserError("Authentication required", { code: "missing_auth" });
     }
     
     // Validate and return user data
     const user = await validateJWT(token);
+    
+    // Check permissions based on what the client is trying to do
+    if (intents.has("create") && user.role !== "admin") {
+      throw new UserError("Admin access required", { code: "insufficient_permissions" });
+    }
+    
     return { userId: user.id, role: user.role };
   },
   
@@ -356,7 +423,7 @@ const protectedActor = actor({
       const { userId, role } = c.conn.auth;
       
       if (role !== "admin") {
-        throw new Forbidden("Admin access required");
+        throw new UserError("Admin access required", { code: "insufficient_permissions" });
       }
       
       return `Hello admin ${userId}`;
@@ -402,9 +469,9 @@ client./* <shows: counter, chatRoom, gameRoom, etc.> */
 
 ## Best Practices
 
-### Actions vs Connections
+### `ActorHandle` (Stateless) vs `ActorConn` (Stateful) Clients
 
-**Use Stateless Actions For:**
+**Use `ActorHandle` (Stateless) For:**
 - Simple request-response operations
 - One-off operations  
 - Server-side integration
@@ -416,7 +483,7 @@ const result = await counter.increment(1);
 const status = await server.getStatus();
 ```
 
-**Use Stateful Connections For:**
+**Use `ActorConn` (Stateful) Connections For:**
 - Real-time updates needed
 - Multiple related operations
 - Event-driven interactions
@@ -443,37 +510,67 @@ try {
 } finally {
   await connection.dispose();
 }
-
-// Automatic cleanup with lifecycle
-connection.on("disconnected", () => {
-  console.log("Connection cleaned up");
-});
 ```
 
 ### Error Handling
 
-Implement proper error handling for both actions and connections:
+Handle connection errors using the `.onError()` method:
 
-```typescript
-// Action error handling
-try {
-  const result = await counter.increment(5);
-} catch (error) {
-  if (error.code === "RATE_LIMITED") {
-    console.log("Rate limited, try again later");
-  } else if (error.code === "UNAUTHORIZED") {
+<CodeGroup>
+
+```typescript {{"title":"TypeScript"}}
+const connection = actor.connect();
+
+connection.onError((error) => {
+  console.error('Connection error:', error);
+  showErrorMessage(error.message);
+  
+  // Handle specific error types
+  if (error.code === 'UNAUTHORIZED') {
     redirectToLogin();
-  } else {
-    console.error("Action failed:", error.message);
+  } else if (error.code === 'ACTOR_NOT_FOUND') {
+    showActorNotFoundError();
   }
-}
-
-// Connection error handling
-connection.on("error", (error) => {
-  console.error("Connection error:", error);
-  // Implement reconnection logic if needed
 });
 ```
+
+```tsx {{"title":"React"}}
+import { useState, useEffect } from "react";
+import { useActor } from "./rivetkit";
+
+function ConnectionErrorHandler() {
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+
+  const actor = useActor({
+    name: "chatRoom",
+    key: ["general"]
+  });
+
+  useEffect(() => {
+    if (!actor.connection) return;
+
+    const unsubscribe = actor.connection.onError((error) => {
+      console.error('Connection error:', error);
+      setConnectionError(error.message);
+      setErrorCode(error.code);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setConnectionError(null);
+        setErrorCode(null);
+      }, 5000);
+    });
+
+    // Clean up error handler when component unmounts
+    return unsubscribe;
+  }, [actor.connection]);
+
+  // ...rest of component...
+}
+```
+
+</CodeGroup>
 
 ### Performance Optimization
 
