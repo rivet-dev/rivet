@@ -321,8 +321,10 @@ export const sitemap = [
 						pages: [
 							{
 								title: "Railway",
-								href: "/docs/hosting-providers/rivet",
+								href: "/docs/hosting-providers/railway",
 							},
+							// TODO: AWS ECS
+							// TODO: Vercel
 							{
 								title: "Cloudflare Workers",
 								href: "/docs/hosting-providers/cloudflare-workers",
@@ -332,13 +334,11 @@ export const sitemap = [
 								href: "/docs/hosting-providers/rivet-cloud",
 							},
 
+							// TODO: Hetzner
 							// TODO: AWS
 							// TODO: Cloudflare Workers
 							// TODO: Railway
-							// TODO: Vercel
-							// TODO: Hetzner
 							// TODO: Coolify
-							// TODO: AWS ECS
 							// TODO: Rivet
 						],
 					},
