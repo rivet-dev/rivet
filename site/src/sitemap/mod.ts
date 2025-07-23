@@ -47,6 +47,8 @@ import {
 	faSitemap,
 	faScrewdriverWrench,
 	faInfoSquare,
+    faPaintbrush,
+    faPalette,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -370,6 +372,11 @@ export const sitemap = [
 			{
 				title: "Reference",
 				pages: [
+					{
+						title: "Rivet Studio",
+						href: "/docs/general/studio",
+						icon: faPalette,
+					},
 					{
 						title: "Docs for LLMs",
 						href: "/docs/general/docs-for-llms",
