@@ -1,5 +1,6 @@
 import {
 	Icon,
+	faActorsBorderless,
 	faArrowRight,
 	faCode,
 	faLayerGroup,
@@ -199,7 +200,7 @@ export const FeaturesGrid = () => {
 					hibernation, and realtime.
 				</>
 			),
-			faIcon: faLayerGroup,
+			faIcon: faActorsBorderless,
 			href: "/docs/actors",
 			useCases: ["AI agents", "realtime apps", "local-first sync"],
 			badge: "Open-Source Durable Objects",

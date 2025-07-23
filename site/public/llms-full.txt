@@ -419,18 +419,16 @@ describe("Protected Actor", () => )
 
 # Actor Clients
 
-Learn how to call actions and connect to actors from client applications
+Learn how to call actions and connect to actors from client applications using Rivet's TypeScript client library.
 
-This guide covers how to connect to and interact with actors from client applications using Rivet's TypeScript client library. Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
+Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
 
-The client is completely optional. If you prefer to write your own networking logic, you can either:
+Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
 
 - Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
 - Write your own HTTP endpoints and use the client returned from `registry.runServer` (see below)
 
 ## Client Setup
-
-### Creating a Client
 
 There are several ways to create a client for communicating with actors:
 
@@ -447,18 +445,6 @@ There are several ways to create a client for communicating with actors:
 		```
 
 		This client doesn't [require authentication](/docs/general/authentication).
-
-		From within an actor to communicate with other actors:
-
-		```typescript }
-		const myActor = actor(
-			}
-		});
-		```
-
-		This client doesn't [require authentication](/docs/general/authentication).
-
-		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 
 		For frontend applications or external services connecting to your Rivet backend:
 
@@ -478,13 +464,25 @@ There are several ways to create a client for communicating with actors:
 
 		This client [requires authentication](/docs/general/authentication).
 
-			Use `import type` when importing the registry type in order to
-			avoid accidentally bundling your backend code.
+		**Important**: Use `import type` when importing the registry type in order to
+		avoid accidentally bundling your backend code.
 
-			```typescript }
-			// ✅ Do this
-			// 🚫 Not this
-			```
+		```typescript }
+		// ✅ Do this
+		// 🚫 Not this
+		```
+
+		From within an actor to communicate with other actors:
+
+		```typescript }
+		const myActor = actor(
+			}
+		});
+		```
+
+		This client doesn't [require authentication](/docs/general/authentication).
+
+		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 
 ## `ActorClient`
 
@@ -1538,6 +1536,8 @@ const websocketActor = actor(,
 ```
 
 Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
+
+	Connection lifecycle hooks like `onConnect` and `onDisconnect` do not get called when opening WebSockets for `onWebSocket`. This is because `onWebSocket` provides a low-level connection. Use `ws.addEventListener("open")` and `ws.addEventListener("close")` instead.
 
 ## Accessing Your Handlers
 
@@ -2742,7 +2742,7 @@ const registry = setup(,
 Choose your preferred web framework:
 
 ```ts }
-// Start Rivet with memory driver (for development)
+// Start Rivet with file system driver (for development)
 const  = registry.createServer();
 
 // Setup Hono app
@@ -4253,83 +4253,24 @@ You'll need to configure CORS when:
 
 ## Registry-Level CORS
 
-Configure CORS directly in your registry setup for simple cases:
+Configure CORS directly in your registry setup for applications that do not require configuring CORS on their own endpoints.
 
-```typescript
-const registry = setup(,
-  cors: 
+```typescript }
+const  = registry.createServer(
 });
+
+serve();
 ```
 
-This approach works well for basic setups but has limitations for complex scenarios.
+### Configuration Options
 
-## Router-Level CORS (Recommended)
-
-For production applications, configure CORS at the router level for maximum control:
-
-```typescript
-const  = registry.createServer();
-const app = new Hono();
-
-app.use("*", cors());
-
-serve(app);
-```
-
-### Required Headers for Rivet
-
-Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
-
-```typescript
-// ALLOWED_PUBLIC_HEADERS includes:
-// - "Content-Type"
-// - "User-Agent" 
-// - "X-RivetKit-Query"
-// - "X-RivetKit-Encoding"
-// - "X-RivetKit-Conn-Params"
-// - "X-RivetKit-Actor"
-// - "X-RivetKit-Conn"
-// - "X-RivetKit-Conn-Token"
-
-const corsConfig = ;
-```
-
-Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
-
-## Framework-Specific Examples
-
-### Express.js
-
-```typescript
-const  = registry.createServer();
-const app = express();
-
-app.use(cors());
-
-app.use("/registry", handler);
-app.listen(8080);
-```
-
-### Elysia
-
-```typescript
-const  = registry.createServer();
-
-const app = new Elysia()
-  .use(cors())
-  .mount("/registry", handler)
-  .listen(8080);
-```
-
-## Configuration Options
-
-### `origin`
+#### `origin`
 
 `string | string[] | (origin: string) => boolean | string`
 
 Specifies which domains can access your resources:
 
-```typescript
+```typescript }
 // Single domain
 origin: "https://example.com"
 
@@ -4343,7 +4284,7 @@ origin: (origin) =>
 origin: "*"
 ```
 
-### `allowMethods`
+#### `allowMethods`
 
 `string[]`
 
@@ -4353,7 +4294,7 @@ HTTP methods clients are allowed to use:
 allowMethods: ["GET", "POST", "OPTIONS"]  // Common for Rivet
 ```
 
-### `allowHeaders`
+#### `allowHeaders`
 
 `string[]`
 
@@ -4368,7 +4309,7 @@ allowHeaders: [
 ]
 ```
 
-### `credentials`
+#### `credentials`
 
 `boolean`
 
@@ -4380,7 +4321,7 @@ credentials: true  // Required for authentication
 
 When `credentials: true`, you cannot use `origin: "*"`. Specify exact origins instead.
 
-### `maxAge`
+#### `maxAge`
 
 `number`
 
@@ -4390,7 +4331,7 @@ How long browsers cache CORS preflight responses (in seconds):
 maxAge: 600  // Cache for 10 minutes
 ```
 
-### `exposeHeaders`
+#### `exposeHeaders`
 
 `string[]`
 
@@ -4399,6 +4340,41 @@ Server headers that browsers can access:
 ```typescript
 exposeHeaders: ["Content-Length", "X-Request-Id"]
 ```
+
+## Router-Level CORS
+
+For applications that need to expose their own routes, configure CORS at the router level:
+
+```typescript }
+const  = registry.createServer();
+const app = new Hono();
+
+app.use("*", cors());
+
+serve(app);
+```
+
+```typescript }
+const  = registry.createServer();
+const app = express();
+
+app.use(cors());
+
+app.use("/registry", handler);
+app.listen(8080);
+```
+
+### Required Headers for Rivet
+
+Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
+
+```typescript }
+const corsConfig = ;
+```
+
+These are automatically configured if using `registry.runServer()`.
+
+Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
 
 ## Development vs Production
 
@@ -4435,27 +4411,6 @@ const corsConfig = ;
 **"Credentials mode mismatch"**
 - Set `credentials: true` in CORS config
 - Cannot use `origin: "*"` with credentials
-
-### Debug CORS Issues
-
-Enable CORS logging to debug issues:
-
-```typescript
-// Log CORS requests in development
-if (process.env.NODE_ENV === "development") );
-    await next();
-  });
-}
-```
-
-## Best Practices
-
-1. **Use Router-Level CORS**: More flexible than registry-level configuration
-2. **Include ALLOWED_PUBLIC_HEADERS**: Required for Rivet communication
-3. **Specify Exact Origins**: Avoid wildcards in production
-4. **Enable Credentials**: Needed for authentication  
-5. **Cache Preflight Requests**: Use appropriate `maxAge` values
-6. **Environment-Specific Config**: Different settings for dev/prod
 ## Documentation for LLMs & AI
 
 # Documentation for LLMs & AI
@@ -4486,47 +4441,14 @@ This format includes:
 - Full API references and guides
 - Suitable for complex queries and comprehensive understanding
 
-## Individual Page Access
+## Access Pages As Markdown
 
 Each documentation page is also available as clean markdown by appending `.md` to any documentation URL path.
 
-### Examples
+For example:
 
-- **This page as markdown:** [/docs/general/llms.md](/docs/general/llms.md)
-- **Actors overview:** [/docs/actors.md](/docs/actors.md)
-- **State management:** [/docs/actors/state.md](/docs/actors/state.md)
-- **React quickstart:** [/docs/actors/quickstart/react.md](/docs/actors/quickstart/react.md)
-
-### URL Pattern
-
-```
-Original URL: https://rivet.gg/docs/[path]
-Markdown URL: https://rivet.gg/docs/[path].md
-```
-
-## Integration Examples
-
-### ChatGPT/Claude Integration
-
-Use the dropdown on any documentation page to:
-- Copy page content directly to clipboard
-- Open the page content in ChatGPT or Claude
-- View the page as raw markdown
-
-### Custom AI Tools
-
-Fetch documentation programmatically:
-
-```javascript
-// Get condensed documentation
-const condensed = await fetch('https://rivet.gg/llms.txt').then(r => r.text());
-
-// Get complete documentation
-const complete = await fetch('https://rivet.gg/llms-full.txt').then(r => r.text());
-
-// Get specific page as markdown
-const actorsDoc = await fetch('https://rivet.gg/docs/actors.md').then(r => r.text());
-```
+- Original URL: `https://rivet.gg/docs/actors`
+- Markdown URL: `https://rivet.gg/docs/actors.md`
 ## Edge Networking
 
 # Edge Networking
@@ -4887,6 +4809,86 @@ Take full control of your Rivet deployment with flexible hosting options and sto
   In-memory storage for testing and ephemeral use cases
 
   Create custom storage drivers for your specific requirements
+## Rivet Studio
+
+# Rivet Studio
+
+Rivet Studio is a web-based development tool for debugging and monitoring your Rivet Actors in real-time.
+
+## Features
+
+- **View running actors**: See all active Rivet Actors in your application
+- **Edit actor state**: Modify actor state in real-time for debugging
+- **REPL for actions**: Interactive console to call actor actions directly
+- **Event monitoring**: Track actor events including actions, broadcasts, events, and subscriptions
+- **Connection viewer**: Monitor all connected connections & their associated state
+
+## How it works
+
+RivetKit automatically mounts a route at `/registry` on your server for Studio access. When your application starts:
+
+1. RivetKit generates a secure token for authentication on startup
+2. Open to [studio.rivet.gg](https://studio.rivet.gg) in your browser or click the `studio.rivet.gg` URL that's printed to your console on startup
+3. Rivet Studio connects to your application
+
+Rivet Studio is automatically disabled in production when `NODE_ENV=production`.
+
+## Configuration
+
+### Token configuration
+
+By default, Rivet Studio generates and stores a token automatically. You can configure it:
+
+- **Environment variable**: Set `RIVETKIT_STUDIO_TOKEN`
+- **Code configuration**:
+  ```typescript }
+  registry.runServer(
+  })
+  ```
+
+### Disabling the Studio
+
+Disable Studio using any of these methods:
+
+- Set `RIVETKIT_STUDIO_DISABLE` environment variable
+- Set `NODE_ENV=production`
+- Configure in code:
+  ```typescript }
+  registry.runServer(
+  })
+  ```
+
+### CORS configuration
+
+Configure CORS for custom Studio deployments:
+
+```typescript }
+registry.runServer(
+  }
+})
+```
+
+See the [CORS documentation](/docs/general/cors/) for more details.
+
+### Default endpoint
+
+On startup, RivetKit prints a URL for connecting to Studio. By default, Studio connects to `localhost:8080` if no endpoint is provided. Override with:
+
+```typescript }
+registry.runServer(
+})
+```
+## System Architecture
+
+# System Architecture
+
+	This document is for advanced users seeking to understand the internal architecture of RivetKit. Most users do not need to read this document.
+
+## Request Lifecycle
+
+### Base Architecture
+
+### Coordinated Architecture
 ## Webhooks
 
 # Webhooks

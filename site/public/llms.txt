@@ -70,6 +70,8 @@ https://rivet.gg/docs/general/edge
 https://rivet.gg/docs/general/logging
 https://rivet.gg/docs/general/registry
 https://rivet.gg/docs/general/self-hosting
+https://rivet.gg/docs/general/studio
+https://rivet.gg/docs/general/system-architecture
 https://rivet.gg/docs/general/webhooks
 https://rivet.gg/docs/hosting-providers/cloudflare-workers
 https://rivet.gg/docs/hosting-providers/railway

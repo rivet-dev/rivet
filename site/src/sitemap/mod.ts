@@ -517,55 +517,21 @@ export const sitemap = [
 					},
 				],
 			},
-			{
-				title: "Use Cases",
-				pages: [
-					{
-						title: "Game Servers",
-						href: "/docs/cloud/solutions/game-servers",
-					},
-				],
-			},
+			//{
+			//	title: "Use Cases",
+			//	pages: [
+			//		{
+			//			title: "Game Servers",
+			//			href: "/docs/cloud/solutions/game-servers",
+			//		},
+			//	],
+			//},
 			{
 				title: "Advanced",
 				pages: [
 					{
 						title: "Limitations",
 						href: "/docs/cloud/limitations",
-					},
-					{
-						title: "Self-Hosting",
-						collapsible: true,
-						pages: [
-							{
-								title: "Overview",
-								href: "/docs/cloud/self-hosting",
-							},
-							{
-								title: "Single Container",
-								href: "/docs/cloud/self-hosting/single-container",
-							},
-							{
-								title: "Docker Compose",
-								href: "/docs/cloud/self-hosting/docker-compose",
-							},
-							{
-								title: "Network Modes",
-								href: "/docs/cloud/self-hosting/network-modes",
-							},
-							{
-								title: "Manual Deployment",
-								href: "/docs/cloud/self-hosting/manual-deployment",
-							},
-							{
-								title: "Server Config",
-								href: "/docs/cloud/self-hosting/server-config",
-							},
-							{
-								title: "Client Config",
-								href: "/docs/cloud/self-hosting/client-config",
-							},
-						],
 					},
 				],
 			},

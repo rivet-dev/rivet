@@ -5,11 +5,11 @@ import { MarketingButton } from "./MarketingButton";
 export const CtaButtons = () => {
 	return (
 		<div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-			<MarketingButton href="https://hub.rivet.gg" primary>
-				Deploy Now
+			<MarketingButton href="/talk-to-an-engineer" primary>
+				Talk to an engineer
 			</MarketingButton>
-			<MarketingButton href="/sales">
-				<span>Request a demo</span>
+			<MarketingButton href="/docs/cloud">
+				<span>Documentation</span>
 				<Icon
 					icon={faArrowRight}
 					className="ml-2 text-xs group-hover:translate-x-0.5 transition-transform duration-200"

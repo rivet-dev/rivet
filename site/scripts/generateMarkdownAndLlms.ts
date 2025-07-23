@@ -289,7 +289,9 @@ async function generateMarkdownAndLlms() {
 	
 	// Generate llms.txt (URL index version)
 	const siteUrl = "https://rivet.gg";
-	const docsUrls = pages.map((page) => `${siteUrl}/docs/${page.cleanPath}`);
+	const docsUrls = pages
+		.map((page) => `${siteUrl}/docs/${page.cleanPath}`)
+		.filter((url) => !url.includes('/docs/cloud'));
 	const blogUrls = blogPosts.map((post) => `${siteUrl}/blog/${post}`);
 	const changelogUrls = blogPosts.map((post) => `${siteUrl}/changelog/${post}`);
 	const guideUrls = guides.map((guide) => `${siteUrl}/guides/${guide}`);
@@ -324,12 +326,13 @@ async function generateMarkdownAndLlms() {
 	].join("\n");
 
 	// Generate llms-full.txt (complete version)
+	const filteredPagesForLlmsFull = pages.filter((page) => !page.cleanPath.startsWith('cloud'));
 	const llmsFullTxtContent = [
 		"# Rivet Documentation - Complete",
 		"",
 		"This file contains the complete documentation for Rivet, an open-source alternative to Durable Objects.",
 		"",
-		...pages.map((page) => `## ${page.title}\n\n${page.content}`),
+		...filteredPagesForLlmsFull.map((page) => `## ${page.title}\n\n${page.content}`),
 	].join("\n");
 
 	// Write LLM files to public directory
