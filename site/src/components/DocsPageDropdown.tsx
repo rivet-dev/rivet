@@ -89,7 +89,7 @@ export function DocsPageDropdown({
 
 	const openInClaude = () => {
 		const prompt = generateAIPrompt();
-		const claudeUrl = `https://claude.ai/chat?q=${encodeURIComponent(prompt)}`;
+		const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 		window.open(claudeUrl, "_blank");
 	};
 
