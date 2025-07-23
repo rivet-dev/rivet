@@ -20,9 +20,9 @@ The region an actor is created in can be overridden using region options:
 
 ```typescript client.ts
 import { createClient } from "@rivetkit/actors/client";
-import type { App } from "./src/index";
+import type { registry } from "./src/index";
 
-const client = createClient<App>(/* endpoint */);
+const client = createClient<typeof registry>(/* endpoint */);
 
 // Create actor in a specific region
 const actor = await client.example.get({

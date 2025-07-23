@@ -1481,7 +1481,7 @@ For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/ev
 
 The `onFetch` handler processes HTTP requests sent to your actor. It receives the actor context and a standard `Request` object.
 
-Complete example showing how to implement raw HTTP request handling in actors
+WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
 
 ```typescript
 const httpActor = actor(,
@@ -1519,15 +1519,13 @@ const honoActor = actor(,
 });
 ```
 
-	WebSocket upgrades are not currently supported in `onFetch`. Use `onWebSocket` instead.
+Also see the [raw fetch handler example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-fetch-handler).
 
 	`onFetch` can be used to expose Server-Sent Events from Rivet Actors.
 
 ### `onWebSocket(c, websocket, )`
 
 The `onWebSocket` handler manages WebSocket connections. It receives the actor context, a `WebSocket` object, and the initial `Request`.
-
-Complete example showing how to implement raw WebSocket connection handling in actors
 
 ```typescript
 const websocketActor = actor(,
@@ -1538,6 +1536,8 @@ const websocketActor = actor(,
     },
 });
 ```
+
+Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
 
 ## Accessing Your Handlers
 
@@ -4464,10 +4464,10 @@ Rivet provides optimized documentation formats specifically designed for Large L
 
 ## Available Formats
 
-### LLMs.txt (Condensed)
+### `llms.txt` (Condensed)
 A condensed version of the documentation perfect for quick reference and context-aware AI assistance.
 
-**Access:** [/llms.txt](/llms.txt)
+**Access:** /llms.txt
 
 This format includes:
 - Key concepts and features
@@ -4475,10 +4475,10 @@ This format includes:
 - Summaries of main functionality
 - Optimized for token efficiency
 
-### LLMs-full.txt (Complete)
+### `llms-full.txt` (Complete)
 The complete documentation in a single file, ideal for comprehensive AI assistance and in-depth analysis.
 
-**Access:** [/llms-full.txt](/llms-full.txt)
+**Access:** /llms-full.txt
 
 This format includes:
 - Complete documentation content

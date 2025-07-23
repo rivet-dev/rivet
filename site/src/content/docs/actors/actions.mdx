@@ -39,9 +39,9 @@ Actions can be called in different ways depending on your use case:
 
 ```typescript {{"title":"frontend.ts"}}
 import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
+import type { registry } from "./src/index";
 
-const client = createClient<App>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:8080");
 const counter = await client.counter.getOrCreate();
 const result = await counter.increment(42);
 console.log(result); // The value returned by the action
@@ -96,7 +96,7 @@ Calling actions from the client are async and require an `await`, even if the ac
 
 ### Type Safety
 
-The actor client includes type safety out of the box. When you use `createClient<App>()`, TypeScript automatically infers action parameter and return types:
+The actor client includes type safety out of the box. When you use `createClient<typeof registry>()`, TypeScript automatically infers action parameter and return types:
 
 <CodeGroup>
 
@@ -122,9 +122,9 @@ const registry = setup({
 
 ```typescript {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
+import type { registry } from "./src/index";
 
-const client = createClient<App>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:8080");
 
 // Type-safe client usage
 const counter = await client.counter.get();

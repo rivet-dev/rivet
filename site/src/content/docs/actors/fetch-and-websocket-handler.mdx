@@ -125,6 +125,10 @@ export const websocketActor = actor({
 
 Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
 
+<Note>
+	Connection lifecycle hooks like `onConnect` and `onDisconnect` do not get called when opening WebSockets for `onWebSocket`. This is because `onWebSocket` provides a low-level connection. Use `ws.addEventListener("open")` and `ws.addEventListener("close")` instead.
+</Note>
+
 ## Accessing Your Handlers
 
 There are three ways to access your actor's fetch and WebSocket handlers:

@@ -9,28 +9,110 @@ You'll need to configure CORS when:
 
 ## Registry-Level CORS
 
-Configure CORS directly in your registry setup for simple cases:
+Configure CORS directly in your registry setup for applications that do not require configuring CORS on their own endpoints.
 
-```typescript
-import { setup } from "@rivetkit/actor";
-import counter from "./counter";
+```typescript {{"title":"server.ts"}}
+import { registry } from "./registry";
 
-const registry = setup({
-  use: { counter },
-  cors: { 
-    origin: "https://yourdomain.com",
-    credentials: true 
-  }
+const { client, serve } = registry.createServer({
+	cors: {
+		origin: "https://yourdomain.com",
+	}
 });
+
+serve();
 ```
 
-This approach works well for basic setups but has limitations for complex scenarios.
+### Configuration Options
 
-## Router-Level CORS (Recommended)
+#### `origin`
 
-For production applications, configure CORS at the router level for maximum control:
+`string | string[] | (origin: string) => boolean | string`
+
+Specifies which domains can access your resources:
+
+```typescript {{"title":"server.ts"}}
+// Single domain
+origin: "https://example.com"
+
+// Multiple domains
+origin: ["https://app.com", "https://admin.com"]
+
+// Dynamic validation
+origin: (origin) => {
+  return origin?.endsWith('.example.com') ? origin : false;
+}
+
+// All domains (not recommended for production)
+origin: "*"
+```
+
+#### `allowMethods`
+
+`string[]`
+
+HTTP methods clients are allowed to use:
 
 ```typescript
+allowMethods: ["GET", "POST", "OPTIONS"]  // Common for Rivet
+```
+
+#### `allowHeaders`
+
+`string[]`
+
+Headers that clients can send in requests:
+
+```typescript
+allowHeaders: [
+  "Authorization",           // Your auth headers
+  "Content-Type",           // Standard content type
+  "X-API-Key",              // Custom API key header
+  ...ALLOWED_PUBLIC_HEADERS // Required Rivet headers
+]
+```
+
+#### `credentials`
+
+`boolean`
+
+Whether to allow credentials (cookies, auth headers):
+
+```typescript
+credentials: true  // Required for authentication
+```
+
+<Warning>
+When `credentials: true`, you cannot use `origin: "*"`. Specify exact origins instead.
+</Warning>
+
+#### `maxAge`
+
+`number`
+
+How long browsers cache CORS preflight responses (in seconds):
+
+```typescript
+maxAge: 600  // Cache for 10 minutes
+```
+
+#### `exposeHeaders`
+
+`string[]`
+
+Server headers that browsers can access:
+
+```typescript
+exposeHeaders: ["Content-Length", "X-Request-Id"]
+```
+
+## Router-Level CORS
+
+For applications that need to expose their own routes, configure CORS at the router level:
+
+<CodeGroup>
+
+```typescript {{"title":"Hono"}}
 import { registry } from "./registry";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -46,49 +128,12 @@ app.use("*", cors({
     "Content-Type",
     ...ALLOWED_PUBLIC_HEADERS
   ],
-  allowMethods: ["POST", "GET", "OPTIONS"],
-  exposeHeaders: ["Content-Length"],
-  maxAge: 600,
-  credentials: true,
 }));
 
 serve(app);
 ```
 
-### Required Headers for Rivet
-
-Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
-
-```typescript
-import { ALLOWED_PUBLIC_HEADERS } from "@rivetkit/actor";
-
-// ALLOWED_PUBLIC_HEADERS includes:
-// - "Content-Type"
-// - "User-Agent" 
-// - "X-RivetKit-Query"
-// - "X-RivetKit-Encoding"
-// - "X-RivetKit-Conn-Params"
-// - "X-RivetKit-Actor"
-// - "X-RivetKit-Conn"
-// - "X-RivetKit-Conn-Token"
-
-const corsConfig = {
-  allowHeaders: [
-    "Authorization",           // For your auth tokens
-    ...ALLOWED_PUBLIC_HEADERS  // Required Rivet headers
-  ]
-};
-```
-
-<Warning>
-Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
-</Warning>
-
-## Framework-Specific Examples
-
-### Express.js
-
-```typescript
+```typescript {{"title":"Express"}}
 import express from "express";
 import cors from "cors";
 import { ALLOWED_PUBLIC_HEADERS } from "@rivetkit/actor";
@@ -111,112 +156,28 @@ app.use("/registry", handler);
 app.listen(8080);
 ```
 
-### Elysia
+</CodeGroup>
 
-```typescript
-import { Elysia } from "elysia";
-import { cors } from "@elysiajs/cors";
+### Required Headers for Rivet
+
+Rivet requires specific headers for communication. Always include `ALLOWED_PUBLIC_HEADERS`:
+
+```typescript {{"title":"server.ts"}}
 import { ALLOWED_PUBLIC_HEADERS } from "@rivetkit/actor";
-import { registry } from "./registry";
 
-const { handler } = registry.createServer();
-
-const app = new Elysia()
-  .use(cors({
-    origin: ["http://localhost:3000", "https://myapp.com"],
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-      ...ALLOWED_PUBLIC_HEADERS
-    ],
-    credentials: true,
-  }))
-  .mount("/registry", handler)
-  .listen(8080);
+const corsConfig = {
+  allowHeaders: [
+    "X-Foo-Bar",               // Whatever headers you need to configure
+    ...ALLOWED_PUBLIC_HEADERS  // Required Rivet headers
+  ]
+};
 ```
 
-## Configuration Options
-
-### `origin`
-
-`string | string[] | (origin: string) => boolean | string`
-
-Specifies which domains can access your resources:
-
-```typescript
-// Single domain
-origin: "https://example.com"
-
-// Multiple domains
-origin: ["https://app.com", "https://admin.com"]
-
-// Dynamic validation
-origin: (origin) => {
-  return origin?.endsWith('.example.com') ? origin : false;
-}
-
-// All domains (not recommended for production)
-origin: "*"
-```
-
-### `allowMethods`
-
-`string[]`
-
-HTTP methods clients are allowed to use:
-
-```typescript
-allowMethods: ["GET", "POST", "OPTIONS"]  // Common for Rivet
-```
-
-### `allowHeaders`
-
-`string[]`
-
-Headers that clients can send in requests:
-
-```typescript
-allowHeaders: [
-  "Authorization",           // Your auth headers
-  "Content-Type",           // Standard content type
-  "X-API-Key",              // Custom API key header
-  ...ALLOWED_PUBLIC_HEADERS // Required Rivet headers
-]
-```
-
-### `credentials`
-
-`boolean`
-
-Whether to allow credentials (cookies, auth headers):
-
-```typescript
-credentials: true  // Required for authentication
-```
+These are automatically configured if using `registry.runServer({ cors })`.
 
 <Warning>
-When `credentials: true`, you cannot use `origin: "*"`. Specify exact origins instead.
+Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
 </Warning>
-
-### `maxAge`
-
-`number`
-
-How long browsers cache CORS preflight responses (in seconds):
-
-```typescript
-maxAge: 600  // Cache for 10 minutes
-```
-
-### `exposeHeaders`
-
-`string[]`
-
-Server headers that browsers can access:
-
-```typescript
-exposeHeaders: ["Content-Length", "X-Request-Id"]
-```
 
 ## Development vs Production
 
@@ -268,31 +229,4 @@ const corsConfig = {
 **"Credentials mode mismatch"**
 - Set `credentials: true` in CORS config
 - Cannot use `origin: "*"` with credentials
-
-### Debug CORS Issues
-
-Enable CORS logging to debug issues:
-
-```typescript
-// Log CORS requests in development
-if (process.env.NODE_ENV === "development") {
-  app.use("*", async (c, next) => {
-    console.log("CORS request:", {
-      origin: c.req.header("Origin"),
-      method: c.req.method,
-      headers: Object.fromEntries(c.req.headers.entries())
-    });
-    await next();
-  });
-}
-```
-
-## Best Practices
-
-1. **Use Router-Level CORS**: More flexible than registry-level configuration
-2. **Include ALLOWED_PUBLIC_HEADERS**: Required for Rivet communication
-3. **Specify Exact Origins**: Avoid wildcards in production
-4. **Enable Credentials**: Needed for authentication  
-5. **Cache Preflight Requests**: Use appropriate `maxAge` values
-6. **Environment-Specific Config**: Different settings for dev/prod
 

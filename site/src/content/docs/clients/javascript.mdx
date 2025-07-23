@@ -72,11 +72,11 @@ The Rivet JavaScript client allows you to connect to and interact with actors fr
 
     ```typescript src/client.ts
     import { createClient } from "@rivetkit/actor/client";
-    import type { App } from "../actors/app";
+    import type { registry } from "../actors/app";
 
     async function main() {
       // Replace with your endpoint URL after deployment
-      const client = createClient<App>("http://localhost:8080");
+      const client = createClient<typeof registry>("http://localhost:8080");
 
       // Get or create an actor instance
       const counter = await client.counter.get();

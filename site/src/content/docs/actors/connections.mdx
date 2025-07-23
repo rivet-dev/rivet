@@ -12,9 +12,9 @@ For example:
 
 ```typescript {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
-import type { App } from "./src/index";
+import type { registry } from "./src/index";
 
-const client = createClient<App>("http://localhost:8080");
+const client = createClient<typeof registry>("http://localhost:8080");
 const gameRoom = await client.gameRoom.get({
   params: { authToken: "supersekure" }
 });
