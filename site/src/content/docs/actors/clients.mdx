@@ -1,24 +1,26 @@
+import imgActorActorClient from "./images/actor-actor-client.png";
+import imgExtrnalClient from "./images/external-client.png";
+import imgServerSideClient from "./images/server-side-client.png";
+
 # Actor Clients
 
-Learn how to call actions and connect to actors from client applications
+Learn how to call actions and connect to actors from client applications using Rivet's TypeScript client library.
 
-This guide covers how to connect to and interact with actors from client applications using Rivet's TypeScript client library. Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
+Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) clients.
 
-<Note>
-The client is completely optional. If you prefer to write your own networking logic, you can either:
+Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
 
 - Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
 - Write your own HTTP endpoints and use the client returned from `registry.runServer` (see below)
-</Note>
 
 ## Client Setup
-
-### Creating a Client
 
 There are several ways to create a client for communicating with actors:
 
 <Tabs>
-	<Tab title="Server-side Client">
+	<Tab title="Server-Side Client">
+		<Image src={imgServerSideClient} alt="Server-side client diagram" />
+
 		From your backend server that hosts the registry:
 
 		```typescript {{"title":"server.ts"}}
@@ -39,26 +41,9 @@ There are several ways to create a client for communicating with actors:
 		This client doesn't [require authentication](/docs/general/authentication).
 	</Tab>
 
-	<Tab title="Actor-to-Actor">
-		From within an actor to communicate with other actors:
-
-		```typescript {{"title":"actor.ts"}}
-		const myActor = actor({
-			actions: {
-				callOtherActor: (c) => {
-					const client = c.client<typeof registry>();
-					return await client.otherActor.getOrCreate("my-id").foo();
-				}
-			}
-		});
-		```
-
-		This client doesn't [require authentication](/docs/general/authentication).
-
-		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
-	</Tab>
-
 	<Tab title="External Client">
+		<Image src={imgExtrnalClient} alt="External client diagram" />
+
 		For frontend applications or external services connecting to your Rivet backend:
 
 		```typescript {{"title":"client.ts"}}
@@ -84,18 +69,37 @@ There are several ways to create a client for communicating with actors:
 
 		This client [requires authentication](/docs/general/authentication).
 
-		<Note>
-			Use `import type` when importing the registry type in order to
-			avoid accidentally bundling your backend code.
+		**Important**: Use `import type` when importing the registry type in order to
+		avoid accidentally bundling your backend code.
 
-			```typescript {{"title":"client.ts"}}
-			// ✅ Do this
-			import type { registry } from "./registry"
+		```typescript {{"title":"client.ts"}}
+		// ✅ Do this
+		import type { registry } from "./registry"
 
-			// 🚫 Not this
-			import { registry } from "./registry"
-			```
-		</Note>
+		// 🚫 Not this
+		import { registry } from "./registry"
+		```
+	</Tab>
+
+	<Tab title="Actor-to-Actor Client">
+		<Image src={imgActorActorClient} alt="Actor-to-actor client diagram" />
+
+		From within an actor to communicate with other actors:
+
+		```typescript {{"title":"actor.ts"}}
+		const myActor = actor({
+			actions: {
+				callOtherActor: (c) => {
+					const client = c.client<typeof registry>();
+					return await client.otherActor.getOrCreate("my-id").foo();
+				}
+			}
+		});
+		```
+
+		This client doesn't [require authentication](/docs/general/authentication).
+
+		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 	</Tab>
 </Tabs>
 

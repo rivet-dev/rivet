@@ -49,6 +49,7 @@ import {
 	faInfoSquare,
     faPaintbrush,
     faPalette,
+    faLayerGroup,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -381,6 +382,11 @@ export const sitemap = [
 						title: "Docs for LLMs",
 						href: "/docs/general/docs-for-llms",
 						icon: faSquareBinary,
+					},
+					{
+						title: "System Architecture",
+						href: "/docs/general/system-architecture",
+						icon: faLayerGroup
 					},
 					{
 						title: "More",
