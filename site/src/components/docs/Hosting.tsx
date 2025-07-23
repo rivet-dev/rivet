@@ -3,9 +3,9 @@ import { CardGroup, Card } from '@/components/Card'
 export function Hosting() {
 	return (
 		<>
-			<p>By default, Rivet stores actor state on the local file system. To scale Rivet in production, follow a guide to deploy a hosting provider or integrate a driver:</p>
+			<p>By default, Rivet stores actor state on the local file system. To scale Rivet in production, follow a guide to deploy to a hosting provider or integrate a driver:</p>
 
-			<h3>Hosting Providers</h3>
+			<p><b>Hosting Providers</b></p>
 			<CardGroup>
 				<Card title="Railway" href="/docs/hosting-providers/railway">
 					Deploy Rivet applications with Railway's platform-as-a-service
@@ -18,7 +18,7 @@ export function Hosting() {
 				</Card>
 			</CardGroup>
 
-			<h3>Drivers</h3>
+			<p><b>Drivers</b></p>
 			<CardGroup>
 				<Card title="Redis" href="/docs/drivers/redis">
 					High-performance in-memory data store for production workloads

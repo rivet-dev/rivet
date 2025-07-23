@@ -49,7 +49,7 @@ Choose your preferred web framework:
 import { registry } from "./registry";
 import { Hono } from "hono";
 
-// Start Rivet with memory driver (for development)
+// Start Rivet with file system driver (for development)
 const { client, serve } = registry.createServer();
 
 // Setup Hono app

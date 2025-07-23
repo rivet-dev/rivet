@@ -3,6 +3,7 @@
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'fs';
 import { join } from 'path';
+import { EXAMPLE_METADATA } from './examplesData.mjs';
 
 const REPO_URL = 'https://github.com/rivet-gg/rivetkit.git';
 const BRANCH = '07-09-chore_add_new_examples';
@@ -10,87 +11,6 @@ const TEMP_DIR = '/tmp/rivetkit-examples';
 const TEMP_EXAMPLE_DIR = '/tmp/rivet-example-temp';
 const OUTPUT_DIR = './src/data/examples';
 const OUTPUT_FILE = 'examples.ts';
-
-// Core libraries:
-// - Actors
-// - Workflows
-// - Realtime
-// - Sandboxes
-// - Agents
-//
-// TODO: Durable Workflows
-// TODO: Scheduling
-// TODO: Socket server
-// TODO: AI sandbox
-// TODO: Distributed locks
-//
-// Ideal list:
-// - AI Agent
-// - AI Sandbox
-// - Chat Room
-// - Collaborative Doc (Yjs)
-// - Multiplayer Game
-// - Durable Workflows
-// - Local-First Sync
-// - Multi-Tenant Database
-// - Scheduling
-// - Raw Fetch
-const EXAMPLE_METADATA = {
-  "ai-agent": { 
-    icon: "faRobot", 
-    title: "AI Agent",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "chat-room": { 
-    icon: "faMessage", 
-    title: "Chat Room",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "crdt": { 
-    icon: "faFilePen", 
-    title: "Collab (Yjs)",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "game": { 
-    icon: "faGamepad", 
-    title: "Multiplayer Game",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "sync": { 
-    icon: "faRotate", 
-    title: "Local-First Sync",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "rate": { 
-    icon: "faGaugeHigh", 
-    title: "Rate Limiter",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "database": { 
-    icon: "faDatabase", 
-    title: "Per-User DB",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "sqlite"
-  },
-  "tenant": { 
-    icon: "faBuilding", 
-    title: "Multi-Tenant SaaS",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "stream": { 
-    icon: "faWaveSine", 
-    title: "Stream Processing",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-};
 
 // Ensure output directory exists
 if (!existsSync(OUTPUT_DIR)) {

@@ -12,7 +12,9 @@
 		"prebuild": "yarn gen:navigation && yarn gen:markdown",
 		"gen:navigation": "tsx scripts/generateNavigation.ts",
 		"gen:examples": "node scripts/generateExamples.mjs",
-		"gen:markdown": "tsx scripts/generateMarkdownAndLlms.ts"
+		"gen:markdown": "tsx scripts/generateMarkdownAndLlms.ts",
+		"gen:readme": "node scripts/generateReadme.mjs",
+		"gen": "yarn gen:navigation && yarn gen:examples && yarn gen:markdown && yarn gen:readme"
 	},
 	"browserslist": "defaults, not ie <= 11",
 	"dependencies": {
