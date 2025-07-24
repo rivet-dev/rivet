@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useEffect } from "react";
+import { Newsletter } from "./Newsletter";
 
 const HEADER_HEIGHT = remToPx(6.5);
 // const SCROLL_MARGIN = remToPx(9 /* scroll-mt-header-offset */ - HEADER_HEIGHT);
@@ -30,10 +31,7 @@ function useScrollToActiveLink(currentSection) {
 		if (linkRelativeTop + LINK_MARGIN >= containerRect.height) {
 			// calculate the difference between the bottom of the link and the bottom of the container
 			const bottomDifference =
-				linkRelativeTop +
-				LINK_MARGIN -
-				containerRect.height +
-				linkRect.height;
+				linkRelativeTop + LINK_MARGIN - containerRect.height + linkRect.height;
 			ref.current.scrollBy(0, bottomDifference);
 		}
 		// if the link is above the container, scroll up by the difference in height + the height of the link itself (so it's not at the top)
@@ -51,10 +49,7 @@ function useCurrentSection(tableOfContents = []) {
 	);
 	const getHeadings = useCallback((tableOfContents) => {
 		return tableOfContents
-			.flatMap((node) => [
-				node.id,
-				...node.children.map((child) => child.id),
-			])
+			.flatMap((node) => [node.id, ...node.children.map((child) => child.id)])
 			.map((id) => {
 				const el = document.getElementById(id);
 				if (!el) return null;
@@ -62,8 +57,7 @@ function useCurrentSection(tableOfContents = []) {
 				const style = window.getComputedStyle(el);
 				const scrollMt = Number.parseFloat(style.scrollMarginTop);
 
-				const top =
-					window.scrollY + el.getBoundingClientRect().top - scrollMt;
+				const top = window.scrollY + el.getBoundingClientRect().top - scrollMt;
 				return { id, top };
 			})
 			.filter((x) => x !== null);
@@ -206,6 +200,7 @@ export function DocsTableOfContents({
 			<div className="relative">
 				<div className="relative">
 					<Tree sections={tableOfContents} isActive={isActive} />
+					<Newsletter />
 				</div>
 			</div>
 		</div>

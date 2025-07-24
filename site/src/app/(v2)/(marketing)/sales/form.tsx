@@ -12,8 +12,6 @@ export function SalesForm() {
 
 		const data = Object.fromEntries(formData.entries().toArray());
 
-		console.log(data);
-
 		posthog.capture("survey sent", {
 			$survey_id: "0193928a-4799-0000-8fc4-455382e21359",
 			...data,
@@ -27,8 +25,8 @@ export function SalesForm() {
 				<span className="text-2xl text-white mb-2 block">
 					Thank you for your interest!
 				</span>
-				We will get back to you within the next few days. In the
-				meantime, feel free to explore our{" "}
+				We will get back to you within the next few days. In the meantime, feel
+				free to explore our{" "}
 				<a href="/docs" className="text-[#FF5C00] hover:underline">
 					documentation
 				</a>{" "}
