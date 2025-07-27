@@ -2927,6 +2927,7 @@ const registry = setup(,
 Start a server to run your actors:
 
 ```ts }
+// Run server with default configuration (port 8080)
 registry.runServer();
 ```
 
@@ -3783,36 +3784,7 @@ function CollaborativeEditor() );
 }
 ```
 
-## Client Connection Options
-
-### Basic Client Setup
-
-Create a type-safe client to connect to your backend:
-
-```ts client.ts
-// Create typed client
-const client = createClient("http://localhost:8080");
-
-// Use the counter actor directly
-const counter = client.counter.getOrCreate(["my-counter"]);
-
-// Call actions
-const count = await counter.increment(3);
-console.log("New count:", count);
-
-// Get current state
-const currentCount = await counter.getCount();
-console.log("Current count:", currentCount);
-
-// Listen to real-time events
-const connection = counter.connect();
-connection.on("countChanged", (newCount) => );
-
-// Increment through connection
-await connection.increment(1);
-```
-
-### React Integration
+## React Integration
 
 Use the React hooks for seamless integration:
 
@@ -3862,9 +3834,7 @@ const config = ,
 Update your server to use environment-based configuration:
 
 ```ts server.ts
-const  = registry.createServer(config.rivetkit);
-
-// ... rest of server setup
+registry.runServer(config.rivetkit);
 ```
 
 ### Frontend Environment Variables

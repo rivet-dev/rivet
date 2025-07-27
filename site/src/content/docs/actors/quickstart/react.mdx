@@ -21,6 +21,7 @@ Create your actor registry on the backend:
 import { actor, setup } from "@rivetkit/actor";
 
 export const counter = actor({
+	onAuth: () => {},  // Skip authentication (can be configured later)
 	state: { count: 0 },
 	actions: {
 		increment: (c, amount: number = 1) => {
@@ -45,6 +46,8 @@ Start a server to run your actors:
 
 ```ts {{"title":"backend/server.ts"}}
 import { registry } from "./registry";
+
+// Run server with default configuration (port 8080)
 registry.runServer();
 ```
 
