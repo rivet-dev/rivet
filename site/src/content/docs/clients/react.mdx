@@ -162,6 +162,9 @@ const actor = useActor({
   - `name`: The name of the actor type (string)
   - `key`: Array of strings identifying the specific actor instance
   - `params`: Optional parameters passed to the actor connection
+  - `createWithInput`: Optional input to pass to the actor on creation
+  - `createInRegion`: Optional region to create the actor in if does not exist
+  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
   - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
 
 #### Returns
