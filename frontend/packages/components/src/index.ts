@@ -71,6 +71,7 @@ export * from "./ui/kbd";
 export * from "./ui/checkbox";
 export { default as Filters } from "./ui/filters";
 export * from "./ui/filters";
+export * from "./ui/context-menu";
 export * from "./lib/utils";
 export * from "./lib/filesize";
 export * from "./lib/timing";

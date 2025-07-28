@@ -12,6 +12,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
+import { LogoContextMenu } from "./LogoContextMenu";
 
 interface TextNavItemProps {
 	href: string;
@@ -100,16 +101,18 @@ export function Header({
 					<RivetHeader
 						className={headerStyles}
 						logo={
-							<Link href="/">
-								<Image
-									src={logoUrl.src || logoUrl}
-									width={80}
-									height={24}
-									className="ml-1 w-20"
-									alt="Rivet logo"
-									unoptimized
-								/>
-							</Link>
+							<LogoContextMenu>
+								<Link href="/">
+									<Image
+										src={logoUrl.src || logoUrl}
+										width={80}
+										height={24}
+										className="ml-1 w-20"
+										alt="Rivet logo"
+										unoptimized
+									/>
+								</Link>
+							</LogoContextMenu>
 						}
 						subnav={subnav}
 						support={
@@ -197,16 +200,18 @@ export function Header({
 				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
 			)}
 			logo={
-				<Link href="/">
-					<Image
-						src={logoUrl.src || logoUrl}
-						width={80}
-						height={24}
-						className="ml-1 w-20"
-						alt="Rivet logo"
-						unoptimized
-					/>
-				</Link>
+				<LogoContextMenu>
+					<Link href="/">
+						<Image
+							src={logoUrl.src || logoUrl}
+							width={80}
+							height={24}
+							className="ml-1 w-20"
+							alt="Rivet logo"
+							unoptimized
+						/>
+					</Link>
+				</LogoContextMenu>
 			}
 			subnav={subnav}
 			support={
