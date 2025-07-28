@@ -27,11 +27,11 @@ export function CollapsibleSidebarItem({
 	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
 	const isCurrent = false; // Never highlight collapsible sections themselves
 	const [shouldAnimate, setShouldAnimate] = useState(false);
-	
+
 	const itemId = useMemo(() => {
 		return parentPath ? `${parentPath}.${item.title}` : item.title;
 	}, [parentPath, item.title]);
-	
+
 	// Determine initial open state
 	const getInitialState = () => {
 		try {
@@ -48,10 +48,11 @@ export function CollapsibleSidebarItem({
 		// If no saved state, open if has active child
 		return hasActiveChild;
 	};
-	
+
 	const [isItemOpen, setIsItemOpen] = useState(getInitialState);
-	
+
 	// Sync with global state after mount
+	// biome-ignore lint/correctness/useExhaustiveDependencies: it's okay, this runs only once
 	useEffect(() => {
 		const globalIsOpen = isOpen(itemId);
 		if (globalIsOpen !== isItemOpen) {
@@ -59,8 +60,8 @@ export function CollapsibleSidebarItem({
 		}
 		// Enable animations after initial mount
 		setShouldAnimate(true);
-	}, [itemId, isItemOpen, isOpen, setIsOpen]);
-	
+	}, []);
+
 	// Update local state when global state changes
 	useEffect(() => {
 		const globalIsOpen = isOpen(itemId);
@@ -68,16 +69,20 @@ export function CollapsibleSidebarItem({
 			setIsItemOpen(globalIsOpen);
 		}
 	}, [isOpen, itemId, isItemOpen, shouldAnimate]);
-	
+
 	const getPaddingClass = (level: number) => {
 		switch (level) {
-			case 0: return "pl-3 pr-3";
-			case 1: return "pl-6 pr-3";
-			case 2: return "pl-9 pr-3";
-			default: return "pl-12 pr-3";
+			case 0:
+				return "pl-3 pr-3";
+			case 1:
+				return "pl-6 pr-3";
+			case 2:
+				return "pl-9 pr-3";
+			default:
+				return "pl-12 pr-3";
 		}
 	};
-	
+
 	return (
 		<div>
 			<button
@@ -107,7 +112,9 @@ export function CollapsibleSidebarItem({
 						closed: { rotateZ: "-90deg" },
 					}}
 					initial={isItemOpen ? "open" : "closed"}
-					animate={shouldAnimate ? (isItemOpen ? "open" : "closed") : false}
+					animate={
+						shouldAnimate ? (isItemOpen ? "open" : "closed") : false
+					}
 					className="ml-2 inline-block flex-shrink-0 opacity-70"
 				>
 					<Icon icon={faChevronDown} className="w-3 h-3" />
@@ -120,7 +127,9 @@ export function CollapsibleSidebarItem({
 					closed: { height: 0, opacity: 0 },
 				}}
 				initial={isItemOpen ? "open" : "closed"}
-				animate={shouldAnimate ? (isItemOpen ? "open" : "closed") : false}
+				animate={
+					shouldAnimate ? (isItemOpen ? "open" : "closed") : false
+				}
 				transition={{
 					opacity: isItemOpen ? { delay: 0.05 } : {},
 					height: !isItemOpen ? { delay: 0.05 } : {},
@@ -135,7 +144,10 @@ export function CollapsibleSidebarItem({
 
 function findActiveItem(pages: SidebarItem[], href: string) {
 	for (const page of pages) {
-		if ("href" in page && normalizePath(page.href) === normalizePath(href)) {
+		if (
+			"href" in page &&
+			normalizePath(page.href) === normalizePath(href)
+		) {
 			return page;
 		}
 		if ("pages" in page) {

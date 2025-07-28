@@ -1,11 +1,12 @@
 import { Header } from "@/components/v2/Header";
-import { findPageForHref } from "@/lib/sitemap";
+import { findActiveTab, findPageForHref, Sitemap } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
 import { Button } from "@rivet-gg/components";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { buildFullPath, buildPathComponents } from "./util";
 import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
+import { Tree } from "@/components/DocsNavigation";
 
 function Subnav({ path }: { path: string[] }) {
 	const fullPath = buildFullPath(path);
@@ -37,9 +38,24 @@ function Subnav({ path }: { path: string[] }) {
 
 export default function Layout({ params: { section, page }, children }) {
 	const path = buildPathComponents(section, page);
+	const fullPath = buildFullPath(path);
+	const foundTab = findActiveTab(fullPath, sitemap as Sitemap);
+
 	return (
 		<NavigationStateProvider>
-			<Header active="docs" subnav={<Subnav path={path} />} variant="full-width" />
+			<Header
+				active="docs"
+				subnav={<Subnav path={path} />}
+				variant="full-width"
+				mobileSidebar={
+					foundTab?.tab.sidebar ? (
+						<Tree
+							className="mt-2 mb-4"
+							pages={foundTab.tab.sidebar}
+						/>
+					) : null
+				}
+			/>
 			<div className="w-full">
 				<div
 					className="md:grid-cols-docs-no-sidebar lg:grid-cols-docs mx-auto flex w-full flex-col justify-center md:grid min-h-content"

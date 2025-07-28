@@ -1,7 +1,5 @@
 "use client";
 import { ActiveLink } from "@/components/ActiveLink";
-import { Tree } from "@/components/DocsNavigation";
-import { sitemap } from "@/sitemap/mod";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
 import { cn } from "@rivet-gg/components";
 import { Header as RivetHeader } from "@rivet-gg/components/header";
@@ -50,14 +48,14 @@ function TextNavItem({
 interface HeaderProps {
 	active?: "product" | "docs" | "blog" | "cloud" | "pricing" | "solutions";
 	subnav?: ReactNode;
-	mobileBreadcrumbs?: ReactNode;
+	mobileSidebar?: ReactNode;
 	variant?: "floating" | "full-width";
 }
 
 export function Header({
 	active,
 	subnav,
-	mobileBreadcrumbs,
+	mobileSidebar,
 	variant = "full-width",
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
@@ -156,7 +154,9 @@ export function Header({
 								</Link>
 							</div>
 						}
-						mobileBreadcrumbs={<DocsMobileNavigation />}
+						mobileBreadcrumbs={
+							<DocsMobileNavigation tree={mobileSidebar} />
+						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
 								<TextNavItem
@@ -246,7 +246,7 @@ export function Header({
 					</Link>
 				</div>
 			}
-			mobileBreadcrumbs={<DocsMobileNavigation />}
+			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
 					<TextNavItem
@@ -273,11 +273,11 @@ export function Header({
 	);
 }
 
-function DocsMobileNavigation() {
+function DocsMobileNavigation({ tree }) {
 	const pathname = usePathname() || "";
 
 	const docsLinks = [
-		{ href: "/docs", label: "Actors" },
+		{ href: "/docs/actors", label: "Actors" },
 		{ href: "/docs/cloud", label: "Cloud" },
 	];
 
@@ -289,12 +289,14 @@ function DocsMobileNavigation() {
 	return (
 		<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 			{/* Docs section */}
-			<div className="text-white/40">Documentation</div>
-			<div className="border-l border-white/20">
+			<div className="text-foreground">Documentation</div>
+			<div className="">
 				{docsLinks.map(({ href, label }) => (
-					<div key={href} className="ml-4">
+					<div key={href} className="ml-2">
 						<RivetHeader.NavItem asChild>
-							<ActiveLink href={href}>{label}</ActiveLink>
+							<ActiveLink includeChildren tree={tree} href={href}>
+								{label}
+							</ActiveLink>
 						</RivetHeader.NavItem>
 					</div>
 				))}

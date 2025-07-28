@@ -5,57 +5,57 @@
       "pages": [
         {
           "title": "actors.list",
-          "href": "/docs/api/actors/list",
+          "href": "/docs/cloud/api/actors/list",
           "sortingKey": "/actors get"
         },
         {
           "title": "actors.create",
-          "href": "/docs/api/actors/create",
+          "href": "/docs/cloud/api/actors/create",
           "sortingKey": "/actors post"
         },
         {
           "title": "actors.logs.get",
-          "href": "/docs/api/actors/logs/get",
+          "href": "/docs/cloud/api/actors/logs/get",
           "sortingKey": "/actors/logs get"
         },
         {
           "title": "actors.logs.export",
-          "href": "/docs/api/actors/logs/export",
+          "href": "/docs/cloud/api/actors/logs/export",
           "sortingKey": "/actors/logs/export post"
         },
         {
           "title": "actors.query",
-          "href": "/docs/api/actors/query",
+          "href": "/docs/cloud/api/actors/query",
           "sortingKey": "/actors/query get"
         },
         {
           "title": "actors.upgradeAll",
-          "href": "/docs/api/actors/upgrade-all",
+          "href": "/docs/cloud/api/actors/upgrade-all",
           "sortingKey": "/actors/upgrade post"
         },
         {
           "title": "actors.usage",
-          "href": "/docs/api/actors/usage",
+          "href": "/docs/cloud/api/actors/usage",
           "sortingKey": "/actors/usage get"
         },
         {
           "title": "actors.destroy",
-          "href": "/docs/api/actors/destroy",
+          "href": "/docs/cloud/api/actors/destroy",
           "sortingKey": "/actors/{actor} delete"
         },
         {
           "title": "actors.get",
-          "href": "/docs/api/actors/get",
+          "href": "/docs/cloud/api/actors/get",
           "sortingKey": "/actors/{actor} get"
         },
         {
           "title": "actors.metrics.get",
-          "href": "/docs/api/actors/metrics/get",
+          "href": "/docs/cloud/api/actors/metrics/get",
           "sortingKey": "/actors/{actor}/metrics/history get"
         },
         {
           "title": "actors.upgrade",
-          "href": "/docs/api/actors/upgrade",
+          "href": "/docs/cloud/api/actors/upgrade",
           "sortingKey": "/actors/{actor}/upgrade post"
         }
       ]
@@ -65,27 +65,27 @@
       "pages": [
         {
           "title": "builds.list",
-          "href": "/docs/api/builds/list",
+          "href": "/docs/cloud/api/builds/list",
           "sortingKey": "/builds get"
         },
         {
           "title": "builds.prepare",
-          "href": "/docs/api/builds/prepare",
+          "href": "/docs/cloud/api/builds/prepare",
           "sortingKey": "/builds/prepare post"
         },
         {
           "title": "builds.get",
-          "href": "/docs/api/builds/get",
+          "href": "/docs/cloud/api/builds/get",
           "sortingKey": "/builds/{build} get"
         },
         {
           "title": "builds.complete",
-          "href": "/docs/api/builds/complete",
+          "href": "/docs/cloud/api/builds/complete",
           "sortingKey": "/builds/{build}/complete post"
         },
         {
           "title": "builds.patchTags",
-          "href": "/docs/api/builds/patch-tags",
+          "href": "/docs/cloud/api/builds/patch-tags",
           "sortingKey": "/builds/{build}/tags patch"
         }
       ]
@@ -95,12 +95,12 @@
       "pages": [
         {
           "title": "regions.list",
-          "href": "/docs/api/regions/list",
+          "href": "/docs/cloud/api/regions/list",
           "sortingKey": "/regions get"
         },
         {
           "title": "regions.recommend",
-          "href": "/docs/api/regions/recommend",
+          "href": "/docs/cloud/api/regions/recommend",
           "sortingKey": "/regions/recommend get"
         }
       ]
@@ -110,22 +110,22 @@
       "pages": [
         {
           "title": "routes.list",
-          "href": "/docs/api/routes/list",
+          "href": "/docs/cloud/api/routes/list",
           "sortingKey": "/routes get"
         },
         {
           "title": "routes.history",
-          "href": "/docs/api/routes/history",
+          "href": "/docs/cloud/api/routes/history",
           "sortingKey": "/routes/history get"
         },
         {
           "title": "routes.delete",
-          "href": "/docs/api/routes/delete",
+          "href": "/docs/cloud/api/routes/delete",
           "sortingKey": "/routes/{id} delete"
         },
         {
           "title": "routes.update",
-          "href": "/docs/api/routes/update",
+          "href": "/docs/cloud/api/routes/update",
           "sortingKey": "/routes/{id} put"
         }
       ]

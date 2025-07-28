@@ -32,8 +32,7 @@ function createParamsForFile(section, file): Param {
 	const step2 = step1.replace(".mdx", "");
 	const step3 = step2.split("/");
 	const step4 = step3.filter((x) => x.length > 0);
-	
-	
+
 	return {
 		section,
 		page: step4,
@@ -96,7 +95,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 	const fullPath = buildFullPath(path);
 	const foundTab = findActiveTab(fullPath, sitemap as Sitemap);
 	const parentPage = foundTab?.page.parent;
-	
+
 	// Create markdown path for the dropdown (remove .mdx extension and handle index files)
 	const markdownPath = componentSourcePath
 		.replace(/\.mdx$/, "")
@@ -122,7 +121,10 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 								/>
 							</div>
 						</div>
-						<Prose as="article" className="max-w-prose lg:max-w-prose mx-auto">
+						<Prose
+							as="article"
+							className="max-w-prose lg:max-w-prose mx-auto"
+						>
 							{parentPage && (
 								<div className="eyebrow h-5 text-primary text-sm font-semibold">
 									{parentPage.title}
@@ -162,7 +164,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 
 export async function generateStaticParams() {
 	const staticParams: Param[] = [];
-	
+
 	for (const section of VALID_SECTIONS) {
 		const dir = path.join(process.cwd(), "src", "content", section);
 

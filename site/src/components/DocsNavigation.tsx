@@ -2,7 +2,7 @@ import { ActiveLink } from "@/components/ActiveLink";
 import { CollapsibleSidebarItem } from "@/components/CollapsibleSidebarItem";
 import { DynamicNavWrapper } from "@/components/DynamicNavWrapper";
 import routes from "@/generated/routes.json";
-import type { SidebarItem, SidebarSection } from "@/lib/sitemap";
+import type { SidebarItem } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faArrowUpRight } from "@rivet-gg/icons";
 import clsx from "clsx";
@@ -22,16 +22,28 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 		"pages" in item &&
 		item.collapsible
 	) {
-		const itemPath = parentPath ? `${parentPath}.${item.title}` : item.title;
+		const itemPath = parentPath
+			? `${parentPath}.${item.title}`
+			: item.title;
 		return (
-			<CollapsibleSidebarItem item={item} level={level} parentPath={parentPath}>
-				<Tree pages={item.pages} level={level + 1} parentPath={itemPath} />
+			<CollapsibleSidebarItem
+				item={item}
+				level={level}
+				parentPath={parentPath}
+			>
+				<Tree
+					pages={item.pages}
+					level={level + 1}
+					parentPath={itemPath}
+				/>
 			</CollapsibleSidebarItem>
 		);
 	}
 
 	if ("title" in item && "pages" in item) {
-		const itemPath = parentPath ? `${parentPath}.${item.title}` : item.title;
+		const itemPath = parentPath
+			? `${parentPath}.${item.title}`
+			: item.title;
 		return (
 			<div>
 				<p
@@ -45,7 +57,11 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 					) : null}
 					<span className="truncate"> {item.title}</span>
 				</p>
-				<Tree pages={item.pages} level={level + 1} parentPath={itemPath} />
+				<Tree
+					pages={item.pages}
+					level={level + 1}
+					parentPath={itemPath}
+				/>
 			</div>
 		);
 	}
@@ -72,7 +88,12 @@ interface TreeProps {
 	parentPath?: string;
 }
 
-export function Tree({ pages, className, level = 0, parentPath = "" }: TreeProps) {
+export function Tree({
+	pages,
+	className,
+	level = 0,
+	parentPath = "",
+}: TreeProps) {
 	return (
 		<ul className={cn(className)}>
 			{pages.map((item, index) => (
@@ -80,7 +101,12 @@ export function Tree({ pages, className, level = 0, parentPath = "" }: TreeProps
 					// biome-ignore lint/suspicious/noArrayIndexKey: FIXME: used only for static content
 					key={index}
 				>
-					<TreeItem index={index} item={item} level={level} parentPath={parentPath} />
+					<TreeItem
+						index={index}
+						item={item}
+						level={level}
+						parentPath={parentPath}
+					/>
 				</li>
 			))}
 		</ul>
