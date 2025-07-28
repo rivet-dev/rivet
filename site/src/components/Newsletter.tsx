@@ -17,6 +17,10 @@ export function Newsletter() {
 			$survey_id: "01983e70-b743-0000-e4a7-07ce220da177",
 			...data,
 		});
+
+		posthog.setPersonProperties({
+			email: Object.values(data)[0],
+		});
 		setIsSubmitted(true);
 
 		const form = event.currentTarget;
