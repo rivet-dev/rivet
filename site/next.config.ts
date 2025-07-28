@@ -24,13 +24,25 @@ const nextConfig = {
 	},
 	async redirects() {
 		return [
+			// Discord redirect
+			{
+				source: '/discord',
+				destination: 'https://discord.gg/aXYfyNxYVn',
+				permanent: false,
+			},
+			{
+				source: '/discord/',
+				destination: 'https://discord.gg/aXYfyNxYVn',
+				permanent: false,
+			},
+
 			// Convenience Redirects
 			{
 				source: '/docs',
 				destination: '/docs/actors',
 				permanent: false,
 			},
-			
+
 			// Redirects for moved Cloud docs
 			{
 				source: '/docs/actors-low-level',
@@ -165,6 +177,97 @@ const nextConfig = {
 			{
 				source: '/docs/container-runtime',
 				destination: '/docs/cloud/containers',
+				permanent: false,
+			},
+
+			// Additional redirects for missing pages from CSV
+			{
+				source: '/docs/general/authentication',
+				destination: '/docs/actors/authentication',
+				permanent: false,
+			},
+			{
+				source: '/docs/general/authentication/',
+				destination: '/docs/actors/authentication',
+				permanent: false,
+			},
+			{
+				source: '/docs/general/testing',
+				destination: '/docs/actors/testing',
+				permanent: false,
+			},
+			{
+				source: '/docs/general/testing/',
+				destination: '/docs/actors/testing',
+				permanent: false,
+			},
+			{
+				source: '/docs/actors/communicating-with-actors',
+				destination: '/docs/actors/communicating-between-actors',
+				permanent: false,
+			},
+			{
+				source: '/docs/actors/communicating-with-actors/',
+				destination: '/docs/actors/communicating-between-actors',
+				permanent: false,
+			},
+			{
+				source: '/actors/communicating-with-actors',
+				destination: '/docs/actors/communicating-between-actors',
+				permanent: false,
+			},
+			{
+				source: '/actors/communicating-with-actors/',
+				destination: '/docs/actors/communicating-between-actors',
+				permanent: false,
+			},
+			{
+				source: '/clients/javascript',
+				destination: '/docs/clients/javascript',
+				permanent: false,
+			},
+			{
+				source: '/clients/javascript/',
+				destination: '/docs/clients/javascript',
+				permanent: false,
+			},
+
+			// Handle talk-to-an-engineer typo in CSV
+			{
+				source: '/talk-to-an-engineer%20/',
+				destination: '/talk-to-an-engineer',
+				permanent: false,
+			},
+
+			// Handle specific API variants without trailing slash that may not be caught by :slug* pattern
+			{
+				source: '/docs/api/regions/list',
+				destination: '/docs/cloud/api/regions/list',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/actors/create',
+				destination: '/docs/cloud/api/actors/create',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/actors/upgrade-all',
+				destination: '/docs/cloud/api/actors/upgrade-all',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/actors/upgrade',
+				destination: '/docs/cloud/api/actors/upgrade',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/actors/destroy',
+				destination: '/docs/cloud/api/actors/destroy',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/routes/update',
+				destination: '/docs/cloud/api/routes/update',
 				permanent: false,
 			},
 		];
