@@ -47,7 +47,7 @@ const result = await counter.increment(42);
 console.log(result); // The value returned by the action
 ```
 
-Learn more about [communicating with actors from the frontend](/docs/actors/communicating-with-actors).
+Learn more about [communicating with actors from the frontend](/docs/actors/communicating-between-actors).
 
 </Tab>
 <Tab title="Backend (registry.runServer)">
@@ -67,7 +67,7 @@ const result = await counter.increment(42);
 console.log(result);
 ```
 
-Learn more about [communicating with actors from the backend](/docs/actors/communicating-with-actors).
+Learn more about [communicating with actors from the backend](/docs/actors/communicating-between-actors).
 
 </Tab>
 <Tab title="Actor-to-Actor (c.client())">
@@ -232,7 +232,7 @@ const counter = actor({
 
 By default, actors' actions are only accessible from your server-side client.
 
-In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/general/authentication). Read more about the [types of clients](/docs/actors/clients)
+In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/actors/authentication). Read more about the [types of clients](/docs/actors/clients)
 
 ## Streaming Return Data
 

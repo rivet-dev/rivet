@@ -141,7 +141,7 @@ async function OtherArticles({ slug }) {
 				.slice(0, 3)
 				.map((article) => (
 					<li key={article.slug} className="py-1">
-						<Link href={`/blog/${article.slug}`}>
+						<Link href={`/changelog/${article.slug}`}>
 							{article.title}
 						</Link>
 					</li>

@@ -26,7 +26,7 @@ function Article({
 	image,
 	category,
 }) {
-	const href = `/blog/${slug}`;
+	const href = category.id === "changelog" ? `/changelog/${slug}` : `/blog/${slug}`;
 	return (
 		<Link href={href} className="size-full">
 			<article className="bg-card hover:border-primary flex size-full flex-col items-start justify-between rounded-md border p-4 transition-colors">

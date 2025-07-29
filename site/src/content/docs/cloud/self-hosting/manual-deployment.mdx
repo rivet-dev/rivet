@@ -2,12 +2,12 @@ import Link from 'next/link';
 
 # Manual Deployment
 
-Manual deployment of Rivet is meant for advanced use cases. For a simpler solution, try <Link href='/docs/self-hosting/docker-compose'>our Docker Compose</Link>.
+Manual deployment of Rivet is meant for advanced use cases. For a simpler solution, try <Link href='/docs/cloud/self-hosting/docker-compose'>our Docker Compose</Link>.
 
 <Tip>
 	**Get started faster with a single container**: If you're deploying Rivet on a single machine or just want to try it, Rivet
 	can be started with a single `docker run` command. See [Single Container
-	Deployments](/docs/self-hosting/single-container) for more information.
+	Deployments](/docs/cloud/self-hosting/single-container) for more information.
 </Tip>
 
 ## Prerequisites
@@ -40,7 +40,7 @@ Edge server:
    - <Link href='https://docs.nats.io/nats-concepts/what-is-nats'>NATS</Link>
    - <Link href='https://vector.dev/docs/setup/installation/'>Vector</Link>
 
-2. Setup the <Link href='/docs/self-hosting/server-config'>Rivet server config</Link> with your existing components:
+2. Setup the <Link href='/docs/cloud/self-hosting/server-config'>Rivet server config</Link> with your existing components:
 
    ```yaml {{ "file": "rivet.yaml" }}
    server:
@@ -101,7 +101,7 @@ Once running, you can visit the dashboard at <Link href='http://localhost:8080'>
    This guide assumes you already have <Link href='https://apple.github.io/foundationdb/getting-started-linux.html'>FoundationDB</Link> running on
    the edge.
 
-2. Setup the <Link href='/docs/self-hosting/client-config'>Rivet client config</Link>:
+2. Setup the <Link href='/docs/cloud/self-hosting/client-config'>Rivet client config</Link>:
 
    ```yaml {{ "file": "rivet.yaml" }}
    client:

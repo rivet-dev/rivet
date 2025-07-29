@@ -11,10 +11,12 @@ import {
 	faCodePullRequest,
 	faCoin,
 	faDatabase,
+	faDocker,
 	faDownload,
 	faFingerprint,
 	faFloppyDisk,
 	faFunction,
+	faGear,
 	faGlobe,
 	faKey,
 	faLeaf,
@@ -28,6 +30,7 @@ import {
 	faRust,
 	faServer,
 	faShareNodes,
+	faSliders,
 	faSquareInfo,
 	faSquareSliders,
 	faSquareTerminal,
@@ -47,9 +50,9 @@ import {
 	faSitemap,
 	faScrewdriverWrench,
 	faInfoSquare,
-    faPaintbrush,
-    faPalette,
-    faLayerGroup,
+	faPaintbrush,
+	faPalette,
+	faLayerGroup,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -526,6 +529,46 @@ export const sitemap = [
 			//		},
 			//	],
 			//},
+			{
+				title: "Self-Hosting",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/cloud/self-hosting",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Single Container",
+						href: "/docs/cloud/self-hosting/single-container",
+						icon: faDocker,
+					},
+					{
+						title: "Docker Compose",
+						href: "/docs/cloud/self-hosting/docker-compose",
+						icon: faDocker,
+					},
+					{
+						title: "Manual Deployment",
+						href: "/docs/cloud/self-hosting/manual-deployment",
+						icon: faGear,
+					},
+					{
+						title: "Client Config",
+						href: "/docs/cloud/self-hosting/client-config",
+						icon: faSliders,
+					},
+					{
+						title: "Server Config",
+						href: "/docs/cloud/self-hosting/server-config",
+						icon: faSliders,
+					},
+					{
+						title: "Networking",
+						href: "/docs/cloud/self-hosting/network-modes",
+						icon: faNetworkWired,
+					},
+				],
+			},
 			{
 				title: "Advanced",
 				pages: [

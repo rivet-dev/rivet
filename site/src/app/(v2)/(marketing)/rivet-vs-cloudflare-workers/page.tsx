@@ -898,7 +898,7 @@ const MigrationSection = () => {
 				</p>
 				<div className="mt-6">
 					<Link
-						href="/talk-to-an-engineer "
+						href="/talk-to-an-engineer"
 						className="inline-flex items-center px-5 py-2.5 bg-white text-black rounded-md hover:bg-white/90 transition-colors no-underline"
 					>
 						Talk to an engineer
