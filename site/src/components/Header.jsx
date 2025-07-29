@@ -209,7 +209,7 @@ export const Header = forwardRef(function Header(
 						{/* Social icons */}
 						{/* <div className='flex gap-1.5'> */}
 						{[
-							[faDiscord, "/discord"],
+							[faDiscord, "https://rivet.gg/discord"],
 							[faGithub, "https://github.com/rivet-gg/rivet"],
 						].map(([icon, href]) => (
 							<Link

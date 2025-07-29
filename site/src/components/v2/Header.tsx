@@ -121,7 +121,7 @@ export function Header({
 									</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
-									<Link href="/discord">Discord</Link>
+									<Link href="https://rivet.gg/discord">Discord</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
 									<Link href="/support">Support</Link>
@@ -136,7 +136,7 @@ export function Header({
 									className="p-2 mr-4"
 								>
 									<Link
-										href="/discord"
+										href="https://rivet.gg/discord"
 										className="text-white/90"
 									>
 										<Icon
@@ -233,7 +233,7 @@ export function Header({
 						<HeaderSearch />
 					</div>
 					<RivetHeader.NavItem asChild className="p-2 mr-4">
-						<Link href="/discord" className="text-white/90">
+						<Link href="https://rivet.gg/discord" className="text-white/90">
 							<Icon icon={faDiscord} className="drop-shadow-md" />
 						</Link>
 					</RivetHeader.NavItem>

@@ -24,8 +24,7 @@ const nextConfig = {
 	},
 	async redirects() {
 		return [
-			// NOTE: Redirects don't work with output: "export" 
-			// Static HTML redirect files are created in public/ instead
+			// Next.js redirects for Cloudflare deployment
 
 			// Convenience Redirects
 			{
@@ -40,8 +39,7 @@ const nextConfig = {
 				destination: '/docs/cloud/actors',
 				permanent: false,
 			},
-			// These redirects work in dev but not in static export
-			// Static HTML files created in public/ instead
+			// Redirects for moved Cloud docs
 			{
 				source: '/docs/hub',
 				destination: '/docs/cloud/hub',
@@ -170,12 +168,6 @@ const nextConfig = {
 				permanent: false,
 			},
 
-			// Handle talk-to-an-engineer typo in CSV
-			{
-				source: '/talk-to-an-engineer%20/',
-				destination: '/talk-to-an-engineer',
-				permanent: false,
-			},
 
 			// Handle specific API variants without trailing slash that may not be caught by :slug* pattern
 			{
@@ -208,6 +200,48 @@ const nextConfig = {
 				destination: '/docs/cloud/api/routes/update',
 				permanent: false,
 			},
+
+			// Additional missing API endpoints
+			{
+				source: '/docs/api/actors/get',
+				destination: '/docs/cloud/api/actors/get',
+				permanent: false,
+			},
+			{
+				source: '/docs/api/actors/list',
+				destination: '/docs/cloud/api/actors/list',
+				permanent: false,
+			},
+			{
+				source: '/docs/api',
+				destination: '/docs/cloud/api',
+				permanent: false,
+			},
+
+			// Missing documentation pages
+			{
+				source: '/docs/functions',
+				destination: '/docs/cloud/functions',
+				permanent: false,
+			},
+			{
+				source: '/docs/containers',
+				destination: '/docs/cloud/containers',
+				permanent: false,
+			},
+			{
+				source: '/docs/durability',
+				destination: '/docs/cloud/durability',
+				permanent: false,
+			},
+
+			// Discord redirect
+			{
+				source: '/discord',
+				destination: 'https://discord.gg/aXYfyNxYVn',
+				permanent: false,
+			},
+
 		];
 	},
 	webpack: (config) => {
