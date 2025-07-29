@@ -24,17 +24,8 @@ const nextConfig = {
 	},
 	async redirects() {
 		return [
-			// Discord redirect
-			{
-				source: '/discord',
-				destination: 'https://discord.gg/aXYfyNxYVn',
-				permanent: false,
-			},
-			{
-				source: '/discord/',
-				destination: 'https://discord.gg/aXYfyNxYVn',
-				permanent: false,
-			},
+			// NOTE: Redirects don't work with output: "export" 
+			// Static HTML redirect files are created in public/ instead
 
 			// Convenience Redirects
 			{
@@ -43,67 +34,14 @@ const nextConfig = {
 				permanent: false,
 			},
 
-			// Redirects for moved Cloud docs
+			// Redirects for moved Cloud docs  
 			{
 				source: '/docs/actors-low-level',
 				destination: '/docs/cloud/actors',
 				permanent: false,
 			},
-			{
-				source: '/docs/api',
-				destination: '/docs/cloud/api',
-				permanent: false,
-			},
-			{
-				source: '/docs/api/:slug*',
-				destination: '/docs/cloud/api/:slug*',
-				permanent: false,
-			},
-			{
-				source: '/docs/cli',
-				destination: '/docs/cloud/cli',
-				permanent: false,
-			},
-			{
-				source: '/docs/config',
-				destination: '/docs/cloud/config',
-				permanent: false,
-			},
-			{
-				source: '/docs/containers',
-				destination: '/docs/cloud/containers',
-				permanent: false,
-			},
-			{
-				source: '/docs/continuous-delivery',
-				destination: '/docs/cloud/continuous-delivery',
-				permanent: false,
-			},
-			{
-				source: '/docs/durability',
-				destination: '/docs/cloud/durability',
-				permanent: false,
-			},
-			{
-				source: '/docs/edge',
-				destination: '/docs/cloud/edge',
-				permanent: false,
-			},
-			{
-				source: '/docs/environment-variables',
-				destination: '/docs/cloud/environment-variables',
-				permanent: false,
-			},
-			{
-				source: '/docs/faq',
-				destination: '/docs/cloud/faq',
-				permanent: false,
-			},
-			{
-				source: '/docs/functions',
-				destination: '/docs/cloud/functions',
-				permanent: false,
-			},
+			// These redirects work in dev but not in static export
+			// Static HTML files created in public/ instead
 			{
 				source: '/docs/hub',
 				destination: '/docs/cloud/hub',
