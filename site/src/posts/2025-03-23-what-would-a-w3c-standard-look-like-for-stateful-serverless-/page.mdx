@@ -22,7 +22,7 @@ This specification is intended as step 1 to start the conversation about what is
 
 ## What Is Stateful Serverless?
 
-Unless you're deep in to <Link href="https://developers.cloudflare.com/durable-objects/" target="_blank">Cloudflare Durable Objects</Link> or <Link href="https://rivet.gg/docs/javascript-runtime" target="_blank">Rivet Actors</Link>, there's a good chance you've never heard of "stateful serverless."
+Unless you're deep in to <Link href="https://developers.cloudflare.com/durable-objects/" target="_blank">Cloudflare Durable Objects</Link> or <Link href="https://rivet.gg/docs/cloud/actors" target="_blank">Rivet Actors</Link>, there's a good chance you've never heard of "stateful serverless."
 
 **Stateful serverless** allows serverless functions to maintain state across multiple invocations. They're very similar to **Web Workers (specifically `SharedWorker`) on the server** and share characteristics with the **actor model**. The most popular implementation of this today is <Link href="https://developers.cloudflare.com/durable-objects/" target="_blank">Durable Objects</Link>.
 
@@ -164,9 +164,9 @@ Purely theorizing: a standard for stateful serverless might provide the foundati
 
 I'm the founder of Rivet and have a vested interest in seeing stateful serverless become a standard. Rivet provides an open-source stateful serverless platform that can be easily self-hosted.
 
-We also provide a handful of features in our runtime that don't make sense to be part of a standard, since the best W3C standards build on existing web standards: [Docker containers for non-JavaScript applications](https://rivet.gg/docs/container-runtime), [HTTP, UDP, and TCP support](https://rivet.gg/docs/networking), [advanced lifecycle management](https://rivet.gg/docs/durability), [actor tagging](https://rivet.gg/docs/api/actors/create) for advanced multi-tenant applications, [advanced control over actor upgrades](https://rivet.gg/docs/api/actors/upgrade-all) for companies with specific use cases, [fine-grained control over where your actor is running](https://rivet.gg/docs/api/regions/list), and a developer-friendly REST API for managing Rivet Actors.
+We also provide a handful of features in our runtime that don't make sense to be part of a standard, since the best W3C standards build on existing web standards: [Docker containers for non-JavaScript applications](https://rivet.gg/docs/cloud/containers), [HTTP, UDP, and TCP support](https://rivet.gg/docs/cloud/networking), [advanced lifecycle management](https://rivet.gg/docs/cloud/durability), [actor tagging](https://rivet.gg/docs/cloud/api/actors/create) for advanced multi-tenant applications, [advanced control over actor upgrades](https://rivet.gg/docs/cloud/api/actors/upgrade-all) for companies with specific use cases, [fine-grained control over where your actor is running](https://rivet.gg/docs/cloud/api/regions/list), and a developer-friendly REST API for managing Rivet Actors.
 
-We encourage developers building on Rivet to use [RivetKit](https://github.com/rivet-gg/rivetkit). However, we also provide a [low-level API](https://rivet.gg/docs/javascript-runtime) for defining actors:
+We encourage developers building on Rivet to use [RivetKit](https://github.com/rivet-gg/rivetkit). However, we also provide a [low-level API](https://rivet.gg/docs/cloud/actors) for defining actors:
 
 ```typescript
 import type { ActorContext } from "@rivet-gg/actor";
@@ -436,7 +436,7 @@ The key differences are:
 
 Rivet and RivetKit provide a tagging system for organizing actors. This allows you to build more manageable multi-tenant applications with complex requirements. For example:
 
-Rivet allows you to create actors with the [`actors.create`](https://rivet.gg/docs/api/actors/create) endpoint. The API accepts environment variables to configure how the actor behaves.
+Rivet allows you to create actors with the [`actors.create`](https://rivet.gg/docs/cloud/api/actors/create) endpoint. The API accepts environment variables to configure how the actor behaves.
 
 RivetKit allows passing tags to [`client.get({ /* tags */ })`](https://github.com/rivet-gg/rivetkit) to get or create an actor, but does not provide environment variables. You can also use the `client.create` method to create a fresh actor. Actors can read their own tags to configure behavior accordingly:
 
@@ -505,7 +505,7 @@ console.log(self.name);
 
 **Current Implementation: Rivet**
 
-Rivet provides two ways to destroy an actor: use `process.exit(0)` or call [`actors.destroy`](https://rivet.gg/docs/api/actors/destroy) from the API.
+Rivet provides two ways to destroy an actor: use `process.exit(0)` or call [`actors.destroy`](https://rivet.gg/docs/cloud/api/actors/destroy) from the API.
 
 RivetKit will provide a `ctx.shutdown` method that delegates to `ActorDriver`, though is not currently implemented.
 
@@ -535,7 +535,7 @@ export default {
 
 Both Rivet Actors & Durable Objects provide a way to serve requests to actors based on web standards.
 
-Rivet provides flexible networking infrastructure, including [UDP, TCP, and host networking](https://rivet.gg/docs/networking). To remain widely compatible, Rivet relies on the Deno implementation of the fetch handler with [`Deno.serve`](https://docs.deno.com/api/deno/~/Deno.serve). 
+Rivet provides flexible networking infrastructure, including [UDP, TCP, and host networking](https://rivet.gg/docs/cloud/networking). To remain widely compatible, Rivet relies on the Deno implementation of the fetch handler with [`Deno.serve`](https://docs.deno.com/api/deno/~/Deno.serve). 
 
 **Current Implementation: Cloudflare**
 
@@ -771,7 +771,7 @@ Items out of the scope for this spec:
 - **Supervisors**: Traditional actor runtimes use "supervisors" to automatically restart crashed actors. `ServerlessWorker` cannot crash, and instead will automatically log and disregard thrown errors -- similar to service workers.
 - **SQLite Storage**: Many serious use cases of Durable Objects rely on SQLite. This is out of the scope for this web standard.
 - **Versioning**: Cloudflare and Rivet each have significantly different ways of implementing versioning. Rivet is more like AWS AMI, while Cloudflare uses a simpler but less flexible version history.
-- **Upgrades & Rolling Deploys**: Leave it up to the platform to decide what code is running. Under the hood, the Rivet implementation of this standard would automatically call [`actors.upgrade`](https://rivet.gg/docs/api/actors/upgrade)
+- **Upgrades & Rolling Deploys**: Leave it up to the platform to decide what code is running. Under the hood, the Rivet implementation of this standard would automatically call [`actors.upgrade`](https://rivet.gg/docs/cloud/api/actors/upgrade)
 - **Logging**: Leave this up to the platform to decide how to ship logs.
 
 ## Full Examples

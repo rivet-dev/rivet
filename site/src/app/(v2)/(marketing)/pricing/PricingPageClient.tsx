@@ -381,7 +381,7 @@ export default function PricingPageClient() {
 				<PricingTiers />
 				<div className="flex flex-col items-center mt-16">
 					<a
-						href="/docs/pricing"
+						href="/docs/cloud/pricing"
 						target="_self"
 						rel="noopener noreferrer"
 						className="text-xl font-medium flex items-center gap-2 cursor-pointer bg-transparent border-none p-0 text-white transition-colors duration-200 group group-hover:text-[#FF5C00]"

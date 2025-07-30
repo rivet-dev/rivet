@@ -59,7 +59,7 @@ CMD ["node", "server.js"]
 ```
 
 <Note>
-	We'll pass the ports & env vars used in the Dockerfile in _Step 3_. Read more in the API docs for [actors.create](/docs/api/actors/create).
+	We'll pass the ports & env vars used in the Dockerfile in _Step 3_. Read more in the API docs for [actors.create](/docs/cloud/api/actors/create).
 </Note>
 
 ### Step 2: Deploying a container
@@ -147,7 +147,7 @@ What happens during creation:
 - It starts your container with the provided environment variables
 - The container starts running based on your Dockerfile's CMD or ENTRYPOINT
 
-See [actors.create](/docs/api/actors/create) for more options.
+See [actors.create](/docs/cloud/api/actors/create) for more options.
 
 ### Step 4: Connecting to a container
 
@@ -174,7 +174,7 @@ What happens during connection:
 - The URL routes to your container regardless of which region it's in
 - For additional security, you can use `getConnection` to generate temporary, authenticated URLs
 
-See [actors.get](/docs/api/actors/get) for more details.
+See [actors.get](/docs/cloud/api/actors/get) for more details.
 
 ### Step 5: Destroying a container
 
@@ -196,7 +196,7 @@ What happens during destruction:
 - All compute resources associated with the container are freed
 - You stop being billed for the container's runtime
 
-See [actors.destroy](/docs/api/actors/destroy) for more details.
+See [actors.destroy](/docs/cloud/api/actors/destroy) for more details.
 
 <Note>
   Always destroy containers when you're done with them to avoid unnecessary costs.

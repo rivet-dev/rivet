@@ -21,9 +21,9 @@ All API requests require [authentication tokens](/docs/tokens). Use these tokens
 
 ## Resources
 
-- **Actors** - Create [Rivet Actors](/docs/actors) and [Rivet Containers](/docs/containers)
+- **Actors** - Create [Rivet Actors](/docs/actors) and [Rivet Containers](/docs/cloud/containers)
 - **Builds** - Code deployments
-- **Routes** - HTTP routing configuration for [Rivet Functions](/docs/functions)
+- **Routes** - HTTP routing configuration for [Rivet Functions](/docs/cloud/functions)
 - **Regions** - Global deployment locations ([more info](/docs/regions))
 
 ## SDKs
@@ -38,7 +38,7 @@ While you can use the HTTP API directly, we recommend using our official SDKs:
 
 ## Error Handling
 
-See [API Errors](/docs/api/errors) for all error codes.
+See [API Errors](/docs/cloud/api/errors) for all error codes.
 `;
   try {
     const existingIndexPath = join(OUTPUT_PATH, 'index.mdx');

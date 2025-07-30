@@ -9,7 +9,7 @@ In this guide, we'll implement a simple game server on Rivet and create a backen
 Before starting, you'll need to choose a runtime for your game server. Rivet offers two options:
 
 - **[Actors](/docs/actors)**: For lightweight, fast-starting game servers using JavaScript/TypeScript
-- **[Containers](/docs/containers)**: For maximum flexibility, supports any language, ideal for complex game servers
+- **[Containers](/docs/cloud/containers)**: For maximum flexibility, supports any language, ideal for complex game servers
 
 ### Step 1: Preparing your game server code
 
@@ -427,8 +427,8 @@ This script will output a list of server connection URLs that you can copy & pas
 Scale your server fleet up or down based on demand from your backend.
 
 - Periodically check metrics (player count, server load) from your running servers
-- Call [`actors.create`](/docs/api/actors/create) to add servers when needed
-- Call [`actors.destroy`](/docs/api/actors/destroy) to remove underutilized servers
+- Call [`actors.create`](/docs/cloud/api/actors/create) to add servers when needed
+- Call [`actors.destroy`](/docs/cloud/api/actors/destroy) to remove underutilized servers
 - Implement custom scaling logic based on your game's patterns
 
 **Example: Periodic scaling with setInterval**
@@ -457,7 +457,7 @@ async function checkAndAdjustServerCapacity() {
   
   try {
     // 1. Get current servers and their metrics
-    // See [actors.list](/docs/api/actors/list) for more filtering options
+    // See [actors.list](/docs/cloud/api/actors/list) for more filtering options
     const { actors } = await client.actors.list({
       tagsJson: JSON.stringify({ name: "game-server" })
     });
@@ -582,7 +582,7 @@ app.post('/lobbies/join', async (c) => {
   // Create a new lobby if none available
   if (!lobby) {
     // Create a new server actor
-    // See [actors.create](/docs/api/actors/create)
+    // See [actors.create](/docs/cloud/api/actors/create)
     const { actor } = await client.actors.create({
       body: {
         tags: { 
@@ -667,7 +667,7 @@ Create customized game servers on-demand with specific configurations.
 
 - Create actors with specific configurations via environment variables
 - Customize CPU and memory resources for demanding game modes
-- Use tags for organizing and querying actors with [`actors.list`](/docs/api/actors/list)
+- Use tags for organizing and querying actors with [`actors.list`](/docs/cloud/api/actors/list)
 - Filter and monitor lobbies in the dashboard
 
 **Example: Custom lobby creation with Hono**
@@ -795,7 +795,7 @@ When you run `rivet deploy`, your game server code is uploaded and all running [
 
 If you want more control over upgrading your servers, you can use targeted upgrades to selectively update specific servers:
 
-- Call [`actors.upgrade`](/docs/api/actors/upgrade) on specific actors
+- Call [`actors.upgrade`](/docs/cloud/api/actors/upgrade) on specific actors
 - Useful for testing updates on a subset of servers
 - Allows controlled rollout of new versions
 - Can target empty or low-population servers first
@@ -824,7 +824,7 @@ async function upgradeEmptyServers() {
       
       // Upgrade servers with no players
       if (stats.playerCount === 0) {
-        // See [actors.upgrade](/docs/api/actors/upgrade) for more options
+        // See [actors.upgrade](/docs/cloud/api/actors/upgrade) for more options
         await client.actors.upgrade(actor.id, {
           project: process.env.RIVET_PROJECT_ID,
           environment: process.env.RIVET_ENVIRONMENT_ID,
@@ -850,7 +850,7 @@ For production games, it's highly recommended to implement a system for routing 
 
 ## Server Configuration Options
 
-When creating game servers with [`actors.create`](/docs/api/actors/create), you can configure:
+When creating game servers with [`actors.create`](/docs/cloud/api/actors/create), you can configure:
 
 - **Network**: Define HTTPS/WSS ports, custom paths, and routing options
   ```typescript
@@ -888,9 +888,9 @@ When creating game servers with [`actors.create`](/docs/api/actors/create), you 
   ```
 
 For detailed documentation, see:
-- [Actors Create API Reference](/docs/api/actors/create)
+- [Actors Create API Reference](/docs/cloud/api/actors/create)
 - [Actors](/docs/actors)
-- [Containers](/docs/containers)
+- [Containers](/docs/cloud/containers)
 - [Configuration Reference](/docs/config)
 
 ## Learning More

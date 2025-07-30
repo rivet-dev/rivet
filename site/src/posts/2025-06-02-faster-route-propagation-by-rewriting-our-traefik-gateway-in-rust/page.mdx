@@ -10,14 +10,14 @@ export const keywords = ["guard","actors","proxy","rust","traefik"]
 
 # 2,000x faster route propagation by rewriting our Traefik gateway in Rust
 
-**Rivet is an open-source, self-hostable serverless platform that supports [Rivet Functions](/docs/functions), [Rivet Actors](/docs/actors) (open-source Cloudflare Durable Objects), and [Rivet Containers](/docs/containers). We've rewritten our Traefik-based gateway in Rust — now named Rivet Guard — to support the hyper-specific needs of building a serverless platform.**
+**Rivet is an open-source, self-hostable serverless platform that supports [Rivet Functions](/docs/cloud/functions), [Rivet Actors](/docs/actors) (open-source Cloudflare Durable Objects), and [Rivet Containers](/docs/cloud/containers). We've rewritten our Traefik-based gateway in Rust — now named Rivet Guard — to support the hyper-specific needs of building a serverless platform.**
 
 ## What is Rivet Guard
 
 Rivet Guard is our gateway service that handles all incoming traffic to the Rivet platform. Its core responsibilities include:
 
-- **[Rivet Function](/docs/functions) Routing**: Routing the appropriate paths + hostnames to the correct Rivet Function
-- **[Rivet Actors](/docs/actors) & [Rivet Containers](/docs/containers) Routing**: Route incoming requests to the correct Rivet Actor or Rivet Container
+- **[Rivet Function](/docs/cloud/functions) Routing**: Routing the appropriate paths + hostnames to the correct Rivet Function
+- **[Rivet Actors](/docs/actors) & [Rivet Containers](/docs/cloud/containers) Routing**: Route incoming requests to the correct Rivet Actor or Rivet Container
 - **Rivet API**: Route API endpoints to the Rivet API server
 
 ## The Problem with Traefik
@@ -360,7 +360,7 @@ Why we went with our own custom solution:
 - Gateways are always on the bleeding edge of networking standards — if we want to support WebTransport or other new technologies, we don't want to have fork Envoy
 - We have use cases that include TCP & UDP that's not included in this piece. This is not Envoy's strong suite — we'd likely have to also incorporate [Quilkin](https://github.com/googleforgames/quilkin) to make UDP work
 - Less moving parts: this is a single binary with fewer points of failure (no need for a gRPC or REST server)
-- We care a lot about portability & being able to run all of Rivet in a single container for a full local dev environment ([single container docs](https://rivet.gg/docs/self-hosting/single-container))
+- We care a lot about portability & being able to run all of Rivet in a single container for a full local dev environment ([single container docs](https://rivet.gg/docs/cloud/self-hosting/single-container))
 - Faster & easier to write it from scratch than parse Envoy's obscure documentation; past experiences with Envoy require reading the source to understand how to configure it
 
 ### Cloudflare Pingora

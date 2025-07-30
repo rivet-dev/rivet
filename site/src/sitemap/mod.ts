@@ -397,7 +397,7 @@ export const sitemap = [
 						pages: [
 							{
 								title: "Edge",
-								href: "/docs/general/edge",
+								href: "/docs/cloud/edge",
 								icon: faGlobe,
 							},
 							{

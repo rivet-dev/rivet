@@ -10,9 +10,9 @@ import imgFlyArch from "./fly-arch.png";
 
 # Container Platform Comparison: Cloudflare Containers vs Rivet Containers vs Fly Machines
 
-**Rivet is an open-source, self-hostable serverless alternative to Cloudflare Workers, Durable Objects, and Containers. Check out [Rivet Containers](/docs/containers) and [visit our GitHub](https://github.com/rivet-gg/rivet).**
+**Rivet is an open-source, self-hostable serverless alternative to Cloudflare Workers, Durable Objects, and Containers. Check out [Rivet Containers](/docs/cloud/containers) and [visit our GitHub](https://github.com/rivet-gg/rivet).**
 
-Cloudflare just launched [Cloudflare Containers](https://developers.cloudflare.com/containers/), a platform with many similarities to [Rivet Containers](/docs/containers) and [Fly Machines](https://fly.io/docs/machines).
+Cloudflare just launched [Cloudflare Containers](https://developers.cloudflare.com/containers/), a platform with many similarities to [Rivet Containers](/docs/cloud/containers) and [Fly Machines](https://fly.io/docs/machines).
 
 These three platforms provide a flexible solution to quickly run on-demand containers across a globally distributed network. Common use cases for platforms like these include:
 
@@ -90,7 +90,7 @@ Cloudflare Containers only supports HTTP & WebSockets — not UDP & TCP.
 
 Rivet provides a flexible option for running containers with robust network configuration, datacenter configurations, and optional Cloudflare Container-like orchestration. Rivet Containers can be created via a simple HTTP API from any language, instead of the proprietary JavaScript API like Cloudflare Containers. Additionally — unlike Cloudflare Containers, Rivet Containers also supports TCP & UDP connections.
 
-A simple Rivet Container has a very straightforward architecture: containers are created via a [simple HTTP API](https://rivet.gg/docs/api/actors/create), then requests are proxied through Rivet Guard (the load balancer) and sent directly to the container itself.
+A simple Rivet Container has a very straightforward architecture: containers are created via a [simple HTTP API](https://rivet.gg/docs/cloud/api/actors/create), then requests are proxied through Rivet Guard (the load balancer) and sent directly to the container itself.
 
 <Image src={imgRivetArchDirect} alt="Rivet architecture showing request going directly to a container" />
 
@@ -186,7 +186,7 @@ Cloudflare Containers currently requires defining a fixed instance count at depl
 
 **Rivet Containers**
 
-Rivet Containers can either be created on-demand using the [containers API](https://rivet.gg/docs/api/actors/create) or autoscale as needed. Request- & resource-based autoscaling works by leveraging a tight integration between Rivet Guard and Rivet Containers. This can be configured using [routes](https://rivet.gg/docs/api/routes/update).
+Rivet Containers can either be created on-demand using the [containers API](https://rivet.gg/docs/cloud/api/actors/create) or autoscale as needed. Request- & resource-based autoscaling works by leveraging a tight integration between Rivet Guard and Rivet Containers. This can be configured using [routes](https://rivet.gg/docs/cloud/api/routes/update).
 
 **Fly Machines**
 
@@ -283,7 +283,7 @@ Similarly, traffic to Cloudflare Containers must be routed via the Cloudflare Wo
 
 **Rivet Containers**
 
-Rivet provides a straightforward [REST API for container management](https://rivet.gg/docs/api) that can be used with any language.
+Rivet provides a straightforward [REST API for container management](https://rivet.gg/docs/cloud/api) that can be used with any language.
 
 Rivet Containers can be accessed either via a public endpoint or privately via other Rivet Functions, Workers, or Containers.
 
@@ -303,7 +303,7 @@ Cloudflare Containers leverages the `wrangler dev` command providing a similar e
 
 **Rivet Containers**
 
-Rivet allows you to run a [complete Rivet cluster locally in one command](https://rivet.gg/docs/self-hosting/single-container) or within your own Docker Compose. This enables you to:
+Rivet allows you to run a [complete Rivet cluster locally in one command](https://rivet.gg/docs/cloud/self-hosting/single-container) or within your own Docker Compose. This enables you to:
 
 - Work with full feature parity to what you'll get in production
 - Use the full suite of monitoring tools provided with Rivet.
@@ -359,7 +359,7 @@ _Note that Durable Objects currently deploy inconsistently with containers. Read
 
 Rivet offers flexibility on deployment options. By default, containers are upgraded immediately.
 
-Upgrades can be controlled manually by using the [upgrade API](https://rivet.gg/docs/api/actors/upgrade-all) to selectively upgrade containers. This can be combined with actor tagging to build sophisticated deployment strategies — which are often important for stateful workloads like agents, batch jobs, game servers, and more.
+Upgrades can be controlled manually by using the [upgrade API](https://rivet.gg/docs/cloud/api/actors/upgrade-all) to selectively upgrade containers. This can be combined with actor tagging to build sophisticated deployment strategies — which are often important for stateful workloads like agents, batch jobs, game servers, and more.
 
 **Fly Machines**
 

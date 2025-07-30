@@ -188,7 +188,7 @@ export const FeaturesGrid = () => {
 				</>
 			),
 			faIcon: faCode,
-			href: "/docs/functions",
+			href: "/docs/cloud/functions",
 			useCases: ["APIs", "edge computing"],
 		},
 		{
@@ -215,7 +215,7 @@ export const FeaturesGrid = () => {
 				</>
 			),
 			faIcon: faServer,
-			href: "/docs/containers",
+			href: "/docs/cloud/containers",
 			useCases: ["batch jobs", "code sandbox", "game servers"],
 		},
 		//{
