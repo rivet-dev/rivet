@@ -56,9 +56,7 @@ async function loadContent(path: string[]) {
 				};
 			} catch (indexError) {
 				if (indexError.code === "MODULE_NOT_FOUND") {
-					throw new Error(
-						`Content not found for path: ${path.join("/")}`,
-					);
+					return notFound();
 				}
 				throw indexError;
 			}
@@ -75,9 +73,15 @@ export async function generateMetadata({
 		component: { title, description },
 	} = await loadContent(path);
 
+	const fullPath = buildFullPath(path);
+	const canonicalUrl = `https://www.rivet.gg${fullPath}/`;
+
 	return {
 		title: `${title} - Rivet`,
 		description,
+		alternates: {
+			canonical: canonicalUrl,
+		},
 	};
 }
 

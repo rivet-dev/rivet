@@ -5,6 +5,9 @@ export const metadata: Metadata = {
 	title: "Support - Rivet",
 	description:
 		"Get help with Rivet, from troubleshooting to feature requests.",
+	alternates: {
+		canonical: "https://www.rivet.gg/support/",
+	},
 };
 
 export default function SupportPage() {
