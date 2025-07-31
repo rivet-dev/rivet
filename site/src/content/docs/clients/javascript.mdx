@@ -1,137 +1,56 @@
-import StepDefineActor from "@/components/docs/StepDefineActor";
-import StepRunStudio from "@/components/docs/StepRunStudio";
-import StepDeploy from "@/components/docs/StepDeploy";
-import SetupNextSteps from "@/components/docs/SetupNextSteps";
+import { InstallPackage } from "@/components/docs/InstallPackage";
+
 
 # Node.js & Bun
 
 The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications.
 
-## Quickstart
+## Basic Usage
 
 <Steps>
-  <Step title="Create a new Node.js project">
-    Create a new Node.js project with TypeScript support:
-    
-    <CodeGroup>
-      ```sh npm
-      mkdir my-app
-      cd my-app
-      npm init -y
-      npm pkg set type=module
-      ```
-      
-      ```sh pnpm
-      mkdir my-app
-      cd my-app
-      pnpm init
-      pnpm pkg set type=module
-      ```
-      
-      ```sh yarn
-      mkdir my-app
-      cd my-app
-      yarn init -y
-      yarn pkg set type=module
-      ```
-      
-      ```sh bun
-      mkdir my-app
-      cd my-app
-      bun init -y
-      ```
-    </CodeGroup>
-  </Step>
+<Step title="Installation">
+Install the RivetKit package:
+<InstallPackage name="@rivetkit/actor" />
+</Step>
 
-  <Step title="Install Rivet packages">
-    Install the Rivet client and Node.js platform packages:
-    
-    <CodeGroup>
-      ```sh npm
-      npm install @rivetkit/actor
-      ```
-      
-      ```sh pnpm
-      pnpm add @rivetkit/actor
-      ```
-      
-      ```sh yarn
-      yarn add @rivetkit/actor
-      ```
-      
-      ```sh bun
-      bun add @rivetkit/actor
-      ```
-    </CodeGroup>
-  </Step>
+<Step title="Create Client and Connect to Actor">
 
-  <StepDefineActor />
+<Note>
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+</Note>
 
-  <Step title="Create your client">
-    Create a file `src/client.ts` in your project to connect to your actor:
+Create client and connect to actors and listen for real-time updates:
 
-    ```typescript src/client.ts
-    import { createClient } from "@rivetkit/actor/client";
-    import type { registry } from "../actors/app";
+```tsx {{"title":"index.ts"}}
+import { createClient } from "@rivetkit/actor/client";
+import type { Registry } from "../src/registry";
 
-    async function main() {
-      // Replace with your endpoint URL after deployment
-      const client = createClient<typeof registry>("http://localhost:8080");
+async function main() {
+	const client = createClient<Registry>(
+		process.env.ENDPOINT ?? "http://127.0.0.1:8080",
+	);
 
-      // Get or create an actor instance
-      const counter = await client.counter.get();
+	const counter = await client.counter.getOrCreate().connect();
 
-      // Subscribe to events
-      counter.on("newCount", (count: number) => console.log("Event:", count));
+	counter.on("countChanged", (count: number) => console.log("Count changed:", count));
 
-      // Call an action
-      const out = await counter.increment(5);
-      console.log("Action:", out);
+	for (let i = 0; i < 5; i++) {
+		const out = await counter.increment(1);
+		console.log("Increment:", out);
 
-      // Clean up when done
-      await counter.dispose();
-    }
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
 
-    main().catch(console.error);
-    ```
-  </Step>
+	await new Promise((resolve) => setTimeout(resolve, 10000));
+	await counter.dispose();
+}
 
-  <StepRunStudio />
+main();
 
-  <Step title="Run your client">
-    In a separate terminal, run your client code:
-    
-    <CodeGroup>
-      ```sh npm
-      npx tsx src/client.ts
-      ```
-      
-      ```sh pnpm
-      pnpm exec tsx src/client.ts
-      ```
-      
-      ```sh yarn
-      yarn tsx src/client.ts
-      ```
-      
-      ```sh bun
-      bun run src/client.ts
-      ```
-    </CodeGroup>
-    
-    You should see output like:
-    ```
-    Event: 5
-    Action: 5
-    ```
-
-    Run it again to see the state update.
-  </Step>
-
-  <StepDeploy />
+```
+</Step>
 </Steps>
 
-## Next Steps
+## API Reference
 
-For more information on communicating with actors, including event handling and RPC calls, see [Communicating with Actors](/docs/actors/communicating-between-actors).
-
+Follows the same [API as the Node.js client](http://rivet.gg/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.

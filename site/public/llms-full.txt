@@ -38,7 +38,7 @@ const result = await counter.increment(42);
 console.log(result); // The value returned by the action
 ```
 
-Learn more about [communicating with actors from the frontend](/docs/actors/communicating-with-actors).
+Learn more about [communicating with actors from the frontend](/docs/actors/communicating-between-actors).
 
 ```typescript }
 const registry = setup(
@@ -52,7 +52,7 @@ const result = await counter.increment(42);
 console.log(result);
 ```
 
-Learn more about [communicating with actors from the backend](/docs/actors/communicating-with-actors).
+Learn more about [communicating with actors from the backend](/docs/actors/communicating-between-actors).
 
 ```typescript }
 const actorA = actor(,
@@ -152,7 +152,7 @@ const counter = actor(,
 
 By default, actors' actions are only accessible from your server-side client.
 
-In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/general/authentication). Read more about the [types of clients](/docs/actors/clients)
+In order to expose actions publicly to the external client, you'll need to define `onAuth`. More documentation on authentication is available [here](/docs/actors/authentication). Read more about the [types of clients](/docs/actors/clients)
 
 ## Streaming Return Data
 
@@ -444,7 +444,7 @@ There are several ways to create a client for communicating with actors:
 		serve(app);
 		```
 
-		This client doesn't [require authentication](/docs/general/authentication).
+		This client doesn't [require authentication](/docs/actors/authentication).
 
 		For frontend applications or external services connecting to your Rivet backend:
 
@@ -462,7 +462,7 @@ There are several ways to create a client for communicating with actors:
 		const client = createClient("http://localhost:8080", );
 		```
 
-		This client [requires authentication](/docs/general/authentication).
+		This client [requires authentication](/docs/actors/authentication).
 
 		**Important**: Use `import type` when importing the registry type in order to
 		avoid accidentally bundling your backend code.
@@ -480,7 +480,7 @@ There are several ways to create a client for communicating with actors:
 		});
 		```
 
-		This client doesn't [require authentication](/docs/general/authentication).
+		This client doesn't [require authentication](/docs/actors/authentication).
 
 		Read more about [communicating between actors](/docs/actors/communicating-between-actors).
 
@@ -752,7 +752,7 @@ const protectedActor = actor( = opts;
 });
 ```
 
-Learn more about [authentication patterns](/docs/general/authentication).
+Learn more about [authentication patterns](/docs/actors/authentication).
 
 ## Type Safety
 
@@ -1101,7 +1101,7 @@ function ConnectionErrorHandler() );
 
 ## Offline & Auto-Reconnection
 
-See [client documentation](/docs/actors/communicating-with-actors) for details on reconnection behavior.
+See [client documentation](/docs/actors/communicating-between-actors) for details on reconnection behavior.
 ## Ephemeral Variables
 
 # Ephemeral Variables
@@ -1781,7 +1781,7 @@ If you are using the external client, authentication is handled through the `onA
 
 If you are using the server-side client, then authentication is skipped by default.
 
-See the [authentication documentation](/docs/general/authentication) for detailed information on implementing authentication patterns.
+See the [authentication documentation](/docs/actors/authentication) for detailed information on implementing authentication patterns.
 
 ## State Saves
 
@@ -1938,7 +1938,7 @@ const room = client.chatRoom.getOrCreate(["general"]);
 const message = await room.sendMessage("user-123", "Hello everyone!");
 ```
 
-Learn more about [actions](/docs/actors/actions) and [communicating with actors](/docs/actors/communicating-with-actors).
+Learn more about [actions](/docs/actors/actions) and [communicating with actors](/docs/actors/communicating-between-actors).
 
 ### Real-time Communication & Events
 
@@ -1968,7 +1968,7 @@ connection.on("newBid", (data) => `);
 await auction.placeBid(150);
 ```
 
-Learn more about [events](/docs/actors/events) and [client communication](/docs/actors/communicating-with-actors).
+Learn more about [events](/docs/actors/events) and [client communication](/docs/actors/communicating-between-actors).
 
 ### Scheduling & Lifecycle
 
@@ -2398,7 +2398,7 @@ const chatRoom = actor(,
 });
 ```
 
-Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication - see [Authentication](/docs/general/authentication) for details.
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication - see [Authentication](/docs/actors/authentication) for details.
 
 ### `onConnect`
 
@@ -2914,7 +2914,8 @@ npm install @rivetkit/actor @rivetkit/react
 Create your actor registry on the backend:
 
 ```ts }
-const counter = actor(,
+const counter = actor(,  // Skip authentication (can be configured later)
+	state: ,
 	actions: ,
 		getCount: (c) => c.state.count,
 	},
@@ -3409,92 +3410,28 @@ Rivet's testing framework automatically handles server setup and teardown, so yo
 
 The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications.
 
-## Quickstart
+## Basic Usage
 
-    Create a new Node.js project with TypeScript support:
+Install the RivetKit package:
 
-      ```sh npm
-      mkdir my-app
-      cd my-app
-      npm init -y
-      npm pkg set type=module
-      ```
-      
-      ```sh pnpm
-      mkdir my-app
-      cd my-app
-      pnpm init
-      pnpm pkg set type=module
-      ```
-      
-      ```sh yarn
-      mkdir my-app
-      cd my-app
-      yarn init -y
-      yarn pkg set type=module
-      ```
-      
-      ```sh bun
-      mkdir my-app
-      cd my-app
-      bun init -y
-      ```
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
 
-    Install the Rivet client and Node.js platform packages:
+Create client and connect to actors and listen for real-time updates:
 
-      ```sh npm
-      npm install @rivetkit/actor
-      ```
-      
-      ```sh pnpm
-      pnpm add @rivetkit/actor
-      ```
-      
-      ```sh yarn
-      yarn add @rivetkit/actor
-      ```
-      
-      ```sh bun
-      bun add @rivetkit/actor
-      ```
+```tsx }
+async function main() 
 
-    Create a file `src/client.ts` in your project to connect to your actor:
+	await new Promise((resolve) => setTimeout(resolve, 10000));
+	await counter.dispose();
+}
 
-    ```typescript src/client.ts
-    async function main() 
+main();
 
-    main().catch(console.error);
-    ```
+```
 
-    In a separate terminal, run your client code:
+## API Reference
 
-      ```sh npm
-      npx tsx src/client.ts
-      ```
-      
-      ```sh pnpm
-      pnpm exec tsx src/client.ts
-      ```
-      
-      ```sh yarn
-      yarn tsx src/client.ts
-      ```
-      
-      ```sh bun
-      bun run src/client.ts
-      ```
-
-    You should see output like:
-    ```
-    Event: 5
-    Action: 5
-    ```
-
-    Run it again to see the state update.
-
-## Next Steps
-
-For more information on communicating with actors, including event handling and RPC calls, see [Communicating with Actors](/docs/actors/communicating-with-actors).
+Follows the same [API as the Node.js client](http://rivet.gg/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
 ## OpenAPI
 
 # OpenAPI
@@ -3504,46 +3441,17 @@ The Rivet OpenAPI spec is available [here](https://github.com/rivet-gg/rivetkit/
 
 # React
 
-Build real-time React applications with Rivet Actors
-
 Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
-
-## Installation
-
-Install the Rivet React package:
-
-```bash
-npm install @rivetkit/actor @rivetkit/react
-```
 
 ## Basic Usage
 
-First, set up your actor registry (typically in your backend):
+Install the RivetKit React package:
 
-```typescript
-// backend/registry.ts
-const counter = actor(,
-  actions: ,
-    getCount: (c) => c.state.count,
-  },
-});
-
-const registry = setup(,
-});
-```
-
-Create a typed client and Rivet hooks:
-
-```tsx
-// src/rivetkit.ts
-const client = createClient("http://localhost:8080");
-const  = createRivetKit(client);
-```
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
 
 Connect to actors and listen for real-time updates:
 
-```tsx
-// src/App.tsx
+```tsx }
 function App() );
 
   // Listen for real-time count updates
@@ -3608,6 +3516,9 @@ const actor = useActor(,
   - `name`: The name of the actor type (string)
   - `key`: Array of strings identifying the specific actor instance
   - `params`: Optional parameters passed to the actor connection
+  - `createWithInput`: Optional input to pass to the actor on creation
+  - `createInRegion`: Optional region to create the actor in if does not exist
+  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
   - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
 
 #### Returns
@@ -3678,78 +3589,6 @@ function ConditionalActor() );
 }
 ```
 
-### Authentication
-
-Pass authentication parameters to actors:
-
-```tsx
-function AuthenticatedChat() 
-  });
-
-  chatRoom.useEvent("messageReceived", (message) => );
-
-  const sendMessage = async (text: string) => ;
-
-  return (
-
-  );
-}
-```
-
-### Error Handling
-
-Handle connection errors gracefully:
-
-```tsx
-function ResilientCounter() );
-
-  counter.useEvent("error", (err) => );
-
-  counter.useEvent("connected", () => );
-
-  return (
-
-      )}
-      
-        Status: 
-
-  );
-}
-```
-
-### Custom Hooks
-
-Create reusable custom hooks for common patterns:
-
-```tsx
-// Custom hook for a counter with persistent state
-function useCounter(counterId: string) );
-
-  counter.useEvent("countChanged", setCount);
-
-  const increment = useCallback(async (amount = 1) => , [counter.connection]);
-
-  const reset = useCallback(async () => , [counter.connection]);
-
-  return ;
-}
-
-// Usage
-function App()  = useCounter("my-counter");
-
-  return (
-    
-      Count: 
-       increment()} disabled=>
-        Increment
-      
-       reset()} disabled=>
-        Reset
-
-  );
-}
-```
-
 ### Real-time Collaboration
 
 Build collaborative features with multiple event listeners:
@@ -3784,101 +3623,7 @@ function CollaborativeEditor() );
 }
 ```
 
-## React Integration
-
-Use the React hooks for seamless integration:
-
-```tsx
-const client = createClient("http://localhost:8080");
-const  = createRivetKit(client);
-
-function App() );
-
-	counter.useEvent("countChanged", (newCount: number) => setCount(newCount));
-
-	const increment = async () => ;
-
-	return (
-		
-			Counter: 
-			 setCounterName(e.target.value)}
-				placeholder="Counter name"
-			/>
-			Increment
-		
-	);
-}
-```
-
-## Environment Configuration
-
-### Development vs Production
-
-Create environment-specific configurations:
-
-```ts config.ts
-const isDev = process.env.NODE_ENV !== "production";
-
-const config = ,
-					manager: ,
-				}
-			: ,
-					manager: ,
-				},
-	},
-};
-```
-
-### Backend Configuration
-
-Update your server to use environment-based configuration:
-
-```ts server.ts
-registry.runServer(config.rivetkit);
-```
-
-### Frontend Environment Variables
-
-Configure your frontend for different environments:
-
-```ts .env.local
-VITE_API_URL=http://localhost:8080
-VITE_WS_URL=ws://localhost:8080
-```
-
-```ts config/client.ts
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
-
-const client = createClient(API_URL);
-```
-
-## Authentication Integration
-
-### Protected Actors
-
-Add authentication to secure your actors:
-
-```ts registry.ts
-const protectedCounter = actor(
-		
-		// Validate token and return user data
-		const user = await validateJWT(token);
-		return ;
-	},
-	
-	state: ,
-	
-	actions:  = c.conn.auth;
-			
-			c.state.count += amount;
-			c.broadcast("countChanged", );
-			return c.state.count;
-		},
-	},
-});
-```
-
-### React Authentication
+### Authentication
 
 Connect authenticated actors in React:
 
@@ -3899,16 +3644,7 @@ function AuthenticatedApp() ,
 }
 ```
 
-Learn more about [authentication](/docs/general/authentication).
-
-## Best Practices
-
-1. **Use Custom Hooks**: Extract actor logic into reusable custom hooks
-2. **Handle Loading States**: Always account for the initial loading state
-3. **Error Boundaries**: Implement error boundaries around actor components
-4. **Conditional Connections**: Use the `enabled` prop to control when actors connect
-5. **Event Cleanup**: Event listeners are automatically cleaned up, but be mindful of heavy operations in handlers
-6. **State Management**: Combine with React state for local UI state that doesn't need to be shared
+Learn more about [authentication](/docs/actors/authentication).
 ## Rust
 
 # Rust
@@ -3917,39 +3653,32 @@ The Rivet Rust client provides a way to connect to and interact with actors from
 
 ## Quickstart
 
-    Create a new Rust project:
+    Add RivetKit client to your `Cargo.toml`:
     
-    ```sh
-    cargo new my-app
-    cd my-app
+    ```toml
+    [dependencies]
+    rivetkit-client = "0.1.0"
     ```
 
-    Add Rivet client & related dependencies to your project:
-    
-    ```sh
-    cargo add rivetkit-client
-    cargo add serde_json
-    cargo add tokio --features full
-    ```
-
-    Modify `src/main.rs` to connect to your actor:
+      Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
 
     ```rust src/main.rs
     use rivetkit_client::;
     use serde_json::json;
-    use std::time::Duration;
 
     #[tokio::main]
-    async fn main() -> Result> ", count);
+    async fn main() -> anyhow::Result : ", username, message);
         }).await;
-        
-        // Call an action
-        let result = counter.action("increment", vec![json!(5)]).await?;
-        println!("Action: ", result);
-        
-        // Wait to receive events
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        
+
+        // Send message to room
+        chat_room.action("sendMessage", vec![
+            json!("william"),
+            json!("All the world's a stage.")
+        ]).await?;
+
+        // When finished
+        client.disconnect();
+
         Ok(())
     }
     ```
@@ -3959,14 +3688,14 @@ The Rivet Rust client provides a way to connect to and interact with actors from
     ```sh
     cargo run
     ```
-    
-    You should see output like:
-    ```
-    Event: 5
-    Action: 5
-    ```
 
     Run it again to see the state update.
+
+## API Reference
+
+_Coming Soon_
+
+For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-gg/rivetkit/blob/main/clients/rust).
 ## Build Your Own
 
 # Build Your Own

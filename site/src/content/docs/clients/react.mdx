@@ -1,67 +1,26 @@
+import { InstallPackage } from "@/components/docs/InstallPackage";
+
 # React
 
 Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
 
-## Installation
-
-Install the Rivet React package:
-
-```bash
-npm install @rivetkit/actor @rivetkit/react
-```
-
 ## Basic Usage
 
 <Steps>
-<Step title="Create Actor Registry">
-First, set up your actor registry (typically in your backend):
 
-```typescript {{"title":"backend/registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+<Step title="Installation">
+  
+Install the RivetKit React package:
+<InstallPackage name="@rivetkit/actor @rivetkit/react" />
 
-export const counter = actor({
-  onAuth: () => {},  // Skip authentication (can be configured later)
-  state: { count: 0 },
-  actions: {
-    increment: (c, amount: number = 1) => {
-      c.state.count += amount;
-      c.broadcast("countChanged", c.state.count);
-      return c.state.count;
-    },
-    getCount: (c) => c.state.count,
-  },
-});
-
-export const registry = setup({
-  use: { counter },
-});
-```
-</Step>
-
-<Step title="Setup Backend Server">
-Start a server to run your actors:
-
-```typescript {{"title":"backend/server.ts"}}
-import { registry } from "./registry";
-
-// Run server with default configuration (port 8080)
-registry.runServer();
-```
-</Step>
-
-<Step title="Set Up React Client">
-Create a typed client and Rivet hooks:
-
-```tsx {{"title":"frontend/App.tsx"}}
-import { createClient, createRivetKit } from "@rivetkit/react";
-import type { registry } from "../backend/registry";
-
-export const client = createClient<typeof registry>("http://localhost:8080");
-export const { useActor } = createRivetKit(client);
-```
 </Step>
 
 <Step title="Use in Components">
+
+<Note>
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+</Note>
+
 Connect to actors and listen for real-time updates:
 
 ```tsx {{"title":"frontend/App.tsx"}}

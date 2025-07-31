@@ -18,19 +18,20 @@ function rehypeParseCodeBlocks() {
 						node.properties.className[0]?.replace(/^language-/, "");
 				}
 				// Parse annotations
-				if (parentNode.properties?.annotation) {
-					try {
-						// Annotations can only be strings
-						const annotations = JSON.parse(
-							parentNode.properties.annotation,
-						);
+				const info = parentNode.properties?.annotation || node.data;
+				if (info) {
+					let annotations = info;
 
-						for (const key in annotations) {
-							parentNode.properties[key] = annotations[key];
-						}
-					} catch (e) {
-						console.error(parentNode.properties.annotation);
-						console.error("invalid annotations in code block", e);
+					try {
+						annotations = JSON.parse(annotations);
+					} catch (e) {}
+
+					if (typeof annotations === "string") {
+						annotations = { title: annotations.trim() };
+					}
+
+					for (const key in annotations) {
+						parentNode.properties[key] = annotations[key];
 					}
 				}
 			}
@@ -64,6 +65,7 @@ function rehypeShiki() {
 				"http",
 				"prisma",
 				"rust",
+				"toml",
 			],
 		});
 

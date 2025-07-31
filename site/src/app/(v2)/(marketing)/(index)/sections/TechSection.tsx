@@ -49,9 +49,9 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 
 	const linkProps = external
 		? {
-			target: "_blank",
-			rel: "noopener noreferrer",
-		}
+				target: "_blank",
+				rel: "noopener noreferrer",
+			}
 		: {};
 
 	const statusText =
@@ -135,9 +135,9 @@ function TechSectionText({
 }: TechSectionTextProps) {
 	const linkProps = linkExternal
 		? {
-			target: "_blank",
-			rel: "noopener noreferrer",
-		}
+				target: "_blank",
+				rel: "noopener noreferrer",
+			}
 		: {};
 
 	return (
@@ -306,12 +306,10 @@ export function TechSection() {
 								alt="Rust"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/904"
+								href="/docs/clients/nextjs"
 								name="Next.js"
 								icon={nextjsLogo}
 								alt="Next.js"
-								external
-								status="help-wanted"
 							/>
 							<TechLink
 								href="https://github.com/rivet-gg/rivetkit/issues/903"

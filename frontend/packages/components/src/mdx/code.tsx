@@ -25,6 +25,8 @@ const languageNames: Record<string, string> = {
 	ruby: "Ruby",
 	ts: "TypeScript",
 	typescript: "TypeScript",
+	tsx: "React",
+	jsx: "React",
 	yaml: "YAML",
 	gdscript: "GDScript",
 	powershell: "Command Line",
@@ -34,6 +36,8 @@ const languageNames: Record<string, string> = {
 	bash: "Command Line",
 	sh: "Command Line",
 	prisma: "Prisma",
+	toml: "TOML",
+	rust: "Rust",
 };
 
 interface CodeGroupProps {
@@ -42,7 +46,11 @@ interface CodeGroupProps {
 }
 
 const getChildIdx = (child: ReactElement) =>
-	child.props?.file || child.props?.title || child.props?.language || "code";
+	child.props?.file ||
+	child.props?.title ||
+	child.props.meta ||
+	child.props?.language ||
+	"code";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
@@ -65,6 +73,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 								return (
 									<TabsTrigger key={idx} value={idx}>
 										{child.props.title ||
+											child.props.meta ||
 											languageNames[
 												child.props.language
 											] ||

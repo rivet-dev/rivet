@@ -1,5 +1,6 @@
 import * as shiki from "shiki";
 import theme from "@/lib/textmate-code-theme";
+import { cn } from "@rivet-gg/components";
 
 const LANGS: shiki.BundledLanguage[] = [
 	"bash",
@@ -20,6 +21,7 @@ const LANGS: shiki.BundledLanguage[] = [
 	"http",
 	"prisma",
 	"rust",
+	"toml",
 ];
 
 let highlighter: shiki.Highlighter;
@@ -27,7 +29,8 @@ let highlighter: shiki.Highlighter;
 export async function CodeBlock({
 	lang,
 	code,
-}: { lang: shiki.BundledLanguage; code: string }) {
+	className,
+}: { lang: shiki.BundledLanguage; code: string; className?: string }) {
 	highlighter ??= await shiki.getSingletonHighlighter({
 		langs: LANGS,
 		themes: [theme],
@@ -40,7 +43,7 @@ export async function CodeBlock({
 
 	return (
 		<div
-			className="code"
+			className={cn("code", className)}
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: we trust shinki
 			dangerouslySetInnerHTML={{ __html: out }}
 		/>

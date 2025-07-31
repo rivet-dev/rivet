@@ -1,77 +1,69 @@
-# Rust
+import {Note} from "@/components/mdx";
 
-import StepDefineActor from "@/components/docs/StepDefineActor";
-import StepRunStudio from "@/components/docs/StepRunStudio";
-import StepDeploy from "@/components/docs/StepDeploy";
-import SetupNextSteps from "@/components/docs/SetupNextSteps";
+
+# Rust
 
 The Rivet Rust client provides a way to connect to and interact with actors from Rust applications.
 
 ## Quickstart
 
 <Steps>
-  <Step title="Create a new Rust project">
-    Create a new Rust project:
+  <Step title="Installation">
+    Add RivetKit client to your `Cargo.toml`:
     
-    ```sh
-    cargo new my-app
-    cd my-app
+    ```toml
+    [dependencies]
+    rivetkit-client = "0.1.0"
     ```
   </Step>
 
-  <Step title="Add dependencies">
-    Add Rivet client & related dependencies to your project:
-    
-    ```sh
-    cargo add rivetkit-client
-    cargo add serde_json
-    cargo add tokio --features full
-    ```
-  </Step>
+  <Step title="Connect to your Actors">
 
-  <StepDefineActor />
+    <Note>
+      Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+    </Note>
 
-  <Step title="Create your client">
-    Modify `src/main.rs` to connect to your actor:
 
     ```rust src/main.rs
     use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
     use serde_json::json;
-    use std::time::Duration;
 
     #[tokio::main]
-    async fn main() -> Result<(), Box<dyn std::error::Error>> {
-        // Replace with your endpoint URL after deployment
+    async fn main() -> anyhow::Result<()> {
+        // Create a client connected to your RivetKit manager
         let client = Client::new(
             "http://localhost:8080",
             TransportKind::Sse,
             EncodingKind::Json
         );
+
+        // Connect to a chat room actor
+        let chat_room = client.get_or_create(
+            "chat-room",
+            ["keys-here"].into(),
+            GetOrCreateOptions::default()
+        )?.connect();
         
-        // Get or create an actor instance
-        let options = GetOrCreateOptions::default();
-        let counter = client.get("counter", [].into(), options)?
-          .connect();
-        
-        // Subscribe to events
-        counter.on_event("newCount", |args| {
-            let count = args[0].as_i64().unwrap();
-            println!("Event: {}", count);
+        // Listen for new messages
+        chat_room.on_event("newMessage", |args| {
+            let username = args[0].as_str().unwrap();
+            let message = args[1].as_str().unwrap();
+            println!("Message from {}: {}", username, message);
         }).await;
-        
-        // Call an action
-        let result = counter.action("increment", vec![json!(5)]).await?;
-        println!("Action: {}", result);
-        
-        // Wait to receive events
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        
+
+        // Send message to room
+        chat_room.action("sendMessage", vec![
+            json!("william"),
+            json!("All the world's a stage.")
+        ]).await?;
+
+        // When finished
+        client.disconnect();
+
         Ok(())
     }
     ```
   </Step>
-
-  <StepRunStudio />
 
   <Step title="Run your client">
     In a separate terminal, run your client code:
@@ -79,18 +71,14 @@ The Rivet Rust client provides a way to connect to and interact with actors from
     ```sh
     cargo run
     ```
-    
-    You should see output like:
-    ```
-    Event: 5
-    Action: 5
-    ```
 
     Run it again to see the state update.
   </Step>
-
-  <StepDeploy />
 </Steps>
 
-<SetupNextSteps />
 
+## API Reference
+
+_Coming Soon_
+
+For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-gg/rivetkit/blob/main/clients/rust).
