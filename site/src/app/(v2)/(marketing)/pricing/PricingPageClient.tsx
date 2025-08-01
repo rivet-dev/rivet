@@ -221,7 +221,7 @@ function PricingTable() {
 									"string" ? (
 										feature.name === "Regions" ? (
 											<a
-												href="https://rivet.gg/docs/edge"
+												href="https://rivet.gg/docs/general/edge"
 												target="_blank"
 												rel="noopener noreferrer"
 												className="text-sm text-white underline hover:brightness-125"

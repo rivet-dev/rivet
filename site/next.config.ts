@@ -26,72 +26,7 @@ const nextConfig = {
 		return [
 			// Next.js redirects for Cloudflare deployment
 
-			// Permanent redirects for common 404s
-			{
-				source: '/docs/config',
-				destination: '/docs/cloud/config',
-				permanent: true,
-			},
-			{
-				source: '/discord',
-				destination: 'https://discord.gg/aXYfyNxYVn',
-				permanent: true,
-			},
-			{
-				source: '/docs/functions',
-				destination: '/docs/cloud/functions',
-				permanent: true,
-			},
-			{
-				source: '/docs/general/testing',
-				destination: '/docs/actors/testing',
-				permanent: true,
-			},
-			{
-				source: '/docs/local-development',
-				destination: '/docs/cloud/local-development',
-				permanent: true,
-			},
-			{
-				source: '/actors/communicating-with-actors',
-				destination: '/docs/actors/communicating-between-actors',
-				permanent: true,
-			},
-			{
-				source: '/docs/api',
-				destination: '/docs/cloud/api',
-				permanent: true,
-			},
-			{
-				source: '/docs/troubleshooting',
-				destination: '/docs/cloud/troubleshooting',
-				permanent: true,
-			},
-			{
-				source: '/docs/edge',
-				destination: '/docs/general/edge',
-				permanent: true,
-			},
-			{
-				source: '/docs/edge/',
-				destination: '/docs/general/edge',
-				permanent: true,
-			},
-			{
-				source: '/docs/durability',
-				destination: '/docs/cloud/durability',
-				permanent: true,
-			},
-			{
-				source: '/clients/javascript',
-				destination: '/docs/clients/javascript',
-				permanent: true,
-			},
-			{
-				source: '/docs/networking',
-				destination: '/docs/cloud/networking',
-				permanent: true,
-			},
+			// Permanent redirects for common 404s (consolidated from duplicates)
 
 			// Convenience Redirects
 			{
@@ -287,68 +222,9 @@ const nextConfig = {
 
 			// Missing documentation pages
 			{
-				source: '/docs/functions',
-				destination: '/docs/cloud/functions',
-				permanent: false,
-			},
-			{
 				source: '/docs/containers',
 				destination: '/docs/cloud/containers',
 				permanent: false,
-			},
-			{
-				source: '/docs/durability',
-				destination: '/docs/cloud/durability',
-				permanent: false,
-			},
-
-			// Discord redirect
-			{
-				source: '/discord',
-				destination: 'https://discord.gg/aXYfyNxYVn',
-				permanent: false,
-			},
-
-			// Additional 404 fixes from SEO audit
-			{
-				source: '/docs/config/',
-				destination: '/docs/cloud/config',
-				permanent: true,
-			},
-			{
-				source: '/docs/general/testing/',
-				destination: '/docs/actors/testing',
-				permanent: true,
-			},
-			{
-				source: '/docs/local-development/',
-				destination: '/docs/cloud/local-development',
-				permanent: true,
-			},
-			{
-				source: '/docs/api/',
-				destination: '/docs/cloud/api',
-				permanent: true,
-			},
-			{
-				source: '/docs/troubleshooting/',
-				destination: '/docs/cloud/troubleshooting',
-				permanent: true,
-			},
-			{
-				source: '/docs/durability/',
-				destination: '/docs/cloud/durability',
-				permanent: true,
-			},
-			{
-				source: '/clients/javascript/',
-				destination: '/docs/clients/javascript',
-				permanent: true,
-			},
-			{
-				source: '/docs/networking/',
-				destination: '/docs/cloud/networking',
-				permanent: true,
 			},
 
 		];
