@@ -37,9 +37,9 @@ function Actor() {
 				features={[
 					ActorFeature.Config,
 					ActorFeature.Logs,
-					ActorFeature.State,
-					ActorFeature.Metrics,
-					ActorFeature.Connections,
+					// ActorFeature.State,
+					// ActorFeature.Metrics,
+					// ActorFeature.Connections,
 				]}
 			/>
 		);
@@ -100,8 +100,8 @@ function Content() {
 						features={[
 							ActorFeature.Config,
 							ActorFeature.Logs,
-							ActorFeature.State,
-							ActorFeature.Connections,
+							// ActorFeature.State,
+							// ActorFeature.Connections,
 						]}
 					/>
 				)}

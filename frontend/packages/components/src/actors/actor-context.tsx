@@ -403,8 +403,8 @@ const commonActorFeatures = [
 	ActorFeature.Logs,
 	ActorFeature.Config,
 	ActorFeature.Runtime,
-	ActorFeature.Metrics,
-	ActorFeature.InspectReconnectNotification,
+	// ActorFeature.Metrics,
+	// ActorFeature.InspectReconnectNotification,
 ];
 
 export const currentActorFeaturesAtom = atom((get) => {
@@ -424,13 +424,13 @@ export const currentActorFeaturesAtom = atom((get) => {
 			}
 			return [
 				...commonActorFeatures,
-				ActorFeature.Connections,
-				ActorFeature.State,
-				ActorFeature.Console,
-				ActorFeature.InspectReconnectNotification,
+				// ActorFeature.Connections,
+				// ActorFeature.State,
+				// ActorFeature.Console,
+				// ActorFeature.InspectReconnectNotification,
 			];
 		}
-		return commonActorFeatures;
+		return [...commonActorFeatures, ActorFeature.Metrics];
 	}
 
 	return actor.features;
