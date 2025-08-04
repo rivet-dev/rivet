@@ -1,0 +1,132 @@
+import { Hosting } from "@/components/docs/Hosting";
+import { InstallPackage } from "@/components/docs/InstallPackage";
+
+# Next.js Quickstart
+
+Get started with Rivet Actors in Next.js
+
+<Steps>
+<Step title="Create a Next.js App">
+
+```sh
+npx create-next-app@latest my-app
+cd my-app
+```
+
+</Step>
+
+<Step title="Install RivetKit">
+
+<InstallPackage name="@rivetkit/actor @rivetkit/next-js" />
+
+</Step>
+
+<Step title="Create an Actor">
+
+Create a simple counter actor:
+
+```ts {{"title":"src/rivet/registry.ts"}}
+import { actor, setup } from "@rivetkit/actor";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, amount: number = 1) => {
+			c.state.count += amount;
+			c.broadcast("countChanged", c.state.count);
+			return c.state.count;
+		},
+		getCount: (c) => c.state.count,
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+</Step>
+
+<Step title="Setup RivetKit client">
+
+Create a RivetKit client to connect to your actor:
+
+```ts {{"title":"src/lib/rivet-client.ts"}}
+"use client";
+import { createClient, createRivetKit } from "@rivetkit/next-js/client";
+import type { registry } from "@/rivet/registry";
+
+const client = createClient<typeof registry>(`${window.location.href}api`, {
+	transport: "sse",
+});
+
+export const { useActor } = createRivetKit(client);
+
+```
+
+<Info>It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.</Info>
+
+</Step>
+
+<Step title="Setup Registry API routes">
+
+```ts {{"title":"src/app/api/registry/[...all]/route.ts"}}
+import { toNextHandler } from "@rivetkit/next-js";
+import { registry } from "@/rivet/registry";
+
+const server = registry.createServer({
+	// Use the same base path as the client
+	// This is important for Next.js to route the API calls correctly
+	basePath: "/api/registry",
+	studio: {
+		// Tell RivetKit Studio where to find RivetKit Registry
+		defaultEndpoint: "http://localhost:3000/api/registry",
+	},
+});
+
+// Export the Next.js handler for the API routes
+export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(server);
+```
+
+</Step>
+
+<Step title="Use the Actor in a Component">
+
+
+```tsx {{"title":"src/components/Counter.tsx"}}
+"use client";
+import { useActor } from "@/lib/rivet-client";
+import { useState } from "react";
+
+
+export function Counter() {
+	const counter = useActor({
+		name: "counter",
+		key: ["test"], // Use a unique key for the actor instance
+	});
+	const [count, setCount] = useState(0);
+
+	counter.on("countChanged", (newCount) => {
+		setCount(newCount);
+	});
+
+	const increment = () => {
+		counter.increment();
+	};
+
+	return (
+		<div>
+			<p>Count: {count}</p>
+			<button onClick={increment}>Increment</button>
+		</div>
+	);
+}
+```
+
+<Note>Make sure to import the `Counter` component in your page or layout.</Note>
+
+For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.gg/docs/clients/react/).
+
+</Step>
+
+</Steps>

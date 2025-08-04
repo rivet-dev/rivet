@@ -1,4 +1,5 @@
 import apiData from "@/generated/apiPages.json" assert { type: "json" };
+import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 import {
 	faActorsBorderless,
@@ -53,6 +54,7 @@ import {
 	faPaintbrush,
 	faPalette,
 	faLayerGroup,
+	faVercel,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -95,6 +97,11 @@ export const sitemap = [
 								title: "React",
 								href: "/docs/actors/quickstart/react",
 								icon: faReact,
+							},
+							{
+								title: "Next.js",
+								href: "/docs/actors/quickstart/next-js",
+								icon: nextjs,
 							},
 						],
 					},
@@ -254,6 +261,11 @@ export const sitemap = [
 								icon: faReact,
 							},
 							{
+								title: "Next.js",
+								href: "/docs/clients/next-js",
+								icon: nextjs,
+							},
+							{
 								title: "Rust",
 								href: "/docs/clients/rust",
 								icon: faRust,
@@ -285,6 +297,10 @@ export const sitemap = [
 							{
 								title: "tRPC",
 								href: "/docs/integrations/trpc",
+							},
+							{
+								title: "Next.js",
+								href: "/docs/integrations/next-js",
 							},
 						],
 					},
@@ -389,7 +405,7 @@ export const sitemap = [
 					{
 						title: "System Architecture",
 						href: "/docs/general/system-architecture",
-						icon: faLayerGroup
+						icon: faLayerGroup,
 					},
 					{
 						title: "More",

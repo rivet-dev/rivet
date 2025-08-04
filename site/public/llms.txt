@@ -49,6 +49,7 @@ https://rivet.gg/docs/actors/lifecycle
 https://rivet.gg/docs/actors/metadata
 https://rivet.gg/docs/actors/quickstart
 https://rivet.gg/docs/actors/quickstart/backend
+https://rivet.gg/docs/actors/quickstart/next-js
 https://rivet.gg/docs/actors/quickstart/react
 https://rivet.gg/docs/actors/scaling
 https://rivet.gg/docs/actors/schedule
@@ -56,6 +57,7 @@ https://rivet.gg/docs/actors/sharing-and-joining-state
 https://rivet.gg/docs/actors/state
 https://rivet.gg/docs/actors/testing
 https://rivet.gg/docs/clients/javascript
+https://rivet.gg/docs/clients/next-js
 https://rivet.gg/docs/clients/openapi
 https://rivet.gg/docs/clients/react
 https://rivet.gg/docs/clients/rust
@@ -81,6 +83,7 @@ https://rivet.gg/docs/integrations/better-auth
 https://rivet.gg/docs/integrations/elysia
 https://rivet.gg/docs/integrations/express
 https://rivet.gg/docs/integrations/hono
+https://rivet.gg/docs/integrations/next-js
 https://rivet.gg/docs/integrations/trpc
 https://rivet.gg/docs/integrations/vitest
 https://rivet.gg/guides/chat

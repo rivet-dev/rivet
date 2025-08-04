@@ -42,7 +42,7 @@ export function Card({
 					</div>
 				</div>
 			)}
-			<div className={clsx("px-8", (title || icon) ? "pb-6" : "py-6")}>
+			<div className={clsx("px-8", title || icon ? "pb-6" : "py-6")}>
 				{children}
 			</div>
 		</div>
@@ -50,7 +50,7 @@ export function Card({
 
 	if (href) {
 		return (
-			<Link href={href} className="block group" target={target}>
+			<Link href={href} className="flex group" target={target}>
 				{content}
 			</Link>
 		);

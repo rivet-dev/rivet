@@ -2901,6 +2901,71 @@ See the [Rust client documentation](/clients/rust) for more information.
   Set up actors with Node.js, Bun, and web frameworks
 
   Build real-time React applications with actors
+## Next.js Quickstart
+
+# Next.js Quickstart
+
+Get started with Rivet Actors in Next.js
+
+```sh
+npx create-next-app@latest my-app
+cd my-app
+```
+
+Create a simple counter actor:
+
+```ts }
+const counter = actor(,
+	actions: ,
+		getCount: (c) => c.state.count,
+	},
+});
+
+const registry = setup(,
+});
+```
+
+Create a RivetKit client to connect to your actor:
+
+```ts }
+"use client";
+const client = createClient(`$api`, );
+
+const  = createRivetKit(client);
+
+```
+
+It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.
+
+```ts }
+const server = registry.createServer(,
+});
+
+// Export the Next.js handler for the API routes
+const  = toNextHandler(server);
+```
+
+```tsx }
+"use client";
+function Counter() );
+	const [count, setCount] = useState(0);
+
+	counter.on("countChanged", (newCount) => );
+
+	const increment = () => ;
+
+	return (
+		
+			Count: 
+			Increment
+		
+	);
+}
+```
+
+Make sure to import the `Counter` component in your page or layout.
+
+For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.gg/docs/clients/react/).
 ## React Quickstart
 
 # React Quickstart
@@ -3432,6 +3497,58 @@ main();
 ## API Reference
 
 Follows the same [API as the Node.js client](http://rivet.gg/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
+## Next.js
+
+# Next.js
+
+The Rivet Next.js client allows you to connect to and interact with actors in Next.js applications.
+
+	Check out the complete example
+
+	Use Next.js API routes to run RivetKit Registry
+
+## Basic Usage
+
+Install the RivetKit React package:
+
+  Follow the [Next.js backend integration guide](https://rivet.gg/docs/integrations/next-js/) to set up your Next.js backend with Rivet.
+
+Create a RivetKit client to connect to your actor:
+
+```ts }
+"use client";
+const client = createClient(`$api`, );
+
+const  = createRivetKit(client);
+
+```
+
+It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.
+
+Connect to actors and listen for real-time updates:
+```tsx }
+"use client";
+function Counter() );
+	const [count, setCount] = useState(0);
+
+	counter.on("countChanged", (newCount) => );
+
+	const increment = () => ;
+
+	return (
+		
+			Count: 
+			Increment
+		
+	);
+}
+```
+
+Make sure to import the `Counter` component in your page or layout.
+
+## API Reference
+
+It's the same as the [React client API reference](https://rivet.gg/docs/clients/react#api-reference), since the RivetKit React package is used in both Next.js and React applications.
 ## OpenAPI
 
 # OpenAPI
@@ -5146,6 +5263,64 @@ Rivet provides seamless integrations with popular frameworks and tools to help y
 ## Misc
 
   Fast unit testing framework for JavaScript and TypeScript
+## Next.js
+
+# Next.js
+
+Next.js is a powerful React framework that allows you to build server-rendered applications with ease. The Rivet Next.js client enables you to connect to and interact with actors in your Next.js applications.
+
+	Check out the complete example
+
+	Use the RivetKit React client to connect to actors
+
+## Basic Usage
+
+Install the RivetKit Next.js package:
+
+Create a simple counter actor:
+
+```ts }
+const counter = actor(,
+	actions: ,
+		getCount: (c) => c.state.count,
+	},
+});
+
+const registry = setup(,
+});
+```
+
+```ts }
+const server = registry.createServer(,
+});
+
+// Export the Next.js handler for the API routes
+const  = toNextHandler(server);
+```
+
+## API Reference
+
+### `toNextHandler`
+Converts a RivetKit server to a Next.js handler for API routes.
+
+```ts
+const counter = actor(,
+	actions: ,
+});
+
+const registry = setup(,
+});
+
+const server = registry.createServer();
+
+const  = toNextHandler(server);
+```
+
+#### Parameters
+- `server`: The RivetKit server instance created from your registry.
+
+#### Returns
+- An object containing Next.js-compatible handlers for the HTTP methods.
 ## tRPC
 
 # tRPC

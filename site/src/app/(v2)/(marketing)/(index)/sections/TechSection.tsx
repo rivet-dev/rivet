@@ -306,7 +306,7 @@ export function TechSection() {
 								alt="Rust"
 							/>
 							<TechLink
-								href="/docs/clients/nextjs"
+								href="/docs/clients/next-js"
 								name="Next.js"
 								icon={nextjsLogo}
 								alt="Next.js"

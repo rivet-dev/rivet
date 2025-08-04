@@ -1,0 +1,93 @@
+import { Hosting } from "@/components/docs/Hosting";
+import { InstallPackage } from "@/components/docs/InstallPackage";
+
+# Next.js
+
+The Rivet Next.js client allows you to connect to and interact with actors in Next.js applications.
+
+<CardGroup>
+<Card title="View Example on GitHub" icon="github" href="https://github.com/rivet-gg/rivetkit/tree/main/examples/next-js">
+	Check out the complete example
+</Card>
+<Card title="View the backend integration" icon="github" href="https://rivet.gg/docs/integrations/next-js/">
+	Use Next.js API routes to run RivetKit Registry
+</Card>
+</CardGroup>
+
+## Basic Usage
+
+<Steps>
+
+<Step title="Installation">
+  
+Install the RivetKit React package:
+<InstallPackage name="@rivetkit/actor @rivetkit/react" />
+
+</Step>
+
+<Step title="Setup RivetKit client">
+
+
+<Note>
+  Follow the [Next.js backend integration guide](https://rivet.gg/docs/integrations/next-js/) to set up your Next.js backend with Rivet.
+</Note>
+
+Create a RivetKit client to connect to your actor:
+
+```ts {{"title":"src/lib/rivet-client.ts"}}
+"use client";
+import { createClient, createRivetKit } from "@rivetkit/next-js/client";
+import type { registry } from "@/rivet/registry";
+
+const client = createClient<typeof registry>(`${window.location.href}api`, {
+	transport: "sse",
+});
+
+export const { useActor } = createRivetKit(client);
+
+```
+
+<Info>It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.</Info>
+
+</Step>
+
+<Step title="Connect to Actor">
+
+Connect to actors and listen for real-time updates:
+```tsx {{"title":"src/components/Counter.tsx"}}
+"use client";
+import { useActor } from "@/lib/rivet-client";
+import { useState } from "react";
+
+
+export function Counter() {
+	const counter = useActor({
+		name: "counter",
+		key: ["test"], // Use a unique key for the actor instance
+	});
+	const [count, setCount] = useState(0);
+
+	counter.on("countChanged", (newCount) => {
+		setCount(newCount);
+	});
+
+	const increment = () => {
+		counter.increment();
+	};
+
+	return (
+		<div>
+			<p>Count: {count}</p>
+			<button onClick={increment}>Increment</button>
+		</div>
+	);
+}
+```
+
+<Note>Make sure to import the `Counter` component in your page or layout.</Note>
+</Step>
+</Steps>
+
+## API Reference
+
+It's the same as the [React client API reference](https://rivet.gg/docs/clients/react#api-reference), since the RivetKit React package is used in both Next.js and React applications.
