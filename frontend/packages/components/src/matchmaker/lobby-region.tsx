@@ -2,7 +2,7 @@ import { Icon, type IconProp, faComputer } from "@rivet-gg/icons";
 import { AssetImage } from "../asset-image";
 import { convertEmojiToUriFriendlyString } from "../lib/emoji";
 
-export const REGION_ICON: Record<string, string | IconProp> = {
+export const REGION_ICON = {
 	local: faComputer,
 	unknown: "❓",
 	atlanta: "🇺🇸", // Atlanta
@@ -48,9 +48,10 @@ export const REGION_ICON: Record<string, string | IconProp> = {
 	gru: "🇧🇷", // Sao Paulo
 	bom: "🇮🇳", // Mumbai
 	sin: "🇸🇬", // Singapore
-};
+	"tr-d": "🇺🇸", // Dallas
+} satisfies Record<string, IconProp | string>;
 
-export const REGION_LABEL: Record<string, string> = {
+export const REGION_LABEL = {
 	local: "Local",
 	unknown: "Unknown",
 	atlanta: "Atlanta, Georgia, USA",
@@ -96,19 +97,23 @@ export const REGION_LABEL: Record<string, string> = {
 	gru: "Sao Paulo",
 	bom: "Mumbai, India",
 	sin: "Singapore",
-};
+	"tr-d": "Dallas, Texas, USA",
+} satisfies Record<keyof typeof REGION_ICON, string>;
 
-export function getRegionKey(regionNameId: string | undefined) {
+export function getRegionKey(
+	regionNameId: string | undefined,
+): keyof typeof REGION_ICON {
 	// HACK: Remove prefix for old regions with format `lnd-atl`
 	const regionIdSplit = (regionNameId || "").split("-");
-	return regionIdSplit[regionIdSplit.length - 1];
+	return regionIdSplit[regionIdSplit.length - 1] as keyof typeof REGION_ICON;
 }
 
 export function RegionIcon({
 	region = "",
 	...props
 }: { region: string | undefined; className?: string }) {
-	const regionIcon = REGION_ICON[region] ?? REGION_ICON.unknown;
+	const regionIcon =
+		REGION_ICON[region as keyof typeof REGION_ICON] ?? REGION_ICON.unknown;
 
 	if (typeof regionIcon === "string") {
 		return (
