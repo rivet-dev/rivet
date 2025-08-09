@@ -111,7 +111,7 @@ Use keys to provide basic actor configuration:
 
 ```typescript {{"title":"registry.ts"}}
 const userSession = actor({
-  createState: (c) => ({
+  createState: () => ({
     userId: c.key[0], // Extract user ID from key
     loginTime: Date.now(),
     preferences: {}

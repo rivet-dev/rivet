@@ -22,7 +22,9 @@ The `createVars` function or `vars` constant defines ephemeral variables for the
 The `createVars` function can also receive driver-specific context as its second parameter, allowing access to driver capabilities like Rivet KV or Cloudflare Durable Object storage.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "@rivetkit/actor";
+// In this example, assume we're using Redis
+import type { DriverContext } from "@rivetkit/redis";
 
 // Using vars constant
 const counter1 = actor({
@@ -48,7 +50,7 @@ const counter2 = actor({
 const exampleActor = actor({
   state: { count: 0 },
   // Access driver context in createVars
-  createVars: (c, driverCtx) => ({
+  createVars: (c: ActorInitContext, driverCtx: DriverContext) => ({
     driverCtx,
   }),
   actions: {
@@ -87,10 +89,10 @@ const counter3 = actor({
   state: { count: 0 },
   
   // Run initialization logic (logging, external service setup, etc.)
-  onCreate: (c, opts) => {
+  onCreate: (c, opts, input: { foo: string }) => {
     console.log("Counter actor initialized");
     // Access input parameters if provided
-    console.log("Input:", opts.input);
+    console.log("Input:", input);
     // Can perform async operations or setup
     // No need to return anything
   },
@@ -198,7 +200,7 @@ const chatRoom = actor({
   },
   
   // Method 2: Dynamically create connection state
-  createConnState: (c, { params }) => {
+  createConnState: (c, opts, params: { userId?: string, role?: string }) => {
     return {
       userId: params.userId || "anonymous",
       role: params.role || "guest",
@@ -207,7 +209,7 @@ const chatRoom = actor({
   },
   
   // Validate connections before accepting them
-  onBeforeConnect: (c, { params }) => {
+  onBeforeConnect: (c, opts, params: { authToken?: string }) => {
     // Validate authentication
     const authToken = params.authToken;
     if (!authToken || !validateToken(authToken)) {
@@ -369,8 +371,8 @@ import { actor } from "@rivetkit/actor";
 
 const secureActor = actor({
   // Authentication handler - runs on HTTP server
-  onAuth: async (opts) => {
-    const authHeader = opts.req.headers.get("authorization");
+  onAuth: async (params: undefined, { request }) => {
+    const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       throw new Error("Missing or invalid authorization header");
     }
@@ -537,8 +539,14 @@ See [Helper Types](/docs/actors/helper-types) for more details on using `ActorCo
 ## Full Example
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "@rivetkit/actor";
 import { z } from "zod";
+
+interface CounterInput {
+	initialCount?: number;
+	stepSize?: number;
+	name?: string;
+}
 
 const counter = actor({
   // Authentication handler (runs on HTTP server)
@@ -561,16 +569,16 @@ const counter = actor({
   },
   
   // Initialize state with input
-  createState: (c, opts) => ({
-    count: opts.input?.initialCount ?? 0,
-    stepSize: opts.input?.stepSize ?? 1,
-    name: opts.input?.name ?? "Unnamed Counter",
+  createState: (c: ActorInitContext, input: CounterInput) => ({
+    count: input.initialCount ?? 0,
+    stepSize: input.stepSize ?? 1,
+    name: input.name ?? "Unnamed Counter",
     requestCount: 0,
   }),
   
   // Initialize actor (run setup that doesn't affect initial state)
-  onCreate: (c, opts) => {
-    console.log(`Counter "${opts.input?.name}" initialized`);
+  onCreate: (c, opts, input: { name: string }) => {
+    console.log(`Counter "${input.name}" initialized`);
     // Set up external resources, logging, etc.
   },
   
@@ -579,8 +587,7 @@ const counter = actor({
     role: "guest"
   },
   
-  // Dynamically create connection state based on params
-  createConnState: (c, { params }) => {
+  createConnState: (c, opts) => {
     // Auth data is available from onAuth
     return {
       userId: c.conn.auth.userId,

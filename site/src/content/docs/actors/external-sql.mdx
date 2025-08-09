@@ -36,7 +36,7 @@ Here's a basic example of a user actor that creates a database record on start a
 
 <CodeGroup>
 ```typescript {{ "title": "registry.ts" }}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup, ActorInitContext } from "@rivetkit/actor";
 import { Pool } from "pg";
 
 interface ActorInput {
@@ -55,10 +55,10 @@ const pool = new Pool({
 
 // Create the user actor
 export const userActor = actor({
-  createState: (opts: { input: ActorInput }) => ({
+  createState: (c: ActorInitContext, input: ActorInput) => ({
     requestCount: 0,
-    username: opts.input.username,
-    email: opts.input.email,
+    username: input.username,
+    email: input.email,
     lastActive: Date.now()
   }),
   
@@ -140,7 +140,7 @@ Here's the same user actor pattern using Drizzle ORM for more type-safe database
 
 <CodeGroup>
 ```typescript {{ "title": "registry.ts" }}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup, ActorInitContext } from "@rivetkit/actor";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { eq } from "drizzle-orm";
@@ -169,10 +169,10 @@ const db = drizzle(pool);
 
 // Create the user actor
 export const userActor = actor({
-  createState: (opts: { input: ActorInput }) => ({
+  createState: (c: ActorInitContext, input: ActorInput) => ({
     requestCount: 0,
-    username: opts.input.username,
-    email: opts.input.email,
+    username: input.username,
+    email: input.email,
     lastActive: Date.now()
   }),
   

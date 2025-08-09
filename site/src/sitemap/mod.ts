@@ -200,7 +200,7 @@ export const sitemap = [
 								collapsible: true,
 								pages: [
 									{
-										title: "Variables",
+										title: "Ephemeral Variables",
 										href: "/docs/actors/ephemeral-variables",
 										//icon: faMemory,
 									},

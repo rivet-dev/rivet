@@ -2,9 +2,10 @@
 
 Rivet provides several TypeScript helper types to make it easier to work with actors in a type-safe way.
 
+
 ## `Context` Types
 
-When working with actors, you often need to access the context object. Rivet provides helper types to extract the context types from actor definitions.
+When working with actors, you often need to access the context object outside of the actor's handlers. Rivet provides helper types to extract the context types from actor definitions.
 
 ### `ActorContextOf<ActorDefinition>`
 
@@ -57,4 +58,3 @@ function processCounterAction(context: ActionContextOf<typeof counter>) {
   context.state.count++;
 }
 ```
-

@@ -14,11 +14,10 @@ The `onAuth` hook runs on the HTTP server before clients can access actors. This
 import { actor, UserError } from "@rivetkit/actor";
 
 const chatRoom = actor({
-  onAuth: async (opts) => {
-    const { req, params, intents } = opts;
+  onAuth: async (params: { authToken?: string }, { request, intents }) => {
     
     // Extract token from params or headers
-    const token = params.authToken || req.headers.get("Authorization");
+    const token = params.authToken || request.headers.get("Authorization");
     
     if (!token) {
       throw new UserError("Authentication required");
@@ -83,8 +82,8 @@ const userProfileActor = actor({
     }
   },
   
-  createConnState: (c, opts) => {
-    return { userId: opts.params.userId };
+  createConnState: (c, opts, params: { userId: string }) => {
+    return { userId: params.userId };
   },
   
   actions: {
@@ -128,9 +127,7 @@ The `onAuth` hook receives an `intents` parameter indicating what the client wan
 
 ```typescript
 const secureActor = actor({
-  onAuth: async (opts) => {
-    const { intents, params } = opts;
-    
+  onAuth: async (params: { token: string }, { intents }) => {
     // Different validation based on intent
     if (intents.has("action")) {
       // Requires higher privileges for actions
@@ -162,8 +159,8 @@ Use specific error types for different authentication failures:
 import { UserError, Unauthorized, Forbidden } from "@rivetkit/actor/errors";
 
 const protectedActor = actor({
-  onAuth: async (opts) => {
-    const token = opts.params.authToken;
+  onAuth: async (params: { authToken?: string }) => {
+    const token = params.authToken;
     
     if (!token) {
       throw new Unauthorized("Authentication token required");
@@ -226,9 +223,9 @@ import { actor, UserError } from "@rivetkit/actor";
 import jwt from "jsonwebtoken";
 
 const jwtActor = actor({
-  onAuth: async (opts) => {
-    const token = opts.params.jwt || 
-                  opts.req.headers.get("Authorization")?.replace("Bearer ", "");
+  onAuth: async (params: { jwt?: string }, { request }) => {
+    const token = params.jwt || 
+                  request.headers.get("Authorization")?.replace("Bearer ", "");
     
     if (!token) {
       throw new UserError("JWT token required");
@@ -265,9 +262,9 @@ const jwtActor = actor({
 
 ```typescript
 const apiActor = actor({
-  onAuth: async (opts) => {
-    const apiKey = opts.params.apiKey || 
-                   opts.req.headers.get("X-API-Key");
+  onAuth: async (params: { apiKey?: string }, { request }) => {
+    const apiKey = params.apiKey || 
+                   request.headers.get("X-API-Key");
     
     if (!apiKey) {
       throw new UserError("API key required");
@@ -331,7 +328,7 @@ export function requirePermission(permission: string) {
 
 // usage in actor
 const forumActor = actor({
-  onAuth: async (opts) => {
+  onAuth: async (params: { token: string }) => {
     // ... authenticate and return user with role/permissions
   },
   

@@ -55,6 +55,36 @@ const counter = actor({
 });
 ```
 
+To accept a custom input parameters for the initial state, use:
+
+```typescript
+import { actor, ActorInitContext } from "@rivetkit/actor";
+
+interface CounterInput {
+	startingCount: number;
+}
+
+// State with initialization logic
+const counter = actor({
+  // Define state using a creation function
+  createState: (c: ActorInitContext, input: CounterInput) => {
+    return { count: input.startingCount };
+  },
+  
+  actions: {
+    // ...
+  }
+});
+```
+
+Read more about [input parameters](/docs/actors/input) here.
+
+<Note>
+If accepting arguments to `createState`, you **must** define the types: `createSTate(c: ActorInitContext, input: MyType)`
+
+Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
+</Note>
+
 </Tab>
 
 </Tabs>
@@ -141,13 +171,22 @@ In addition to persisted state, actors can store ephemeral data that is not save
 
 For complete documentation on ephemeral variables, see [Ephemeral Variables](/docs/actors/ephemeral-variables).
 
-## Limitations
+## Type Limitations
 
-State is currently constrained to the available memory on the machine.
+State is currently constrained to the following types:
 
-Only JSON-serializable types can be stored in state. In serverless runtimes that support it (Rivet, Cloudflare Workers), state is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
-
-<Note>
-SQLite in Rivet Actors (coming soon) will provide a way of dynamically querying data with in-memory performance without being constrained to memory limits.
-</Note>
+- `null`
+- `undefined`
+- `boolean`
+- `string`
+- `number`
+- `BigInt`
+- `Date`
+- `RegExp`
+- `Error`
+- Typed arrays (`Uint8Array`, `Int8Array`, `Float32Array`, etc.)
+- `Map`
+- `Set`
+- `Array`
+- Plain objects
 

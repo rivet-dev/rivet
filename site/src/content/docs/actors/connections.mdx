@@ -27,7 +27,7 @@ const gameRoom = actor({
   state: {},
   
   // Handle connection setup
-  createConnState: (c, { params }) => {
+  createConnState: (c, opts, params: { authToken: string }) => {
     // Validate authentication token
     const authToken = params.authToken;
     

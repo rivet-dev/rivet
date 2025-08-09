@@ -50,7 +50,7 @@ const gameRoom = actor({
     players: {} as Record<string, {health: number, position: {x: number, y: number}}>
   },
   
-  createConnState: (c, { params }) => ({
+  createConnState: (c, opts, params: { playerId: string, role?: string }) => ({
     playerId: params.playerId,
     role: params.role || "player"
   }),
@@ -86,7 +86,7 @@ const gameRoom = actor({
     players: {} as Record<string, {health: number, position: {x: number, y: number}}>
   },
   
-  createConnState: (c, { params }) => ({
+  createConnState: (c, opts, params: { playerId: string, role?: string }) => ({
     playerId: params.playerId,
     role: params.role || "player"
   }),

@@ -32,21 +32,26 @@ const gameHandle = client.game.getOrCreate(["game-456"], {
 Input is available in lifecycle hooks via the `opts.input` parameter:
 
 ```typescript
+interface ChatRoomInput {
+	roomName: string,
+	isPrivate: boolean,
+}
+
 const chatRoom = actor({
-  createState: (c, opts) => ({
-    name: opts.input?.roomName ?? "Unnamed Room",
-    isPrivate: opts.input?.isPrivate ?? false,
-    maxUsers: opts.input?.maxUsers ?? 50,
+  createState: (c: ActorInitContext, input: ChatRoomInput) => ({
+    name: input?.roomName ?? "Unnamed Room",
+    isPrivate: input?.isPrivate ?? false,
+    maxUsers: input?.maxUsers ?? 50,
     users: {},
     messages: [],
   }),
   
-  onCreate: (c, opts) => {
-    console.log(`Creating room: ${opts.input?.roomName}`);
+  onCreate: (c, opts, input: ChatRoomInput) => {
+    console.log(`Creating room: ${input.roomName}`);
     
     // Setup external services based on input
-    if (opts.input?.isPrivate) {
-      setupPrivateRoomLogging(opts.input.roomName);
+    if (input.isPrivate) {
+      setupPrivateRoomLogging(input.roomName);
     }
   },
   
@@ -76,9 +81,9 @@ const GameInputSchema = z.object({
 });
 
 const game = actor({
-  createState: (c, opts) => {
+  createState: (c: ActorInitContext, inputRaw: z.infer<typeof GameInputSchema>) => {
     // Validate input
-    const input = GameInputSchema.parse(opts.input);
+    const input = GameInputSchema.parse(inputRaw);
     
     return {
       gameMode: input.gameMode,
@@ -142,10 +147,10 @@ interface GameInput {
 }
 
 const game = actor({
-  createState: (c, opts: { input?: GameInput }) => ({
-    gameMode: opts.input?.gameMode ?? "casual",
-    maxPlayers: opts.input?.maxPlayers ?? 4,
-    difficulty: opts.input?.difficulty ?? "medium",
+  createState: (c: ActorInitContext,  input: GameInput) => ({
+    gameMode: input.gameMode,
+    maxPlayers: input.maxPlayers,
+    difficulty: input.difficulty ?? "medium",
   }),
   
   actions: {
@@ -160,12 +165,12 @@ If you need to access input data in actions, store it in the actor's state:
 
 ```typescript
 const game = actor({
-  createState: (c, opts) => ({
+  createState: (c: ActorInitContext, input: GameInput) => ({
     // Store input configuration in state
     config: {
-      gameMode: opts.input?.gameMode ?? "casual",
-      maxPlayers: opts.input?.maxPlayers ?? 4,
-      difficulty: opts.input?.difficulty ?? "medium",
+      gameMode: input.gameMode,
+      maxPlayers: input.maxPlayers,
+      difficulty: input?.difficulty ?? "medium",
     },
     // Runtime state
     players: {},
