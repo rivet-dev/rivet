@@ -129,3 +129,42 @@ Example using Redis driver with Hono web framework.
 Basic Redis driver setup and configuration example.
 </Card>
 </CardGroup>
+
+## Advanced
+
+### Driver Context
+
+The Redis driver provides access to the underlying Redis connection through the driver context in `createVars`.
+
+```typescript
+import { actor, ActorInitContext } from "@rivetkit/actor";
+import type { DriverContext } from "@rivetkit/redis";
+
+const myActor = actor({
+  state: { count: 0 },
+  
+  // Save the Redis driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => ({ redis: driver.redis }),
+  
+  actions: {
+    // Example: Access Redis directly (not recommended in practice)
+    getRedisValue: async (c, key: string) => {
+      // Use the Redis client from driver context
+      return await c.vars.redis.get(key);
+    },
+  }
+});
+```
+
+The Redis driver context type is exported as `DriverContext` from `@rivetkit/redis`:
+
+```typescript
+interface DriverContext {
+  redis: ioredis.Redis;
+  keyPrefix: string;  // Key prefix that all RivetKit data is stored under
+}
+```
+
+<Warning>
+While you have access to the Redis client, be cautious when directly modifying keys under the `keyPrefix`, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
+</Warning>

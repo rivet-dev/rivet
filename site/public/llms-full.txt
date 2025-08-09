@@ -1143,6 +1143,34 @@ const counter = actor(,
 });
 ```
 
+## Accessing Driver Context
+
+The `createVars` function receives a second parameter that provides access to driver-specific context. This allows you to interact with the underlying infrastructure directly within your actor's ephemeral variables.
+
+```typescript
+const myActor = actor(,
+  
+  // The second parameter provides driver-specific context
+  createVars: (ctx, driver) => ;
+  },
+  
+  actions: 
+      if (driver?.ctx) 
+      
+      return "Driver accessed";
+    }
+  }
+});
+```
+
+The structure of the driver context depends on which driver you're using:
+
+- **Cloudflare Workers**: ``
+- **Redis**: ``
+- **Local**: No driver context provided
+
+This driver context enables advanced use cases where you need direct access to platform-specific features alongside Rivet's actor abstraction.
+
 ## Using Variables
 
 Vars can be accessed and modified through the context object with `c.vars`:
@@ -4007,6 +4035,46 @@ Deploy your Redis-powered actors on these hosting providers:
 
 Deploy on Railway with automatic scaling and managed infrastructure.
 
+## Accessing Driver Context with createVars
+
+The Redis driver provides access to the underlying Redis connection through the driver context in `createVars`. This allows you to perform Redis operations directly within your actors.
+
+```typescript
+const myActor = actor(,
+  
+  // Access Redis connection through driver context
+  createVars: (ctx, driver: DriverContext) => ;
+  },
+  
+  actions: `, value, 'EX', 3600);
+      
+      // Also store locally for fast access
+      c.vars.cacheData.set(key, value);
+      
+      return "Cached successfully";
+    },
+    
+    // Example: Get cached value
+    getCachedValue: async (c, key: string) => 
+      
+      // Fallback to Redis
+      const value = await c.vars.redis.get(`cache:$`);
+      if (value) 
+      
+      return value;
+    }
+  }
+});
+```
+
+The Redis driver context type is exported as `DriverContext` from `@rivetkit/redis` and contains:
+
+```typescript
+interface DriverContext 
+```
+
+This gives you full access to all Redis operations while still benefiting from Rivet's actor model for state management and horizontal scaling.
+
 ## Examples
 
 Example using Redis driver with Hono web framework.
@@ -4784,6 +4852,34 @@ wrangler deploy
 ```
 
 Your actors will now run on Cloudflare's global edge network with persistent state backed by Durable Objects.
+
+## Accessing Driver Context with createVars
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`. This enables direct interaction with Cloudflare's platform features.
+
+```typescript
+const myActor = actor(,
+  
+  // Access Durable Object state through driver context
+  createVars: (ctx, driver: DriverContext) => ;
+  },
+  
+  actions: ;
+    },
+    
+    // Example: Access environment bindings
+    accessEnvBindings: async (c) => 
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers` and contains:
+
+```typescript
+interface DriverContext 
+```
+
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality. Use these features for read-only operations or additional custom logic that doesn't conflict with RivetKit's state management.
 
 ## Examples
 

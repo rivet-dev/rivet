@@ -141,3 +141,71 @@ Example using Cloudflare Workers with Hono web framework.
 Basic Cloudflare Workers setup and configuration example.
 </Card>
 </CardGroup>
+
+## Advanced
+
+### Accessing Environment Bindings
+
+You can access Cloudflare Workers environment bindings directly using the importable `env`:
+
+```typescript
+import { env } from "cloudflare:workers";
+
+// Access environment variables and secrets in top-level scope
+const API_KEY = env.API_KEY;
+const LOG_LEVEL = env.LOG_LEVEL || "info";
+
+// Use bindings in your actor
+const myActor = actor({
+  state: { count: 0 },
+  
+  actions: {
+    // Access KV, D1, or other bindings during request handling
+    getFromKV: async (c, key: string) => {
+      // Access additional KV namespaces defined in wrangler.json
+      if (env.MY_CACHE_KV) {
+        return await env.MY_CACHE_KV.get(key);
+      }
+    }
+  }
+});
+```
+
+### Driver Context
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
+
+```typescript
+import { actor, ActorInitContext } from "@rivetkit/actor";
+import type { DriverContext } from "@rivetkit/cloudflare-workers";
+
+const myActor = actor({
+  state: { count: 0 },
+  
+  // Save the Cloudflare driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => ({ 
+    state: driver.state,
+  }),
+  
+  actions: {
+    // Example: Access Durable Object info (not recommended in practice)
+    kvGet: (c, key: string) => {
+      const doState = c.vars.state;
+	  return await doState.storage.get(key)
+    },
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
+
+```typescript
+interface DriverContext {
+  state: DurableObjectState;
+}
+```
+
+<Warning>
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
+</Warning>
+
