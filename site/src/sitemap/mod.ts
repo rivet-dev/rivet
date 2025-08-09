@@ -55,6 +55,7 @@ import {
 	faPalette,
 	faLayerGroup,
 	faVercel,
+    faSquareRootVariable,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -195,7 +196,7 @@ export const sitemap = [
 							},
 							{
 								title: "State Management",
-								icon: faFloppyDisk,
+								icon: faDatabase,
 								collapsible: true,
 								pages: [
 									{

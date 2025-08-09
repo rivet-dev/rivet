@@ -471,55 +471,48 @@ const loggingActor = actor({
 
 ## Destroying Actors
 
-Actors can be shut down gracefully with `c.shutdown()`. Clients will be gracefully disconnected.
+_Destroying actors is not available yet._
+
+## Advanced
+
+### Running Background Tasks
+
+The `c.runInBackground` method allows you to execute promises asynchronously without blocking the actor's main execution flow. The actor is prevented from sleeping while the promise passed to `runInBackground` is still active. This is useful for fire-and-forget operations where you don't need to wait for completion.
+
+Common use cases:
+- **Analytics and logging**: Send events to external services without delaying responses
+- **State sync**: Populate external databases or APIs with updates to actor state in the background
 
 ```typescript
 import { actor } from "@rivetkit/actor";
 
-const temporaryRoom = actor({
-  state: { 
-    createdAt: 0,
-    expiresAfterMs: 3600000 // 1 hour
-  },
-  
-  createState: () => ({
-    createdAt: Date.now(),
-    expiresAfterMs: 3600000 // 1 hour
-  }),
-  
-  onStart: (c) => {
-    // Check if room is expired
-    const now = Date.now();
-    const expiresAt = c.state.createdAt + c.state.expiresAfterMs;
-    
-    if (now > expiresAt) {
-      console.log("Room expired, shutting down");
-      c.shutdown();
-    } else {
-      // Set up expiration timer
-      const timeUntilExpiry = expiresAt - now;
-      setTimeout(() => {
-        console.log("Room lifetime reached, shutting down");
-        c.shutdown();
-      }, timeUntilExpiry);
-    }
-  },
+const gameRoom = actor({
+  state: { players: {}, scores: {} },
   
   actions: {
-    closeRoom: (c) => {
-      // Notify all clients
-      c.broadcast("roomClosed", { reason: "Admin closed the room" });
+    playerJoined: (c, playerId: string) => {
+      c.state.players[playerId] = { joinedAt: Date.now() };
       
-      // Shutdown the actor
-      c.shutdown();
-    }
+      // Send analytics event without blocking
+      c.runInBackground(
+        fetch('https://analytics.example.com/events', {
+          method: 'POST',
+          body: JSON.stringify({ 
+            event: 'player_joined', 
+            playerId,
+            timestamp: Date.now() 
+          })
+        }).then(() => console.log('Analytics sent'))
+      );
+      
+      return { success: true };
+    },
   }
 });
 ```
 
-This action is permanent and cannot be reverted.
 
-## Using `ActorContext` Type Externally
+### Using `ActorContext` Type Externally
 
 When extracting logic from lifecycle hooks or actions into external functions, you'll often need to define the type of the context parameter. Rivet provides helper types that make it easy to extract and pass these context types to external functions.
 
