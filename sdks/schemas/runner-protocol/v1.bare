@@ -1,0 +1,262 @@
+# Runner Protocol v1
+
+type Id str
+type Json str
+
+type KvKey data
+
+type KvValue data
+
+type KvMetadata struct {
+	version: data
+	createTs: i64
+}
+
+type KvListAllQuery void
+
+type KvListRangeQuery struct {
+	start: KvKey
+	end: KvKey
+	exclusive: bool
+}
+
+type KvListPrefixQuery struct {
+	key: KvKey
+}
+
+type KvListQuery union {
+	KvListAllQuery |
+	KvListRangeQuery |
+	KvListPrefixQuery
+}
+
+type ActorName struct {
+	metadata: Json
+}
+
+type RunnerAddressHttp struct {
+	hostname: str
+	port: u16
+}
+
+type RunnerAddressTcp struct {
+	hostname: str
+	port: u16
+}
+
+type RunnerAddressUdp struct {
+	hostname: str
+	port: u16
+}
+
+type StopCode enum {
+	OK
+	ERROR
+}
+
+type ActorIntentSleep void
+
+type ActorIntentStop void
+
+type ActorIntent union {
+	ActorIntentSleep |
+	ActorIntentStop
+}
+
+type ActorStateRunning void
+
+type ActorStateStopped struct {
+	code: StopCode
+	message: optional<str>
+}
+
+type ActorState union {
+	ActorStateRunning |
+	ActorStateStopped
+}
+
+type EventActorIntent struct {
+	actorId: Id
+	generation: u32
+	intent: ActorIntent
+}
+
+type EventActorStateUpdate struct {
+	actorId: Id
+	generation: u32
+	state: ActorState
+}
+
+type EventActorSetAlarm struct {
+	actorId: Id
+	generation: u32
+	alarmTs: optional<i64>
+}
+
+type Event union {
+	EventActorIntent |
+	EventActorStateUpdate |
+	EventActorSetAlarm
+}
+
+type EventWrapper struct {
+	index: i64
+	inner: Event
+}
+
+type ActorConfig struct {
+	name: str
+	key: optional<str>
+	createTs: i64
+	input: optional<data>
+}
+
+type CommandStartActor struct {
+	actorId: Id
+	generation: u32
+	config: ActorConfig
+}
+
+type CommandStopActor struct {
+	actorId: Id
+	generation: u32
+}
+
+type Command union {
+	CommandStartActor |
+	CommandStopActor
+}
+
+type CommandWrapper struct {
+	index: i64
+	inner: Command
+}
+
+type ToServerInit struct {
+	runnerId: optional<Id>
+	name: str
+	key: str
+	version: u32
+	totalSlots: u32
+	addressesHttp: optional<map<str><RunnerAddressHttp>>
+	addressesTcp: optional<map<str><RunnerAddressTcp>>
+	addressesUdp: optional<map<str><RunnerAddressUdp>>
+	lastCommandIdx: optional<i64>
+	prepopulateActorNames: optional<map<str><ActorName>>
+	metadata: optional<Json>
+}
+
+type ToServerEvents list<EventWrapper>
+
+type ToServerAckCommands struct {
+	lastCommandIdx: i64
+}
+
+type ToServerStopping void
+
+type ToServerPing struct {
+	ts: i64
+}
+
+type KvGetRequest struct {
+	keys: list<KvKey>
+}
+
+type KvListRequest struct {
+	query: KvListQuery
+	reverse: optional<bool>
+	limit: optional<u64>
+}
+
+type KvPutRequest struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+}
+
+type KvDeleteRequest struct {
+	keys: list<KvKey>
+}
+
+type KvDropRequest void
+
+type KvRequestData union {
+	KvGetRequest |
+	KvListRequest |
+	KvPutRequest |
+	KvDeleteRequest |
+	KvDropRequest
+}
+
+type ToServerKvRequest struct {
+	actorId: Id
+	requestId: u32
+	data: KvRequestData
+}
+
+type ToServer union {
+	ToServerInit |
+	ToServerEvents |
+	ToServerAckCommands |
+	ToServerStopping |
+	ToServerPing |
+	ToServerKvRequest
+}
+
+type ProtocolMetadata struct {
+	runnerLostThreshold: i64
+}
+
+type ToClientInit struct {
+	runnerId: Id
+	lastEventIdx: i64
+	metadata: ProtocolMetadata
+}
+
+type ToClientCommands list<CommandWrapper>
+
+type ToClientAckEvents struct {
+	lastEventIdx: i64
+}
+
+type KvErrorResponse struct {
+	message: str
+}
+
+type KvGetResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvListResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvPutResponse void
+
+type KvDeleteResponse void
+
+type KvDropResponse void
+
+type KvResponseData union {
+	KvErrorResponse |
+	KvGetResponse |
+	KvListResponse |
+	KvPutResponse |
+	KvDeleteResponse |
+	KvDropResponse
+}
+
+type ToClientKvResponse struct {
+	requestId: u32
+	data: KvResponseData
+}
+
+type ToClient union {
+	ToClientInit |
+	ToClientCommands |
+	ToClientAckEvents |
+	ToClientKvResponse
+}

@@ -1,0 +1,56 @@
+[package]
+name = "rivet-guard-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+ops = ["dep:gas", "dep:clickhouse-user-query", "dep:once_cell"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+clickhouse-inserter.workspace = true
+futures-util.workspace = true
+futures.workspace = true
+http-body-util.workspace = true
+http-body.workspace = true
+# TODO: Make this use workspace version
+hyper = { version = "1.6.0", features = ["full", "http1", "http2"] }
+hyper-tungstenite.workspace = true
+hyper-util = { workspace = true, features = ["full"] }
+indoc.workspace = true
+lazy_static.workspace = true
+moka = { workspace = true, features = ["future"] }
+pegboard.workspace = true
+rand.workspace = true
+regex.workspace = true
+rivet-api-builder.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-metrics.workspace = true
+rivet-util.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio-rustls.workspace = true
+tokio-tungstenite.workspace = true
+tokio.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing.workspace = true
+url.workspace = true
+uuid = { workspace = true, features = ["v4", "serde"] }
+
+# Optional dependencies for ops feature
+gas = { workspace = true, optional = true }
+clickhouse-user-query = { workspace = true, optional = true }
+once_cell = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures-util.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+tokio-stream.workspace = true

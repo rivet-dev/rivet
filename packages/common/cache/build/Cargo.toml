@@ -6,34 +6,22 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-futures-util = "0.3"
-global-error.workspace = true
-lazy_static = "1.4"
-moka = { version = "0.12", features = ["future"] }
-prost = "0.10"
-prost-types = "0.10"
+anyhow.workspace = true
+futures-util.workspace = true
+lazy_static.workspace = true
+moka.workspace = true
 rivet-cache-result.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true
 rivet-metrics.workspace = true
 rivet-pools.workspace = true
 rivet-util.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
-tracing = "0.1"
-types-proto.workspace = true
-uuid = { version = "1", features = ["v4"] }
-
-[dependencies.redis]
-workspace = true
-features = [
-	"keep-alive",
-	"aio",
-	"tokio-comp",
-	"tokio-native-tls-comp",
-]
+tracing.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
-rand = "0.8"
+rand.workspace = true

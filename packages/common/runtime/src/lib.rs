@@ -1,9 +1,9 @@
 use std::{env, future::Future, sync::Arc, time::Duration};
 
+use rivet_metrics::{KeyValue, init_otel_providers};
 use tokio::sync::{Notify, OnceCell};
-
 mod metrics;
-mod otel;
+mod traces;
 
 static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
 
@@ -19,7 +19,8 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 			.clone();
 
 		// Must be called from within a tokio context
-		let _guard = otel::init_tracing_subscriber();
+		let providers = init_otel_providers();
+		traces::init_tracing_subscriber(&providers);
 
 		tokio::select! {
 			_ = notify.notified() => {
@@ -33,27 +34,13 @@ pub fn run<F: Future>(f: F) -> Option<F::Output> {
 	output
 }
 
-/// Shuts down the entire rivet runtime, if one is running. This future will never resolve.
+/// Shuts down the entire rivet runtime, if one is running.
 pub async fn shutdown() {
 	if let Some(shutdown) = SHUTDOWN.get() {
 		shutdown.notify_one();
 	} else {
 		tracing::error!("no runtime to shutdown");
 	};
-
-	// Wait forever, the runtime should be shutting down
-	std::future::pending().await
-}
-
-/// Shuts down the entire rivet runtime, if one is running. Immediately panics afterwards.
-pub fn sync_shutdown() {
-	if let Some(shutdown) = SHUTDOWN.get() {
-		shutdown.notify_one();
-	} else {
-		tracing::error!("no runtime to shutdown");
-	};
-
-	panic!("shutting down");
 }
 
 fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
@@ -61,53 +48,60 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	rt_builder.enable_all();
 
 	rt_builder.on_thread_start(move || {
-		metrics::TOKIO_THREAD_COUNT.inc();
+		metrics::TOKIO_THREAD_COUNT.add(1, &[]);
 	});
 	rt_builder.on_thread_stop(move || {
-		metrics::TOKIO_THREAD_COUNT.dec();
+		metrics::TOKIO_THREAD_COUNT.add(-1, &[]);
 	});
 
-	rt_builder.on_task_spawn(move |_| {
-		metrics::TOKIO_TASK_TOTAL.inc();
-	});
+	rt_builder.on_task_spawn(move |_| metrics::TOKIO_TASK_TOTAL.add(1, &[]));
 
 	if env::var("TOKIO_RUNTIME_METRICS").is_ok() {
 		rt_builder.on_before_task_poll(|_| {
 			let metrics = tokio::runtime::Handle::current().metrics();
-			let buckets = metrics.poll_time_histogram_num_buckets();
+			// let buckets = metrics.poll_time_histogram_num_buckets();
 
-			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
-			metrics::TOKIO_ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
+			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.record(metrics.global_queue_depth() as u64, &[]);
+			metrics::TOKIO_ACTIVE_TASK_COUNT.record(metrics.num_alive_tasks() as u64, &[]);
 
 			for worker in 0..metrics.num_workers() {
-				metrics::TOKIO_WORKER_OVERFLOW_COUNT
-					.with_label_values(&[&worker.to_string()])
-					.set(metrics.worker_overflow_count(worker) as i64);
-				metrics::TOKIO_WORKER_LOCAL_QUEUE_DEPTH
-					.with_label_values(&[&worker.to_string()])
-					.set(metrics.worker_local_queue_depth(worker) as i64);
+				metrics::TOKIO_WORKER_OVERFLOW_COUNT.record(
+					metrics.worker_overflow_count(worker),
+					&[KeyValue::new("worker", worker.to_string())],
+				);
+				metrics::TOKIO_WORKER_LOCAL_QUEUE_DEPTH.record(
+					metrics.worker_local_queue_depth(worker) as u64,
+					&[KeyValue::new("worker", worker.to_string())],
+				);
 
-				use rivet_metrics::prometheus::core::Metric;
-				// Has some sort of internal lock, must read data before loop
-				let prom_buckets = {
-					metrics::TOKIO_TASK_POLL_DURATION
-						.metric()
-						.get_histogram()
-						.get_bucket()
-						.iter()
-						.map(|bucket| bucket.get_cumulative_count())
-						.collect::<Vec<_>>()
-				};
+				// TODO: Internal histogram data no longer accessable in OTEL
+				// needs to be turned into: 1. 20 gauges, or 2. store internal
+				// bucket counts manually
 
-				for (bucket, prom_bucket_count) in (0..buckets).zip(prom_buckets) {
-					let range = metrics.poll_time_histogram_bucket_range(bucket);
-					let count = metrics.poll_time_histogram_bucket_count(worker, bucket);
-					let diff = count.saturating_sub(prom_bucket_count);
+				// use rivet_metrics::prometheus::core::Metric;
+				// // Has some sort of internal lock, must read data before loop
+				// let prom_buckets = {
+				// 	metrics::TOKIO_TASK_POLL_DURATION
+				// 		.metric()
+				// 		.get_histogram()
+				// 		.get_bucket()
+				// 		.iter()
+				// 		.map(|bucket| bucket.get_cumulative_count())
+				// 		.collect::<Vec<_>>()
+				// };
 
-					for _ in 0..diff {
-						metrics::TOKIO_TASK_POLL_DURATION.observe(range.start.as_secs_f64());
-					}
-				}
+				// for (bucket, prom_bucket_count) in (0..buckets).zip(prom_buckets) {
+				// 	let range = metrics.poll_time_histogram_bucket_range(bucket);
+				// 	let count = metrics.poll_time_histogram_bucket_count(worker, bucket);
+				// 	// Calculate difference in tokio's internal bucket counts and
+				// 	// prom's internal count
+				// 	let diff = count.saturating_sub(prom_bucket_count);
+
+				// 	// Match prom's count with tokio's for given bucket
+				// 	for _ in 0..diff {
+				// 		metrics::TOKIO_TASK_POLL_DURATION.record(range.start.as_secs_f64(), &[]);
+				// 	}
+				// }
 			}
 		});
 

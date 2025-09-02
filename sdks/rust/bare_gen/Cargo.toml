@@ -1,0 +1,15 @@
+[package]
+name = "bare_gen"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+heck.workspace = true
+pest_derive.workspace = true
+pest.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+serde.workspace = true
+syn.workspace = true

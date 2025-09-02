@@ -66,7 +66,7 @@ where
 		format!("Secret<{}>", T::schema_name())
 	}
 
-	fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-		T::json_schema(gen)
+	fn json_schema(generator: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+		T::json_schema(generator)
 	}
 }

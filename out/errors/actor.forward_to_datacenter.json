@@ -1,0 +1,5 @@
+{
+  "code": "forward_to_datacenter",
+  "group": "actor",
+  "message": "Actor should be created in a different datacenter."
+}

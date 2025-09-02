@@ -1,1 +1,0 @@
-ALTER TABLE service_logs ADD COLUMN namespace String DEFAULT '';

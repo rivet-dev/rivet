@@ -1,0 +1,5 @@
+{
+  "code": "request_timeout",
+  "group": "ups",
+  "message": "Request timeout."
+}

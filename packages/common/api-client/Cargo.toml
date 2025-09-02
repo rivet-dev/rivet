@@ -1,0 +1,21 @@
+[package]
+name = "rivet-api-client"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+rivet-api-builder.workspace = true
+rivet-api-util.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true

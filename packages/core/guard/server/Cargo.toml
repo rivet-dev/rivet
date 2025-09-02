@@ -1,0 +1,53 @@
+[package]
+name = "rivet-guard"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "rivet_guard"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+bytes.workspace = true
+gas.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+hyper-tungstenite.workspace = true
+tower.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+futures.workspace = true
+# TODO: Make this use workspace version
+hyper = "1.6.0"
+indoc.workspace = true
+once_cell.workspace = true
+pegboard.workspace = true
+pegboard-gateway.workspace = true
+pegboard-tunnel.workspace = true
+regex.workspace = true
+rivet-api-peer.workspace = true
+rivet-api-public.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-guard-core.workspace = true
+rivet-key-data.workspace = true
+rivet-logs.workspace = true
+rivet-metrics.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
+rustls-pemfile.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true

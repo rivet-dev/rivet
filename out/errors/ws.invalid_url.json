@@ -1,0 +1,5 @@
+{
+  "code": "invalid_url",
+  "group": "ws",
+  "message": "The connection URL is invalid."
+}

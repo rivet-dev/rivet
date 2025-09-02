@@ -1,0 +1,5 @@
+{
+  "code": "wrong_addr_protocol",
+  "group": "guard",
+  "message": "Attempted to access a address using the wrong protocol."
+}

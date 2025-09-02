@@ -1,0 +1,19 @@
+[package]
+name = "namespace"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+rivet-api-builder.workspace = true
+rivet-api-util.workspace = true
+rivet-error.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+tracing.workspace = true
+utoipa.workspace = true

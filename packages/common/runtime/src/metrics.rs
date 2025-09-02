@@ -1,49 +1,34 @@
-use rivet_metrics::{prometheus::*, REGISTRY, TASK_POLL_BUCKETS};
+use rivet_metrics::{
+	TASK_POLL_BUCKETS,
+	otel::{global::*, metrics::*},
+};
 
 lazy_static::lazy_static! {
+	static ref METER: Meter = meter("rivet-runtime");
+
 	// MARK: Tokio
-	pub static ref TOKIO_THREAD_COUNT: IntGauge =
-		register_int_gauge_with_registry!(
-			"tokio_thread_count",
-			"Total number of Tokio threads.",
-			*REGISTRY
-		).unwrap();
-	pub static ref TOKIO_GLOBAL_QUEUE_DEPTH: IntGauge =
-		register_int_gauge_with_registry!(
-			"tokio_global_queue_depth",
-			"Number of pending tasks in the global queue.",
-			*REGISTRY
-		).unwrap();
-	pub static ref TOKIO_TASK_TOTAL: IntCounter =
-		register_int_counter_with_registry!(
-			"tokio_task_total",
-			"Total number of spawned tasks.",
-			*REGISTRY
-		).unwrap();
-	pub static ref TOKIO_ACTIVE_TASK_COUNT: IntGauge =
-		register_int_gauge_with_registry!(
-			"tokio_active_task_count",
-			"Total number of active (running or sleeping) tasks.",
-			*REGISTRY
-		).unwrap();
-	pub static ref TOKIO_WORKER_OVERFLOW_COUNT: IntGaugeVec = register_int_gauge_vec_with_registry!(
-			"tokio_worker_overflow_count",
-			"Number of times the given worker thread saturated its local queue.",
-			&["worker"],
-			*REGISTRY,
-		)
-		.unwrap();
-	pub static ref TOKIO_WORKER_LOCAL_QUEUE_DEPTH: IntGaugeVec = register_int_gauge_vec_with_registry!(
-			"tokio_worker_local_queue_depth",
-			"Number of pending tasks in a worker's queue.",
-			&["worker"],
-			*REGISTRY,
-		)
-		.unwrap();
-	pub static ref TOKIO_TASK_POLL_DURATION: Histogram = register_histogram_with_registry!(
-		"tokio_task_poll_duration",
-		"Duration to poll a task.",
-		TASK_POLL_BUCKETS.to_vec(),
-		*REGISTRY,
-	).unwrap();
+	pub static ref TOKIO_THREAD_COUNT: UpDownCounter<i64> = METER.i64_up_down_counter("rivet_tokio_thread_count")
+		.with_description("Total number of Tokio threads.")
+		.build();
+	pub static ref TOKIO_GLOBAL_QUEUE_DEPTH: Gauge<u64> = METER.u64_gauge("rivet_tokio_global_queue_depth")
+		.with_description("Number of pending tasks in the global queue.")
+		.build();
+	pub static ref TOKIO_TASK_TOTAL: Counter<u64> = METER.u64_counter("rivet_tokio_task_total")
+		.with_description("Total number of spawned tasks.")
+		.build();
+	pub static ref TOKIO_ACTIVE_TASK_COUNT: Gauge<u64> = METER.u64_gauge("rivet_tokio_active_task_count")
+		.with_description("Total number of active (running or sleeping) tasks.")
+		.build();
+	/// Expected attributes: "worker"
+	pub static ref TOKIO_WORKER_OVERFLOW_COUNT: Gauge<u64> = METER.u64_gauge("rivet_tokio_worker_overflow_count")
+		.with_description("Number of times the given worker thread saturated its local queue.")
+		.build();
+	/// Expected attributes: "worker"
+	pub static ref TOKIO_WORKER_LOCAL_QUEUE_DEPTH: Gauge<u64> = METER.u64_gauge("rivet_tokio_worker_local_queue_depth")
+		.with_description("Number of pending tasks in a worker's queue.")
+		.build();
+	pub static ref TOKIO_TASK_POLL_DURATION: Histogram<f64> = METER.f64_histogram("rivet_tokio_task_poll_duration")
+		.with_description("Duration to poll a task.")
+		.with_boundaries(TASK_POLL_BUCKETS.to_vec())
+		.build();
 }

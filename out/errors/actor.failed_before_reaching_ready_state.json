@@ -1,0 +1,5 @@
+{
+  "code": "failed_before_reaching_ready_state",
+  "group": "actor",
+  "message": "Actor failed before reaching ready state."
+}

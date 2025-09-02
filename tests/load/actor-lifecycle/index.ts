@@ -2,7 +2,6 @@ import { fail, sleep } from "k6";
 import {
 	createActor,
 	destroyActor,
-	testWebSocket,
 	waitForHealth,
 } from "./actor.ts";
 import { CONFIG } from "./config.ts";
@@ -28,30 +27,23 @@ export default function () {
 
 	let actorId: string | undefined;
 	try {
-		const start = Date.now();
+		let start = Date.now();
 		console.log("creating actor");
 
 		// Create actor
 		const { actor } = createActor(CONFIG);
-		actorId = actor.id;
+		actorId = actor.actor_id;
 
-		console.log(`created actor ${actorId} ${Date.now() - start}ms`);
-
-		// Get endpoint info
-		const port = actor.network.ports.http;
-		const actorOrigin = port.url;
+		let created = Date.now();
+		console.log(`created actor ${actorId} ${created - start}ms`);
 
 		// Wait for health check if not disabled
 		if (!CONFIG.disableHealthcheck) {
-			const isHealthy = waitForHealth(`${actorOrigin}/health`);
+			const isHealthy = waitForHealth(`${CONFIG.rivetEndpoint}/ping`, actorId);
 			if (!isHealthy) fail("actor did not become healthy");
 		}
 
-		// Test WebSocket if not disabled
-		if (!CONFIG.disableWebsocket) {
-			const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
-			testWebSocket(wsUrl);
-		}
+		console.log(`actor healthy ${actorId} ${Date.now() - created}ms`);
 
 		// Sleep if not disabled
 		if (!CONFIG.disableSleep) {
@@ -65,7 +57,6 @@ export default function () {
 			destroyActor(CONFIG, actorId);
 		}
 	}
-
 	// const sleepDuration = (start + 60_000 - Date.now()) / 1000;
 	// console.log(`sleeping for ${sleepDuration}s`);
 	// sleep(sleepDuration);

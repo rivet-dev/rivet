@@ -4,11 +4,9 @@ pub mod metrics;
 mod pools;
 pub mod prelude;
 pub mod reqwest;
-pub mod utils;
 
 pub use crate::{
-	db::clickhouse::ClickHousePool, db::crdb::CrdbPool, db::fdb::FdbPool, db::nats::NatsPool,
-	db::redis::RedisPool, db::sqlite::SqlitePool, error::Error, pools::Pools,
+	db::clickhouse::ClickHousePool, db::udb::UdbPool, db::ups::UpsPool, error::Error, pools::Pools,
 };
 
 pub use clickhouse_inserter::ClickHouseInserterHandle;

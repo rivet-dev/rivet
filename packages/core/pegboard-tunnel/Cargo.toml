@@ -1,0 +1,40 @@
+[package]
+name = "pegboard-tunnel"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+gas.workspace = true
+http-body-util = "0.1"
+hyper = "1.6"
+hyper-tungstenite.workspace = true
+pegboard = { path = "../../services/pegboard" }
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-guard-core = { path = "../guard/core" }
+rivet-metrics.workspace = true
+rivet-pools.workspace = true
+rivet-tunnel-protocol.workspace = true
+rivet-runtime.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+universalpubsub.workspace = true
+url.workspace = true
+uuid.workspace = true
+versioned-data-util.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+rivet-cache.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use global_error::prelude::*;
+use anyhow::*;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use tokio::sync::mpsc;
@@ -33,7 +33,7 @@ impl ClickHouseInserterHandle {
 		database: &'static str,
 		table: &'static str,
 		columns: impl serde::Serialize,
-	) -> GlobalResult<()> {
+	) -> Result<()> {
 		// Serialize the columns to a JSON string
 		let columns = serde_json::value::to_raw_value(&columns).map_err(|e| {
 			tracing::error!(?e, "failed to serialize columns for ClickHouse");
@@ -150,7 +150,7 @@ impl InserterService {
 pub fn create_inserter(
 	vector_host: impl Into<String>,
 	vector_port: u16,
-) -> GlobalResult<ClickHouseInserterHandle> {
+) -> Result<ClickHouseInserterHandle> {
 	let (sender, receiver) = mpsc::channel(BATCH_SIZE * 2);
 	let vector_url = format!("http://{}:{}", vector_host.into(), vector_port);
 

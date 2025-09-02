@@ -1,0 +1,253 @@
+# MARK: Common Types
+type ReplicaId u64
+type SlotId u64
+type SequenceNumber u64
+
+type Instance struct {
+	replicaId: ReplicaId
+	slotId: SlotId
+}
+
+type Ballot struct {
+	epoch: u64
+	ballot: u64
+	replicaId: ReplicaId
+}
+
+type State enum {
+	PRE_ACCEPTED
+	ACCEPTED
+	COMMITTED
+}
+
+# MARK: Cluster config
+type ReplicaStatus enum {
+	# Receives nothing
+	JOINING
+	# Receives commits, cannot propose, cannot vote
+	LEARNING
+	# Receives commits, can propose, can vote
+	ACTIVE
+}
+
+type ReplicaConfig struct {
+	replicaId: ReplicaId
+	status: ReplicaStatus
+	apiPeerUrl: str
+	guardUrl: str
+}
+
+type ClusterConfig struct {
+	coordinatorReplicaId: ReplicaId
+	epoch: u64
+	replicas: list<ReplicaConfig>
+}
+
+# MARK: Config Change
+type UpdateConfigRequest struct {
+	config: ClusterConfig
+}
+
+type UpdateConfigResponse void
+
+# MARK: Command
+type NoopCommand void
+
+type SetCommand struct {
+	key: data
+	value: optional<data>
+}
+
+type CheckAndSetCommand struct {
+	key: data
+	expectOneOf: list<optional<data>>
+	newValue: optional<data>
+}
+
+type CommandKind union {
+	NoopCommand |
+	SetCommand |
+	CheckAndSetCommand
+}
+
+type Command struct {
+	kind: CommandKind
+}
+
+# MARK: Proposal
+type Proposal struct {
+	commands: list<Command>
+}
+
+# MARK: Payload
+type Payload struct {
+	proposal: Proposal
+	seq: SequenceNumber
+	deps: list<Instance>
+	instance: Instance
+}
+
+# MARK: Log
+type LogEntry struct {
+	commands: list<Command>
+	seq: SequenceNumber
+	deps: list<Instance>
+	state: State
+	ballot: Ballot
+}
+
+# MARK: Path
+type PathSlow struct {
+	payload: Payload
+}
+
+type PathFast struct {
+	payload: Payload
+}
+
+type Path union {
+	PathSlow |
+	PathFast
+}
+
+# MARK: Prepare
+type PrepareRequest struct {
+	ballot: Ballot
+	instance: Instance
+}
+
+type PrepareResponseData struct {
+	commands: list<Command>
+	seq: SequenceNumber
+	deps: list<Instance>
+	state: State
+	ballot: Ballot
+}
+
+type PrepareOk struct {
+	# None if instance is empty
+	data: optional<PrepareResponseData>
+	# The highest ballot seen for this instance
+	previousBallot: Ballot
+	instance: Instance
+}
+
+type PrepareNack struct {
+	# The ballot that caused the Nack
+	highestBallot: Ballot
+}
+
+type PrepareResponse union {
+	PrepareOk |
+	PrepareNack
+}
+
+# MARK: Pre Accept
+type PreAcceptRequest struct {
+	payload: Payload
+}
+
+type PreAcceptResponse struct {
+	payload: Payload
+}
+
+## MARK: Accept
+type AcceptRequest struct {
+	payload: Payload
+}
+
+type AcceptOKPayload struct {
+	proposal: Proposal
+	instance: Instance
+}
+
+type AcceptResponse struct {
+	payload: AcceptOKPayload
+}
+
+# MARK: Commit
+type CommitRequest struct {
+	payload: Payload
+}
+
+type CommitResponse void
+
+# MARK: Replica Join
+type DownloadInstancesRequest struct {
+	afterInstance: optional<Instance>
+	count: u64
+}
+
+type DownloadInstancesEntry struct {
+	instance: Instance
+	logEntry: LogEntry
+}
+
+type DownloadInstancesResponse struct {
+	instances: list<DownloadInstancesEntry>
+}
+
+type HealthCheckRequest void
+
+type HealthCheckResponse void
+
+type CoordinatorUpdateReplicaStatusRequest struct {
+	replicaId: ReplicaId
+	status: ReplicaStatus
+}
+
+type CoordinatorUpdateReplicaStatusResponse void
+
+type BeginLearningRequest struct {
+	config: ClusterConfig
+}
+
+type BeginLearningResponse void
+
+# MARK: KV Operations
+type KvGetRequest struct {
+	key: data
+}
+
+type KvGetResponse struct {
+	value: optional<data>
+}
+
+
+# MARK: Request/Response
+type RequestKind union {
+	UpdateConfigRequest |
+	PrepareRequest |
+	PreAcceptRequest |
+	AcceptRequest |
+	CommitRequest |
+	DownloadInstancesRequest |
+	HealthCheckRequest |
+	CoordinatorUpdateReplicaStatusRequest |
+	BeginLearningRequest |
+	KvGetRequest
+}
+
+type Request struct {
+	fromReplicaId: ReplicaId
+	toReplicaId: ReplicaId
+	kind: RequestKind
+}
+
+type ResponseKind union {
+	UpdateConfigResponse |
+	PrepareResponse |
+	PreAcceptResponse |
+	AcceptResponse |
+	CommitResponse |
+	DownloadInstancesResponse |
+	HealthCheckResponse |
+	CoordinatorUpdateReplicaStatusResponse |
+	BeginLearningResponse |
+	KvGetResponse
+}
+
+type Response struct {
+	kind: ResponseKind
+}
+

@@ -1,0 +1,14 @@
+[package]
+name = "rivet-api-util"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+reqwest.workspace = true
+rivet-api-builder.workspace = true
+serde.workspace = true
+serde_json.workspace = true

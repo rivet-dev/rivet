@@ -1,0 +1,30 @@
+apiVersion: 1
+datasources:
+  - name: ClickHouse
+    uid: clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    secureJsonData:
+      password: default
+    jsonData:
+      version: 2.0.0
+      host: clickhouse
+      port: 9300
+      defaultDatabase: default
+      protocol: http
+      secure: false
+      username: default
+      validateSql: true
+      logs:
+        otelEnabled: true
+        otelVersion: 1.2.9
+        defaultDatabase: otel
+        defaultTable: otel_logs
+        timeColumn: TimestampTime
+        messageColumn: Body
+        levelColumn: SeverityText
+      traces:
+        otelEnabled: true
+        otelVersion: 1.2.9
+        defaultDatabase: otel
+        defaultTable: otel_traces

@@ -1,7 +1,7 @@
 use std::{convert::TryInto, time};
 
+use anyhow::*;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
-use global_error::prelude::*;
 
 pub fn now() -> i64 {
 	time::SystemTime::now()
@@ -12,28 +12,30 @@ pub fn now() -> i64 {
 		.expect("now doesn't fit in i64")
 }
 
-pub fn end_of_month(ts: i64) -> GlobalResult<NaiveDateTime> {
+pub fn end_of_month(ts: i64) -> Result<NaiveDateTime> {
 	let nanos = (ts % 1000 * 1_000_000).try_into()?;
 
 	// Get year and month of current month
-	let current_date = unwrap!(DateTime::from_timestamp(ts / 1000, nanos));
+	let current_date =
+		DateTime::from_timestamp(ts / 1000, nanos).context("failed converting ms to datetime")?;
 	let year = current_date.year();
 	let month = current_date.month();
 
-	let date = unwrap!(NaiveDate::from_ymd_opt(year, month + 1, 1)
+	let date = NaiveDate::from_ymd_opt(year, month + 1, 1)
 		.or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1))
-		.and_then(|date| date.and_hms_opt(0, 0, 0)));
+		.and_then(|date| date.and_hms_opt(0, 0, 0))
+		.context("failed constructing eom date")?;
 
 	Ok(date - Duration::milliseconds(1))
 }
 
-pub fn to_chrono(ts: i64) -> GlobalResult<DateTime<Utc>> {
+pub fn to_chrono(ts: i64) -> Result<DateTime<Utc>> {
 	let nanos = (ts % 1000 * 1_000_000).try_into()?;
 	let local = Utc.timestamp_opt(ts / 1000, nanos).latest();
-	Ok(unwrap!(local))
+	local.context("failed converting ms to chrono")
 }
 
-pub fn to_string(ts: i64) -> GlobalResult<String> {
+pub fn to_string(ts: i64) -> Result<String> {
 	Ok(to_chrono(ts)?.to_rfc3339_openapi())
 }
 

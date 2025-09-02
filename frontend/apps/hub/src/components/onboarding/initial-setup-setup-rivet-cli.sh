@@ -1,2 +1,0 @@
-rivet init
-rivet deploy

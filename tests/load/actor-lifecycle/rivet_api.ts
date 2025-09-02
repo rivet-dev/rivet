@@ -25,10 +25,6 @@ export function callRivetApi(
 		"Content-Type": "application/json",
 	};
 
-	if (config.rivetServiceToken) {
-		headers.Authorization = `Bearer ${config.rivetServiceToken}`;
-	}
-
 	// Build URL with query parameters
 	let url = config.rivetEndpoint;
 	if (!url.endsWith("/") && !path.startsWith("/")) {
@@ -38,8 +34,7 @@ export function callRivetApi(
 
 	// Auto-add project and environment if defined
 	const defaultParams = {
-		project: config.rivetProject,
-		environment: config.rivetEnvironment,
+		namespace: config.rivetNamespace,
 		...queryParams,
 	};
 

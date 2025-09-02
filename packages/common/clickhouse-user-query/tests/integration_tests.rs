@@ -2,7 +2,7 @@ use clickhouse::{Client, Row};
 use clickhouse_user_query::*;
 use serde::Deserialize;
 use serde_json;
-use testcontainers::{core::ContainerPort, runners::AsyncRunner, ContainerAsync, GenericImage};
+use testcontainers::{ContainerAsync, GenericImage, core::ContainerPort, runners::AsyncRunner};
 
 #[derive(Row, Deserialize)]
 struct UserRow {
@@ -79,13 +79,11 @@ async fn test_simple_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema
-	let schema = Schema::new(vec![Property::new(
-		"active".to_string(),
-		false,
-		PropertyType::Bool,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("active".to_string(), false, PropertyType::Bool)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Create query
@@ -124,13 +122,11 @@ async fn test_map_key_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema with map support
-	let schema = Schema::new(vec![Property::new(
-		"metadata".to_string(),
-		true,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Query for premium tier users
@@ -236,13 +232,11 @@ async fn test_sql_injection_protection() {
 	let setup = TestSetup::new().await;
 
 	// Create schema
-	let schema = Schema::new(vec![Property::new(
-		"metadata".to_string(),
-		true,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Attempt SQL injection in map key
@@ -381,13 +375,11 @@ async fn test_numeric_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema with number support
-	let schema = Schema::new(vec![Property::new(
-		"score".to_string(),
-		false,
-		PropertyType::Number,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Query for users with score greater than 80
@@ -425,13 +417,11 @@ async fn test_numeric_less_or_equal_query() {
 	let setup = TestSetup::new().await;
 
 	// Create schema with number support
-	let schema = Schema::new(vec![Property::new(
-		"score".to_string(),
-		false,
-		PropertyType::Number,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Query for users with score <= 90
@@ -469,13 +459,11 @@ async fn test_string_in_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema
-	let schema = Schema::new(vec![Property::new(
-		"metadata".to_string(),
-		true,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Query for users with specific regions
@@ -514,13 +502,11 @@ async fn test_number_not_in_query_execution() {
 	let setup = TestSetup::new().await;
 
 	// Create schema
-	let schema = Schema::new(vec![Property::new(
-		"score".to_string(),
-		false,
-		PropertyType::Number,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("score".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	// Query for users with score not in specific values

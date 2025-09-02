@@ -1,2 +1,0 @@
-ALTER TABLE datacenters
-ADD COLUMN prebakes_enabled BOOLEAN NOT NULL DEFAULT TRUE;

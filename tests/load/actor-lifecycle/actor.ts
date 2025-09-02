@@ -6,26 +6,12 @@ import type { Config, CreateActorResponse } from "./types.ts";
 
 export function createActor(config: Config): CreateActorResponse {
 	return callRivetApi(config, "POST", "/actors", {
-		region: config.region,
-		tags: { name: config.buildName },
-		build_tags: { name: config.buildName, current: "true" },
-		network: {
-			ports: {
-				http: {
-					protocol: "https",
-					routing: { guard: {} },
-				},
-			},
+		name: "test-actor",
+		keys: {
+			idx: Math.floor(Math.random() * 10000000).toString(),
 		},
-		...(config.buildName === "ws-container"
-			? {
-					resources: {
-						cpu: 125,
-						memory: 128,
-					},
-				}
-			: {}),
-		lifecycle: { durable: false },
+		runner_name_selector: "foo",
+		durable: false,
 	});
 }
 
@@ -33,12 +19,18 @@ export function destroyActor(config: Config, actorId: string): void {
 	callRivetApi(config, "DELETE", `/actors/${actorId}`);
 }
 
-export function waitForHealth(url: string): boolean {
+export function waitForHealth(url: string, actorId: string): boolean {
 	let attempts = 0;
 	const maxAttempts = 30;
 
 	while (attempts < maxAttempts) {
-		const response = http.get(url);
+		const response = http.get(url, {
+			headers: {
+				"x-rivet-target": "actor",
+				"x-rivet-actor": actorId,
+				"x-rivet-addr": "main",
+			}
+		});
 		if (response.status === 200) {
 			console.debug("health check passed");
 			return true;
@@ -47,45 +39,4 @@ export function waitForHealth(url: string): boolean {
 		attempts++;
 	}
 	return false;
-}
-
-export function testWebSocket(url: string): void {
-	sleep(0.5);
-
-	let didOpen = false;
-	let didError = false;
-	let didPong = false;
-	console.log("connecting to", url);
-	const wsResponse = ws.connect(url, null, (socket) => {
-		socket.on("open", () => {
-			didOpen = true;
-			console.debug("socket open, sending ping");
-			socket.send(JSON.stringify(["ping", 123]));
-		});
-
-		socket.on("message", (data) => {
-			const [type, _body] = JSON.parse(data);
-			if (type === "pong") {
-				console.debug("socket pong");
-				didPong = true;
-				socket.close();
-			}
-		});
-
-		socket.on("error", () => {
-			didError = true;
-		});
-
-		socket.setTimeout(() => {
-			console.log("2 seconds passed, closing the socket from timeout");
-		}, 2000);
-	});
-
-	check(wsResponse, {
-		"websocket connected successfully": (r) => r && r.status === 101,
-	});
-
-	check(didOpen, { "socket opened": (x) => x });
-	check(didPong, { "socket received pong": (x) => x });
-	check(didError, { "socket did not error": (x) => !x });
 }

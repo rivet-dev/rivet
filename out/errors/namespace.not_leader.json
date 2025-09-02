@@ -1,0 +1,5 @@
+{
+  "code": "not_leader",
+  "group": "namespace",
+  "message": "Attempting to run operation in non-leader datacenter."
+}

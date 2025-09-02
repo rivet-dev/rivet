@@ -4,8 +4,7 @@ on:
   pull_request:
     paths:
       - frontend/**
-      - site/**
-      - sdks/actor/**
+      - sdks/typescript/runner/**
 
 jobs:
   quality:

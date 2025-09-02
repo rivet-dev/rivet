@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" class="dark">
+	<head>
+		<script src="https://analytics.ahrefs.com/analytics.js" data-key="wQAsHie9RgJMLNhmUbr/fQ" async></script>
+
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<meta property="description" content="A unified platform to manage your game servers & backend." />
+
+		<meta property="og:url" content="https://rivet.gg/" />
+		<meta property="og:image" content="https://rivet.gg/promo/og.png" />
+		<meta property="og:image:alt" content="Rivet promotional banner" />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:type" content="website" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@rivetgg" />
+		<meta name="twitter:title" content="Rivet" />
+		<meta
+			name="twitter:description"
+			content="A unified platform to manage your game servers & backend."
+		/>
+		<meta name="twitter:image" content="https://rivet.gg/promo/og.png" />
+		<meta name="twitter:image:alt" content="Rivet promotional banner" />
+
+		<title>Rivet</title>
+	</head>
+	<body>
+		<div id="root"></div>
+
+		<script type="application/json" id="RIVET_CONFIG">
+			{
+				"apiUrl": "%VITE_APP_API_URL%",
+				"assetsUrl": "%VITE_APP_ASSETS_URL%",
+				"sentryDsn": "%VITE_APP_SENTRY_DSN%",
+				"sentry": {
+					"dsn": "%VITE_APP_SENTRY_DSN%",
+					"projectId": "%VITE_APP_SENTRY_PROJECT_ID%"
+				},
+				"posthog": {
+					"apiKey": "%VITE_APP_POSTHOG_API_KEY%",
+					"apiHost": "%VITE_APP_POSTHOG_HOST%"
+				}
+			}
+		</script>
+		<script type="module" src="/src/main.tsx"></script>
+	</body>
+</html>

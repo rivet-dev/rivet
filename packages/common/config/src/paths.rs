@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 /// Name of the config directory holding the rivet config.
-const CONFIG_DIR_NAME: &str = "rivet-server";
+const CONFIG_DIR_NAME: &str = "rivet";
 
 #[cfg(target_os = "linux")]
 pub fn system_config_dir() -> PathBuf {

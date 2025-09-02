@@ -1,0 +1,5 @@
+{
+  "code": "request_timeout_with_duration",
+  "group": "guard",
+  "message": "Request timed out."
+}

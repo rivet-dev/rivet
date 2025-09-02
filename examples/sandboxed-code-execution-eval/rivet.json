@@ -1,8 +1,0 @@
-{
-	"builds": {
-		"app": {
-			"dockerfile": "Dockerfile",
-			"access": "private"
-		}
-	}
-}

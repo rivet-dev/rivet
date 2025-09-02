@@ -1,0 +1,35 @@
+[package]
+name = "rivet-api-public"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+gas.workspace = true
+epoxy.workspace = true
+futures-util.workspace = true
+include_dir.workspace = true
+namespace.workspace = true
+pegboard.workspace = true
+reqwest.workspace = true
+rivet-api-builder.workspace = true
+rivet-api-client.workspace = true
+rivet-api-peer.workspace = true
+rivet-api-types.workspace = true
+rivet-api-util.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
+rivet-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+
+[build-dependencies]
+fs_extra.workspace = true

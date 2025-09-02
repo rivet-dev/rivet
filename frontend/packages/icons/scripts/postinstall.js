@@ -8,61 +8,52 @@ const esbuild = require("esbuild");
 let hasFaToken = !!process.env.FONTAWESOME_PACKAGE_TOKEN;
 
 const sourceDir = join(__dirname, "..", "src");
+const sourceNodeModules = join(sourceDir, "node_modules");
 
 if (!fs.existsSync(sourceDir)){
     fs.mkdirSync(sourceDir, { recursive: true });
 }
 
 if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
+	// Configure auth for Font Awesome private registry via .npmrc for pnpm
 	fs.writeFileSync(
-		join(sourceDir, ".yarnrc.yml"),
+		join(sourceDir, ".npmrc"),
 		dedent`
-		nodeLinker: node-modules
-
-		enableImmutableInstalls: false
-
-		npmScopes:
-		  fortawesome:
-		    npmAlwaysAuth: true
-		    npmRegistryServer: 'https://npm.fontawesome.com/'
-		    npmAuthToken: \${FONTAWESOME_PACKAGE_TOKEN}
-		  awesome.me:
-		    npmAlwaysAuth: true
-		    npmRegistryServer: "https://npm.fontawesome.com/"
-		    npmAuthToken: \${FONTAWESOME_PACKAGE_TOKEN}
+		@fortawesome:registry=https://npm.fontawesome.com/
+		@awesome.me:registry=https://npm.fontawesome.com/
+		//npm.fontawesome.com/:_authToken=\${FONTAWESOME_PACKAGE_TOKEN}
+		//npm.fontawesome.com/:always-auth=true
 		`,
 	);
 
-	fs.writeFileSync(join(sourceDir, "./package.json"), JSON.stringify({
-		"name": "@rivet-gg/internal-icons",
-		"private": true,
-		"sideEffects": false,
-		"dependencies": {
-			"@awesome.me/kit-63db24046b": "^1.0.13",
-			"@fortawesome/pro-regular-svg-icons": "6.6.0",
-			"@fortawesome/pro-solid-svg-icons": "6.6.0"
-		}
-	}));
+	fs.writeFileSync(
+		join(sourceDir, "./package.json"),
+		JSON.stringify(
+			{
+				name: "@rivet-gg/internal-icons",
+				private: true,
+				sideEffects: false,
+				dependencies: {
+					"@awesome.me/kit-63db24046b": "^1.0.13",
+					"@fortawesome/pro-regular-svg-icons": "6.6.0",
+					"@fortawesome/pro-solid-svg-icons": "6.6.0",
+				},
+			},
+			null,
+			2,
+		),
+	);
 
-	fs.writeFileSync(join(sourceDir, "yarn.lock"), "");
-
+	// Install dependencies locally without engaging the workspace to avoid recursion
 	spawnSync(
-		"yarn",
-		["config", "set", "-H", "enableImmutableInstalls", "false"],
+		"npm",
+		["install", "--no-package-lock", "--silent"],
 		{
 			stdio: "inherit",
 			cwd: sourceDir,
+			env: { ...process.env, CI: 0 },
 		},
 	);
-
-	spawnSync("yarn", [], {
-		stdio: "inherit",
-		cwd: sourceDir,
-		env: {
-			...process.env,
-			CI: 0,
-		},
-	});
 }
 
 const banner = dedent`
@@ -100,7 +91,16 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 		for (const { icon, aliases } of icons) {
 			if (!indexJsSource.includes(`export { definition as ${icon} }`)) {
 				if (hasFaToken || !isPro) {
-					indexJsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
+					if (hasFaToken && isPro) {
+						const candidate = join(sourceNodeModules, pkg, `${icon}.js`);
+						if (fs.existsSync(candidate)) {
+							indexJsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
+						} else {
+							indexJsSource += `export { definition as ${icon} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
+						}
+					} else {
+						indexJsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
+					}
 				} else {
 					indexJsSource += `export { definition as ${icon} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
 				}
@@ -112,7 +112,16 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 				) {
 					continue;
 				}
-				indexJsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
+				if (hasFaToken && isPro) {
+					const candidate = join(sourceNodeModules, pkg, `${icon}.js`);
+					if (fs.existsSync(candidate)) {
+						indexJsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
+					} else {
+						indexJsSource += `export { definition as ${alias} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
+					}
+				} else {
+					indexJsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
+				}
 			}
 		}
 	}
@@ -130,10 +139,27 @@ let indexTsSource = dedent`
 fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);
 
 async function build() {
+	const externals = [
+		"react",
+		"react-dom",
+		"@fortawesome/react-fontawesome",
+		"@fortawesome/fontawesome-svg-core",
+		"@fortawesome/free-solid-svg-icons",
+		"@fortawesome/free-brands-svg-icons",
+		// Only treat Pro packages as external when we DON'T have a token.
+		// When token is present, we bundle Pro icons into dist so consumers
+		// don't need to resolve these at runtime from their node_modules.
+		// This avoids Module Not Found errors during Next.js builds.
+		...(hasFaToken ? [] : [
+			"@fortawesome/pro-solid-svg-icons",
+			"@fortawesome/pro-regular-svg-icons",
+		]),
+	];
+
 	await esbuild.build({
 		entryPoints: [resolve(sourceDir, "index.gen.js")],
 		outfile: resolve(__dirname, "..", "dist", "index.js"),
-		external: ["react", "react-dom","@fortawesome/react-fontawesome", "@fortawesome/free-solid-svg-icons","@fortawesome/fontawesome-svg-core", "@fortawesome/free-brands-svg-icons"],
+		external: externals,
 		bundle: true,
 		platform: "browser",
 		format: "esm",

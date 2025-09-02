@@ -1,0 +1,23 @@
+{
+	"name": "@rivetkit/docker-template",
+	"version": "1.0.0",
+	"description": "Docker compose templating for Rivet",
+	"main": "dist/main.js",
+	"private": true,
+	"scripts": {
+		"start": "tsx src/main.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@types/js-yaml": "^4.0.9",
+		"js-yaml": "^4.1.0",
+		"tsx": "^4.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.19.9",
+		"typescript": "^5.0.0"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	}
+}

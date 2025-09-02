@@ -184,13 +184,11 @@ fn test_number_less_or_equal() {
 
 #[test]
 fn test_number_with_map_key() {
-	let schema = Schema::new(vec![Property::new(
-		"metrics".to_string(),
-		true,
-		PropertyType::Number,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("metrics".to_string(), true, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	let query = QueryExpr::NumberEqual {
@@ -411,13 +409,11 @@ fn test_number_not_in() {
 
 #[test]
 fn test_string_in_with_map_key() {
-	let schema = Schema::new(vec![Property::new(
-		"metadata".to_string(),
-		true,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("metadata".to_string(), true, PropertyType::String)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	let query = QueryExpr::StringIn {
@@ -558,13 +554,11 @@ fn test_group_by_map_property_rejected() {
 
 #[test]
 fn test_group_by_property_not_found() {
-	let schema = Schema::new(vec![Property::new(
-		"user_id".to_string(),
-		false,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(true)])
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+	])
 	.unwrap();
 
 	let query = QueryExpr::StringEqual {
@@ -581,13 +575,11 @@ fn test_group_by_property_not_found() {
 
 #[test]
 fn test_group_by_empty_allowed() {
-	let schema = Schema::new(vec![Property::new(
-		"user_id".to_string(),
-		false,
-		PropertyType::String,
-	)
-	.unwrap()
-	.with_group_by(true)])
+	let schema = Schema::new(vec![
+		Property::new("user_id".to_string(), false, PropertyType::String)
+			.unwrap()
+			.with_group_by(true),
+	])
 	.unwrap();
 
 	let query = QueryExpr::StringEqual {

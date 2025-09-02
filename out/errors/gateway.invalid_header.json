@@ -1,0 +1,5 @@
+{
+  "code": "invalid_header",
+  "group": "gateway",
+  "message": "Invalid header value"
+}

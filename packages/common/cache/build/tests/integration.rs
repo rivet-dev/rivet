@@ -4,15 +4,7 @@ use std::{
 	time::Duration,
 };
 
-use rand::{seq::IteratorRandom, thread_rng, Rng};
-use rivet_pools::prelude::*;
-
-async fn build_redis_cache() -> rivet_cache::Cache {
-	let redis_client = redis::Client::open("redis://127.0.0.1/").unwrap();
-	let redis_conn = redis_client.get_tokio_connection_manager().await.unwrap();
-
-	rivet_cache::CacheInner::new_redis("cache-test".to_owned(), redis_conn)
-}
+use rand::{Rng, seq::IteratorRandom, thread_rng};
 
 async fn build_in_memory_cache() -> rivet_cache::Cache {
 	rivet_cache::CacheInner::new_in_memory("cache-test".to_owned(), 1000)
@@ -413,10 +405,6 @@ async fn test_rate_limit_basic(cache: rivet_cache::Cache) {
 	struct TestKey;
 
 	impl rivet_cache::CacheKey for TestKey {
-		fn simple_cache_key(&self) -> String {
-			"rate-limit-test".to_string()
-		}
-
 		fn cache_key(&self) -> String {
 			"rate-limit-test".to_string()
 		}
@@ -457,10 +445,6 @@ async fn test_rate_limit_ip_isolation(cache: rivet_cache::Cache) {
 	struct TestKey;
 
 	impl rivet_cache::CacheKey for TestKey {
-		fn simple_cache_key(&self) -> String {
-			"ip-isolation-test".to_string()
-		}
-
 		fn cache_key(&self) -> String {
 			"ip-isolation-test".to_string()
 		}
@@ -547,54 +531,6 @@ async fn test_rate_limit_ip_isolation(cache: rivet_cache::Cache) {
 		!result[0].is_valid,
 		"IP1 should still be blocked after IP2 requests"
 	);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_multiple_keys() {
-	let cache = build_redis_cache().await;
-	test_multiple_keys(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_smoke_test() {
-	let cache = build_redis_cache().await;
-	test_smoke_test(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_custom_ttl() {
-	let cache = build_redis_cache().await;
-	test_custom_ttl(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_default_ttl() {
-	let cache = build_redis_cache().await;
-	test_default_ttl(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_purge_with_ttl() {
-	let cache = build_redis_cache().await;
-	test_purge_with_ttl(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_multi_key_ttl() {
-	let cache = build_redis_cache().await;
-	test_multi_key_ttl(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_rate_limit_basic() {
-	let cache = build_redis_cache().await;
-	test_rate_limit_basic(cache).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn redis_rate_limit_ip_isolation() {
-	let cache = build_redis_cache().await;
-	test_rate_limit_ip_isolation(cache).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -1,0 +1,5 @@
+{
+  "code": "rate_limit",
+  "group": "guard",
+  "message": "Too many requests. Try again later."
+}

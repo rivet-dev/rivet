@@ -1,8 +1,0 @@
-{
-	"functions": {
-		"http": {
-			"dockerfile": "Dockerfile",
-			"path": "/container"
-		}
-	}
-}

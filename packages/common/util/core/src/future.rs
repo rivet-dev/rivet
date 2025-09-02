@@ -6,7 +6,9 @@ use std::{
 };
 
 use futures_util::future;
-use tracing::{instrument::Instrumented, Instrument};
+use tracing::{Instrument, instrument::Instrumented};
+
+use rivet_metrics::KeyValue;
 
 /// Attempts to create a new future to select over a list of futures.
 /// Non-panicking version of [futures_util::future::select_all](https://docs.rs/futures/0.3.15/futures/future/fn.select_all.html).
@@ -55,9 +57,13 @@ impl<T: Future> Future for CustomInstrumented<T> {
 			Poll::Ready(val) => {
 				if let Some(metadata) = metadata {
 					if let (Some(file), Some(line)) = (metadata.file(), metadata.line()) {
-						metrics::INSTRUMENTED_FUTURE_DURATION
-							.with_label_values(&[&format!("{file}:{line}"), metadata.name()])
-							.observe(this.start.elapsed().as_secs_f64());
+						metrics::INSTRUMENTED_FUTURE_DURATION.record(
+							this.start.elapsed().as_secs_f64(),
+							&[
+								KeyValue::new("location", format!("{file}:{line}")),
+								KeyValue::new("name", metadata.name()),
+							],
+						);
 					}
 				}
 				Poll::Ready(val)
@@ -68,15 +74,18 @@ impl<T: Future> Future for CustomInstrumented<T> {
 }
 
 mod metrics {
-	use rivet_metrics::{prometheus::*, MICRO_BUCKETS, REGISTRY};
+	use rivet_metrics::{
+		MICRO_BUCKETS,
+		otel::{global::*, metrics::*},
+	};
 
 	lazy_static::lazy_static! {
-		pub static ref INSTRUMENTED_FUTURE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-			"instrumented_future_duration",
-			"Duration of a future.",
-			&["location", "name"],
-			MICRO_BUCKETS.to_vec(),
-			*REGISTRY,
-		).unwrap();
+		static ref METER: Meter = meter("rivet-util-core");
+
+		/// Expected attributes: "location", "name"
+		pub static ref INSTRUMENTED_FUTURE_DURATION: Histogram<f64> = METER.f64_histogram("rivet_instrumented_future_duration")
+			.with_description("Duration of a future.")
+			.with_boundaries(MICRO_BUCKETS.to_vec())
+			.build();
 	}
 }

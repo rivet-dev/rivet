@@ -1,0 +1,5 @@
+{
+  "code": "key_reserved_in_different_datacenter",
+  "group": "actor",
+  "message": "Actor key is already reserved in a different datacenter. Either remove the datacenter constraint to automatically create this actor in the correct datacenter or provide the datacenter that matches."
+}

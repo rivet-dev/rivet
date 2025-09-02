@@ -1,13 +1,12 @@
-use std::{fmt::Debug, future::Future};
+use std::{fmt::Debug, future::Future, result::Result::Ok};
 
-use serde::{de::DeserializeOwned, Serialize};
+use anyhow::*;
+use serde::{Serialize, de::DeserializeOwned};
 use tracing::Instrument;
 
 use super::*;
-use crate::{
-	error::{Error, GetterResult},
-	metrics,
-};
+use crate::{errors::Error, metrics};
+use rivet_metrics::KeyValue;
 
 /// Config specifying how cached values will behave.
 #[derive(Clone)]
@@ -55,12 +54,12 @@ impl RequestConfig {
 		base_key: impl ToString + Debug,
 		key: K,
 		getter: Getter,
-	) -> Result<Option<V>, Error>
+	) -> Result<Option<V>>
 	where
 		K: CacheKey + Send + Sync,
-		V: redis::ToRedisArgs + redis::FromRedisValue + Clone + Debug + Send + Sync,
+		V: Serialize + DeserializeOwned + Clone + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<K, V>, K) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<K, V>>>,
+		Fut: Future<Output = Result<GetterCtx<K, V>>>,
 	{
 		let values = self
 			.fetch_all(base_key, [key], move |cache, keys| {
@@ -85,12 +84,12 @@ impl RequestConfig {
 		base_key: impl ToString + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
-	) -> Result<Vec<(Key, Value)>, Error>
+	) -> Result<Vec<(Key, Value)>>
 	where
 		Key: CacheKey + Send + Sync,
-		Value: redis::ToRedisArgs + redis::FromRedisValue + Clone + Debug + Send + Sync,
+		Value: Serialize + DeserializeOwned + Clone + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
 	{
 		self.fetch_all_convert(
 			base_key,
@@ -103,22 +102,22 @@ impl RequestConfig {
 	}
 
 	#[tracing::instrument(err, skip(keys, getter, encoder, decoder))]
-	async fn fetch_all_convert<Key, Value, ValueRedis, Getter, Fut, Encoder, Decoder>(
+	async fn fetch_all_convert<Key, Value, ValueSerde, Getter, Fut, Encoder, Decoder>(
 		self,
 		base_key: impl ToString + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
 		encoder: Encoder,
 		decoder: Decoder,
-	) -> Result<Vec<(Key, Value)>, Error>
+	) -> Result<Vec<(Key, Value)>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Debug + Send + Sync,
-		ValueRedis: redis::ToRedisArgs + redis::FromRedisValue + Debug + Send + Sync,
+		ValueSerde: Serialize + DeserializeOwned + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
-		Encoder: Fn(&Value) -> Result<ValueRedis, Error> + Clone,
-		Decoder: Fn(&ValueRedis) -> Result<Value, Error> + Clone,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
+		Encoder: Fn(&Value) -> Result<ValueSerde> + Clone,
+		Decoder: Fn(&ValueSerde) -> Result<Value> + Clone,
 	{
 		let base_key = base_key.to_string();
 		let keys = keys.into_iter().collect::<Vec<Key>>();
@@ -128,12 +127,9 @@ impl RequestConfig {
 			return Ok(Vec::new());
 		}
 
-		metrics::CACHE_REQUEST_TOTAL
-			.with_label_values(&[&base_key])
-			.inc();
+		metrics::CACHE_REQUEST_TOTAL.add(1, &[KeyValue::new("key", base_key.clone())]);
 		metrics::CACHE_VALUE_TOTAL
-			.with_label_values(&[&base_key])
-			.inc_by(keys.len() as u64);
+			.add(keys.len() as u64, &[KeyValue::new("key", base_key.clone())]);
 
 		// Build context.
 		//
@@ -162,7 +158,7 @@ impl RequestConfig {
 					if let Some(value_bytes) = value {
 						// Try to decode the value using the driver
 						match self.cache.driver.decode_value(&value_bytes) {
-							Ok(value_redis) => match decoder(&value_redis) {
+							Ok(value_serde) => match decoder(&value_serde) {
 								Ok(value) => {
 									ctx.resolve_from_cache(i, value);
 								}
@@ -183,9 +179,10 @@ impl RequestConfig {
 					let remaining_keys = ctx.unresolved_keys();
 					let unresolved_len = remaining_keys.len();
 
-					metrics::CACHE_VALUE_MISS_TOTAL
-						.with_label_values(&[&base_key])
-						.inc_by(unresolved_len as u64);
+					metrics::CACHE_VALUE_MISS_TOTAL.add(
+						unresolved_len as u64,
+						&[KeyValue::new("key", base_key.clone())],
+					);
 
 					ctx = getter(ctx, remaining_keys).await.map_err(Error::Getter)?;
 
@@ -205,14 +202,23 @@ impl RequestConfig {
 						.filter_map(|(key, value)| {
 							// Process the key with the appropriate driver
 							let driver_key = self.cache.driver.process_key(&base_key, &key.key);
-							match encoder(value) {
-								Ok(value_redis) => {
-									// Encode the value with the driver
-									let value_bytes = self.cache.driver.encode_value(&value_redis);
-									Some((driver_key, value_bytes, expire_at))
+							// Try to decode the value using the driver
+							match encoder(&value) {
+								Ok(value_bytes) => {
+									match self.cache.driver.encode_value(&value_bytes) {
+										Ok(value_serde) => {
+											Some((driver_key, value_serde, expire_at))
+										}
+										Err(err) => {
+											tracing::error!(?err, "Failed to encode value");
+
+											None
+										}
+									}
 								}
 								Err(err) => {
 									tracing::error!(?err, "Failed to encode value");
+
 									None
 								}
 							}
@@ -239,9 +245,10 @@ impl RequestConfig {
 					}
 				}
 
-				metrics::CACHE_VALUE_EMPTY_TOTAL
-					.with_label_values(&[&base_key])
-					.inc_by(ctx.unresolved_keys().len() as u64);
+				metrics::CACHE_VALUE_EMPTY_TOTAL.add(
+					ctx.unresolved_keys().len() as u64,
+					&[KeyValue::new("key", base_key.clone())],
+				);
 
 				Ok(ctx.into_values())
 			}
@@ -251,9 +258,7 @@ impl RequestConfig {
 					"failed to read batch keys from cache, falling back to getter"
 				);
 
-				metrics::CACHE_REQUEST_ERRORS
-					.with_label_values(&[&base_key])
-					.inc();
+				metrics::CACHE_REQUEST_ERRORS.add(1, &[KeyValue::new("key", base_key.clone())]);
 
 				// Fall back to the getter since we can't fetch the value from
 				// the cache
@@ -270,7 +275,7 @@ impl RequestConfig {
 		self,
 		base_key: impl AsRef<str> + Debug,
 		keys: impl IntoIterator<Item = Key>,
-	) -> Result<(), Error>
+	) -> Result<()>
 	where
 		Key: CacheKey + Send + Sync,
 	{
@@ -299,87 +304,6 @@ impl RequestConfig {
 	}
 }
 
-// MARK: Proto fetch
-impl RequestConfig {
-	#[tracing::instrument(err, skip(key, getter))]
-	pub async fn fetch_one_proto<Key, Value, Getter, Fut>(
-		self,
-		base_key: impl ToString + Debug,
-		key: Key,
-		getter: Getter,
-	) -> Result<Option<Value>, Error>
-	where
-		Key: CacheKey + Send + Sync,
-		Value: prost::Message + Default + Send + Sync,
-		Getter: Fn(GetterCtx<Key, Value>, Key) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
-	{
-		let values = self
-			.fetch_all_proto_with_keys(base_key, [key], move |cache, keys| {
-				let getter = getter.clone();
-				async move {
-					debug_assert_eq!(1, keys.len());
-					if let Some(key) = keys.into_iter().next() {
-						getter(cache, key).await
-					} else {
-						tracing::error!("no keys provided to fetch one");
-						Ok(cache)
-					}
-				}
-			})
-			.await?;
-		Ok(values.into_iter().next().map(|(_, v)| v))
-	}
-
-	#[tracing::instrument(err, skip(keys, getter))]
-	pub async fn fetch_all_proto<Key, Value, Getter, Fut>(
-		self,
-		base_key: impl ToString + Debug,
-		keys: impl IntoIterator<Item = Key>,
-		getter: Getter,
-	) -> Result<Vec<Value>, Error>
-	where
-		Key: CacheKey + Send + Sync,
-		Value: prost::Message + Default + Send + Sync,
-		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
-	{
-		self.fetch_all_proto_with_keys::<Key, Value, Getter, Fut>(base_key, keys, getter)
-			.await
-			// TODO: Find a way to not allocate another vec here
-			.map(|x| x.into_iter().map(|(_, v)| v).collect::<Vec<_>>())
-	}
-
-	#[tracing::instrument(err, skip(keys, getter))]
-	pub async fn fetch_all_proto_with_keys<Key, Value, Getter, Fut>(
-		self,
-		base_key: impl ToString + Debug,
-		keys: impl IntoIterator<Item = Key>,
-		getter: Getter,
-	) -> Result<Vec<(Key, Value)>, Error>
-	where
-		Key: CacheKey + Send + Sync,
-		Value: prost::Message + Default + Send + Sync,
-		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
-	{
-		self.fetch_all_convert(
-			base_key,
-			keys,
-			getter,
-			|value: &Value| -> Result<Vec<u8>, Error> {
-				let mut buf = Vec::with_capacity(value.encoded_len());
-				value.encode(&mut buf).map_err(Error::ProtoEncode)?;
-				Ok(buf)
-			},
-			|value: &Vec<u8>| -> Result<Value, Error> {
-				Value::decode(value.as_slice()).map_err(Error::ProtoDecode)
-			},
-		)
-		.await
-	}
-}
-
 // MARK: JSON fetch
 impl RequestConfig {
 	#[tracing::instrument(err, skip(key, getter))]
@@ -388,12 +312,12 @@ impl RequestConfig {
 		base_key: impl ToString + Debug,
 		key: Key,
 		getter: Getter,
-	) -> Result<Option<Value>, Error>
+	) -> Result<Option<Value>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Key) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
 	{
 		let values = self
 			.fetch_all_json_with_keys(base_key, [key], move |cache, keys| {
@@ -418,12 +342,12 @@ impl RequestConfig {
 		base_key: impl ToString + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
-	) -> Result<Vec<Value>, Error>
+	) -> Result<Vec<Value>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
 	{
 		self.fetch_all_json_with_keys::<Key, Value, Getter, Fut>(base_key, keys, getter)
 			.await
@@ -437,22 +361,26 @@ impl RequestConfig {
 		base_key: impl ToString + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
-	) -> Result<Vec<(Key, Value)>, Error>
+	) -> Result<Vec<(Key, Value)>>
 	where
 		Key: CacheKey + Send + Sync,
 		Value: Serialize + DeserializeOwned + Debug + Send + Sync,
 		Getter: Fn(GetterCtx<Key, Value>, Vec<Key>) -> Fut + Clone,
-		Fut: Future<Output = GetterResult<GetterCtx<Key, Value>>>,
+		Fut: Future<Output = Result<GetterCtx<Key, Value>>>,
 	{
 		self.fetch_all_convert(
 			base_key,
 			keys,
 			getter,
-			|value: &Value| -> Result<Vec<u8>, Error> {
-				serde_json::to_vec(value).map_err(Error::SerdeEncode)
+			|value: &Value| -> Result<Vec<u8>> {
+				serde_json::to_vec(value)
+					.map_err(Error::SerdeEncode)
+					.map_err(Into::into)
 			},
-			|value: &Vec<u8>| -> Result<Value, Error> {
-				serde_json::from_slice(value.as_slice()).map_err(Error::SerdeDecode)
+			|value: &Vec<u8>| -> Result<Value> {
+				serde_json::from_slice(value.as_slice())
+					.map_err(Error::SerdeDecode)
+					.map_err(Into::into)
 			},
 		)
 		.await

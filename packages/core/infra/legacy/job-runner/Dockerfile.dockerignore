@@ -1,8 +1,0 @@
-*
-
-!Cargo.lock
-!Cargo.toml
-!packages
-!resources/legacy/proto
-!sdks/api/full/rust/Cargo.toml
-!sdks/api/full/rust/src

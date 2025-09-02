@@ -1,0 +1,16 @@
+[package]
+name = "udb-util"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+universaldb.workspace = true
+futures-util.workspace = true
+lazy_static.workspace = true
+rivet-metrics.workspace = true
+tokio.workspace = true
+tracing.workspace = true

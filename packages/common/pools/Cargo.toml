@@ -6,71 +6,34 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-dirs = { workspace = true }
-anyhow = "1.0"
-async-nats = "0.33"
-clickhouse = { version = "0.11.2", features = ["uuid"] }
+anyhow.workspace = true
+async-nats.workspace = true
 clickhouse-inserter.workspace = true
-fdb-util.workspace = true
-foundationdb.workspace = true
-funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981
-futures-util = "0.3"
-global-error.workspace = true
-governor = "0.6"
-hex.workspace = true
-hyper = { version = "0.14" }
-hyper-tls = { version = "0.5.0" }
-lazy_static = "1.4"
-lz4_flex = "0.11.3"
+clickhouse.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+futures-util.workspace = true
+governor.workspace = true
+hyper-tls.workspace = true
+hyper.workspace = true
+lazy_static.workspace = true
+reqwest.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
-service-discovery.workspace = true
+universalpubsub.workspace = true
 rivet-util.workspace = true
-tempfile = "3.13.0"
-thiserror = "1.0"
+tempfile.workspace = true
+thiserror.workspace = true
+tokio-native-tls.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
-tokio-util = "0.7"
-tracing = "0.1"
+tracing-logfmt.workspace = true
 tracing-subscriber.workspace = true
-tracing-logfmt = "0.3"
-url = "2.4"
-uuid = { version = "1", features = ["v4"] }
-papaya = "0.2.1"
-tokio-native-tls = "0.3.1"
-reqwest = "0.11"
-
-[dependencies.sqlx]
-workspace = true
-features = [
-	"bit-vec",
-	"ipnetwork",
-	"json",
-	"macros",
-	"migrate",
-	"postgres",
-	"runtime-tokio-native-tls",
-	"runtime-tokio",
-	"sqlite",
-	"uuid",
-]
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
-divan = "0.1.17"
-
-[dependencies.redis]
-# TODO: https://github.com/rivet-gg/rivet/issues/508
-workspace = true
-features = [
-	"keep-alive",
-	"aio",
-	"tokio-comp",
-	"tokio-native-tls-comp",
-	"connection-manager",
-	"script",
-	"streams",
-]
-
-[[bench]]
-name = "sqlite_lifecycle"
-harness = false
+divan.workspace = true
 

@@ -1,1 +1,0 @@
-pnpx @actor-core/cli@latest dev

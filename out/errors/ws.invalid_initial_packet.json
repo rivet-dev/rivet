@@ -1,0 +1,5 @@
+{
+  "code": "invalid_initial_packet",
+  "group": "ws",
+  "message": "The websocket could not process the initial packet."
+}

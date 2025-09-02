@@ -1,0 +1,208 @@
+{
+	"annotations": {
+		"list": [
+			{
+				"builtIn": 1,
+				"datasource": {
+					"type": "grafana",
+					"uid": "-- Grafana --"
+				},
+				"enable": true,
+				"hide": true,
+				"iconColor": "rgba(0, 211, 255, 1)",
+				"name": "Annotations & Alerts",
+				"type": "dashboard"
+			}
+		]
+	},
+	"editable": true,
+	"fiscalYearStartMonth": 0,
+	"graphTooltip": 0,
+	"links": [],
+	"panels": [
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 0
+			},
+			"id": 1,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"range": true,
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_instrumented_future_duration'\n    AND $__conditionalAll(Attributes['name'], $name)\n    AND $__conditionalAll(Attributes['location'], $location)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Instrumented Future Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		}
+	],
+	"preload": false,
+	"refresh": "30s",
+	"schemaVersion": 40,
+	"tags": [],
+	"templating": {
+		"list": [
+			{
+				"current": {
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT Attributes['name'] as name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_instrumented_future_duration' ORDER BY name",
+				"includeAll": true,
+				"label": "Name",
+				"multi": true,
+				"name": "name",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"rawSql": "SELECT DISTINCT Attributes['name'] as name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_instrumented_future_duration' ORDER BY name",
+					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"type": "query"
+			},
+			{
+				"current": {
+					"text": [
+						"All"
+					],
+					"value": [
+						"$__all"
+					]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT Attributes['location'] as location FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_instrumented_future_duration' ORDER BY location",
+				"includeAll": true,
+				"label": "Location",
+				"multi": true,
+				"name": "location",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"rawSql": "SELECT DISTINCT Attributes['location'] as location FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_instrumented_future_duration' ORDER BY location",
+					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"type": "query"
+			}
+		]
+	},
+	"time": {
+		"from": "now-15m",
+		"to": "now"
+	},
+	"timepicker": {},
+	"timezone": "browser",
+	"title": "Futures",
+	"version": 0,
+	"weekStart": ""
+}

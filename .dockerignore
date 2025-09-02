@@ -19,18 +19,7 @@
 **/dist/
 **/node_modules/
 **/target
-!frontend/apps/hub/dist
 
-# Site
-site/public/rss/
-!site/public/rss/.gitkeep
-
-site/src/generated/
-!site/src/generated/errorPages.json
-!site/src/generated/apiPages.json
-!site/src/generated/meta.json
-
-# Icons
-frontend/packages/icons/src/*
-!frontend/packages/icons/src/package.json
+# Frontend
+!frontend/dist/
 

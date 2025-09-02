@@ -1,1 +1,0 @@
-yarn dlx @actor-core/cli@latest dev

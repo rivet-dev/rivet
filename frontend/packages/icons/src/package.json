@@ -1,0 +1,10 @@
+{
+  "name": "@rivet-gg/internal-icons",
+  "private": true,
+  "sideEffects": false,
+  "dependencies": {
+    "@awesome.me/kit-63db24046b": "^1.0.13",
+    "@fortawesome/pro-regular-svg-icons": "6.6.0",
+    "@fortawesome/pro-solid-svg-icons": "6.6.0"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "code": "invalid_name",
+  "group": "namespace",
+  "message": "\n\tInvalid namespace name.\n\t\n\tNamespace names must be valid DNS subdomains.\n\t"
+}

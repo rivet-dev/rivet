@@ -1,0 +1,5 @@
+{
+  "code": "namespace_not_found",
+  "group": "actor",
+  "message": "The namespace does not exist."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "race_condition",
+  "group": "validation",
+  "message": "Race condition detected"
+}

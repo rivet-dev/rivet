@@ -1,0 +1,19 @@
+[package]
+name = "rivet-test-deps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+portpicker.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-pools.workspace = true
+rivet-test-deps-docker.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true

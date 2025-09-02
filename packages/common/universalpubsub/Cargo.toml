@@ -1,0 +1,29 @@
+[package]
+name = "universalpubsub"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-nats.workspace = true
+async-trait.workspace = true
+deadpool-postgres.workspace = true
+futures-util.workspace = true
+rivet-error.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+tokio-postgres.workspace = true
+base64 = "0.22"
+sha2.workspace = true
+
+[dev-dependencies]
+rivet-config.workspace = true
+rivet-env.workspace = true
+tempfile.workspace = true
+tracing-subscriber.workspace = true
+rivet-test-deps-docker.workspace = true

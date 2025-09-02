@@ -1,35 +1,11 @@
 #!/usr/bin/env -S deno run -A
 
-import { parse, stringify } from "@std/yaml";
 import { assert } from "@std/assert";
 
 const FERN_GROUP = Deno.env.get("FERN_GROUP");
-const SDKS_PATH = `sdks/api/${FERN_GROUP}`;
-const GEN_PATH_OPENAPI = `${SDKS_PATH}/openapi_compat/openapi.yml`;
-const GEN_PATH_RUST = `${SDKS_PATH}/rust`;
-
-async function createOutputDir(outputDir: string) {
-	console.log("Creating output dir");
-	try {
-		await Deno.mkdir(outputDir, { recursive: true });
-	} catch (error) {
-		if (!(error instanceof Deno.errors.AlreadyExists)) {
-			throw error;
-		}
-	}
-}
-
-async function modifyOpenApiSpec(specPath: string, outputPath: string) {
-	console.log("Reading spec");
-	const specContent = await Deno.readTextFile(specPath);
-	const openapi = parse(specContent) as { info: { version: string } };
-
-	console.log("Modifying spec for compatibility");
-	openapi.info.version = "0.0.1";
-
-	console.log("Writing new spec");
-	await Deno.writeTextFile(outputPath, stringify(openapi));
-}
+if (!FERN_GROUP) throw "Missing FERN_GROUP";
+const OPENAPI_PATH = `out/openapi.json`;
+const GEN_PATH_RUST = `sdks/rust/api-${FERN_GROUP}/rust`;
 
 async function generateRustSdk() {
 	console.log("Running OpenAPI generator");
@@ -43,17 +19,17 @@ async function generateRustSdk() {
 			"--rm",
 			`-u=${Deno.uid()}:${Deno.gid()}`,
 			`-v=${Deno.cwd()}:/data`,
-			"openapitools/openapi-generator-cli:v6.4.0",
+			"openapitools/openapi-generator-cli:v7.14.0",
 			"generate",
 			"-i",
-			`/data/${GEN_PATH_OPENAPI}`,
+			`/data/${OPENAPI_PATH}`,
 			"--additional-properties=removeEnumValuePrefix=false",
 			"-g",
 			"rust",
 			"-o",
 			`/data/${GEN_PATH_RUST}`,
 			"-p",
-			"packageName=rivet-api",
+			`packageName=rivet-api-${FERN_GROUP}`,
 		],
 		stdout: "inherit",
 		stderr: "inherit",
@@ -64,18 +40,30 @@ async function generateRustSdk() {
 
 async function fixOpenApiBugs() {
 	const files: Record<string, [RegExp, string][]> = {
-		"cloud_games_matchmaker_api.rs": [
-			[/CloudGamesLogStream/g, "crate::models::CloudGamesLogStream"],
-		],
-		"actors_api.rs": [
-			[/ActorsEndpointType/g, "crate::models::ActorsEndpointType"],
-		],
-		"actors_logs_api.rs": [
-			[/ActorsQueryLogStream/g, "crate::models::ActorsQueryLogStream"],
-		],
-		"servers_logs_api.rs": [
-			[/ServersLogStream/g, "crate::models::ServersLogStream"],
-		],
+		//"cloud_games_matchmaker_api.rs": [
+		//	[/CloudGamesLogStream/g, "crate::models::CloudGamesLogStream"],
+		//],
+		//"actors_api.rs": [
+		//	[/ActorsEndpointType/g, "crate::models::ActorsEndpointType"],
+		//],
+		//"actors_logs_api.rs": [
+		//	[/ActorsQueryLogStream/g, "crate::models::ActorsQueryLogStream"],
+		//],
+		//"containers_api.rs": [
+		//	[/ContainersEndpointType/g, "crate::models::ContainersEndpointType"],
+		//],
+		//"containers_logs_api.rs": [
+		//	[/ContainersQueryLogStream/g, "crate::models::ContainersQueryLogStream"],
+		//],
+		//"actors_v1_api.rs": [
+		//	[/ActorsV1EndpointType/g, "crate::models::ActorsV1EndpointType"],
+		//],
+		//"actors_v1_logs_api.rs": [
+		//	[/ActorsV1QueryLogStream/g, "crate::models::ActorsV1QueryLogStream"],
+		//],
+		//"servers_logs_api.rs": [
+		//	[/ServersLogStream/g, "crate::models::ServersLogStream"],
+		//],
 	};
 
 	for (const [file, replacements] of Object.entries(files)) {
@@ -130,16 +118,11 @@ async function formatSdk() {
 }
 
 async function main() {
-	const outputDir = `sdks/api/${FERN_GROUP}/openapi_compat`;
-	const specPath = `sdks/api/${FERN_GROUP}/openapi/openapi.yml`;
-
-	await createOutputDir(outputDir);
-	await modifyOpenApiSpec(specPath, `${outputDir}/openapi.yml`);
 	await generateRustSdk();
 	await fixOpenApiBugs();
 	await modifyDependencies();
 	await formatSdk(); // Format so patch is consistent
-	await applyErrorPatch();
+	// await applyErrorPatch();  // TODO: Broken
 	await formatSdk(); // Format again after patched
 
 	console.log("Done");

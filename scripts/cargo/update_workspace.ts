@@ -21,6 +21,22 @@ async function updateCargoToml() {
 			if (entry.path.endsWith("Cargo.toml")) yield entry;
 		}
 
+	// Yield from SDKs
+		for await (const entry of walk(join(rootDir, "sdks", "rust"), {
+			includeDirs: false,
+			exts: ["toml"],
+			skip: [/node_modules/],
+		})) {
+			// Only include Cargo.toml files that are directly in a subdirectory of sdks/rust
+			if (entry.path.endsWith("Cargo.toml")) {
+				const relativePath = relative(join(rootDir, "sdks", "rust"), entry.path);
+				const pathParts = relativePath.split("/");
+				if (pathParts.length === 2) {  // Directly in a subdirectory
+					yield entry;
+				}
+			}
+		}
+
 		// Yield from OSS
 		if (oss) {
 			for await (const entry of walk(join(rootDir, "oss", "packages"), {
@@ -37,19 +53,12 @@ async function updateCargoToml() {
 	for await (
 		const entry of entries
 	) {
-		// Exclude infra packages
-		if (entry.path.includes("packages/infra/job-runner")) continue;
-
 		const packagePath = relative(
 			rootDir,
 			entry.path.replace(/\/Cargo\.toml$/, ""),
 		);
 		members.push(packagePath);
 	}
-
-	// Hardcode extra workspace members
-	members.push("sdks/api/full/rust");
-	if (oss) members.push("oss/sdks/api/full/rust");
 
 	// Sort deps
 	members.sort();
@@ -67,13 +76,6 @@ async function updateCargoToml() {
 	const newDependencies: Record<string, any> = {};
 	const packageAliases: Record<string, string[]> = {
 		"rivet-util": ["util"],
-		"rivet-util-mm": ["util-mm"],
-		"rivet-util-job": ["util-job"],
-		"rivet-util-search": ["util-search"],
-		"rivet-util-captcha": ["util-captcha"],
-		"rivet-util-cdn": ["util-cdn"],
-		"rivet-util-team": ["util-team"],
-		"rivet-util-build": ["util-build"],
 	};
 	for (const packagePath of members) {
 		const packageTomlPath = join(rootDir, packagePath, "Cargo.toml");

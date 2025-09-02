@@ -6,16 +6,12 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.89"
-chrono = "0.4.38"
-global-error.workspace = true
-include_dir = "0.7.4"
+anyhow.workspace = true
+chrono.workspace = true
+include_dir.workspace = true
 rivet-config.workspace = true
-rivet-health-checks.workspace = true
 rivet-metrics.workspace = true
-rivet-migrate.workspace = true
 rivet-pools.workspace = true
-s3-util.workspace = true
 tokio.workspace = true
-tokio-cron-scheduler = "0.13.0"
-tracing = "0.1.40"
+tokio-cron-scheduler.workspace = true
+tracing.workspace = true

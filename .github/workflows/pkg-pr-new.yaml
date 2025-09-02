@@ -1,24 +1,17 @@
-name: Continuous Release
-
 on:
   pull_request:
-    paths:
-      - frontend/packages/cli/**
-      - sdks/actor/**
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
       - run: corepack enable
       - uses: actions/setup-node@v4
-      - name: Install dependencies
-        run: yarn install
-        
-      - run: yarn build --filter='./{sdks,frontend/packages/cli}/**'
-      # TODO: Add --compact once we publish cli to npm
-      - run: rm -rf ./sdks/actor/client/node_modules; rm -rf ./sdks/actor/runtime/node_modules; rm -rf ./frontend/packages/cli/node_modules
-      - run: yarn dlx pkg-pr-new publish --yarn './sdks/actor/client' './frontend/packages/cli'
+        with:
+          cache: "pnpm"
+      - run: pnpm install
+      - run: pnpm build -F @rivetkit/engine-runner-protocol -F @rivetkit/engine-tunnel-protocol -F @rivetkit/engine-runner
+      - run: pnpm dlx pkg-pr-new publish 'sdks/typescript/runner/' 'sdks/typescript/runner-protocol/' 'sdks/typescript/tunnel-protocol/'

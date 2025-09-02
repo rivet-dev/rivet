@@ -6,25 +6,24 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-console-subscriber = "0.4"
-lazy_static = "1.4"
+console-subscriber.workspace = true
+lazy_static.workspace = true
 rivet-metrics.workspace = true
-thiserror = "1.0"
+thiserror.workspace = true
 tokio.workspace = true
-tracing = "0.1"
-tracing-core = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi", "registry", "env-filter"] }  # Used with attribute
-tracing-logfmt = { version = "0.3", features = ["ansi_logs"] }
+tracing.workspace = true
+tracing-core.workspace = true
+tracing-subscriber.workspace = true
+tracing-logfmt.workspace = true
 
-opentelemetry = { version = "0.28", features = ["trace", "metrics", "logs"] }
-opentelemetry-otlp = { version = "0.28", features = ["trace", "metrics", "logs", "grpc-tonic"] }
-opentelemetry-semantic-conventions = { version = "0.28", features = ["semconv_experimental"] }
-opentelemetry-stdout = { version = "0.28.0", features = ["trace", "metrics", "logs"] }
-opentelemetry_sdk = { version = "0.28", features = ["trace", "metrics", "logs"] }
-tracing-opentelemetry = "0.29"
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry-semantic-conventions.workspace = true
+opentelemetry-stdout.workspace = true
+opentelemetry_sdk.workspace = true
+tracing-opentelemetry.workspace = true
 rivet-env.workspace = true
-opentelemetry-appender-tracing = "0.28.1"
-reqwest = { version = "0.12", features = ["json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
+opentelemetry-appender-tracing.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,1 +1,0 @@
-# captcha-turnstile-config-get

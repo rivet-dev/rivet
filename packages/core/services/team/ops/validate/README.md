@@ -1,1 +1,0 @@
-# team-validate

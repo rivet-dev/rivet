@@ -1,7 +1,0 @@
-{
-	"functions": {
-		"simple": {
-			"script": "http.ts"
-		}
-	}
-}

@@ -24,88 +24,77 @@ env:
   RUSTFLAGS: "--cfg tokio_unstable"
 
 jobs:
-  setup:
-    name: "Setup"
-    runs-on: ubuntu-24.04
-    permissions:
-      # Allow pushing to GitHub
-      contents: write
-      # Allows JSR to authenticate with GitHub
-      id-token: write
-    steps:
-      - name: Checkout rivet
-        uses: actions/checkout@v4
-        with:
-          lfs: 'true'
-          path: './rivet'
-          
-      - name: Checkout actor-core
-        uses: actions/checkout@v4
-        with:
-          repository: 'rivet-gg/actor-core'
-          path: './actor-core'
+  # setup:
+  #   name: "Setup"
+  #   runs-on: ubuntu-24.04
+  #   permissions:
+  #     # Allow pushing to GitHub
+  #     contents: write
+  #     # Allows JSR to authenticate with GitHub
+  #     id-token: write
+  #   steps:
+  #     - name: Checkout rivet
+  #       uses: actions/checkout@v4
+  #       with:
+  #         lfs: 'true'
+  #         path: './rivet'
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
 
-      - run: corepack enable
+  #     - run: corepack enable
 
-      - name: Setup
-        env:
-          # Required to authenticate with Git
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: './rivet'
-        run: |
-          # Configure Git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #     - name: Setup
+  #       env:
+  #         # Required to authenticate with Git
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       working-directory: './rivet'
+  #       run: |
+  #         # Configure Git
+  #         git config --global user.name "github-actions[bot]"
+  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Install Deno
-          curl -fsSL https://deno.land/x/install/install.sh | sh
-          export PATH=$HOME/.deno/bin:$PATH
+  #         # Install Deno
+  #         curl -fsSL https://deno.land/x/install/install.sh | sh
+  #         export PATH=$HOME/.deno/bin:$PATH
 
-          # Authenticate with NPM
-          cat << EOF > ~/.yarnrc.yml
-          npmAuthToken: "${{ secrets.NPM_TOKEN }}"
-          EOF
+  #         # Authenticate with NPM
+  #         cat << EOF > ~/.npmrc
+  #         //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+  #         EOF
 
-          # TODO: CI yarn.lock differs from local for some reason & causes errors
-          # Install dependencies
-          # yarn install --immutable
-          yarn config set -H enableImmutableInstalls false
-          yarn install
+  #         pnpm install
 
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
-          fi
-
+  #         if [ "${{ inputs.latest }}" = "true" ]; then
+  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+  #         else
+  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+  #         fi
 
   binaries:
     name: "Build & Push Binaries"
-    needs: [setup]
+    # needs: [setup]
     strategy:
       matrix:
         include:
           - platform: linux
-            runner: [self-hosted, Linux, X64]
+            runner: ubuntu-latest
             target: x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
           - platform: windows
-            runner: [self-hosted, Linux, X64]
+            runner: ubuntu-latest
             target: x86_64-pc-windows-gnu
             binary_ext: ".exe"
             arch: x86_64
           - platform: macos
-            runner: [self-hosted, Linux, X64]
+            runner: ubuntu-latest
             target: x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
           - platform: macos
-            runner: [self-hosted, Linux, ARM64]
+            runner: ubuntu-latest
             target: aarch64-apple-darwin
             binary_ext: ""
             arch: aarch64
@@ -118,13 +107,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build using toolchain Dockerfile
+      - name: Build using engine Dockerfile
         run: |
           # Use Docker BuildKit
           export DOCKER_BUILDKIT=1
           
           # Build the binary using our Dockerfile
-          docker/toolchain/build.sh ${{ matrix.target }}
+          docker/engine/build.sh ${{ matrix.target }}
           
           # Make sure dist directory exists and binary is there
           ls -la dist/
@@ -148,28 +137,28 @@ jobs:
           ./aws/install --update
 
           COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
-          BINARY_PATH="dist/rivet-${{ matrix.target }}${{ matrix.binary_ext }}"
+          BINARY_PATH="dist/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}"
 
           # Must specify --checksum-algorithm for compatibility with R2
           aws s3 cp \
             "${BINARY_PATH}" \
-            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-${{ matrix.target }}${{ matrix.binary_ext }}" \
+            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}" \
             --region auto \
-            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases \
+            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-engine-releases \
             --checksum-algorithm CRC32
 
   docker:
     name: "Build & Push Docker Images"
-    needs: [setup]
+    # needs: [setup]
     strategy:
       matrix:
         include:
           # TODO(RVT-4479): Add back ARM builder once manifest generation fixed
           # - platform: linux/arm64
-          #   runner: [self-hosted, Linux, ARM64]
+          #   runner: ubuntu-latest
           #   arch_suffix: -arm64
           - platform: linux/x86_64
-            runner: [self-hosted, Linux, X64]
+            runner: ubuntu-latest
             # TODO: Replace with appropriate arch_suffix when needed
             # arch_suffix: -amd64
             arch_suffix: ''
@@ -198,100 +187,60 @@ jobs:
           docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN}}
 
-      - name: Build & Push (rivetgg/server:full)
+      - name: Build & Push (rivetgg/engine:full)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: rivetgg/rivet-server:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          tags: rivetgg/rivet-engine:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
           file: docker/universal/Dockerfile
-          target: server-full
+          target: engine-full
           platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
+          # secrets: |
+          #   fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
+          # secret-files: |
+          #   netrc=${{ runner.temp }}/netrc
 
-      - name: Build & Push (rivetgg/server:slim)
+      - name: Build & Push (rivetgg/engine:slim)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          tags: rivetgg/rivet-engine:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
           file: docker/universal/Dockerfile
-          target: server-slim
+          target: engine-slim
           platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
+          # secrets: |
+          #   fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
+          # secret-files: |
+          #   netrc=${{ runner.temp }}/netrc
 
-      - name: Build & Push (rivetgg/server:slim)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: server-slim
-          platforms: ${{ matrix.platform }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
+  # complete:
+  #   name: "Complete"
+  #   needs: [docker]
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         lfs: 'true'
 
-      - name: Build & Push (rivetgg/client:full)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet-client:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: client-full
-          platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
+  #     - uses: ./.github/actions/docker-setup
+  #       with:
+  #         docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+  #         docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+  #         github_token: ${{ secrets.GITHUB_TOKEN}}
 
-      - name: Build & Push (rivetgg/rivet:monolith)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet:monolith-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: monolith
-          platforms: ${{ matrix.platform }}
-          secrets: |
-            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
+  #     - name: Complete
+  #       env:
+  #         R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+  #         R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+  #       run: |
+  #         # Install Deno
+  #         curl -fsSL https://deno.land/x/install/install.sh | sh
+  #         export PATH=$HOME/.deno/bin:$PATH
 
-  complete:
-    name: "Complete"
-    needs: [binaries, docker]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: 'true'
-
-      - uses: ./.github/actions/docker-setup
-        with:
-          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
-          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN}}
-
-      - name: Complete
-        env:
-          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-        run: |
-          # Install Deno
-          curl -fsSL https://deno.land/x/install/install.sh | sh
-          export PATH=$HOME/.deno/bin:$PATH
-
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
-          fi
+  #         if [ "${{ inputs.latest }}" = "true" ]; then
+  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
+  #         else
+  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
+  #         fi

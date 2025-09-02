@@ -1,8 +1,10 @@
+use std::{ops::Deref, path::Path, result::Result::Ok, sync::Arc};
+
 use ::config as config_loader;
-use global_error::prelude::*;
-use std::{ops::Deref, path::Path, sync::Arc};
+use anyhow::*;
 
 pub mod config;
+pub mod defaults;
 pub mod paths;
 pub mod secret;
 
@@ -14,14 +16,20 @@ struct ConfigData {
 pub struct Config(Arc<ConfigData>);
 
 impl Config {
-	pub async fn load<P: AsRef<Path>>(paths: &[P]) -> GlobalResult<Self> {
+	pub async fn load<P: AsRef<Path>>(paths: &[P]) -> Result<Self> {
 		let mut settings = config_loader::Config::builder();
 
+		// Start with default values
+		settings = settings.add_source(config_loader::Config::try_from(&config::Root::default())?);
+
 		if paths.is_empty() {
-			// Add default config directory
-			settings = add_source(settings, paths::system_config_dir())?;
+			let default_path = paths::system_config_dir();
+			if default_path.exists() {
+				// Add default config directory if it exists
+				settings = add_source(settings, default_path)?;
+			}
 		} else {
-			// Use config paths provided
+			// Use provided paths
 			for path in paths {
 				settings = add_source(settings, path)?;
 			}
@@ -35,12 +43,18 @@ impl Config {
 		);
 
 		// Read config
-		let config = unwrap!(
-			unwrap!(settings.build(), "failed to build config").try_deserialize::<config::Root>(),
-			"failed to deserialize config"
-		);
+		let mut config_root = settings
+			.build()
+			.context("failed to build config")?
+			.try_deserialize::<config::Root>()
+			.context("failed to deserialize config")?;
 
-		Ok(Self(Arc::new(ConfigData { config })))
+		// Validate configuration at load time
+		config_root.validate_and_set_defaults()?;
+
+		Ok(Self(Arc::new(ConfigData {
+			config: config_root,
+		})))
 	}
 
 	pub fn from_root(config: config::Root) -> Self {
@@ -57,12 +71,17 @@ impl Deref for Config {
 }
 
 /// Adds a source to the config builder. If the path is a directory, it reads all config files.
-/// If it's a file, it adds it directly.
+/// If it's a file, it adds it directly. If the path doesn't exist, it's silently ignored.
 fn add_source<P: AsRef<Path>>(
 	mut settings: config_loader::ConfigBuilder<config_loader::builder::DefaultState>,
 	path: P,
-) -> GlobalResult<config_loader::ConfigBuilder<config_loader::builder::DefaultState>> {
+) -> Result<config_loader::ConfigBuilder<config_loader::builder::DefaultState>> {
 	let path = path.as_ref();
+
+	if !path.exists() {
+		// Silently ignore non-existent paths
+		return Ok(settings);
+	}
 
 	if path.is_dir() {
 		for entry in std::fs::read_dir(path)? {
@@ -89,22 +108,20 @@ fn add_source<P: AsRef<Path>>(
 fn add_file_source<P: AsRef<Path>>(
 	settings: config_loader::ConfigBuilder<config_loader::builder::DefaultState>,
 	path: P,
-) -> GlobalResult<config_loader::ConfigBuilder<config_loader::builder::DefaultState>> {
+) -> Result<config_loader::ConfigBuilder<config_loader::builder::DefaultState>> {
 	let path = path.as_ref();
-	let content = unwrap!(
-		std::fs::read_to_string(path),
-		"failed to read file: {}",
-		path.display()
-	);
+	let content = std::fs::read_to_string(path)
+		.with_context(|| format!("failed to read file: {}", path.display()))?;
 
 	let format = match path.extension().and_then(std::ffi::OsStr::to_str) {
 		Some("json") => config_loader::FileFormat::Json,
 		Some("json5") | Some("jsonc") => {
 			// Parse JSON5/JSONC and convert to regular JSON
-			let value: serde_json::Value =
-				json5::from_str(&content).map_err(|e| global_error::GlobalError::new(e))?;
-			let json =
-				serde_json::to_string(&value).map_err(|e| global_error::GlobalError::new(e))?;
+			let value = match json5::from_str::<serde_json::Value>(&content) {
+				Ok(x) => x,
+				Err(err) => bail!("failed to parse config file at {}: {err}", path.display()),
+			};
+			let json = serde_json::to_string(&value)?;
 			return Ok(settings.add_source(config_loader::File::from_str(
 				&json,
 				config_loader::FileFormat::Json,

@@ -1,0 +1,19 @@
+[package]
+name = "rivet-bootstrap"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+gas.workspace = true
+rivet-config.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
+serde.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+namespace.workspace = true
+epoxy.workspace = true

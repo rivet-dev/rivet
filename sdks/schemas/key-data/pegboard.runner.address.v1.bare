@@ -1,0 +1,20 @@
+type Http struct {
+	hostname: str
+	port: u16
+}
+
+type Tcp struct {
+	hostname: str
+	port: u16
+}
+
+type Udp struct {
+	hostname: str
+	port: u16
+}
+
+type Data union {
+	Http |
+	Tcp |
+	Udp
+}

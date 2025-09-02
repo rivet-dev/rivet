@@ -6,15 +6,15 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-config = { version = "0.14.0", default-features = false, features = ["async", "json", "yaml"] }
-dirs = "5.0.1"
-json5 = "0.4.1"
-glob = "0.3.1"
-global-error.workspace = true
-ipnet = { version = "2.10.1", features = ["serde"] }
-maplit = "1.0.2"
-schemars = { version = "0.8.21", features = ["url", "uuid1"] }
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.129"
-url = { version = "2.4", features = ["serde"] }
-uuid = { version = "1.11.0", features = ["serde", "v4"] }
+anyhow.workspace = true
+config.workspace = true
+dirs.workspace = true
+glob.workspace = true
+ipnet.workspace = true
+json5.workspace = true
+maplit.workspace = true
+schemars.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+url.workspace = true
+uuid.workspace = true

@@ -1,0 +1,11 @@
+[package]
+name = "rivet-dump-openapi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[build-dependencies]
+rivet-api-public.workspace = true
+serde_json.workspace = true
+utoipa.workspace = true

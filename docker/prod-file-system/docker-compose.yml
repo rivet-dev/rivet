@@ -1,0 +1,42 @@
+services:
+  rivet-engine:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    restart: unless-stopped
+    command: /usr/bin/rivet-engine start
+    environment:
+      - RIVET__FILE_SYSTEM__PATH=/var/lib/rivet-engine
+    volumes:
+      - ./rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+      - rivet-engine-data:/var/lib/rivet-engine
+    ports:
+      - '6420:6420'
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - http://127.0.0.1:6421/health
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+  runner:
+    build:
+      context: ../..
+      dockerfile: docker/runner/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - RIVET_ENDPOINT=http://rivet-engine:6420
+      - RUNNER_HOST=runner
+    stop_grace_period: 4s
+    ports:
+      - '5050:5050'
+    depends_on:
+      rivet-engine:
+        condition: service_healthy
+volumes:
+  rivet-engine-data:

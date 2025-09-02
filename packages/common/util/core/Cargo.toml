@@ -10,36 +10,26 @@ default = ["macros"]
 macros = []
 
 [dependencies]
-async-trait = "0.1"
-bcrypt = "0.13.0"
-chrono = "0.4"
-formatted-error = { workspace = true, optional = true }
-futures-util = "0.3"
-global-error.workspace = true
-indexmap = { version = "2.0", features = ["serde"] }
-ipnet = { version = "2.7", features = ["serde"] }
-lazy_static = "1.4"
-rand = "0.8"
-regex = "1.4"
-reqwest = { version = "0.12", default-features = false }
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+bcrypt.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+indexmap.workspace = true
+ipnet.workspace = true
+lazy_static.workspace = true
+rand.workspace = true
+regex.workspace = true
+reqwest.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
-rivet-util-macros.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
-thiserror = "1.0"
+rivet-util-id.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-types-proto.workspace = true
-url = "2.5.4"
-uuid = { version = "1", features = ["v4", "serde"] }
-
-[dependencies.sqlx]
-workspace = true
-features = [
-	"runtime-tokio",
-	"postgres",
-	"uuid",
-	"json",
-	"ipnetwork"
-]
+url.workspace = true
+uuid.workspace = true
+utoipa.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "pegboard-runner-ws"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+# Idk how to get this working with the workspace version
+hyper = "1.6"
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-metrics.workspace = true
+rivet-runner-protocol.workspace = true
+rivet-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+url.workspace = true
+versioned-data-util.workspace = true
+
+pegboard.workspace = true
+pegboard-actor-kv.workspace = true
+namespace.workspace = true

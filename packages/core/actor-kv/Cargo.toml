@@ -1,0 +1,22 @@
+[package]
+name = "pegboard-actor-kv"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+rivet-util-id.workspace = true
+serde_bare.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing-logfmt.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+rivet-runner-protocol.workspace = true
+
+pegboard.workspace = true

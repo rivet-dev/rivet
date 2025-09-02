@@ -1,0 +1,7 @@
+type Id data
+
+type Data struct {
+	workflow_id: Id
+	remaining_slots: u32
+	total_slots: u32
+}

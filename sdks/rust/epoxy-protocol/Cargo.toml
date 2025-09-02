@@ -1,0 +1,20 @@
+[package]
+name = "epoxy-protocol"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rivet-util.workspace = true
+serde_bare.workspace = true
+serde.workspace = true
+versioned-data-util.workspace = true
+
+[build-dependencies]
+bare_gen.workspace = true
+indoc.workspace = true
+prettyplease.workspace = true
+serde_json.workspace = true
+syn.workspace = true

@@ -1,0 +1,107 @@
+type RequestId u64
+type WebSocketId u64
+type Id str
+
+type StreamFinishReason enum {
+	COMPLETE
+	ABORT
+}
+
+# MARK: HTTP Request Forwarding
+type ToServerRequestStart struct {
+	requestId: RequestId
+	actorId: Id
+	method: str
+	path: str
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToServerRequestChunk struct {
+	requestId: RequestId
+	body: data
+}
+
+type ToServerRequestFinish struct {
+	requestId: RequestId
+	reason: StreamFinishReason
+}
+
+type ToClientResponseStart struct {
+	requestId: RequestId
+	status: u16
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToClientResponseChunk struct {
+	requestId: RequestId
+	body: data
+}
+
+type ToClientResponseFinish struct {
+	requestId: RequestId
+	reason: StreamFinishReason
+}
+
+# MARK: WebSocket Forwarding
+type ToServerWebSocketOpen struct {
+	actorId: Id
+	webSocketId: WebSocketId
+	path: str
+	headers: map<str><str>
+}
+
+type ToServerWebSocketMessage struct {
+	webSocketId: WebSocketId
+	data: data
+	binary: bool
+}
+
+type ToServerWebSocketClose struct {
+	webSocketId: WebSocketId
+	code: optional<u16>
+	reason: optional<str>
+}
+
+type ToClientWebSocketOpen struct {
+	webSocketId: WebSocketId
+}
+
+type ToClientWebSocketMessage struct {
+	webSocketId: WebSocketId
+	data: data
+	binary: bool
+}
+
+type ToClientWebSocketClose struct {
+	webSocketId: WebSocketId
+	code: optional<u16>
+	reason: optional<str>
+}
+
+# MARK: Message
+type MessageBody union {
+	# HTTP
+	ToServerRequestStart |
+	ToServerRequestChunk |
+	ToServerRequestFinish |
+	ToClientResponseStart |
+	ToClientResponseChunk |
+	ToClientResponseFinish |
+	
+	# WebSocket
+	ToServerWebSocketOpen |
+	ToServerWebSocketMessage |
+	ToServerWebSocketClose |
+	ToClientWebSocketOpen |
+	ToClientWebSocketMessage |
+	ToClientWebSocketClose
+}
+
+# Main tunnel message
+type TunnelMessage struct {
+	body: MessageBody
+}

@@ -1,0 +1,5 @@
+{
+  "code": "no_leader_elected",
+  "group": "kv",
+  "message": "No leader has been elected yet."
+}

@@ -1,0 +1,6 @@
+type Id data
+
+type Data struct {
+	workflow_id: Id
+	is_destroyed: bool
+}

@@ -1,8 +1,8 @@
-mod buckets;
-mod registry;
-mod server;
+mod providers;
 
-pub use buckets::{BUCKETS, MICRO_BUCKETS, PROVISION_BUCKETS, TASK_POLL_BUCKETS};
-pub use prometheus;
-pub use registry::REGISTRY;
-pub use server::run_standalone;
+mod buckets;
+
+pub use buckets::*;
+pub use opentelemetry as otel;
+pub use opentelemetry::KeyValue;
+pub use providers::{OtelProviderGuard, init_otel_providers};

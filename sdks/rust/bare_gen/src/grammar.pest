@@ -1,0 +1,46 @@
+//schema            =  { SOI ~ user_type+ ~ EOI }
+schema            =  { SOI ~ user_type+ ~ EOI }
+type_l            = _{ "type" }
+user_type         =  { "type" ~ user_type_name ~ any_type }
+user_type_name    = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+unsigned_t        = { "uint" | "u64" | "u32" | "u16" | "u8" }
+signed_t          = { "int" | "i64" | "i32" | "i16" | "i8" }
+void_t            = { "void" }
+str_t             = { "str" }
+bool_t            = { "bool" }
+float_t           = { "f32" | "f64" }
+data_t            = { "data" ~ (length)? }
+enum_t            = { "enum" ~ "{" ~ enum_value+ ~ "}" }
+enum_value        =  { enum_value_name ~ ("=" ~ integer)? }
+enum_value_name   = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+list_t            =  { "list" ~ type_t ~ length? }
+type_t            =  _{ "<" ~ any_type ~ ">" }
+struct_t          =  { "struct" ~ "{" ~ struct_field+ ~ "}" }
+map_t             =  { "map" ~ type_t ~ type_t }
+union_t           =  { "union" ~ "{" ~ any_type ~ ("|" ~ any_type)* ~ "}" }
+optional_t        =  { "optional" ~ type_t }
+struct_field      =  { struct_field_name ~ ":" ~ any_type }
+struct_field_name =  { (ASCII_ALPHANUMERIC | "_" | "-")+ }
+length            =  _{ "[" ~ integer ~ "]" }
+integer           = !{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+primative_type      =  _{
+    unsigned_t
+  | signed_t
+  | bool_t
+  | float_t
+  | data_t
+  | str_t
+  | void_t
+}
+any_type          = _{
+    user_type_name
+  | list_t
+  | struct_t
+  | enum_t
+  | map_t
+  | union_t
+  | optional_t
+  | primative_type
+}
+WHITESPACE        = _{ " " | "\n" | "\t" | NEWLINE }
+COMMENT           = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }

@@ -1,0 +1,61 @@
+# Vector Server (Aggregator) Configuration
+# This Vector instance acts as an aggregator that collects logs and metrics from all Vector clients
+# across different datacenters and forwards them to ClickHouse and other sinks.
+
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+sources:
+  vector:
+    type: vector
+    address: 0.0.0.0:6000
+    version: '2'
+  tcp_json:
+    type: socket
+    mode: tcp
+    address: 0.0.0.0:6100
+    decoding:
+      codec: json
+  http_json:
+    type: http_server
+    address: 0.0.0.0:6200
+    encoding: json
+  vector_metrics:
+    type: internal_metrics
+  vector_logs:
+    type: internal_logs
+transforms:
+  clickhouse_dynamic_events_filter:
+    type: filter
+    inputs:
+      - vector
+    condition:
+      type: vrl
+      source: .source == "clickhouse"
+  clickhouse_dynamic_events_transform:
+    type: remap
+    inputs:
+      - clickhouse_dynamic_events_filter
+    source: "# Extract and store metadata\n__database = .database\n__table = .table\n__columns = .columns\n\n# Create a new object with just the columns data\n. = {\n\t\"__database\": __database,\n\t\"__table\": __table,\n\t# By default insert namespace column since most tables include this\n\t\"namespace\": \"rivet\"\n}\n\t\n# Merge in the column data that should be inserted\n. = merge!(., __columns)\n"
+sinks:
+  clickhouse_dynamic_events:
+    type: clickhouse
+    inputs:
+      - clickhouse_dynamic_events_transform
+    endpoint: http://clickhouse:9300
+    database: '{{ __database }}'
+    table: '{{ __table }}'
+    compression: gzip
+    auth:
+      strategy: basic
+      user: system
+      password: default
+    batch:
+      max_events: 1000
+      timeout_secs: 10
+  console_vector_logs:
+    type: console
+    inputs:
+      - vector_logs
+    encoding:
+      codec: json

@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 pub const IDENT_CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz1234567890-";
 pub const IDENT_CHARSET_ALPHANUM: &[u8] = b"abcdefghijklmnopqrstuvwxyz1234567890";
@@ -59,23 +59,23 @@ pub fn bcrypt() -> (String, String) {
 pub fn ip_addr_v4() -> std::net::Ipv4Addr {
 	let mut rng = thread_rng();
 	std::net::Ipv4Addr::new(
-		rng.gen::<u8>(),
-		rng.gen::<u8>(),
-		rng.gen::<u8>(),
-		rng.gen::<u8>(),
+		rng.r#gen::<u8>(),
+		rng.r#gen::<u8>(),
+		rng.r#gen::<u8>(),
+		rng.r#gen::<u8>(),
 	)
 }
 
 pub fn ip_addr_v6() -> std::net::Ipv6Addr {
 	let mut rng = thread_rng();
 	std::net::Ipv6Addr::new(
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
-		rng.gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
+		rng.r#gen::<u16>(),
 	)
 }

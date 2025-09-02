@@ -1,0 +1,16 @@
+[package]
+name = "rivet-types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+rivet-api-builder.workspace = true
+rivet-runner-protocol.workspace = true
+rivet-key-data.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+utoipa.workspace = true

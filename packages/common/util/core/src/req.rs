@@ -1,19 +1,19 @@
 use std::time::Duration;
 
+use anyhow::*;
 use async_trait::async_trait;
-use global_error::prelude::*;
 
 #[async_trait]
 pub trait SendRetry {
 	/// Retries the request upon receiving a 429 response.
-	async fn send_retry(self, mut retries: usize) -> GlobalResult<reqwest::Response>;
+	async fn send_retry(self, mut retries: usize) -> Result<reqwest::Response>;
 }
 
 #[async_trait]
 impl SendRetry for reqwest::RequestBuilder {
-	async fn send_retry(self, mut retries: usize) -> GlobalResult<reqwest::Response> {
+	async fn send_retry(self, mut retries: usize) -> Result<reqwest::Response> {
 		loop {
-			let req = unwrap!(self.try_clone());
+			let req = self.try_clone().context("failed cloning req")?;
 			let res = req.send().await?;
 
 			if let reqwest::StatusCode::TOO_MANY_REQUESTS = res.status() {

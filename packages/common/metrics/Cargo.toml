@@ -6,12 +6,15 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-global-error.workspace = true
-hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
-lazy_static = "1.4"
-prometheus = "0.13"
+anyhow.workspace = true
+console-subscriber.workspace = true
+hyper.workspace = true
+lazy_static.workspace = true
+opentelemetry = { workspace = true, features = ["metrics"] }
+opentelemetry-otlp.workspace = true
+opentelemetry-semantic-conventions.workspace = true
+opentelemetry_sdk = { workspace = true, features = ["metrics"] }
 rivet-config.workspace = true
 rivet-env.workspace = true
 tokio.workspace = true
-tracing = "0.1"
-
+tracing.workspace = true

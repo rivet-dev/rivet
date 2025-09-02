@@ -1,0 +1,31 @@
+[package]
+name = "pegboard"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+epoxy.workspace = true
+lazy_static.workspace = true
+namespace.workspace = true
+nix.workspace = true
+rivet-api-client.workspace = true
+rivet-api-types.workspace = true
+rivet-api-util.workspace = true
+rivet-error.workspace = true
+rivet-key-data.workspace = true
+rivet-metrics.workspace = true
+rivet-runner-protocol.workspace = true
+rivet-types.workspace = true
+rivet-util.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+strum.workspace = true
+tracing.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+utoipa.workspace = true
+versioned-data-util.workspace = true

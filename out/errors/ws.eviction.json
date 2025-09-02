@@ -1,0 +1,5 @@
+{
+  "code": "eviction",
+  "group": "ws",
+  "message": "The websocket has been evicted and should not attempt to reconnect."
+}

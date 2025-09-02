@@ -1,0 +1,5 @@
+{
+  "code": "retry_attempts_exceeded",
+  "group": "guard",
+  "message": "Retry attempts exceeded."
+}

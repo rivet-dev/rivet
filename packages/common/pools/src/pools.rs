@@ -1,25 +1,19 @@
+use std::sync::Arc;
+
+use anyhow::*;
 use clickhouse_inserter::ClickHouseInserterHandle;
-use fdb_util::prelude::*;
-use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
-use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
-use crate::{
-	db::sqlite::{SqliteConnType, SqlitePoolManager, SqlitePoolManagerHandle},
-	ClickHousePool, CrdbPool, Error, FdbPool, NatsPool, RedisPool, SqlitePool,
-};
+use crate::{ClickHousePool, Error, UdbPool, UpsPool};
 
 // TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
 	pub(crate) _guard: DropGuard,
-	pub(crate) nats: Option<NatsPool>,
-	pub(crate) crdb: Option<CrdbPool>,
-	pub(crate) redis: HashMap<String, RedisPool>,
+	pub(crate) nats: Option<UpsPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
 	pub(crate) clickhouse_inserter: Option<ClickHouseInserterHandle>,
-	pub(crate) fdb: Option<FdbPool>,
-	pub(crate) sqlite: SqlitePoolManagerHandle,
+	pub(crate) udb: Option<UdbPool>,
 	clickhouse_enabled: bool,
 }
 
@@ -28,27 +22,21 @@ pub struct Pools(Arc<PoolsInner>);
 
 impl Pools {
 	#[tracing::instrument(skip(config))]
-	pub async fn new(config: Config) -> Result<Pools, Error> {
+	pub async fn new(config: Config) -> Result<Pools> {
 		// TODO: Choose client name for this service
 		let client_name = "rivet".to_string();
 		let token = CancellationToken::new();
 
-		let (nats, crdb, redis, fdb) = tokio::try_join!(
-			crate::db::nats::setup(config.clone(), client_name.clone()),
-			crate::db::crdb::setup(config.clone()),
-			crate::db::redis::setup(config.clone()),
-			crate::db::fdb::setup(config.clone()),
+		let (nats, udb) = tokio::try_join!(
+			crate::db::ups::setup(config.clone(), client_name.clone()),
+			crate::db::udb::setup(config.clone()),
 		)?;
 		let clickhouse = crate::db::clickhouse::setup(config.clone())?;
-		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
 		// Create the ClickHouse inserter if vector is enabled
-		let clickhouse_inserter = if let Some(vector_http) =
-			config.server.as_ref().and_then(|x| x.vector_http.as_ref())
-		{
+		let clickhouse_inserter = if let Some(vector_http) = config.vector_http().as_ref() {
 			let inserter =
-				clickhouse_inserter::create_inserter(&vector_http.host, vector_http.port)
-					.map_err(Error::BuildClickHouseInserter)?;
+				clickhouse_inserter::create_inserter(&vector_http.host, vector_http.port)?;
 			Some(inserter)
 		} else {
 			None
@@ -57,241 +45,70 @@ impl Pools {
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
 			nats: Some(nats),
-			crdb: Some(crdb),
-			redis,
 			clickhouse,
 			clickhouse_inserter,
-			fdb,
-			sqlite,
-			clickhouse_enabled: config
-				.server
-				.as_ref()
-				.map_or(false, |x| x.clickhouse.is_some()),
+			udb,
+			clickhouse_enabled: config.clickhouse().is_some(),
 		}));
-		pool.clone().start(token);
-
-		tokio::task::Builder::new()
-			.name("rivet_pools::runtime")
-			.spawn(runtime(pool.clone(), client_name.clone()))
-			.map_err(Error::TokioSpawn)?;
 
 		Ok(pool)
 	}
 
 	// Only for tests
 	#[tracing::instrument(skip(config))]
-	pub async fn test(config: Config) -> Result<Pools, Error> {
+	pub async fn test(config: Config) -> Result<Pools> {
 		// TODO: Choose client name for this service
 		let client_name = "rivet".to_string();
 		let token = CancellationToken::new();
 
-		let (nats, redis, fdb) = tokio::try_join!(
-			crate::db::nats::setup(config.clone(), client_name.clone()),
-			crate::db::redis::setup(config.clone()),
-			crate::db::fdb::setup(config.clone()),
+		let (nats, udb) = tokio::try_join!(
+			crate::db::ups::setup(config.clone(), client_name.clone()),
+			crate::db::udb::setup(config.clone()),
 		)?;
-		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
 		// Test setup doesn't use ClickHouse inserter
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
 			nats: Some(nats),
-			crdb: None,
-			redis,
 			clickhouse: None,
 			clickhouse_inserter: None,
-			fdb,
-			sqlite,
-			clickhouse_enabled: config
-				.server
-				.as_ref()
-				.map_or(false, |x| x.clickhouse.is_some()),
+			udb,
+			clickhouse_enabled: config.clickhouse().is_some(),
 		}));
-		pool.clone().start(token);
-
-		tokio::task::Builder::new()
-			.name("rivet_pools::runtime")
-			.spawn(runtime(pool.clone(), client_name.clone()))
-			.map_err(Error::TokioSpawn)?;
 
 		Ok(pool)
 	}
 
-	/// Spawn background tasks required to operate the pool.
-	pub(crate) fn start(self, token: CancellationToken) {
-		let spawn_res = tokio::task::Builder::new()
-			.name("PoolsInner::record_metrics")
-			.spawn(self.clone().record_metrics_loop(token));
-		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn record_metrics task");
-		}
-	}
-
 	// MARK: Getters
-	pub fn nats_option(&self) -> &Option<NatsPool> {
+	pub fn nats_option(&self) -> &Option<UpsPool> {
 		&self.0.nats
 	}
 
-	pub fn redis_map(&self) -> &HashMap<String, RedisPool> {
-		&self.0.redis
-	}
-
 	// MARK: Pool lookups
-	pub fn nats(&self) -> Result<NatsPool, Error> {
-		self.0.nats.clone().ok_or(Error::MissingNatsPool)
-	}
-
-	pub fn crdb(&self) -> Result<CrdbPool, Error> {
-		self.0.crdb.clone().ok_or(Error::MissingCrdbPool)
-	}
-
-	pub fn redis(&self, key: &str) -> Result<RedisPool, Error> {
-		self.0
-			.redis
-			.get(key)
-			.cloned()
-			.ok_or_else(|| Error::MissingRedisPool {
-				key: Some(key.to_string()),
-			})
-	}
-
-	pub fn redis_chirp(&self) -> Result<RedisPool, Error> {
-		self.redis("persistent")
-	}
-
-	pub fn redis_chirp_ephemeral(&self) -> Result<RedisPool, Error> {
-		self.redis("ephemeral")
-	}
-
-	pub fn redis_cache(&self) -> Result<RedisPool, Error> {
-		self.redis("ephemeral")
+	pub fn ups(&self) -> Result<UpsPool> {
+		self.0.nats.clone().ok_or(Error::MissingNatsPool.into())
 	}
 
 	pub fn clickhouse_enabled(&self) -> bool {
 		self.0.clickhouse_enabled
 	}
 
-	pub fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
-		ensure_with!(
-			self.clickhouse_enabled(),
-			FEATURE_DISABLED,
-			feature = "Clickhouse"
-		);
+	pub fn clickhouse(&self) -> Result<ClickHousePool> {
+		ensure!(self.clickhouse_enabled(), "clickhouse disabled");
 
-		let ch = unwrap!(self.0.clickhouse.clone(), "missing clickhouse pool");
-		Ok(ch)
+		self.0.clickhouse.clone().context("missing clickhouse pool")
 	}
 
-	pub fn clickhouse_inserter(&self) -> GlobalResult<ClickHouseInserterHandle> {
-		ensure_with!(
-			self.clickhouse_enabled(),
-			FEATURE_DISABLED,
-			feature = "Clickhouse"
-		);
+	pub fn clickhouse_inserter(&self) -> Result<ClickHouseInserterHandle> {
+		ensure!(self.clickhouse_enabled(), "clickhouse disabled");
 
-		let inserter = unwrap!(
-			self.0.clickhouse_inserter.clone(),
-			"missing clickhouse inserter"
-		);
-		Ok(inserter)
+		self.0
+			.clickhouse_inserter
+			.clone()
+			.context("missing clickhouse inserter")
 	}
 
-	pub fn fdb(&self) -> Result<FdbPool, Error> {
-		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
-	}
-
-	#[tracing::instrument(skip_all, fields(?key, read_only))]
-	pub async fn sqlite(
-		&self,
-		key: impl TuplePack + Debug,
-		read_only: bool,
-	) -> Result<SqlitePool, Error> {
-		self.sqlite_with_conn_type(
-			key,
-			if read_only {
-				SqliteConnType::Reader
-			} else {
-				SqliteConnType::Writer {
-					auto_snapshot: true,
-				}
-			},
-		)
-		.await
-	}
-
-	#[tracing::instrument(level = "debug", skip_all)]
-	pub async fn sqlite_with_conn_type(
-		&self,
-		key: impl TuplePack + Debug,
-		conn_type: SqliteConnType,
-	) -> Result<SqlitePool, Error> {
-		self.0.sqlite.get(key, conn_type).await
-	}
-
-	pub fn sqlite_manager(&self) -> &SqlitePoolManagerHandle {
-		&self.0.sqlite
-	}
-
-	#[tracing::instrument(level = "debug", skip_all)]
-	async fn record_metrics_loop(self, token: CancellationToken) {
-		let cancelled = token.cancelled();
-		tokio::pin!(cancelled);
-
-		let mut interval = tokio::time::interval(Duration::from_secs(5));
-		loop {
-			tokio::select! {
-				_ = &mut cancelled => {
-					tracing::info!("record metrics cancelled");
-					break
-				}
-				_ = interval.tick() => {
-					self.record_metrics().await;
-				}
-			}
-		}
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn record_metrics(&self) {
-		use crate::metrics::*;
-
-		if let Some(pool) = &self.0.crdb {
-			CRDB_POOL_SIZE.set(pool.size() as i64);
-			CRDB_POOL_NUM_IDLE.set(pool.num_idle() as i64);
-		}
-	}
-}
-
-#[tracing::instrument(level = "trace", skip(pools))]
-async fn runtime(pools: Pools, client_name: String) {
-	// We have to manually ping the Redis connection since `ConnectionManager`
-	// doesn't do this for us. If we don't make a request on a Redis connection
-	// for a long time, we'll get a broken pipe error, so this keeps the
-	// connection alive.
-
-	let mut interval = tokio::time::interval(Duration::from_secs(15));
-	loop {
-		interval.tick().await;
-
-		for (db, conn) in &pools.0.redis {
-			// HACK: Instead of sending `PING`, we test the connection by
-			// updating the client's name. We do this because
-			// `ConnectionManager` doesn't let us hook in to new connections, so
-			// we have to manually update the client's name.
-			let mut conn = conn.clone();
-			let res = redis::cmd("CLIENT")
-				.arg("SETNAME")
-				.arg(&client_name)
-				.query_async::<_, ()>(&mut conn)
-				.await;
-			match res {
-				Result::Ok(_) => {
-					tracing::trace!(%db, "ping success");
-				}
-				Err(err) => {
-					tracing::error!(%db, ?err, "redis ping failed");
-				}
-			}
-		}
+	pub fn udb(&self) -> Result<UdbPool> {
+		self.0.udb.clone().ok_or(Error::MissingUdbPool.into())
 	}
 }

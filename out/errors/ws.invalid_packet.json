@@ -1,0 +1,5 @@
+{
+  "code": "invalid_packet",
+  "group": "ws",
+  "message": "The websocket could not process the given packet."
+}

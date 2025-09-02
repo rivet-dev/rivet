@@ -1,0 +1,187 @@
+services:
+  clickhouse:
+    restart: unless-stopped
+    image: clickhouse/clickhouse-server:25.1.5
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/config.xml
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ./clickhouse/client-config.xml:/etc/clickhouse-client/config.xml
+      - ./clickhouse/init:/docker-entrypoint-initdb.d
+    environment:
+      - CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=true
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=default
+      - CLICKHOUSE_HTTP_PORT=9300
+      - CLICKHOUSE_TCP_PORT=9301
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - '--host'
+        - 127.0.0.1
+        - '--port'
+        - '9301'
+        - '--user'
+        - system
+        - '--password'
+        - default
+        - '--query'
+        - SELECT 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    network_mode: host
+  grafana:
+    image: grafana/grafana:11.5.2
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    network_mode: host
+  postgres:
+    restart: unless-stopped
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d postgres
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    network_mode: host
+  rivet-shell:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: sleep infinity
+    stop_grace_period: 0s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    network_mode: host
+  vector-server:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-server-data-local:/var/lib/vector
+      - ./vector-server:/etc/vector
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    network_mode: host
+  vector-client:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-client-data-local:/var/lib/vector
+      - ./vector-client:/etc/vector
+    depends_on:
+      vector-server:
+        condition: service_started
+    network_mode: host
+  otel-collector-server:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - ./otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      - CLICKHOUSE_PASSWORD=default
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    network_mode: host
+  otel-collector-client:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - ./otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      otel-collector-server:
+        condition: service_started
+    network_mode: host
+  rivet-engine:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: /usr/bin/rivet-engine start
+    environment:
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_SAMPLER_RATIO=1
+      - RIVET_OTEL_GRPC_ENDPOINT=http://127.0.0.1:4317
+    stop_grace_period: 0s
+    depends_on:
+      vector-client:
+        condition: service_started
+      otel-collector-client:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - http://127.0.0.1:6421/health
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    network_mode: host
+  runner:
+    build:
+      context: ../..
+      dockerfile: sdks/typescript/test-runner/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - RIVET_ENDPOINT=http://127.0.0.1:6420
+      - RUNNER_HOST=127.0.0.1
+    stop_grace_period: 4s
+    depends_on:
+      rivet-engine:
+        condition: service_healthy
+    network_mode: host
+networks:
+  rivet-core-network:
+    driver: bridge
+  rivet-network:
+    driver: bridge
+  rivet-network-engine-peer:
+    driver: bridge
+  rivet-network-to-core:
+    driver: bridge
+volumes:
+  clickhouse-data: null
+  grafana-data: null
+  postgres-data: null
+  vector-server-data-local: null
+  vector-client-data-local: null

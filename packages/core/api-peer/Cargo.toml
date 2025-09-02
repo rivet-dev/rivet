@@ -1,0 +1,31 @@
+[package]
+name = "rivet-api-peer"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+gas.workspace = true
+epoxy.workspace = true
+futures-util.workspace = true
+rivet-api-builder.workspace = true
+rivet-api-types.workspace = true
+rivet-api-util.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
+rivet-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+
+tokio.workspace = true
+tracing.workspace = true
+namespace.workspace = true
+pegboard.workspace = true
+uuid.workspace = true
+utoipa.workspace = true

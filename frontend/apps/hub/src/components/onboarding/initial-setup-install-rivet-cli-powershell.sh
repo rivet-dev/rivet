@@ -1,1 +1,0 @@
-iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex

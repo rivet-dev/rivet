@@ -1,0 +1,5 @@
+{
+  "code": "timed_out_waiting_for_init",
+  "group": "ws",
+  "message": "Timed out waiting for the init packet to be sent."
+}

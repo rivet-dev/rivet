@@ -1,9 +1,0 @@
-[package]
-name = "rivet-test-images"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-edition.workspace = true
-
-[dependencies]
-testcontainers = "0.12"

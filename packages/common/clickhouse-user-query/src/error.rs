@@ -11,10 +11,14 @@ pub enum UserQueryError {
 	#[error("Property '{0}' type mismatch: expected {1}, got {2}")]
 	PropertyTypeMismatch(String, String, String),
 
-	#[error("Invalid property name '{0}': must contain only alphanumeric characters and underscores, and cannot start with a number")]
+	#[error(
+		"Invalid property name '{0}': must contain only alphanumeric characters and underscores, and cannot start with a number"
+	)]
 	InvalidPropertyName(String),
 
-	#[error("Invalid map key name '{0}': must contain only alphanumeric characters and underscores, and cannot start with a number")]
+	#[error(
+		"Invalid map key name '{0}': must contain only alphanumeric characters and underscores, and cannot start with a number"
+	)]
 	InvalidMapKeyName(String),
 
 	#[error("Empty query expression")]

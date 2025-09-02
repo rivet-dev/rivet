@@ -1,9 +1,0 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
-
-imports:
-  commons: ../../common.yml
-
-types:
-  KvConfig:
-    docs: KV configuration for a given version.
-    properties: {}

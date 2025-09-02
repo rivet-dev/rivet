@@ -1,0 +1,5 @@
+{
+  "code": "websocket_service_unavailable",
+  "group": "guard",
+  "message": "WebSocket service unavailable."
+}

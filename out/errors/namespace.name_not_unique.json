@@ -1,0 +1,5 @@
+{
+  "code": "name_not_unique",
+  "group": "namespace",
+  "message": "Namespace name must be unique."
+}

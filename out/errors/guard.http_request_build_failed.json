@@ -1,0 +1,5 @@
+{
+  "code": "http_request_build_failed",
+  "group": "guard",
+  "message": "Failed to build HTTP request."
+}

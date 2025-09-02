@@ -1,0 +1,5 @@
+{
+  "code": "tls_handshake_failed",
+  "group": "guard",
+  "message": "TLS handshake failed."
+}

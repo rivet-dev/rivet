@@ -228,13 +228,11 @@ fn test_string_in_with_empty_values_case_insensitive() {
 
 #[test]
 fn test_regex_property_type_mismatch() {
-	let schema = Schema::new(vec![Property::new(
-		"count".to_string(),
-		false,
-		PropertyType::Number,
-	)
-	.unwrap()
-	.with_group_by(false)])
+	let schema = Schema::new(vec![
+		Property::new("count".to_string(), false, PropertyType::Number)
+			.unwrap()
+			.with_group_by(false),
+	])
 	.unwrap();
 
 	let query = QueryExpr::StringMatchRegex {

@@ -1,0 +1,5 @@
+{
+  "code": "wrong_port_protocol",
+  "group": "guard",
+  "message": "Attempted to access a port using the wrong protocol."
+}

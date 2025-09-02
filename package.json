@@ -1,33 +1,20 @@
 {
+	"name": "@rivetkit/engine-workspace",
 	"private": true,
-	"packageManager": "yarn@4.6.0",
-	"name": "rivet",
-	"workspaces": [
-		"frontend/apps/*",
-		"frontend/packages/*",
-		"cloud/packages/*",
-		"site",
-		"sdks/api/runtime/typescript",
-		"sdks/api/full/typescript",
-		"examples/*",
-		"tests/load",
-		"scripts/lz4"
-	],
+	"packageManager": "pnpm@10.13.1",
 	"scripts": {
-		"start": "npx turbo dev",
-		"dev": "npx turbo dev",
-		"build": "npx turbo build",
-		"fmt": "yarn biome check --write ."
+		"start": "npx turbo watch build",
+		"test": "npx turbo test",
+		"test:watch": "npx turbo watch test",
+		"check-types": "npx turbo check-types",
+		"fmt": "pnpm biome check --write --diagnostic-level=error ."
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^1.9.4",
-		"@yarnpkg/plugin-exec": "^3.0.1",
-		"turbo": "^2.0.1"
-	},
-	"resolutions": {
-		"react": "^19",
-		"react-dom": "^19",
-		"esbuild": "^0.25.5",
-		"actor-core": "file:./frontend/packages/actor-core.tgz"
+		"@bare-ts/tools": "0.15.0",
+		"@biomejs/biome": "^2.1.1",
+		"lefthook": "^1.6.12",
+		"tsup": "^8.5.0",
+		"turbo": "^2.0.1",
+		"typescript": "^5.0.0"
 	}
 }

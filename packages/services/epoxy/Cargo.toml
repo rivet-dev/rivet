@@ -1,0 +1,46 @@
+[package]
+name = "epoxy"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+base64.workspace = true
+bytes.workspace = true
+gas.workspace = true
+epoxy-protocol.workspace = true
+futures-util.workspace = true
+lazy_static.workspace = true
+protobuf.workspace = true
+reqwest.workspace = true
+rivet-api-builder.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
+serde.workspace = true
+serde_bare.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+slog-async.workspace = true
+slog-term.workspace = true
+slog.workspace = true
+tokio.workspace = true
+tracing-slog.workspace = true
+tracing.workspace = true
+udb-util.workspace = true
+universaldb.workspace = true
+url.workspace = true
+uuid.workspace = true
+versioned-data-util.workspace = true
+
+[dev-dependencies]
+gas.workspace = true
+rivet-runtime.workspace = true
+rivet-test-deps.workspace = true
+portpicker.workspace = true
+tokio.workspace = true
+libc.workspace = true

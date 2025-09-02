@@ -1,0 +1,5 @@
+{
+  "code": "destroyed_while_waiting_for_ready",
+  "group": "actor",
+  "message": "Actor was destroyed while waiting for ready state."
+}

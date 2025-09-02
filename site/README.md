@@ -26,8 +26,8 @@ _redirects        https://developers.cloudflare.com/pages/platform/redirects/
 
 ```bash
 cd site
-yarn install
-yarn dev
+pnpm install
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to view the website.

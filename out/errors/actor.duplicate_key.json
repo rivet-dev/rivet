@@ -1,0 +1,5 @@
+{
+  "code": "duplicate_key",
+  "group": "actor",
+  "message": "Actor key already in use."
+}

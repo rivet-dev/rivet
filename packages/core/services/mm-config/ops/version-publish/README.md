@@ -1,1 +1,0 @@
-# mm-config-version-publish

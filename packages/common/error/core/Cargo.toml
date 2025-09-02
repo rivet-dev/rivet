@@ -1,0 +1,16 @@
+[package]
+name = "rivet-error"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+indoc.workspace = true
+rivet-error-macros.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true

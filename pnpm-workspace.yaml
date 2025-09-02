@@ -1,0 +1,16 @@
+packages:
+  - docker/template
+  - frontend
+  - scripts/tests
+  - sdks/typescript/api-full
+  - sdks/typescript/api-runtime
+  - sdks/typescript/runner
+  - sdks/typescript/runner-protocol
+  - sdks/typescript/test-runner
+  - sdks/typescript/tunnel-protocol
+  - site
+  - frontend/packages/components/
+  - frontend/packages/icons/
+
+onlyBuiltDependencies:
+  - esbuild

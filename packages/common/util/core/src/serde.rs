@@ -3,15 +3,15 @@ use std::{
 	fmt,
 	hash::{Hash, Hasher},
 	marker::PhantomData,
-	ops::Deref,
+	ops::{Deref, DerefMut},
 };
 
 use indexmap::IndexMap;
 use serde::{
-	de::{self, DeserializeOwned},
 	Deserialize, Deserializer, Serialize, Serializer,
+	de::{self, DeserializeOwned},
 };
-use serde_json::{value::RawValue, Number};
+use serde_json::{Number, value::RawValue};
 use thiserror::Error;
 
 /// Like serde_json::Value but with no nesting types (arrays, objects).
@@ -125,6 +125,10 @@ impl<K: Eq + Hash, V: Hash> HashableMap<K, V> {
 	pub fn new() -> Self {
 		HashableMap(IndexMap::new())
 	}
+
+	pub fn with_capacity(capacity: usize) -> Self {
+		HashableMap(IndexMap::with_capacity(capacity))
+	}
 }
 
 impl<K: Eq + Hash, V: Hash> Default for HashableMap<K, V> {
@@ -133,11 +137,31 @@ impl<K: Eq + Hash, V: Hash> Default for HashableMap<K, V> {
 	}
 }
 
+impl<K: Eq + Hash, V: PartialEq + Hash> PartialEq for HashableMap<K, V> {
+	fn eq(&self, other: &HashableMap<K, V>) -> bool {
+		if self.len() != other.len() {
+			return false;
+		}
+
+		self.0
+			.iter()
+			.all(|(key, value)| other.get(key).map_or(false, |v| *value == *v))
+	}
+}
+
+impl<K: Eq + Hash, V: Eq + Hash> Eq for HashableMap<K, V> {}
+
 impl<K: Eq + Hash, V: Hash> Deref for HashableMap<K, V> {
 	type Target = IndexMap<K, V>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<K: Eq + Hash, V: Hash> DerefMut for HashableMap<K, V> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 
@@ -182,6 +206,12 @@ impl<K: Eq + Clone + Hash, V: Clone + Hash> From<HashMap<K, V>> for HashableMap<
 	}
 }
 
+impl<K: Eq + Clone + Hash, V: Clone + Hash> From<HashableMap<K, V>> for HashMap<K, V> {
+	fn from(val: HashableMap<K, V>) -> Self {
+		val.into_iter().collect()
+	}
+}
+
 impl<K: Eq + Hash, V: Hash> FromIterator<(K, V)> for HashableMap<K, V> {
 	fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
 		HashableMap(iter.into_iter().collect())
@@ -214,6 +244,33 @@ impl<'a, K: Eq + Hash, V: Hash> IntoIterator for &'a mut HashableMap<K, V> {
 		self.0.iter_mut()
 	}
 }
+
+impl<K: Eq + Hash, V: Hash> Extend<(K, V)> for HashableMap<K, V> {
+	fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+		self.0.extend(iter);
+	}
+}
+
+// TODO: This doesn't work
+// impl<K: ToSchema + Eq + Hash, T: ToSchema + Hash> ToSchema for HashableMap<K, T> {
+// 	fn schemas(
+// 		schemas: &mut Vec<(
+// 			String,
+// 			utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+// 		)>,
+// 	) {
+// 		K::schemas(schemas);
+// 		T::schemas(schemas);
+// 	}
+// }
+//
+// impl<K: ToSchema + Eq + Hash, T: ToSchema + Hash> PartialSchema for HashableMap<K, T> {
+// 	fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+// 		utoipa::openapi::ObjectBuilder::new()
+// 			.additional_properties(Some(T::schema()))
+// 			.into()
+// 	}
+// }
 
 /// Allows partial json ser/de.
 /// Effectively a `serde_json::value::RawValue` with type information.
@@ -302,54 +359,158 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Raw<T> {
 	}
 }
 
-impl<T, DB> sqlx::Type<DB> for Raw<T>
-where
-	DB: sqlx::Database,
-	for<'a> sqlx::types::Json<&'a RawValue>: sqlx::Type<DB>,
-{
-	fn type_info() -> DB::TypeInfo {
-		<RawValue as sqlx::Type<DB>>::type_info()
+/// A map-like structure that serializes/deserializes as a JSON object but is backed by a Vec.
+/// Preserves insertion order and allows duplicate keys.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FakeMap<K, V>(Vec<(K, V)>);
+
+impl<K, V> FakeMap<K, V> {
+	pub fn new() -> Self {
+		FakeMap(Vec::new())
 	}
 
-	fn compatible(ty: &DB::TypeInfo) -> bool {
-		<RawValue as sqlx::Type<DB>>::compatible(ty)
-	}
-}
-
-impl<'q, T, DB> sqlx::Encode<'q, DB> for Raw<T>
-where
-	for<'a> sqlx::types::Json<&'a RawValue>: sqlx::Encode<'q, DB>,
-	DB: sqlx::Database,
-{
-	fn encode_by_ref(
-		&self,
-		buf: &mut <DB as sqlx::Database>::ArgumentBuffer<'q>,
-	) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-		<sqlx::types::Json<&RawValue> as sqlx::Encode<'q, DB>>::encode(
-			sqlx::types::Json(self.inner.as_ref()),
-			buf,
-		)
+	pub fn with_capacity(capacity: usize) -> Self {
+		FakeMap(Vec::with_capacity(capacity))
 	}
 }
 
-impl<'q, T, DB> sqlx::Decode<'q, DB> for Raw<T>
-where
-	DB: sqlx::Database,
-	for<'a> std::string::String: sqlx::Decode<'a, DB>,
-{
-	fn decode(
-		value: <DB as sqlx::Database>::ValueRef<'q>,
-	) -> Result<Self, sqlx::error::BoxDynError> {
-		Ok(Raw {
-			_marker: PhantomData,
-			inner: RawValue::from_string(<String as sqlx::Decode<DB>>::decode(value)?)?,
+impl<K: Ord, V> FakeMap<K, V> {
+	/// Sort by keys.
+	pub fn sort(&mut self)
+	where
+		K: Ord,
+	{
+		self.0.sort_by(|a, b| a.0.cmp(&b.0));
+	}
+}
+
+impl<K, V> Default for FakeMap<K, V> {
+	fn default() -> Self {
+		FakeMap::new()
+	}
+}
+
+impl<K, V> Deref for FakeMap<K, V> {
+	type Target = Vec<(K, V)>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<K, V> DerefMut for FakeMap<K, V> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl<K: Eq + Hash, V> From<Vec<(K, V)>> for FakeMap<K, V> {
+	fn from(val: Vec<(K, V)>) -> Self {
+		FakeMap(val)
+	}
+}
+
+impl<K: Eq + Hash, V> From<FakeMap<K, V>> for Vec<(K, V)> {
+	fn from(val: FakeMap<K, V>) -> Self {
+		val.0
+	}
+}
+
+impl<K: Eq + Hash, V> From<HashMap<K, V>> for FakeMap<K, V> {
+	fn from(val: HashMap<K, V>) -> Self {
+		FakeMap(val.into_iter().collect())
+	}
+}
+
+impl<K: Eq + Hash, V> From<FakeMap<K, V>> for HashMap<K, V> {
+	fn from(val: FakeMap<K, V>) -> Self {
+		val.into_iter().collect()
+	}
+}
+
+impl<K: Serialize, V: Serialize> Serialize for FakeMap<K, V> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		use serde::ser::SerializeMap;
+		let mut map = serializer.serialize_map(Some(self.0.len()))?;
+		for (k, v) in &self.0 {
+			map.serialize_entry(k, v)?;
+		}
+		map.end()
+	}
+}
+
+impl<'de, K: Deserialize<'de>, V: Deserialize<'de>> Deserialize<'de> for FakeMap<K, V> {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		struct FakeMapVisitor<K, V> {
+			marker: PhantomData<(K, V)>,
+		}
+
+		impl<'de, K: Deserialize<'de>, V: Deserialize<'de>> de::Visitor<'de> for FakeMapVisitor<K, V> {
+			type Value = FakeMap<K, V>;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				formatter.write_str("a map")
+			}
+
+			fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+			where
+				M: de::MapAccess<'de>,
+			{
+				let mut vec = Vec::with_capacity(access.size_hint().unwrap_or(0));
+				while let Some((key, value)) = access.next_entry()? {
+					vec.push((key, value));
+				}
+				Ok(FakeMap(vec))
+			}
+		}
+
+		deserializer.deserialize_map(FakeMapVisitor {
+			marker: PhantomData,
 		})
 	}
 }
 
-impl<T> sqlx::postgres::PgHasArrayType for Raw<T> {
-	fn array_type_info() -> sqlx::postgres::PgTypeInfo {
-		// JSONB array
-		sqlx::postgres::PgTypeInfo::with_name("_jsonb")
+impl<K, V> FromIterator<(K, V)> for FakeMap<K, V> {
+	fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+		FakeMap(iter.into_iter().collect())
+	}
+}
+
+impl<K, V> IntoIterator for FakeMap<K, V> {
+	type Item = (K, V);
+	type IntoIter = std::vec::IntoIter<(K, V)>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
+	}
+}
+
+impl<'a, K, V> IntoIterator for &'a FakeMap<K, V> {
+	type Item = &'a (K, V);
+	type IntoIter = std::slice::Iter<'a, (K, V)>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, K, V> IntoIterator for &'a mut FakeMap<K, V> {
+	type Item = &'a mut (K, V);
+	type IntoIter = std::slice::IterMut<'a, (K, V)>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
+impl<K, V> Extend<(K, V)> for FakeMap<K, V> {
+	fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+		self.0.extend(iter);
 	}
 }

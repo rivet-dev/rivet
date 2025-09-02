@@ -1,44 +1,52 @@
-# Keep all .gitignore files in this file so we can easily keep it in sync with .dockerignore
-#
-# Make sure to update .dockerignore appropriately
-
-**/.DS_Store
-**/*.tmp
-
-# Env
-.env*.local
-
 # Rust
-**/target
+lib/**/Cargo.lock
+!lib/bolt/Cargo.lock
 
-# JavaScript
-**/*.log*
-**/.cache/
-**/.next/
-**/.turbo
-**/.yarn
-**/dist/
-**/node_modules/
-**/vendor/
+# Allows symlinking target instead of being a directory
 **/target
+**/target/
+**/*.rustfmt
+
+# Turborepo
+**/.turbo
+
+# Node.js and pnpm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# pnpm workspace
+.pnpm-store/
+
+# TypeScript
+*.tsbuildinfo
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+secrets/**/*
+
+tf/.terraform/**/*
+tf/.terraform.lock.hcl
+
+# Frontend
+frontend/.env.*
+frontend/dist/
+frontend/node_modules/
 
 # Site
-site/out/
-site/public/rss/
-!site/public/rss/.gitkeep
-# Generated Markdown
-site/public/docs/
-
+site/.next/
 site/src/generated/
-!site/src/generated/errorPages.json
-!site/src/generated/apiPages.json
-!site/src/generated/meta.json
-
-# Icons
-frontend/packages/icons/src/*
-
-# HACK: Unsure why these artifacts are generated when running fern generate
-frontend/apps/hub/vite.config.ts.*
-
-.aider*
-
+site/public/docs/
+site/public/llms-full.txt
+site/public/llms.txt

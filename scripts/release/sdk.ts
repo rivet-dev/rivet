@@ -42,37 +42,22 @@ async function jsrVersionExists(
 }
 
 export async function publishSdk(opts: ReleaseOpts) {
-	const packages = [
+	const packages: { path: string, name: string, npm: boolean, jsr?: boolean, turbo?: boolean }[] = [
 		{
-			path: `${opts.root}/sdks/api/runtime/typescript`,
+			path: `${opts.root}/sdks/typescript/api-runtime`,
 			name: "@rivet-gg/api",
 			npm: true,
 		},
 		{
-			path: `${opts.root}/sdks/api/full/typescript`,
+			path: `${opts.root}/sdks/typescript/api-full`,
 			name: "@rivet-gg/api-full",
 			npm: true,
 		},
-		// {
-		// 	path: `${opts.root}/sdks/actor/core`,
-		// 	name: "@rivet-gg/actor",
-		// 	//jsr: true,
-		// 	npm: true,
-		// 	turbo: true
-		// },
-		{
-	
-			path: `${opts.root}/frontend/packages/cli`,
-			name: "rivet-cli",
-			//jsr: true,
-			npm: true,
-			turbo: true
-		}
 	];
 
 	for (const pkg of packages) {
-		if(pkg.turbo) {
-			await $`yarn build --filter ${pkg.name}`;
+		if (pkg.turbo) {
+			await $`pnpm build --filter ${pkg.name}`;
 		}
 
 		// Check if version already exists
@@ -93,8 +78,8 @@ export async function publishSdk(opts: ReleaseOpts) {
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
-			await $`yarn install`.cwd(pkg.path);
-			await $`yarn npm publish --access public --tolerate-republish`.cwd(pkg.path);
+			await $`pnpm install`.cwd(pkg.path);
+			await $`pnpm npm publish --access public --tolerate-republish`.cwd(pkg.path);
 		}
 
 		if (pkg.jsr) {
@@ -103,7 +88,7 @@ export async function publishSdk(opts: ReleaseOpts) {
 			// TODO(https://github.com/denoland/deno/issues/27428): `--set-version` not working, so we have to manually update `jsr.jsonc`
 
 			await transformPackageJsonToDenoJson({
-				cwd: pkg.path, 
+				cwd: pkg.path,
 				skipPathInInternalPackages: "src",
 				internalPackagesLinkPath: "internal",
 			});

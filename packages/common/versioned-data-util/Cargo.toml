@@ -1,0 +1,13 @@
+[package]
+name = "versioned-data-util"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde_bare.workspace = true

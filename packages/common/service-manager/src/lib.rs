@@ -1,9 +1,6 @@
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use anyhow::*;
-use global_error::GlobalResult;
-use rivet_migrate::SqlService;
-use s3_util::S3Bucket;
 
 #[derive(Clone)]
 pub struct Service {
@@ -13,7 +10,7 @@ pub struct Service {
 		dyn Fn(
 				rivet_config::Config,
 				rivet_pools::Pools,
-			) -> Pin<Box<dyn Future<Output = GlobalResult<()>> + Send>>
+			) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>
 			+ Send
 			+ Sync,
 	>,
@@ -23,7 +20,7 @@ impl Service {
 	pub fn new<F, Fut>(name: &'static str, kind: ServiceKind, run: F) -> Self
 	where
 		F: Fn(rivet_config::Config, rivet_pools::Pools) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = GlobalResult<()>> + Send + 'static,
+		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		Self {
 			name,
@@ -37,8 +34,7 @@ impl Service {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServiceKind {
 	ApiPublic,
-	ApiEdge,
-	ApiPrivate,
+	ApiPeer,
 	Standalone,
 	Singleton,
 	Oneshot,
@@ -52,9 +48,7 @@ impl ServiceKind {
 		use ServiceKind::*;
 
 		match self {
-			ApiPublic | ApiEdge | ApiPrivate | Standalone | Singleton | Core => {
-				ServiceBehavior::Service
-			}
+			ApiPublic | ApiPeer | Standalone | Singleton | Core => ServiceBehavior::Service,
 			Oneshot => ServiceBehavior::Oneshot,
 			Cron(config) => ServiceBehavior::Cron(config.clone()),
 		}
@@ -65,8 +59,7 @@ impl ServiceKind {
 
 		match (self, other) {
 			(ApiPublic, ApiPublic)
-			| (ApiEdge, ApiEdge)
-			| (ApiPrivate, ApiPrivate)
+			| (ApiPeer, ApiPeer)
 			| (Standalone, Standalone)
 			| (Singleton, Singleton)
 			| (Oneshot, Oneshot)
@@ -102,8 +95,6 @@ pub type RunConfig = Arc<RunConfigData>;
 
 pub struct RunConfigData {
 	pub services: Vec<Service>,
-	pub sql_services: Vec<SqlService>,
-	pub s3_buckets: Vec<S3Bucket>,
 }
 
 impl RunConfigData {
@@ -128,25 +119,8 @@ impl RunConfigData {
 pub async fn start(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	mut services: Vec<Service>,
+	services: Vec<Service>,
 ) -> Result<()> {
-	// Inject metrics and health services
-	services.push(Service::new(
-		"health_checks",
-		ServiceKind::Core,
-		|config, pools| {
-			rivet_health_checks::run_standalone(rivet_health_checks::Config {
-				config,
-				pools: Some(pools),
-			})
-		},
-	));
-	services.push(Service::new(
-		"metrics",
-		ServiceKind::Core,
-		|config, _pools| rivet_metrics::run_standalone(config),
-	));
-
 	// Spawn services
 	tracing::info!(services = ?services.len(), "starting services");
 	let mut join_set = tokio::task::JoinSet::new();

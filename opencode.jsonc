@@ -1,0 +1,17 @@
+{
+  "formatter": {
+    "rust": {
+      "command": [
+        "cargo",
+        "fmt",
+        "--",
+        "$FILE"
+      ],
+      "extensions": [
+        ".rs"
+      ]
+    }
+  },
+  "instructions": ["CLAUDE.md"],
+  "$schema": "https://opencode.ai/config.json"
+}

@@ -1,0 +1,6 @@
+type Id data
+
+type Data struct {
+	runner_id: Id
+	workflow_id: Id
+}

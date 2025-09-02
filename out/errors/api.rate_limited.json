@@ -1,0 +1,5 @@
+{
+  "code": "rate_limited",
+  "group": "api",
+  "message": "\n\tRate limit exceeded.\n\t\n\tThe API rate limit has been exceeded for this endpoint.\n\tPlease wait before making additional requests.\n\t"
+}

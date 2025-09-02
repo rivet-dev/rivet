@@ -8,9 +8,9 @@ index 308accea0..b8ab9f288 100644
  
 +#[derive(serde::Deserialize)]
 +pub struct RivetErrorBody {
++	pub group: String,
 +	pub code: String,
 +	pub message: String,
-+	pub documentation: Option<String>,
 +}
 +
  impl<T> fmt::Display for Error<T> {
@@ -19,13 +19,13 @@ index 308accea0..b8ab9f288 100644
  			Error::Reqwest(e) => ("reqwest", e.to_string()),
  			Error::Serde(e) => ("serde", e.to_string()),
  			Error::Io(e) => ("IO", e.to_string()),
--			Error::ResponseError(e) => ("response", format!("status code {}", e.status)),
+-            Error::ResponseError(e) => ("response", format!("status code {}", e.status)),
 +			Error::ResponseError(e) => {
 +				if let Ok(body) = serde_json::from_str::<RivetErrorBody>(&e.content) {
 +					write!(f, "{}", body.message)?;
-+					if let Some(docs) = &body.documentation {
++					/*if let Some(docs) = &body.documentation {
 +						write!(f, "\n{docs}")?;
-+					}
++					}*/
 +					return Ok(());
 +				}
 +

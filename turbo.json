@@ -1,18 +1,32 @@
 {
 	"$schema": "https://turbo.build/schema.json",
-	"globalEnv": ["FONTAWESOME_PACKAGE_TOKEN"],
 	"tasks": {
 		"//#fmt": {
 			"cache": false
 		},
 		"build": {
 			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"tsup.config.ts",
+				"package.json"
+			],
 			"outputs": ["dist/**"]
 		},
-		"lint": {},
-		"dev": {
-			"cache": false,
-			"persistent": true
+		"check-types": {
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"tsconfig.json",
+				"tsup.config.ts",
+				"package.json"
+			],
+			"dependsOn": ["^build"]
+		},
+		"test": {
+			"inputs": ["src/**", "tests/**", "package.json"],
+			"dependsOn": ["^build", "check-types"]
 		}
 	}
 }

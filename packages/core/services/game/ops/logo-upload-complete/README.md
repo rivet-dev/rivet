@@ -1,1 +1,0 @@
-# game-logo-upload-complete

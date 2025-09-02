@@ -3,18 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "yarn prebuild && next dev",
-    "build": "yarn prebuild && next build && next-sitemap",
+    "dev": "pnpm prebuild && next dev",
+    "build": "pnpm prebuild && next build && next-sitemap",
     "lint": "next lint",
     "format": "prettier --write .",
     "create-article": "vite-node scripts/generateArticle.js",
     "generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
-    "prebuild": "yarn gen:navigation && yarn gen:markdown",
+    "prebuild": "pnpm gen:navigation && pnpm gen:markdown",
     "gen:navigation": "tsx scripts/generateNavigation.ts",
     "gen:examples": "node scripts/generateExamples.mjs",
     "gen:markdown": "tsx scripts/generateMarkdownAndLlms.ts",
     "gen:readme": "node scripts/generateReadme.mjs",
-    "gen": "yarn gen:navigation && yarn gen:examples && yarn gen:markdown && yarn gen:readme"
+    "gen": "pnpm gen:navigation && pnpm gen:examples && pnpm gen:markdown && pnpm gen:readme"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -99,6 +99,5 @@
     "typescript": "^5.1.6",
     "vite-node": "^2.1.1",
     "yaml": "^2.3.1"
-  },
-  "packageManager": "yarn@4.6.0"
+  }
 }

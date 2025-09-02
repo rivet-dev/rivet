@@ -1,0 +1,531 @@
+services:
+  clickhouse:
+    restart: unless-stopped
+    image: clickhouse/clickhouse-server:25.1.5
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./core/clickhouse/config.xml:/etc/clickhouse-server/config.d/config.xml
+      - ./core/clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ./core/clickhouse/client-config.xml:/etc/clickhouse-client/config.xml
+      - ./core/clickhouse/init:/docker-entrypoint-initdb.d
+    environment:
+      - CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=true
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=default
+      - CLICKHOUSE_HTTP_PORT=9300
+      - CLICKHOUSE_TCP_PORT=9301
+    networks:
+      - rivet-network-dc-a-to-core
+      - rivet-network-dc-b-to-core
+      - rivet-network-dc-c-to-core
+      - rivet-core-network
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - '--host'
+        - 127.0.0.1
+        - '--port'
+        - '9301'
+        - '--user'
+        - system
+        - '--password'
+        - default
+        - '--query'
+        - SELECT 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
+  grafana:
+    image: grafana/grafana:11.5.2
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./core/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./core/grafana/provisioning:/etc/grafana/provisioning
+      - ./core/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    ports:
+      - '3100:3000'
+    networks:
+      - rivet-core-network
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+  postgres-dc-a:
+    restart: unless-stopped
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - >-
+        ./datacenters/dc-a/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - postgres-data-dc-a:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d postgres
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    networks:
+      - rivet-network-dc-a
+  rivet-shell-dc-a:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: sleep infinity
+    stop_grace_period: 0s
+    depends_on:
+      postgres-dc-a:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-a/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-a
+      - rivet-network-dc-a-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+  vector-server-dc-a:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-server-data-dc-a:/var/lib/vector
+      - ./datacenters/dc-a/vector-server:/etc/vector
+    networks:
+      - rivet-network-dc-a
+      - rivet-network-dc-a-to-core
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+  vector-client-dc-a:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-client-data-dc-a:/var/lib/vector
+      - ./datacenters/dc-a/vector-client:/etc/vector
+    networks:
+      - rivet-network-dc-a
+    depends_on:
+      vector-server-dc-a:
+        condition: service_started
+  otel-collector-server-dc-a:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-a/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      - CLICKHOUSE_PASSWORD=default
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-a
+      - rivet-network-dc-a-to-core
+  otel-collector-client-dc-a:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-a/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      otel-collector-server-dc-a:
+        condition: service_started
+    networks:
+      - rivet-network-dc-a
+  rivet-engine-dc-a:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: /usr/bin/rivet-engine start
+    environment:
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_SAMPLER_RATIO=1
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-a:4317
+    stop_grace_period: 0s
+    depends_on:
+      vector-client-dc-a:
+        condition: service_started
+      otel-collector-client-dc-a:
+        condition: service_started
+      postgres-dc-a:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-a/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-a
+      - rivet-network-dc-a-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+    ports:
+      - '6420:6420'
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - http://127.0.0.1:6421/health
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+  runner-dc-a:
+    build:
+      context: ../..
+      dockerfile: sdks/typescript/test-runner/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - RIVET_ENDPOINT=http://rivet-engine-dc-a:6420
+      - RUNNER_HOST=runner-dc-a
+    stop_grace_period: 4s
+    ports:
+      - '5050:5050'
+    depends_on:
+      rivet-engine-dc-a:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-a
+  postgres-dc-b:
+    restart: unless-stopped
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - >-
+        ./datacenters/dc-b/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - postgres-data-dc-b:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d postgres
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    networks:
+      - rivet-network-dc-b
+  rivet-shell-dc-b:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: sleep infinity
+    stop_grace_period: 0s
+    depends_on:
+      postgres-dc-b:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-b/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-b
+      - rivet-network-dc-b-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+  vector-server-dc-b:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-server-data-dc-b:/var/lib/vector
+      - ./datacenters/dc-b/vector-server:/etc/vector
+    networks:
+      - rivet-network-dc-b
+      - rivet-network-dc-b-to-core
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+  vector-client-dc-b:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-client-data-dc-b:/var/lib/vector
+      - ./datacenters/dc-b/vector-client:/etc/vector
+    networks:
+      - rivet-network-dc-b
+    depends_on:
+      vector-server-dc-b:
+        condition: service_started
+  otel-collector-server-dc-b:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-b/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      - CLICKHOUSE_PASSWORD=default
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-b
+      - rivet-network-dc-b-to-core
+  otel-collector-client-dc-b:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-b/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      otel-collector-server-dc-b:
+        condition: service_started
+    networks:
+      - rivet-network-dc-b
+  rivet-engine-dc-b:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: /usr/bin/rivet-engine start
+    environment:
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_SAMPLER_RATIO=1
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-b:4317
+    stop_grace_period: 0s
+    depends_on:
+      vector-client-dc-b:
+        condition: service_started
+      otel-collector-client-dc-b:
+        condition: service_started
+      postgres-dc-b:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-b/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-b
+      - rivet-network-dc-b-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - http://127.0.0.1:6421/health
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+  runner-dc-b:
+    build:
+      context: ../..
+      dockerfile: sdks/typescript/test-runner/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - RIVET_ENDPOINT=http://rivet-engine-dc-b:6420
+      - RUNNER_HOST=runner-dc-b
+    stop_grace_period: 4s
+    depends_on:
+      rivet-engine-dc-b:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-b
+  postgres-dc-c:
+    restart: unless-stopped
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - >-
+        ./datacenters/dc-c/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - postgres-data-dc-c:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d postgres
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    networks:
+      - rivet-network-dc-c
+  rivet-shell-dc-c:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: sleep infinity
+    stop_grace_period: 0s
+    depends_on:
+      postgres-dc-c:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-c/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-c
+      - rivet-network-dc-c-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+  vector-server-dc-c:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-server-data-dc-c:/var/lib/vector
+      - ./datacenters/dc-c/vector-server:/etc/vector
+    networks:
+      - rivet-network-dc-c
+      - rivet-network-dc-c-to-core
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+  vector-client-dc-c:
+    restart: unless-stopped
+    image: timberio/vector:0.48.0-distroless-static
+    command: '-C /etc/vector'
+    volumes:
+      - vector-client-data-dc-c:/var/lib/vector
+      - ./datacenters/dc-c/vector-client:/etc/vector
+    networks:
+      - rivet-network-dc-c
+    depends_on:
+      vector-server-dc-c:
+        condition: service_started
+  otel-collector-server-dc-c:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-c/otel-collector-server/config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      - CLICKHOUSE_PASSWORD=default
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-c
+      - rivet-network-dc-c-to-core
+  otel-collector-client-dc-c:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: '--config=/etc/otel/config.yaml'
+    volumes:
+      - >-
+        ./datacenters/dc-c/otel-collector-client/config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      otel-collector-server-dc-c:
+        condition: service_started
+    networks:
+      - rivet-network-dc-c
+  rivet-engine-dc-c:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: engine-full
+    platform: linux/amd64
+    restart: unless-stopped
+    command: /usr/bin/rivet-engine start
+    environment:
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_SAMPLER_RATIO=1
+      - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-client-dc-c:4317
+    stop_grace_period: 0s
+    depends_on:
+      vector-client-dc-c:
+        condition: service_started
+      otel-collector-client-dc-c:
+        condition: service_started
+      postgres-dc-c:
+        condition: service_healthy
+    volumes:
+      - ./datacenters/dc-c/rivet-engine/config.jsonc:/etc/rivet/config.jsonc:ro
+    networks:
+      - rivet-network-dc-c
+      - rivet-network-dc-c-to-core
+      - rivet-network-dc-a-engine-peer
+      - rivet-network-dc-b-engine-peer
+      - rivet-network-dc-c-engine-peer
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - http://127.0.0.1:6421/health
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+  runner-dc-c:
+    build:
+      context: ../..
+      dockerfile: sdks/typescript/test-runner/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - RIVET_ENDPOINT=http://rivet-engine-dc-c:6420
+      - RUNNER_HOST=runner-dc-c
+    stop_grace_period: 4s
+    depends_on:
+      rivet-engine-dc-c:
+        condition: service_healthy
+    networks:
+      - rivet-network-dc-c
+networks:
+  rivet-core-network:
+    driver: bridge
+  rivet-network-dc-a:
+    driver: bridge
+  rivet-network-dc-a-engine-peer:
+    driver: bridge
+  rivet-network-dc-a-to-core:
+    driver: bridge
+  rivet-network-dc-b:
+    driver: bridge
+  rivet-network-dc-b-engine-peer:
+    driver: bridge
+  rivet-network-dc-b-to-core:
+    driver: bridge
+  rivet-network-dc-c:
+    driver: bridge
+  rivet-network-dc-c-engine-peer:
+    driver: bridge
+  rivet-network-dc-c-to-core:
+    driver: bridge
+volumes:
+  clickhouse-data: null
+  grafana-data: null
+  postgres-data-dc-a: null
+  vector-server-data-dc-a: null
+  vector-client-data-dc-a: null
+  postgres-data-dc-b: null
+  vector-server-data-dc-b: null
+  vector-client-data-dc-b: null
+  postgres-data-dc-c: null
+  vector-server-data-dc-c: null
+  vector-client-data-dc-c: null
