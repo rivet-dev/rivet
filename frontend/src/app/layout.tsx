@@ -371,28 +371,30 @@ function ConnectionStatus() {
 		);
 	}
 
-	// if (isError) {
-	return (
-		<div className="text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ">
-			<div className="flex items-center">
-				<div>
-					<p>Disconnected</p>
-					<p className="text-muted-foreground text-xs">{endpoint}</p>
+	if (isError) {
+		return (
+			<div className="text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ">
+				<div className="flex items-center">
+					<div>
+						<p>Disconnected</p>
+						<p className="text-muted-foreground text-xs">
+							{endpoint}
+						</p>
+					</div>
 				</div>
-			</div>
 
-			<Button
-				variant="outline"
-				size="xs"
-				className="ml-2 text-foreground"
-				onClick={() => setCredentials(null)}
-			>
-				<Icon icon={faLink} />
-				Reconnect
-			</Button>
-		</div>
-	);
-	// }
+				<Button
+					variant="outline"
+					size="xs"
+					className="ml-2 text-foreground"
+					onClick={() => setCredentials(null)}
+					startIcon={<Icon icon={faLink} />}
+				>
+					Reconnect
+				</Button>
+			</div>
+		);
+	}
 
 	if (isSuccess) {
 		return (
