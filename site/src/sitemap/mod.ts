@@ -328,68 +328,68 @@ export const sitemap = [
 					},
 				],
 			},
-			{
-				title: "Self-Hosting",
-				// IMPORTANT: Also update integrations/index.mdx
-				pages: [
-					{
-						title: "Overview",
-						icon: faInfoSquare,
-						href: "/docs/general/self-hosting",
-					},
-					{
-						title: "Hosting Providers",
-						icon: faServer,
-						collapsible: true,
-						pages: [
-							{
-								title: "Railway",
-								href: "/docs/hosting-providers/railway",
-							},
-							// TODO: AWS ECS
-							// TODO: Vercel
-							{
-								title: "Cloudflare Workers",
-								href: "/docs/hosting-providers/cloudflare-workers",
-							},
-							{
-								title: "Rivet Cloud (Enterprise)",
-								href: "/docs/hosting-providers/rivet-cloud",
-							},
-
-							// TODO: Hetzner
-							// TODO: AWS
-							// TODO: Cloudflare Workers
-							// TODO: Railway
-							// TODO: Coolify
-							// TODO: Rivet
-						],
-					},
-					{
-						title: "Drivers",
-						icon: faScrewdriverWrench,
-						collapsible: true,
-						pages: [
-							{
-								title: "Redis",
-								href: "/docs/drivers/redis",
-							},
-							{
-								title: "File System",
-								href: "/docs/drivers/file-system",
-							},
-							{
-								title: "Memory",
-								href: "/docs/drivers/memory",
-							},
-							{
-								title: "Build Your Own",
-								href: "/docs/drivers/build-your-own",
-							},
-						],
-					},
-				],
-			},
+			//{
+			//	title: "Self-Hosting",
+			//	// IMPORTANT: Also update integrations/index.mdx
+			//	pages: [
+			//		{
+			//			title: "Overview",
+			//			icon: faInfoSquare,
+			//			href: "/docs/general/self-hosting",
+			//		},
+			//		{
+			//			title: "Hosting Providers",
+			//			icon: faServer,
+			//			collapsible: true,
+			//			pages: [
+			//				{
+			//					title: "Railway",
+			//					href: "/docs/hosting-providers/railway",
+			//				},
+			//				// TODO: AWS ECS
+			//				// TODO: Vercel
+			//				{
+			//					title: "Cloudflare Workers",
+			//					href: "/docs/hosting-providers/cloudflare-workers",
+			//				},
+			//				{
+			//					title: "Rivet Cloud (Enterprise)",
+			//					href: "/docs/hosting-providers/rivet-cloud",
+			//				},
+			//
+			//				// TODO: Hetzner
+			//				// TODO: AWS
+			//				// TODO: Cloudflare Workers
+			//				// TODO: Railway
+			//				// TODO: Coolify
+			//				// TODO: Rivet
+			//			],
+			//		},
+			//		{
+			//			title: "Drivers",
+			//			icon: faScrewdriverWrench,
+			//			collapsible: true,
+			//			pages: [
+			//				{
+			//					title: "Redis",
+			//					href: "/docs/drivers/redis",
+			//				},
+			//				{
+			//					title: "File System",
+			//					href: "/docs/drivers/file-system",
+			//				},
+			//				{
+			//					title: "Memory",
+			//					href: "/docs/drivers/memory",
+			//				},
+			//				{
+			//					title: "Build Your Own",
+			//					href: "/docs/drivers/build-your-own",
+			//				},
+			//			],
+			//		},
+			//	],
+			//},
 			{
 				title: "Reference",
 				pages: [
@@ -434,7 +434,84 @@ export const sitemap = [
 		],
 	},
 	{
-		title: "Cloud",
+		title: "Self-Hosting",
+		href: "/docs/self-hosting",
+		sidebar: [
+			{
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/self-hosting",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Install",
+						href: "/docs/self-hosting/install",
+						icon: faDownload,
+					},
+					{
+						title: "Connect Backend",
+						href: "/docs/self-hosting/connect-backend",
+						icon: faNetworkWired,
+					},
+					{
+						title: "Configuration",
+						href: "/docs/self-hosting/configuration",
+						icon: faGear,
+					},
+					{
+						title: "Multi-Region",
+						href: "/docs/self-hosting/multi-region",
+						icon: faGlobe,
+					},
+				],
+			},
+			{
+				title: "Platforms",
+				pages: [
+					{
+						title: "Docker Container",
+						href: "/docs/self-hosting/docker-container",
+					},
+					{
+						title: "Docker Compose",
+						href: "/docs/self-hosting/docker-compose",
+					},
+					{
+						title: "Railway",
+						href: "/docs/self-hosting/railway",
+					},
+					{
+						title: "Kubernetes",
+						href: "/docs/self-hosting/kubernetes",
+					},
+					{
+						title: "AWS Fargate",
+						href: "/docs/self-hosting/aws-fargate",
+					},
+					{
+						title: "Google Cloud Run",
+						href: "/docs/self-hosting/google-cloud-run",
+					},
+					{
+						title: "Hetzner",
+						href: "/docs/self-hosting/hetzner",
+					},
+				],
+			},
+			//{
+			//	title: "Advanced",
+			//	pages: [
+			//	// TODO: Scaling
+			//		// TODO: Architecture
+			//		// TODO: Networking (expoed ports, how data gets routed to actors, etc)
+			//	],
+			//},
+		],
+	},
+	{
+		title: "Enterprise Cloud",
 		href: "/docs/cloud",
 		sidebar: [
 			{
@@ -546,46 +623,46 @@ export const sitemap = [
 			//		},
 			//	],
 			//},
-			{
-				title: "Self-Hosting",
-				pages: [
-					{
-						title: "Overview",
-						href: "/docs/cloud/self-hosting",
-						icon: faSquareInfo,
-					},
-					{
-						title: "Single Container",
-						href: "/docs/cloud/self-hosting/single-container",
-						icon: faDocker,
-					},
-					{
-						title: "Docker Compose",
-						href: "/docs/cloud/self-hosting/docker-compose",
-						icon: faDocker,
-					},
-					{
-						title: "Manual Deployment",
-						href: "/docs/cloud/self-hosting/manual-deployment",
-						icon: faGear,
-					},
-					{
-						title: "Client Config",
-						href: "/docs/cloud/self-hosting/client-config",
-						icon: faSliders,
-					},
-					{
-						title: "Server Config",
-						href: "/docs/cloud/self-hosting/server-config",
-						icon: faSliders,
-					},
-					{
-						title: "Networking",
-						href: "/docs/cloud/self-hosting/network-modes",
-						icon: faNetworkWired,
-					},
-				],
-			},
+			//{
+			//	title: "Self-Hosting",
+			//	pages: [
+			//		{
+			//			title: "Overview",
+			//			href: "/docs/cloud/self-hosting",
+			//			icon: faSquareInfo,
+			//		},
+			//		{
+			//			title: "Single Container",
+			//			href: "/docs/cloud/self-hosting/single-container",
+			//			icon: faDocker,
+			//		},
+			//		{
+			//			title: "Docker Compose",
+			//			href: "/docs/cloud/self-hosting/docker-compose",
+			//			icon: faDocker,
+			//		},
+			//		{
+			//			title: "Manual Deployment",
+			//			href: "/docs/cloud/self-hosting/manual-deployment",
+			//			icon: faGear,
+			//		},
+			//		{
+			//			title: "Client Config",
+			//			href: "/docs/cloud/self-hosting/client-config",
+			//			icon: faSliders,
+			//		},
+			//		{
+			//			title: "Server Config",
+			//			href: "/docs/cloud/self-hosting/server-config",
+			//			icon: faSliders,
+			//		},
+			//		{
+			//			title: "Networking",
+			//			href: "/docs/cloud/self-hosting/network-modes",
+			//			icon: faNetworkWired,
+			//		},
+			//	],
+			//},
 			{
 				title: "Advanced",
 				pages: [

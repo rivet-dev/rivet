@@ -1,0 +1,52 @@
+# Railway Deployment
+
+Railway provides a simple platform for deploying Rivet Engine with automatic scaling and managed infrastructure.
+
+## Quick Deploy
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/rivet?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+You can also use the [Rivet Railway template](https://github.com/rivet-gg/template-railway) as a starting point for your application.
+
+## Manual Deployment
+
+### Prerequisites
+
+1. [Railway account](https://railway.app)
+2. [Railway CLI](https://docs.railway.app/develop/cli) (optional)
+
+### Step 1: Create New Project
+
+```bash
+# Using Railway CLI
+railway init
+
+# Or create via dashboard
+# https://railway.app/new
+```
+
+### Step 2: Add Services
+
+#### Deploy PostgreSQL Database
+
+1. Click "New Service" → "Database" → "PostgreSQL"
+2. Railway automatically provisions and configures PostgreSQL
+3. Note the connection string from the service variables
+
+#### Deploy Rivet Engine
+
+1. Click "New Service" → "Docker Image"
+2. Set image: `rivetkit/engine:latest`
+3. Configure environment variables:
+    - `RIVET__POSTGRES__URL=${{Postgres.DATABASE_URL}}`
+
+### Step 3: Deploy Your Application
+
+Follow the [Railway Quick Start guide](https://docs.railway.com/quick-start) to deploy your repository:
+
+1. Connect your GitHub account to Railway
+2. Select your repository containing your Rivet application
+3. Railway will automatically detect and deploy your application
+4. Configure environment variables for your application:
+    - `RIVET_ENGINE=${{Rivet.RAILWAY_PRIVATE_DOMAIN}}` - Points to the Rivet Engine service's private domain
+

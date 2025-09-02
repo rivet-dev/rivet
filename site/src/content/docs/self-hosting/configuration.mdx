@@ -1,0 +1,152 @@
+# Configuration
+
+Rivet Engine can be configured through environment variables or configuration files. The configuration system is defined in `packages/common/config/`.
+
+## Configuration Loading
+
+Rivet supports multiple configuration sources:
+
+1. **Default Values**: All configurations have sensible defaults
+2. **File-based Configuration**: JSON, JSON5, JSONC, YAML, and YML files
+3. **Environment Variables**: Using `RIVET__` prefix with `__` as separator (e.g., `RIVET__database__postgres__url`)
+4. **Multi-path Loading**: Can load from multiple configuration files
+5. **System Paths**: Platform-specific system configuration directories:
+   - Linux: `/etc/rivet/`
+   - macOS: `/Library/Application Support/rivet/`
+   - Windows: `C:\ProgramData\rivet\`
+
+## Definition
+
+```typescript
+interface RivetConfig {
+  // HTTP/HTTPS traffic handling service
+  guard?: {
+    host?: string;              // Default: "::" (IPv6 unspecified)
+    port?: number;              // Default: 6420
+    https?: {
+      port: number;
+      tls: {
+        actor_cert_path: string;
+        actor_key_path: string;
+        api_cert_path: string;
+        api_key_path: string;
+      };
+    };
+  };
+
+  // Public API service configuration
+  api_public?: {
+    host?: string;                    // Default: "::" (IPv6 unspecified)
+    lan_host?: string;                // Default: "::1"
+    port?: number;                    // Default: 6421
+    verbose_errors?: boolean;         // Default: true
+    respect_forwarded_for?: boolean;  // Default: false
+  };
+
+  // Private API service configuration
+  api_peer?: {
+    host?: string;      // Default: "::" (IPv6 unspecified)
+    port?: number;      // Default: 6422
+  };
+
+  // Runner WebSocket connection management
+  pegboard?: {
+    host?: string;      // Default: "::" (IPv6 unspecified)
+    lan_host?: string;  // Default: "::1"
+    port?: number;      // Default: 6423
+  };
+
+  // WebSocket proxy gateway service
+  pegboard_gateway?: {
+    host?: string;      // Default: "::" (IPv6 unspecified)
+    lan_host?: string;  // Default: "::1"
+    port?: number;      // Default: 6424
+  };
+
+  // Tunnel protocol message forwarding
+  pegboard_tunnel?: {
+    host?: string;      // Default: "::" (IPv6 unspecified)
+    lan_host?: string;  // Default: "::1"
+    port?: number;      // Default: 6425
+  };
+
+  // Logging configuration
+  logs?: {
+    redirect_logs_dir?: string;  // Directory for log file redirection
+  };
+
+  // Multi-datacenter topology
+  topology?: {
+    datacenter_label: number;     // Default: 1
+    datacenters: Array<{
+      name: string;               // Default: "local"
+      datacenter_label: number;   // Default: 1
+      is_leader: boolean;         // Default: true
+      api_peer_url: string;       // Default: "http://127.0.0.1:6422"
+      guard_url: string;          // Default: "http://127.0.0.1:6420"
+    }>;
+  };
+
+  // Database backend configuration
+  database?: 
+    | { 
+        postgres: {
+          url: string;  // Default: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+        };
+      }
+    | { 
+        file_system: {
+          path: string;  // Default: "~/.local/share/rivet-engine/db" or "./data/db"
+        };
+      };
+
+  // Message pub/sub system
+  pubsub?: 
+    | {
+        nats: {
+          addresses: string[];       // Default: ["127.0.0.1:4222"]
+          port?: number;            // Default: 4222
+          username?: string;
+          password?: string;
+        };
+      }
+    | {
+        postgres_notify: {
+          url: string;  // Default: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+        };
+      }
+    | {
+        memory: {
+          channel: string;  // Default: "default"
+        };
+      };
+
+  // Caching layer configuration
+  cache?: {
+    driver: "redis" | "in_memory";  // Default: "in_memory"
+  };
+
+  // ClickHouse analytics database (optional)
+  clickhouse?: {
+    http_url: string;
+    native_url: string;
+    username: string;
+    password?: string;
+    secure?: boolean;  // Default: false
+    provision_users?: {
+      [key: string]: {
+        username: string;
+        password: string;
+        role: "admin" | "write" | "read_only";
+      };
+    };
+  };
+
+  // Vector HTTP endpoint (optional)
+  vector_http?: {
+    host: string;  // Default: "127.0.0.1"
+    port: number;  // Default: 5022
+  };
+}
+```
+

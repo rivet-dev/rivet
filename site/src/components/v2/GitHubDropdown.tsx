@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@rivet-gg/components";
-import { Icon, faArrowRight, faGithub } from "@rivet-gg/icons";
+import { Icon, faArrowRight, faGithub, faRust, faNodeJs, faTs } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 
 interface GitHubDropdownProps extends React.HTMLAttributes<HTMLDivElement> {}
@@ -96,7 +96,7 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 			</button>
 
 			{isOpen && (
-				<div className="absolute left-0 top-full pt-1 w-48 z-50">
+				<div className="absolute right-0 top-full pt-1 w-72 z-50">
 					<div
 						className={cn(
 							"rounded-md border shadow-lg",
@@ -107,30 +107,51 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 					>
 						<div className="py-1">
 							<a
-								href="https://github.com/rivet-gg/rivetkit"
+								href="https://github.com/rivet-gg/rivet"
 								target="_blank"
 								rel="noreferrer"
 								className={cn(
-									"group flex items-center justify-between px-4 py-2 text-sm transition-colors",
+									"group flex items-center justify-between px-4 py-3 text-sm transition-colors",
 									className?.includes("text-white")
 										? "text-white/90 hover:bg-white/5 hover:text-white"
 										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
-								<div className="flex flex-col items-start">
-									<span>Rivet Actors</span>
-									<span
+								<div className="flex items-center gap-3">
+									<Icon
+										icon={faRust}
 										className={cn(
-											"text-xs",
+											"h-4 w-4",
 											className?.includes("text-white")
 												? "text-white/70"
 												: "text-muted-foreground",
 										)}
-									>
-										{rivetKitStars.loading
-											? "..."
-											: `${formatNumber(rivetKitStars.stars)} stars`}
-									</span>
+									/>
+									<div className="flex flex-col items-start">
+										<span className="font-medium">Rivet</span>
+										<span
+											className={cn(
+												"text-xs",
+												className?.includes("text-white")
+													? "text-white/60"
+													: "text-muted-foreground",
+											)}
+										>
+											Stateful workload orchestrator
+										</span>
+										<span
+											className={cn(
+												"text-xs mt-0.5",
+												className?.includes("text-white")
+													? "text-white/70"
+													: "text-muted-foreground",
+											)}
+										>
+											{rivetStars.loading
+												? "..."
+												: `${formatNumber(rivetStars.stars)} stars`}
+										</span>
+									</div>
 								</div>
 								<Icon
 									icon={faArrowRight}
@@ -138,30 +159,51 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 								/>
 							</a>
 							<a
-								href="https://github.com/rivet-gg/rivet"
+								href="https://github.com/rivet-gg/rivetkit"
 								target="_blank"
 								rel="noreferrer"
 								className={cn(
-									"group flex items-center justify-between px-4 py-2 text-sm transition-colors",
+									"group flex items-center justify-between px-4 py-3 text-sm transition-colors",
 									className?.includes("text-white")
 										? "text-white/90 hover:bg-white/5 hover:text-white"
 										: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
-								<div className="flex flex-col items-start">
-									<span>Rivet Cloud</span>
-									<span
+								<div className="flex items-center gap-3">
+									<Icon
+										icon={faTs}
 										className={cn(
-											"text-xs",
+											"h-4 w-4",
 											className?.includes("text-white")
 												? "text-white/70"
 												: "text-muted-foreground",
 										)}
-									>
-										{rivetStars.loading
-											? "..."
-											: `${formatNumber(rivetStars.stars)} stars`}
-									</span>
+									/>
+									<div className="flex flex-col items-start">
+										<span className="font-medium">RivetKit</span>
+										<span
+											className={cn(
+												"text-xs",
+												className?.includes("text-white")
+													? "text-white/60"
+													: "text-muted-foreground",
+											)}
+										>
+											Library for building stateful workloads
+										</span>
+										<span
+											className={cn(
+												"text-xs mt-0.5",
+												className?.includes("text-white")
+													? "text-white/70"
+													: "text-muted-foreground",
+											)}
+										>
+											{rivetKitStars.loading
+												? "..."
+												: `${formatNumber(rivetKitStars.stars)} stars`}
+										</span>
+									</div>
 								</div>
 								<Icon
 									icon={faArrowRight}

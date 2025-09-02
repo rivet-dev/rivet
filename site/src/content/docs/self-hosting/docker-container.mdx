@@ -1,0 +1,85 @@
+# Docker Container
+
+## Quick Start
+
+Run with ephemeral storage:
+
+```bash
+docker run -p 6420:6420 rivetkit/engine
+```
+
+Run with persistent storage:
+
+```bash
+docker run \
+  -p 6420:6420 \
+  -v rivet-data:/data \
+  -e RIVET__FILE_SYSTEM__PATH="/data" \
+  rivetkit/engine
+```
+
+## Configuration
+
+### Environment Variables
+
+Configure Rivet using environment variables:
+
+```bash
+docker run -p 6420:6420 \
+  -v rivet-data:/data \
+  -e RIVET__POSTGRES__URL="postgresql://postgres:password@localhost:5432/db" \
+  rivetkit/engine
+```
+
+### Config File
+
+Mount a JSON configuration file:
+
+```bash
+# Create config file
+cat <<EOF > rivet-config.json
+{
+  "postgres": {
+    "url": "postgresql://postgres:password@localhost:5432/db"
+  }
+}
+EOF
+
+# Run with mounted config
+docker run -p 6420:6420 \
+  -v rivet-data:/data \
+  -v $(pwd)/rivet-config.json:/etc/rivet/config.json:ro \
+  rivetkit/engine
+```
+
+## Production Setup
+
+### With PostgreSQL
+
+```bash
+# Create network
+docker network create rivet-net
+
+# Run PostgreSQL
+docker run -d \
+  --name postgres \
+  --network rivet-net \
+  -e POSTGRES_DB=rivet \
+  -e POSTGRES_USER=rivet \
+  -e POSTGRES_PASSWORD=rivet_password \
+  -v postgres-data:/var/lib/postgresql/data \
+  postgres:15
+
+# Run Rivet Engine
+docker run -d \
+  --name rivet-engine \
+  --network rivet-net \
+  -p 6420:6420 \
+  -e RIVET__POSTGRES__URL="postgresql://rivet:rivet_password@postgres:5432/rivet" \
+  rivetkit/engine
+```
+
+## Next Steps
+
+- Use [Docker Compose](/docs/self-hosting/docker-compose) for multi-container setups
+- See [Configuration](/docs/self-hosting/configuration) for all options

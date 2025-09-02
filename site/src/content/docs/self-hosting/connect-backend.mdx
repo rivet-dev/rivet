@@ -1,0 +1,88 @@
+# Connecting Your Backend to Rivet Engine
+
+Unless exlpicitly configured, Rivet will default to running on the local file system without using the Rivet Engine. This is perfect for local development and testing.
+
+When ready to scale the backend, RivetKit can connect to a Rivet Engine instance using the `RIVET_ENGINE` environment variable.
+
+<Tip>
+	The engine is not required at any point during development. It is only required to scale RivetKit to multiple nodes.
+</Tip>
+
+## Connecting Runners
+
+To connect a runner to your Rivet Engine, set the `RIVET_ENGINE` environment variable:
+
+```bash
+RIVET_ENGINE=http://your-engine-host:6420 npm run dev
+```
+
+Once connected:
+- The runner appears in the Runners tab of the dashboard
+- Your actor names show up in the sidebar
+- The engine begins routing traffic to your runner
+
+## Environment Variables
+
+### `RIVET_ENGINE`
+The endpoint of your Rivet Engine instance.
+
+```bash
+# Local development
+RIVET_ENGINE=http://localhost:6420
+
+# Production
+RIVET_ENGINE=https://engine.your-domain.com
+```
+
+### `RIVET_NAMESPACE`
+The namespace to run actors in. Useful for multi-tenant deployments.
+
+```bash
+RIVET_NAMESPACE=production
+```
+
+### `RIVET_RUNNER`
+A name for the runner to allow filtering which nodes to run actors on.
+
+```bash
+RIVET_RUNNER=worker-01
+```
+
+### `RIVET_RUNNER_KEY`
+A unique key for the runner. If another runner connects with the same key, the previous one is disconnected. This is useful for handling zombie runners that weren't shut down gracefully.
+
+```bash
+RIVET_RUNNER_KEY=unique-runner-key-123
+```
+
+<Tip>
+  Generate a unique runner key using: `uuidgen` or `openssl rand -hex 16`
+</Tip>
+
+## Connection Examples
+
+### Testing Setup
+
+You do not need the engine for local development, but it can be helpful for testing your production-readiness: 
+
+```bash
+# Start the engine
+docker run -p 6420:6420 rivetkit/engine
+
+# In another terminal, start your runner
+RIVET_ENGINE=http://localhost:6420 npm run dev
+```
+
+### Production Setup
+
+```bash
+# Assume the engine is running at 1.2.3.4
+
+# On runner nodes
+RIVET_ENGINE=http://1.2.3.4 \
+RIVET_NAMESPACE=production \
+RIVET_RUNNER=worker-$(hostname) \
+RIVET_RUNNER_KEY=$(cat /etc/machine-id) \
+npm run start
+```
+

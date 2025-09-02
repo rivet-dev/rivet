@@ -1,0 +1,44 @@
+# Self-Hosting Overview
+
+Rivet consists of several core components that work together to provide a complete actor orchestration platform. The Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale:
+
+## Core Components
+
+- **Your Backend** - Your application server that handles user requests and includes a runner component that executes actor code
+- **Rivet Engine** - Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
+- **Storage** - Persistence layer for actor state and messaging infrastructure for real-time communication
+
+## Architecture
+
+```txt {{"title":"Architecture"}}
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│Your Backend │◀───▶│Rivet Engine │◀───▶│   Storage   │
+│ (w/ runner) │     │             │     │  (DB/File)  │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+## Storage Backends
+
+Rivet supports multiple storage backends:
+- **File System** - Default, suitable for single-node deployments
+- **PostgreSQL** - Recommended for production
+- **FoundationDB** - Enterprise option for massive scale
+
+## Deployment Platforms
+
+Deploy Rivet on your preferred platform:
+
+- [Docker Container](./docker-container)
+- [Docker Compose](./docker-compose)
+- [Kubernetes](./kubernetes)
+- [AWS Fargate](./aws-fargate)
+- [Google Cloud Run](./google-cloud-run)
+- [Hetzner](./hetzner)
+- [Railway](./railway)
+
+## Next Steps
+
+- [Install Rivet Engine](./install)
+- [Connect your backend](./connect-backend)
+- [Configure your deployment](./configuration)
+- [Multi-region setup](./multi-region)

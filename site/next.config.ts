@@ -78,16 +78,6 @@ const nextConfig = {
 				permanent: false,
 			},
 			{
-				source: '/docs/self-hosting',
-				destination: '/docs/cloud/self-hosting',
-				permanent: false,
-			},
-			{
-				source: '/docs/self-hosting/:slug*',
-				destination: '/docs/cloud/self-hosting/:slug*',
-				permanent: false,
-			},
-			{
 				source: '/docs/solutions/:slug*',
 				destination: '/docs/cloud/solutions/:slug*',
 				permanent: false,

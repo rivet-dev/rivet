@@ -191,12 +191,7 @@ Rivet provides multiple authentication methods to secure your actors. Use `onAut
 The `onAuth` hook runs on the HTTP server before clients can access actors. This is the preferred method for most authentication scenarios.
 
 ```typescript
-const chatRoom = actor( = opts;
-    
-    // Extract token from params or headers
-    const token = params.authToken || req.headers.get("Authorization");
-    
-    if (!token) 
+const chatRoom = actor(, ) => 
     
     // Validate token and return user data
     const user = await validateJWT(token);
@@ -235,7 +230,7 @@ const userProfileActor = actor(),
     if (c.state.isPrivate && c.state.ownerId !== userId) 
   },
   
-  createConnState: (c, opts) => ;
+  createConnState: (c, opts, params: ) => ;
   },
   
   actions: 
@@ -266,10 +261,7 @@ const counter = client.counter.getOrCreate(["user-counter"], );
 The `onAuth` hook receives an `intents` parameter indicating what the client wants to do:
 
 ```typescript
-const secureActor = actor( = opts;
-    
-    // Different validation based on intent
-    if (intents.has("action"))  else if (intents.has("connect")) 
+const secureActor = actor(, ) =>  else if (intents.has("connect")) 
     
     throw new UserError("Unknown intent");
   },
@@ -286,7 +278,7 @@ const secureActor = actor( = opts;
 Use specific error types for different authentication failures:
 
 ```typescript
-const protectedActor = actor(
+const protectedActor = actor() => 
     
     try  catch (error) 
       throw new Unauthorized("Invalid authentication token");
@@ -318,7 +310,7 @@ try  catch (error)  else if (error.code === "FORBIDDEN")
 ### JWT Authentication
 
 ```typescript
-const jwtActor = actor(
+const jwtActor = actor(, ) => 
     
     try ;
     } catch (error) 
@@ -338,7 +330,7 @@ const jwtActor = actor(
 ### API Key Authentication
 
 ```typescript
-const apiActor = actor(
+const apiActor = actor(, ) => 
     
     // Validate with your API service
     const response = await fetch(`$/validate`, 
@@ -372,7 +364,7 @@ function requireRole(requiredRole: string) ;
 }
 
 // usage in actor
-const forumActor = actor(,
+const forumActor = actor() => ,
   
   actions: ,
     
@@ -979,7 +971,7 @@ const gameRoom = await client.gameRoom.get(
 const gameRoom = actor(,
   
   // Handle connection setup
-  createConnState: (c, ) => 
+  createConnState: (c, opts, params: ) => 
     
     // Create connection state
     return ;
@@ -1136,40 +1128,16 @@ Create actor state dynamically on each actors' start:
 const counter = actor(,
   
   // Define vars using a creation function
-  createVars: () => ;
+  createVars: (c: ActorInitContext, driver: any) => ;
   },
   
   actions: 
 });
 ```
 
-## Accessing Driver Context
+If accepting arguments to `createVars`, you **must** define the types: `createVars(c: ActorInitContext, driver: any)`
 
-The `createVars` function receives a second parameter that provides access to driver-specific context. This allows you to interact with the underlying infrastructure directly within your actor's ephemeral variables.
-
-```typescript
-const myActor = actor(,
-  
-  // The second parameter provides driver-specific context
-  createVars: (ctx, driver) => ;
-  },
-  
-  actions: 
-      if (driver?.ctx) 
-      
-      return "Driver accessed";
-    }
-  }
-});
-```
-
-The structure of the driver context depends on which driver you're using:
-
-- **Cloudflare Workers**: ``
-- **Redis**: ``
-- **Local**: No driver context provided
-
-This driver context enables advanced use cases where you need direct access to platform-specific features alongside Rivet's actor abstraction.
+Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
 
 ## Using Variables
 
@@ -1203,6 +1171,27 @@ Use `state` when:
 
 - The data must be preserved across actor sleeps, restarts, updates, or crashes
 - The information is essential to the actor's core functionality and business logic
+
+## Advanced
+
+### Accessing Driver Context
+
+The `createVars` function receives a second parameter that provides access to driver-specific context. This allows you to access driver-specific functionality.
+
+For example, the Redis driver exposes access to the Redis instance:
+
+```typescript
+const myActor = actor(,
+  
+  // The second parameter provides driver-specific context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  
+  actions: 
+  }
+});
+```
+
+Consult the documentation for each driver to learn more about their respective `DriverContext` types.
 ## Events
 
 # Events
@@ -1241,7 +1230,7 @@ Send events to individual connections using `conn.send(eventName, data)`:
 const gameRoom = actor( as Record
   },
   
-  createConnState: (c, ) => (),
+  createConnState: (c, opts, params: ) => (),
   
   actions: );
       } else 
@@ -1256,7 +1245,7 @@ Send events to all connections except the sender:
 const gameRoom = actor( as Record
   },
   
-  createConnState: (c, ) => (),
+  createConnState: (c, opts, params: ) => (),
   
   actions: ) => );
           }
@@ -1401,7 +1390,7 @@ interface ActorInput
 const pool = new Pool();
 
 // Create the user actor
-const userActor = actor() => (),
+const userActor = actor(),
   
   // Insert user into database when actor starts
   onStart: async (c, opts) => ,
@@ -1454,7 +1443,7 @@ const pool = new Pool();
 const db = drizzle(pool);
 
 // Create the user actor
-const userActor = actor() => (),
+const userActor = actor(),
   
   // Insert user into database when actor starts
   onStart: async (c, opts) => );
@@ -1841,7 +1830,7 @@ Rivet provides several TypeScript helper types to make it easier to work with ac
 
 ## `Context` Types
 
-When working with actors, you often need to access the context object. Rivet provides helper types to extract the context types from actor definitions.
+When working with actors, you often need to access the context object outside of the actor's handlers. Rivet provides helper types to extract the context types from actor definitions.
 
 ### `ActorContextOf`
 
@@ -2085,14 +2074,16 @@ const gameHandle = client.game.getOrCreate(["game-456"],
 Input is available in lifecycle hooks via the `opts.input` parameter:
 
 ```typescript
+interface ChatRoomInput 
+
 const chatRoom = actor(,
     messages: [],
   }),
   
-  onCreate: (c, opts) => `);
+  onCreate: (c, opts, input: ChatRoomInput) => `);
     
     // Setup external services based on input
-    if (opts.input?.isPrivate) 
+    if (input.isPrivate) 
   },
   
   actions: ),
@@ -2146,7 +2137,7 @@ Define input types to ensure type safety:
 ```typescript
 interface GameInput 
 
-const game = actor() => (),
+const game = actor(),
   
   actions: ,
 });
@@ -2306,6 +2297,7 @@ The `createVars` function or `vars` constant defines ephemeral variables for the
 The `createVars` function can also receive driver-specific context as its second parameter, allowing access to driver capabilities like Rivet KV or Cloudflare Durable Object storage.
 
 ```typescript
+// In this example, assume we're using Redis
 // Using vars constant
 const counter1 = actor(,
   vars: ,
@@ -2322,7 +2314,7 @@ const counter2 = actor(,
 // Access driver-specific context
 const exampleActor = actor(,
   // Access driver context in createVars
-  createVars: (c, driverCtx) => (),
+  createVars: (c: ActorInitContext, driverCtx: DriverContext) => (),
   actions: 
   }
 });
@@ -2348,7 +2340,7 @@ const counter2 = actor(;
 const counter3 = actor(,
   
   // Run initialization logic (logging, external service setup, etc.)
-  onCreate: (c, opts) => ,
+  onCreate: (c, opts, input: ) => ,
   
   actions: 
 });
@@ -2412,11 +2404,11 @@ const chatRoom = actor(,
   connState: ,
   
   // Method 2: Dynamically create connection state
-  createConnState: (c, ) => ;
+  createConnState: (c, opts, params: ) => ;
   },
   
   // Validate connections before accepting them
-  onBeforeConnect: (c, ) => 
+  onBeforeConnect: (c, opts, params: ) => 
     
     // Authentication is valid, connection will proceed
     // The actual connection state will come from connState or createConnState
@@ -2516,7 +2508,7 @@ The `onAuth` hook is called on the HTTP server before clients can interact with 
 This hook runs on the HTTP server (not the actor) to reduce load and prevent denial of service attacks against individual actors. Only called for public endpoints - calls to actors from within the backend do not trigger this handler.
 
 ```typescript
-const secureActor = actor(
+const secureActor = actor() => 
     
     const token = authHeader.slice(7);
     
@@ -2571,29 +2563,36 @@ const loggingActor = actor(,
 
 ## Destroying Actors
 
-Actors can be shut down gracefully with `c.shutdown()`. Clients will be gracefully disconnected.
+_Destroying actors is not available yet._
+
+## Advanced
+
+### Running Background Tasks
+
+The `c.runInBackground` method allows you to execute promises asynchronously without blocking the actor's main execution flow. The actor is prevented from sleeping while the promise passed to `runInBackground` is still active. This is useful for fire-and-forget operations where you don't need to wait for completion.
+
+Common use cases:
+- **Analytics and logging**: Send events to external services without delaying responses
+- **State sync**: Populate external databases or APIs with updates to actor state in the background
 
 ```typescript
-const temporaryRoom = actor(,
+const gameRoom = actor(, scores:  },
   
-  createState: () => (),
-  
-  onStart: (c) =>  else , timeUntilExpiry);
-    }
-  },
-  
-  actions: );
+  actions: ;
       
-      // Shutdown the actor
-      c.shutdown();
-    }
+      // Send analytics event without blocking
+      c.runInBackground(
+        fetch('https://analytics.example.com/events', )
+        }).then(() => console.log('Analytics sent'))
+      );
+      
+      return ;
+    },
   }
 });
 ```
 
-This action is permanent and cannot be reverted.
-
-## Using `ActorContext` Type Externally
+### Using `ActorContext` Type Externally
 
 When extracting logic from lifecycle hooks or actions into external functions, you'll often need to define the type of the context parameter. Rivet provides helper types that make it easy to extract and pass these context types to external functions.
 
@@ -2614,6 +2613,8 @@ See [Helper Types](/docs/actors/helper-types) for more details on using `ActorCo
 ## Full Example
 
 ```typescript
+interface CounterInput 
+
 const counter = actor(
     
     const token = authHeader.slice(7);
@@ -2624,18 +2625,17 @@ const counter = actor(
   },
   
   // Initialize state with input
-  createState: (c, opts) => (),
+  createState: (c: ActorInitContext, input: CounterInput) => (),
   
   // Initialize actor (run setup that doesn't affect initial state)
-  onCreate: (c, opts) => " initialized`);
+  onCreate: (c, opts, input: ) => " initialized`);
     // Set up external resources, logging, etc.
   },
   
   // Define default connection state
   connState: ,
   
-  // Dynamically create connection state based on params
-  createConnState: (c, ) => ;
+  createConnState: (c, opts) => ;
   },
   
   // Lifecycle hooks
@@ -3275,6 +3275,25 @@ const counter = actor(;
 });
 ```
 
+To accept a custom input parameters for the initial state, use:
+
+```typescript
+interface CounterInput 
+
+// State with initialization logic
+const counter = actor(;
+  },
+  
+  actions: 
+});
+```
+
+Read more about [input parameters](/docs/actors/input) here.
+
+If accepting arguments to `createState`, you **must** define the types: `createSTate(c: ActorInitContext, input: MyType)`
+
+Otherwise, the return type will not be inferred and `c.vars` will be of type `unknown`.
+
 The `createState` function is called once when the actor is first created. See [Lifecycle](/docs/actors/lifecycle) for more details.
 
 ## Modifying State
@@ -3335,13 +3354,24 @@ In addition to persisted state, actors can store ephemeral data that is not save
 
 For complete documentation on ephemeral variables, see [Ephemeral Variables](/docs/actors/ephemeral-variables).
 
-## Limitations
+## Type Limitations
 
-State is currently constrained to the available memory on the machine.
+State is currently constrained to the following types:
 
-Only JSON-serializable types can be stored in state. In serverless runtimes that support it (Rivet, Cloudflare Workers), state is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
-
-SQLite in Rivet Actors (coming soon) will provide a way of dynamically querying data with in-memory performance without being constrained to memory limits.
+- `null`
+- `undefined`
+- `boolean`
+- `string`
+- `number`
+- `BigInt`
+- `Date`
+- `RegExp`
+- `Error`
+- Typed arrays (`Uint8Array`, `Int8Array`, `Float32Array`, etc.)
+- `Map`
+- `Set`
+- `Array`
+- Plain objects
 ## Testing
 
 # Testing
@@ -4035,51 +4065,36 @@ Deploy your Redis-powered actors on these hosting providers:
 
 Deploy on Railway with automatic scaling and managed infrastructure.
 
-## Accessing Driver Context with createVars
-
-The Redis driver provides access to the underlying Redis connection through the driver context in `createVars`. This allows you to perform Redis operations directly within your actors.
-
-```typescript
-const myActor = actor(,
-  
-  // Access Redis connection through driver context
-  createVars: (ctx, driver: DriverContext) => ;
-  },
-  
-  actions: `, value, 'EX', 3600);
-      
-      // Also store locally for fast access
-      c.vars.cacheData.set(key, value);
-      
-      return "Cached successfully";
-    },
-    
-    // Example: Get cached value
-    getCachedValue: async (c, key: string) => 
-      
-      // Fallback to Redis
-      const value = await c.vars.redis.get(`cache:$`);
-      if (value) 
-      
-      return value;
-    }
-  }
-});
-```
-
-The Redis driver context type is exported as `DriverContext` from `@rivetkit/redis` and contains:
-
-```typescript
-interface DriverContext 
-```
-
-This gives you full access to all Redis operations while still benefiting from Rivet's actor model for state management and horizontal scaling.
-
 ## Examples
 
 Example using Redis driver with Hono web framework.
 
 Basic Redis driver setup and configuration example.
+
+## Advanced
+
+### Driver Context
+
+The Redis driver provides access to the underlying Redis connection through the driver context in `createVars`.
+
+```typescript
+const myActor = actor(,
+  
+  // Save the Redis driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  
+  actions: ,
+  }
+});
+```
+
+The Redis driver context type is exported as `DriverContext` from `@rivetkit/redis`:
+
+```typescript
+interface DriverContext 
+```
+
+While you have access to the Redis client, be cautious when directly modifying keys under the `keyPrefix`, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
 ## Architecture
 
 # Architecture
@@ -4853,39 +4868,54 @@ wrangler deploy
 
 Your actors will now run on Cloudflare's global edge network with persistent state backed by Durable Objects.
 
-## Accessing Driver Context with createVars
-
-The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`. This enables direct interaction with Cloudflare's platform features.
-
-```typescript
-const myActor = actor(,
-  
-  // Access Durable Object state through driver context
-  createVars: (ctx, driver: DriverContext) => ;
-  },
-  
-  actions: ;
-    },
-    
-    // Example: Access environment bindings
-    accessEnvBindings: async (c) => 
-  }
-});
-```
-
-The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers` and contains:
-
-```typescript
-interface DriverContext 
-```
-
-While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality. Use these features for read-only operations or additional custom logic that doesn't conflict with RivetKit's state management.
-
 ## Examples
 
 Example using Cloudflare Workers with Hono web framework.
 
 Basic Cloudflare Workers setup and configuration example.
+
+## Advanced
+
+### Accessing Environment Bindings
+
+You can access Cloudflare Workers environment bindings directly using the importable `env`:
+
+```typescript
+// Access environment variables and secrets in top-level scope
+const API_KEY = env.API_KEY;
+const LOG_LEVEL = env.LOG_LEVEL || "info";
+
+// Use bindings in your actor
+const myActor = actor(,
+  
+  actions: 
+    }
+  }
+});
+```
+
+### Driver Context
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
+
+```typescript
+const myActor = actor(,
+  
+  // Save the Cloudflare driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  
+  actions: ,
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
+
+```typescript
+interface DriverContext 
+```
+
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
 ## Railway
 
 # Railway
@@ -5516,3 +5546,2708 @@ async function examples() );
 # Vitest
 
 See [Testing](/docs/general/testing) documentation.
+## Binary
+
+# Binary Installation
+
+  Binary releases are coming soon. For now, please use the [Docker image](/docs/self-hosting/installing/docker-image) or [build from source](/docs/self-hosting/installing/build-from-source).
+
+## Coming Soon
+
+We're working on providing pre-built binaries for:
+
+- Linux (x86_64, ARM64)
+- macOS (Intel, Apple Silicon)
+- Windows (x86_64)
+
+Binary releases will be available through:
+- Direct download from GitHub releases
+- Package managers (Homebrew, apt, yum)
+- Installation scripts
+
+## Alternative Installation Methods
+
+While we prepare binary releases, you can use:
+
+- [Docker Image](/docs/self-hosting/installing/docker-image) - Recommended for most users
+- [Build from Source](/docs/self-hosting/installing/build-from-source) - For advanced users who need custom builds
+## Build From Source
+
+# Build From Source
+
+Build Rivet Engine from source for custom configurations or to contribute to development.
+
+## Prerequisites
+
+- Rust 1.75+ (install via [rustup](https://rustup.rs/))
+- Git
+- C compiler (for native dependencies)
+
+## Clone the Repository
+
+```bash
+git clone https://github.com/rivet-gg/rivet.git
+cd rivet
+```
+
+## Build the Engine
+
+### Development Build
+
+```bash
+cargo build -p rivet-engine
+```
+
+The binary will be available at `target/debug/rivet-engine`.
+
+### Release Build
+
+For production use, build with optimizations:
+
+```bash
+cargo build --release -p rivet-engine
+```
+
+The optimized binary will be at `target/release/rivet-engine`.
+
+## Run the Engine
+
+After building, run the engine:
+
+```bash
+# Development build
+./target/debug/rivet-engine
+
+# Release build
+./target/release/rivet-engine
+```
+
+## Configuration
+
+Configure the engine using environment variables or a configuration file:
+
+```bash
+RIVET_PORT=5032 \
+RIVET_STORAGE_TYPE=filesystem \
+RIVET_DATA_DIR=/path/to/data \
+./target/release/rivet-engine
+```
+
+## Building with Features
+
+Enable specific features during build:
+
+```bash
+# Build with FoundationDB support (enterprise)
+cargo build --release -p rivet-engine --features foundationdb
+
+# Build with all features
+cargo build --release -p rivet-engine --all-features
+```
+
+## Docker Build
+
+Build your own Docker image:
+
+```bash
+docker build -t my-rivet-engine .
+```
+
+## Next Steps
+
+- [Configure the engine](/docs/self-hosting/reference/configuration)
+- [Connect runners](/docs/self-hosting/reference/connecting)
+- Set up your [database backend](/docs/self-hosting/reference/databases)
+## Docker Image
+
+# Docker Image
+
+The official Rivet Engine Docker image is available on Docker Hub at `rivetkit/engine`.
+
+## Quick Start
+
+Run the Rivet Engine with the following command:
+
+```bash
+docker run -p 5032:5032 -v rivet-data:/data rivetkit/engine
+```
+
+This will:
+- Expose the engine on port 5032
+- Mount a volume for persistent data storage
+- Use the default file system storage backend
+
+## Configuration
+
+### Environment Variables
+
+You can configure the engine using environment variables:
+
+```bash
+docker run -p 5032:5032 \
+  -v rivet-data:/data \
+  -e RIVET_STORAGE_TYPE=postgres \
+  -e RIVET_POSTGRES_URL="postgresql://user:pass@host:5432/db" \
+  rivetkit/engine
+```
+
+### Volume Mounts
+
+For file system storage, mount a volume to persist data:
+
+```bash
+docker run -p 5032:5032 \
+  -v /path/to/local/data:/data \
+  rivetkit/engine
+```
+
+## Available Tags
+
+- `latest` - Latest stable release
+- `vX.Y.Z` - Specific version tags
+- `edge` - Development builds (not recommended for production)
+
+## Next Steps
+
+- [Connect your runners](/docs/self-hosting/reference/connecting) to the engine
+- Configure your [database backend](/docs/self-hosting/reference/databases)
+- Learn about [networking options](/docs/self-hosting/reference/networking)
+## AWS
+
+# AWS Deployment
+
+  Coming Soon
+  
+    AWS deployment documentation is currently being prepared. This will include:
+
+    • ECS (Elastic Container Service) deployment
+    • EKS (Elastic Kubernetes Service) setup
+    • EC2 instance configuration
+    • RDS PostgreSQL integration
+    • Application Load Balancer setup
+    • Auto Scaling Groups
+    • CloudFormation templates
+    • CDK (Cloud Development Kit) examples
+    • Cost optimization strategies
+
+## Deployment Options
+
+We'll cover multiple AWS deployment strategies:
+
+### ECS Fargate
+- Serverless container hosting
+- Automatic scaling
+- No infrastructure management
+
+### ECS on EC2
+- More control over instances
+- Cost-effective for steady workloads
+- Custom AMI support
+
+### EKS
+- Managed Kubernetes
+- Integration with existing K8s workflows
+- Advanced orchestration features
+
+### EC2
+- Full control over deployment
+- Custom configurations
+- Traditional VM approach
+
+## In the Meantime
+
+- Deploy using [Docker](/docs/self-hosting/platforms/docker-container) on EC2 instances
+- Use [Docker Compose](/docs/self-hosting/platforms/docker-compose) for quick setups
+- Check [Railway](/docs/self-hosting/platforms/railway) for managed deployments
+## Docker Compose
+
+# Docker Compose Deployment
+
+Docker Compose simplifies multi-container Rivet deployments with declarative configuration.
+
+## Quick Start
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "5032:5032"
+    volumes:
+      - rivet-data:/data
+    environment:
+      - RIVET_STORAGE_TYPE=filesystem
+    restart: unless-stopped
+
+volumes:
+  rivet-data:
+```
+
+Start the deployment:
+
+```bash
+docker-compose up -d
+```
+
+## Full Stack Example
+
+Complete deployment with PostgreSQL and NATS:
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: rivet
+      POSTGRES_USER: rivet
+      POSTGRES_PASSWORD: rivet_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rivet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:latest
+    command: "-js -sd /data"
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "nats", "account", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "5032:5032"  # API
+      - "5033:5033"  # Proxy
+      - "9090:9090"  # Metrics
+    environment:
+      RIVET_STORAGE_TYPE: postgres
+      RIVET_POSTGRES_URL: postgresql://rivet:rivet_password@postgres:5432/rivet
+      RIVET_PUBSUB_TYPE: nats
+      RIVET_NATS_URL: nats://nats:4222
+      RIVET_LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+  nats-data:
+  rivet-data:
+```
+
+## Environment Configuration
+
+### Using .env File
+
+Create a `.env` file:
+
+```env
+# Database
+POSTGRES_PASSWORD=secure_password_here
+RIVET_POSTGRES_URL=postgresql://rivet:secure_password_here@postgres:5432/rivet
+
+# PubSub
+RIVET_NATS_URL=nats://nats:4222
+
+# Engine Config
+RIVET_LOG_LEVEL=info
+RIVET_AUTH_TOKEN=your_secret_token
+```
+
+Reference in `docker-compose.yml`:
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    env_file:
+      - .env
+    environment:
+      RIVET_STORAGE_TYPE: postgres
+```
+
+### Multiple Environment Files
+
+```yaml
+services:
+  rivet-engine:
+    env_file:
+      - common.env
+      - secrets.env
+      - $.env  # dev.env, prod.env, etc.
+```
+
+## Networking
+
+### Custom Network
+
+```yaml
+version: '3.8'
+
+networks:
+  rivet-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+services:
+  rivet-engine:
+    networks:
+      rivet-net:
+        ipv4_address: 172.20.0.10
+```
+
+### External Network
+
+```yaml
+networks:
+  external-net:
+    external: true
+
+services:
+  rivet-engine:
+    networks:
+      - external-net
+      - default
+```
+
+## Scaling
+
+### Multiple Runners
+
+```yaml
+services:
+  rivet-runner:
+    image: your-app:latest
+    environment:
+      RIVET_ENGINE: http://rivet-engine:5032
+      RIVET_RUNNER_KEY: $
+    deploy:
+      replicas: 3
+    depends_on:
+      - rivet-engine
+```
+
+Scale dynamically:
+
+```bash
+docker-compose up -d --scale rivet-runner=5
+```
+
+## Resource Limits
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+```
+
+## Health Monitoring
+
+### Health Checks
+
+```yaml
+services:
+  rivet-engine:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### Monitoring Stack
+
+Add Prometheus and Grafana:
+
+```yaml
+services:
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9091:9090"
+
+  grafana:
+    image: grafana/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus-data:
+  grafana-data:
+```
+
+Prometheus configuration (`prometheus.yml`):
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'rivet-engine'
+    static_configs:
+      - targets: ['rivet-engine:9090']
+```
+
+## Backup and Restore
+
+### Backup Script
+
+```yaml
+services:
+  backup:
+    image: alpine:latest
+    volumes:
+      - postgres-data:/postgres-data:ro
+      - ./backups:/backups
+    command: >
+      sh -c "tar czf /backups/backup-$$(date +%Y%m%d-%H%M%S).tar.gz
+             -C / postgres-data"
+    profiles:
+      - tools
+```
+
+Run backup:
+
+```bash
+docker-compose run --rm backup
+```
+
+### Restore Script
+
+```yaml
+services:
+  restore:
+    image: alpine:latest
+    volumes:
+      - postgres-data:/postgres-data
+      - ./backups:/backups
+    command: >
+      sh -c "tar xzf /backups/$$BACKUP_FILE -C /"
+    profiles:
+      - tools
+```
+
+Run restore:
+
+```bash
+BACKUP_FILE=backup-20240101-120000.tar.gz \
+docker-compose run --rm restore
+```
+
+## Production Configuration
+
+### docker-compose.prod.yml
+
+```yaml
+version: '3.8'
+
+services:
+  rivet-engine:
+    image: rivetkit/engine:$
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    secrets:
+      - db_password
+      - auth_token
+    environment:
+      RIVET_POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      RIVET_AUTH_TOKEN_FILE: /run/secrets/auth_token
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  auth_token:
+    file: ./secrets/auth_token.txt
+```
+
+Deploy production:
+
+```bash
+docker-compose -f docker-compose.yml \
+               -f docker-compose.prod.yml \
+               up -d
+```
+
+## SSL/TLS with Traefik
+
+```yaml
+services:
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+
+  rivet-engine:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rivet.rule=Host(`engine.example.com`)"
+      - "traefik.http.routers.rivet.entrypoints=websecure"
+      - "traefik.http.routers.rivet.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rivet.loadbalancer.server.port=5032"
+
+volumes:
+  letsencrypt:
+```
+
+## Common Commands
+
+```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# View logs
+docker-compose logs -f rivet-engine
+
+# Restart service
+docker-compose restart rivet-engine
+
+# Execute command in container
+docker-compose exec rivet-engine sh
+
+# Update images
+docker-compose pull
+docker-compose up -d
+
+# Clean up
+docker-compose down -v  # Also removes volumes
+```
+
+## Override Files
+
+Development override (`docker-compose.override.yml`):
+
+```yaml
+version: '3.8'
+
+services:
+  rivet-engine:
+    environment:
+      RIVET_LOG_LEVEL: debug
+    ports:
+      - "5032:5032"
+      - "9090:9090"
+    volumes:
+      - ./config:/config
+```
+
+  Docker Compose automatically loads `docker-compose.override.yml` if it exists, perfect for local development settings.
+
+## Troubleshooting
+
+### Service Dependencies
+
+Ensure proper startup order:
+
+```yaml
+services:
+  rivet-engine:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+```
+
+### Network Issues
+
+Debug networking:
+
+```bash
+# List networks
+docker network ls
+
+# Inspect network
+docker network inspect rivet_default
+
+# Test connectivity
+docker-compose exec rivet-engine ping postgres
+```
+
+### Volume Permissions
+
+Fix permission issues:
+
+```bash
+# Run as specific user
+services:
+  rivet-engine:
+    user: "1000:1000"
+
+# Or fix in entrypoint
+    entrypoint: >
+      sh -c "chown -R 1000:1000 /data && exec rivet-engine"
+```
+
+## Next Steps
+
+- Deploy to [Railway](/docs/self-hosting/platforms/railway) for managed hosting
+- Scale with [Kubernetes](/docs/self-hosting/platforms/kubernetes)
+- Set up [monitoring](/docs/self-hosting/reference/monitoring)
+## Docker Container
+
+# Docker Container Deployment
+
+Deploy Rivet Engine as a Docker container for simple, portable deployments.
+
+## Quick Start
+
+```bash
+docker run -d \
+  --name rivet-engine \
+  -p 5032:5032 \
+  -v rivet-data:/data \
+  rivetkit/engine
+```
+
+This command:
+- Runs the container in detached mode (`-d`)
+- Names the container `rivet-engine`
+- Exposes port 5032 for API access
+- Creates a named volume `rivet-data` for persistence
+
+## Full Configuration
+
+```bash
+docker run -d \
+  --name rivet-engine \
+  --restart unless-stopped \
+  -p 5032:5032 \
+  -p 5033:5033 \
+  -p 9090:9090 \
+  -v rivet-data:/data \
+  -v /path/to/config:/config \
+  -e RIVET_STORAGE_TYPE=postgres \
+  -e RIVET_POSTGRES_URL="postgresql://user:pass@db:5432/rivet" \
+  -e RIVET_PUBSUB_TYPE=nats \
+  -e RIVET_NATS_URL="nats://nats:4222" \
+  -e RIVET_LOG_LEVEL=info \
+  rivetkit/engine
+```
+
+## Docker Run Options
+
+### Container Management
+
+```bash
+# Auto-restart on failure
+--restart unless-stopped
+
+# Resource limits
+--memory="2g"
+--cpus="2"
+
+# Health check
+--health-cmd="curl -f http://localhost:8080/health || exit 1"
+--health-interval=30s
+--health-timeout=10s
+--health-retries=3
+```
+
+### Networking
+
+```bash
+# Use host networking (Linux only)
+--network host
+
+# Custom network
+--network rivet-net
+
+# Expose additional ports
+-p 5033:5033  # Proxy port
+-p 9090:9090  # Metrics port
+-p 8080:8080  # Health port
+```
+
+### Volumes
+
+```bash
+# Named volume (recommended)
+-v rivet-data:/data
+
+# Bind mount
+-v /host/path/data:/data
+
+# Configuration file
+-v /host/path/config.yaml:/config/rivet.yaml
+```
+
+## Environment Variables
+
+Common environment variables for configuration:
+
+```bash
+# Storage
+-e RIVET_STORAGE_TYPE=postgres
+-e RIVET_POSTGRES_URL="postgresql://..."
+
+# PubSub
+-e RIVET_PUBSUB_TYPE=nats
+-e RIVET_NATS_URL="nats://..."
+
+# Performance
+-e RIVET_WORKERS=4
+-e RIVET_MAX_CONNECTIONS=10000
+
+# Security
+-e RIVET_AUTH_TOKEN="secret-token"
+-e RIVET_TLS_ENABLED=true
+
+# Logging
+-e RIVET_LOG_LEVEL=info
+-e RIVET_LOG_FORMAT=json
+```
+
+## Data Persistence
+
+### Using Named Volumes
+
+```bash
+# Create volume
+docker volume create rivet-data
+
+# Run with volume
+docker run -v rivet-data:/data rivetkit/engine
+
+# Backup volume
+docker run --rm \
+  -v rivet-data:/source \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/rivet-backup.tar.gz -C /source .
+
+# Restore volume
+docker run --rm \
+  -v rivet-data:/target \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/rivet-backup.tar.gz -C /target
+```
+
+### Using Bind Mounts
+
+```bash
+# Create data directory
+mkdir -p /opt/rivet/data
+
+# Set permissions
+chown 1000:1000 /opt/rivet/data
+
+# Run with bind mount
+docker run -v /opt/rivet/data:/data rivetkit/engine
+```
+
+## Container Management
+
+### Starting and Stopping
+
+```bash
+# Start container
+docker start rivet-engine
+
+# Stop gracefully
+docker stop rivet-engine
+
+# Restart
+docker restart rivet-engine
+
+# Remove container
+docker rm rivet-engine
+```
+
+### Monitoring
+
+```bash
+# View logs
+docker logs rivet-engine
+docker logs -f rivet-engine  # Follow logs
+
+# Check status
+docker ps
+docker inspect rivet-engine
+
+# Resource usage
+docker stats rivet-engine
+
+# Enter container
+docker exec -it rivet-engine sh
+```
+
+### Updates
+
+```bash
+# Pull latest image
+docker pull rivetkit/engine:latest
+
+# Stop old container
+docker stop rivet-engine
+docker rm rivet-engine
+
+# Start with new image
+docker run -d \
+  --name rivet-engine \
+  -v rivet-data:/data \
+  rivetkit/engine:latest
+```
+
+## Production Deployment
+
+### Security Hardening
+
+```bash
+docker run -d \
+  --name rivet-engine \
+  --restart unless-stopped \
+  --read-only \
+  --tmpfs /tmp \
+  --security-opt no-new-privileges:true \
+  --cap-drop ALL \
+  --cap-add NET_BIND_SERVICE \
+  -v rivet-data:/data \
+  rivetkit/engine
+```
+
+### Resource Limits
+
+```bash
+docker run -d \
+  --name rivet-engine \
+  --memory="4g" \
+  --memory-swap="4g" \
+  --cpus="4" \
+  --pids-limit 1000 \
+  -v rivet-data:/data \
+  rivetkit/engine
+```
+
+### Logging
+
+```bash
+docker run -d \
+  --name rivet-engine \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -v rivet-data:/data \
+  rivetkit/engine
+```
+
+## Networking Examples
+
+### Bridge Network
+
+```bash
+# Create network
+docker network create rivet-net
+
+# Run containers on network
+docker run -d --network rivet-net --name postgres postgres:15
+docker run -d --network rivet-net --name nats nats:latest
+docker run -d --network rivet-net \
+  -e RIVET_POSTGRES_URL="postgresql://user:pass@postgres:5432/rivet" \
+  -e RIVET_NATS_URL="nats://nats:4222" \
+  rivetkit/engine
+```
+
+### Host Network (Linux)
+
+```bash
+docker run -d \
+  --network host \
+  -v rivet-data:/data \
+  rivetkit/engine
+```
+
+## Health Checks
+
+### Built-in Health Check
+
+The container includes a health check endpoint:
+
+```bash
+# Check health from host
+curl http://localhost:8080/health
+
+# Check from another container
+docker run --rm curlimages/curl \
+  curl http://rivet-engine:8080/health
+```
+
+### Custom Health Check
+
+```dockerfile
+# In your Dockerfile
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker logs rivet-engine
+
+# Check events
+docker events --filter container=rivet-engine
+
+# Debug mode
+docker run -it --rm \
+  -e RIVET_LOG_LEVEL=debug \
+  rivetkit/engine
+```
+
+### Permission Issues
+
+```bash
+# Fix volume permissions
+docker run --rm \
+  -v rivet-data:/data \
+  alpine chown -R 1000:1000 /data
+```
+
+### Network Issues
+
+```bash
+# Test network connectivity
+docker run --rm --network rivet-net \
+  nicolaka/netshoot \
+  ping postgres
+
+# Check port binding
+netstat -tlpn | grep 5032
+```
+
+  Use Docker Compose for more complex deployments with multiple services. See the [Docker Compose guide](/docs/self-hosting/platforms/docker-compose).
+
+## Next Steps
+
+- Set up [Docker Compose](/docs/self-hosting/platforms/docker-compose) for multi-container deployments
+- Deploy to [Kubernetes](/docs/self-hosting/platforms/kubernetes) for orchestration
+- Configure [monitoring and metrics](/docs/self-hosting/reference/monitoring)
+## Google Cloud
+
+# Google Cloud Deployment
+
+  Coming Soon
+  
+    Google Cloud deployment documentation is currently being prepared. This will include:
+
+    • Cloud Run deployment (serverless)
+    • GKE (Google Kubernetes Engine) setup
+    • Compute Engine VM configuration
+    • Cloud SQL PostgreSQL integration
+    • Load Balancer configuration
+    • Cloud Build CI/CD pipelines
+    • Terraform configurations
+    • Identity and Access Management (IAM)
+    • Cost optimization with committed use discounts
+
+## Deployment Options
+
+We'll cover multiple GCP deployment strategies:
+
+### Cloud Run
+- Fully managed serverless platform
+- Automatic scaling to zero
+- Pay-per-use pricing
+
+### GKE Autopilot
+- Managed Kubernetes without node management
+- Automatic scaling and updates
+- Built-in security best practices
+
+### GKE Standard
+- Full Kubernetes control
+- Custom node pools
+- Advanced networking options
+
+### Compute Engine
+- Traditional VM deployment
+- Full infrastructure control
+- Custom machine types
+
+## In the Meantime
+
+- Deploy using [Docker](/docs/self-hosting/platforms/docker-container) on Compute Engine
+- Use [Docker Compose](/docs/self-hosting/platforms/docker-compose) for quick deployments
+- Try [Railway](/docs/self-hosting/platforms/railway) for simplified hosting
+## Hetzner
+
+# Hetzner Cloud Deployment
+
+  Coming Soon
+  
+    Hetzner deployment documentation is currently being prepared. This will include:
+
+    • Cloud server provisioning
+    • Load balancer configuration
+    • Floating IPs for high availability
+    • Volume storage setup
+    • Private networks configuration
+    • Firewall rules
+    • Snapshot backups
+    • Terraform deployment scripts
+    • Cost-effective scaling strategies
+
+## Why Hetzner?
+
+Hetzner Cloud offers:
+- **Excellent price-performance ratio**
+- **German data centers** with strong privacy laws
+- **Simple, predictable pricing**
+- **Fast NVMe SSD storage**
+- **100% renewable energy**
+
+## Deployment Preview
+
+We'll provide:
+- One-click deployment scripts
+- Ansible playbooks for automation
+- Docker Swarm cluster setup
+- Kubernetes (k3s) lightweight deployment
+- Monitoring with Hetzner Cloud metrics
+
+## In the Meantime
+
+- Deploy using [Docker](/docs/self-hosting/platforms/docker-container) on Hetzner Cloud servers
+- Use [Docker Compose](/docs/self-hosting/platforms/docker-compose) for multi-container setups
+- Check our [installation guide](/docs/self-hosting/installing/docker-image) for Docker deployment
+## Kubernetes
+
+# Kubernetes Deployment
+
+  Coming Soon
+  
+    Kubernetes deployment documentation is currently being prepared. This will include:
+
+    • Helm charts for easy deployment
+    • Kubernetes manifests (Deployment, Service, ConfigMap)
+    • Horizontal Pod Autoscaling configuration
+    • Persistent volume setup
+    • Ingress configuration
+    • Multi-node clustering
+    • Security best practices
+
+## Quick Preview
+
+While we prepare comprehensive documentation, here's a basic example:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rivet-engine
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rivet-engine
+  template:
+    metadata:
+      labels:
+        app: rivet-engine
+    spec:
+      containers:
+      - name: engine
+        image: rivetkit/engine:latest
+        ports:
+        - containerPort: 5032
+        env:
+        - name: RIVET_STORAGE_TYPE
+          value: postgres
+        - name: RIVET_POSTGRES_URL
+          valueFrom:
+            secretKeyRef:
+              name: rivet-secrets
+              key: postgres-url
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rivet-engine
+spec:
+  selector:
+    app: rivet-engine
+  ports:
+    - port: 5032
+      targetPort: 5032
+  type: LoadBalancer
+```
+
+## In the Meantime
+
+- Use [Docker](/docs/self-hosting/platforms/docker-container) for container deployments
+- Try [Docker Compose](/docs/self-hosting/platforms/docker-compose) for multi-container setups
+- Deploy to [Railway](/docs/self-hosting/platforms/railway) for managed Kubernetes
+## Railway
+
+# Railway Deployment
+
+Railway provides a simple platform for deploying Rivet Engine with automatic scaling and managed infrastructure.
+
+## Quick Deploy
+
+  Railway template coming soon. For now, follow the manual deployment steps below.
+
+[![Deploy on Railway](https://railway.app/button.svg)](TODO)
+
+## Manual Deployment
+
+### Prerequisites
+
+1. [Railway account](https://railway.app)
+2. [Railway CLI](https://docs.railway.app/develop/cli) (optional)
+
+### Step 1: Create New Project
+
+```bash
+# Using Railway CLI
+railway init
+
+# Or create via dashboard
+# https://railway.app/new
+```
+
+### Step 2: Add Services
+
+#### PostgreSQL Database
+
+1. Click "New Service" → "Database" → "PostgreSQL"
+2. Railway automatically provisions and configures PostgreSQL
+3. Note the connection string from the service variables
+
+#### Rivet Engine
+
+1. Click "New Service" → "Docker Image"
+2. Set image: `rivetkit/engine:latest`
+3. Configure environment variables
+
+### Step 3: Environment Variables
+
+In the Rivet Engine service settings:
+
+```bash
+# Database (use Railway's PostgreSQL reference)
+RIVET_STORAGE_TYPE=postgres
+RIVET_POSTGRES_URL=$}
+
+# Engine Configuration
+RIVET_PORT=5032
+RIVET_LOG_LEVEL=info
+
+# Optional: Authentication
+RIVET_AUTH_TOKEN=your-secret-token-here
+```
+
+### Step 4: Configure Networking
+
+1. Go to Settings → Networking
+2. Generate a domain or use custom domain
+3. Set port to `5032`
+
+## Railway Configuration File
+
+Create `railway.toml` in your project:
+
+```toml
+[deploy]
+dockerfilePath = "Dockerfile"
+
+[build]
+builder = "dockerfile"
+
+[[services]]
+name = "rivet-engine"
+image = "rivetkit/engine:latest"
+
+[[services.ports]]
+port = 5032
+targetPort = 5032
+
+[[services.envs]]
+RIVET_STORAGE_TYPE = "postgres"
+RIVET_POSTGRES_URL = "$}"
+RIVET_LOG_LEVEL = "info"
+```
+
+## Custom Dockerfile
+
+For custom configurations, create a `Dockerfile`:
+
+```dockerfile
+FROM rivetkit/engine:latest
+
+# Add custom configuration
+COPY config.yaml /config/rivet.yaml
+
+# Set environment
+ENV RIVET_CONFIG_FILE=/config/rivet.yaml
+
+EXPOSE 5032 5033 9090
+
+CMD ["rivet-engine"]
+```
+
+Deploy with:
+
+```bash
+railway up
+```
+
+## Database Setup
+
+### Using Railway PostgreSQL
+
+Railway automatically provides:
+- Managed PostgreSQL instance
+- Automatic backups
+- Connection pooling
+- SSL connections
+
+Access database URL:
+
+```bash
+railway variables
+# Copy DATABASE_URL value
+```
+
+### External Database
+
+Use any PostgreSQL-compatible database:
+
+```bash
+RIVET_POSTGRES_URL=postgresql://user:pass@external-db.com:5432/rivet
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+Railway supports multiple instances:
+
+```bash
+# Via CLI
+railway scale --count 3
+
+# Or in dashboard
+# Service → Settings → Scaling → Instance Count
+```
+
+### Resource Limits
+
+Configure in service settings:
+
+- **Memory**: 512MB - 8GB
+- **CPU**: 0.5 - 8 vCPUs
+- **Disk**: 1GB - 100GB
+
+Recommended production settings:
+- Memory: 2GB minimum
+- CPU: 1 vCPU minimum
+- Disk: 10GB for file storage
+
+## Monitoring
+
+### Railway Metrics
+
+Built-in metrics available in dashboard:
+- CPU usage
+- Memory usage
+- Network I/O
+- Request count
+- Response times
+
+### Custom Metrics
+
+Enable Prometheus endpoint:
+
+```bash
+RIVET_METRICS_ENABLED=true
+RIVET_METRICS_PORT=9090
+```
+
+Access metrics at: `https://your-app.railway.app:9090/metrics`
+
+### Logging
+
+View logs in Railway dashboard or CLI:
+
+```bash
+# Stream logs
+railway logs
+
+# Filter logs
+railway logs --filter "error"
+
+# Export logs
+railway logs > logs.txt
+```
+
+## Custom Domains
+
+### Add Custom Domain
+
+1. Go to Settings → Networking → Custom Domain
+2. Add your domain: `engine.yourdomain.com`
+3. Configure DNS:
+
+```
+CNAME engine.yourdomain.com -> your-app.railway.app
+```
+
+### SSL Certificates
+
+Railway automatically provides:
+- Free SSL certificates via Let's Encrypt
+- Automatic renewal
+- HTTP → HTTPS redirect
+
+## Environment Management
+
+### Development Environment
+
+```bash
+# Create dev environment
+railway environment create dev
+
+# Switch to dev
+railway environment dev
+
+# Deploy to dev
+railway up
+```
+
+### Production Environment
+
+```bash
+# Switch to production
+railway environment production
+
+# Set production variables
+railway variables set RIVET_LOG_LEVEL=warn
+railway variables set RIVET_AUTH_ENABLED=true
+```
+
+## Connecting Runners
+
+Connect external runners to Railway-hosted engine:
+
+```bash
+# Get public URL
+railway domain
+
+# Configure runner
+RIVET_ENGINE=https://your-app.railway.app npm run start
+```
+
+## CI/CD Integration
+
+### GitHub Integration
+
+1. Connect GitHub repo in Railway dashboard
+2. Configure automatic deployments
+3. Set branch triggers
+
+### GitHub Actions
+
+```yaml
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to Railway
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: $}
+          service: rivet-engine
+```
+
+### GitLab CI
+
+```yaml
+deploy:
+  stage: deploy
+  script:
+    - npm install -g @railway/cli
+    - railway up
+  environment:
+    name: production
+  only:
+    - main
+```
+
+## Backup and Recovery
+
+### Automatic Backups
+
+Railway PostgreSQL includes:
+- Daily automatic backups
+- 7-day retention
+- Point-in-time recovery
+
+### Manual Backup
+
+```bash
+# Export database
+railway run pg_dump $DATABASE_URL > backup.sql
+
+# Import database
+railway run psql $DATABASE_URL 
+  Join Railway's Discord community for help and best practices: [discord.gg/railway](https://discord.gg/railway)
+
+## Next Steps
+
+- Configure [monitoring](/docs/self-hosting/reference/monitoring)
+- Set up [high availability](/docs/self-hosting/reference/high-availability)
+- Explore [Kubernetes deployment](/docs/self-hosting/platforms/kubernetes) for more control
+## Architecture
+
+# Architecture
+
+  Coming Soon
+  
+    Detailed architecture documentation is currently being prepared. This will include:
+
+    • System design and components
+    • Data flow and communication patterns
+    • Scaling strategies
+    • Performance considerations
+    • Security architecture
+
+## In the Meantime
+
+While we prepare comprehensive architecture documentation, you can:
+
+- Review the [Overview](/docs/self-hosting/reference/overview) for a high-level understanding
+- Explore the [source code](https://github.com/rivet-gg/rivet) on GitHub
+- Check our [system architecture](/docs/general/system-architecture) documentation
+- Join our [Discord community](https://discord.gg/rivet) for discussions
+## Configuration
+
+# Configuration
+
+Rivet Engine can be configured through environment variables or configuration files. The configuration system is defined in `packages/common/config/`.
+
+## Configuration Methods
+
+### Environment Variables
+
+The most common way to configure Rivet:
+
+```bash
+RIVET_PORT=5032 \
+RIVET_STORAGE_TYPE=postgres \
+RIVET_POSTGRES_URL="postgresql://..." \
+rivet-engine
+```
+
+### Configuration File
+
+For complex deployments, use a YAML or JSON configuration file:
+
+```yaml
+# rivet.yaml
+port: 5032
+storage:
+  type: postgres
+  postgres:
+    url: postgresql://...
+```
+
+Load the configuration:
+
+```bash
+rivet-engine --config rivet.yaml
+```
+
+## Core Configuration
+
+### Server Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RIVET_PORT` | HTTP server port | `5032` |
+| `RIVET_HOST` | Bind address | `0.0.0.0` |
+| `RIVET_WORKERS` | Number of worker threads | CPU cores |
+| `RIVET_MAX_CONNECTIONS` | Maximum concurrent connections | `10000` |
+
+### Storage Configuration
+
+| Variable | Description | Options |
+|----------|-------------|---------|
+| `RIVET_STORAGE_TYPE` | Storage backend type | `filesystem`, `postgres`, `foundationdb` |
+| `RIVET_DATA_DIR` | Directory for file storage | `/data` |
+
+### Database Settings
+
+For PostgreSQL:
+
+| Variable | Description |
+|----------|-------------|
+| `RIVET_POSTGRES_URL` | PostgreSQL connection string |
+| `RIVET_POSTGRES_POOL_SIZE` | Connection pool size |
+| `RIVET_POSTGRES_MAX_CONNECTIONS` | Maximum connections |
+
+### PubSub Configuration
+
+| Variable | Description | Options |
+|----------|-------------|---------|
+| `RIVET_PUBSUB_TYPE` | PubSub backend | `memory`, `postgres`, `nats` |
+| `RIVET_NATS_URL` | NATS server URL | |
+| `RIVET_NATS_CLUSTER` | NATS cluster name | |
+
+## Advanced Configuration
+
+### Performance Tuning
+
+```bash
+# Increase connection limits
+RIVET_MAX_CONNECTIONS=50000
+RIVET_POSTGRES_POOL_SIZE=100
+
+# Optimize for throughput
+RIVET_BATCH_SIZE=1000
+RIVET_FLUSH_INTERVAL=100
+
+# Enable compression
+RIVET_COMPRESSION=true
+RIVET_COMPRESSION_LEVEL=6
+```
+
+### High Availability
+
+```bash
+# Enable clustering
+RIVET_CLUSTER_ENABLED=true
+RIVET_CLUSTER_NODE_ID=node-1
+RIVET_CLUSTER_SEEDS=node-2:5032,node-3:5032
+
+# Configure replication
+RIVET_REPLICATION_FACTOR=3
+RIVET_MIN_REPLICAS=2
+```
+
+### Security
+
+```bash
+# Authentication
+RIVET_AUTH_ENABLED=true
+RIVET_AUTH_TOKEN=secret-token
+RIVET_AUTH_METHOD=bearer
+
+# TLS/SSL
+RIVET_TLS_ENABLED=true
+RIVET_TLS_CERT=/path/to/cert.pem
+RIVET_TLS_KEY=/path/to/key.pem
+
+# Network restrictions
+RIVET_ALLOWED_ORIGINS=https://app.example.com
+RIVET_IP_WHITELIST=10.0.0.0/8,192.168.0.0/16
+```
+
+### Monitoring
+
+```bash
+# Metrics
+RIVET_METRICS_ENABLED=true
+RIVET_METRICS_PORT=9090
+RIVET_METRICS_PATH=/metrics
+
+# Logging
+RIVET_LOG_LEVEL=info
+RIVET_LOG_FORMAT=json
+RIVET_LOG_OUTPUT=/var/log/rivet/engine.log
+
+# Tracing
+RIVET_TRACING_ENABLED=true
+RIVET_TRACING_ENDPOINT=http://jaeger:14268
+```
+
+## Configuration Profiles
+
+### Development
+
+```bash
+# Minimal configuration for local development
+RIVET_STORAGE_TYPE=filesystem
+RIVET_DATA_DIR=./data
+RIVET_LOG_LEVEL=debug
+```
+
+### Production
+
+```bash
+# Robust configuration for production
+RIVET_STORAGE_TYPE=postgres
+RIVET_POSTGRES_URL="postgresql://user:pass@db:5432/rivet"
+RIVET_POSTGRES_POOL_SIZE=50
+RIVET_PUBSUB_TYPE=nats
+RIVET_NATS_URL=nats://nats:4222
+RIVET_AUTH_ENABLED=true
+RIVET_AUTH_TOKEN="$"
+RIVET_TLS_ENABLED=true
+RIVET_LOG_LEVEL=warn
+RIVET_METRICS_ENABLED=true
+```
+
+### High Performance
+
+```bash
+# Optimized for maximum throughput
+RIVET_WORKERS=32
+RIVET_MAX_CONNECTIONS=100000
+RIVET_BATCH_SIZE=5000
+RIVET_COMPRESSION=false
+RIVET_STORAGE_TYPE=foundationdb
+RIVET_FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+```
+
+## Environment-Specific Overrides
+
+Use environment prefixes for different deployments:
+
+```bash
+# Production
+PROD_RIVET_STORAGE_TYPE=postgres
+PROD_RIVET_AUTH_ENABLED=true
+
+# Staging
+STAGING_RIVET_STORAGE_TYPE=postgres
+STAGING_RIVET_LOG_LEVEL=debug
+
+# Development
+DEV_RIVET_STORAGE_TYPE=filesystem
+DEV_RIVET_LOG_LEVEL=trace
+```
+
+  For a complete list of configuration options, refer to the source code in `packages/common/config/`.
+
+## Next Steps
+
+- Choose a [database backend](/docs/self-hosting/reference/databases)
+- Configure [networking options](/docs/self-hosting/reference/networking)
+- Set up [monitoring and metrics](/docs/self-hosting/reference/monitoring)
+## Connecting
+
+# Connecting to Rivet Engine
+
+## Default Configuration
+
+With no environment variables set, Rivet defaults to:
+- Storing data on the local filesystem
+- Running on `localhost:5032`
+- Using in-memory pubsub
+
+This is perfect for local development and testing.
+
+## Connecting Runners
+
+To connect a runner to your Rivet Engine, set the `RIVET_ENGINE` environment variable:
+
+```bash
+RIVET_ENGINE=http://your-engine-host:5032 npm run dev
+```
+
+Once connected:
+- The runner appears in the Runners tab of the dashboard
+- Your actor names show up in the sidebar
+- The engine begins routing traffic to your runner
+
+## Environment Variables
+
+### Core Variables
+
+#### `RIVET_ENGINE`
+The endpoint of your Rivet Engine instance.
+
+```bash
+# Local development
+RIVET_ENGINE=http://localhost:5032
+
+# Production
+RIVET_ENGINE=https://engine.your-domain.com
+```
+
+#### `RIVET_NAMESPACE`
+The namespace to run actors in. Useful for multi-tenant deployments.
+
+```bash
+RIVET_NAMESPACE=production
+```
+
+#### `RIVET_RUNNER`
+A human-readable name for the runner.
+
+```bash
+RIVET_RUNNER=worker-01
+```
+
+#### `RIVET_RUNNER_KEY`
+A unique key for the runner. If another runner connects with the same key, the previous one is disconnected. This is useful for handling zombie runners that weren't shut down gracefully.
+
+```bash
+RIVET_RUNNER_KEY=unique-runner-key-123
+```
+
+  Generate a unique runner key using: `uuidgen` or `openssl rand -hex 16`
+
+## Connection Examples
+
+### Development Setup
+
+```bash
+# Start the engine (defaults to local storage)
+rivet-engine
+
+# In another terminal, start your runner
+RIVET_ENGINE=http://localhost:5032 npm run dev
+```
+
+### Production Setup
+
+```bash
+# On the engine server
+RIVET_STORAGE_TYPE=postgres \
+RIVET_POSTGRES_URL="postgresql://..." \
+rivet-engine
+
+# On runner nodes
+RIVET_ENGINE=https://engine.example.com \
+RIVET_NAMESPACE=production \
+RIVET_RUNNER=worker-$(hostname) \
+RIVET_RUNNER_KEY=$(cat /etc/machine-id) \
+npm run start
+```
+
+## Client Connection
+
+Clients connect to the engine using RivetKit:
+
+```typescript
+const rivet = new Rivet();
+```
+
+## Connection Security
+
+### Authentication
+
+For production deployments, secure your engine:
+
+```bash
+# Engine configuration
+RIVET_AUTH_TOKEN=secret-token-here
+
+# Runner configuration
+RIVET_ENGINE=https://engine.example.com
+RIVET_AUTH_TOKEN=secret-token-here
+```
+
+### TLS/SSL
+
+Always use HTTPS in production:
+- Use a reverse proxy (nginx, Caddy) with SSL certificates
+- Or configure the engine with TLS certificates directly
+
+## Troubleshooting
+
+### Runner Not Appearing
+
+If your runner doesn't appear in the dashboard:
+
+1. Check the engine is accessible:
+   ```bash
+   curl http://your-engine:5032/health
+   ```
+
+2. Verify environment variables are set:
+   ```bash
+   echo $RIVET_ENGINE
+   ```
+
+3. Check runner logs for connection errors
+
+### Connection Refused
+
+- Ensure the engine is running on the correct port
+- Check firewall rules allow traffic on port 5032
+- Verify the engine host is reachable from runner nodes
+
+### Duplicate Runners
+
+If you see duplicate runners:
+- Set unique `RIVET_RUNNER_KEY` values
+- Or let the engine auto-generate keys (omit the variable)
+
+## Next Steps
+
+- Configure your [engine settings](/docs/self-hosting/reference/configuration)
+- Set up a [database backend](/docs/self-hosting/reference/databases)
+- Learn about [networking options](/docs/self-hosting/reference/networking)
+## Supported Databases
+
+# Supported Databases
+
+Rivet supports multiple database backends for storing actor state and metadata. Choose based on your scale and operational requirements.
+
+## PostgreSQL
+
+**Recommended for most production deployments.**
+
+PostgreSQL provides a robust, battle-tested foundation for Rivet with excellent performance and reliability.
+
+### Features
+- ACID compliance
+- Strong consistency
+- Built-in replication
+- Extensive tooling ecosystem
+- Supports up to thousands of actors
+
+### Configuration
+
+```bash
+RIVET_STORAGE_TYPE=postgres
+RIVET_POSTGRES_URL="postgresql://user:password@localhost:5432/rivet"
+```
+
+### Connection String Format
+
+```
+postgresql://[user[:password]@][host][:port][/dbname][?param1=value1&...]
+```
+
+### Required Schema
+
+Rivet automatically creates required tables on startup:
+- `actors` - Actor metadata and configuration
+- `actor_state` - Persistent actor state
+- `messages` - Message queue for actors
+- `events` - Event log for debugging
+
+### Performance Tuning
+
+```sql
+-- Optimize for Rivet workload
+ALTER SYSTEM SET max_connections = 200;
+ALTER SYSTEM SET shared_buffers = '256MB';
+ALTER SYSTEM SET effective_cache_size = '1GB';
+ALTER SYSTEM SET work_mem = '4MB';
+```
+
+### High Availability
+
+Use PostgreSQL replication for HA:
+- Streaming replication for read replicas
+- Logical replication for multi-region
+- Tools like Patroni for automatic failover
+
+## FoundationDB (Enterprise)
+
+**For massive scale deployments.**
+
+FoundationDB is a distributed database designed for extreme scale and reliability.
+
+  FoundationDB support is available in Rivet Enterprise. Contact us for access.
+
+### Features
+- Unbounded horizontal scaling
+- ACID transactions across clusters
+- Automatic sharding and rebalancing
+- Multi-region support
+- Supports millions of actors
+
+### Configuration
+
+```bash
+RIVET_STORAGE_TYPE=foundationdb
+RIVET_FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+```
+
+### Cluster File
+
+```
+# /etc/foundationdb/fdb.cluster
+cluster_name:id@host1:4500,host2:4500,host3:4500
+```
+
+### Benefits
+- No manual sharding required
+- Automatic failure recovery
+- Consistent performance at any scale
+- Multi-datacenter deployments
+
+## File System
+
+**For development and single-node deployments.**
+
+The file system backend stores data directly on disk using efficient binary formats.
+
+### Features
+- Zero dependencies
+- Simple backup/restore
+- Good performance for small deployments
+- Suitable for up to hundreds of actors
+
+### Configuration
+
+```bash
+RIVET_STORAGE_TYPE=filesystem
+RIVET_DATA_DIR=/var/lib/rivet/data
+```
+
+### Directory Structure
+
+```
+/var/lib/rivet/data/
+├── actors/
+│   ├── metadata/
+│   └── state/
+├── messages/
+└── events/
+```
+
+### Limitations
+- Single node only (no clustering)
+- No concurrent access from multiple engines
+- Limited query capabilities
+- Manual backup required
+
+### Backup
+
+```bash
+# Stop the engine
+systemctl stop rivet-engine
+
+# Backup data directory
+tar -czf rivet-backup.tar.gz /var/lib/rivet/data
+
+# Restore
+tar -xzf rivet-backup.tar.gz -C /
+```
+
+## Choosing a Database
+
+### Development
+
+Use **File System** for:
+- Local development
+- Testing and CI/CD
+- Prototyping
+
+### Small to Medium Production
+
+Use **PostgreSQL** for:
+- Production deployments up to 10,000 actors
+- When you need SQL compatibility
+- Existing PostgreSQL infrastructure
+- Strong consistency requirements
+
+### Large Scale Production
+
+Use **FoundationDB** for:
+- More than 10,000 actors
+- Multi-region deployments
+- Automatic scaling requirements
+- Mission-critical reliability
+
+## Migration Between Backends
+
+Rivet provides tools to migrate between storage backends:
+
+```bash
+# Export from filesystem to PostgreSQL
+rivet-migrate \
+  --from filesystem --from-path /data \
+  --to postgres --to-url "postgresql://..."
+
+# Export from PostgreSQL to FoundationDB
+rivet-migrate \
+  --from postgres --from-url "postgresql://..." \
+  --to foundationdb --to-cluster /etc/fdb.cluster
+```
+
+  Always test migrations in a staging environment first. Migrations may require downtime.
+
+## Performance Comparison
+
+| Backend | Actors | Latency | Throughput | HA | Scaling |
+|---------|--------|---------|------------|-------|---------|
+| File System | < 1K | < 1ms | High | No | Manual |
+| PostgreSQL | < 100K | < 5ms | High | Yes | Vertical |
+| FoundationDB | Unlimited | < 10ms | Very High | Yes | Horizontal |
+
+## Next Steps
+
+- Configure [PubSub backends](/docs/self-hosting/reference/pubsub)
+- Set up [networking](/docs/self-hosting/reference/networking)
+- Learn about [monitoring options](/docs/self-hosting/reference/monitoring)
+## Networking
+
+# Networking
+
+Rivet provides sophisticated networking capabilities that are automatically configured for you, including proxying and secure tunneling.
+
+## Rivet Proxy
+
+The Rivet Proxy enables seamless communication with actors through HTTP/WebSocket endpoints.
+
+### How It Works
+
+1. **Client Request**: Client sends request to Rivet Proxy
+2. **Routing**: Proxy identifies target actor and runner
+3. **Forwarding**: Request forwarded to appropriate runner
+4. **Response**: Runner processes request and returns response
+
+```
+Client → Rivet Proxy → Runner → Actor
+         ↓
+    [Routing Logic]
+```
+
+### Automatic Configuration
+
+The proxy is automatically configured when you:
+- Start the Rivet Engine
+- Connect runners to the engine
+- Deploy actors
+
+No manual configuration required!
+
+### Request Routing
+
+Requests are routed based on:
+- Actor ID in the URL path
+- Custom routing rules
+- Load balancing policies
+- Geographic proximity (enterprise)
+
+Example URLs:
+```
+https://engine.example.com/actors//action
+wss://engine.example.com/actors//connect
+```
+
+## Tunneling
+
+Rivet includes built-in tunneling (similar to ngrok) for exposing actors securely without opening public ports.
+
+### How Tunneling Works
+
+1. **Runner Registration**: Runner connects to engine via outbound connection
+2. **Tunnel Creation**: Engine creates secure tunnel back to runner
+3. **Request Proxying**: Incoming requests routed through tunnel
+4. **No Inbound Ports**: Runner needs no open inbound ports
+
+```
+Internet → Engine (Public) → Tunnel → Runner (Private) → Actor
+```
+
+### Benefits
+
+- **Security**: No exposed ports on runner machines
+- **Simplicity**: Works behind NAT/firewalls
+- **Automatic**: No configuration needed
+- **Scalable**: Thousands of concurrent tunnels
+
+### Use Cases
+
+Perfect for:
+- Development machines behind NAT
+- Runners in private networks
+- Edge deployments
+- Kubernetes pods without ingress
+
+## Network Architecture
+
+### Single Node
+
+```
+┌─────────────────────────────┐
+│         Rivet Node          │
+│                             │
+│  ┌─────────┐  ┌──────────┐ │
+│  │ Engine  │──│  Runner  │ │
+│  └────┬────┘  └──────────┘ │
+│       │                     │
+│  ┌────▼────┐                │
+│  │  Proxy  │◄───────────────┼── Clients
+│  └─────────┘                │
+└─────────────────────────────┘
+```
+
+### Distributed
+
+```
+┌──────────────┐     ┌──────────────┐
+│ Engine Node  │     │ Runner Node  │
+│              │     │              │
+│  ┌────────┐  │     │  ┌────────┐  │
+│  │ Engine │◄─┼─────┼──│ Runner │  │
+│  └───┬────┘  │     │  └────────┘  │
+│      │       │     └──────────────┘
+│  ┌───▼────┐  │
+│  │ Proxy  │◄─┼───── Clients
+│  └────────┘  │
+└──────────────┘
+```
+
+## Port Configuration
+
+### Default Ports
+
+| Service | Port | Protocol | Purpose |
+|---------|------|----------|---------|
+| Engine API | 5032 | HTTP/WS | API and WebSocket connections |
+| Proxy | 5033 | HTTP/WS | Actor proxy endpoint |
+| Metrics | 9090 | HTTP | Prometheus metrics |
+| Health | 8080 | HTTP | Health checks |
+
+### Custom Port Configuration
+
+```bash
+# Change default ports
+RIVET_PORT=8080
+RIVET_PROXY_PORT=8081
+RIVET_METRICS_PORT=9091
+RIVET_HEALTH_PORT=8082
+```
+
+## Load Balancing
+
+### Built-in Load Balancing
+
+Rivet automatically load balances across:
+- Multiple runners for the same actor type
+- Geographic regions (enterprise)
+- Available resources
+
+### Load Balancing Strategies
+
+```bash
+# Round-robin (default)
+RIVET_LB_STRATEGY=round-robin
+
+# Least connections
+RIVET_LB_STRATEGY=least-conn
+
+# Resource-based
+RIVET_LB_STRATEGY=resource
+
+# Geographic (enterprise)
+RIVET_LB_STRATEGY=geo
+```
+
+## TLS/SSL Configuration
+
+### Enable TLS
+
+```bash
+RIVET_TLS_ENABLED=true
+RIVET_TLS_CERT=/path/to/cert.pem
+RIVET_TLS_KEY=/path/to/key.pem
+RIVET_TLS_CA=/path/to/ca.pem
+```
+
+### Automatic TLS (Let's Encrypt)
+
+```bash
+RIVET_TLS_AUTO=true
+RIVET_TLS_DOMAINS=engine.example.com,api.example.com
+RIVET_TLS_EMAIL=admin@example.com
+```
+
+### TLS Between Components
+
+```bash
+# Secure runner connections
+RIVET_INTERNAL_TLS=true
+RIVET_INTERNAL_TLS_VERIFY=true
+```
+
+## Firewall Configuration
+
+### Required Inbound Ports
+
+For the **Engine**:
+```bash
+# Allow API access
+ufw allow 5032/tcp
+
+# Allow proxy access
+ufw allow 5033/tcp
+
+# Allow metrics (internal only)
+ufw allow from 10.0.0.0/8 to any port 9090
+```
+
+For **Runners** (with tunneling):
+```bash
+# No inbound ports required!
+# Only outbound to engine:5032
+```
+
+### Network Policies (Kubernetes)
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rivet-engine
+spec:
+  podSelector:
+    matchLabels:
+      app: rivet-engine
+  ingress:
+  - ports:
+    - port: 5032
+    - port: 5033
+  egress:
+  -  # Allow all outbound
+```
+
+## DNS Configuration
+
+### Basic Setup
+
+```bash
+# A records
+engine.example.com → Engine IP
+*.actors.example.com → Engine IP
+
+# With CDN
+engine.example.com → CDN → Engine IP
+```
+
+### Multi-Region (Enterprise)
+
+```bash
+# GeoDNS routing
+us.engine.example.com → US Engine
+eu.engine.example.com → EU Engine
+ap.engine.example.com → AP Engine
+
+# Global endpoint with latency routing
+engine.example.com → Nearest Engine
+```
+
+## Network Optimization
+
+### TCP Tuning
+
+```bash
+# Increase connection limits
+sysctl -w net.core.somaxconn=65535
+sysctl -w net.ipv4.tcp_max_syn_backlog=65535
+
+# Enable TCP fast open
+sysctl -w net.ipv4.tcp_fastopen=3
+
+# Optimize for low latency
+sysctl -w net.ipv4.tcp_low_latency=1
+```
+
+### HTTP/2 and WebSocket
+
+```bash
+# Enable HTTP/2
+RIVET_HTTP2_ENABLED=true
+
+# WebSocket configuration
+RIVET_WS_MAX_FRAME_SIZE=1048576
+RIVET_WS_COMPRESSION=true
+```
+
+## Monitoring Network Health
+
+### Health Endpoints
+
+```bash
+# Engine health
+curl http://engine:8080/health
+
+# Proxy health
+curl http://engine:5033/health
+
+# Runner connectivity
+curl http://engine:5032/api/runners
+```
+
+### Network Metrics
+
+Monitor these key metrics:
+- Connection count
+- Request latency
+- Tunnel stability
+- Bandwidth usage
+- Error rates
+
+## Troubleshooting
+
+### Connection Issues
+
+1. **Check engine is reachable**:
+   ```bash
+   telnet engine.example.com 5032
+   ```
+
+2. **Verify DNS resolution**:
+   ```bash
+   nslookup engine.example.com
+   ```
+
+3. **Test with curl**:
+   ```bash
+   curl -v http://engine.example.com:5032/health
+   ```
+
+### Tunnel Problems
+
+1. **Check runner logs** for tunnel errors
+2. **Verify outbound connectivity** from runner
+3. **Ensure no proxy** interfering with WebSocket
+4. **Check firewall** allows outbound connections
+
+### Performance Issues
+
+1. **Monitor latency** between components
+2. **Check network** bandwidth utilization
+3. **Verify MTU** settings (especially for tunnels)
+4. **Enable compression** for large payloads
+
+  Rivet's networking is designed to work out-of-the-box in most environments. Manual configuration is only needed for advanced use cases.
+
+## Next Steps
+
+- Learn about [deployment platforms](/docs/self-hosting/platforms/docker-container)
+- Configure [monitoring and metrics](/docs/self-hosting/reference/monitoring)
+- Set up [high availability](/docs/self-hosting/reference/high-availability)
+## Overview
+
+# Self-Hosting Overview
+
+Rivet consists of three main components that work together to provide a complete actor orchestration platform:
+
+## Core Components
+
+### Rivet Engine
+
+The main service that orchestrates actors. The engine:
+- Manages actor lifecycle (creation, destruction, scaling)
+- Handles state persistence and replication
+- Routes messages between actors and clients
+- Provides the HTTP/WebSocket API for communication
+
+### RivetKit
+
+The JavaScript/TypeScript library that connects your application code to the Rivet Engine. RivetKit:
+- Provides the actor programming model
+- Handles serialization and communication with the engine
+- Offers client libraries for connecting to actors
+- Manages local development workflows
+
+### Runners
+
+Processes that execute your actor code. Runners:
+- Connect to the Rivet Engine to receive work
+- Execute actor instances in isolated environments
+- Handle actor lifecycle events
+- Report health and metrics back to the engine
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Client    │────▶│    Engine   │◀────│   Runner    │
+│  (RivetKit) │     │             │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │   Storage   │
+                    │  (DB/File)  │
+                    └─────────────┘
+```
+
+## Deployment Models
+
+### Single Node
+
+All components run on a single machine:
+- Engine, runners, and storage co-located
+- Suitable for development and small deployments
+- Simple to manage and operate
+
+### Distributed
+
+Components spread across multiple machines:
+- Engine runs on dedicated nodes
+- Runners distributed across worker nodes
+- Storage on separate database cluster
+- Suitable for production and high-availability
+
+## Storage Backends
+
+Rivet supports multiple storage backends:
+- **File System** - Default, suitable for single-node deployments
+- **PostgreSQL** - Recommended for production
+- **FoundationDB** - Enterprise option for massive scale
+
+## Next Steps
+
+- Learn how to [connect runners](/docs/self-hosting/reference/connecting)
+- Understand [configuration options](/docs/self-hosting/reference/configuration)
+- Choose a [database backend](/docs/self-hosting/reference/databases)
+## Supported PubSub
+
+# Supported PubSub Backends
+
+Rivet uses PubSub for real-time messaging between components. Choose a backend based on your deployment architecture and scale requirements.
+
+## PostgreSQL NOTIFY
+
+**Best for PostgreSQL-based deployments.**
+
+Uses PostgreSQL's built-in LISTEN/NOTIFY for pub/sub messaging.
+
+### Features
+- No additional infrastructure
+- Guaranteed delivery to connected clients
+- Simple and reliable
+- Good for small to medium scale
+
+### Configuration
+
+```bash
+RIVET_PUBSUB_TYPE=postgres
+RIVET_POSTGRES_URL="postgresql://user:password@localhost:5432/rivet"
+```
+
+### How It Works
+
+Rivet uses PostgreSQL channels for different message types:
+- `rivet_actor_events` - Actor lifecycle events
+- `rivet_state_updates` - State synchronization
+- `rivet_messages` - Inter-actor messaging
+
+### Limitations
+- Limited to 8KB payload size
+- Requires persistent connections
+- Performance degrades with many listeners
+- Single region only
+
+### Performance Tuning
+
+```sql
+-- Increase notification queue size
+ALTER SYSTEM SET max_notify_queue_pages = 8;
+```
+
+## NATS
+
+**Recommended for distributed deployments.**
+
+NATS is a high-performance messaging system designed for cloud-native applications.
+
+### Features
+- Extremely high throughput (millions of messages/sec)
+- Low latency (
+  Never use memory pubsub in production. It's only suitable for development and testing.
+
+## Choosing a PubSub Backend
+
+### Development
+
+Use **Memory** for:
+- Local development
+- Unit testing
+- Quick prototypes
+
+### Small Production
+
+Use **PostgreSQL NOTIFY** for:
+- When already using PostgreSQL for storage
+- Simple deployments
+- < 100 messages per second
+- Single datacenter
+
+### Large Production
+
+Use **NATS** for:
+- Distributed deployments
+- High message throughput
+- Multi-region setups
+- Microservices architecture
+
+## Performance Comparison
+
+| Backend | Throughput | Latency | HA | Persistence | Complexity |
+|---------|------------|---------|-------|-------------|------------|
+| Memory | Unlimited* | < 0.1ms | No | No | None |
+| PostgreSQL | 1K msg/s | < 5ms | Yes | Yes | Low |
+| NATS | 1M+ msg/s | < 1ms | Yes | Optional | Medium |
+
+*Limited by single process capacity
+
+## Message Patterns
+
+Rivet uses these PubSub patterns:
+
+### Topic-Based Routing
+
+```
+actors...events
+actors...messages
+system.health
+system.metrics
+```
+
+### Request-Reply
+
+For synchronous operations:
+```
+requests.
+replies.
+```
+
+### Broadcast
+
+For cluster-wide notifications:
+```
+cluster.nodes.join
+cluster.nodes.leave
+cluster.config.update
+```
+
+## Monitoring PubSub
+
+### PostgreSQL NOTIFY
+
+Monitor active listeners:
+```sql
+SELECT pid, state, query 
+FROM pg_stat_activity 
+WHERE query LIKE 'LISTEN%';
+```
+
+### NATS
+
+Use NATS monitoring endpoints:
+```bash
+# Server stats
+curl http://localhost:8222/varz
+
+# Connection info
+curl http://localhost:8222/connz
+
+# Route info (cluster)
+curl http://localhost:8222/routez
+```
+
+### Memory
+
+Enable debug logging:
+```bash
+RIVET_LOG_LEVEL=debug
+RIVET_LOG_PUBSUB=true
+```
+
+## Troubleshooting
+
+### Messages Not Delivered
+
+1. Check connectivity to PubSub backend
+2. Verify authentication credentials
+3. Ensure topics/channels exist
+4. Check for network partitions
+
+### High Latency
+
+1. Monitor PubSub server load
+2. Check network latency
+3. Consider upgrading to NATS
+4. Enable batching if supported
+
+### Message Loss
+
+1. Enable persistence (NATS JetStream)
+2. Increase buffer sizes
+3. Implement retry logic
+4. Monitor for disconnections
+
+## Next Steps
+
+- Configure [networking options](/docs/self-hosting/reference/networking)
+- Set up [monitoring](/docs/self-hosting/reference/monitoring)
+- Deploy to [production platforms](/docs/self-hosting/platforms/docker-container)

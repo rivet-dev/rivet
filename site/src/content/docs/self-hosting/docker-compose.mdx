@@ -1,0 +1,140 @@
+# Docker Compose
+
+## Quick Start
+
+Run with ephemeral storage:
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "6420:6420"
+    restart: unless-stopped
+```
+
+Run with persistent storage:
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "6420:6420"
+    volumes:
+      - rivet-data:/data
+    environment:
+      RIVET__FILE_SYSTEM__PATH: "/data"
+    restart: unless-stopped
+
+volumes:
+  rivet-data:
+```
+
+Start the services:
+
+```bash
+docker-compose up -d
+```
+
+## Configuration
+
+### Environment Variables
+
+Configure Rivet using environment variables in your compose file:
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "6420:6420"
+    volumes:
+      - rivet-data:/data
+    environment:
+      RIVET__POSTGRES__URL: "postgresql://postgres:password@localhost:5432/db"
+    restart: unless-stopped
+
+volumes:
+  rivet-data:
+```
+
+Or use a `.env` file:
+
+```txt
+# .env
+POSTGRES_PASSWORD=secure_password
+RIVET__POSTGRES__URL=postgresql://rivet:secure_password@postgres:5432/rivet
+```
+
+Reference in compose:
+
+```yaml
+services:
+  rivet-engine:
+    env_file:
+      - .env
+```
+
+### Config File
+
+Mount a JSON configuration file:
+
+```yaml
+services:
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "6420:6420"
+    volumes:
+      - ./rivet-config.json:/etc/rivet/config.json:ro
+      - rivet-data:/data
+    restart: unless-stopped
+
+volumes:
+  rivet-data:
+```
+
+Create the config file (`rivet-config.json`):
+
+```json
+{
+  "postgres": {
+    "url": "postgresql://rivet:password@postgres:5432/rivet"
+  }
+}
+```
+
+## Production Setup
+
+#### With PostgreSQL
+
+```yaml
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: rivet
+      POSTGRES_USER: rivet
+      POSTGRES_PASSWORD: rivet_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  rivet-engine:
+    image: rivetkit/engine:latest
+    ports:
+      - "6420:6420"
+    environment:
+      RIVET__POSTGRES__URL: postgresql://rivet:rivet_password@postgres:5432/rivet
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+```
+
+## Next Steps
+
+- See [Configuration](/docs/self-hosting/configuration) for all options

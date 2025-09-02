@@ -1,0 +1,27 @@
+# Installing Rivet Engine
+
+## Docker
+
+```bash
+docker run -p 6420:6420 rivetkit/engine
+```
+
+For more options:
+- [Docker Container](/docs/self-hosting/docker-container) - Persistent storage, configuration, production setup
+- [Docker Compose](/docs/self-hosting/docker-compose) - Multi-container deployments with PostgreSQL
+
+## Prebuilt Binaries
+
+<Info>
+	Prebuilt binaries coming soon
+</Info>
+
+## Build From Source
+
+```bash
+git clone https://github.com/rivet-gg/rivet.git
+cd rivet
+cargo build --release -p rivet-engine
+./target/release/rivet-engine
+```
+
