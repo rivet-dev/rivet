@@ -4,6 +4,7 @@
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
 		"start": "npx turbo watch build",
+		"build": "npx turbo build",
 		"test": "npx turbo test",
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",

@@ -5,8 +5,6 @@ import { unreachable, calculateBackoff } from "./utils.js";
 import { Tunnel } from "./tunnel.js";
 import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter.js";
 
-const WS = await importWebSocket();
-
 const KV_EXPIRE: number = 30_000;
 
 interface ActorInstance {
@@ -215,12 +213,12 @@ export class Runner {
 	}
 
 	// MARK: Start
-	start() {
+	async start() {
 		if (this.#started) throw new Error("Cannot call runner.start twice");
 		this.#started = true;
 
 		console.log("[RUNNER] Starting runner");
-		this.#openPegboardWebSocket();
+		await this.#openPegboardWebSocket();
 		this.#openTunnel();
 
 		process.on("SIGTERM", this.shutdown.bind(this, false, true));
@@ -378,7 +376,8 @@ export class Runner {
 	}
 
 	// MARK: Runner protocol
-	#openPegboardWebSocket() {
+	async #openPegboardWebSocket() {
+		const WS = await importWebSocket();
 		const ws = new WS(this.pegboardUrl, {
 			headers: {
 				"x-rivet-target": "runner-ws",
@@ -1177,13 +1176,13 @@ export class Runner {
 			`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
 		);
 
-		this.#reconnectTimeout = setTimeout(() => {
+		this.#reconnectTimeout = setTimeout(async () => {
 			if (!this.#shutdown) {
 				this.#reconnectAttempt++;
 				console.log(
 					`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
 				);
-				this.#openPegboardWebSocket();
+				await this.#openPegboardWebSocket();
 			}
 		}, delay);
 	}
