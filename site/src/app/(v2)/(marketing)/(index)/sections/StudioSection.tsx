@@ -90,7 +90,7 @@ export function StudioSection() {
 					{/* Header */}
 					<div className="max-w-7xl mx-auto relative z-20 pointer-events-auto">
 						<h2 className="max-w-lg text-4xl font-medium tracking-tight text-white">
-							Supercharged Local Development with the Studio
+							Supercharged Local Development with the Inspector
 						</h2>
 						<p className="max-w-lg mt-4 text-lg text-white/70">
 							Like Postman, but for all of your stateful serverless needs.
@@ -104,7 +104,7 @@ export function StudioSection() {
 								target="_blank"
 								rel="noopener noreferrer"
 							>
-								Visit The Studio
+								Visit The Inspector
 								<span className="transition-transform group-hover/link:translate-x-1">→</span>
 							</a>
 						</div>

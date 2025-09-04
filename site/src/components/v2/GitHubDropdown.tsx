@@ -128,7 +128,7 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 										)}
 									/>
 									<div className="flex flex-col items-start">
-										<span className="font-medium">Rivet</span>
+										<span className="font-medium">Engine</span>
 										<span
 											className={cn(
 												"text-xs",
@@ -137,7 +137,7 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 													: "text-muted-foreground",
 											)}
 										>
-											Stateful workload orchestrator
+											Orchestrator for RivetKit
 										</span>
 										<span
 											className={cn(

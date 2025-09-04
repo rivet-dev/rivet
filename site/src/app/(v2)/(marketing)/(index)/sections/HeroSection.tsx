@@ -16,7 +16,7 @@ export function HeroSection() {
 						<h1 className="hero-bg-exclude text-4xl md:text-5xl font-normal text-white leading-[1.3] sm:leading-[1.1] tracking-[-0.03em] max-w-full">
 							{/*Lightweight library for building modern backends*/}
 							{/*Library for building stateful applications and distributed systems*/}
-							The open-source alternative to Durable Objects
+							Build and scale stateful workloads
 						</h1>
 
 						<div className="h-5" />
