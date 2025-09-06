@@ -13,6 +13,7 @@ import vercelLogo from "../images/platforms/vercel.svg";
 import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
 import supabaseLogo from "../images/platforms/supabase.svg";
 import postgresLogo from "../images/platforms/postgres.svg";
+import railwayLogo from "../images/platforms/railway.svg";
 
 // Client images
 import reactLogo from "../images/clients/react.svg";
@@ -216,6 +217,13 @@ export function TechSection() {
 								status="coming-soon"
 							/>
 							<TechLink
+								href="https://railway.com/deploy/rivet"
+								name="Railway"
+								icon={railwayLogo}
+								alt="Railway"
+								external
+							/>
+							<TechLink
 								href="https://github.com/rivet-gg/rivetkit/issues/898"
 								name="AWS Lambda"
 								icon={awsLambdaLogo}
@@ -247,12 +255,10 @@ export function TechSection() {
 								alt="Redis"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/899"
+								href="/docs/actors/"
 								name="Postgres"
 								icon={postgresLogo}
 								alt="Postgres"
-								external
-								status="coming-soon"
 							/>
 							<TechLink
 								href="/docs/actors/quickstart/backend"
