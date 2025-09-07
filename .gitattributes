@@ -21,4 +21,5 @@ site/public/docs/**/*.md linguist-generated=true
 
 # I refuse to admit there's more TypeScript than Rust in this codebase
 frontend/** linguist-generated=true
+site/** linguist-generated=true
 
