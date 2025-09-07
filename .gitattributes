@@ -11,8 +11,8 @@
 
 # Prevent from counting in the language statistics
 out/** linguist-generated=true
-sdks/api/** linguist-generated=true
-sdks/api/fern/** linguist-generated=false
+sdks/** linguist-generated=true
+sdks/schema/** linguist-generated=false
 
 site/public/llms.txt linguist-generated=true
 site/public/llms-full.txt linguist-generated=true
