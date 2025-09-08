@@ -86,6 +86,13 @@ export type Region = {
 	name: string;
 };
 
+export type Namespace = {
+	id: string;
+	name: string;
+	displayName: string;
+	createdAt: string;
+};
+
 export * from "./actor";
 
 export type ActorStatus =

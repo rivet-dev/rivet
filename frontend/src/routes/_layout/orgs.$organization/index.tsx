@@ -10,7 +10,7 @@ import { projectsQueryOptions } from "@/queries/manager-cloud";
 export const Route = createFileRoute("/_layout/orgs/$organization/")({
 	component: match(__APP_TYPE__)
 		.with("cloud", () => RouteComponent)
-		.otherwise(() => {
+		.otherwise(() => () => {
 			throw notFound();
 		}),
 });
@@ -26,7 +26,7 @@ function RouteComponent() {
 		isFetchingNextPage,
 		isLoading,
 		refetch,
-	} = useInfiniteQuery(projectsQueryOptions({ orgId: organization }));
+	} = useInfiniteQuery(projectsQueryOptions({ organization }));
 
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">

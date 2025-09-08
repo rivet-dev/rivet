@@ -1,0 +1,23 @@
+.safeHover {
+    @apply static;
+}
+
+.safeHover:hover::before {
+	@apply absolute inset-0;
+	content: '';
+	clip-path: polygon(var(--safe-x, 0) var(--safe-y0, 0), 100% 0, 100% 100%, var(--safe-x, 0) var(--safe-y1, 0));
+	pointer-events: none;
+    z-index: 1;
+
+    animation: 0s .3s forwards delayed-pointer-events;
+}
+
+@keyframes delayed-pointer-events {
+    0% {
+        pointer-events: none
+    }
+
+    to {
+        pointer-events: auto
+    }
+}

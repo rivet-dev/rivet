@@ -24,6 +24,7 @@ import {
 } from "@/components/actors/manager-context";
 import { clerk } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
+import { queryClient } from "./global";
 
 const client = new RivetClient({
 	baseUrl: () => getConfig().apiUrl,
@@ -34,19 +35,54 @@ const cloudClient = new CloudRivetClient({
 	baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
 	environment: "",
 	token: async () => {
-		console.log(await clerk.session?.getToken());
 		return (await clerk.session?.getToken()) || "";
 	},
 });
 
-export { client as managerClient };
+export { cloudClient as managerCloudClient };
 
 export const createCloudManagerContext = ({
 	namespace,
+	project,
 }: {
 	namespace: string;
+	project: string;
 }) => {
 	const def = createDefaultManagerContext();
+
+	const namespacesQueryOptions = (project: string) => {
+		return infiniteQueryOptions({
+			queryKey: [project, "namespaces"],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async ({ pageParam, signal: abortSignal }) => {
+				const data = await cloudClient.namespaces.list(
+					project,
+					{
+						limit: ACTORS_PER_PAGE,
+						cursor: pageParam ?? undefined,
+					},
+					{ abortSignal },
+				);
+				return {
+					pagination: data.pagination,
+					namespaces: data.namespaces.map((ns) => ({
+						id: ns.id,
+						name: ns.name,
+						displayName: ns.displayName,
+						createdAt: ns.createdAt,
+					})),
+				};
+			},
+			getNextPageParam: (lastPage) => {
+				if (lastPage.namespaces.length < ACTORS_PER_PAGE) {
+					return undefined;
+				}
+				return lastPage.pagination.cursor;
+			},
+			select: (data) => data.pages.flatMap((page) => page.namespaces),
+		});
+	};
+
 	return {
 		...def,
 		features: {
@@ -169,9 +205,6 @@ export const createCloudManagerContext = ({
 
 					return {
 						...data,
-						pagination: {
-							cursor: data.pagination.cursor || null,
-						},
 						actors: data.actors.map((actor) =>
 							transformActor(actor),
 						),
@@ -245,19 +278,35 @@ export const createCloudManagerContext = ({
 				},
 			};
 		},
+		namespacesQueryOptions() {
+			return namespacesQueryOptions(project);
+		},
+		projectNamespacesQueryOptions(projectId) {
+			return namespacesQueryOptions(projectId);
+		},
+		createNamespaceMutationOptions(opts) {
+			return {
+				...opts,
+				mutationKey: [project, "namespaces"],
+				mutationFn: async (data) => {
+					return await cloudClient.namespaces.create(project, data);
+				},
+			};
+		},
 	} satisfies ManagerContext;
 };
 
 export const NamespaceNameId = z.string().brand();
 export type NamespaceNameId = z.infer<typeof NamespaceNameId>;
 
-export const projectsQueryOptions = ({ orgId }: { orgId: string }) => {
+export const projectsQueryOptions = (opts: { organization: string }) => {
 	return infiniteQueryOptions({
-		queryKey: [orgId, "projects"],
+		queryKey: [opts, "projects"],
 		initialPageParam: undefined as string | undefined,
 		queryFn: async ({ signal: abortSignal, pageParam }) => {
 			const data = await cloudClient.projects.list(
 				{
+					org: opts.organization,
 					cursor: pageParam ?? undefined,
 					limit: ACTORS_PER_PAGE,
 				},
@@ -274,6 +323,28 @@ export const projectsQueryOptions = ({ orgId }: { orgId: string }) => {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.projects),
+	});
+};
+
+export const projectQueryOptions = (opts: { project: string }) => {
+	return queryOptions({
+		queryKey: ["project", opts.project],
+		enabled: !!opts.project,
+		queryFn: async ({ signal: abortSignal }) => {
+			const data = await cloudClient.projects.get(opts.project, {
+				abortSignal,
+			});
+			return data;
+		},
+	});
+};
+
+export const organizationQueryOptions = (opts: { org: string }) => {
+	return queryOptions({
+		queryKey: ["organization", opts.org],
+		queryFn: async () => {
+			return clerk.getOrganization(opts.org);
+		},
 	});
 };
 
@@ -351,42 +422,26 @@ export const runnerNamesQueryOptions = (opts: {
 	});
 };
 
-export const namespacesQueryOptions = () => {
-	return infiniteQueryOptions({
-		queryKey: ["namespaces"],
-		initialPageParam: undefined as string | undefined,
-		queryFn: async ({ pageParam, signal: abortSignal }) => {
-			const data = await client.namespaces.list(
-				{
-					limit: ACTORS_PER_PAGE,
-					cursor: pageParam ?? undefined,
-				},
-				{ abortSignal },
-			);
-			return data;
-		},
-		getNextPageParam: (lastPage) => {
-			if (lastPage.namespaces.length < ACTORS_PER_PAGE) {
-				return undefined;
-			}
-			return lastPage.pagination.cursor;
-		},
-		select: (data) => data.pages.flatMap((page) => page.namespaces),
-	});
-};
-
-export const namespaceQueryOptions = (
-	namespace: NamespaceNameId | undefined,
-) => {
+export const namespaceQueryOptions = ({
+	project,
+	namespace,
+}: {
+	project: string;
+	namespace: string;
+}) => {
 	return queryOptions({
-		queryKey: ["namespace", namespace],
+		queryKey: [project, "namespace", namespace],
 		enabled: !!namespace,
 		queryFn: namespace
 			? async ({ signal: abortSignal }) => {
-					const data = await client.namespaces.get(namespace, {
-						abortSignal,
-					});
-					return data.namespace;
+					const data = await cloudClient.namespaces.get(
+						project,
+						namespace,
+						{
+							abortSignal,
+						},
+					);
+					return data;
 				}
 			: skipToken,
 	});

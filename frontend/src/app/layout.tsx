@@ -1,4 +1,4 @@
-import { OrganizationSwitcher, useClerk } from "@clerk/clerk-react";
+import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faLink,
@@ -7,12 +7,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import {
-	Link,
-	useMatch,
-	useMatchRoute,
-	useNavigate,
-} from "@tanstack/react-router";
+import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
 import {
 	type ComponentProps,
 	createContext,
@@ -28,6 +23,8 @@ import {
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { match } from "ts-pattern";
 import {
+	Avatar,
+	AvatarImage,
 	Button,
 	type ButtonProps,
 	cn,
@@ -44,6 +41,7 @@ import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import type { NamespaceNameId } from "@/queries/manager-engine";
 import { ActorBuildsList } from "./actor-builds-list";
+import { ContextSwitcher } from "./context-switcher";
 import { useInspectorCredentials } from "./credentials-context";
 import { NamespaceSelect } from "./namespace-select";
 
@@ -176,6 +174,9 @@ const Sidebar = ({
 					</div>
 					<div>
 						<div className="border-t p-2 flex flex-col gap-[1px] text-sm">
+							{match(__APP_TYPE__)
+								.with("cloud", () => <CloudSidebarFooter />)
+								.otherwise(() => null)}
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"
@@ -450,43 +451,97 @@ function ConnectionStatus(): ReactNode {
 }
 
 function CloudSidebar(): ReactNode {
-	const match = useMatch({
-		from: "/_layout/orgs/$organization/",
-		shouldThrow: false,
-	});
-
-	const clerk = useClerk();
 	return (
 		<>
-			<OrganizationSwitcher />
+			<ContextSwitcher />
 
 			<ScrollArea>
-				<div className="flex gap-1.5 flex-col">
-					<HeaderLink
-						to="/orgs/$organization"
-						className="font-normal"
-						params={match?.params}
-					>
-						Projects
-					</HeaderLink>
-					<HeaderButton
-						onClick={() => {
-							clerk.openUserProfile({
-								__experimental_startPath: "/billing",
-							});
-						}}
-					>
-						Billing
-					</HeaderButton>
-					<HeaderButton
-						onClick={() => {
-							clerk.openUserProfile();
-						}}
-					>
-						Settings
-					</HeaderButton>
-				</div>
+				<CloudSidebarContent />
 			</ScrollArea>
 		</>
+	);
+}
+
+function CloudSidebarContent() {
+	const match = useMatchRoute();
+
+	const clerk = useClerk();
+
+	const matchNamespace = match({
+		to: "/orgs/$organization/projects/$project/ns/$namespace",
+	});
+
+	if (matchNamespace) {
+		return (
+			<div className="flex gap-1.5 flex-col">
+				<HeaderLink
+					to="/orgs/$organization/projects/$project/ns/$namespace/connect"
+					className="font-normal"
+					params={matchNamespace}
+				>
+					Connect
+				</HeaderLink>
+				<div className="w-full">
+					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors">
+						Instances
+					</span>
+					<ActorBuildsList />
+				</div>
+			</div>
+		);
+	}
+
+	const matchOrganization = match({
+		to: "/orgs/$organization",
+	});
+
+	if (matchOrganization) {
+		return (
+			<div className="flex gap-1.5 flex-col">
+				<HeaderLink
+					to="/orgs/$organization"
+					className="font-normal"
+					params={matchOrganization}
+				>
+					Projects
+				</HeaderLink>
+				<HeaderButton
+					onClick={() => {
+						clerk.openOrganizationProfile({
+							__experimental_startPath: "/organization-billing",
+						});
+					}}
+				>
+					Billing
+				</HeaderButton>
+				<HeaderButton
+					onClick={() => {
+						clerk.openOrganizationProfile();
+					}}
+				>
+					Settings
+				</HeaderButton>
+			</div>
+		);
+	}
+}
+
+function CloudSidebarFooter() {
+	const clerk = useClerk();
+
+	return (
+		<Button
+			variant="ghost"
+			size="xs"
+			className="text-muted-foreground justify-start py-1 h-auto gap-2"
+			onClick={() => {
+				clerk.openUserProfile();
+			}}
+		>
+			<Avatar className="size-5">
+				<AvatarImage src={clerk.user?.imageUrl} />
+			</Avatar>
+			{clerk.user?.fullName}
+		</Button>
 	);
 }

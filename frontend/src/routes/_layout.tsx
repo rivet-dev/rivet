@@ -11,6 +11,7 @@ import {
 	Outlet,
 	useMatch,
 	useNavigate,
+	useParams,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { C } from "node_modules/@clerk/clerk-react/dist/useAuth-BVxIa9U7.mjs";
@@ -49,6 +50,7 @@ import { RootLayoutContextProvider } from "@/components/actors/root-layout-conte
 import { ConnectionForm } from "@/components/connection-form";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { docsLinks } from "@/content/data";
+import { createCloudManagerContext } from "@/queries/manager-cloud";
 import {
 	createEngineManagerContext,
 	type NamespaceNameId,
@@ -410,26 +412,26 @@ function CloudRouteComponent() {
 				<SignInButton />
 			</SignedOut>
 			<SignedIn>
-				<NavigateToLatestOrganization />
-				<RouteComponent />
+				<CloudContextContent />
 			</SignedIn>
-			<CloudModals />
 		</>
 	);
 }
 
-function NavigateToLatestOrganization() {
-	const { isLoaded, organization } = useOrganization();
-
-	if (!isLoaded || !organization) {
-		return null;
-	}
+function CloudContextContent() {
+	const { namespace, project } = useParams({ strict: false });
+	const managerContext = useMemo(() => {
+		return createCloudManagerContext({
+			project: project || "",
+			namespace: namespace || "",
+		});
+	}, [namespace, project]);
 
 	return (
-		<Navigate
-			to="/orgs/$organization"
-			params={{ organization: organization.id }}
-		/>
+		<ManagerProvider value={managerContext}>
+			<RouteComponent />
+			<CloudModals />
+		</ManagerProvider>
 	);
 }
 
@@ -438,11 +440,29 @@ function CloudModals() {
 	const search = Route.useSearch();
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
+	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+
 	return (
 		<>
 			<CreateProjectDialog
 				dialogProps={{
 					open: search.modal === "create-project",
+					onOpenChange: (value) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<CreateNamespaceDialog
+				dialogProps={{
+					open: search.modal === "create-ns",
 					onOpenChange: (value) => {
 						if (!value) {
 							navigate({
