@@ -4,7 +4,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming};
+use hyper::{body::Incoming as BodyIncoming, Request, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
 use pegboard::pubsub_subjects::{
 	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
@@ -16,22 +16,21 @@ use rivet_guard_core::{
 	request_context::RequestContext,
 };
 use rivet_tunnel_protocol::{
-	MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
+	versioned, MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
 	ToServerWebSocketClose, ToServerWebSocketMessage, ToServerWebSocketOpen, TunnelMessage,
-	versioned,
 };
 use rivet_util::serde::HashableMap;
 use std::result::Result::Ok as ResultOk;
 use std::{
 	collections::HashMap,
 	sync::{
-		Arc,
 		atomic::{AtomicU64, Ordering},
+		Arc,
 	},
 	time::Duration,
 };
 use tokio::{
-	sync::{Mutex, oneshot},
+	sync::{oneshot, Mutex},
 	time::timeout,
 };
 use tokio_tungstenite::tungstenite::Message;
@@ -508,7 +507,7 @@ impl PegboardGateway {
 fn is_tunnel_closed_error(err: &anyhow::Error) -> bool {
 	if let Some(err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>())
 		&& err.group() == "ups"
-		&& (err.code() == "no_responders" || err.code() == "request_timeout")
+		&& err.code() == "request_timeout"
 	{
 		true
 	} else {

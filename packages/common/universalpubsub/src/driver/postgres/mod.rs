@@ -11,7 +11,6 @@ use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod
 use futures_util::future::poll_fn;
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 use tokio_postgres::{AsyncMessage, NoTls};
 use tracing::Instrument;
@@ -167,10 +166,6 @@ impl PubSubDriver for PostgresDriver {
 			None
 		};
 
-		// Get the lock ID for this subject
-		let lock_id = subject_to_lock_id(subject);
-		tracing::debug!(%subject, ?lock_id, "calculated advisory lock id");
-
 		// Convert subject to base64 hash string because Postgres identifiers can only be 63 bytes
 		let mut hasher = DefaultHasher::new();
 		subject.hash(&mut hasher);
@@ -189,30 +184,14 @@ impl PubSubDriver for PostgresDriver {
 			.tx
 			.subscribe();
 
-		let lock_sql = format!("SELECT pg_try_advisory_lock_shared({})", lock_id);
-		let lock_res = self.client.query_one(&lock_sql, &[]).await?;
-		let lock_acquired = lock_res.get::<_, bool>(0);
-		ensure!(lock_acquired, "Failed to acquire advisory lock for subject");
-
 		let sql = format!("LISTEN {}", quote_ident(&subject_hash));
-		let listen_res = self.client.batch_execute(&sql).await;
-
-		if listen_res.is_err() {
-			// Release lock on error
-			let _ = self
-				.client
-				.execute("SELECT pg_advisory_unlock_shared($1)", &[&lock_id])
-				.await;
-		}
-
-		listen_res?;
+		self.client.batch_execute(&sql).await?;
 
 		tracing::debug!(%subject, "subscription established successfully");
 		Ok(Box::new(PostgresSubscriber {
 			driver: self.clone(),
 			rx,
 			local_request_rx,
-			lock_id,
 			subject: subject.to_string(),
 		}))
 	}
@@ -323,48 +302,8 @@ impl PubSubDriver for PostgresDriver {
 			}
 		}
 
-		// Normal path: check for listeners via database
-		tracing::debug!(%subject, "checking for remote listeners via database");
-		// Get a connection from the pool for checking listeners
-		let conn = self
-			.pool
-			.get()
-			.await
-			.context("failed to get connection from pool")?;
-
-		// First check if there are any listeners for this subject
-		let lock_id = subject_to_lock_id(subject);
-
-		// Check if there are any shared advisory locks (listeners) for this subject
-		// Query pg_locks directly to avoid lock acquisition overhead
-		// Split the 64-bit lock_id into two 32-bit integers for pg_locks query
-		let classid = (lock_id >> 32) as i32;
-		let objid = (lock_id & 0xFFFFFFFF) as i32;
-
-		let check_sql = "
-            SELECT EXISTS (
-                SELECT 1 FROM pg_locks 
-                WHERE locktype = 'advisory' 
-                AND classid = $1::int
-                AND objid = $2::int
-                AND mode = 'ShareLock'
-            ) AS has_listeners
-        ";
-		let row = conn.query_one(check_sql, &[&classid, &objid]).await?;
-		let has_listeners: bool = row.get(0);
-		tracing::debug!(
-			%subject,
-			?has_listeners,
-			"checked for listeners in database"
-		);
-
-		if !has_listeners {
-			tracing::warn!(%subject, "no listeners found for subject");
-			return Err(errors::Ups::NoResponders.build().into());
-		}
-
-		// Drop the pool connection before creating new dedicated connections
-		drop(conn);
+		// Normal path: use database for request/response
+		tracing::debug!(%subject, "using database path for request");
 
 		// Create a temporary reply subject and a dedicated listener connection
 		let reply_subject = format!("_INBOX.{}", uuid::Uuid::new_v4());
@@ -489,13 +428,12 @@ pub struct PostgresSubscriber {
 	driver: PostgresDriver,
 	rx: tokio::sync::broadcast::Receiver<(Vec<u8>, Option<String>)>,
 	local_request_rx: Option<tokio::sync::broadcast::Receiver<LocalRequest>>,
-	lock_id: i64,
 	subject: String,
 }
 
 #[async_trait]
 impl SubscriberDriver for PostgresSubscriber {
-	#[tracing::instrument(skip(self), fields(subject = %self.subject, lock_id = %self.lock_id))]
+	#[tracing::instrument(skip(self), fields(subject = %self.subject))]
 	async fn next(&mut self) -> Result<NextOutput> {
 		tracing::debug!("waiting for message");
 
@@ -543,7 +481,7 @@ impl SubscriberDriver for PostgresSubscriber {
 							}))
 						}
 						std::result::Result::Err(_) => {
-							tracing::debug!(?self.subject, ?self.lock_id, "subscription closed");
+							tracing::debug!(?self.subject, "subscription closed");
 
 							Ok(NextOutput::Unsubscribed)
 						}
@@ -574,14 +512,13 @@ impl SubscriberDriver for PostgresSubscriber {
 
 impl Drop for PostgresSubscriber {
 	fn drop(&mut self) {
-		tracing::debug!(subject = %self.subject, ?self.lock_id, "dropping postgres subscriber");
+		tracing::debug!(subject = %self.subject, "dropping postgres subscriber");
 
-		let lock_id = self.lock_id;
 		let driver = self.driver.clone();
 		let subject = self.subject.clone();
 		let has_local_rx = self.local_request_rx.is_some();
 
-		// Spawn a task to release the lock
+		// Spawn a task to clean up
 		tokio::spawn(async move {
 			// Clean up local subscription registration if memory optimization is enabled
 			if has_local_rx {
@@ -610,11 +547,6 @@ impl Drop for PostgresSubscriber {
 					}
 				}
 			}
-
-			let _ = driver
-				.client
-				.execute("SELECT pg_advisory_unlock_shared($1)", &[&lock_id])
-				.await;
 		});
 	}
 }
@@ -623,18 +555,4 @@ fn quote_ident(subject: &str) -> String {
 	// Double-quote and escape any embedded quotes for safe identifier usage
 	let escaped = subject.replace('"', "\"\"");
 	format!("\"{}\"", escaped)
-}
-
-/// Convert a subject name to a PostgreSQL advisory lock ID
-/// Uses SHA256 hash truncated to 63 bits to avoid collisions
-fn subject_to_lock_id(subject: &str) -> i64 {
-	let mut hasher = Sha256::new();
-	hasher.update(subject.as_bytes());
-	let hash = hasher.finalize();
-
-	// Take first 8 bytes and convert to i64, using only 63 bits to avoid sign issues
-	let mut bytes = [0u8; 8];
-	bytes.copy_from_slice(&hash[0..8]);
-	let hash_u64 = u64::from_be_bytes(bytes);
-	(hash_u64 & 0x7FFFFFFFFFFFFFFF) as i64
 }

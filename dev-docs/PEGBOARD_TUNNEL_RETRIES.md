@@ -7,7 +7,7 @@ This document explains how retries are coordinated between Guard and Pegboard-ba
 ## HTTP
 
 - Signal: A retryable transient tunnel failure is signaled by returning an HTTP 503 with the `X-RIVET-ERROR` header set.
-  - Example (Pegboard Gateway): on tunnel closed (e.g., UPS `no_responders` or `request_timeout`), the gateway replies with `503` and `X-RIVET-ERROR: pegboard_gateway.tunnel_closed`.
+  - Example (Pegboard Gateway): on tunnel closed (e.g., UPS `request_timeout`), the gateway replies with `503` and `X-RIVET-ERROR: pegboard_gateway.tunnel_closed`.
 
 - Guard behavior
   - Guard considers a response retryable if `status == 503` and the `X-RIVET-ERROR` header is present.
@@ -37,7 +37,7 @@ This section explains how WebSocket retries are coordinated between Guard and Pe
   - Handler contract:
     - Do not await the client websocket yet.
     - Return the untouched `HyperWebsocket` in the error tuple so Guard still owns it: `Err((client_ws, err))`.
-    - The outer wrapper maps tunnel-closed UPS errors (e.g., `ups.no_responders`, `ups.request_timeout`) to `WebSocketServiceUnavailable`.
+    - The outer wrapper maps tunnel-closed UPS errors (e.g., `ups.request_timeout`) to `WebSocketServiceUnavailable`.
   - Guard reaction:
     - Treats `WebSocketServiceUnavailable` as retryable.
     - Re-resolves the route with ignore-cache=true, using middleware-config retry/backoff.
@@ -65,7 +65,7 @@ This section explains how WebSocket retries are coordinated between Guard and Pe
   - Return the socket in the error tuple: `Err((client_ws, err))`.
 
 - Map tunnel-closed errors at the wrapper:
-  - In the outer `handle_websocket` wrapper, detect tunnel-closed (e.g., `ups.no_responders`, `ups.request_timeout`) and map to `WebSocketServiceUnavailable`.
+  - In the outer `handle_websocket` wrapper, detect tunnel-closed (e.g., `ups.request_timeout`) and map to `WebSocketServiceUnavailable`.
   - `handle_websocket_inner` should return raw errors; do not construct `WebSocketServiceUnavailable` inside the inner function.
 
 - Use `ups.request` for all tunnel operations (open, messages, close):

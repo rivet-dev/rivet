@@ -9,10 +9,10 @@ use gas::prelude::*;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming as BodyIncoming};
 use hyper::{Request, Response, StatusCode};
-use hyper_tungstenite::tungstenite::Utf8Bytes as WsUtf8Bytes;
-use hyper_tungstenite::tungstenite::protocol::frame::CloseFrame as WsCloseFrame;
 use hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode as WsCloseCode;
-use hyper_tungstenite::{HyperWebsocket, tungstenite::Message as WsMessage};
+use hyper_tungstenite::tungstenite::protocol::frame::CloseFrame as WsCloseFrame;
+use hyper_tungstenite::tungstenite::Utf8Bytes as WsUtf8Bytes;
+use hyper_tungstenite::{tungstenite::Message as WsMessage, HyperWebsocket};
 use pegboard::pubsub_subjects::{
 	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
 };
@@ -20,7 +20,7 @@ use rivet_guard_core::custom_serve::CustomServeTrait;
 use rivet_guard_core::proxy_service::ResponseBody;
 use rivet_guard_core::request_context::RequestContext;
 use rivet_pools::Pools;
-use rivet_tunnel_protocol::{MessageBody, TunnelMessage, versioned};
+use rivet_tunnel_protocol::{versioned, MessageBody, TunnelMessage};
 use rivet_util::Id;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -690,7 +690,7 @@ fn is_tunnel_closed_error(err: &anyhow::Error) -> bool {
 		.chain()
 		.find_map(|x| x.downcast_ref::<rivet_error::RivetError>())
 		&& err.group() == "ups"
-		&& (err.code() == "no_responders" || err.code() == "request_timeout")
+		&& err.code() == "request_timeout"
 	{
 		true
 	} else {

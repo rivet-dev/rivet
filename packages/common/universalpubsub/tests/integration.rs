@@ -137,10 +137,6 @@ async fn test_inner(pubsub: &PubSub) {
 	let start = Instant::now();
 	test_request_timeout(&pubsub).await.unwrap();
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_request_timeout completed");
-
-	let start = Instant::now();
-	test_no_responders(&pubsub).await.unwrap();
-	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_no_responders completed");
 }
 
 async fn test_basic_pub_sub(pubsub: &PubSub) -> Result<()> {
@@ -329,27 +325,6 @@ async fn test_request_timeout(pubsub: &PubSub) -> Result<()> {
 		.expect("expected errors::Ups");
 	assert_eq!(err.group(), "ups");
 	assert_eq!(err.code(), "request_timeout");
-
-	Ok(())
-}
-
-async fn test_no_responders(pubsub: &PubSub) -> Result<()> {
-	tracing::info!("testing no responders error");
-
-	let result = pubsub
-		.request("test.no_responders", b"no one listening")
-		.await;
-	assert!(
-		result.is_err(),
-		"Expected request to fail with no responders"
-	);
-
-	let err = result.err().unwrap();
-	let err = err
-		.downcast_ref::<RivetError>()
-		.expect("expected errors::Ups");
-	assert_eq!(err.group(), "ups");
-	assert_eq!(err.code(), "no_responders");
 
 	Ok(())
 }

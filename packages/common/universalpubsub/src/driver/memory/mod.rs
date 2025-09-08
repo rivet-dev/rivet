@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::*;
 use async_trait::async_trait;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
@@ -93,7 +93,10 @@ impl PubSubDriver for MemoryDriver {
 					.get(&subject_with_channel)
 					.map_or(true, |subs| subs.is_empty())
 			{
-				return Err(crate::errors::Ups::NoResponders.build().into());
+				// HACK: There is no native NoResponders error, so we return
+				// RequestTimeout. This is equivalent since the request would time out
+				// if there are no responders.
+				return Err(crate::errors::Ups::RequestTimeout.build().into());
 			}
 		}
 

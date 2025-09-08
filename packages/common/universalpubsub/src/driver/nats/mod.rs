@@ -67,7 +67,10 @@ impl PubSubDriver for NatsDriver {
 					std::result::Result::Ok(msg) => msg,
 					std::result::Result::Err(err) => match err.kind() {
 						RequestErrorKind::NoResponders => {
-							return Err(errors::Ups::NoResponders.build().into());
+							// HACK: There is no native NoResponders error, so we return
+							// RequestTimeout. This is equivalent since the request would time out
+							// if there are no responders.
+							return Err(errors::Ups::RequestTimeout.build().into());
 						}
 						RequestErrorKind::TimedOut => {
 							return Err(errors::Ups::RequestTimeout.build().into());
@@ -84,7 +87,8 @@ impl PubSubDriver for NatsDriver {
 				std::result::Result::Ok(msg) => msg,
 				std::result::Result::Err(err) => match err.kind() {
 					RequestErrorKind::NoResponders => {
-						return Err(errors::Ups::NoResponders.build().into());
+						// HACK: See above
+						return Err(errors::Ups::RequestTimeout.build().into());
 					}
 					RequestErrorKind::TimedOut => {
 						return Err(errors::Ups::RequestTimeout.build().into());
