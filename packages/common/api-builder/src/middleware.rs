@@ -128,26 +128,48 @@ pub async fn http_logging_middleware(
 
 		// Log based on status
 		if status.is_server_error() {
+			let group = error.as_ref().map_or("-", |x| &x.group);
+			let code = error.as_ref().map_or("-", |x| &x.code);
+			let meta = error.as_ref().and_then(|x| x.metadata.as_ref()).unwrap_or(&serde_json::Value::Null);
+			let internal = error.as_ref().and_then(|x| x.internal.as_ref()).map_or("-", |x| x.as_ref());
+
 			tracing::error!(
-				status = ?status_code,
-				group = %error.as_ref().map_or("-", |x| &x.group),
-				code = ?error.as_ref().map_or("-", |x| &x.code),
-				meta = %error.as_ref().and_then(|x| x.metadata.as_ref()).unwrap_or(&serde_json::Value::Null),
-				internal = %error.as_ref().and_then(|x| x.internal.as_ref()).map_or("-", |x| x.as_ref()),
+				status=?status_code,
+				%group,
+				%code,
+				%meta,
+				%internal,
 				"http server error"
 			);
+
+			sentry::with_scope(
+				|scope| {
+					scope.set_tag("status", status_code);
+					scope.set_tag("group", group);
+					scope.set_tag("code", code);
+					scope.set_tag("meta", meta);
+					scope.set_tag("internal", internal);
+				},
+				|| {
+					sentry::capture_message(&format!("{group}.{code}"), sentry::Level::Error);
+				},
+			);
 		} else if status.is_client_error() {
+			let group = error.as_ref().map_or("-", |x| &x.group);
+			let code = error.as_ref().map_or("-", |x| &x.code);
+			let meta = error.as_ref().and_then(|x| x.metadata.as_ref()).unwrap_or(&serde_json::Value::Null);
+
 			tracing::info!(
-				status = ?status_code,
-				group = %error.as_ref().map_or("-", |x| &x.group),
-				code = %error.as_ref().map_or("-", |x| &x.code),
-				meta = %error.as_ref().and_then(|x| x.metadata.as_ref()).unwrap_or(&serde_json::Value::Null),
+				status=?status_code,
+				%group,
+				%code,
+				%meta,
 				"http client error"
 			);
 		} else if status.is_redirection() {
-			tracing::debug!(status = ?status_code, "http redirection");
+			tracing::debug!(status=?status_code, "http redirection");
 		} else if status.is_informational() {
-			tracing::debug!(status = ?status_code, "http informational");
+			tracing::debug!(status=?status_code, "http informational");
 		}
 
 		let duration = start.elapsed().as_secs_f64();

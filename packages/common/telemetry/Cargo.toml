@@ -1,0 +1,13 @@
+[package]
+name = "rivet-telemetry"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rivet-config.workspace = true
+sentry.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

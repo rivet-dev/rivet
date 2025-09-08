@@ -14,6 +14,7 @@ pub mod pegboard;
 pub mod pegboard_gateway;
 pub mod pegboard_tunnel;
 pub mod pubsub;
+pub mod telemetry;
 pub mod topology;
 pub mod vector;
 
@@ -28,6 +29,7 @@ pub use pegboard::*;
 pub use pegboard_gateway::*;
 pub use pegboard_tunnel::*;
 pub use pubsub::PubSub;
+pub use telemetry::*;
 pub use topology::*;
 pub use vector::*;
 
@@ -100,6 +102,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub vector_http: Option<VectorHttp>,
+
+	#[serde(default)]
+	pub telemetry: Telemetry,
 }
 
 impl Default for Root {
@@ -118,6 +123,7 @@ impl Default for Root {
 			cache: None,
 			clickhouse: None,
 			vector_http: None,
+			telemetry: Default::default(),
 		}
 	}
 }

@@ -91,6 +91,7 @@ impl<'a> ListenCtx<'a> {
 				KeyValue::new("signal_name", signal.signal_name.clone()),
 			],
 		);
+
 		if recv_lag > 3.0 {
 			// We print an error here so the trace of this workflow does not get dropped
 			tracing::error!(

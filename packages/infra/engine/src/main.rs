@@ -27,9 +27,19 @@ async fn main_inner() -> Result<()> {
 	let config = rivet_config::Config::load(&cli.config).await?;
 	tracing::info!(config = ?*config, "loaded config");
 
+	// Initialize telemetry (does nothing if telemetry is disabled)
+	let _guard = rivet_telemetry::init(&config);
+
 	// Build run config
-	let run_config = Arc::new(run_config::config(config.clone())?);
+	let run_config = Arc::new(run_config::config(config.clone()).inspect_err(|err| {
+		rivet_telemetry::capture_error(err);
+	})?);
 
 	// Execute command
-	cli.command.execute(config, run_config).await
+	cli.command
+		.execute(config, run_config)
+		.await
+		.inspect_err(|err| {
+			rivet_telemetry::capture_error(err);
+		})
 }
