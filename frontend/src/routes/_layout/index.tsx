@@ -1,12 +1,17 @@
+import { useOrganization } from "@clerk/clerk-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { match } from "ts-pattern";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components";
 import { namespacesQueryOptions } from "@/queries/manager-engine";
 import { RouteComponent as NamespaceRouteComponent } from "./ns.$namespace/index";
 
 export const Route = createFileRoute("/_layout/")({
-	component:
-		__APP_TYPE__ === "engine" ? RouteComponent : NamespaceRouteComponent,
+	component: match(__APP_TYPE__)
+		.with("engine", () => RouteComponent)
+		.with("inspector", () => NamespaceRouteComponent)
+		.with("cloud", () => () => CloudRouteComponent)
+		.exhaustive(),
 });
 
 function RouteComponent() {
@@ -34,5 +39,20 @@ function RouteComponent() {
 				</CardContent>
 			</Card>
 		</div>
+	);
+}
+
+function CloudRouteComponent() {
+	const { isLoaded, organization } = useOrganization();
+
+	if (!isLoaded || !organization) {
+		return null;
+	}
+
+	return (
+		<Navigate
+			to="/orgs/$organization"
+			params={{ organization: organization.id }}
+		/>
 	);
 }

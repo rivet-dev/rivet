@@ -29,10 +29,8 @@ export function HeaderLink({
 				icon ? <Icon className={cn("size-5")} icon={icon} /> : undefined
 			}
 		>
-			<Link to={props.to}>
-				{children}
-				<div className="absolute inset-x-0 -bottom-2 z-[1] h-[2px] rounded-sm bg-primary group-data-active:block hidden" />
-			</Link>
+			{children}
+			<div className="absolute inset-x-0 -bottom-2 z-[1] h-[2px] rounded-sm bg-primary group-data-active:block hidden" />
 		</Button>
 	);
 }

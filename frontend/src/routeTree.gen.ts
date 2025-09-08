@@ -13,8 +13,10 @@ import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutNamespacesRouteImport } from './routes/_layout/namespaces'
 import { Route as LayoutNsNamespaceRouteImport } from './routes/_layout/ns.$namespace'
+import { Route as LayoutOrgsOrganizationIndexRouteImport } from './routes/_layout/orgs.$organization/index'
 import { Route as LayoutNsNamespaceIndexRouteImport } from './routes/_layout/ns.$namespace/index'
 import { Route as LayoutNsNamespaceRunnersRouteImport } from './routes/_layout/ns.$namespace/runners'
+import { Route as LayoutOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_layout/orgs.$organization/projects.$project/index'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -35,6 +37,12 @@ const LayoutNsNamespaceRoute = LayoutNsNamespaceRouteImport.update({
   path: '/ns/$namespace',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutOrgsOrganizationIndexRoute =
+  LayoutOrgsOrganizationIndexRouteImport.update({
+    id: '/orgs/$organization/',
+    path: '/orgs/$organization/',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 const LayoutNsNamespaceIndexRoute = LayoutNsNamespaceIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -46,6 +54,12 @@ const LayoutNsNamespaceRunnersRoute =
     path: '/runners',
     getParentRoute: () => LayoutNsNamespaceRoute,
   } as any)
+const LayoutOrgsOrganizationProjectsProjectIndexRoute =
+  LayoutOrgsOrganizationProjectsProjectIndexRouteImport.update({
+    id: '/orgs/$organization/projects/$project/',
+    path: '/orgs/$organization/projects/$project/',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/namespaces': typeof LayoutNamespacesRoute
@@ -53,12 +67,16 @@ export interface FileRoutesByFullPath {
   '/ns/$namespace': typeof LayoutNsNamespaceRouteWithChildren
   '/ns/$namespace/runners': typeof LayoutNsNamespaceRunnersRoute
   '/ns/$namespace/': typeof LayoutNsNamespaceIndexRoute
+  '/orgs/$organization': typeof LayoutOrgsOrganizationIndexRoute
+  '/orgs/$organization/projects/$project': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
 }
 export interface FileRoutesByTo {
   '/namespaces': typeof LayoutNamespacesRoute
   '/': typeof LayoutIndexRoute
   '/ns/$namespace/runners': typeof LayoutNsNamespaceRunnersRoute
   '/ns/$namespace': typeof LayoutNsNamespaceIndexRoute
+  '/orgs/$organization': typeof LayoutOrgsOrganizationIndexRoute
+  '/orgs/$organization/projects/$project': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,6 +86,8 @@ export interface FileRoutesById {
   '/_layout/ns/$namespace': typeof LayoutNsNamespaceRouteWithChildren
   '/_layout/ns/$namespace/runners': typeof LayoutNsNamespaceRunnersRoute
   '/_layout/ns/$namespace/': typeof LayoutNsNamespaceIndexRoute
+  '/_layout/orgs/$organization/': typeof LayoutOrgsOrganizationIndexRoute
+  '/_layout/orgs/$organization/projects/$project/': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -77,8 +97,16 @@ export interface FileRouteTypes {
     | '/ns/$namespace'
     | '/ns/$namespace/runners'
     | '/ns/$namespace/'
+    | '/orgs/$organization'
+    | '/orgs/$organization/projects/$project'
   fileRoutesByTo: FileRoutesByTo
-  to: '/namespaces' | '/' | '/ns/$namespace/runners' | '/ns/$namespace'
+  to:
+    | '/namespaces'
+    | '/'
+    | '/ns/$namespace/runners'
+    | '/ns/$namespace'
+    | '/orgs/$organization'
+    | '/orgs/$organization/projects/$project'
   id:
     | '__root__'
     | '/_layout'
@@ -87,6 +115,8 @@ export interface FileRouteTypes {
     | '/_layout/ns/$namespace'
     | '/_layout/ns/$namespace/runners'
     | '/_layout/ns/$namespace/'
+    | '/_layout/orgs/$organization/'
+    | '/_layout/orgs/$organization/projects/$project/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -123,6 +153,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutNsNamespaceRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/orgs/$organization/': {
+      id: '/_layout/orgs/$organization/'
+      path: '/orgs/$organization'
+      fullPath: '/orgs/$organization'
+      preLoaderRoute: typeof LayoutOrgsOrganizationIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/ns/$namespace/': {
       id: '/_layout/ns/$namespace/'
       path: '/'
@@ -136,6 +173,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ns/$namespace/runners'
       preLoaderRoute: typeof LayoutNsNamespaceRunnersRouteImport
       parentRoute: typeof LayoutNsNamespaceRoute
+    }
+    '/_layout/orgs/$organization/projects/$project/': {
+      id: '/_layout/orgs/$organization/projects/$project/'
+      path: '/orgs/$organization/projects/$project'
+      fullPath: '/orgs/$organization/projects/$project'
+      preLoaderRoute: typeof LayoutOrgsOrganizationProjectsProjectIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
   }
 }
@@ -157,12 +201,17 @@ interface LayoutRouteChildren {
   LayoutNamespacesRoute: typeof LayoutNamespacesRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutNsNamespaceRoute: typeof LayoutNsNamespaceRouteWithChildren
+  LayoutOrgsOrganizationIndexRoute: typeof LayoutOrgsOrganizationIndexRoute
+  LayoutOrgsOrganizationProjectsProjectIndexRoute: typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutNamespacesRoute: LayoutNamespacesRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutNsNamespaceRoute: LayoutNsNamespaceRouteWithChildren,
+  LayoutOrgsOrganizationIndexRoute: LayoutOrgsOrganizationIndexRoute,
+  LayoutOrgsOrganizationProjectsProjectIndexRoute:
+    LayoutOrgsOrganizationProjectsProjectIndexRoute,
 }
 
 const LayoutRouteWithChildren =
