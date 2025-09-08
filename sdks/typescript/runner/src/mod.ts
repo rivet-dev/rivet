@@ -34,17 +34,14 @@ export interface RunnerConfig {
 	onConnected: () => void;
 	onDisconnected: () => void;
 	fetch: (actorId: string, request: Request) => Promise<Response>;
-	websocket?: (
-		actorId: string,
-		ws: any,
-		request: Request,
-	) => Promise<void>;
+	websocket?: (actorId: string, ws: any, request: Request) => Promise<void>;
 	onActorStart: (
 		actorId: string,
 		generation: number,
 		config: ActorConfig,
 	) => Promise<void>;
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
+	noAutoShutdown?: boolean;
 }
 
 export interface KvListOptions {
@@ -221,8 +218,10 @@ export class Runner {
 		await this.#openPegboardWebSocket();
 		this.#openTunnel();
 
-		process.on("SIGTERM", this.shutdown.bind(this, false, true));
-		process.on("SIGINT", this.shutdown.bind(this, false, true));
+		if (!this.#config.noAutoShutdown) {
+			process.on("SIGTERM", this.shutdown.bind(this, false, true));
+			process.on("SIGINT", this.shutdown.bind(this, false, true));
+		}
 	}
 
 	// MARK: Shutdown
@@ -344,6 +343,10 @@ export class Runner {
 			this.#tunnel.shutdown();
 			console.log("Tunnel shutdown completed");
 		}
+
+		if (exit) {
+			process.exit(0);
+		}
 	}
 
 	// MARK: Networking
@@ -356,7 +359,10 @@ export class Runner {
 	}
 
 	get pegboardRelayUrl() {
-		const endpoint = this.#config.pegboardRelayEndpoint || this.#config.pegboardEndpoint || this.#config.endpoint;
+		const endpoint =
+			this.#config.pegboardRelayEndpoint ||
+			this.#config.pegboardEndpoint ||
+			this.#config.endpoint;
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
@@ -424,7 +430,7 @@ export class Runner {
 				key: this.#config.runnerKey,
 				version: this.#config.version,
 				totalSlots: this.#config.totalSlots,
-				addressesHttp: new Map(),  // No addresses needed with tunnel
+				addressesHttp: new Map(), // No addresses needed with tunnel
 				addressesTcp: null,
 				addressesUdp: null,
 				lastCommandIdx:
@@ -499,7 +505,9 @@ export class Runner {
 				this.runnerId = init.runnerId;
 
 				// Store the runner lost threshold from metadata
-				this.#runnerLostThreshold = init.metadata?.runnerLostThreshold ? Number(init.metadata.runnerLostThreshold) : undefined;
+				this.#runnerLostThreshold = init.metadata?.runnerLostThreshold
+					? Number(init.metadata.runnerLostThreshold)
+					: undefined;
 
 				console.log("Received init", {
 					runnerId: init.runnerId,
@@ -616,7 +624,10 @@ export class Runner {
 			console.log("[RUNNER] Registering new actor with tunnel:", actorId);
 			this.#tunnel.registerActor(actorId);
 		} else {
-			console.error("[RUNNER] WARNING: No tunnel available to register actor:", actorId);
+			console.error(
+				"[RUNNER] WARNING: No tunnel available to register actor:",
+				actorId,
+			);
 		}
 
 		this.#sendActorStateUpdate(actorId, generation, "running");
