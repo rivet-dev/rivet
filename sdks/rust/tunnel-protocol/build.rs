@@ -1,8 +1,4 @@
-use std::{
-	env, fs,
-	path::{Path, PathBuf},
-	process::Command,
-};
+use std::{env, fs, path::Path};
 
 use indoc::formatdoc;
 
@@ -56,78 +52,6 @@ mod rust {
 	}
 }
 
-mod typescript {
-	use super::*;
-
-	pub fn generate_sdk(schema_dir: &Path) {
-		let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-		let workspace_root = Path::new(&manifest_dir)
-			.parent()
-			.and_then(|p| p.parent())
-			.and_then(|p| p.parent())
-			.expect("Failed to find workspace root");
-
-		let sdk_dir = workspace_root
-			.join("sdks")
-			.join("typescript")
-			.join("tunnel-protocol");
-		let src_dir = sdk_dir.join("src");
-
-		let highest_version_path = super::find_highest_version(schema_dir);
-
-		let _ = fs::remove_dir_all(&src_dir);
-		if let Err(e) = fs::create_dir_all(&src_dir) {
-			panic!("Failed to create SDK directory: {}", e);
-		}
-
-		let output =
-			Command::new(workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"))
-				.arg("compile")
-				.arg("--generator")
-				.arg("ts")
-				.arg(highest_version_path)
-				.arg("-o")
-				.arg(src_dir.join("index.ts"))
-				.output()
-				.expect("Failed to execute bare compiler for TypeScript");
-
-		if !output.status.success() {
-			panic!(
-				"BARE TypeScript generation failed: {}",
-				String::from_utf8_lossy(&output.stderr),
-			);
-		}
-	}
-}
-
-fn find_highest_version(schema_dir: &Path) -> PathBuf {
-	let mut highest_version = 0;
-	let mut highest_version_path = PathBuf::new();
-
-	for entry in fs::read_dir(schema_dir).unwrap().flatten() {
-		if !entry.path().is_dir() {
-			let path = entry.path();
-			let bare_name = path
-				.file_name()
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.split_once('.')
-				.unwrap()
-				.0;
-
-			if let Ok(version) = bare_name[1..].parse::<u32>() {
-				if version > highest_version {
-					highest_version = version;
-					highest_version_path = path;
-				}
-			}
-		}
-	}
-
-	highest_version_path
-}
-
 fn main() {
 	let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 	let workspace_root = Path::new(&manifest_dir)
@@ -144,15 +68,4 @@ fn main() {
 	println!("cargo:rerun-if-changed={}", schema_dir.display());
 
 	rust::generate_sdk(&schema_dir);
-
-	// Check if cli.js exists before attempting TypeScript generation
-	let cli_js_path = workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js");
-	if cli_js_path.exists() {
-		typescript::generate_sdk(&schema_dir);
-	} else {
-		println!(
-			"cargo:warning=TypeScript SDK generation skipped: cli.js not found at {}. Run `pnpm install` to install.",
-			cli_js_path.display()
-		);
-	}
 }

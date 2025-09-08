@@ -154,28 +154,20 @@ async fn find_actor(
 	}
 
 	// Check if actor is connectable and get runner_id
-	let runner_info = {
-		let get_runner_fut = ctx.op(pegboard::ops::actor::get_runner::Input {
-			actor_ids: vec![actor_id],
-		});
-		let output = tokio::time::timeout(Duration::from_secs(5), get_runner_fut).await??;
-		output.actors.into_iter().find(|a| a.actor_id == actor_id)
-	};
+	let get_runner_fut = ctx.op(pegboard::ops::actor::get_runner::Input {
+		actor_ids: vec![actor_id],
+	});
+	let res = tokio::time::timeout(Duration::from_secs(5), get_runner_fut).await??;
+	let runner_info = res.actors.into_iter().next().filter(|x| x.is_connectable);
 
-	let Some(runner_info) = runner_info else {
-		return Err(errors::ActorNotFound {
-			actor_id,
-			port_name: port_name.to_string(),
-		}
-		.build());
-	};
-
-	if !runner_info.is_connectable {
+	let runner_id = if let Some(runner_info) = runner_info {
+		runner_info.runner_id
+	} else {
 		tracing::info!(?actor_id, "waiting for actor to become ready");
 
 		// Wait for ready, fail, or destroy
 		tokio::select! {
-			res = ready_sub.next() => { res?; },
+			res = ready_sub.next() => { res?.runner_id },
 			res = fail_sub.next() => {
 				let msg = res?;
 				return Err(msg.error.clone().build());
@@ -185,45 +177,19 @@ async fn find_actor(
 				return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
 			}
 			// Ready timeout
-				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+			_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
 				return Err(errors::ActorReadyTimeout { actor_id }.build());
 			}
 		}
+	};
 
-		// TODO: Is this needed? Can't we just re-check the actor exists if it fails to connect?
-		// Verify actor is connectable again
-		let runner_info = {
-			let get_runner_fut = ctx.op(pegboard::ops::actor::get_runner::Input {
-				actor_ids: vec![actor_id],
-			});
-			let output = tokio::time::timeout(Duration::from_secs(5), get_runner_fut).await??;
-			output.actors.into_iter().find(|a| a.actor_id == actor_id)
-		};
-
-		let Some(runner_info) = runner_info else {
-			return Err(errors::ActorNotFound {
-				actor_id,
-				port_name: port_name.to_string(),
-			}
-			.build());
-		};
-
-		if !runner_info.is_connectable {
-			return Err(errors::ActorNotFound {
-				actor_id,
-				port_name: port_name.to_string(),
-			}
-			.build());
-		};
-	}
-
-	tracing::debug!(?actor_id, runner_id = ?runner_info.runner_id, "actor ready");
+	tracing::debug!(?actor_id, ?runner_id, "actor ready");
 
 	// Return pegboard-gateway instance
 	let gateway = pegboard_gateway::PegboardGateway::new(
 		ctx.clone(),
 		actor_id,
-		runner_info.runner_id,
+		runner_id,
 		port_name.to_string(),
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(

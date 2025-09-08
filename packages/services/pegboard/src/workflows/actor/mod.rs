@@ -307,10 +307,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										})
 										.await?;
 
-										ctx.msg(Ready {})
-											.tag("actor_id", input.actor_id)
-											.send()
-											.await?;
+										ctx.msg(Ready {
+											runner_id: state.runner_id,
+										})
+										.tag("actor_id", input.actor_id)
+										.send()
+										.await?;
 									}
 									protocol::ActorState::Stopped { code, .. } => {
 										if let Some(res) =
@@ -516,7 +518,9 @@ pub struct Failed {
 }
 
 #[message("pegboard_actor_ready")]
-pub struct Ready {}
+pub struct Ready {
+	pub runner_id: Id,
+}
 
 #[signal("pegboard_actor_allocate")]
 #[derive(Debug)]

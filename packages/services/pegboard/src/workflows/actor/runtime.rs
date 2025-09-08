@@ -268,11 +268,16 @@ async fn allocate_actor(
 	metrics::ACTOR_ALLOCATE_DURATION
 		.record(dt, &[KeyValue::new("did_reserve", res.is_ok().to_string())]);
 
-	if let Ok(res) = &res {
-		state.sleep_ts = None;
-		state.pending_allocation_ts = None;
-		state.runner_id = Some(res.runner_id);
-		state.runner_workflow_id = Some(res.runner_workflow_id);
+	match &res {
+		Ok(res) => {
+			state.sleep_ts = None;
+			state.pending_allocation_ts = None;
+			state.runner_id = Some(res.runner_id);
+			state.runner_workflow_id = Some(res.runner_workflow_id);
+		}
+		Err(pending_allocation_ts) => {
+			state.pending_allocation_ts = Some(*pending_allocation_ts);
+		}
 	}
 
 	Ok(res)
@@ -364,11 +369,6 @@ pub async fn spawn_actor(
 				actor_id=?input.actor_id,
 				"failed to allocate (no availability), waiting for allocation",
 			);
-
-			ctx.activity(SetPendingAllocationInput {
-				pending_allocation_ts,
-			})
-			.await?;
 
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
 			// an `Allocate` signal
@@ -543,23 +543,6 @@ pub async fn reschedule_actor(
 	} else {
 		Ok(true)
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct SetPendingAllocationInput {
-	pending_allocation_ts: i64,
-}
-
-#[activity(SetPendingAllocation)]
-pub async fn set_pending_allocation(
-	ctx: &ActivityCtx,
-	input: &SetPendingAllocationInput,
-) -> Result<()> {
-	let mut state = ctx.state::<State>()?;
-
-	state.pending_allocation_ts = Some(input.pending_allocation_ts);
-
-	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

@@ -7,7 +7,6 @@ use rivet_guard_core::RoutingFn;
 
 use crate::errors;
 
-//pub(crate) mod actor;
 mod api_peer;
 mod api_public;
 pub mod pegboard_gateway;
@@ -36,12 +35,6 @@ pub fn create_routing_function(ctx: StandaloneCtx) -> RoutingFn {
 					// Read target
 					if let Some(target) = headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
 					{
-						// if let Some(routing_output) =
-						// 	actor::route_request(&ctx, target, host, path, headers).await?
-						// {
-						// 	return Ok(routing_output);
-						// }
-
 						if let Some(routing_output) =
 							runner_ws::route_request(&ctx, target, host, path).await?
 						{
