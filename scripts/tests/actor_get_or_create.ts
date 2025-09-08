@@ -7,7 +7,8 @@ import {
 	generateRandomKey,
 } from "./utils";
 
-const COUNT = 5;
+const COUNT = 50;
+const PARALLEL = true;
 
 async function main() {
 	try {
@@ -21,28 +22,47 @@ async function main() {
 		const sharedKey = generateRandomKey();
 		console.log(`Using shared key: ${sharedKey}`);
 
-		// Create parallel calls to get or create actor with the same key
+		// Create calls to get or create actor with the same key
 		console.log(
-			`Creating ${COUNT} parallel get-or-create calls with shared key...`,
+			`Creating ${COUNT} ${PARALLEL ? "parallel" : "serial"} get-or-create calls with shared key...`,
 		);
 		let completedCount = 0;
-		const promises = Array.from({ length: COUNT }, (_, index) =>
-			getOrCreateActorById(
-				namespaceName,
-				actorName,
-				sharedKey,
-				runnerNameSelector,
-			).then((response) => {
+		
+		let results;
+		if (PARALLEL) {
+			const promises = Array.from({ length: COUNT }, (_, index) =>
+				getOrCreateActorById(
+					namespaceName,
+					actorName,
+					sharedKey,
+					runnerNameSelector,
+				).then((response) => {
+					completedCount++;
+					console.log(
+						`Call ${index + 1}/${COUNT} completed ${JSON.stringify(response)} (${completedCount} total)`,
+					);
+					return { index, response };
+				}),
+			);
+			results = await Promise.all(promises);
+		} else {
+			results = [];
+			for (let index = 0; index < COUNT; index++) {
+				const response = await getOrCreateActorById(
+					namespaceName,
+					actorName,
+					sharedKey,
+					runnerNameSelector,
+				);
 				completedCount++;
 				console.log(
 					`Call ${index + 1}/${COUNT} completed ${JSON.stringify(response)} (${completedCount} total)`,
 				);
-				return { index, response };
-			}),
-		);
-
-		const results = await Promise.all(promises);
-		console.log(`✓ Completed all ${COUNT} parallel calls`);
+				results.push({ index, response });
+			}
+		}
+		
+		console.log(`✓ Completed all ${COUNT} ${PARALLEL ? "parallel" : "serial"} calls`);
 
 		// Extract all actor IDs and verify they're all the same
 		const actorIds = results.map((result) => result.response.actor_id);

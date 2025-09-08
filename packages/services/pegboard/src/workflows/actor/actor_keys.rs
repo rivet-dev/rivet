@@ -6,7 +6,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_key_data::converted::ActorByKeyKeyData;
 use udb_util::prelude::*;
-use universaldb::{self as udb, FdbBindingError, options::StreamingMode};
+use universaldb::{self as udb, options::StreamingMode, FdbBindingError};
 
 use crate::keys;
 
@@ -52,7 +52,23 @@ pub async fn reserve_key(
 			.await?;
 
 		match proposal_result {
-			ProposalResult::Committed => Ok(ReserveKeyOutput::Success),
+			ProposalResult::Committed => {
+				let output = ctx
+					.activity(ReserveActorKeyInput {
+						namespace_id,
+						name: name.clone(),
+						key: key.clone(),
+						actor_id,
+						create_ts: ctx.create_ts(),
+					})
+					.await?;
+				match output {
+					ReserveActorKeyOutput::Success => Ok(ReserveKeyOutput::Success),
+					ReserveActorKeyOutput::ExistingActor { existing_actor_id } => {
+						Ok(ReserveKeyOutput::KeyExists { existing_actor_id })
+					}
+				}
+			}
 			ProposalResult::ConsensusFailed => {
 				bail!("consensus failed")
 			}
