@@ -137,9 +137,9 @@ export class Runner {
 	}
 
 	#stopAllActors() {
-		console.log(
-			"Stopping all actors due to runner lost threshold exceeded",
-		);
+		//console.log(
+		//	"Stopping all actors due to runner lost threshold exceeded",
+		//);
 
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
@@ -214,7 +214,7 @@ export class Runner {
 		if (this.#started) throw new Error("Cannot call runner.start twice");
 		this.#started = true;
 
-		console.log("[RUNNER] Starting runner");
+		//console.log("[RUNNER] Starting runner");
 		await this.#openPegboardWebSocket();
 		this.#openTunnel();
 
@@ -285,10 +285,10 @@ export class Runner {
 			} else {
 				// Wait for actors to shut down befoer stopping
 				try {
-					console.log(
-						"Sending stopping message",
-						pegboardWebSocket.readyState,
-					);
+					//console.log(
+					//	"Sending stopping message",
+					//	pegboardWebSocket.readyState,
+					//);
 
 					// NOTE: We don't use #sendToServer here because that function checks if the runner is
 					// shut down
@@ -312,23 +312,23 @@ export class Runner {
 							throw new Error("missing pegboardWebSocket");
 
 						pegboardWebSocket.addEventListener("close", (ev) => {
-							console.log(
-								"Connection closed",
-								ev.code,
-								ev.reason.toString(),
-							);
+							//console.log(
+							//	"Connection closed",
+							//	ev.code,
+							//	ev.reason.toString(),
+							//);
 							resolve();
 						});
 					});
 
 					// TODO: Wait for all actors to stop before closing ws
 
-					console.log("Closing WebSocket");
+					//console.log("Closing WebSocket");
 					pegboardWebSocket.close(1000, "Stopping");
 
 					await closePromise;
 
-					console.log("WebSocket shutdown completed");
+					//console.log("WebSocket shutdown completed");
 				} catch (error) {
 					console.error("Error during WebSocket shutdown:", error);
 					pegboardWebSocket.close();
@@ -341,7 +341,7 @@ export class Runner {
 		// Close tunnel
 		if (this.#tunnel) {
 			this.#tunnel.shutdown();
-			console.log("Tunnel shutdown completed");
+			//console.log("Tunnel shutdown completed");
 		}
 
 		if (exit) {
@@ -375,9 +375,9 @@ export class Runner {
 
 	#openTunnel() {
 		const url = this.pegboardRelayUrl;
-		console.log("[RUNNER] Opening tunnel to:", url);
-		console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
-		console.log("[RUNNER] Active actors count:", this.#actors.size);
+		//console.log("[RUNNER] Opening tunnel to:", url);
+		//console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
+		//console.log("[RUNNER] Active actors count:", this.#actors.size);
 
 		this.#tunnel = new Tunnel(url);
 		this.#tunnel.setCallbacks({
@@ -388,7 +388,7 @@ export class Runner {
 
 		// Re-register all active actors with the new tunnel
 		for (const actorId of this.#actors.keys()) {
-			console.log("[RUNNER] Re-registering actor with tunnel:", actorId);
+			//console.log("[RUNNER] Re-registering actor with tunnel:", actorId);
 			this.#tunnel.registerActor(actorId);
 		}
 	}
@@ -403,10 +403,8 @@ export class Runner {
 		}) as any as WebSocket;
 		this.#pegboardWebSocket = ws;
 
-		console.log(ws);
-
 		ws.addEventListener("open", () => {
-			console.log("Connected");
+			//console.log("Connected");
 
 			// Reset reconnect attempt counter on successful connection
 			this.#reconnectAttempt = 0;
@@ -468,7 +466,7 @@ export class Runner {
 					});
 				} else {
 					clearInterval(pingLoop);
-					console.log("WebSocket not open, stopping ping loop");
+					//console.log("WebSocket not open, stopping ping loop");
 				}
 			}, pingInterval);
 			this.#pingLoop = pingLoop;
@@ -480,7 +478,7 @@ export class Runner {
 					this.#sendCommandAcknowledgment();
 				} else {
 					clearInterval(ackLoop);
-					console.log("WebSocket not open, stopping ack loop");
+					//console.log("WebSocket not open, stopping ack loop");
 				}
 			}, ackInterval);
 			this.#ackInterval = ackLoop;
@@ -509,16 +507,16 @@ export class Runner {
 					? Number(init.metadata.runnerLostThreshold)
 					: undefined;
 
-				console.log("Received init", {
-					runnerId: init.runnerId,
-					lastEventIdx: init.lastEventIdx,
-					runnerLostThreshold: this.#runnerLostThreshold,
-				});
+				//console.log("Received init", {
+				//	runnerId: init.runnerId,
+				//	lastEventIdx: init.lastEventIdx,
+				//	runnerLostThreshold: this.#runnerLostThreshold,
+				//});
 
 				// Reopen tunnel with runner ID
-				console.log("[RUNNER] Received runner ID, reopening tunnel");
+				//console.log("[RUNNER] Received runner ID, reopening tunnel");
 				if (this.#tunnel) {
-					console.log("[RUNNER] Shutting down existing tunnel");
+					//console.log("[RUNNER] Shutting down existing tunnel");
 					this.#tunnel.shutdown();
 				}
 				this.#openTunnel();
@@ -543,7 +541,7 @@ export class Runner {
 		});
 
 		ws.addEventListener("close", (ev) => {
-			console.log("Connection closed", ev.code, ev.reason.toString());
+			//console.log("Connection closed", ev.code, ev.reason.toString());
 
 			this.#config.onDisconnected();
 
@@ -565,9 +563,9 @@ export class Runner {
 					this.#runnerLostThreshold &&
 					this.#runnerLostThreshold > 0
 				) {
-					console.log(
-						`Starting runner lost timeout: ${this.#runnerLostThreshold / 1000}s`,
-					);
+					//console.log(
+					//	`Starting runner lost timeout: ${this.#runnerLostThreshold / 1000}s`,
+					//);
 					this.#runnerLostTimeout = setTimeout(() => {
 						this.#stopAllActors();
 					}, this.#runnerLostThreshold);
@@ -580,12 +578,12 @@ export class Runner {
 	}
 
 	#handleCommands(commands: protocol.ToClientCommands) {
-		console.log("Received commands", {
-			commandCount: commands.length,
-		});
+		//console.log("Received commands", {
+		//	commandCount: commands.length,
+		//});
 
 		for (const commandWrapper of commands) {
-			console.log("Received command", commandWrapper);
+			//console.log("Received command", commandWrapper);
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
@@ -621,7 +619,7 @@ export class Runner {
 
 		// Register actor with tunnel
 		if (this.#tunnel) {
-			console.log("[RUNNER] Registering new actor with tunnel:", actorId);
+			//console.log("[RUNNER] Registering new actor with tunnel:", actorId);
 			this.#tunnel.registerActor(actorId);
 		} else {
 			console.error(
@@ -701,12 +699,12 @@ export class Runner {
 			timestamp: Date.now(),
 		});
 
-		console.log(
-			"Sending event to server",
-			eventWrapper.index,
-			eventWrapper.inner.tag,
-			eventWrapper.inner.val,
-		);
+		//console.log(
+		//	"Sending event to server",
+		//	eventWrapper.index,
+		//	eventWrapper.inner.tag,
+		//	eventWrapper.inner.val,
+		//);
 
 		this.#sendToServer({
 			tag: "ToServerEvents",
@@ -760,12 +758,12 @@ export class Runner {
 			timestamp: Date.now(),
 		});
 
-		console.log(
-			"Sending event to server",
-			eventWrapper.index,
-			eventWrapper.inner.tag,
-			eventWrapper.inner.val,
-		);
+		//console.log(
+		//	"Sending event to server",
+		//	eventWrapper.index,
+		//	eventWrapper.inner.tag,
+		//	eventWrapper.inner.val,
+		//);
 
 		this.#sendToServer({
 			tag: "ToServerEvents",
@@ -786,7 +784,7 @@ export class Runner {
 			return;
 		}
 
-		console.log("Sending command acknowledgment", this.#lastCommandIdx);
+		//console.log("Sending command acknowledgment", this.#lastCommandIdx);
 
 		this.#sendToServer({
 			tag: "ToServerAckCommands",
@@ -1159,7 +1157,7 @@ export class Runner {
 		}
 
 		if (processedCount > 0) {
-			console.log(`Processed ${processedCount} queued KV requests`);
+			//console.log(`Processed ${processedCount} queued KV requests`);
 		}
 	}
 
@@ -1184,7 +1182,7 @@ export class Runner {
 
 	#scheduleReconnect() {
 		if (this.#shutdown) {
-			console.log("Runner is shut down, not attempting reconnect");
+			//console.log("Runner is shut down, not attempting reconnect");
 			return;
 		}
 
@@ -1195,16 +1193,16 @@ export class Runner {
 			jitter: true,
 		});
 
-		console.log(
-			`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
-		);
+		//console.log(
+		//	`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
+		//);
 
 		this.#reconnectTimeout = setTimeout(async () => {
 			if (!this.#shutdown) {
 				this.#reconnectAttempt++;
-				console.log(
-					`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
-				);
+				//console.log(
+				//	`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
+				//);
 				await this.#openPegboardWebSocket();
 			}
 		}, delay);
@@ -1217,9 +1215,9 @@ export class Runner {
 
 		if (eventsToResend.length === 0) return;
 
-		console.log(
-			`Resending ${eventsToResend.length} unacknowledged events from index ${Number(lastEventIdx) + 1}`,
-		);
+		//console.log(
+		//	`Resending ${eventsToResend.length} unacknowledged events from index ${Number(lastEventIdx) + 1}`,
+		//);
 
 		// Resend events in batches
 		const events = eventsToResend.map((item) => item.event);
@@ -1241,7 +1239,7 @@ export class Runner {
 
 		const prunedCount = originalLength - this.#eventHistory.length;
 		if (prunedCount > 0) {
-			console.log(`Pruned ${prunedCount} old events from history`);
+			//console.log(`Pruned ${prunedCount} old events from history`);
 		}
 	}
 
@@ -1265,7 +1263,7 @@ export class Runner {
 		}
 
 		if (toDelete.length > 0) {
-			console.log(`Cleaned up ${toDelete.length} expired KV requests`);
+			//console.log(`Cleaned up ${toDelete.length} expired KV requests`);
 		}
 	}
 }
