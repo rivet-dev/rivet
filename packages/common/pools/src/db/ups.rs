@@ -72,7 +72,11 @@ pub async fn setup(config: Config, client_name: String) -> Result<UpsPool> {
 		config::PubSub::PostgresNotify(pg) => {
 			tracing::debug!("creating postgres pubsub driver");
 			Arc::new(
-				ups::driver::postgres::PostgresDriver::connect(pg.url.read().clone(), true).await?,
+				ups::driver::postgres::PostgresDriver::connect(
+					pg.url.read().clone(),
+					pg.memory_optimization,
+				)
+				.await?,
 			) as ups::PubSubDriverHandle
 		}
 		config::PubSub::Memory(memory) => {

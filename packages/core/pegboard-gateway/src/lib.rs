@@ -172,16 +172,16 @@ impl PegboardGateway {
 		let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))
 			.map_err(|e| anyhow!("failed to serialize message: {}", e))?;
 
-		// Build NATS topic
+		// Build pubsub topic
 		let tunnel_subject = TunnelHttpRunnerSubject::new(self.runner_id, &self.port_name);
 		let topic = tunnel_subject.to_string();
 
 		tracing::info!(
-			?topic,
+			%topic,
 			?self.runner_id,
-			?self.port_name,
+			%self.port_name,
 			?request_id,
-			"publishing request to NATS"
+			"publishing request to pubsub"
 		);
 
 		// Create response channel
@@ -208,16 +208,16 @@ impl PegboardGateway {
 			tracing::info!("starting response handler task");
 			while let ResultOk(NextOutput::Message(msg)) = subscriber.next().await {
 				// Ack message
-				//match msg.reply(&[]).await {
-				//	Result::Ok(_) => {}
-				//	Err(err) => {
-				//		tracing::warn!(?err, "failed to ack gateway request response message")
-				//	}
-				//};
+				match msg.reply(&[]).await {
+					Result::Ok(_) => {}
+					Err(err) => {
+						tracing::warn!(?err, "failed to ack gateway request response message")
+					}
+				};
 
 				tracing::info!(
 					payload_len = msg.payload.len(),
-					"received response from NATS"
+					"received response from pubsub"
 				);
 				if let ResultOk(tunnel_msg) = versioned::TunnelMessage::deserialize(&msg.payload) {
 					match tunnel_msg.body {
@@ -235,11 +235,11 @@ impl PegboardGateway {
 							}
 						}
 						_ => {
-							tracing::warn!("received non-response message from NATS");
+							tracing::warn!("received non-response message from pubsub");
 						}
 					}
 				} else {
-					tracing::error!("failed to deserialize response from NATS");
+					tracing::error!("failed to deserialize response from pubsub");
 				}
 			}
 			tracing::info!("response handler task ended");
@@ -248,7 +248,7 @@ impl PegboardGateway {
 		// Publish request
 		self.ctx
 			.ups()?
-			.publish(&topic, &serialized)
+			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
 			.await
 			.map_err(|e| anyhow!("failed to publish request: {}", e))?;
 
@@ -264,7 +264,7 @@ impl PegboardGateway {
 				.map_err(|e| anyhow!("failed to serialize finish message: {}", e))?;
 		self.ctx
 			.ups()?
-			.publish(&topic, &finish_serialized)
+			.request_with_timeout(&topic, &finish_serialized, UPS_REQ_TIMEOUT)
 			.await
 			.map_err(|e| anyhow!("failed to publish finish message: {}", e))?;
 
@@ -320,7 +320,7 @@ impl PegboardGateway {
 			}
 		}
 
-		// Build NATS topic
+		// Build pubsub topic
 		let tunnel_subject = TunnelHttpRunnerSubject::new(self.runner_id, &self.port_name);
 		let topic = tunnel_subject.to_string();
 
@@ -349,7 +349,10 @@ impl PegboardGateway {
 			Result::Ok(u) => u,
 			Err(err) => return Err((client_ws, err.into())),
 		};
-		if let Err(err) = ups.publish(&topic, &serialized).await {
+		if let Err(err) = ups
+			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+			.await
+		{
 			return Err((client_ws, err.into()));
 		}
 
@@ -378,12 +381,12 @@ impl PegboardGateway {
 		tokio::spawn(async move {
 			while let ResultOk(NextOutput::Message(msg)) = subscriber.next().await {
 				// Ack message
-				//match msg.reply(&[]).await {
-				//	Result::Ok(_) => {}
-				//	Err(err) => {
-				//		tracing::warn!(?err, "failed to ack gateway websocket message")
-				//	}
-				//};
+				match msg.reply(&[]).await {
+					Result::Ok(_) => {}
+					Err(err) => {
+						tracing::warn!(?err, "failed to ack gateway websocket message")
+					}
+				};
 
 				if let ResultOk(tunnel_msg) = versioned::TunnelMessage::deserialize(&msg.payload) {
 					match tunnel_msg.body {
@@ -424,7 +427,10 @@ impl PegboardGateway {
 						Result::Ok(s) => s,
 						Err(_) => break,
 					};
-					if let Err(err) = ups.publish(&topic, &serialized).await {
+					if let Err(err) = ups
+						.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+						.await
+					{
 						if is_tunnel_closed_error(&err) {
 							tracing::warn!("tunnel closed sending binary message");
 							close_reason = Some("Tunnel closed".to_string());
@@ -448,7 +454,10 @@ impl PegboardGateway {
 						Result::Ok(s) => s,
 						Err(_) => break,
 					};
-					if let Err(err) = ups.publish(&topic, &serialized).await {
+					if let Err(err) = ups
+						.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+						.await
+					{
 						if is_tunnel_closed_error(&err) {
 							tracing::warn!("tunnel closed sending text message");
 							close_reason = Some("Tunnel closed".to_string());
@@ -479,7 +488,10 @@ impl PegboardGateway {
 			Err(_) => Vec::new(),
 		};
 
-		if let Err(err) = ups.publish(&topic, &serialized).await {
+		if let Err(err) = ups
+			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+			.await
+		{
 			if is_tunnel_closed_error(&err) {
 				tracing::warn!("tunnel closed sending close message");
 			} else {

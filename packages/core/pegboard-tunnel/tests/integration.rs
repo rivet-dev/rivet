@@ -50,14 +50,14 @@ async fn test_tunnel_bidirectional_forwarding() -> Result<()> {
 	let runner_id = Id::nil();
 	let port_name = "default";
 
-	// Give tunnel time to set up NATS subscription after WebSocket connection
+	// Give tunnel time to set up pubsub subscription after WebSocket connection
 	sleep(Duration::from_secs(1)).await;
 
-	// Test 1: NATS to WebSocket forwarding
-	test_nats_to_websocket(&ups, &mut ws_stream, runner_id, port_name).await?;
+	// Test 1: pubsub to WebSocket forwarding
+	test_pubsub_to_websocket(&ups, &mut ws_stream, runner_id, port_name).await?;
 
-	// Test 2: WebSocket to NATS forwarding
-	test_websocket_to_nats(&ups, &mut ws_stream, runner_id).await?;
+	// Test 2: WebSocket to pubsub forwarding
+	test_websocket_to_pubsub(&ups, &mut ws_stream, runner_id).await?;
 
 	// Clean up
 	tunnel_handle.abort();
@@ -65,7 +65,7 @@ async fn test_tunnel_bidirectional_forwarding() -> Result<()> {
 	Ok(())
 }
 
-async fn test_nats_to_websocket(
+async fn test_pubsub_to_websocket(
 	ups: &PubSub,
 	ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
 	runner_id: Id,
@@ -93,7 +93,7 @@ async fn test_nats_to_websocket(
 	// Serialize the message
 	let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))?;
 
-	// Publish to NATS topic using proper subject
+	// Publish to pubsub topic using proper subject
 	let topic = TunnelHttpRunnerSubject::new(&runner_id.to_string(), port_name).to_string();
 	ups.request(&topic, &serialized).await?;
 
@@ -111,7 +111,7 @@ async fn test_nats_to_websocket(
 					assert_eq!(req.request_id, request_id);
 					assert_eq!(req.method, "GET");
 					assert_eq!(req.path, "/test");
-					println!("✓ NATS to WebSocket forwarding successful");
+					println!("✓ pubsub to WebSocket forwarding successful");
 				}
 				_ => bail!("Unexpected message type received"),
 			}
@@ -122,7 +122,7 @@ async fn test_nats_to_websocket(
 	Ok(())
 }
 
-async fn test_websocket_to_nats(
+async fn test_websocket_to_pubsub(
 	ups: &PubSub,
 	ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
 	runner_id: Id,
@@ -153,7 +153,7 @@ async fn test_websocket_to_nats(
 	let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))?;
 	ws_stream.send(WsMessage::Binary(serialized.into())).await?;
 
-	// Wait for message on NATS
+	// Wait for message on pubsub
 	let received = timeout(Duration::from_secs(10), subscriber.next()).await??;
 
 	match received {
@@ -164,12 +164,12 @@ async fn test_websocket_to_nats(
 				MessageBody::ToClientResponseStart(resp) => {
 					assert_eq!(resp.request_id, request_id);
 					assert_eq!(resp.status, 200);
-					println!("✓ WebSocket to NATS forwarding successful");
+					println!("✓ WebSocket to pubsub forwarding successful");
 				}
 				_ => bail!("Unexpected message type received"),
 			}
 		}
-		_ => bail!("Expected message from NATS"),
+		_ => bail!("Expected message from subscriber"),
 	}
 
 	Ok(())

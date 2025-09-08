@@ -9,14 +9,14 @@ pub trait Message: Debug + Send + Sync + Serialize + DeserializeOwned + 'static 
 	const NAME: &'static str;
 	const TAIL_TTL: std::time::Duration;
 
-	fn nats_subject() -> String {
+	fn subject() -> String {
 		format!("gasoline.msg.{}", Self::NAME)
 	}
 }
 
-/// A message received from a NATS subscription.
+/// A message received from a pubsub subscription.
 #[derive(Debug)]
-pub struct NatsMessage<M>
+pub struct PubsubMessage<M>
 where
 	M: Message,
 {
@@ -26,19 +26,19 @@ where
 	pub(crate) body: M,
 }
 
-impl<M> NatsMessage<M>
+impl<M> PubsubMessage<M>
 where
 	M: Message,
 {
 	#[tracing::instrument(skip_all)]
 	pub(crate) fn deserialize_from_wrapper(
-		wrapper: NatsMessageWrapper<'_>,
+		wrapper: PubsubMessageWrapper<'_>,
 	) -> WorkflowResult<Self> {
 		// Deserialize the body
 		let body = serde_json::from_str(wrapper.body.get())
 			.map_err(WorkflowError::DeserializeMessageBody)?;
 
-		Ok(NatsMessage {
+		Ok(PubsubMessage {
 			ray_id: wrapper.ray_id,
 			req_id: wrapper.req_id,
 			ts: wrapper.ts,
@@ -48,12 +48,14 @@ where
 
 	// Only returns the message wrapper
 	#[tracing::instrument(skip_all)]
-	pub(crate) fn deserialize_wrapper<'a>(buf: &'a [u8]) -> WorkflowResult<NatsMessageWrapper<'a>> {
+	pub(crate) fn deserialize_wrapper<'a>(
+		buf: &'a [u8],
+	) -> WorkflowResult<PubsubMessageWrapper<'a>> {
 		serde_json::from_slice(buf).map_err(WorkflowError::DeserializeMessage)
 	}
 }
 
-impl<M> std::ops::Deref for NatsMessage<M>
+impl<M> std::ops::Deref for PubsubMessage<M>
 where
 	M: Message,
 {
@@ -64,7 +66,7 @@ where
 	}
 }
 
-impl<M> NatsMessage<M>
+impl<M> PubsubMessage<M>
 where
 	M: Message,
 {
@@ -91,7 +93,7 @@ where
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct NatsMessageWrapper<'a> {
+pub(crate) struct PubsubMessageWrapper<'a> {
 	pub(crate) ray_id: Id,
 	pub(crate) req_id: Id,
 	pub(crate) tags: serde_json::Value,

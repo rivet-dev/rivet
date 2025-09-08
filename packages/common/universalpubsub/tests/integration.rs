@@ -1,4 +1,5 @@
 use anyhow::*;
+use futures_util::StreamExt;
 use rivet_error::RivetError;
 use rivet_test_deps_docker::{TestDatabase, TestPubSub};
 use std::{
@@ -58,7 +59,7 @@ async fn test_postgres_driver_with_memory() {
 	let (db_config, docker_config) = TestDatabase::Postgres.config(test_id, 1).await.unwrap();
 	let mut docker = docker_config.unwrap();
 	docker.start().await.unwrap();
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+	tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
 	let rivet_config::config::Database::Postgres(pg) = db_config else {
 		unreachable!();
@@ -81,7 +82,7 @@ async fn test_postgres_driver_without_memory() {
 	let (db_config, docker_config) = TestDatabase::Postgres.config(test_id, 1).await.unwrap();
 	let mut docker = docker_config.unwrap();
 	docker.start().await.unwrap();
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+	tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
 	let rivet_config::config::Database::Postgres(pg) = db_config else {
 		unreachable!();
@@ -128,6 +129,10 @@ async fn test_inner(pubsub: &PubSub) {
 	let start = Instant::now();
 	test_request_response(&pubsub).await.unwrap();
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_request_response completed");
+
+	let start = Instant::now();
+	test_multiple_request_response(&pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_multiple_request_response completed");
 
 	let start = Instant::now();
 	test_request_timeout(&pubsub).await.unwrap();
@@ -265,6 +270,42 @@ async fn test_request_response(pubsub: &PubSub) -> Result<()> {
 		.await
 		.unwrap();
 	assert_eq!(req.payload, payload);
+
+	Ok(())
+}
+
+async fn test_multiple_request_response(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing multiple request/response");
+
+	// TODO: This fails on postgres for high numbers (too many clients)
+	futures_util::stream::iter(0..5)
+		.map(|i| async move {
+			let mut payload = b"request payload ".to_vec();
+			payload.extend(i.to_string().as_bytes());
+
+			{
+				let pubsub = pubsub.clone();
+				let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+				tokio::spawn(async move {
+					let mut sub = pubsub.subscribe("test.request_response").await.unwrap();
+					ready_tx.send(()).unwrap();
+					while let NextOutput::Message(msg) = sub.next().await.unwrap() {
+						// Reply with the same payload back
+						let _ = msg.reply(&msg.payload).await;
+					}
+				});
+				ready_rx.await.unwrap();
+			}
+
+			let req = pubsub
+				.request("test.request_response", &payload)
+				.await
+				.unwrap();
+			assert_eq!(req.payload, payload);
+		})
+		.buffer_unordered(50)
+		.collect::<()>()
+		.await;
 
 	Ok(())
 }

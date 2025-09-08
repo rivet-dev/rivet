@@ -1,7 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	#[error("missing nats pool")]
-	MissingNatsPool,
+	#[error("missing ups pool")]
+	MissingUpsPool,
 
 	#[error("missing clickhouse pool")]
 	MissingClickHousePool,

@@ -110,8 +110,8 @@ pub enum WorkflowError {
 	#[error("failed to create subscription: {0}")]
 	CreateSubscription(#[source] anyhow::Error),
 
-	#[error("failed to flush nats: {0}")]
-	FlushNats(#[source] anyhow::Error),
+	#[error("failed to flush pubsub: {0}")]
+	FlushPubsub(#[source] anyhow::Error),
 
 	#[error("subscription unsubscribed")]
 	SubscriptionUnsubscribed,

@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// The tunnel service that forwards tunnel-protocol messages between NATS and WebSocket connections.
+/// The tunnel service that forwards tunnel-protocol messages between pubsub and WebSocket connections.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PegboardTunnel {

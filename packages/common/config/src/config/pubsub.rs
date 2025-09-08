@@ -23,12 +23,15 @@ pub struct Postgres {
 	///
 	/// See: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url
 	pub url: Secret<String>,
+	#[serde(default = "default_mem_opt")]
+	pub memory_optimization: bool,
 }
 
 impl Default for Postgres {
 	fn default() -> Self {
 		Self {
 			url: Secret::new("postgresql://postgres:postgres@127.0.0.1:5432/postgres".into()),
+			memory_optimization: true,
 		}
 	}
 }
@@ -80,4 +83,8 @@ impl Memory {
 	fn default_channel() -> String {
 		"default".to_string()
 	}
+}
+
+fn default_mem_opt() -> bool {
+	true
 }

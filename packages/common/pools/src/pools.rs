@@ -10,7 +10,7 @@ use crate::{ClickHousePool, Error, UdbPool, UpsPool};
 // TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
 	pub(crate) _guard: DropGuard,
-	pub(crate) nats: Option<UpsPool>,
+	pub(crate) ups: Option<UpsPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
 	pub(crate) clickhouse_inserter: Option<ClickHouseInserterHandle>,
 	pub(crate) udb: Option<UdbPool>,
@@ -27,7 +27,7 @@ impl Pools {
 		let client_name = "rivet".to_string();
 		let token = CancellationToken::new();
 
-		let (nats, udb) = tokio::try_join!(
+		let (ups, udb) = tokio::try_join!(
 			crate::db::ups::setup(config.clone(), client_name.clone()),
 			crate::db::udb::setup(config.clone()),
 		)?;
@@ -44,7 +44,7 @@ impl Pools {
 
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
-			nats: Some(nats),
+			ups: Some(ups),
 			clickhouse,
 			clickhouse_inserter,
 			udb,
@@ -61,7 +61,7 @@ impl Pools {
 		let client_name = "rivet".to_string();
 		let token = CancellationToken::new();
 
-		let (nats, udb) = tokio::try_join!(
+		let (ups, udb) = tokio::try_join!(
 			crate::db::ups::setup(config.clone(), client_name.clone()),
 			crate::db::udb::setup(config.clone()),
 		)?;
@@ -69,7 +69,7 @@ impl Pools {
 		// Test setup doesn't use ClickHouse inserter
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
-			nats: Some(nats),
+			ups: Some(ups),
 			clickhouse: None,
 			clickhouse_inserter: None,
 			udb,
@@ -80,13 +80,13 @@ impl Pools {
 	}
 
 	// MARK: Getters
-	pub fn nats_option(&self) -> &Option<UpsPool> {
-		&self.0.nats
+	pub fn ups_option(&self) -> &Option<UpsPool> {
+		&self.0.ups
 	}
 
 	// MARK: Pool lookups
 	pub fn ups(&self) -> Result<UpsPool> {
-		self.0.nats.clone().ok_or(Error::MissingNatsPool.into())
+		self.0.ups.clone().ok_or(Error::MissingUpsPool.into())
 	}
 
 	pub fn clickhouse_enabled(&self) -> bool {

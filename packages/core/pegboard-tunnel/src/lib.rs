@@ -118,10 +118,10 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 
 		let connection_id = Id::nil();
 
-		// Subscribe to NATS topic for this runner before accepting the client websocket so
+		// Subscribe to pubsub topic for this runner before accepting the client websocket so
 		// that failures can be retried by the proxy.
 		let topic = TunnelHttpRunnerSubject::new(runner_id, &port_name).to_string();
-		info!(?topic, ?runner_id, "subscribing to NATS topic");
+		info!(%topic, ?runner_id, "subscribing to pubsub topic");
 
 		let mut sub = match ups.subscribe(&topic).await {
 			Result::Ok(s) => s,
@@ -153,43 +153,43 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 			.insert(connection_id, connection.clone());
 
 		// Handle bidirectional message forwarding
-		let ws_write_nats_to_ws = ws_write.clone();
+		let ws_write_pubsub_to_ws = ws_write.clone();
 		let connections_clone = connections.clone();
 		let ups_clone = ups.clone();
 
-		// Task for forwarding NATS -> WebSocket
-		let nats_to_ws = tokio::spawn(async move {
-			info!("starting NATS to WebSocket forwarding task");
+		// Task for forwarding pubsub -> WebSocket
+		let pubsub_to_ws = tokio::spawn(async move {
+			info!("starting pubsub to WebSocket forwarding task");
 			while let ::std::result::Result::Ok(NextOutput::Message(msg)) = sub.next().await {
 				// Ack message
-				//match msg.reply(&[]).await {
-				//	Result::Ok(_) => {}
-				//	Err(err) => {
-				//		tracing::warn!(?err, "failed to ack gateway request response message")
-				//	}
-				//};
+				match msg.reply(&[]).await {
+					Result::Ok(_) => {}
+					Err(err) => {
+						tracing::warn!(?err, "failed to ack gateway request response message")
+					}
+				};
 
 				info!(
 					payload_len = msg.payload.len(),
-					"received message from NATS, forwarding to WebSocket"
+					"received message from pubsub, forwarding to WebSocket"
 				);
 				// Forward raw message to WebSocket
 				let ws_msg = WsMessage::Binary(msg.payload.to_vec().into());
 				{
-					let mut stream = ws_write_nats_to_ws.lock().await;
+					let mut stream = ws_write_pubsub_to_ws.lock().await;
 					if let Err(e) = stream.send(ws_msg).await {
 						error!(?e, "failed to send message to WebSocket");
 						break;
 					}
 				}
 			}
-			info!("NATS to WebSocket forwarding task ended");
+			info!("pubsub to WebSocket forwarding task ended");
 		});
 
-		// Task for forwarding WebSocket -> NATS
-		let ws_write_ws_to_nats = ws_write.clone();
-		let ws_to_nats = tokio::spawn(async move {
-			info!("starting WebSocket to NATS forwarding task");
+		// Task for forwarding WebSocket -> pubsub
+		let ws_write_ws_to_pubsub = ws_write.clone();
+		let ws_to_pubsub = tokio::spawn(async move {
+			info!("starting WebSocket to pubsub forwarding task");
 			while let Some(msg) = ws_read.next().await {
 				match msg {
 					::std::result::Result::Ok(WsMessage::Binary(data)) => {
@@ -203,7 +203,7 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 								// Handle different message types
 								match &tunnel_msg.body {
 									MessageBody::ToClientResponseStart(resp) => {
-										info!(?resp.request_id, status = resp.status, "forwarding HTTP response to NATS");
+										info!(?resp.request_id, status = resp.status, "forwarding HTTP response to pubsub");
 										let response_topic = TunnelHttpResponseSubject::new(
 											runner_id,
 											&port_name,
@@ -211,10 +211,15 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 										)
 										.to_string();
 
-										info!(?response_topic, ?resp.request_id, "publishing HTTP response to NATS");
+										info!(%response_topic, ?resp.request_id, "publishing HTTP response to pubsub");
 
-										if let Err(e) =
-											ups_clone.publish(&response_topic, &data.to_vec()).await
+										if let Err(e) = ups_clone
+											.request_with_timeout(
+												&response_topic,
+												&data.to_vec(),
+												UPS_REQ_TIMEOUT,
+											)
+											.await
 										{
 											let err_any: anyhow::Error = e.into();
 											if is_tunnel_closed_error(&err_any) {
@@ -223,19 +228,19 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 												);
 												// Close client websocket with reason
 												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_nats,
+													&ws_write_ws_to_pubsub,
 												)
 												.await;
 												break;
 											} else {
-												error!(?err_any, ?resp.request_id, "failed to publish HTTP response to NATS");
+												error!(?err_any, ?resp.request_id, "failed to publish HTTP response to pubsub");
 											}
 										} else {
-											info!(?resp.request_id, "successfully published HTTP response to NATS");
+											info!(?resp.request_id, "successfully published HTTP response to pubsub");
 										}
 									}
 									MessageBody::ToClientWebSocketMessage(ws_msg) => {
-										info!(?ws_msg.web_socket_id, "forwarding WebSocket message to NATS");
+										info!(?ws_msg.web_socket_id, "forwarding WebSocket message to pubsub");
 										// Forward WebSocket messages to the topic that pegboard-gateway subscribes to
 										let ws_topic = TunnelHttpWebSocketSubject::new(
 											runner_id,
@@ -244,10 +249,15 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 										)
 										.to_string();
 
-										info!(?ws_topic, ?ws_msg.web_socket_id, "publishing WebSocket message to NATS");
+										info!(%ws_topic, ?ws_msg.web_socket_id, "publishing WebSocket message to pubsub");
 
-										if let Err(e) =
-											ups_clone.publish(&ws_topic, &data.to_vec()).await
+										if let Err(e) = ups_clone
+											.request_with_timeout(
+												&ws_topic,
+												&data.to_vec(),
+												UPS_REQ_TIMEOUT,
+											)
+											.await
 										{
 											let err_any: anyhow::Error = e.into();
 											if is_tunnel_closed_error(&err_any) {
@@ -256,19 +266,19 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 												);
 												// Close client websocket with reason
 												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_nats,
+													&ws_write_ws_to_pubsub,
 												)
 												.await;
 												break;
 											} else {
-												error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to NATS");
+												error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to pubsub");
 											}
 										} else {
-											info!(?ws_msg.web_socket_id, "successfully published WebSocket message to NATS");
+											info!(?ws_msg.web_socket_id, "successfully published WebSocket message to pubsub");
 										}
 									}
 									MessageBody::ToClientWebSocketOpen(ws_open) => {
-										info!(?ws_open.web_socket_id, "forwarding WebSocket open to NATS");
+										info!(?ws_open.web_socket_id, "forwarding WebSocket open to pubsub");
 										let ws_topic = TunnelHttpWebSocketSubject::new(
 											runner_id,
 											&port_name,
@@ -276,8 +286,13 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 										)
 										.to_string();
 
-										if let Err(e) =
-											ups_clone.publish(&ws_topic, &data.to_vec()).await
+										if let Err(e) = ups_clone
+											.request_with_timeout(
+												&ws_topic,
+												&data.to_vec(),
+												UPS_REQ_TIMEOUT,
+											)
+											.await
 										{
 											let err_any: anyhow::Error = e.into();
 											if is_tunnel_closed_error(&err_any) {
@@ -286,19 +301,19 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 												);
 												// Close client websocket with reason
 												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_nats,
+													&ws_write_ws_to_pubsub,
 												)
 												.await;
 												break;
 											} else {
-												error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to NATS");
+												error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to pubsub");
 											}
 										} else {
-											info!(?ws_open.web_socket_id, "successfully published WebSocket open to NATS");
+											info!(?ws_open.web_socket_id, "successfully published WebSocket open to pubsub");
 										}
 									}
 									MessageBody::ToClientWebSocketClose(ws_close) => {
-										info!(?ws_close.web_socket_id, "forwarding WebSocket close to NATS");
+										info!(?ws_close.web_socket_id, "forwarding WebSocket close to pubsub");
 										let ws_topic = TunnelHttpWebSocketSubject::new(
 											runner_id,
 											&port_name,
@@ -306,8 +321,13 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 										)
 										.to_string();
 
-										if let Err(e) =
-											ups_clone.publish(&ws_topic, &data.to_vec()).await
+										if let Err(e) = ups_clone
+											.request_with_timeout(
+												&ws_topic,
+												&data.to_vec(),
+												UPS_REQ_TIMEOUT,
+											)
+											.await
 										{
 											let err_any: anyhow::Error = e.into();
 											if is_tunnel_closed_error(&err_any) {
@@ -316,21 +336,21 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 												);
 												// Close client websocket with reason
 												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_nats,
+													&ws_write_ws_to_pubsub,
 												)
 												.await;
 												break;
 											} else {
-												error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to NATS");
+												error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to pubsub");
 											}
 										} else {
-											info!(?ws_close.web_socket_id, "successfully published WebSocket close to NATS");
+											info!(?ws_close.web_socket_id, "successfully published WebSocket close to pubsub");
 										}
 									}
 									_ => {
-										// For other message types, we might not need to forward to NATS
+										// For other message types, we might not need to forward to pubsub
 										info!(
-											"Received non-response message from WebSocket, skipping NATS forward"
+											"Received non-response message from WebSocket, skipping pubsub forward"
 										);
 										continue;
 									}
@@ -354,7 +374,7 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 					}
 				}
 			}
-			info!("WebSocket to NATS forwarding task ended");
+			info!("WebSocket to pubsub forwarding task ended");
 
 			// Clean up connection
 			connections_clone.write().await.remove(&connection_id);
@@ -362,11 +382,11 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 
 		// Wait for either task to complete
 		tokio::select! {
-			_ = nats_to_ws => {
-				info!("NATS to WebSocket task completed");
+			_ = pubsub_to_ws => {
+				info!("pubsub to WebSocket task completed");
 			}
-			_ = ws_to_nats => {
-				info!("WebSocket to NATS task completed");
+			_ = ws_to_pubsub => {
+				info!("WebSocket to pubsub task completed");
 			}
 		}
 
@@ -440,9 +460,9 @@ async fn handle_connection(
 
 	let connection_id = rivet_util::Id::nil();
 
-	// Subscribe to NATS topic for this runner using raw NATS client
+	// Subscribe to pubsub topic for this runner using raw pubsub client
 	let topic = TunnelHttpRunnerSubject::new(runner_id, &port_name).to_string();
-	info!(?topic, ?runner_id, "subscribing to NATS topic");
+	info!(%topic, ?runner_id, "subscribing to pubsub topic");
 
 	// Get UPS (UniversalPubSub) client
 	let ups = ctx.pools().ups()?;
@@ -468,16 +488,16 @@ async fn handle_connection(
 	let connections_clone = connections.clone();
 	let ups_clone = ups.clone();
 
-	// Task for forwarding NATS -> WebSocket
-	let nats_to_ws = tokio::spawn(async move {
+	// Task for forwarding pubsub -> WebSocket
+	let pubsub_to_ws = tokio::spawn(async move {
 		while let ::std::result::Result::Ok(NextOutput::Message(msg)) = sub.next().await {
 			// Ack message
-			//match msg.reply(&[]).await {
-			//	Result::Ok(_) => {}
-			//	Err(err) => {
-			//		tracing::warn!(?err, "failed to ack gateway request response message")
-			//	}
-			//};
+			match msg.reply(&[]).await {
+				Result::Ok(_) => {}
+				Err(err) => {
+					tracing::warn!(?err, "failed to ack gateway request response message")
+				}
+			};
 
 			// Forward raw message to WebSocket
 			let ws_msg =
@@ -492,9 +512,9 @@ async fn handle_connection(
 		}
 	});
 
-	// Task for forwarding WebSocket -> NATS
-	let ws_write_ws_to_nats = ws_write.clone();
-	let ws_to_nats = tokio::spawn(async move {
+	// Task for forwarding WebSocket -> pubsub
+	let ws_write_ws_to_pubsub = ws_write.clone();
+	let ws_to_pubsub = tokio::spawn(async move {
 		while let Some(msg) = ws_read.next().await {
 			match msg {
 				::std::result::Result::Ok(tokio_tungstenite::tungstenite::Message::Binary(
@@ -513,8 +533,13 @@ async fn handle_connection(
 									)
 									.to_string();
 
-									if let Err(e) =
-										ups_clone.publish(&response_topic, &data.to_vec()).await
+									if let Err(e) = ups_clone
+										.request_with_timeout(
+											&response_topic,
+											&data.to_vec(),
+											UPS_REQ_TIMEOUT,
+										)
+										.await
 									{
 										let err_any: anyhow::Error = e.into();
 										if is_tunnel_closed_error(&err_any) {
@@ -522,11 +547,11 @@ async fn handle_connection(
 												"tunnel closed while publishing HTTP response; closing client websocket"
 											);
 											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_nats)
+											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
 												.await;
 											break;
 										} else {
-											error!(?err_any, ?resp.request_id, "failed to publish HTTP response to NATS");
+											error!(?err_any, ?resp.request_id, "failed to publish HTTP response to pubsub");
 										}
 									}
 								}
@@ -538,8 +563,13 @@ async fn handle_connection(
 									)
 									.to_string();
 
-									if let Err(e) =
-										ups_clone.publish(&ws_topic, &data.to_vec()).await
+									if let Err(e) = ups_clone
+										.request_with_timeout(
+											&ws_topic,
+											&data.to_vec(),
+											UPS_REQ_TIMEOUT,
+										)
+										.await
 									{
 										let err_any: anyhow::Error = e.into();
 										if is_tunnel_closed_error(&err_any) {
@@ -547,11 +577,11 @@ async fn handle_connection(
 												"tunnel closed while publishing WebSocket message; closing client websocket"
 											);
 											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_nats)
+											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
 												.await;
 											break;
 										} else {
-											error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to NATS");
+											error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to pubsub");
 										}
 									}
 								}
@@ -563,8 +593,13 @@ async fn handle_connection(
 									)
 									.to_string();
 
-									if let Err(e) =
-										ups_clone.publish(&ws_topic, &data.to_vec()).await
+									if let Err(e) = ups_clone
+										.request_with_timeout(
+											&ws_topic,
+											&data.to_vec(),
+											UPS_REQ_TIMEOUT,
+										)
+										.await
 									{
 										let err_any: anyhow::Error = e.into();
 										if is_tunnel_closed_error(&err_any) {
@@ -572,11 +607,11 @@ async fn handle_connection(
 												"tunnel closed while publishing WebSocket open; closing client websocket"
 											);
 											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_nats)
+											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
 												.await;
 											break;
 										} else {
-											error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to NATS");
+											error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to pubsub");
 										}
 									}
 								}
@@ -588,8 +623,13 @@ async fn handle_connection(
 									)
 									.to_string();
 
-									if let Err(e) =
-										ups_clone.publish(&ws_topic, &data.to_vec()).await
+									if let Err(e) = ups_clone
+										.request_with_timeout(
+											&ws_topic,
+											&data.to_vec(),
+											UPS_REQ_TIMEOUT,
+										)
+										.await
 									{
 										let err_any: anyhow::Error = e.into();
 										if is_tunnel_closed_error(&err_any) {
@@ -597,18 +637,18 @@ async fn handle_connection(
 												"tunnel closed while publishing WebSocket close; closing client websocket"
 											);
 											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_nats)
+											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
 												.await;
 											break;
 										} else {
-											error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to NATS");
+											error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to pubsub");
 										}
 									}
 								}
 								_ => {
-									// For other message types, we might not need to forward to NATS
+									// For other message types, we might not need to forward to pubsub
 									info!(
-										"Received non-response message from WebSocket, skipping NATS forward"
+										"Received non-response message from WebSocket, skipping pubsub forward"
 									);
 									continue;
 								}
@@ -639,11 +679,11 @@ async fn handle_connection(
 
 	// Wait for either task to complete
 	tokio::select! {
-		_ = nats_to_ws => {
-			info!("NATS to WebSocket task completed");
+		_ = pubsub_to_ws => {
+			info!("pubsub to WebSocket task completed");
 		}
-		_ = ws_to_nats => {
-			info!("WebSocket to NATS task completed");
+		_ = ws_to_pubsub => {
+			info!("WebSocket to pubsub task completed");
 		}
 	}
 

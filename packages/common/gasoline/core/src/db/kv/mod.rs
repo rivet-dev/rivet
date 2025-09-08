@@ -1,4 +1,4 @@
-//! Implementation of a workflow database driver with UniversalDB and NATS.
+//! Implementation of a workflow database driver with UniversalDB and UniversalPubSub.
 // TODO: Move code to smaller functions for readability
 
 use std::{
@@ -43,7 +43,7 @@ mod keys;
 const WORKER_INSTANCE_LOST_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
 /// How long before overwriting an existing metrics lock.
 const METRICS_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
-/// For NATS wake mechanism.
+/// For pubsub wake mechanism.
 const WORKER_WAKE_SUBJECT: &str = "gasoline.worker.wake";
 
 pub struct DatabaseKv {
@@ -52,17 +52,17 @@ pub struct DatabaseKv {
 }
 
 impl DatabaseKv {
-	/// Spawns a new thread and publishes a worker wake message to nats.
+	/// Spawns a new thread and publishes a worker wake message to pubsub.
 	fn wake_worker(&self) {
-		let Ok(nats) = self.pools.ups() else {
-			tracing::debug!("failed to acquire nats pool");
+		let Ok(pubsub) = self.pools.ups() else {
+			tracing::debug!("failed to acquire pubsub pool");
 			return;
 		};
 
 		let spawn_res = tokio::task::Builder::new().name("wake").spawn(
 			async move {
 				// Fail gracefully
-				if let Err(err) = nats.publish(WORKER_WAKE_SUBJECT, &Vec::new()).await {
+				if let Err(err) = pubsub.publish(WORKER_WAKE_SUBJECT, &Vec::new()).await {
 					tracing::warn!(?err, "failed to publish wake message");
 				}
 			}

@@ -12,14 +12,14 @@ use universalpubsub::{NextOutput, Subscriber};
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
-	message::{Message, NatsMessage, NatsMessageWrapper},
+	message::{Message, PubsubMessage, PubsubMessageWrapper},
 	utils::{self, tags::AsTags},
 };
 
 #[derive(Clone)]
 pub struct MessageCtx {
-	/// The connection used to communicate with NATS.
-	nats: UpsPool,
+	/// The connection used to communicate with pubsub.
+	pubsub: UpsPool,
 
 	ray_id: Id,
 
@@ -35,7 +35,7 @@ impl MessageCtx {
 		ray_id: Id,
 	) -> WorkflowResult<Self> {
 		Ok(MessageCtx {
-			nats: pools.ups().map_err(WorkflowError::PoolsGeneric)?,
+			pubsub: pools.ups().map_err(WorkflowError::PoolsGeneric)?,
 			ray_id,
 			config: config.clone(),
 		})
@@ -44,7 +44,7 @@ impl MessageCtx {
 
 // MARK: Publishing messages
 impl MessageCtx {
-	/// Publishes a message to NATS and to a durable message stream if a topic is
+	/// Publishes a message to pubsub and to a durable message stream if a topic is
 	/// set.
 	///
 	/// Use `subscribe` to consume these messages ephemerally and `tail` to read
@@ -94,7 +94,7 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let nats_subject = M::nats_subject();
+		let subject = M::subject();
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_else(|err| unreachable!("time is broken: {}", err));
@@ -109,7 +109,7 @@ impl MessageCtx {
 
 		// Serialize message
 		let req_id = Id::new_v1(self.config.dc_label());
-		let message = NatsMessageWrapper {
+		let message = PubsubMessageWrapper {
 			req_id,
 			ray_id: self.ray_id,
 			tags: tags.as_tags()?,
@@ -119,7 +119,7 @@ impl MessageCtx {
 		let message_buf = serde_json::to_vec(&message).map_err(WorkflowError::SerializeMessage)?;
 
 		tracing::debug!(
-			%nats_subject,
+			%subject,
 			body_bytes = ?body_buf_len,
 			message_bytes = ?message_buf.len(),
 			"publish message"
@@ -128,15 +128,15 @@ impl MessageCtx {
 		// It's important to write to the stream as fast as possible in order to
 		// ensure messages are handled quickly.
 		let message_buf = Arc::new(message_buf);
-		self.message_publish_nats::<M>(&nats_subject, message_buf)
+		self.message_publish_pubsub::<M>(&subject, message_buf)
 			.await;
 
 		Ok(())
 	}
 
-	/// Publishes the message to NATS.
+	/// Publishes the message to pubsub.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn message_publish_nats<M>(&self, nats_subject: &str, message_buf: Arc<Vec<u8>>)
+	async fn message_publish_pubsub<M>(&self, subject: &str, message_buf: Arc<Vec<u8>>)
 	where
 		M: Message,
 	{
@@ -146,19 +146,19 @@ impl MessageCtx {
 			// Ignore for infinite backoff
 			backoff.tick().await;
 
-			let nats_subject = nats_subject.to_owned();
+			let subject = subject.to_owned();
 
 			tracing::trace!(
-				%nats_subject,
+				%subject,
 				message_len = message_buf.len(),
-				"publishing message to nats"
+				"publishing message to pubsub"
 			);
-			if let Err(err) = self.nats.publish(&nats_subject, &(*message_buf)).await {
+			if let Err(err) = self.pubsub.publish(&subject, &(*message_buf)).await {
 				tracing::warn!(?err, "publish message failed, trying again");
 				continue;
 			}
 
-			tracing::debug!("publish nats message succeeded");
+			tracing::debug!("publish pubsub message succeeded");
 			break;
 		}
 	}
@@ -172,7 +172,7 @@ impl MessageCtx {
 
 // MARK: Subscriptions
 impl MessageCtx {
-	/// Listens for gasoline messages globally on NATS.
+	/// Listens for gasoline messages globally on pubsub.
 	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> WorkflowResult<SubscriptionHandle<M>>
 	where
@@ -180,13 +180,13 @@ impl MessageCtx {
 	{
 		self.subscribe_opt::<M>(SubscribeOpts {
 			tags: tags.as_tags()?,
-			flush_nats: true,
+			flush: true,
 		})
 		.in_current_span()
 		.await
 	}
 
-	/// Listens for gasoline messages globally on NATS.
+	/// Listens for gasoline messages globally on pubsub.
 	#[tracing::instrument(skip_all, fields(message = M::NAME))]
 	pub async fn subscribe_opt<M>(
 		&self,
@@ -195,24 +195,24 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let nats_subject = M::nats_subject();
+		let subject = M::subject();
 
 		// Create subscription and flush immediately.
-		tracing::debug!(%nats_subject, tags = ?opts.tags, "creating subscription");
+		tracing::debug!(%subject, tags = ?opts.tags, "creating subscription");
 		let subscription = self
-			.nats
-			.subscribe(&nats_subject)
+			.pubsub
+			.subscribe(&subject)
 			.await
 			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
-		if opts.flush_nats {
-			self.nats
+		if opts.flush {
+			self.pubsub
 				.flush()
 				.await
-				.map_err(|x| WorkflowError::FlushNats(x.into()))?;
+				.map_err(|x| WorkflowError::FlushPubsub(x.into()))?;
 		}
 
 		// Return handle
-		let subscription = SubscriptionHandle::new(nats_subject, subscription, opts.tags.clone());
+		let subscription = SubscriptionHandle::new(subject, subscription, opts.tags.clone());
 		Ok(subscription)
 	}
 }
@@ -220,7 +220,7 @@ impl MessageCtx {
 #[derive(Debug)]
 pub struct SubscribeOpts {
 	pub tags: serde_json::Value,
-	pub flush_nats: bool,
+	pub flush: bool,
 }
 
 /// Used to receive messages from other contexts.
@@ -291,7 +291,7 @@ where
 	///
 	/// This future can be safely dropped.
 	#[tracing::instrument(name="message_next", skip_all, fields(message = M::NAME))]
-	pub async fn next(&mut self) -> WorkflowResult<NatsMessage<M>> {
+	pub async fn next(&mut self) -> WorkflowResult<PubsubMessage<M>> {
 		tracing::debug!("waiting for message");
 
 		loop {
@@ -299,7 +299,7 @@ where
 			//
 			// Use blocking threads instead of `try_next`, since I'm not sure
 			// try_next works as intended.
-			let nats_message = match self.subscription.next().await {
+			let message = match self.subscription.next().await {
 				Ok(NextOutput::Message(msg)) => msg,
 				Ok(NextOutput::Unsubscribed) => {
 					tracing::debug!("unsubscribed");
@@ -311,11 +311,11 @@ where
 				}
 			};
 
-			let message_wrapper = NatsMessage::<M>::deserialize_wrapper(&nats_message.payload)?;
+			let message_wrapper = PubsubMessage::<M>::deserialize_wrapper(&message.payload)?;
 
 			// Check if the subscription tags match a subset of the message tags
 			if utils::is_value_subset(&self.tags, &message_wrapper.tags) {
-				let message = NatsMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
+				let message = PubsubMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
 				tracing::debug!(?message, "received message");
 
 				return Ok(message);
@@ -326,7 +326,7 @@ where
 	}
 
 	/// Converts the subscription in to a stream.
-	pub fn into_stream(self) -> impl futures_util::Stream<Item = WorkflowResult<NatsMessage<M>>> {
+	pub fn into_stream(self) -> impl futures_util::Stream<Item = WorkflowResult<PubsubMessage<M>>> {
 		futures_util::stream::try_unfold(self, |mut sub| {
 			async move {
 				let message = sub.next().await?;

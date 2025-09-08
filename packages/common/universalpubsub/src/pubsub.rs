@@ -79,3 +79,9 @@ impl Message {
 pub struct Response {
 	pub payload: Vec<u8>,
 }
+
+impl Drop for Message {
+	fn drop(&mut self) {
+		tracing::info!("dropping message");
+	}
+}

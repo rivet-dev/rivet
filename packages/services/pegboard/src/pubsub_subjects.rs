@@ -18,7 +18,7 @@ impl std::fmt::Display for TunnelHttpRunnerSubject<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"pegboard.tunnel_http.runner.{}.{}",
+			"pegboard.tunnel.http.runner.{}.{}",
 			self.runner_id, self.port_name
 		)
 	}
