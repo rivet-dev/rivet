@@ -6042,6 +6042,7 @@ dependencies = [
  "base64 0.22.1",
  "deadpool-postgres",
  "futures-util",
+ "moka",
  "rivet-config",
  "rivet-env",
  "rivet-error",

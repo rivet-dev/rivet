@@ -9,17 +9,18 @@ edition.workspace = true
 anyhow.workspace = true
 async-nats.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 deadpool-postgres.workspace = true
 futures-util.workspace = true
+moka.workspace = true
 rivet-error.workspace = true
-serde.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+sha2.workspace = true
+tokio-postgres.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
-tokio-postgres.workspace = true
-base64 = "0.22"
-sha2.workspace = true
 
 [dev-dependencies]
 rivet-config.workspace = true

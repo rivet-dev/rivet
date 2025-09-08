@@ -294,7 +294,7 @@ export function generateDockerCompose(context: TemplateContext) {
             ],
             ports: isPrimary && i === 0 ? [`6420:6420`] : undefined,
             healthcheck: {
-               test: ["CMD", "curl", "-f", "http://127.0.0.1:6421/health"],
+               test: ["CMD", "curl", "-f", "http://127.0.0.1:6420/health"],
                interval: "2s",
                timeout: "10s",
                retries: 10,

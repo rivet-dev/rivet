@@ -291,10 +291,22 @@ export class Runner {
 						pegboardWebSocket.readyState,
 					);
 
-					this.#sendToServer({
+					// NOTE: We don't use #sendToServer here because that function checks if the runner is
+					// shut down
+					const encoded = protocol.encodeToServer({
 						tag: "ToServerStopping",
 						val: null,
 					});
+					if (
+						this.#pegboardWebSocket &&
+						this.#pegboardWebSocket.readyState === WebSocket.OPEN
+					) {
+						this.#pegboardWebSocket.send(encoded);
+					} else {
+						console.error(
+							"WebSocket not available or not open for sending data",
+						);
+					}
 
 					const closePromise = new Promise<void>((resolve) => {
 						if (!pegboardWebSocket)
@@ -360,7 +372,7 @@ export class Runner {
 		console.log("[RUNNER] Opening tunnel to:", url);
 		console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
 		console.log("[RUNNER] Active actors count:", this.#actors.size);
-		
+
 		this.#tunnel = new Tunnel(url);
 		this.#tunnel.setCallbacks({
 			fetch: this.#config.fetch,

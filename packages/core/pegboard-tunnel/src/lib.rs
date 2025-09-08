@@ -85,24 +85,14 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 		let connections = self.connections.clone();
 
 		// Extract runner_id from query parameters
-		let runner_id = if let Some(query_start) = path.find('?') {
-			let query_string = &path[query_start + 1..];
-			let params: Vec<_> = query_string.split('&').collect();
-			let mut found_runner_id = None;
-
-			for param in params {
-				if let Some(eq_pos) = param.find('=') {
-					let (key, value) = param.split_at(eq_pos);
-					if key == "runner_id" {
-						// Remove the leading '=' from value
-						let id_str = &value[1..];
-						found_runner_id = id_str.parse::<Id>().ok();
-						break;
-					}
-				}
-			}
-
-			found_runner_id.unwrap_or(Id::nil())
+		let runner_id = if let std::result::Result::Ok(url) =
+			url::Url::parse(&format!("ws://placeholder/{path}"))
+		{
+			url.query_pairs()
+				.find_map(|(n, v)| (n == "runner_id").then_some(v))
+				.as_ref()
+				.and_then(|id| Id::parse(id).ok())
+				.unwrap_or(Id::nil())
 		} else {
 			Id::nil()
 		};

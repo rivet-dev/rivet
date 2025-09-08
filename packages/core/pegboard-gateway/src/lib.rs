@@ -320,6 +320,21 @@ impl PegboardGateway {
 			}
 		}
 
+		let ups = match self.ctx.ups() {
+			Result::Ok(u) => u,
+			Err(err) => return Err((client_ws, err.into())),
+		};
+
+		// Subscribe to messages from server before informing server that a client websocket is connecting to
+		// prevent race conditions.
+		let ws_subject =
+			TunnelHttpWebSocketSubject::new(self.runner_id, &self.port_name, websocket_id);
+		let response_topic = ws_subject.to_string();
+		let mut subscriber = match ups.subscribe(&response_topic).await {
+			Result::Ok(sub) => sub,
+			Err(err) => return Err((client_ws, err.into())),
+		};
+
 		// Build pubsub topic
 		let tunnel_subject = TunnelHttpRunnerSubject::new(self.runner_id, &self.port_name);
 		let topic = tunnel_subject.to_string();
@@ -345,26 +360,12 @@ impl PegboardGateway {
 				}
 			};
 
-		let ups = match self.ctx.ups() {
-			Result::Ok(u) => u,
-			Err(err) => return Err((client_ws, err.into())),
-		};
 		if let Err(err) = ups
 			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
 			.await
 		{
 			return Err((client_ws, err.into()));
 		}
-
-		// Subscribe to messages from server before accepting the client websocket so that
-		// failures here can be retried by the proxy.
-		let ws_subject =
-			TunnelHttpWebSocketSubject::new(self.runner_id, &self.port_name, websocket_id);
-		let response_topic = ws_subject.to_string();
-		let mut subscriber = match ups.subscribe(&response_topic).await {
-			Result::Ok(sub) => sub,
-			Err(err) => return Err((client_ws, err.into())),
-		};
 
 		// Accept the WebSocket
 		let ws_stream = match client_ws.await {

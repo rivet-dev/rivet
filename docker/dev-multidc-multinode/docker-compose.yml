@@ -184,7 +184,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -224,7 +224,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -264,7 +264,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -444,7 +444,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -484,7 +484,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -524,7 +524,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -702,7 +702,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -742,7 +742,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10
@@ -782,7 +782,7 @@ services:
         - CMD
         - curl
         - '-f'
-        - http://127.0.0.1:6421/health
+        - http://127.0.0.1:6420/health
       interval: 2s
       timeout: 10s
       retries: 10

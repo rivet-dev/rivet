@@ -193,6 +193,7 @@ impl Root {
 		{
 			self.pubsub = Some(PubSub::PostgresNotify(pubsub::Postgres {
 				url: pg.url.clone(),
+				memory_optimization: true,
 			}));
 		}
 
