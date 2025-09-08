@@ -1,7 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["packages/common/api-builder","packages/common/api-client","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/udb-util","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner-ws","packages/core/pegboard-tunnel","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/api-runtime","sdks/rust/bare_gen","sdks/rust/epoxy-protocol","sdks/rust/key-data","sdks/rust/runner-protocol","sdks/rust/tunnel-protocol"]
+members = ["packages/common/api-builder","packages/common/api-client","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/udb-util","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner-ws","packages/core/pegboard-tunnel","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/bare_gen","sdks/rust/epoxy-protocol","sdks/rust/key-data","sdks/rust/runner-protocol","sdks/rust/tunnel-protocol"]
 
 [workspace.package]
 version = "0.0.1"
@@ -58,7 +58,6 @@ regex = "1.4"
 rstest = "0.26.1"
 rustls-pemfile = "2.2.0"
 rustyline = "15.0.0"
-sentry = { version = "0.37.0", default-features = false, features = ["anyhow", "backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 serde_bare = "0.5.0"
 serde_yaml = "0.9.34"
 sha2 = "0.10"
@@ -80,6 +79,11 @@ tracing-core = "0.1"
 tracing-opentelemetry = "0.29"
 tracing-slog = "0.2"
 vergen = "9.0.4"
+
+[workspace.dependencies.sentry]
+version = "0.37.0"
+default-features = false
+features = ["anyhow","backtrace","contexts","debug-images","panic","reqwest","rustls"]
 
 [workspace.dependencies.windows]
 version = "0.58"
@@ -378,9 +382,6 @@ path = "packages/services/pegboard"
 
 [workspace.dependencies.rivet-api-full]
 path = "sdks/rust/api-full"
-
-[workspace.dependencies.rivet-api-runtime]
-path = "sdks/rust/api-runtime"
 
 [workspace.dependencies.bare_gen]
 path = "sdks/rust/bare_gen"

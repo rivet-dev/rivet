@@ -1,7 +1,14 @@
 import type { ReleaseOpts } from "./main.ts";
 import { glob } from "glob";
-import $ from "dax";
-import { assert } from "@std/assert";
+import { $ } from "execa";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
+function assert(condition: any, message?: string): asserts condition {
+	if (!condition) {
+		throw new Error(message || "Assertion failed");
+	}
+}
 
 export async function updateVersion(opts: ReleaseOpts) {
 	// Define substitutions
@@ -48,12 +55,12 @@ export async function updateVersion(opts: ReleaseOpts) {
 		const paths = await glob(globPath, { cwd: opts.root });
 		assert(paths.length > 0, `no paths matched: ${globPath}`);
 		for (const path of paths) {
-			const file = await Deno.readTextFile(path);
+			const file = await fs.readFile(path, 'utf-8');
 			assert(find.test(file), `file does not match ${find}: ${path}`);
 			const newFile = file.replace(find, replace);
-			await Deno.writeTextFile(path, newFile);
+			await fs.writeFile(path, newFile);
 
-			await $`git add ${path}`.cwd(opts.root);
+			await $({ cwd: opts.root })`git add ${path}`;
 		}
 	}
 }

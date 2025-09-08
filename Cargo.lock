@@ -4111,18 +4111,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet-api-runtime"
-version = "0.0.1"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "serde_repr",
- "serde_with",
- "url",
-]
-
-[[package]]
 name = "rivet-api-types"
 version = "0.0.1"
 dependencies = [

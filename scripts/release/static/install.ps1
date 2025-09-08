@@ -16,22 +16,22 @@ if (!(Test-Path $RivetInstall)) {
 	New-Item $RivetInstall -ItemType Directory | Out-Null
 }
 
-$RivetExe = "$RivetInstall\rivet.exe"
+$RivetExe = "$RivetInstall\rivet-engine.exe"
 $Version = '__VERSION__'
-$FileName = 'rivet-x86_64-pc-windows-gnu.exe'
+$FileName = 'rivet-engine-x86_64-pc-windows-gnu.exe'
 
 Write-Host
-Write-Host "> Installing Rivet CLI ${Version}"
+Write-Host "> Installing Rivet Engine ${Version}"
 
 # Download CLI
-$DownloadUrl = "https://releases.rivet.gg/rivet/${Version}/${FileName}"
+$DownloadUrl = "https://releases.rivet.gg/engine/${Version}/${FileName}"
 Write-Host
 Write-Host "> Downloading ${DownloadUrl}"
 Invoke-WebRequest $DownloadUrl -OutFile $RivetExe -UseBasicParsing
 
 # Install CLI
 Write-Host
-Write-Host "> Installing rivet"
+Write-Host "> Installing rivet-engine"
 $User = [System.EnvironmentVariableTarget]::User
 $Path = [System.Environment]::GetEnvironmentVariable('Path', $User)
 if (!(";${Path};".ToLower() -like "*;${RivetInstall};*".ToLower())) {
@@ -43,9 +43,9 @@ if (!(";${Path};".ToLower() -like "*;${RivetInstall};*".ToLower())) {
 
 Write-Host
 Write-Host "> Checking installation"
-rivet.exe --version
+rivet-engine.exe --version
 
 Write-Host
-Write-Host "Rivet was installed successfully to ${RivetExe}."
-Write-Host "Run 'rivet --help' to get started."
+Write-Host "Rivet engine was installed successfully to ${RivetExe}."
+Write-Host "Run 'rivet-engine --help' to get started."
 Write-Host

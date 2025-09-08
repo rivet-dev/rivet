@@ -24,57 +24,57 @@ env:
   RUSTFLAGS: "--cfg tokio_unstable"
 
 jobs:
-  # setup:
-  #   name: "Setup"
-  #   runs-on: ubuntu-24.04
-  #   permissions:
-  #     # Allow pushing to GitHub
-  #     contents: write
-  #     # Allows JSR to authenticate with GitHub
-  #     id-token: write
-  #   steps:
-  #     - name: Checkout rivet
-  #       uses: actions/checkout@v4
-  #       with:
-  #         lfs: 'true'
-  #         path: './rivet'
+  setup:
+    name: "Setup"
+    runs-on: ubuntu-24.04
+    permissions:
+      # Allow pushing to GitHub
+      contents: write
+      # Allows JSR to authenticate with GitHub
+      id-token: write
+    steps:
+      - name: Checkout rivet
+        uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+          path: './rivet'
 
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-  #     - run: corepack enable
+      - run: corepack enable
 
-  #     - name: Setup
-  #       env:
-  #         # Required to authenticate with Git
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       working-directory: './rivet'
-  #       run: |
-  #         # Configure Git
-  #         git config --global user.name "github-actions[bot]"
-  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Setup
+        env:
+          # Required to authenticate with Git
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: './rivet'
+        run: |
+          # Configure Git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-  #         # Install Deno
-  #         curl -fsSL https://deno.land/x/install/install.sh | sh
-  #         export PATH=$HOME/.deno/bin:$PATH
+          # Authenticate with NPM
+          cat << EOF > ~/.npmrc
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          EOF
 
-  #         # Authenticate with NPM
-  #         cat << EOF > ~/.npmrc
-  #         //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-  #         EOF
+          # Install dependencies
+          pnpm install
 
-  #         pnpm install
+          # Install tsx globally
+          npm install -g tsx
 
-  #         if [ "${{ inputs.latest }}" = "true" ]; then
-  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
-  #         else
-  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
-  #         fi
+          if [ "${{ inputs.latest }}" = "true" ]; then
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+          else
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+          fi
 
   binaries:
     name: "Build & Push Binaries"
-    # needs: [setup]
+    needs: [setup]
     strategy:
       matrix:
         include:
@@ -124,8 +124,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: |
           # Install dependencies for AWS CLI
-          apt-get update
-          apt-get install -y unzip curl
+          sudo apt-get update
+          sudo apt-get install -y unzip curl
 
           # Install AWS CLI - use ARM version if running on ARM architecture
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
@@ -134,7 +134,7 @@ jobs:
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           fi
           unzip awscliv2.zip
-          ./aws/install --update
+          sudo ./aws/install --update
 
           COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
           BINARY_PATH="dist/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}"
@@ -142,14 +142,14 @@ jobs:
           # Must specify --checksum-algorithm for compatibility with R2
           aws s3 cp \
             "${BINARY_PATH}" \
-            "s3://rivet/${COMMIT_SHA_SHORT}/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}" \
+            "s3://engine/${COMMIT_SHA_SHORT}/rivet-engine-${{ matrix.target }}${{ matrix.binary_ext }}" \
             --region auto \
-            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-engine-releases \
+            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases \
             --checksum-algorithm CRC32
 
   docker:
     name: "Build & Push Docker Images"
-    # needs: [setup]
+    needs: [setup]
     strategy:
       matrix:
         include:
@@ -169,13 +169,8 @@ jobs:
         uses: douglascamata/setup-docker-macos-action@v1-alpha
 
       - uses: actions/checkout@v4
-
-      # Required for running in Docker
-      - name: Git LFS Pull
-        run: |
-          apt-get update
-          apt-get install git-lfs
-          git lfs pull
+        with:
+          lfs: true
 
       - name: Set outputs
         id: vars
@@ -215,32 +210,40 @@ jobs:
           # secret-files: |
           #   netrc=${{ runner.temp }}/netrc
 
-  # complete:
-  #   name: "Complete"
-  #   needs: [docker]
-  #   runs-on: ubuntu-24.04
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         lfs: 'true'
+  complete:
+    name: "Complete"
+    needs: [docker]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
 
-  #     - uses: ./.github/actions/docker-setup
-  #       with:
-  #         docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
-  #         docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
-  #         github_token: ${{ secrets.GITHUB_TOKEN}}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-  #     - name: Complete
-  #       env:
-  #         R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-  #         R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-  #       run: |
-  #         # Install Deno
-  #         curl -fsSL https://deno.land/x/install/install.sh | sh
-  #         export PATH=$HOME/.deno/bin:$PATH
+      - run: corepack enable
 
-  #         if [ "${{ inputs.latest }}" = "true" ]; then
-  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
-  #         else
-  #             ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
-  #         fi
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+
+      - name: Complete
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          # Install dependencies
+          pnpm install
+
+          # Install tsx globally
+          npm install -g tsx
+
+          if [ "${{ inputs.latest }}" = "true" ]; then
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
+          else
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
+          fi

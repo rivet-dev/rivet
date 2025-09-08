@@ -603,6 +603,25 @@ importers:
         specifier: ^0.25.0
         version: 0.25.8
 
+  scripts/release:
+    dependencies:
+      execa:
+        specifier: ^8.0.1
+        version: 8.0.1
+      glob:
+        specifier: ^10.3.10
+        version: 10.4.5
+    devDependencies:
+      '@types/minimist':
+        specifier: ^1.2.5
+        version: 1.2.5
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.3.0
+      minimist:
+        specifier: ^1.2.8
+        version: 1.2.8
+
   scripts/tests:
     devDependencies:
       '@types/node':
@@ -613,52 +632,6 @@ importers:
         version: 8.18.3
 
   sdks/typescript/api-full:
-    dependencies:
-      form-data:
-        specifier: ^4.0.0
-        version: 4.0.4
-      js-base64:
-        specifier: ^3.7.5
-        version: 3.7.7
-      node-fetch:
-        specifier: '2'
-        version: 2.7.0
-      qs:
-        specifier: ^6.11.2
-        version: 6.14.0
-      readable-stream:
-        specifier: ^4.5.2
-        version: 4.7.0
-      url-join:
-        specifier: ^5.0.0
-        version: 5.0.0
-    devDependencies:
-      '@types/node':
-        specifier: 17.0.33
-        version: 17.0.33
-      '@types/node-fetch':
-        specifier: 2.6.11
-        version: 2.6.11
-      '@types/qs':
-        specifier: 6.9.8
-        version: 6.9.8
-      '@types/readable-stream':
-        specifier: ^4.0.18
-        version: 4.0.21
-      '@types/url-join':
-        specifier: 4.0.1
-        version: 4.0.1
-      esbuild:
-        specifier: ^0.19.11
-        version: 0.19.12
-      prettier:
-        specifier: 2.7.1
-        version: 2.7.1
-      typescript:
-        specifier: 5.8.2
-        version: 5.8.2
-
-  sdks/typescript/api-runtime:
     dependencies:
       form-data:
         specifier: ^4.0.0
@@ -3511,6 +3484,9 @@ packages:
   '@types/mime@4.0.0':
     resolution: {integrity: sha512-5eEkJZ/BLvTE3vXGKkWlyTSUVZuzj23Wj8PoyOq2lt5I3CYbiLBOPb3XmCW6QcuOibIUE6emHXHt9E/F/rCa6w==}
     deprecated: This is a stub types definition. mime provides its own type definitions, so you do not need this installed.
+
+  '@types/minimist@1.2.5':
+    resolution: {integrity: sha512-hov8bUuiLiyFPGyFPE1lwWhmzYbirOXQNNo40+y3zow8aFVTeyn3VWL0VFFfdNddA8S4Vf0Tc062rzyNr7Paag==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -10098,6 +10074,8 @@ snapshots:
   '@types/mime@4.0.0':
     dependencies:
       mime: 4.0.7
+
+  '@types/minimist@1.2.5': {}
 
   '@types/ms@2.1.0': {}
 

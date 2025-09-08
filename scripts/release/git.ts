@@ -1,9 +1,10 @@
 import type { ReleaseOpts } from "./main.ts";
-import $ from "dax";
+import { $ } from "execa";
 
 export async function validateGit(_opts: ReleaseOpts) {
 	// Validate there's no uncommitted changes
-	const status = await $`git status --porcelain`.text();
+	const result = await $`git status --porcelain`;
+	const status = result.stdout;
 	if (status.trim().length > 0) {
 		throw new Error(
 			"There are uncommitted changes. Please commit or stash them.",

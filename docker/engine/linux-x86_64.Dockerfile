@@ -16,21 +16,21 @@ RUN apt-get update && apt-get install -y \
     g++-multilib \
     git-lfs && \
     rm -rf /var/lib/apt/lists/* && \
-    wget -q https://musl.cc/x86_64-linux-musl-cross.tgz && \
-    tar -xzf x86_64-linux-musl-cross.tgz -C /opt/ && \
-    rm x86_64-linux-musl-cross.tgz
+    wget -q https://github.com/cross-tools/musl-cross/releases/latest/download/x86_64-unknown-linux-musl.tar.xz && \
+    tar -xf x86_64-unknown-linux-musl.tar.xz -C /opt/ && \
+    rm x86_64-unknown-linux-musl.tar.xz
 
 # Install musl targets
 RUN rustup target add x86_64-unknown-linux-musl
 
 # Set environment variables
-ENV PATH="/opt/x86_64-linux-musl-cross/bin:$PATH" \
+ENV PATH="/opt/x86_64-unknown-linux-musl/bin:$PATH" \
     LIBCLANG_PATH=/usr/lib/llvm-14/lib \
     CLANG_PATH=/usr/bin/clang-14 \
-    CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc \
-    CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++ \
-    AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar \
-    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc \
+    CC_x86_64_unknown_linux_musl=x86_64-unknown-linux-musl-gcc \
+    CXX_x86_64_unknown_linux_musl=x86_64-unknown-linux-musl-g++ \
+    AR_x86_64_unknown_linux_musl=x86_64-unknown-linux-musl-ar \
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-unknown-linux-musl-gcc \
     CARGO_INCREMENTAL=0 \
     RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc" \
     CARGO_NET_GIT_FETCH_WITH_CLI=true

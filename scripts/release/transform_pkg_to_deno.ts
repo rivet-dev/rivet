@@ -1,6 +1,7 @@
 import type { PackageJson, TsConfigJson } from "type-fest";
-import { join, joinGlobs, dirname, basename } from "@std/path";
-import { expandGlob } from "@std/fs";
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
+import { glob } from "glob";
 
 type DenoFlavoredPackageJson = PackageJson & {
 	deno?: {
@@ -34,10 +35,10 @@ interface Config {
  * - Use `deno` field in exports to point to the correct path
  */
 export async function transformPackageJsonToDenoJson(
-	config: Config = { internalPackagesLinkPath: "internal", cwd: Deno.cwd() },
+	config: Config = { internalPackagesLinkPath: "internal", cwd: process.cwd() },
 ) {
 	const packageJson: DenoFlavoredPackageJson = JSON.parse(
-		await Deno.readTextFile(join(config.cwd,"package.json")),
+		await fs.readFile(path.join(config.cwd,"package.json"), 'utf-8'),
 	);
 
 	const denoPkg = {
@@ -52,12 +53,13 @@ export async function transformPackageJsonToDenoJson(
 		publish: { ...(packageJson.deno?.publish ?? {}) },
 	};
 
-	const dirStat = await Deno.stat(config.internalPackagesLinkPath).catch(
-		() => null,
-	);
-
-	if (dirStat?.isDirectory) {
-		await Deno.remove(config.internalPackagesLinkPath, { recursive: true });
+	try {
+		const dirStat = await fs.stat(config.internalPackagesLinkPath);
+		if (dirStat.isDirectory()) {
+			await fs.rm(config.internalPackagesLinkPath, { recursive: true });
+		}
+	} catch (error) {
+		// Directory doesn't exist, that's fine
 	}
 
 	const internalPackages = await getInternalPackages(config.cwd);
@@ -98,26 +100,26 @@ export async function transformPackageJsonToDenoJson(
 				);
 			}
 
-			const link = basename(dirname(internalPkg.path));
+			const link = path.basename(path.dirname(internalPkg.path));
 
-			await Deno.mkdir(
-				join(config.cwd, config.internalPackagesLinkPath),
+			await fs.mkdir(
+				path.join(config.cwd, config.internalPackagesLinkPath),
 				{ recursive: true },
 			);
 
-			const internalPkgPath = join(
+			const internalPkgPath = path.join(
 				internalPkg.path,
 				"..",
 				config.skipPathInInternalPackages || "",
 			);
-			const relativeAliasedPkgPath = join(
+			const relativeAliasedPkgPath = path.join(
 				config.internalPackagesLinkPath,
 				link,
 			);
 
-			const aliasedPkgPath = join(config.cwd, relativeAliasedPkgPath);
+			const aliasedPkgPath = path.join(config.cwd, relativeAliasedPkgPath);
 
-			await Deno.symlink(internalPkgPath, aliasedPkgPath);
+			await fs.symlink(internalPkgPath, aliasedPkgPath);
 
 			// Add the symlinked package to the negation of exclude (exclude it from exclude)
 			if (
@@ -147,7 +149,7 @@ export async function transformPackageJsonToDenoJson(
 					);
 				}
 
-				const exported = join(internalPkg.packageJson.name, exportPath);
+				const exported = path.join(internalPkg.packageJson.name, exportPath);
 
 				if (!paths?.deno) {
 					throw new Error(
@@ -161,7 +163,7 @@ export async function transformPackageJsonToDenoJson(
 					);
 				}
 
-				const newPath = join(
+				const newPath = path.join(
 					"./",
 					"internal",
 					link,
@@ -179,44 +181,44 @@ export async function transformPackageJsonToDenoJson(
 		}
 	}
 
-	await Deno.writeTextFile(join(config.cwd, "deno.json"), JSON.stringify(denoPkg, null, "\t"));
+	await fs.writeFile(path.join(config.cwd, "deno.json"), JSON.stringify(denoPkg, null, "\t"));
 }
 
-async function findRootWorkspace(dir = Deno.cwd()): Promise<string> {
+async function findRootWorkspace(dir = process.cwd()): Promise<string> {
 	try {
 		const { workspaces } = JSON.parse(
-			await Deno.readTextFile(join(dir, "package.json")),
+			await fs.readFile(path.join(dir, "package.json"), 'utf-8'),
 		);
 		if (workspaces) {
-			return join(dir, "package.json");
+			return path.join(dir, "package.json");
 		}
-		return findRootWorkspace(join(dir, ".."));
+		return findRootWorkspace(path.join(dir, ".."));
 	} catch {
-		return findRootWorkspace(join(dir, ".."));
+		return findRootWorkspace(path.join(dir, ".."));
 	}
 }
 
 async function getInternalPackages(cwd: string): Promise<InternalPackagesMap> {
 	const workspaceRoot = await findRootWorkspace(cwd);
-	const { workspaces } = JSON.parse(await Deno.readTextFile(workspaceRoot));
-
-	const globPatterns = workspaces.map((pattern: string) =>
-		joinGlobs([pattern, "package.json"]),
-	);
+	const { workspaces } = JSON.parse(await fs.readFile(workspaceRoot, 'utf-8'));
 
 	const internalPackages = new Map<
 		string,
 		{ path: string; packageJson: DenoFlavoredPackageJson }
 	>();
 
-	for (const pattern of globPatterns) {
-		for await (const entry of expandGlob(pattern, {
-			root: join(workspaceRoot, ".."),
-		})) {
-			const packageJson = JSON.parse(await Deno.readTextFile(entry.path));
+	for (const pattern of workspaces) {
+		const globPattern = path.join(pattern, "package.json");
+		const matches = await glob(globPattern, {
+			cwd: path.join(workspaceRoot, ".."),
+			absolute: true,
+		});
+
+		for (const matchPath of matches) {
+			const packageJson = JSON.parse(await fs.readFile(matchPath, 'utf-8'));
 
 			internalPackages.set(packageJson.name, {
-				path: entry.path,
+				path: matchPath,
 				packageJson,
 			});
 		}

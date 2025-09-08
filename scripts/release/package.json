@@ -1,0 +1,22 @@
+{
+	"name": "release",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"check-types": "tsc --noEmit"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"packageManager": "pnpm@10.13.1",
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"minimist": "^1.2.8",
+		"@types/minimist": "^1.2.5"
+	},
+	"dependencies": {
+		"execa": "^8.0.1",
+		"glob": "^10.3.10"
+	}
+}

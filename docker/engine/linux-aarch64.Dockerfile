@@ -15,21 +15,21 @@ RUN apt-get update && apt-get install -y \
     g++-multilib \
     git-lfs && \
     rm -rf /var/lib/apt/lists/* && \
-    wget -q https://musl.cc/aarch64-linux-musl-cross.tgz && \
-    tar -xzf aarch64-linux-musl-cross.tgz -C /opt/ && \
-    rm aarch64-linux-musl-cross.tgz
+    wget -q https://github.com/cross-tools/musl-cross/releases/download/20250815/aarch64-unknown-linux-musl.tar.xz && \
+    tar -xzf aarch64-unknown-linux-musl.tgz -C /opt/ && \
+    rm aarch64-unknown-linux-musl.tgz
 
 # Install musl targets
 RUN rustup target add aarch64-unknown-linux-musl
 
 # Set environment variables
-ENV PATH="/opt/aarch64-linux-musl-cross/bin:$PATH" \
+ENV PATH="/opt/aarch64-unknown-linux-musl/bin:$PATH" \
     LIBCLANG_PATH=/usr/lib/llvm-14/lib \
     CLANG_PATH=/usr/bin/clang-14 \
-    CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc \
-    CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++ \
-    AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar \
-    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc \
+    CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc \
+    CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++ \
+    AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc \
     CARGO_INCREMENTAL=0 \
     RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc" \
     CARGO_NET_GIT_FETCH_WITH_CLI=true

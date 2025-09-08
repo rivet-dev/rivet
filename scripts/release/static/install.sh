@@ -7,11 +7,11 @@
 # shellcheck enable=require-variable-braces
 set -eu
 
-rm -rf /tmp/rivet_cli_install
-mkdir /tmp/rivet_cli_install
-cd /tmp/rivet_cli_install
+rm -rf /tmp/rivet_engine_install
+mkdir /tmp/rivet_engine_install
+cd /tmp/rivet_engine_install
 
-RIVET_CLI_VERSION="${RIVET_CLI_VERSION:-__VERSION__}"
+RIVET_ENGINE_VERSION="${RIVET_ENGINE_VERSION:-__VERSION__}"
 UNAME="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -21,9 +21,9 @@ if [ "$(printf '%s' "$UNAME" | cut -c 1-6)" = "Darwin" ]; then
 	echo "> Detected macOS"
 
 	if [ "$ARCH" = "x86_64" ]; then
-		FILE_NAME="rivet-x86_64-apple-darwin"
+		FILE_NAME="rivet-engine-x86_64-apple-darwin"
 	elif [ "$ARCH" = "arm64" ]; then
-		FILE_NAME="rivet-aarch64-apple-darwin"
+		FILE_NAME="rivet-engine-aarch64-apple-darwin"
 	else
 		echo "Unknown arch $ARCH" 1>&2
 		exit 1
@@ -32,7 +32,7 @@ elif [ "$(printf '%s' "$UNAME" | cut -c 1-5)" = "Linux" ]; then
 	echo
 	echo "> Detected Linux ($(getconf LONG_BIT) bit)"
 
-	FILE_NAME="rivet-x86_64-unknown-linux-musl"
+	FILE_NAME="rivet-engine-x86_64-unknown-linux-musl"
 else
 	echo "Unable to determine platform" 1>&2
 	exit 1
@@ -44,7 +44,7 @@ if [ -z "$BIN_DIR" ]; then
 	BIN_DIR="/usr/local/bin"
 fi
 set -u
-INSTALL_PATH="$BIN_DIR/rivet"
+INSTALL_PATH="$BIN_DIR/rivet-engine"
 
 if [ ! -d "$BIN_DIR" ]; then
     # Find the base parent directory. We're using mkdir -p, which recursively creates directories, so we can't rely on `dirname`.
@@ -66,22 +66,22 @@ if [ ! -d "$BIN_DIR" ]; then
 
 fi
 
-# Download CLI
-URL="https://releases.rivet.gg/rivet/${RIVET_CLI_VERSION}/${FILE_NAME}"
+# Download engine
+URL="https://releases.rivet.gg/engine/${RIVET_ENGINE_VERSION}/${FILE_NAME}"
 echo
 echo "> Downloading $URL"
-curl -fsSL "$URL" -o rivet-cli
-chmod +x rivet-cli
+curl -fsSL "$URL" -o rivet-engine
+chmod +x rivet-engine
 
 # Move binary
 if [ ! -w "$BIN_DIR" ]; then
     echo
-    echo "> Installing rivet to $INSTALL_PATH (requires sudo)"
-    sudo mv ./rivet-cli "$INSTALL_PATH"
+    echo "> Installing rivet-engine to $INSTALL_PATH (requires sudo)"
+    sudo mv ./rivet-engine "$INSTALL_PATH"
 else
     echo
-    echo "> Installing rivet to $INSTALL_PATH"
-    mv ./rivet-cli "$INSTALL_PATH"
+    echo "> Installing rivet-engine to $INSTALL_PATH"
+    mv ./rivet-engine "$INSTALL_PATH"
 fi
 
 # Check if path may be incorrect
@@ -96,8 +96,8 @@ esac
 
 echo
 echo "> Checking installation"
-"$BIN_DIR/rivet" --version
+"$BIN_DIR/rivet-engine" --version
 
 echo
 echo "Rivet was installed successfully."
-echo "Run 'rivet --help' to get started."
+echo "Run 'rivet-engine --help' to get started."

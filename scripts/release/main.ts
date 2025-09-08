@@ -1,17 +1,37 @@
-#!/usr/bin/env -S deno run -A
+#!/usr/bin/env tsx
 
-import { resolve } from "jsr:@std/path";
-import { assert, assertEquals, assertExists } from "jsr:@std/assert";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import * as url from "node:url";
+import minimist from "minimist";
+import { $ } from "execa";
 import { publishSdk } from "./sdk.ts";
 import { updateVersion } from "./update_version.ts";
 import { configureReleasePlease } from "./release_please.ts";
 import { validateGit } from "./git.ts";
-import { parseArgs } from "jsr:@std/cli";
-import $ from "dax";
 import { tagDocker } from "./docker.ts";
 import { updateArtifacts } from "./artifacts.ts";
 
-const ROOT_DIR = resolve(import.meta.dirname!, "..", "..");
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const ROOT_DIR = path.resolve(__dirname, "..", "..");
+
+function assert(condition: any, message?: string): asserts condition {
+	if (!condition) {
+		throw new Error(message || "Assertion failed");
+	}
+}
+
+function assertEquals<T>(actual: T, expected: T, message?: string): void {
+	if (actual !== expected) {
+		throw new Error(message || `Expected ${expected}, got ${actual}`);
+	}
+}
+
+function assertExists<T>(value: T | null | undefined, message?: string): asserts value is T {
+	if (value === null || value === undefined) {
+		throw new Error(message || "Value does not exist");
+	}
+}
 
 export interface ReleaseOpts {
 	root: string;
@@ -26,7 +46,7 @@ async function main() {
 	// - latest = tag version as the latest version
 	// - noValidateGit = used for testing without using the main branch
 	// - setup & complete = run all pre-build or post-build steps, used in CI for batch jbos
-	const args = parseArgs(Deno.args, {
+	const args = minimist(process.argv.slice(2), {
 		boolean: [
 			// Config
 			"latest",
@@ -70,7 +90,8 @@ async function main() {
 		commit = args.commit;
 	} else {
 		// Read commit
-		commit = await $`git rev-parse HEAD`.text();
+		const result = await $`git rev-parse HEAD`;
+		commit = result.stdout.trim();
 	}
 
 	const opts: ReleaseOpts = {
@@ -92,76 +113,62 @@ async function main() {
 	}
 
 	if (args.updateVersion || args.setupLocal) {
-		$.logStep("Updating Version", "");
-		await $.logGroup(async () => {
-			await updateVersion(opts);
-		});
+		console.log("==> Updating Version");
+		await updateVersion(opts);
 	}
 
 	if (args.generateFern || args.setupLocal) {
-		$.logStep("Generating Fern", "");
-		await $.logGroup(async () => {
-			await $`./scripts/fern/gen.sh`;
-		});
+		console.log("==> Generating Fern");
+		await $`./scripts/fern/gen.sh`;
 	}
 
 	if (args.gitCommit || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot commit without git validation");
-		$.logStep("Committing Changes", "");
-		await $.logGroup(async () => {
-			await $`git add .`;
-			await $`git commit --allow-empty -m ${`chore(release): update version to ${opts.version}`}`;
-		});
+		console.log("==> Committing Changes");
+		await $`git add .`;
+		await $({ shell: true })`git commit --allow-empty -m "chore(release): update version to ${opts.version}"`;
 	}
 
 	if (args.configureReleasePlease || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot configure release please without git validation");
-		$.logStep("Configuring Release Please", "");
-		await $.logGroup(async () => {
-			await configureReleasePlease(opts);
-		});
+		console.log("==> Configuring Release Please");
+		await configureReleasePlease(opts);
 	}
 
 	if (args.gitPush || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot push without git validation");
-		$.logStep("Pushing Commits", "");
-		await $.logGroup(async () => {
-			const branch = (await $`git rev-parse --abbrev-ref HEAD`.stdout("piped")).stdout.trim();
-			if (branch === "main") {
-				// Push on main
-				await $`git push`;
-			} else {
-				// Modify current branch
-				await $`gt submit --force --no-edit --publish`;
-			}
-		});
+		console.log("==> Pushing Commits");
+		const branchResult = await $`git rev-parse --abbrev-ref HEAD`;
+		const branch = branchResult.stdout.trim();
+		if (branch === "main") {
+			// Push on main
+			await $`git push`;
+		} else {
+			// Modify current branch
+			await $`gt submit --force --no-edit --publish`;
+		}
 	}
 
 	if (args.publishSdk || args.setupCi) {
-		$.logStep("Publishing SDKs", "");
-		await $.logGroup(async () => {
-			await publishSdk(opts);
-		});
+		console.log("==> Publishing SDKs");
+		await publishSdk(opts);
 	}
 
 	if (args.tagDocker || args.completeCi) {
-		$.logStep("Tagging Docker", "");
-		await $.logGroup(async () => {
-			await tagDocker(opts);
-		});
+		console.log("==> Tagging Docker");
+		await tagDocker(opts);
 	}
 
 	if (args.updateArtifacts || args.completeCi) {
-		$.logStep("Updating Artifacts", "");
-		await $.logGroup(async () => {
-			await updateArtifacts(opts);
-		});
+		console.log("==> Updating Artifacts");
+		await updateArtifacts(opts);
 	}
 
-	$.logStep("Complete");
+	console.log("==> Complete");
 }
 
-if (import.meta.main) {
-	main();
-}
+main().catch((err) => {
+	console.error(err);
+	process.exit(1);
+});
 

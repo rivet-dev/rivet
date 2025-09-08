@@ -2,8 +2,8 @@ packages:
   - docker/template
   - frontend
   - scripts/tests
+  - scripts/release
   - sdks/typescript/api-full
-  - sdks/typescript/api-runtime
   - sdks/typescript/runner
   - sdks/typescript/runner-protocol
   - sdks/typescript/test-runner
