@@ -27,6 +27,11 @@ uuid.workspace = true
 [dev-dependencies]
 rivet-config.workspace = true
 rivet-env.workspace = true
+tabled.workspace = true
 tempfile.workspace = true
 tracing-subscriber.workspace = true
 rivet-test-deps-docker.workspace = true
+
+[[bench]]
+name = "simple"
+harness = false

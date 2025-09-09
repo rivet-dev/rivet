@@ -338,8 +338,6 @@ pub struct Message {
 impl Message {
 	pub async fn reply(&self, payload: &[u8]) -> Result<()> {
 		if let Some(ref reply_subject) = self.reply {
-			// Send reply using chunking
-			let message_id = *uuid::Uuid::new_v4().as_bytes();
 			// Replies expect exactly one subscriber and should use local fast-path
 			self.pubsub
 				.publish(reply_subject, payload, PublishOpts::one())

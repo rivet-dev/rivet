@@ -121,6 +121,17 @@ impl PostgresDriver {
 #[async_trait]
 impl PubSubDriver for PostgresDriver {
 	async fn subscribe(&self, subject: &str) -> Result<SubscriberDriverHandle> {
+		// TODO: To match NATS implementation, LIST must be pipelined (i.e. wait for the command
+		// to reach the server, but not wait for it to respond). However, this has to ensure that
+		// NOTIFY & LISTEN are called on the same connection (not diff connections in a pool) or
+		// else there will be race conditions where messages might be published before
+		// subscriptions are registered.
+		//
+		// tokio-postgres currently does not expose the API for pipelining, so we are SOL.
+		//
+		// We might be able to use a background tokio task in combination with flush if we use the
+		// same Postgres connection, but unsure if that will create a bottleneck.
+
 		let hashed = self.hash_subject(subject);
 
 		// Check if we already have a subscription for this channel
@@ -155,6 +166,8 @@ impl PubSubDriver for PostgresDriver {
 	}
 
 	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
+		// TODO: See `subscribe` about pipelining
+
 		// Encode payload to base64 and send NOTIFY
 		let encoded = BASE64.encode(payload);
 		let conn = self.pool.get().await?;
