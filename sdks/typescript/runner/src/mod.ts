@@ -215,8 +215,16 @@ export class Runner {
 		this.#started = true;
 
 		//console.log("[RUNNER] Starting runner");
-		await this.#openPegboardWebSocket();
-		this.#openTunnel();
+
+		try {
+			// Connect tunnel first and wait for it to be ready before connecting runner WebSocket
+			// This prevents a race condition where the runner appears ready but can't accept network requests
+			await this.#openTunnelAndWait();
+			await this.#openPegboardWebSocket();
+		} catch (error) {
+			this.#started = false;
+			throw error;
+		}
 
 		if (!this.#config.noAutoShutdown) {
 			process.on("SIGTERM", this.shutdown.bind(this, false, true));
@@ -373,6 +381,44 @@ export class Runner {
 		return `${wsEndpoint}/tunnel?namespace=${encodeURIComponent(this.#config.namespace)}`;
 	}
 
+	async #openTunnelAndWait(): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const url = this.pegboardRelayUrl;
+			//console.log("[RUNNER] Opening tunnel to:", url);
+			//console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
+			//console.log("[RUNNER] Active actors count:", this.#actors.size);
+
+			let connected = false;
+
+			this.#tunnel = new Tunnel(url);
+			this.#tunnel.setCallbacks({
+				fetch: this.#config.fetch,
+				websocket: this.#config.websocket,
+				onConnected: () => {
+					if (!connected) {
+						connected = true;
+						//console.log("[RUNNER] Tunnel connected");
+						resolve();
+					}
+				},
+				onDisconnected: () => {
+					if (!connected) {
+						// First connection attempt failed
+						reject(new Error("Tunnel connection failed"));
+					}
+					// If already connected, tunnel will handle reconnection automatically
+				},
+			});
+			this.#tunnel.start();
+
+			// Re-register all active actors with the new tunnel
+			for (const actorId of this.#actors.keys()) {
+				//console.log("[RUNNER] Re-registering actor with tunnel:", actorId);
+				this.#tunnel.registerActor(actorId);
+			}
+		});
+	}
+
 	#openTunnel() {
 		const url = this.pegboardRelayUrl;
 		//console.log("[RUNNER] Opening tunnel to:", url);
@@ -500,6 +546,7 @@ export class Runner {
 			// Handle message
 			if (message.tag === "ToClientInit") {
 				const init = message.val;
+				const hadRunnerId = !!this.runnerId;
 				this.runnerId = init.runnerId;
 
 				// Store the runner lost threshold from metadata
@@ -513,13 +560,17 @@ export class Runner {
 				//	runnerLostThreshold: this.#runnerLostThreshold,
 				//});
 
-				// Reopen tunnel with runner ID
-				//console.log("[RUNNER] Received runner ID, reopening tunnel");
-				if (this.#tunnel) {
-					//console.log("[RUNNER] Shutting down existing tunnel");
-					this.#tunnel.shutdown();
+				// Only reopen tunnel if we didn't have a runner ID before
+				// This happens on reconnection after losing connection
+				if (!hadRunnerId && this.runnerId) {
+					// Reopen tunnel with runner ID
+					//console.log("[RUNNER] Received runner ID, reopening tunnel");
+					if (this.#tunnel) {
+						//console.log("[RUNNER] Shutting down existing tunnel");
+						this.#tunnel.shutdown();
+					}
+					this.#openTunnel();
 				}
-				this.#openTunnel();
 
 				// Resend events that haven't been acknowledged
 				this.#resendUnacknowledgedEvents(init.lastEventIdx);
