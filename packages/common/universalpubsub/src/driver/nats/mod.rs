@@ -1,14 +1,17 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use anyhow::*;
-use async_nats::{Client, client::RequestErrorKind};
+use async_nats::Client;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
-use crate::errors;
-use crate::pubsub::{Message, NextOutput, Response};
+use crate::pubsub::DriverOutput;
+
+/// > The size is set to 1 MB by default, but can be increased up to 64 MB if needed (though we recommend keeping the max message size to something more reasonable like 8 MB).
+///
+/// https://docs.nats.io/reference/faq#is-there-a-message-size-limitation-in-nats
+///
+/// When they say "MB" they mean "MiB." Ignorance strikes again.
+pub const NATS_MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct NatsDriver {
@@ -20,11 +23,10 @@ impl NatsDriver {
 		options: async_nats::ConnectOptions,
 		server_addrs: impl async_nats::ToServerAddrs,
 	) -> Result<Self> {
-		// NOTE: async-nats adds ConnectionInfo.no_responders by default
-
 		tracing::debug!("nats connecting");
 		let client = options.connect(server_addrs).await?;
 		tracing::debug!("nats connected");
+
 		Ok(Self { client })
 	}
 }
@@ -33,15 +35,12 @@ impl NatsDriver {
 impl PubSubDriver for NatsDriver {
 	async fn subscribe(&self, subject: &str) -> Result<SubscriberDriverHandle> {
 		let subscriber = self.client.subscribe(subject.to_string()).await?;
-		Ok(Box::new(NatsSubscriber {
-			driver: self.clone(),
-			subscriber,
-		}))
+		Ok(Box::new(NatsSubscriber { subscriber }))
 	}
 
-	async fn publish(&self, subject: &str, message: &[u8]) -> Result<()> {
+	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
 		self.client
-			.publish(subject.to_string(), message.to_vec().into())
+			.publish(subject.to_string(), payload.to_vec().into())
 			.await?;
 		Ok(())
 	}
@@ -51,78 +50,24 @@ impl PubSubDriver for NatsDriver {
 		Ok(())
 	}
 
-	async fn request(
-		&self,
-		subject: &str,
-		payload: &[u8],
-		timeout: Option<Duration>,
-	) -> Result<Response> {
-		let request_future = self
-			.client
-			.request(subject.to_string(), payload.to_vec().into());
-
-		let request = if let Some(timeout) = timeout {
-			match tokio::time::timeout(timeout, request_future).await {
-				std::result::Result::Ok(result) => match result {
-					std::result::Result::Ok(msg) => msg,
-					std::result::Result::Err(err) => match err.kind() {
-						RequestErrorKind::NoResponders => {
-							// HACK: There is no native NoResponders error, so we return
-							// RequestTimeout. This is equivalent since the request would time out
-							// if there are no responders.
-							return Err(errors::Ups::RequestTimeout.build().into());
-						}
-						RequestErrorKind::TimedOut => {
-							return Err(errors::Ups::RequestTimeout.build().into());
-						}
-						_ => bail!(err),
-					},
-				},
-				std::result::Result::Err(_) => {
-					return Err(errors::Ups::RequestTimeout.build().into());
-				}
-			}
-		} else {
-			match request_future.await {
-				std::result::Result::Ok(msg) => msg,
-				std::result::Result::Err(err) => match err.kind() {
-					RequestErrorKind::NoResponders => {
-						// HACK: See above
-						return Err(errors::Ups::RequestTimeout.build().into());
-					}
-					RequestErrorKind::TimedOut => {
-						return Err(errors::Ups::RequestTimeout.build().into());
-					}
-					_ => bail!(err),
-				},
-			}
-		};
-
-		Ok(Response {
-			payload: request.payload.to_vec(),
-		})
-	}
-
-	async fn send_request_reply(&self, reply: &str, payload: &[u8]) -> Result<()> {
-		self.publish(reply, payload).await
+	fn max_message_size(&self) -> usize {
+		NATS_MAX_MESSAGE_SIZE
 	}
 }
 
 pub struct NatsSubscriber {
-	driver: NatsDriver,
 	subscriber: async_nats::Subscriber,
 }
 
 #[async_trait]
 impl SubscriberDriver for NatsSubscriber {
-	async fn next(&mut self) -> Result<NextOutput> {
+	async fn next(&mut self) -> Result<DriverOutput> {
 		match self.subscriber.next().await {
-			Some(msg) => Ok(NextOutput::Message(Message {
-				driver: Arc::new(self.driver.clone()),
+			Some(msg) => Ok(DriverOutput::Message {
+				subject: msg.subject.to_string(),
 				payload: msg.payload.to_vec(),
-				reply: msg.reply.map(|r| r.to_string()),
-			})),
-			None => Ok(NextOutput::Unsubscribed),
+			}),
+			None => Ok(DriverOutput::Unsubscribed),
 		}
 	}
 }

@@ -153,7 +153,15 @@ impl MessageCtx {
 				message_len = message_buf.len(),
 				"publishing message to pubsub"
 			);
-			if let Err(err) = self.pubsub.publish(&subject, &(*message_buf)).await {
+			if let Err(err) = self
+				.pubsub
+				.publish(
+					&subject,
+					&(*message_buf),
+					universalpubsub::PublishOpts::broadcast(),
+				)
+				.await
+			{
 				tracing::warn!(?err, "publish message failed, trying again");
 				continue;
 			}

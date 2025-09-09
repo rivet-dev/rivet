@@ -9,10 +9,10 @@ use gas::prelude::*;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming as BodyIncoming};
 use hyper::{Request, Response, StatusCode};
-use hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode as WsCloseCode;
-use hyper_tungstenite::tungstenite::protocol::frame::CloseFrame as WsCloseFrame;
 use hyper_tungstenite::tungstenite::Utf8Bytes as WsUtf8Bytes;
-use hyper_tungstenite::{tungstenite::Message as WsMessage, HyperWebsocket};
+use hyper_tungstenite::tungstenite::protocol::frame::CloseFrame as WsCloseFrame;
+use hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode as WsCloseCode;
+use hyper_tungstenite::{HyperWebsocket, tungstenite::Message as WsMessage};
 use pegboard::pubsub_subjects::{
 	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
 };
@@ -20,7 +20,7 @@ use rivet_guard_core::custom_serve::CustomServeTrait;
 use rivet_guard_core::proxy_service::ResponseBody;
 use rivet_guard_core::request_context::RequestContext;
 use rivet_pools::Pools;
-use rivet_tunnel_protocol::{versioned, MessageBody, TunnelMessage};
+use rivet_tunnel_protocol::{MessageBody, TunnelMessage, versioned};
 use rivet_util::Id;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;

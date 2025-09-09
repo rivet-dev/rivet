@@ -1,28 +1,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::*;
 use async_trait::async_trait;
-use tokio::sync::{mpsc, RwLock};
-use uuid::Uuid;
+use tokio::sync::{RwLock, mpsc};
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
-use crate::pubsub::{Message, NextOutput, Response};
+use crate::pubsub::DriverOutput;
 
-type Subscribers = Arc<RwLock<HashMap<String, Vec<mpsc::UnboundedSender<MemoryMessage>>>>>;
+type Subscribers = Arc<RwLock<HashMap<String, Vec<mpsc::UnboundedSender<Vec<u8>>>>>>;
 
-#[derive(Clone, Debug)]
-struct MemoryMessage {
-	payload: Vec<u8>,
-	reply_to: Option<String>,
-}
+/// This is arbitrary.
+const MEMORY_MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10MiB
 
 #[derive(Clone)]
 pub struct MemoryDriver {
 	channel: String,
 	subscribers: Subscribers,
-	// No pending requests tracking needed for simple in-memory behavior
 }
 
 impl MemoryDriver {
@@ -51,22 +45,18 @@ impl PubSubDriver for MemoryDriver {
 			.push(tx);
 
 		Ok(Box::new(MemorySubscriber {
-			driver: self.clone(),
+			subject: subject_with_channel,
 			rx,
 		}))
 	}
 
-	async fn publish(&self, subject: &str, message: &[u8]) -> Result<()> {
+	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
 		let subject_with_channel = self.subject_with_channel(subject);
 		let subscribers = self.subscribers.read().await;
 
 		if let Some(subs) = subscribers.get(&subject_with_channel) {
-			let msg = MemoryMessage {
-				payload: message.to_vec(),
-				reply_to: None,
-			};
 			for tx in subs {
-				let _ = tx.send(msg.clone());
+				let _ = tx.send(payload.to_vec());
 			}
 		}
 
@@ -77,124 +67,25 @@ impl PubSubDriver for MemoryDriver {
 		Ok(())
 	}
 
-	async fn request(
-		&self,
-		subject: &str,
-		payload: &[u8],
-		timeout: Option<Duration>,
-	) -> Result<Response> {
-		let subject_with_channel = self.subject_with_channel(subject);
-
-		// Check if there are any subscribers for this subject
-		{
-			let subscribers = self.subscribers.read().await;
-			if !subscribers.contains_key(&subject_with_channel)
-				|| subscribers
-					.get(&subject_with_channel)
-					.map_or(true, |subs| subs.is_empty())
-			{
-				// HACK: There is no native NoResponders error, so we return
-				// RequestTimeout. This is equivalent since the request would time out
-				// if there are no responders.
-				return Err(crate::errors::Ups::RequestTimeout.build().into());
-			}
-		}
-
-		// Create a unique reply subject for this request
-		let reply_subject = format!("_INBOX.{}", Uuid::new_v4());
-		let reply_subject_with_channel = self.subject_with_channel(&reply_subject);
-
-		// Create a oneshot channel for the response
-		let (tx, rx) = tokio::sync::oneshot::channel();
-
-		// Subscribe to the reply subject to receive the response
-		{
-			let mut subscribers = self.subscribers.write().await;
-			let (reply_tx, mut reply_rx) = mpsc::unbounded_channel();
-			subscribers
-				.entry(reply_subject_with_channel.clone())
-				.or_default()
-				.push(reply_tx);
-
-			// Spawn a task to wait for the reply
-			tokio::spawn(async move {
-				if let Some(msg) = reply_rx.recv().await {
-					let _ = tx.send(Response {
-						payload: msg.payload,
-					});
-				}
-			});
-		}
-
-		// Send the request message with reply_to field to first subscriber (if any)
-		{
-			let subscribers = self.subscribers.read().await;
-			if let Some(subs) = subscribers.get(&subject_with_channel) {
-				if let Some(tx) = subs.first() {
-					let msg = MemoryMessage {
-						payload: payload.to_vec(),
-						reply_to: Some(reply_subject.clone()),
-					};
-					let _ = tx.send(msg);
-				}
-			}
-		}
-
-		// Wait for response with optional timeout
-		let response = if let Some(timeout_duration) = timeout {
-			match tokio::time::timeout(timeout_duration, rx).await {
-				std::result::Result::Ok(result) => match result {
-					std::result::Result::Ok(response) => response,
-					std::result::Result::Err(_) => {
-						// Channel error - shouldn't happen in normal operation
-						return Err(crate::errors::Ups::RequestTimeout.build().into());
-					}
-				},
-				std::result::Result::Err(_) => {
-					// Timeout elapsed
-					// Clean up the reply subscription
-					let subscribers = self.subscribers.clone();
-					let reply_subject = reply_subject_with_channel.clone();
-					tokio::spawn(async move {
-						let mut subs = subscribers.write().await;
-						subs.remove(&reply_subject);
-					});
-					return Err(crate::errors::Ups::RequestTimeout.build().into());
-				}
-			}
-		} else {
-			match rx.await {
-				std::result::Result::Ok(response) => response,
-				std::result::Result::Err(_) => {
-					// Channel closed without response - shouldn't happen
-					return Err(anyhow!("Request failed: no response received"));
-				}
-			}
-		};
-
-		Ok(response)
-	}
-
-	async fn send_request_reply(&self, reply: &str, payload: &[u8]) -> Result<()> {
-		self.publish(reply, payload).await
+	fn max_message_size(&self) -> usize {
+		MEMORY_MAX_MESSAGE_SIZE
 	}
 }
 
 pub struct MemorySubscriber {
-	driver: MemoryDriver,
-	rx: mpsc::UnboundedReceiver<MemoryMessage>,
+	subject: String,
+	rx: mpsc::UnboundedReceiver<Vec<u8>>,
 }
 
 #[async_trait]
 impl SubscriberDriver for MemorySubscriber {
-	async fn next(&mut self) -> Result<NextOutput> {
+	async fn next(&mut self) -> Result<DriverOutput> {
 		match self.rx.recv().await {
-			Some(msg) => Ok(NextOutput::Message(Message {
-				driver: Arc::new(self.driver.clone()),
-				payload: msg.payload,
-				reply: msg.reply_to,
-			})),
-			None => Ok(NextOutput::Unsubscribed),
+			Some(payload) => Ok(DriverOutput::Message {
+				subject: self.subject.clone(),
+				payload,
+			}),
+			None => Ok(DriverOutput::Unsubscribed),
 		}
 	}
 }

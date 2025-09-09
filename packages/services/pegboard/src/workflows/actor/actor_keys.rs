@@ -6,7 +6,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_key_data::converted::ActorByKeyKeyData;
 use udb_util::prelude::*;
-use universaldb::{self as udb, options::StreamingMode, FdbBindingError};
+use universaldb::{self as udb, FdbBindingError, options::StreamingMode};
 
 use crate::keys;
 

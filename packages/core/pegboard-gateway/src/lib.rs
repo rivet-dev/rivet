@@ -4,7 +4,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{body::Incoming as BodyIncoming, Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming};
 use hyper_tungstenite::HyperWebsocket;
 use pegboard::pubsub_subjects::{
 	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
@@ -16,21 +16,22 @@ use rivet_guard_core::{
 	request_context::RequestContext,
 };
 use rivet_tunnel_protocol::{
-	versioned, MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
+	MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
 	ToServerWebSocketClose, ToServerWebSocketMessage, ToServerWebSocketOpen, TunnelMessage,
+	versioned,
 };
 use rivet_util::serde::HashableMap;
 use std::result::Result::Ok as ResultOk;
 use std::{
 	collections::HashMap,
 	sync::{
-		atomic::{AtomicU64, Ordering},
 		Arc,
+		atomic::{AtomicU64, Ordering},
 	},
 	time::Duration,
 };
 use tokio::{
-	sync::{oneshot, Mutex},
+	sync::{Mutex, oneshot},
 	time::timeout,
 };
 use tokio_tungstenite::tungstenite::Message;

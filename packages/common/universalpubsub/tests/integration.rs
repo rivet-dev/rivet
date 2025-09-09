@@ -6,7 +6,7 @@ use std::{
 	sync::Arc,
 	time::{Duration, Instant},
 };
-use universalpubsub::{NextOutput, PubSub};
+use universalpubsub::{NextOutput, PubSub, PublishOpts};
 use uuid::Uuid;
 
 fn setup_logging() {
@@ -18,7 +18,7 @@ fn setup_logging() {
 }
 
 #[tokio::test]
-async fn test_nats_driver() {
+async fn test_nats_driver_with_memory() {
 	setup_logging();
 
 	let test_id = Uuid::new_v4();
@@ -46,7 +46,41 @@ async fn test_nats_driver() {
 	)
 	.await
 	.unwrap();
-	let pubsub = PubSub::new(Arc::new(driver));
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
+
+	test_inner(&pubsub).await;
+}
+
+#[tokio::test]
+async fn test_nats_driver_without_memory() {
+	setup_logging();
+
+	let test_id = Uuid::new_v4();
+	let (pubsub_config, docker_config) = TestPubSub::Nats.config(test_id, 1).await.unwrap();
+	let mut docker = docker_config.unwrap();
+	docker.start().await.unwrap();
+	tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+	let rivet_config::config::PubSub::Nats(nats) = pubsub_config else {
+		unreachable!();
+	};
+
+	use std::str::FromStr;
+	let server_addrs = nats
+		.addresses
+		.iter()
+		.map(|addr| format!("nats://{addr}"))
+		.map(|url| async_nats::ServerAddr::from_str(url.as_ref()))
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	let driver = universalpubsub::driver::nats::NatsDriver::connect(
+		async_nats::ConnectOptions::new(),
+		&server_addrs[..],
+	)
+	.await
+	.unwrap();
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
 	test_inner(&pubsub).await;
 }
@@ -69,7 +103,7 @@ async fn test_postgres_driver_with_memory() {
 	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, true)
 		.await
 		.unwrap();
-	let pubsub = PubSub::new(Arc::new(driver));
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 
 	test_inner(&pubsub).await;
 }
@@ -92,7 +126,7 @@ async fn test_postgres_driver_without_memory() {
 	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, false)
 		.await
 		.unwrap();
-	let pubsub = PubSub::new(Arc::new(driver));
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
 	test_inner(&pubsub).await;
 }
@@ -137,6 +171,10 @@ async fn test_inner(pubsub: &PubSub) {
 	let start = Instant::now();
 	test_request_timeout(&pubsub).await.unwrap();
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_request_timeout completed");
+
+	let start = Instant::now();
+	test_large_payloads(&pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_large_payloads completed");
 }
 
 async fn test_basic_pub_sub(pubsub: &PubSub) -> Result<()> {
@@ -147,7 +185,9 @@ async fn test_basic_pub_sub(pubsub: &PubSub) -> Result<()> {
 
 	// Publish a message
 	let message = b"Hello, World!";
-	pubsub.publish("test.subject", message).await?;
+	pubsub
+		.publish("test.subject", message, PublishOpts::broadcast())
+		.await?;
 	pubsub.flush().await?;
 
 	// Receive the message
@@ -172,7 +212,9 @@ async fn test_multiple_subscribers(pubsub: &PubSub) -> Result<()> {
 
 	// Publish a message
 	let message = b"Broadcast message";
-	pubsub.publish("test.multi", message).await?;
+	pubsub
+		.publish("test.multi", message, PublishOpts::broadcast())
+		.await?;
 	pubsub.flush().await?;
 
 	// Both subscribers should receive the message
@@ -205,7 +247,9 @@ async fn test_unsubscribe(pubsub: &PubSub) -> Result<()> {
 
 	// Publish a message
 	let message = b"First message";
-	pubsub.publish("test.unsub", message).await?;
+	pubsub
+		.publish("test.unsub", message, PublishOpts::broadcast())
+		.await?;
 	pubsub.flush().await?;
 
 	// Receive the first message
@@ -226,7 +270,9 @@ async fn test_unsubscribe(pubsub: &PubSub) -> Result<()> {
 
 	// Publish another message
 	let message2 = b"Second message";
-	pubsub.publish("test.unsub", message2).await?;
+	pubsub
+		.publish("test.unsub", message2, PublishOpts::broadcast())
+		.await?;
 	pubsub.flush().await?;
 
 	// New subscriber should receive the message
@@ -325,6 +371,71 @@ async fn test_request_timeout(pubsub: &PubSub) -> Result<()> {
 		.expect("expected errors::Ups");
 	assert_eq!(err.group(), "ups");
 	assert_eq!(err.code(), "request_timeout");
+
+	Ok(())
+}
+
+async fn test_large_payloads(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing large payloads with chunking");
+
+	// Use a base size that works with all drivers
+	// Postgres has the smallest limit at 8KB
+	let base_size = 5000; // Use 5KB as base to ensure we're under the limit
+
+	// Test 1x max size
+	test_payload_size(pubsub, base_size, "1x").await?;
+
+	// Test 2x max size
+	test_payload_size(pubsub, base_size * 2, "2x").await?;
+
+	// Test 2.5x max size
+	test_payload_size(pubsub, (base_size as f64 * 2.5) as usize, "2.5x").await?;
+
+	Ok(())
+}
+
+async fn test_payload_size(pubsub: &PubSub, size: usize, label: &str) -> Result<()> {
+	tracing::info!(size, label, "testing payload size");
+
+	// Create a payload of the specified size
+	let mut payload = vec![0u8; size];
+	// Fill with a pattern to verify integrity
+	for (i, byte) in payload.iter_mut().enumerate() {
+		*byte = (i % 256) as u8;
+	}
+
+	// Subscribe to a test subject
+	let mut subscriber = pubsub.subscribe(&format!("test.large.{}", label)).await?;
+
+	// Publish the large message
+	pubsub
+		.publish(
+			&format!("test.large.{}", label),
+			&payload,
+			PublishOpts::broadcast(),
+		)
+		.await?;
+	pubsub.flush().await?;
+
+	// Receive and verify the message
+	match subscriber.next().await? {
+		NextOutput::Message(msg) => {
+			assert_eq!(
+				msg.payload.len(),
+				size,
+				"payload size mismatch for {}",
+				label
+			);
+			assert_eq!(
+				msg.payload, payload,
+				"payload content mismatch for {}",
+				label
+			);
+		}
+		NextOutput::Unsubscribed => {
+			panic!("unexpected unsubscribe for {}", label);
+		}
+	}
 
 	Ok(())
 }

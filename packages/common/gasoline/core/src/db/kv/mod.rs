@@ -62,7 +62,14 @@ impl DatabaseKv {
 		let spawn_res = tokio::task::Builder::new().name("wake").spawn(
 			async move {
 				// Fail gracefully
-				if let Err(err) = pubsub.publish(WORKER_WAKE_SUBJECT, &Vec::new()).await {
+				if let Err(err) = pubsub
+					.publish(
+						WORKER_WAKE_SUBJECT,
+						&Vec::new(),
+						universalpubsub::PublishOpts::broadcast(),
+					)
+					.await
+				{
 					tracing::warn!(?err, "failed to publish wake message");
 				}
 			}

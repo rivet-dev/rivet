@@ -1,3 +1,4 @@
+pub mod chunking;
 pub mod driver;
 pub mod errors;
 pub mod pubsub;

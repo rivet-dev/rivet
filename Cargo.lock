@@ -4594,7 +4594,6 @@ dependencies = [
  "anyhow",
  "bare_gen",
  "base64 0.22.1",
- "gasoline",
  "indoc",
  "prettyplease",
  "rivet-util",
@@ -4617,6 +4616,23 @@ dependencies = [
  "rivet-util",
  "serde",
  "utoipa",
+]
+
+[[package]]
+name = "rivet-ups-protocol"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bare_gen",
+ "base64 0.22.1",
+ "indoc",
+ "prettyplease",
+ "rivet-util",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "syn 2.0.104",
+ "versioned-data-util",
 ]
 
 [[package]]
@@ -6318,6 +6334,7 @@ dependencies = [
  "rivet-env",
  "rivet-error",
  "rivet-test-deps-docker",
+ "rivet-ups-protocol",
  "serde",
  "serde_json",
  "sha2",
@@ -6327,6 +6344,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "versioned-data-util",
 ]
 
 [[package]]

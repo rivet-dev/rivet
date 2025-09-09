@@ -1,0 +1,23 @@
+type UuidV4 data[16]
+
+type MessageStart struct {
+	message_id: UuidV4
+	chunk_count: u32
+	reply_subject: optional<str>
+	payload: data
+}
+
+type MessageChunk struct {
+	message_id: UuidV4
+	chunk_index: u32
+	payload: data
+}
+
+type MessageBody union {
+	MessageStart |
+	MessageChunk
+}
+
+type UpsMessage struct {
+	body: MessageBody
+}

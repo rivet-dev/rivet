@@ -1,5 +1,5 @@
 [package]
-name = "rivet-tunnel-protocol"
+name = "rivet-ups-protocol"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

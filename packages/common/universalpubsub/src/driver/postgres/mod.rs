@@ -1,62 +1,46 @@
-use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::*;
 use async_trait::async_trait;
 use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use futures_util::future::poll_fn;
 use moka::future::Cache;
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use tokio_postgres::{AsyncMessage, NoTls};
 use tracing::Instrument;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
-use crate::errors;
-use crate::pubsub::{Message, NextOutput, Response};
+use crate::pubsub::DriverOutput;
 
 #[derive(Clone)]
 struct Subscription {
-	// Channel to send requests to this subscription
-	tx: tokio::sync::broadcast::Sender<(Vec<u8>, Option<String>)>,
+	// Channel to send messages to this subscription
+	tx: tokio::sync::broadcast::Sender<Vec<u8>>,
 }
 
-// Represents a local subscription that can handle request/response
-struct LocalSubscription {
-	// Channel to send requests to this subscription
-	tx: tokio::sync::broadcast::Sender<LocalRequest>,
-}
+/// > In the default configuration it must be shorter than 8000 bytes
+///
+/// https://www.postgresql.org/docs/17/sql-notify.html
+const MAX_NOTIFY_LENGTH: usize = 8000;
 
-// Request sent to a local subscription
-#[derive(Clone)]
-struct LocalRequest {
-	payload: Vec<u8>,
-	reply_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
-}
+/// Base64 encoding ratio
+const BYTES_PER_BLOCK: usize = 3;
+const CHARS_PER_BLOCK: usize = 4;
+
+/// Calculate max message size if encoded as base64
+///
+/// We need to remove BYTES_PER_BLOCK since there might be a tail on the base64-encoded data that
+/// would bump it over the limit.
+pub const POSTGRES_MAX_MESSAGE_SIZE: usize =
+	(MAX_NOTIFY_LENGTH * BYTES_PER_BLOCK) / CHARS_PER_BLOCK - BYTES_PER_BLOCK;
 
 #[derive(Clone)]
 pub struct PostgresDriver {
-	memory_optimization: bool,
 	pool: Arc<Pool>,
 	client: Arc<tokio_postgres::Client>,
-
 	subscriptions: Cache<String, Subscription>,
-
-	// Maps subject to local subscription on this node for fast path
-	local_subscriptions: Arc<RwLock<HashMap<String, LocalSubscription>>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Envelope {
-	// Base64-encoded payload
-	#[serde(rename = "p")]
-	payload: String,
-	#[serde(rename = "r", skip_serializing_if = "Option::is_none")]
-	reply_subject: Option<String>,
 }
 
 impl PostgresDriver {
@@ -92,467 +76,124 @@ impl PostgresDriver {
 				match poll_fn(|cx| conn.poll_message(cx)).await {
 					Some(std::result::Result::Ok(AsyncMessage::Notification(note))) => {
 						if let Some(sub) = subscriptions2.get(note.channel()).await {
-							let env = match serde_json::from_str::<Envelope>(&note.payload()) {
-								std::result::Result::Ok(env) => env,
+							let bytes = match BASE64.decode(note.payload()) {
+								std::result::Result::Ok(b) => b,
 								std::result::Result::Err(err) => {
-									tracing::error!(?err, "failed deserializing envelope");
+									tracing::error!(?err, "failed decoding base64");
 									break;
 								}
 							};
-							let payload = match BASE64
-								.decode(env.payload)
-								.context("invalid base64 payload")
-							{
-								std::result::Result::Ok(p) => p,
-								std::result::Result::Err(err) => {
-									tracing::error!(?err, "failed deserializing envelope");
-									break;
-								}
-							};
-
-							let _ = sub.tx.send((payload, env.reply_subject));
+							let _ = sub.tx.send(bytes);
 						}
 					}
-					Some(std::result::Result::Ok(_)) => continue,
+					Some(std::result::Result::Ok(_)) => {
+						// Ignore other async messages
+					}
 					Some(std::result::Result::Err(err)) => {
-						tracing::error!(?err, "ups poll loop failed");
+						tracing::error!(?err, "async postgres error");
 						break;
 					}
-					None => break,
+					None => {
+						tracing::debug!("async postgres connection closed");
+						break;
+					}
 				}
 			}
-
-			tracing::info!("ups poll loop stopped");
+			tracing::debug!("listen connection closed");
 		});
 
 		Ok(Self {
-			memory_optimization,
 			pool: Arc::new(pool),
 			client: Arc::new(client),
 			subscriptions,
-			local_subscriptions: Arc::new(RwLock::new(HashMap::new())),
 		})
+	}
+
+	fn hash_subject(&self, subject: &str) -> String {
+		// Postgres channel names have a 64 character limit
+		// Hash the subject to ensure it fits
+		let mut hasher = DefaultHasher::new();
+		subject.hash(&mut hasher);
+		format!("ups_{:x}", hasher.finish())
 	}
 }
 
 #[async_trait]
 impl PubSubDriver for PostgresDriver {
-	#[tracing::instrument(skip(self), fields(subject))]
 	async fn subscribe(&self, subject: &str) -> Result<SubscriberDriverHandle> {
-		tracing::debug!(%subject, "starting subscription");
+		let hashed = self.hash_subject(subject);
 
-		// Set up local request handling channel if memory optimization is enabled
-		let local_request_rx = if self.memory_optimization {
-			// Register this subscription in the local map
-			tracing::debug!(
-				%subject,
-				"registering local subscription for memory optimization"
-			);
-			let mut subs = self.local_subscriptions.write().await;
-			let local_rx = subs
-				.entry(subject.to_string())
-				.or_insert_with(|| LocalSubscription {
-					tx: tokio::sync::broadcast::channel(64).0,
-				})
-				.tx
-				.subscribe();
-			tracing::debug!(
-				%subject,
-				"local subscription registered"
-			);
-
-			Some(local_rx)
+		// Check if we already have a subscription for this channel
+		let rx = if let Some(existing_sub) = self.subscriptions.get(&hashed).await {
+			// Reuse the existing broadcast channel
+			existing_sub.tx.subscribe()
 		} else {
-			None
+			// Create a new broadcast channel for this subject
+			let (tx, rx) = tokio::sync::broadcast::channel(1024);
+			let subscription = Subscription { tx: tx.clone() };
+
+			// Register subscription
+			self.subscriptions
+				.insert(hashed.clone(), subscription)
+				.await;
+
+			// Execute LISTEN command on the async client (for receiving notifications)
+			// This only needs to be done once per channel
+			let span = tracing::trace_span!("pg_listen");
+			self.client
+				.execute(&format!("LISTEN \"{hashed}\""), &[])
+				.instrument(span)
+				.await?;
+
+			rx
 		};
 
-		// Convert subject to base64 hash string because Postgres identifiers can only be 63 bytes
-		let mut hasher = DefaultHasher::new();
-		subject.hash(&mut hasher);
-		let subject_hash = BASE64.encode(&hasher.finish().to_be_bytes());
-
-		let rx = self
-			.subscriptions
-			.entry(subject_hash.clone())
-			.or_insert_with(async {
-				Subscription {
-					tx: tokio::sync::broadcast::channel(128).0,
-				}
-			})
-			.await
-			.value()
-			.tx
-			.subscribe();
-
-		let sql = format!("LISTEN {}", quote_ident(&subject_hash));
-		self.client.batch_execute(&sql).await?;
-
-		tracing::debug!(%subject, "subscription established successfully");
 		Ok(Box::new(PostgresSubscriber {
-			driver: self.clone(),
-			rx,
-			local_request_rx,
 			subject: subject.to_string(),
+			rx,
 		}))
 	}
 
-	#[tracing::instrument(skip(self, message), fields(subject, message_len = message.len()))]
-	async fn publish(&self, subject: &str, message: &[u8]) -> Result<()> {
-		tracing::debug!(%subject, message_len = message.len(), "publishing message");
-		// Get a connection from the pool
-		let conn = self
-			.pool
-			.get()
-			.await
-			.context("failed to get connection from pool")?;
-
-		// Convert subject to base64 hash string because Postgres identifiers can only be 63 bytes
-		let mut hasher = DefaultHasher::new();
-		subject.hash(&mut hasher);
-		let subject_hash = BASE64.encode(&hasher.finish().to_be_bytes());
-
-		// Encode payload
-		let env = Envelope {
-			payload: BASE64.encode(message),
-			reply_subject: None,
-		};
-		let payload = serde_json::to_string(&env)?;
-
-		// NOTIFY doesn't support parameterized queries, so we need to escape the payload
-		// Replace single quotes with two single quotes for SQL escaping
-		let escaped_payload = payload.replace('\'', "''");
-		let sql = format!(
-			"NOTIFY {}, '{}'",
-			quote_ident(&subject_hash),
-			escaped_payload
-		);
-		conn.batch_execute(&sql)
-			.instrument(tracing::debug_span!("notify_execute", %subject))
+	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
+		// Encode payload to base64 and send NOTIFY
+		let encoded = BASE64.encode(payload);
+		let conn = self.pool.get().await?;
+		let hashed = self.hash_subject(subject);
+		let span = tracing::trace_span!("pg_notify");
+		conn.execute(&format!("NOTIFY \"{hashed}\", '{encoded}'"), &[])
+			.instrument(span)
 			.await?;
-		tracing::debug!(%subject, "message published successfully");
+
 		Ok(())
-	}
-
-	async fn flush(&self) -> Result<()> {
-		// No-op for Postgres
-		Ok(())
-	}
-
-	#[tracing::instrument(skip(self, payload), fields(subject, payload_len = payload.len(), ?timeout))]
-	async fn request(
-		&self,
-		subject: &str,
-		payload: &[u8],
-		timeout: Option<Duration>,
-	) -> Result<Response> {
-		tracing::debug!(
-			%subject,
-			payload_len = payload.len(),
-			?timeout,
-			"starting request"
-		);
-
-		// Memory fast path: check if we have local subscribers first
-		if self.memory_optimization {
-			let subs = self.local_subscriptions.read().await;
-			if let Some(local_sub) = subs.get(subject) {
-				tracing::debug!(
-					%subject,
-					"using memory fast path for request"
-				);
-
-				// Create a channel for the reply
-				let (reply_tx, mut reply_rx) = tokio::sync::mpsc::channel(1);
-
-				// Send the request to the local subscription
-				let request = LocalRequest {
-					payload: payload.to_vec(),
-					reply_tx,
-				};
-
-				// Try to send the request
-				if local_sub.tx.send(request).is_ok() {
-					// Drop early to clear lock
-					drop(subs);
-
-					// Wait for response with optional timeout
-					let response_future = async {
-						match reply_rx.recv().await {
-							Some(response_payload) => Ok(Response {
-								payload: response_payload,
-							}),
-							None => Err(anyhow!("local subscription closed")),
-						}
-					};
-
-					// Apply timeout if specified
-					if let Some(dur) = timeout {
-						return match tokio::time::timeout(dur, response_future).await {
-							std::result::Result::Ok(resp) => resp,
-							std::result::Result::Err(_) => {
-								Err(errors::Ups::RequestTimeout.build().into())
-							}
-						};
-					} else {
-						return response_future.await;
-					}
-				}
-				// If send failed, the subscription might be dead, clean it up later
-				// and fall through to normal path
-			}
-		}
-
-		// Normal path: use database for request/response
-		tracing::debug!(%subject, "using database path for request");
-
-		// Create a temporary reply subject and a dedicated listener connection
-		let reply_subject = format!("_INBOX.{}", uuid::Uuid::new_v4());
-
-		let mut reply_sub = self.subscribe(&reply_subject).await?;
-
-		// Get another connection from pool to publish the request
-		let publish_conn = self
-			.pool
-			.get()
-			.await
-			.context("failed to get connection from pool")?;
-
-		// Convert subject to base64 hash string because Postgres identifiers can only be 63 bytes
-		let mut hasher = DefaultHasher::new();
-		subject.hash(&mut hasher);
-		let subject_hash = BASE64.encode(&hasher.finish().to_be_bytes());
-		let mut hasher = DefaultHasher::new();
-		reply_subject.hash(&mut hasher);
-		let reply_subject_hash = BASE64.encode(&hasher.finish().to_be_bytes());
-
-		// Publish request with reply subject encoded
-		let env = Envelope {
-			payload: BASE64.encode(payload),
-			reply_subject: Some(reply_subject_hash.clone()),
-		};
-		let env_payload = serde_json::to_string(&env)?;
-
-		// NOTIFY doesn't support parameterized queries
-		let escaped_payload = env_payload.replace('\'', "''");
-
-		let notify_sql = format!(
-			"NOTIFY {}, '{}'",
-			quote_ident(&subject_hash),
-			escaped_payload
-		);
-		publish_conn.batch_execute(&notify_sql).await?;
-
-		// Wait for response with optional timeout
-		let response_future = async {
-			Ok(Response {
-				payload: match reply_sub.next().await? {
-					NextOutput::Message(msg) => msg.payload,
-					NextOutput::Unsubscribed => bail!("reply subscription unsubscribed"),
-				},
-			})
-		};
-
-		// Apply timeout if specified
-		if let Some(dur) = timeout {
-			match tokio::time::timeout(dur, response_future).await {
-				std::result::Result::Ok(resp) => resp,
-				std::result::Result::Err(_) => Err(errors::Ups::RequestTimeout.build().into()),
-			}
-		} else {
-			response_future.await
-		}
-	}
-
-	// NOTE: The reply argument here is already a base64 encoded hash
-	async fn send_request_reply(&self, reply: &str, payload: &[u8]) -> Result<()> {
-		// Get a connection from the pool
-		let conn = self
-			.pool
-			.get()
-			.await
-			.context("failed to get connection from pool")?;
-
-		// Publish reply without nested reply
-		let env = Envelope {
-			payload: BASE64.encode(payload),
-			reply_subject: None,
-		};
-		let payload = serde_json::to_string(&env)?;
-		// NOTIFY doesn't support parameterized queries
-		let escaped_payload = payload.replace('\'', "''");
-		let sql = format!("NOTIFY {}, '{}'", quote_ident(reply), escaped_payload);
-		conn.batch_execute(&sql).await?;
-		Ok(())
-	}
-}
-
-// Special driver for handling local replies
-struct LocalReplyDriver {
-	reply_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
-}
-
-#[async_trait]
-impl PubSubDriver for LocalReplyDriver {
-	async fn subscribe(&self, _subject: &str) -> Result<SubscriberDriverHandle> {
-		Err(anyhow!("LocalReplyDriver does not support subscribe"))
-	}
-
-	async fn publish(&self, _subject: &str, _message: &[u8]) -> Result<()> {
-		Err(anyhow!("LocalReplyDriver does not support publish"))
 	}
 
 	async fn flush(&self) -> Result<()> {
 		Ok(())
 	}
 
-	async fn request(
-		&self,
-		_subject: &str,
-		_payload: &[u8],
-		_timeout: Option<Duration>,
-	) -> Result<Response> {
-		Err(anyhow!("LocalReplyDriver does not support request"))
-	}
-
-	async fn send_request_reply(&self, _reply: &str, payload: &[u8]) -> Result<()> {
-		tracing::debug!("sending local request reply");
-
-		// Send the reply through the local channel
-		let _ = self.reply_tx.send(payload.to_vec()).await;
-
-		Ok(())
+	fn max_message_size(&self) -> usize {
+		POSTGRES_MAX_MESSAGE_SIZE
 	}
 }
 
 pub struct PostgresSubscriber {
-	driver: PostgresDriver,
-	rx: tokio::sync::broadcast::Receiver<(Vec<u8>, Option<String>)>,
-	local_request_rx: Option<tokio::sync::broadcast::Receiver<LocalRequest>>,
 	subject: String,
+	rx: tokio::sync::broadcast::Receiver<Vec<u8>>,
 }
 
 #[async_trait]
 impl SubscriberDriver for PostgresSubscriber {
-	#[tracing::instrument(skip(self), fields(subject = %self.subject))]
-	async fn next(&mut self) -> Result<NextOutput> {
-		tracing::debug!("waiting for message");
-
-		// If we have a local request receiver, poll both channels
-		if let Some(ref mut local_rx) = self.local_request_rx {
-			tokio::select! {
-				// Check for local requests (memory fast path)
-				local_req = local_rx.recv() => {
-					match local_req {
-						std::result::Result::Ok(req) => {
-							// Create a synthetic reply subject for local request
-							let reply_subject = format!("_LOCAL.{}", uuid::Uuid::new_v4());
-
-							// Create a wrapper driver that will handle the reply
-							let local_driver = LocalReplyDriver {
-								reply_tx: req.reply_tx,
-							};
-
-							tracing::debug!(len=?req.payload.len(), "received local message");
-
-							// Return the request as a message with the local reply driver
-							Ok(NextOutput::Message(Message {
-								driver: Arc::new(local_driver),
-								payload: req.payload,
-								reply: Some(reply_subject),
-							}))
-						}
-						std::result::Result::Err(_) => {
-							tracing::debug!("no local subscription senders");
-
-							Ok(NextOutput::Unsubscribed)
-						}
-					}
-				}
-				// Check for regular PostgreSQL messages
-				msg = self.rx.recv() => {
-					match msg {
-						std::result::Result::Ok((payload, reply_subject)) => {
-							tracing::debug!(len=?payload.len(), "received message");
-
-							Ok(NextOutput::Message(Message {
-								driver: Arc::new(self.driver.clone()),
-								payload,
-								reply: reply_subject,
-							}))
-						}
-						std::result::Result::Err(_) => {
-							tracing::debug!(?self.subject, "subscription closed");
-
-							Ok(NextOutput::Unsubscribed)
-						}
-					}
-				}
-			}
-		} else {
-			// No memory optimization, just poll regular messages
-			match self.rx.recv().await {
-				std::result::Result::Ok((payload, reply_subject)) => {
-					tracing::debug!(len=?payload.len(), "received message");
-
-					Ok(NextOutput::Message(Message {
-						driver: Arc::new(self.driver.clone()),
-						payload,
-						reply: reply_subject,
-					}))
-				}
-				std::result::Result::Err(_) => {
-					tracing::debug!("subscription closed");
-
-					Ok(NextOutput::Unsubscribed)
-				}
+	async fn next(&mut self) -> Result<DriverOutput> {
+		match self.rx.recv().await {
+			std::result::Result::Ok(payload) => Ok(DriverOutput::Message {
+				subject: self.subject.clone(),
+				payload,
+			}),
+			Err(tokio::sync::broadcast::error::RecvError::Closed) => Ok(DriverOutput::Unsubscribed),
+			Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+				// Try again
+				self.next().await
 			}
 		}
 	}
-}
-
-impl Drop for PostgresSubscriber {
-	fn drop(&mut self) {
-		tracing::debug!(subject = %self.subject, "dropping postgres subscriber");
-
-		let driver = self.driver.clone();
-		let subject = self.subject.clone();
-		let has_local_rx = self.local_request_rx.is_some();
-
-		// Spawn a task to clean up
-		tokio::spawn(async move {
-			// Clean up local subscription registration if memory optimization is enabled
-			if has_local_rx {
-				let mut subs = driver.local_subscriptions.write().await;
-				if let Some(local_sub) = subs.get_mut(&subject) {
-					// If no more subscriptions for this subject, remove the entry
-					if local_sub.tx.receiver_count() == 0 {
-						subs.remove(&subject);
-					}
-				}
-			}
-
-			if let Some(sub) = driver.subscriptions.get(&subject).await {
-				if sub.tx.receiver_count() == 0 {
-					driver.subscriptions.invalidate(&subject).await;
-
-					let mut hasher = DefaultHasher::new();
-					subject.hash(&mut hasher);
-					let subject_hash = BASE64.encode(&hasher.finish().to_be_bytes());
-
-					let sql = format!("UNLISTEN {}", quote_ident(&subject_hash));
-					let unlisten_res = driver.client.batch_execute(&sql).await;
-
-					if let std::result::Result::Err(err) = unlisten_res {
-						tracing::error!(%subject, ?err, "failed to unlisten subject");
-					}
-				}
-			}
-		});
-	}
-}
-
-fn quote_ident(subject: &str) -> String {
-	// Double-quote and escape any embedded quotes for safe identifier usage
-	let escaped = subject.replace('"', "\"\"");
-	format!("\"{}\"", escaped)
 }
