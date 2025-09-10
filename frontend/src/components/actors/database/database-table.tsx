@@ -32,6 +32,14 @@ import {
 	TableRow,
 } from "@/components";
 
+declare module "@tanstack/react-table" {
+	interface ColumnMeta<TData, TValue> {
+		type: string;
+		notNull: boolean;
+		default: any;
+	}
+}
+
 interface DatabaseTableProps {
 	columns: any[];
 	data: any[];
@@ -52,7 +60,6 @@ export function DatabaseTable({
 
 	enableRowSelection = true,
 	enableSorting = true,
-	enableCellExpanding = true,
 	enableColumnResizing = true,
 }: DatabaseTableProps) {
 	const columns = useMemo(() => {
@@ -61,14 +68,12 @@ export function DatabaseTable({
 
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 	const [sorting, setSorting] = useState<SortingState>([]);
-	const [expanded, setExpanded] = useState<ExpandedState>({});
 
 	const table = useTable({
 		columns,
 		data,
 		enableRowSelection,
 		enableSorting,
-		enableCellExpanding,
 		enableColumnResizing,
 		getCoreRowModel: getCoreRowModel(),
 		getExpandedRowModel: getExpandedRowModel(),
@@ -81,7 +86,6 @@ export function DatabaseTable({
 		state: {
 			sorting,
 			rowSelection,
-			expanded,
 		},
 	});
 
@@ -220,7 +224,7 @@ export function DatabaseTable({
 	);
 }
 
-const ch = createColumnHelper();
+const ch = createColumnHelper<Record<string, any>>();
 
 function createColumns(
 	columns: Columns,
@@ -269,7 +273,7 @@ function createColumns(
 						),
 					})
 				: null,
-		].filter(Boolean),
+		].filter((v): v is NonNullable<typeof v> => v !== null),
 		...columns.map((col) =>
 			ch.accessor(col.name, {
 				header: (info) => (

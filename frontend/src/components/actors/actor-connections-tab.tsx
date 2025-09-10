@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LiveBadge, ScrollArea } from "@/components";
 import { useActor } from "./actor-queries-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import { type ActorId, useActorConnectionsStream } from "./queries";
 
 interface ActorConnectionsTabProps {
@@ -11,7 +11,7 @@ interface ActorConnectionsTabProps {
 
 export function ActorConnectionsTab({ actorId }: ActorConnectionsTabProps) {
 	const { data: destroyedAt } = useQuery(
-		useManager().actorDestroyedAtQueryOptions(actorId),
+		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
 	const actorQueries = useActor();

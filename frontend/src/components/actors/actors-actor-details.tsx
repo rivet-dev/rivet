@@ -19,14 +19,13 @@ import { ActorMetricsTab } from "./actor-metrics-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
-import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
+import { useDataProvider } from "./data-provider";
 import {
 	GuardConnectableInspector,
 	useInspectorGuard,
 } from "./guard-connectable-inspector";
-import { useManager } from "./manager-context";
 import { ActorFeature, type ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
 
@@ -45,7 +44,7 @@ interface ActorsActorDetailsProps {
 export const ActorsActorDetails = memo(
 	({ tab, onTabChange, actorId }: ActorsActorDetailsProps) => {
 		const { data: features = [] } = useQuery(
-			useManager().actorFeaturesQueryOptions(actorId),
+			useDataProvider().actorFeaturesQueryOptions(actorId),
 		);
 
 		const supportsConsole = features.includes(ActorFeature.Console);
@@ -137,7 +136,6 @@ export function ActorTabs({
 			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col ")}
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
-				<ActorsSidebarToggleButton />
 				<div className="flex flex-1 items-center h-full w-full ">
 					<TabsList className="overflow-auto border-none h-full items-end">
 						{supportsState ? (

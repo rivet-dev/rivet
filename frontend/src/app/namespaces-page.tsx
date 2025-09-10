@@ -16,7 +16,7 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
-import { useManager } from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 
 export function NamespacesPage({ from }: { from: LinkComponentProps["from"] }) {
 	const {
@@ -26,7 +26,9 @@ export function NamespacesPage({ from }: { from: LinkComponentProps["from"] }) {
 		fetchNextPage,
 		isLoading,
 		refetch,
-	} = useInfiniteQuery(useManager().namespacesQueryOptions());
+	} = useInfiniteQuery(
+		useEngineCompatDataProvider().namespacesQueryOptions(),
+	);
 
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">

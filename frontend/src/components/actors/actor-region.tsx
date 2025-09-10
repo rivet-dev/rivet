@@ -5,7 +5,7 @@ import {
 	REGION_LABEL,
 	RegionIcon,
 } from "../matchmaker/lobby-region";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 
 interface ActorRegionProps {
 	regionId?: string;
@@ -19,7 +19,7 @@ export function ActorRegion({
 	className,
 }: ActorRegionProps) {
 	const { data: region } = useQuery(
-		useManager().regionQueryOptions(regionId),
+		useDataProvider().regionQueryOptions(regionId),
 	);
 
 	if (!regionId || !region) {

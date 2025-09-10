@@ -7,3 +7,9 @@ export const cloudEnvSchema = z.object({
 });
 
 export const cloudEnv = () => cloudEnvSchema.parse(import.meta.env);
+
+export const engineEnvSchema = z.object({
+	VITE_APP_API_URL: z.string().url(),
+});
+
+export const engineEnv = () => engineEnvSchema.parse(import.meta.env);

@@ -27,8 +27,8 @@
 		"@bare-ts/lib": "^0.4.0"
 	},
 	"devDependencies": {
-		"@types/node": "^20.0.0",
-		"typescript": "^5.0.0",
-		"tsup": "^8.4.0"
+		"@types/node": "^20.19.13",
+		"tsup": "^8.5.0",
+		"typescript": "^5.9.2"
 	}
 }

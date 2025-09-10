@@ -3,10 +3,6 @@ import { useEffect, useRef } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import { CodePreview, Input, Label } from "@/components";
-import {
-	type NamespaceNameId,
-	runnerNamesQueryOptions,
-} from "@/queries/manager-engine";
 import { JsonCode } from "../../code-mirror";
 import { createSchemaForm } from "../../lib/create-schema-form";
 import {
@@ -43,16 +39,12 @@ export const formSchema = z
 		key: z.string(),
 		input: jsonValid.optional(),
 		// tags: tagsFormSchema.shape.tags,
+
+		region: z.string(),
+		runnerNameSelector: z.string(),
+		crashPolicy: z.nativeEnum(CrashPolicyEnum),
 	})
-	.and(
-		__APP_TYPE__ === "engine"
-			? z.object({
-					region: z.string(),
-					runnerNameSelector: z.string(),
-					crashPolicy: z.nativeEnum(CrashPolicyEnum),
-				})
-			: z.object({}),
-	);
+	.partial({ region: true, runnerNameSelector: true, crashPolicy: true });
 
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
@@ -101,7 +93,7 @@ export const CrashPolicy = () => {
 					<FormControl>
 						<CrashPolicySelect
 							onValueChange={field.onChange}
-							value={field.value}
+							value={field.value || "destroy"}
 						/>
 					</FormControl>
 					<FormDescription>
@@ -161,11 +153,7 @@ export const JsonInput = () => {
 	);
 };
 
-export const RunnerNameSelector = ({
-	namespace,
-}: {
-	namespace: NamespaceNameId;
-}) => {
+export const RunnerNameSelector = ({ namespace }: { namespace: string }) => {
 	const { control } = useFormContext<FormValues>();
 
 	return (
@@ -179,7 +167,7 @@ export const RunnerNameSelector = ({
 						<RunnerSelect
 							namespace={namespace}
 							onValueChange={field.onChange}
-							value={field.value}
+							value={field.value || ""}
 						/>
 					</FormControl>
 					<FormDescription>
@@ -224,11 +212,7 @@ export const ActorPreview = () => {
 	);
 };
 
-export const PrefillRunnerName = ({
-	namespace,
-}: {
-	namespace: NamespaceNameId;
-}) => {
+export const PrefillRunnerName = ({ namespace }: { namespace: string }) => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
 

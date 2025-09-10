@@ -20,7 +20,7 @@ interface ActorConsoleMessageProps {
 		| "warn"
 		| "info"
 		| "debug";
-	timestamp?: Date;
+	timestamp?: string | Date;
 	className?: string;
 	children: ReactNode;
 }

@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Combobox } from "@/components";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 
 interface BuildSelectProps {
 	onValueChange: (value: string) => void;
@@ -9,25 +9,14 @@ interface BuildSelectProps {
 }
 
 export function BuildSelect({ onValueChange, value }: BuildSelectProps) {
-	const { data = [] } = useInfiniteQuery(useManager().buildsQueryOptions());
+	const { data = [] } = useInfiniteQuery(
+		useDataProvider().buildsQueryOptions(),
+	);
 
 	const builds = useMemo(() => {
 		return data.map((build) => {
 			return {
-				label: (
-					<div>
-						<div className="flex flex-col gap-0.5 mb-1 text-left">
-							<div className="font-semibold">
-								{build.tags?.name || build.name}
-							</div>
-							{build.createdAt ? (
-								<div className="text-xs">
-									Created: {build.createdAt.toLocaleString()}
-								</div>
-							) : null}
-						</div>
-					</div>
-				),
+				label: build.name,
 				value: build.name,
 				build,
 			};

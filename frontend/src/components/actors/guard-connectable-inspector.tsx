@@ -4,10 +4,6 @@ import { useMatch } from "@tanstack/react-router";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
-import {
-	type NamespaceNameId,
-	runnerByNameQueryOptions,
-} from "@/queries/manager-engine";
 import { DiscreteCopyButton } from "../copy-area";
 import { getConfig } from "../lib/config";
 import { ls } from "../lib/utils";
@@ -15,7 +11,7 @@ import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
 import { ActorProvider } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
-import { useManager } from "./manager-context";
+import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 const InspectorGuardContext = createContext<ReactNode | null>(null);
@@ -35,7 +31,7 @@ export function GuardConnectableInspector({
 	const {
 		data: { destroyedAt, sleepingAt, pendingAllocationAt, startedAt } = {},
 	} = useQuery({
-		...useManager().actorQueryOptions(actorId),
+		...useDataProvider().actorQueryOptions(actorId),
 		refetchInterval: 1000,
 	});
 
@@ -131,14 +127,14 @@ function ActorInspectorProvider({ children }: { children: ReactNode }) {
 
 function useActorRunner({ actorId }: { actorId: ActorId }) {
 	const { data: actor } = useSuspenseQuery(
-		useManager().actorQueryOptions(actorId),
+		useDataProvider().actorQueryOptions(actorId),
 	);
 
 	const match = useMatch({
 		from:
 			__APP_TYPE__ === "engine"
-				? "/_layout/ns/$namespace"
-				: "/_layout/orgs/$organization/projects/$project/ns/$namespace/",
+				? "/_context/_engine/ns/$namespace"
+				: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
 		shouldThrow: false,
 	});
 
@@ -147,9 +143,9 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 	}
 
 	const { data: runner } = useQuery({
-		...runnerByNameQueryOptions({
+		...useEngineCompatDataProvider().runnerByNameQueryOptions({
 			runnerName: actor.runner,
-			namespace: match.params.namespace as NamespaceNameId,
+			namespace: match.params.namespace,
 		}),
 		refetchInterval: 1000,
 	});

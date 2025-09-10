@@ -1,10 +1,9 @@
-import { ClerkProvider } from "@clerk/clerk-react";
-import { dark } from "@clerk/themes";
+import type { Clerk } from "@clerk/clerk-js";
+import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { match } from "ts-pattern";
+import posthog from "posthog-js";
 import { FullscreenLoading } from "@/components";
-import { clerk } from "@/lib/auth";
 
 function RootRoute() {
 	return (
@@ -17,28 +16,37 @@ function RootRoute() {
 	);
 }
 
-function CloudRootRoute() {
-	const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-	if (!PUBLISHABLE_KEY) {
-		throw new Error("Add your Clerk Publishable Key to the .env file");
-	}
-
-	return (
-		<ClerkProvider
-			Clerk={clerk}
-			publishableKey={PUBLISHABLE_KEY}
-			appearance={{ theme: dark }}
-		>
-			<RootRoute />
-		</ClerkProvider>
-	);
+interface RootRouteContext {
+	/**
+	 * Only available in cloud mode
+	 */
+	clerk: Clerk;
+	queryClient: QueryClient;
 }
 
-export const Route = createRootRouteWithContext()({
-	component: match(__APP_TYPE__)
-		.with("cloud", () => CloudRootRoute)
-		.otherwise(() => RootRoute),
+export const Route = createRootRouteWithContext<RootRouteContext>()({
+	component: RootRoute,
 	pendingComponent: FullscreenLoading,
-	wrapInSuspense: true,
+	beforeLoad: async ({ context }) => {
+		if (!context.clerk) return;
+
+		// wait for Clerk
+		await new Promise((resolve, reject) => {
+			context.clerk.on("status", (payload) => {
+				if (payload === "ready") {
+					posthog.setPersonProperties({
+						id: context.clerk.user?.id,
+						email: context.clerk.user?.primaryEmailAddress
+							?.emailAddress,
+					});
+					return resolve(true);
+				}
+				// If the status is not "ready", we don't resolve the promise
+				// We can also add a timeout to avoid waiting indefinitely
+				setTimeout(() => {
+					reject(new Error("Can't confirm identity"));
+				}, 10000);
+			});
+		});
+	},
 });

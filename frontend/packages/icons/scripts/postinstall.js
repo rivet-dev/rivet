@@ -5,13 +5,13 @@ const { join, resolve } = require("node:path");
 const manifest = require("./../manifest.json");
 const esbuild = require("esbuild");
 
-let hasFaToken = !!process.env.FONTAWESOME_PACKAGE_TOKEN;
+const hasFaToken = !!process.env.FONTAWESOME_PACKAGE_TOKEN;
 
 const sourceDir = join(__dirname, "..", "src");
 const sourceNodeModules = join(sourceDir, "node_modules");
 
-if (!fs.existsSync(sourceDir)){
-    fs.mkdirSync(sourceDir, { recursive: true });
+if (!fs.existsSync(sourceDir)) {
+	fs.mkdirSync(sourceDir, { recursive: true });
 }
 
 if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
@@ -45,15 +45,11 @@ if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
 	);
 
 	// Install dependencies locally without engaging the workspace to avoid recursion
-	spawnSync(
-		"npm",
-		["install", "--no-package-lock", "--silent"],
-		{
-			stdio: "inherit",
-			cwd: sourceDir,
-			env: { ...process.env, CI: 0 },
-		},
-	);
+	spawnSync("npm", ["install", "--no-package-lock", "--silent"], {
+		stdio: "inherit",
+		cwd: sourceDir,
+		env: { ...process.env, CI: 0 },
+	});
 }
 
 const banner = dedent`
@@ -70,8 +66,6 @@ let indexJsSource = dedent`
   import { createElement } from "react";
   export function Icon(props) { return createElement(FontAwesomeIcon, props)}
 `;
-
-
 
 for (const [pkg, { icons }] of Object.entries(manifest)) {
 	const isCustom = pkg.startsWith("@awesome.me/kit-");
@@ -92,7 +86,11 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 			if (!indexJsSource.includes(`export { definition as ${icon} }`)) {
 				if (hasFaToken || !isPro) {
 					if (hasFaToken && isPro) {
-						const candidate = join(sourceNodeModules, pkg, `${icon}.js`);
+						const candidate = join(
+							sourceNodeModules,
+							pkg,
+							`${icon}.js`,
+						);
 						if (fs.existsSync(candidate)) {
 							indexJsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
 						} else {
@@ -113,7 +111,11 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 					continue;
 				}
 				if (hasFaToken && isPro) {
-					const candidate = join(sourceNodeModules, pkg, `${icon}.js`);
+					const candidate = join(
+						sourceNodeModules,
+						pkg,
+						`${icon}.js`,
+					);
 					if (fs.existsSync(candidate)) {
 						indexJsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
 					} else {
@@ -128,7 +130,7 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 }
 fs.writeFileSync(join(sourceDir, "index.gen.js"), `${indexJsSource}`);
 
-let indexTsSource = dedent`
+const indexTsSource = dedent`
   ${banner}
   import { FontAwesomeIcon, FontAwesomeIconProps } from "@fortawesome/react-fontawesome";
   import { ComponentProps, createElement } from "react";
@@ -139,6 +141,9 @@ let indexTsSource = dedent`
 fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);
 
 async function build() {
+	console.log(
+		`Generating icon exports. Pro icons will ${hasFaToken ? "" : "not "}be included.`,
+	);
 	const externals = [
 		"react",
 		"react-dom",
@@ -150,10 +155,12 @@ async function build() {
 		// When token is present, we bundle Pro icons into dist so consumers
 		// don't need to resolve these at runtime from their node_modules.
 		// This avoids Module Not Found errors during Next.js builds.
-		...(hasFaToken ? [] : [
-			"@fortawesome/pro-solid-svg-icons",
-			"@fortawesome/pro-regular-svg-icons",
-		]),
+		...(hasFaToken
+			? []
+			: [
+					"@fortawesome/pro-solid-svg-icons",
+					"@fortawesome/pro-regular-svg-icons",
+				]),
 	];
 
 	await esbuild.build({

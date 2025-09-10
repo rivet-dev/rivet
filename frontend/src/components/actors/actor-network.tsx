@@ -12,7 +12,7 @@ import {
 	Flex,
 } from "@/components";
 import { ActorObjectInspector } from "./console/actor-inspector";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 export interface ActorNetworkProps {
@@ -21,7 +21,7 @@ export interface ActorNetworkProps {
 
 export function ActorNetwork({ actorId }: ActorNetworkProps) {
 	const { data: ports } = useQuery(
-		useManager().actorNetworkPortsQueryOptions(actorId),
+		useDataProvider().actorNetworkPortsQueryOptions(actorId),
 	);
 	if (!ports) {
 		return null;

@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 		optimizeDeps: {
-			include: ["@fortawesome/*", "@rivet-gg/icons"],
+			include: ["@fortawesome/*", "@rivet-gg/icons", "@rivet-gg/cloud"],
 		},
 		worker: {
 			format: "es",

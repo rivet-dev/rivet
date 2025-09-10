@@ -12,6 +12,7 @@ export function GoToActorButton(props: ButtonProps) {
 			variant="ghost"
 			onClick={() => {
 				navigate({
+					to: ".",
 					search: (prev) => ({ ...prev, modal: "go-to-actor" }),
 				});
 			}}

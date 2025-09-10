@@ -1,12 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
+import type { DialogContentProps } from "@/components/hooks";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-import type { NamespaceNameId } from "@/queries/manager-engine";
 import {
 	DialogDescription,
 	DialogFooter,
@@ -15,13 +15,12 @@ import {
 } from "../../ui/dialog";
 import { Flex } from "../../ui/flex";
 import { useActorsView } from "../actors-view-context-provider";
+import { useDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
-import type { DialogContentProps } from "../hooks";
-import { useManager } from "../manager-context";
 import { CrashPolicy } from "../queries";
 
 interface ContentProps extends DialogContentProps {
-	namespace: NamespaceNameId;
+	namespace: string;
 }
 
 export default function CreateActorDialog({
@@ -29,10 +28,10 @@ export default function CreateActorDialog({
 	namespace,
 }: ContentProps) {
 	const { mutateAsync } = useMutation(
-		useManager().createActorMutationOptions(),
+		useDataProvider().createActorMutationOptions(),
 	);
 	const name = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => state.n?.[0],
 	});
 
@@ -45,8 +44,8 @@ export default function CreateActorDialog({
 					name: values.name,
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
-					crashPolicy: values.crashPolicy,
-					runnerNameSelector: values.runnerNameSelector,
+					crashPolicy: values.crashPolicy || CrashPolicy.Destroy,
+					runnerNameSelector: values.runnerNameSelector || "default",
 				});
 				onClose?.();
 			}}

@@ -64,7 +64,6 @@ export const Combobox = <Option extends ComboboxOption>({
 	filter,
 	showSelectedOptions = 3,
 	onLoadMore,
-	allowSearchAsOption,
 	isLoading,
 	...props
 }: ComboboxProps<Option>) => {

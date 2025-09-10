@@ -39,20 +39,20 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "form-data": "^4.0.0",
-    "js-base64": "^3.7.5",
-    "node-fetch": "2",
-    "qs": "^6.11.2",
-    "readable-stream": "^4.5.2",
+    "form-data": "^4.0.4",
+    "js-base64": "^3.7.8",
+    "node-fetch": "^2.7.0",
+    "qs": "^6.14.0",
+    "readable-stream": "^4.7.0",
     "url-join": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "17.0.33",
     "@types/node-fetch": "2.6.11",
     "@types/qs": "6.9.8",
-    "@types/readable-stream": "^4.0.18",
+    "@types/readable-stream": "^4.0.21",
     "@types/url-join": "4.0.1",
-    "esbuild": "^0.19.11",
+    "esbuild": "^0.19.12",
     "prettier": "2.7.1",
     "typescript": "5.8.2"
   }

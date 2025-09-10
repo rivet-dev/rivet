@@ -2,7 +2,7 @@ import { faMoon, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { ComponentPropsWithRef } from "react";
 import { cn, Ping } from "@/components";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
 
 export const QueriedActorStatusIndicator = ({
@@ -12,7 +12,7 @@ export const QueriedActorStatusIndicator = ({
 	actorId: ActorId;
 } & ComponentPropsWithRef<"span">) => {
 	const { data: status, isError } = useQuery(
-		useManager().actorStatusQueryOptions(actorId),
+		useDataProvider().actorStatusQueryOptions(actorId),
 	);
 
 	return (

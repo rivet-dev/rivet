@@ -1,11 +1,9 @@
-import { useClerk, useOrganizationList } from "@clerk/clerk-react";
-import { AvatarImage } from "@radix-ui/react-avatar";
-import { faPlusCircle, Icon } from "@rivet-gg/icons";
+import { useClerk } from "@clerk/clerk-react";
+import { faChevronDown, faPlusCircle, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-	Avatar,
 	Button,
 	Command,
 	CommandEmpty,
@@ -13,42 +11,38 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-	cn,
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 	Skeleton,
 } from "@/components";
-import { useManager } from "@/components/actors";
+import { useCloudDataProvider } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import {
-	namespaceQueryOptions,
-	organizationQueryOptions,
-	projectQueryOptions,
-	projectsQueryOptions,
-} from "@/queries/manager-cloud";
 
 export function ContextSwitcher() {
 	const [isOpen, setIsOpen] = useState(false);
 
 	return (
-		<Popover open={isOpen} onOpenChange={setIsOpen}>
-			<PopoverTrigger asChild>
-				<Button
-					variant="outline"
-					className="flex flex-col h-auto justify-start items-start"
+		<>
+			<Popover open={isOpen} onOpenChange={setIsOpen}>
+				<PopoverTrigger asChild>
+					<Button
+						variant="outline"
+						className="flex h-auto justify-between items-center px-2 py-1.5"
+						endIcon={<Icon icon={faChevronDown} />}
+					>
+						<Breadcrumbs />
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent
+					className="p-0 max-w-[calc(12rem*3)] w-full"
+					align="start"
 				>
-					<Breadcrumbs />
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				className="p-0 max-w-[calc(12rem*3)] w-full"
-				align="start"
-			>
-				<Content onClose={() => setIsOpen(false)} />
-			</PopoverContent>
-		</Popover>
+					<Content onClose={() => setIsOpen(false)} />
+				</PopoverContent>
+			</Popover>
+		</>
 	);
 }
 
@@ -61,20 +55,21 @@ function Breadcrumbs() {
 	});
 	if (matchNamespace) {
 		return (
-			<>
-				<OrganizationBreadcrumb
-					org={matchNamespace.organization}
-					className="text-xs [&>span]:size-4 mb-1"
-				/>
-				<ProjectBreadcrumb
-					project={matchNamespace.project}
-					className="text-xs [&>span]:size-4 mb-1"
-				/>
-				<NamespaceBreadcrumb
-					namespace={matchNamespace.namespace}
-					project={matchNamespace.project}
-				/>
-			</>
+			<div className="flex flex-col items-center min-w-0 w-full">
+				<div className="text-left text-xs text-muted-foreground min-w-0 flex w-full">
+					<ProjectBreadcrumb
+						project={matchNamespace.project}
+						className="truncate min-w-0 max-w-full block"
+					/>
+				</div>
+				<div className="min-w-0 w-full">
+					<NamespaceBreadcrumb
+						className="text-left truncate block"
+						namespace={matchNamespace.namespace}
+						project={matchNamespace.project}
+					/>
+				</div>
+			</div>
 		);
 	}
 
@@ -85,47 +80,10 @@ function Breadcrumbs() {
 	if (matchProject) {
 		return (
 			<>
-				<OrganizationBreadcrumb
-					org={matchProject.organization}
-					className="text-xs [&>span]:size-4 mb-1"
-				/>
 				<ProjectBreadcrumb project={matchProject.project} />
 			</>
 		);
 	}
-
-	const matchOrg = match({
-		to: "/orgs/$organization",
-	});
-
-	if (matchOrg) {
-		return <OrganizationBreadcrumb org={matchOrg.organization} />;
-	}
-}
-
-function OrganizationBreadcrumb({
-	org,
-	className,
-}: {
-	org: string;
-	className?: string;
-}) {
-	const { isLoading, data } = useQuery(organizationQueryOptions({ org }));
-	if (isLoading) {
-		return <Skeleton className="h-5 w-32" />;
-	}
-
-	return (
-		<div className={cn("flex justify-start", className)}>
-			<Avatar className="size-5 mr-1">
-				<AvatarImage
-					src={data?.imageUrl}
-					alt={data?.name || "Organization Avatar"}
-				/>
-			</Avatar>
-			<span>{data?.name}</span>
-		</div>
-	);
 }
 
 function ProjectBreadcrumb({
@@ -135,7 +93,9 @@ function ProjectBreadcrumb({
 	project: string;
 	className?: string;
 }) {
-	const { isLoading, data } = useQuery(projectQueryOptions({ project }));
+	const { isLoading, data } = useQuery(
+		useCloudDataProvider().currentOrgProjectQueryOptions({ project }),
+	);
 	if (isLoading) {
 		return <Skeleton className="h-5 w-32" />;
 	}
@@ -153,7 +113,10 @@ function NamespaceBreadcrumb({
 	className?: string;
 }) {
 	const { isLoading, data } = useQuery(
-		namespaceQueryOptions({ project, namespace }),
+		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions({
+			project,
+			namespace,
+		}),
 	);
 	if (isLoading) {
 		return <Skeleton className="h-5 w-32" />;
@@ -163,141 +126,30 @@ function NamespaceBreadcrumb({
 }
 
 function Content({ onClose }: { onClose?: () => void }) {
-	const params = useParams({ strict: false });
-	const {
-		userMemberships: {
-			data: userMemberships = [],
-			isLoading,
-			hasNextPage,
-			fetchNext,
-		},
-	} = useOrganizationList({
-		userMemberships: {
-			infinite: true,
-		},
+	const params = useParams({
+		strict: false,
+		select: (p) => ({ organization: p.organization, project: p.project }),
 	});
-	const clerk = useClerk();
-
-	const [currentOrgHover, setCurrentOrgHover] = useState<string | null>(
-		params.organization || null,
-	);
 
 	const [currentProjectHover, setCurrentProjectHover] = useState<
 		string | null
 	>(params.project || null);
 
-	const navigate = useNavigate();
+	if (!params.organization) {
+		return;
+	}
 
 	return (
 		<div className="flex w-full">
-			<div className="w-48">
-				<Command loop defaultValue={clerk.organization?.id}>
-					<CommandInput
-						className="text-sm"
-						placeholder="Find Organization..."
-					/>
-					<CommandList className="relative p-1">
-						<CommandGroup heading="Organizations">
-							{!isLoading ? (
-								<CommandEmpty>
-									No organizations found.
-									<Button
-										className="mt-1"
-										variant="outline"
-										size="sm"
-										startIcon={<Icon icon={faPlusCircle} />}
-										onClick={() => {
-											onClose?.();
-											clerk.openCreateOrganization();
-										}}
-									>
-										Create Organization
-									</Button>
-								</CommandEmpty>
-							) : null}
-							{userMemberships.map((membership) => (
-								<SafeHover key={membership.id} offset={40}>
-									<CommandItem
-										onSelect={() => {
-											clerk.setActive({
-												organization:
-													membership.organization.id,
-											});
-											navigate({
-												to: "/orgs/$organization",
-												params: {
-													organization:
-														membership.organization
-															.id,
-												},
-											});
-											onClose?.();
-										}}
-										value={membership.organization.id}
-										onMouseEnter={() => {
-											setCurrentOrgHover(
-												membership.organization.id,
-											);
-											setCurrentProjectHover(null);
-										}}
-										keywords={[
-											membership.organization.name,
-										]}
-										className="static cursor-pointer"
-									>
-										{membership.organization.name}
-									</CommandItem>
-								</SafeHover>
-							))}
-							{isLoading ? (
-								<>
-									<ListItemSkeleton />
-									<ListItemSkeleton />
-									<ListItemSkeleton />
-									<ListItemSkeleton />
-									<ListItemSkeleton />
-								</>
-							) : null}
-							<CommandItem
-								keywords={[
-									"create",
-									"new",
-									"organization",
-									"team",
-								]}
-								onMouseEnter={() => {
-									setCurrentOrgHover(null);
-									setCurrentProjectHover(null);
-								}}
-								onFocus={() => {
-									setCurrentOrgHover(null);
-									setCurrentProjectHover(null);
-								}}
-								onSelect={() => {
-									clerk.openCreateOrganization();
-								}}
-							>
-								<Icon icon={faPlusCircle} className="mr-2" />
-								Create Organization
-							</CommandItem>
+			<ProjectList
+				organization={params.organization}
+				onHover={setCurrentProjectHover}
+				onClose={onClose}
+			/>
 
-							{hasNextPage ? (
-								<VisibilitySensor onChange={fetchNext} />
-							) : null}
-						</CommandGroup>
-					</CommandList>
-				</Command>
-			</div>
-			{currentOrgHover ? (
-				<ProjectList
-					organization={currentOrgHover}
-					onHover={setCurrentProjectHover}
-					onClose={onClose}
-				/>
-			) : null}
-			{currentProjectHover && currentOrgHover ? (
+			{currentProjectHover ? (
 				<NamespaceList
-					organization={currentOrgHover}
+					organization={params.organization}
 					project={currentProjectHover}
 					onClose={onClose}
 				/>
@@ -316,7 +168,11 @@ function ProjectList({
 	onHover?: (project: string | null) => void;
 }) {
 	const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } =
-		useInfiniteQuery(projectsQueryOptions({ organization: organization }));
+		useInfiniteQuery(
+			useCloudDataProvider().projectsQueryOptions({
+				organization: organization,
+			}),
+		);
 	const navigate = useNavigate();
 	const clerk = useClerk();
 	const project = useParams({
@@ -449,7 +305,11 @@ function NamespaceList({
 	onClose?: () => void;
 }) {
 	const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } =
-		useInfiniteQuery(useManager().projectNamespacesQueryOptions(project));
+		useInfiniteQuery(
+			useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
+				project,
+			}),
+		);
 	const navigate = useNavigate();
 	const clerk = useClerk();
 	const namespace = useParams({

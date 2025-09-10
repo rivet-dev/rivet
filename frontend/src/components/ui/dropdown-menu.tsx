@@ -33,7 +33,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 		{...props}
 	>
 		{children}
-		<Icon icon={faChevronRight} className="ml-auto h-4 w-4" />
+		<Icon icon={faChevronRight} className="ml-2 size-2" />
 	</DropdownMenuPrimitive.SubTrigger>
 ));
 DropdownMenuSubTrigger.displayName =
@@ -77,18 +77,27 @@ const DropdownMenuItem = React.forwardRef<
 	React.ElementRef<typeof DropdownMenuPrimitive.Item>,
 	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
 		inset?: boolean;
+		indicator?: React.ReactNode;
 	}
->(({ className, inset, ...props }, ref) => (
+>(({ className, children, inset, indicator, ...props }, ref) => (
 	<DropdownMenuPrimitive.Item
 		ref={ref}
 		className={cn(
 			"relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-			inset && "pl-8",
+			(inset || indicator) && "pl-8",
 			className,
 		)}
 		{...props}
-	/>
+	>
+		{indicator ? (
+			<span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+				{indicator}
+			</span>
+		) : null}
+		{children}
+	</DropdownMenuPrimitive.Item>
 ));
+
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 const DropdownMenuCheckboxItem = React.forwardRef<

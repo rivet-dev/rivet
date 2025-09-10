@@ -7,7 +7,7 @@ import {
 	ActorsActorDetails,
 	ActorsActorEmptyDetails,
 	ActorsListPreview,
-	useManager,
+	useDataProvider,
 } from "@/components/actors";
 
 export function Actors({ actorId }: { actorId: string | undefined }) {
@@ -30,10 +30,10 @@ export function Actors({ actorId }: { actorId: string | undefined }) {
 
 function Actor() {
 	const navigate = useNavigate();
-	const { tab, actorId } = useSearch({ from: "/_layout" });
+	const { tab, actorId } = useSearch({ from: "/_context" });
 
 	const { data, isError } = useQuery(
-		useManager().actorQueryOptions(actorId as ActorId),
+		useDataProvider().actorQueryOptions(actorId as ActorId),
 	);
 
 	if (!data || isError) {

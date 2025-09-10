@@ -3,6 +3,7 @@ import {
 	createHighlighterCore,
 	createOnigurumaEngine,
 	type HighlighterCore,
+	type ThemeInput,
 } from "shiki";
 import { Skeleton } from "../ui/skeleton";
 import theme from "./theme.json";
@@ -21,7 +22,7 @@ export function CodePreview({ code, language }: CodePreviewProps) {
 
 		async function createHighlighter() {
 			highlighter.current ??= await createHighlighterCore({
-				themes: [theme],
+				themes: [theme as ThemeInput],
 				langs: [import("@shikijs/langs/typescript")],
 				engine: createOnigurumaEngine(import("shiki/wasm")),
 			});

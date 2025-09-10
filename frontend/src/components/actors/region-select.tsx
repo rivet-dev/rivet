@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Combobox } from "@/components";
 import { ActorRegion } from "./actor-region";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 
 interface RegionSelectProps {
 	onValueChange: (value: string) => void;
@@ -14,7 +14,7 @@ export function RegionSelect({ onValueChange, value }: RegionSelectProps) {
 		fetchNextPage,
 		isLoading,
 		isFetchingNextPage,
-	} = useInfiniteQuery(useManager().regionsQueryOptions());
+	} = useInfiniteQuery(useDataProvider().regionsQueryOptions());
 
 	const regions = [
 		{
