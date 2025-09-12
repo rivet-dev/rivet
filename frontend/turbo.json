@@ -12,6 +12,11 @@
 			"env": ["VITE_APP_*"],
 			"outputs": ["dist/**"]
 		},
+		"build:cloud": {
+			"dependsOn": ["^build"],
+			"env": ["VITE_APP_*"],
+			"outputs": ["dist/**"]
+		},
 		"dev": {
 			"dependsOn": ["^build"],
 			"env": ["VITE_APP_*"],
