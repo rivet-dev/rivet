@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002F[section]\u002F[[...page]]","\u002Fblog\u002F[...slug]","\u002Fchangelog\u002F[...slug]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

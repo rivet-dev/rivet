@@ -159,30 +159,38 @@ export function Header({
 						}
 						breadcrumbs={
 							<div className="flex items-center font-v2 subpixel-antialiased">
-								<TextNavItem
-									href="/docs"
-									ariaCurrent={
-										active === "docs" ? "page" : undefined
-									}
-								>
-									Documentation
-								</TextNavItem>
-								<TextNavItem
-									href="/cloud"
-									ariaCurrent={
-										active === "cloud" ? "page" : undefined
-									}
-								>
-									Cloud
-								</TextNavItem>
-								<TextNavItem
-									href="/changelog"
-									ariaCurrent={
-										active === "blog" ? "page" : undefined
-									}
-								>
-									Changelog
-								</TextNavItem>
+						<TextNavItem
+							href="/docs"
+							ariaCurrent={
+								active === "docs" ? "page" : undefined
+							}
+						>
+							Documentation
+						</TextNavItem>
+						<TextNavItem
+							href="/pricing"
+							ariaCurrent={
+								active === "pricing" ? "page" : undefined
+							}
+						>
+							Pricing
+						</TextNavItem>
+						<TextNavItem
+							href="/cloud"
+							ariaCurrent={
+								active === "cloud" ? "page" : undefined
+							}
+						>
+							Cloud
+						</TextNavItem>
+						<TextNavItem
+							href="/changelog"
+							ariaCurrent={
+								active === "blog" ? "page" : undefined
+							}
+						>
+							Changelog
+						</TextNavItem>
 							</div>
 						}
 					/>
@@ -249,24 +257,30 @@ export function Header({
 			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} />}
 			breadcrumbs={
 				<div className="flex items-center font-v2 subpixel-antialiased">
-					<TextNavItem
-						href="/docs"
-						ariaCurrent={active === "docs" ? "page" : undefined}
-					>
-						Documentation
-					</TextNavItem>
-					<TextNavItem
-						href="/cloud"
-						ariaCurrent={active === "cloud" ? "page" : undefined}
-					>
-						Cloud
-					</TextNavItem>
-					<TextNavItem
-						href="/changelog"
-						ariaCurrent={active === "blog" ? "page" : undefined}
-					>
-						Changelog
-					</TextNavItem>
+				<TextNavItem
+					href="/docs"
+					ariaCurrent={active === "docs" ? "page" : undefined}
+				>
+					Documentation
+				</TextNavItem>
+				<TextNavItem
+					href="/pricing"
+					ariaCurrent={active === "pricing" ? "page" : undefined}
+				>
+					Pricing
+				</TextNavItem>
+				<TextNavItem
+					href="/cloud"
+					ariaCurrent={active === "cloud" ? "page" : undefined}
+				>
+					Cloud
+				</TextNavItem>
+				<TextNavItem
+					href="/changelog"
+					ariaCurrent={active === "blog" ? "page" : undefined}
+				>
+					Changelog
+				</TextNavItem>
 				</div>
 			}
 		/>
@@ -282,8 +296,8 @@ function DocsMobileNavigation({ tree }) {
 	];
 
 	const otherLinks = [
-		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
+		{ href: "/changelog", label: "Changelog" },
 	];
 
 	return (

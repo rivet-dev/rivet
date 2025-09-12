@@ -5,6 +5,11 @@ use futures_util::StreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode, header::HeaderName};
+use hyper_tungstenite::HyperWebsocket;
+use pegboard::pubsub_subjects::{
+	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
+};
+use rivet_error::*;
 use rivet_guard_core::{
 	WebSocketHandle,
 	custom_serve::CustomServeTrait,
@@ -13,8 +18,25 @@ use rivet_guard_core::{
 	request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
+use rivet_tunnel_protocol::{
+	MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
+	ToServerWebSocketClose, ToServerWebSocketMessage, ToServerWebSocketOpen, TunnelMessage,
+	versioned,
+};
 use rivet_util::serde::HashableMap;
-use std::time::Duration;
+use std::result::Result::Ok as ResultOk;
+use std::{
+	collections::HashMap,
+	sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
+use tokio::{
+	sync::{Mutex, oneshot},
+	time::timeout,
+};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::shared_state::{SharedState, TunnelMessageData};

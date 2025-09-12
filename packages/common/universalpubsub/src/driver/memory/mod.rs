@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::*;
 use async_trait::async_trait;
 use tokio::sync::{RwLock, mpsc};
+use uuid::Uuid;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
 use crate::pubsub::DriverOutput;

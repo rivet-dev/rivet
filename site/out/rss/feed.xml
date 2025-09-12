@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Rivet</title>
+        <link>https://www.rivet.gg</link>
+        <description>Rivet news</description>
+        <lastBuildDate>Wed, 30 Jul 2025 23:04:19 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <image>
+            <title>Rivet</title>
+            <url>https://www.rivet.gg/favicon.ico</url>
+            <link>https://www.rivet.gg</link>
+        </image>
+        <copyright>All rights reserved 2025 Rivet Gaming, Inc.</copyright>
+        <item>
+            <title><![CDATA[Is Godot 4's Multiplayer a Worthy Alternative to Unity?]]></title>
+            <link>https://www.rivet.gg/blog/godot-multiplayer-compared-to-unity</link>
+            <guid>godot-multiplayer-compared-to-unity</guid>
+            <pubDate>Tue, 19 Sep 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Comparing Unity's high-level multiplayer API with Unity's Fish-Net framework.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Rivet Inspector Launch]]></title>
+            <link>https://www.rivet.gg/blog/2025-1-12-rivet-inspector</link>
+            <guid>2025-1-12-rivet-inspector</guid>
+            <pubDate>Sun, 12 Jan 2025 08:00:00 GMT</pubDate>
+            <description><![CDATA[Today we are launching Rivet Actor Inspector to help developers view and inspect Rivet Actors. See and edit things like:]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Introducing RivetKit: Backend Libraries That Replace SaaS]]></title>
+            <link>https://www.rivet.gg/blog/2025-07-01-introducing-rivetkit-backend-libraries-that-replace-saas</link>
+            <guid>2025-07-01-introducing-rivetkit-backend-libraries-that-replace-saas</guid>
+            <pubDate>Tue, 01 Jul 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Every API call to a cloud provider is a dependency you can't control.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Container Platform Comparison: Cloudflare Containers vs Rivet Containers vs Fly Machines]]></title>
+            <link>https://www.rivet.gg/blog/2025-06-24-cloudflare-containers-vs-rivet-containers-vs-fly-machines</link>
+            <guid>2025-06-24-cloudflare-containers-vs-rivet-containers-vs-fly-machines</guid>
+            <pubDate>Tue, 24 Jun 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Rivet is an open-source, self-hostable serverless alternative to Cloudflare Workers, Durable Objects, and Containers. Check out Rivet Containers and visit our GitHub.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Rivet Functions Launch]]></title>
+            <link>https://www.rivet.gg/blog/2025-06-10-rivet-functions-launch</link>
+            <guid>2025-06-10-rivet-functions-launch</guid>
+            <pubDate>Tue, 10 Jun 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Announcing Rivet Functions – open-source serverless for your backend logic.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[2,000x faster route propagation by rewriting our Traefik gateway in Rust]]></title>
+            <link>https://www.rivet.gg/blog/2025-06-02-faster-route-propagation-by-rewriting-our-traefik-gateway-in-rust</link>
+            <guid>2025-06-02-faster-route-propagation-by-rewriting-our-traefik-gateway-in-rust</guid>
+            <pubDate>Mon, 02 Jun 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Rivet is an open-source, self-hostable serverless platform that supports Rivet Functions, Rivet Actors (open-source Cloudflare Durable Objects), and Rivet Containers. We've rewritten our Traefik-based gateway in Rust — now named Rivet Guard — to support the hyper-specific needs of building a serverless platform.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Building Linear Agents in Node.js & Rivet: Full Walkthrough and Starter Kit]]></title>
+            <link>https://www.rivet.gg/blog/2025-05-28-building-linear-agents-in-node-js-and-rivet-full-walkthrough-and-starter-kit</link>
+            <guid>2025-05-28-building-linear-agents-in-node-js-and-rivet-full-walkthrough-and-starter-kit</guid>
+            <pubDate>Wed, 28 May 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[In this guide, you'll learn how to build an AI-powered Linear agent that automates development tasks by generating code based on issue descriptions. You'll build a complete application that authenticates with Linear, receives webhooks, and responds to assignments + comments.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Considering A W3C Standard For Stateful Serverless]]></title>
+            <link>https://www.rivet.gg/blog/2025-03-23-what-would-a-w3c-standard-look-like-for-stateful-serverless-</link>
+            <guid>2025-03-23-what-would-a-w3c-standard-look-like-for-stateful-serverless-</guid>
+            <pubDate>Sun, 23 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[We're Rivet, a new open-source, self-hostable serverless platform with a focus on stateful serverless. If you want to support our mission of building a production-ready and self-hostable serverless runtime, give us a star on GitHub.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Writing Docs for AI: Making Your Product Seamless for Cursor, Windsurf, and Claude Code Users]]></title>
+            <link>https://www.rivet.gg/blog/2025-03-15-writing-docs-for-ai</link>
+            <guid>2025-03-15-writing-docs-for-ai</guid>
+            <pubDate>Sat, 15 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Developers increasingly rely on AI-powered tools like Cursor, Windsurf, and Claude Code to streamline coding, debugging, and automation. But if you want your product to integrate smoothly into these AI-driven workflows, you need to structure your documentation in a way that's optimized for Large Language Models (LLMs).]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Rivet CLI Installation Update]]></title>
+            <link>https://www.rivet.gg/blog/2025-03-15-cli-installation-fixes</link>
+            <guid>2025-03-15-cli-installation-fixes</guid>
+            <pubDate>Sat, 15 Mar 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[We've updated the installation process for the rivet-cli package, making it easier than ever to get started with Rivet. This update ensures a seamless setup process whether you're using npx or installing globally via npm.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[SQLite-on-the-Server Is Misunderstood: Better At Hyper-Scale Than Micro-Scale]]></title>
+            <link>https://www.rivet.gg/blog/2025-02-16-sqlite-on-the-server-is-misunderstood</link>
+            <guid>2025-02-16-sqlite-on-the-server-is-misunderstood</guid>
+            <pubDate>Sun, 16 Feb 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[We're Rivet, a new open-source, self-hostable serverless platform. We've been in the weeds with SQLite-on-the-server recently and – boy – do we have a lot of thoughts to share. Give us a star on GitHub, we'll be sharing a lot more about SQLite soon!]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Rivet Actors Launch]]></title>
+            <link>https://www.rivet.gg/blog/2024-12-21-rivet-actors-launch</link>
+            <guid>2024-12-21-rivet-actors-launch</guid>
+            <pubDate>Sat, 21 Dec 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Today we are launching Rivet Actors to help developers build and scale realtime applications. They come with a lot of features like:]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Usage-Based Pricing Update]]></title>
+            <link>https://www.rivet.gg/blog/2024-02-12-usage-pricing-update</link>
+            <guid>2024-02-12-usage-pricing-update</guid>
+            <pubDate>Wed, 19 Feb 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Today we're excited to announce updates to Rivet's pricing model, moving to a more transparent and flexible usage-based system. This change allows developers to better scale their applications while only paying for what they use.]]></description>
+        </item>
+    </channel>
+</rss>
