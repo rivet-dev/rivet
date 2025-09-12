@@ -11,9 +11,21 @@ import {
 	type DefaultDataProvider,
 } from "./default-data-provider";
 
-export const createGlobalContext = (opts: { url: string; token: string }) => {
+export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 	const def = createDefaultGlobalContext();
-	const client = createClient(opts);
+
+	if (!opts.url || !opts.token) {
+		return {
+			...def,
+			endpoint: opts.url,
+			features: {
+				canCreateActors: false,
+				canDeleteActors: false,
+			},
+		};
+	}
+
+	const client = createClient({ url: opts.url, token: opts.token });
 	return {
 		...def,
 		endpoint: opts.url,

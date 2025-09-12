@@ -1,10 +1,17 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Outlet,
+	useNavigate,
+	useParams,
+} from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { match } from "ts-pattern";
 import z from "zod";
 import { createGlobalContext as createGlobalCloudContext } from "@/app/data-providers/cloud-data-provider";
 import { createGlobalContext as createGlobalEngineContext } from "@/app/data-providers/engine-data-provider";
 import { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
+import { useDialog } from "@/components";
+import { ModalRenderer } from "@/components/modal-renderer";
 
 const searchSchema = z
 	.object({
@@ -38,8 +45,8 @@ export const Route = createFileRoute("/_context")({
 			}))
 			.with("inspector", () => ({
 				dataProvider: createGlobalInspectorContext({
-					url: (search as z.infer<typeof searchSchema>).u || "",
-					token: (search as z.infer<typeof searchSchema>).t || "",
+					url: (search as z.infer<typeof searchSchema>).u,
+					token: (search as z.infer<typeof searchSchema>).t,
 				}),
 				__type: "inspector" as const,
 			}))
@@ -49,5 +56,39 @@ export const Route = createFileRoute("/_context")({
 });
 
 function RouteComponent() {
-	return <Outlet />;
+	return (
+		<>
+			<Outlet />
+			<ModalRenderer />
+			<Modals />
+		</>
+	);
+}
+
+function Modals() {
+	const navigate = useNavigate();
+	const search = Route.useSearch();
+	const params = useParams({ strict: false });
+
+	const CreateActorDialog = useDialog.CreateActor.Dialog;
+
+	return (
+		<CreateActorDialog
+			namespace={params.namespace || ""}
+			dialogProps={{
+				open: search.modal === "create-actor",
+				onOpenChange: (value) => {
+					if (!value) {
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				},
+			}}
+		/>
+	);
 }

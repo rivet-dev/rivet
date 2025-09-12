@@ -34,7 +34,7 @@ if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
 				private: true,
 				sideEffects: false,
 				dependencies: {
-					"@awesome.me/kit-63db24046b": "^1.0.13",
+					"@awesome.me/kit-63db24046b": "^1.0.15",
 					"@fortawesome/pro-regular-svg-icons": "6.6.0",
 					"@fortawesome/pro-solid-svg-icons": "6.6.0",
 				},
@@ -73,7 +73,10 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 
 	if (isCustom) {
 		if (hasFaToken) {
-			indexJsSource += `export * from "${pkg}";\n`;
+			const iconNames = icons.map(({ icon }) => icon);
+			const exp = iconNames
+				.join(", ");
+			indexJsSource += `export { ${exp} } from "${pkg}";\n`;
 		} else {
 			const iconNames = icons.map(({ icon }) => icon);
 			const exp = iconNames

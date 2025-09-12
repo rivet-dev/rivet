@@ -43,12 +43,15 @@ export const router = createRouter({
 			__APP_TYPE__ === "cloud" ? clerk : (undefined as unknown as Clerk),
 		queryClient: queryClient,
 	},
-	defaultStaleTime: Infinity,
-	defaultPendingComponent: PageLayout.Root.Skeleton,
 	defaultPreloadStaleTime: 0,
 	defaultGcTime: 0,
 	defaultPreloadGcTime: 0,
+	defaultStaleTime: Infinity,
+	scrollRestoration: true,
+	defaultPendingMinMs: 300,
+	defaultPendingComponent: FullscreenLoading,
 	defaultOnCatch: (error) => {
+		console.error("Router caught an error:", error);
 		Sentry.captureException(error);
 	},
 });

@@ -4,7 +4,7 @@ import { App, router } from "./app";
 import "./index.css";
 import { initThirdPartyProviders } from "@/components";
 
-initThirdPartyProviders(router, import.meta.env.DEV);
+initThirdPartyProviders(router, false);
 
 // biome-ignore lint/style/noNonNullAssertion: it should always be present
 const rootElement = document.getElementById("root")!;

@@ -43,55 +43,59 @@ export const createDialogHook = <
 		const Content = useMemo(() => lazy(component), []);
 
 		return (
-			<Dialog {...dialogProps}>
-				<DialogContent
-					onOpenAutoFocus={(e) => {
-						if (opts.autoFocus === false) {
-							return e.preventDefault();
-						}
-					}}
-				>
-					<Suspense
-						fallback={
-							<div className="flex flex-col gap-4">
-								<VisuallyHidden>
-									<DialogTitle>Loading...</DialogTitle>
-								</VisuallyHidden>
-								<div className="flex flex-col">
-									<Skeleton className="w-1/4 h-5" />
-									<Skeleton className="w-3/4 h-5 mt-2" />
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Skeleton className="w-1/3 h-5" />
-									<Skeleton className="w-full h-10" />
-								</div>
-								<div className="flex flex-col gap-2">
-									<Skeleton className="w-1/3 h-5" />
-									<Skeleton className="w-full h-10" />
-								</div>
-								<div className="flex flex-col gap-2">
-									<Skeleton className="w-1/3 h-5" />
-									<Skeleton className="w-full h-10" />
-								</div>
-								<div className="flex flex-col gap-2">
-									<Skeleton className="w-1/3 h-5" />
-									<Skeleton className="w-full h-10" />
-								</div>
-								<div className="flex flex-col gap-2">
-									<Skeleton className="w-1/3 h-5" />
-									<Skeleton className="w-full h-10" />
-								</div>
-							</div>
-						}
+			<IsInModalContext.Provider value={true}>
+				<Dialog {...dialogProps}>
+					<DialogContent
+						onOpenAutoFocus={(e) => {
+							if (opts.autoFocus === false) {
+								return e.preventDefault();
+							}
+						}}
 					>
-						<Content
-							{...props}
-							onClose={() => dialogProps?.onOpenChange?.(false)}
-						/>
-					</Suspense>
-				</DialogContent>
-			</Dialog>
+						<Suspense
+							fallback={
+								<div className="flex flex-col gap-4">
+									<VisuallyHidden>
+										<DialogTitle>Loading...</DialogTitle>
+									</VisuallyHidden>
+									<div className="flex flex-col">
+										<Skeleton className="w-1/4 h-5" />
+										<Skeleton className="w-3/4 h-5 mt-2" />
+									</div>
+
+									<div className="flex flex-col gap-2">
+										<Skeleton className="w-1/3 h-5" />
+										<Skeleton className="w-full h-10" />
+									</div>
+									<div className="flex flex-col gap-2">
+										<Skeleton className="w-1/3 h-5" />
+										<Skeleton className="w-full h-10" />
+									</div>
+									<div className="flex flex-col gap-2">
+										<Skeleton className="w-1/3 h-5" />
+										<Skeleton className="w-full h-10" />
+									</div>
+									<div className="flex flex-col gap-2">
+										<Skeleton className="w-1/3 h-5" />
+										<Skeleton className="w-full h-10" />
+									</div>
+									<div className="flex flex-col gap-2">
+										<Skeleton className="w-1/3 h-5" />
+										<Skeleton className="w-full h-10" />
+									</div>
+								</div>
+							}
+						>
+							<Content
+								{...props}
+								onClose={() =>
+									dialogProps?.onOpenChange?.(false)
+								}
+							/>
+						</Suspense>
+					</DialogContent>
+				</Dialog>
+			</IsInModalContext.Provider>
 		);
 	};
 
@@ -179,19 +183,21 @@ export const createDataDialogHook = <
 		return {
 			open,
 			dialog: (
-				<Dialog open={isOpen} onOpenChange={setIsOpen}>
-					<DialogContent
-						onOpenAutoFocus={(e) => {
-							if (opts.autoFocus === false) {
-								return e.preventDefault();
-							}
-						}}
-					>
-						<IsInModalContext.Provider value={true}>
-							<Content {...props} {...data} onClose={close} />
-						</IsInModalContext.Provider>
-					</DialogContent>
-				</Dialog>
+				<IsInModalContext.Provider value={true}>
+					<Dialog open={isOpen} onOpenChange={setIsOpen}>
+						<DialogContent
+							onOpenAutoFocus={(e) => {
+								if (opts.autoFocus === false) {
+									return e.preventDefault();
+								}
+							}}
+						>
+							<IsInModalContext.Provider value={true}>
+								<Content {...props} {...data} onClose={close} />
+							</IsInModalContext.Provider>
+						</DialogContent>
+					</Dialog>
+				</IsInModalContext.Provider>
 			),
 		};
 	};

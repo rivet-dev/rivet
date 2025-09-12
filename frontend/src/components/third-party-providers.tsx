@@ -3,6 +3,7 @@ import posthog, { type PostHog } from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import type { PropsWithChildren } from "react";
 import { getConfig, useConfig } from "@/components";
+import { cloudEnv, commonEnv } from "@/lib/env";
 
 export function initThirdPartyProviders(router: unknown, debug: boolean) {
 	const config = getConfig();
@@ -22,19 +23,22 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 	if (config.sentry) {
 		const integrations = [
 			Sentry.tanstackRouterBrowserTracingIntegration(router),
+			Sentry.browserTracingIntegration(),
 		];
 		if (ph) {
 			integrations.push(
 				ph.sentryIntegration({
 					organization: "rivet-gg",
-					projectId: Number.parseInt(config.sentry.projectId, 10),
+					projectId: commonEnv().VITE_APP_SENTRY_PROJECT_ID,
 				}),
 			);
 		}
 
 		Sentry.init({
-			dsn: config.sentry.dsn,
+			dsn: commonEnv().VITE_APP_SENTRY_DSN,
+			tracesSampleRate: 1.0,
 			integrations,
+			tracePropagationTargets: ["localhost", /rivet.gg$/],
 		});
 	}
 }

@@ -22,7 +22,7 @@ export function ActorBuildsList() {
 		<div className="h-full">
 			<div className="flex flex-col gap-[1px]">
 				{data?.length === 0 ? (
-					<p className="text-xs text-muted-foreground ms-2">
+					<p className="text-xs text-muted-foreground ms-1">
 						No instances found.
 					</p>
 				) : null}

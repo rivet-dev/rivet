@@ -1,9 +1,39 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import {
+	useNavigate,
+	useParams,
+	useRouteContext,
+} from "@tanstack/react-router";
+import { match } from "ts-pattern";
 import * as CreateNamespaceForm from "@/app/forms/create-namespace-form";
 import { Flex, Frame } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
 import { convertStringToId } from "@/lib/utils";
+
+const useDataProvider = () => {
+	return match(__APP_TYPE__)
+		.with("cloud", () => {
+			// biome-ignore lint/correctness/useHookAtTopLevel: match will only run once per app load
+			return useRouteContext({
+				from: "/_context/_cloud/orgs/$organization/projects/$project",
+				select: (ctx) => ctx.dataProvider,
+			});
+		})
+		.with("engine", () => {
+			return match(
+				// biome-ignore lint/correctness/useHookAtTopLevel: match will only run once per app load
+				useRouteContext({
+					from: "/_context/",
+				}),
+			)
+				.with({ __type: "engine" }, (ctx) => ctx.dataProvider)
+				.otherwise(() => {
+					throw new Error("Invalid context");
+				});
+		})
+		.otherwise(() => {
+			throw new Error("Invalid app type");
+		});
+};
 
 const useCreateNamespace = () => {
 	const queryClient = useQueryClient();
@@ -11,14 +41,14 @@ const useCreateNamespace = () => {
 
 	const params = useParams({ strict: false });
 
-	const manager = useEngineCompatDataProvider();
+	const dataProivder = useDataProvider();
 
 	return useMutation(
-		manager.createNamespaceMutationOptions({
+		dataProivder.createNamespaceMutationOptions({
 			onSuccess: async (data) => {
 				// Invalidate all queries to ensure fresh data
 				await queryClient.invalidateQueries(
-					manager.namespacesQueryOptions(),
+					dataProivder.namespacesQueryOptions(),
 				);
 
 				if (__APP_TYPE__ === "cloud") {
@@ -26,7 +56,7 @@ const useCreateNamespace = () => {
 						throw new Error("Missing required parameters");
 					}
 					// Navigate to the newly created namespace
-					navigate({
+					await navigate({
 						to: "/orgs/$organization/projects/$project/ns/$namespace",
 						params: {
 							organization: params.organization,
@@ -37,7 +67,7 @@ const useCreateNamespace = () => {
 					return;
 				}
 
-				navigate({
+				await navigate({
 					to: "/ns/$namespace",
 					params: { namespace: data.name },
 				});
@@ -60,7 +90,7 @@ export default function CreateNamespacesFrameContent() {
 			defaultValues={{ name: "", slug: "" }}
 		>
 			<Frame.Header>
-				<Frame.Title>Create New Namespace</Frame.Title>
+				<Frame.Title>Create Namespace</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
 				<Flex gap="4" direction="col">

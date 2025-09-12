@@ -4,7 +4,11 @@ import type { ImperativePanelHandle } from "react-resizable-panels";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
 import * as Layout from "./layout";
 
-export function RouteLayout() {
+export function RouteLayout({
+	children = <Outlet />,
+}: {
+	children?: React.ReactNode;
+}) {
 	const sidebarRef = useRef<ImperativePanelHandle>(null);
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -23,7 +27,7 @@ export function RouteLayout() {
 						sidebarRef={sidebarRef}
 						isSidebarCollapsed={isSidebarCollapsed}
 					>
-						<Outlet />
+						{children}
 					</RootLayoutContextProvider>
 				</Layout.Main>
 			</Layout.VisibleInFull>

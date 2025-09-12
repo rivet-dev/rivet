@@ -4,7 +4,6 @@ import {
 	CardFooter,
 	CardHeader,
 	CardTitle,
-	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
@@ -25,7 +24,7 @@ export const Title = (props: React.ComponentProps<typeof DialogTitle>) => {
 export const Content = (props: React.HTMLAttributes<HTMLDivElement>) => {
 	const isInModal = useContext(IsInModalContext);
 	return isInModal ? (
-		<DialogContent {...props} />
+		<div className="flex-1 min-w-0 max-w-full" {...props} />
 	) : (
 		<CardContent {...props} />
 	);

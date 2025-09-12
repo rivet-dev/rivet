@@ -7,13 +7,12 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
-import { ModalRenderer } from "@/components/modal-renderer";
 
 export const Route = createFileRoute("/_context/_cloud")({
 	component: RouteComponent,
-	beforeLoad: () => {
-		return match(__APP_TYPE__)
-			.with("cloud", async () => {})
+	beforeLoad: ({ context }) => {
+		return match(context)
+			.with({ __type: "cloud" }, async () => {})
 			.otherwise(() => {
 				throw notFound();
 			});
@@ -24,7 +23,6 @@ function RouteComponent() {
 	return (
 		<>
 			<Outlet />
-			<ModalRenderer />
 			<CloudModals />
 		</>
 	);
@@ -36,6 +34,8 @@ function CloudModals() {
 
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
+	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
 
 	return (
 		<>
@@ -59,6 +59,40 @@ function CloudModals() {
 			<CreateNamespaceDialog
 				dialogProps={{
 					open: search.modal === "create-ns",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectVercelDialog
+				dialogProps={{
+					open: search.modal === "connect-vercel",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRailwayDialog
+				dialogProps={{
+					open: search.modal === "connect-railway",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

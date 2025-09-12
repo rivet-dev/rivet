@@ -11,10 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
-import { Route as ContextInspectorRouteImport } from './routes/_context/_inspector'
 import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
 import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
-import { Route as ContextInspectorInspectRouteImport } from './routes/_context/_inspector/inspect'
+import { Route as ContextCloudJoinRouteImport } from './routes/_context/_cloud/join'
 import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/_engine/ns.$namespace'
 import { Route as ContextCloudOrgsOrganizationRouteImport } from './routes/_context/_cloud/orgs.$organization'
 import { Route as ContextEngineNsNamespaceIndexRouteImport } from './routes/_context/_engine/ns.$namespace/index'
@@ -35,10 +34,6 @@ const ContextIndexRoute = ContextIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ContextRoute,
 } as any)
-const ContextInspectorRoute = ContextInspectorRouteImport.update({
-  id: '/_inspector',
-  getParentRoute: () => ContextRoute,
-} as any)
 const ContextEngineRoute = ContextEngineRouteImport.update({
   id: '/_engine',
   getParentRoute: () => ContextRoute,
@@ -47,10 +42,10 @@ const ContextCloudRoute = ContextCloudRouteImport.update({
   id: '/_cloud',
   getParentRoute: () => ContextRoute,
 } as any)
-const ContextInspectorInspectRoute = ContextInspectorInspectRouteImport.update({
-  id: '/inspect',
-  path: '/inspect',
-  getParentRoute: () => ContextInspectorRoute,
+const ContextCloudJoinRoute = ContextCloudJoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => ContextCloudRoute,
 } as any)
 const ContextEngineNsNamespaceRoute =
   ContextEngineNsNamespaceRouteImport.update({
@@ -121,7 +116,7 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ContextIndexRoute
-  '/inspect': typeof ContextInspectorInspectRoute
+  '/join': typeof ContextCloudJoinRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
@@ -135,7 +130,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof ContextIndexRoute
-  '/inspect': typeof ContextInspectorInspectRoute
+  '/join': typeof ContextCloudJoinRoute
   '/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace': typeof ContextEngineNsNamespaceIndexRoute
@@ -148,9 +143,8 @@ export interface FileRoutesById {
   '/_context': typeof ContextRouteWithChildren
   '/_context/_cloud': typeof ContextCloudRouteWithChildren
   '/_context/_engine': typeof ContextEngineRouteWithChildren
-  '/_context/_inspector': typeof ContextInspectorRouteWithChildren
   '/_context/': typeof ContextIndexRoute
-  '/_context/_inspector/inspect': typeof ContextInspectorInspectRoute
+  '/_context/_cloud/join': typeof ContextCloudJoinRoute
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/_context/_engine/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
@@ -166,7 +160,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/inspect'
+    | '/join'
     | '/orgs/$organization'
     | '/ns/$namespace'
     | '/ns/$namespace/runners'
@@ -180,7 +174,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/inspect'
+    | '/join'
     | '/ns/$namespace/runners'
     | '/orgs/$organization'
     | '/ns/$namespace'
@@ -192,9 +186,8 @@ export interface FileRouteTypes {
     | '/_context'
     | '/_context/_cloud'
     | '/_context/_engine'
-    | '/_context/_inspector'
     | '/_context/'
-    | '/_context/_inspector/inspect'
+    | '/_context/_cloud/join'
     | '/_context/_cloud/orgs/$organization'
     | '/_context/_engine/ns/$namespace'
     | '/_context/_engine/ns/$namespace/runners'
@@ -227,13 +220,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextIndexRouteImport
       parentRoute: typeof ContextRoute
     }
-    '/_context/_inspector': {
-      id: '/_context/_inspector'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof ContextInspectorRouteImport
-      parentRoute: typeof ContextRoute
-    }
     '/_context/_engine': {
       id: '/_context/_engine'
       path: ''
@@ -248,12 +234,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudRouteImport
       parentRoute: typeof ContextRoute
     }
-    '/_context/_inspector/inspect': {
-      id: '/_context/_inspector/inspect'
-      path: '/inspect'
-      fullPath: '/inspect'
-      preLoaderRoute: typeof ContextInspectorInspectRouteImport
-      parentRoute: typeof ContextInspectorRoute
+    '/_context/_cloud/join': {
+      id: '/_context/_cloud/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof ContextCloudJoinRouteImport
+      parentRoute: typeof ContextCloudRoute
     }
     '/_context/_engine/ns/$namespace': {
       id: '/_context/_engine/ns/$namespace'
@@ -383,10 +369,12 @@ const ContextCloudOrgsOrganizationRouteWithChildren =
   )
 
 interface ContextCloudRouteChildren {
+  ContextCloudJoinRoute: typeof ContextCloudJoinRoute
   ContextCloudOrgsOrganizationRoute: typeof ContextCloudOrgsOrganizationRouteWithChildren
 }
 
 const ContextCloudRouteChildren: ContextCloudRouteChildren = {
+  ContextCloudJoinRoute: ContextCloudJoinRoute,
   ContextCloudOrgsOrganizationRoute:
     ContextCloudOrgsOrganizationRouteWithChildren,
 }
@@ -423,28 +411,15 @@ const ContextEngineRouteWithChildren = ContextEngineRoute._addFileChildren(
   ContextEngineRouteChildren,
 )
 
-interface ContextInspectorRouteChildren {
-  ContextInspectorInspectRoute: typeof ContextInspectorInspectRoute
-}
-
-const ContextInspectorRouteChildren: ContextInspectorRouteChildren = {
-  ContextInspectorInspectRoute: ContextInspectorInspectRoute,
-}
-
-const ContextInspectorRouteWithChildren =
-  ContextInspectorRoute._addFileChildren(ContextInspectorRouteChildren)
-
 interface ContextRouteChildren {
   ContextCloudRoute: typeof ContextCloudRouteWithChildren
   ContextEngineRoute: typeof ContextEngineRouteWithChildren
-  ContextInspectorRoute: typeof ContextInspectorRouteWithChildren
   ContextIndexRoute: typeof ContextIndexRoute
 }
 
 const ContextRouteChildren: ContextRouteChildren = {
   ContextCloudRoute: ContextCloudRouteWithChildren,
   ContextEngineRoute: ContextEngineRouteWithChildren,
-  ContextInspectorRoute: ContextInspectorRouteWithChildren,
   ContextIndexRoute: ContextIndexRoute,
 }
 

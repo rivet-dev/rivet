@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { commonEnvSchema } from "./src/lib/env";
 
 // These are only needed in CI. They'll be undefined in dev.
 const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
@@ -12,18 +13,18 @@ const GIT_SHA = process.env.CF_PAGES_COMMIT_SHA;
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-	const env = loadEnv(mode, process.cwd(), "");
+	const env = commonEnvSchema.parse(loadEnv(mode, process.cwd(), ""));
 
 	return {
 		base: "/ui",
 		plugins: [
+			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			tsconfigPaths(),
 			react(),
-			tanstackRouter(),
 			env.SENTRY_AUTH_TOKEN
 				? sentryVitePlugin({
 						org: "rivet-gaming",
-						project: "hub",
+						project: env.SENTRY_PROJECT,
 						authToken: env.SENTRY_AUTH_TOKEN,
 						release:
 							GIT_BRANCH === "main"

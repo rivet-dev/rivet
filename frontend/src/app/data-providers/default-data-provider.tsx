@@ -77,6 +77,7 @@ const defaultContext = {
 			enabled: false,
 			refetchInterval: 2000,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as PaginatedActorResponse;
 			},
 			getNextPageParam: (lastPage) => {
@@ -104,6 +105,7 @@ const defaultContext = {
 			initialPageParam: undefined as string | undefined,
 			refetchInterval: 2000,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as PaginatedBuildsResponse;
 			},
 			getNextPageParam: () => {
@@ -215,6 +217,7 @@ const defaultContext = {
 		return queryOptions({
 			queryKey: ["actor", actorId, "build"],
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as Build;
 			},
 			enabled: false,
@@ -224,6 +227,7 @@ const defaultContext = {
 		return queryOptions({
 			queryKey: ["actor", actorId, "metrics"],
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as ActorMetrics;
 			},
 			enabled: false,
@@ -258,6 +262,7 @@ const defaultContext = {
 			queryKey: ["actor", actorId, "logs"],
 			initialPageParam: null as string | null,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return [] as ActorLogEntry[];
 			},
 			getNextPageParam: () => null,
@@ -306,6 +311,7 @@ const defaultContext = {
 			queryKey: ["actor", "regions"],
 			initialPageParam: null as string | null,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as PaginatedRegionsResponse;
 			},
 			getNextPageParam: () => null,
@@ -317,6 +323,7 @@ const defaultContext = {
 			queryKey: ["actor", "region", regionId],
 			enabled: !!regionId,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return {} as Region;
 			},
 		});
@@ -328,6 +335,7 @@ const defaultContext = {
 			enabled: false,
 			retry: 0,
 			queryFn: async () => {
+				throw new Error("Not implemented");
 				return false as boolean;
 			},
 		});
@@ -336,6 +344,7 @@ const defaultContext = {
 		return {
 			mutationKey: ["createActor"],
 			mutationFn: async (_: CreateActor) => {
+				throw new Error("Not implemented");
 				return "";
 			},
 			onSuccess: () => {

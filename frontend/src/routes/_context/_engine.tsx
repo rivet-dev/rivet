@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
-import { ModalRenderer } from "@/components/modal-renderer";
 
 export const Route = createFileRoute("/_context/_engine")({
 	component: RouteComponent,
@@ -24,7 +23,6 @@ function RouteComponent() {
 	return (
 		<>
 			<Outlet />
-			<ModalRenderer />
 			<EngineModals />
 		</>
 	);

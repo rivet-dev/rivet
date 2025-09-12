@@ -11,6 +11,7 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
+	cn,
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -59,7 +60,7 @@ function Breadcrumbs() {
 				<div className="text-left text-xs text-muted-foreground min-w-0 flex w-full">
 					<ProjectBreadcrumb
 						project={matchNamespace.project}
-						className="truncate min-w-0 max-w-full block"
+						className="truncate min-w-0 max-w-full block h-4"
 					/>
 				</div>
 				<div className="min-w-0 w-full">
@@ -97,7 +98,7 @@ function ProjectBreadcrumb({
 		useCloudDataProvider().currentOrgProjectQueryOptions({ project }),
 	);
 	if (isLoading) {
-		return <Skeleton className="h-5 w-32" />;
+		return <Skeleton className={cn("h-5 w-32", className)} />;
 	}
 
 	return <span className={className}>{data?.name}</span>;
