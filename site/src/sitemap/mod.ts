@@ -324,6 +324,10 @@ export const sitemap = [
 								title: "Vitest",
 								href: "/docs/integrations/vitest",
 							},
+							{
+								title: "Pino",
+								href: "/docs/integrations/pino",
+							},
 						],
 					},
 				],
@@ -412,11 +416,6 @@ export const sitemap = [
 						title: "More",
 						collapsible: true,
 						pages: [
-							{
-								title: "Edge",
-								href: "/docs/cloud/edge",
-								icon: faGlobe,
-							},
 							{
 								title: "CORS",
 								href: "/docs/general/cors",

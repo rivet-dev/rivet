@@ -2,139 +2,101 @@
 
 Actors provide a built-in way to log complex data to the console.
 
-When dealing with lots of data, `console.log` often doesn't cut it. Using the context's log object (`c.log`) allows you to log complex data using structured logging.
+Using the context's log object (`c.log`) allows you to log complex data using structured logging.
 
-<Note>Using the actor logging API is completely optional.</Note>
+Using the actor logging API is completely optional.
 
 ## Log levels
 
-There are 5 log levels:
+There are 7 log levels:
 
-| Level    | Call                            | Description                                                      |
-| -------- | ------------------------------- | ---------------------------------------------------------------- |
-| Critical | `c.log.critical(message, ...args);` | Severe errors that prevent core functionality                    |
-| Error    | `c.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation   |
-| Warning  | `c.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed          |
-| Info     | `c.log.info(message, ...args);`     | General information about significant events & state changes     |
-| Debug    | `c.log.debug(message, ...args);`    | Detailed debugging information, usually used only in development |
+| Level  | Call                            | Description                                                      |
+| ------ | ------------------------------- | ---------------------------------------------------------------- |
+| Fatal  | `c.log.fatal(message, ...args);`   | Critical errors that prevent core functionality                 |
+| Error  | `c.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation  |
+| Warn   | `c.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed         |
+| Info   | `c.log.info(message, ...args);`     | General information about significant events & state changes    |
+| Debug  | `c.log.debug(message, ...args);`    | Detailed debugging information, usually used in development     |
+| Trace  | `c.log.trace(message, ...args);`    | Very detailed debugging information, usually for tracing flow   |
+| Silent | N/A                             | Disables all logging output                                     |
 
 ## Structured logging
 
 The built-in logging API (using `c.log`) provides structured logging to let you log key-value
-pairs instead of raw strings. Structures logs are readable by both machines &
+pairs instead of raw strings. Structured logs are readable by both machines &
 humans to make them easier to parse & search.
 
-Passing an object to a log will print as structured data. For example:
+When using `c.log`, the actor's name, key, and actor ID are automatically included in every log output. This makes it easy to filter and trace logs by specific actors in production environments.
+
+### Examples
 
 ```typescript
-c.log.info('increment', { connection: c.conn.id, count });
-// Prints: level=INFO msg=increment connection=123 count=456
+// Just a message
+c.log.info('server started');
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="server started"
+
+// Message with an object
+c.log.info('user connected', { userId: 123, ip: '192.168.1.1' });
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="user connected" userId=123 ip="192.168.1.1"
+
+// Just an object (no message)
+c.log.info({ action: 'purchase', amount: 99.99, currency: 'USD' });
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 action="purchase" amount=99.99 currency="USD"
 ```
 
-The first parameter in each log method is the message. The rest of the arguments are used for structured logging.
+The logging system is built on [Pino](https://getpino.io/#/docs/api?id=logger), a high-performance structured logger for Node.js.
 
-## `c.log` vs `console.log` logging
+## Configuration
 
-`c.log` makes it easier to manage complex logs, while `console.log` can
-become unmaintainable at scale.
+### Environment Variables
 
-Consider this example:
+You can configure logging behavior using environment variables:
 
-<CodeGroup>
+| Variable | Description | Values | Default |
+| -------- | ----------- | ------ | ------- |
+| `LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
+| `LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
+| `LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
 
-```typescript structured_logging.ts
-import { actor } from "@rivetkit/actor";
-
-const counter = actor({
-  state: { count: 0 },
-  
-  actions: {
-    increment: (c, count) => {
-      // Prints: level=INFO msg=increment connection=123 count=456
-      c.log.info('increment', { connection: c.conn.id, count });
-
-      c.state.count += count;
-      return c.state.count;
-    }
-  }
-});
+Example:
+```bash
+LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
 ```
 
-```typescript unstructured_logging.ts
-import { actor } from "@rivetkit/actor";
+### Log Level
 
-const counter = actor({
-  state: { count: 0 },
-  
-  actions: {
-    increment: (c, count) => {
-      // Prints: Increment for connection 123 with count 456
-      console.log(`Increment for connection ${c.conn.id} with count ${count}`);
-
-      c.state.count += count;
-      return c.state.count;
-    }
-  }
-});
-```
-
-</CodeGroup>
-
-If you need to search through a lot of logs, it's easier to read the structured logs. To find increments for a single connection, you can search `connection=123`.
-
-Additionally, structured logs can be parsed and queried at scale using tools like Elasticsearch, Loki, or Datadog. For example, you can parse the log `level=INFO msg=increment connection=123 count=456` in to the JSON object `{"level":"INFO","msg":"increment","connection":123,"count":456}` and then query it as you would any other structured data.
-
-## Usage in lifecycle hooks
-
-The logger is available in all lifecycle hooks:
+You can configure the log level programmatically when running your server:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+registry.runServer({
+	logging: {
+		logLevel: "debug"
+	}
+})
+```
 
-const loggingExample = actor({
-  state: { events: [] },
-  
-  onStart: (c) => {
-    c.log.info('actor_started', { timestamp: Date.now() });
-  },
-  
-  onBeforeConnect: (c, { params }) => {
-    c.log.debug('connection_attempt', { 
-      ip: params.ip,
-      timestamp: Date.now() 
-    });
-    
-    return { authorized: true };
-  },
-  
-  onConnect: (c) => {
-    c.log.info('connection_established', { 
-      connectionId: c.conn.id,
-      timestamp: Date.now() 
-    });
-    
-    c.state.events.push({
-      type: 'connect',
-      connectionId: c.conn.id,
-      timestamp: Date.now()
-    });
-  },
-  
-  onDisconnect: (c) => {
-    c.log.info('connection_closed', { 
-      connectionId: c.conn.id,
-      timestamp: Date.now() 
-    });
-    
-    c.state.events.push({
-      type: 'disconnect',
-      connectionId: c.conn.id,
-      timestamp: Date.now()
-    });
-  },
-  
-  actions: {
-    // Actor actions...
+### Custom Pino Logger
+
+You can also provide a custom Pino base logger for more advanced logging configurations:
+
+```typescript
+import { pino } from "pino";
+
+const customLogger = pino({
+  level: "info",
+  transport: {
+    target: "pino-pretty"
   }
 });
+
+registry.runServer({
+	logging: {
+		baseLogger: customLogger,  // Use your custom Pino logger
+	}
+})
 ```
+
+If using a custom base logger, you must manually configure your own log level in the Pino logger.
+
+For more advanced Pino configuration options, see the [Pino API documentation](https://getpino.io/#/docs/api?id=export).
+
