@@ -11,7 +11,7 @@ Events work through persistent connections such as WebSocket or SSE.
 Use `c.broadcast(eventName, data)` to send events to all connected clients:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { 
@@ -43,7 +43,7 @@ const chatRoom = actor({
 Send events to individual connections using `conn.send(eventName, data)`:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const gameRoom = actor({
   state: { 
@@ -79,7 +79,7 @@ const gameRoom = actor({
 Send events to all connections except the sender:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const gameRoom = actor({
   state: { 
@@ -121,7 +121,7 @@ Use `connection.on(eventName, callback)` to listen for events:
 <CodeGroup>
 
 ```typescript {{"title":"TypeScript"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("http://localhost:8080");

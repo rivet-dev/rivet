@@ -18,7 +18,7 @@ There are two ways to define an actor's initial state:
 Define an actor state as a constant value:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 // Simple state with a constant
 const counter = actor({
@@ -40,7 +40,7 @@ This value will be cloned for every new actor using `structuredClone`.
 Create actor state dynamically on each actors' creation:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 // State with initialization logic
 const counter = actor({
@@ -58,7 +58,7 @@ const counter = actor({
 To accept a custom input parameters for the initial state, use:
 
 ```typescript
-import { actor, ActorInitContext } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "rivetkit";
 
 interface CounterInput {
 	startingCount: number;
@@ -96,7 +96,7 @@ The `createState` function is called once when the actor is first created. See [
 To update state, modify the `state` property on the context object (`c.state`) in your actions:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
@@ -128,7 +128,7 @@ For `onWebSocket` handlers specifically, you'll need to manually save state usin
 In other cases where you need to force a state change mid-action, you can use `c.saveState()`. This should only be used if your action makes an important state change that needs to be persisted before the action completes.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const criticalProcess = actor({
   state: { 

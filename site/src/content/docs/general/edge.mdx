@@ -19,7 +19,7 @@ Under the hood, Rivet and Cloudflare use [Anycast routing](https://en.wikipedia.
 The region an actor is created in can be overridden using region options:
 
 ```typescript client.ts
-import { createClient } from "@rivetkit/actors/client";
+import { createClient } from "rivetkits/client";
 import type { registry } from "./src/index";
 
 const client = createClient<typeof registry>(/* endpoint */);

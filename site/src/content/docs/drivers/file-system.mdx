@@ -21,10 +21,10 @@ The File System driver is ideal for development and single-node deployments. For
 <Steps>
 <Step title="Install packages">
 
-The File System driver is included with `@rivetkit/actor` - no additional packages needed:
+The File System driver is included with `rivetkit` - no additional packages needed:
 
 ```bash
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 </Step>
@@ -37,7 +37,7 @@ npm install @rivetkit/actor
 Use the default configuration with automatic path based on your current working directory:
 
 ```typescript {{"title":"server.ts"}}
-import { createFileSystemDriver } from "@rivetkit/actor";
+import { createFileSystemDriver } from "rivetkit";
 import { registry } from "./registry";
 
 const driver = createFileSystemDriver();
@@ -55,7 +55,7 @@ The default path is stored in your system's data path. The path is unique to the
 Specify a custom path for actor storage:
 
 ```typescript {{"title":"server.ts"}}
-import { createFileSystemDriver } from "@rivetkit/actor";
+import { createFileSystemDriver } from "rivetkit";
 import { registry } from "./registry";
 
 const driver = createFileSystemDriver({

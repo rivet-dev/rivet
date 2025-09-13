@@ -88,6 +88,7 @@ https://rivet.gg/docs/integrations/elysia
 https://rivet.gg/docs/integrations/express
 https://rivet.gg/docs/integrations/hono
 https://rivet.gg/docs/integrations/next-js
+https://rivet.gg/docs/integrations/pino
 https://rivet.gg/docs/integrations/trpc
 https://rivet.gg/docs/integrations/vitest
 https://rivet.gg/docs/self-hosting

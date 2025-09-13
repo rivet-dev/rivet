@@ -34,7 +34,7 @@ Our decision to launch RivetKit as a library was underpinned by the following co
 
 <Image src={oldway} />
 
-### With @rivetkit/actors: Just A Library & Your Database
+### With rivetkits: Just A Library & Your Database
 
 <Image src={newway} />
 
@@ -58,7 +58,7 @@ Rivet Actors excel at:
 A simple Rivet actor that combines persistence & realtime looks like this:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   // FEATURE: Durable state
@@ -119,7 +119,7 @@ npx @actor-core/cli dev
 Now, RivetKit is a lightweight library that can be integrated in to your existing backend like this:
 
 ```typescript
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 // Setup actors
 const myActor = actor(/* ... */);
@@ -188,7 +188,7 @@ The new `onAuth` lifecycle hook provides a way to handle authentication to actor
 For example:
 
 ```typescript
-import { actor, Unauthorized } from "@rivetkit/actor";
+import { actor, Unauthorized } from "rivetkit";
 
 const chatRoom = actor({
   // NEW: Auth hook
@@ -245,7 +245,7 @@ See the [RivetKit + Better Auth integration](/docs/integrations/better-auth).
 Actors can now communicate with each other by using the client in the context. For example:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 import type { registry } from "./registry";
 
 export const orderProcessor = actor({

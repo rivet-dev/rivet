@@ -79,7 +79,7 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("http://localhost:8080");
@@ -128,7 +128,7 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("http://localhost:8080");
@@ -144,7 +144,7 @@ const userSession = client.userSession.getOrCreate([userId]);
 For more complex configuration, use [input parameters](/docs/actors/input):
 
 ```typescript {{"title":"client.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("http://localhost:8080");

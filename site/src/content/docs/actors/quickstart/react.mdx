@@ -8,7 +8,7 @@ Build real-time React applications with Rivet Actors
 <Step title="Install Dependencies">
 
 ```sh
-npm install @rivetkit/actor @rivetkit/react
+npm install rivetkit @rivetkit/react
 ```
 
 </Step>
@@ -18,7 +18,7 @@ npm install @rivetkit/actor @rivetkit/react
 Create your actor registry on the backend:
 
 ```ts {{"title":"backend/registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 export const counter = actor({
 	onAuth: () => {},  // Skip authentication (can be configured later)

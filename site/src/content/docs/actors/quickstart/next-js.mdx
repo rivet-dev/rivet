@@ -17,7 +17,7 @@ cd my-app
 
 <Step title="Install RivetKit">
 
-<InstallPackage name="@rivetkit/actor @rivetkit/next-js" />
+<InstallPackage name="rivetkit @rivetkit/next-js" />
 
 </Step>
 
@@ -26,7 +26,7 @@ cd my-app
 Create a simple counter actor:
 
 ```ts {{"title":"src/rivet/registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 export const counter = actor({
 	state: { count: 0 },

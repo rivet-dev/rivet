@@ -61,7 +61,7 @@ export function HeroSection() {
 						{/*<div className="h-1" />
 
 						<CopyCommand
-							command="npm install @rivetkit/actors"
+							command="npm install rivetkits"
 							className="hero-bg-exclude"
 						/>*/}
 					</div>

@@ -62,8 +62,8 @@ pnpm dlx @better-auth/cli@latest migrate --config auth.ts -y
 Use the `onAuth` hook to validate sessions:
 
 ```typescript registry.ts
-import { actor, setup } from "@rivetkit/actor";
-import { Unauthorized } from "@rivetkit/actor/errors";
+import { actor, setup } from "rivetkit";
+import { Unauthorized } from "rivetkit/errors";
 import { auth } from "./auth";
 
 export const chatRoom = actor({
@@ -132,7 +132,7 @@ import { registry } from "./registry";
 import { auth } from "./auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { ALLOWED_PUBLIC_HEADERS } from "@rivetkit/actor";
+import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
 
 const { serve } = registry.createServer();
 const app = new Hono();

@@ -15,7 +15,7 @@ There are two ways to define an actor's initial vars:
 Define an actor vars as a constant value:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 // Define vars as a constant
 const counter = actor({
@@ -42,7 +42,7 @@ This value will be cloned for every new actor using `structuredClone`.
 Create actor state dynamically on each actors' start:
 
 ```typescript
-import { actor, ActorInitContext } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "rivetkit";
 
 // Define vars with initialization logic
 const counter = actor({
@@ -77,7 +77,7 @@ Otherwise, the return type will not be inferred and `c.vars` will be of type `un
 Vars can be accessed and modified through the context object with `c.vars`:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 import { createNanoEvents } from "nanoevents";
 
 const counter = actor({
@@ -134,7 +134,7 @@ The `createVars` function receives a second parameter that provides access to dr
 For example, the Redis driver exposes access to the Redis instance:
 
 ```typescript
-import { actor, ActorInitContext } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "rivetkit";
 import { DriverContext } from "@rivetkit/redis";
 
 const myActor = actor({

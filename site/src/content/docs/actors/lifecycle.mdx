@@ -22,7 +22,7 @@ The `createVars` function or `vars` constant defines ephemeral variables for the
 The `createVars` function can also receive driver-specific context as its second parameter, allowing access to driver capabilities like Rivet KV or Cloudflare Durable Object storage.
 
 ```typescript
-import { actor, ActorInitContext } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "rivetkit";
 // In this example, assume we're using Redis
 import type { DriverContext } from "@rivetkit/redis";
 
@@ -67,7 +67,7 @@ const exampleActor = actor({
 The `onCreate` hook is called at the same time as `createState`, but unlike `createState`, it doesn't return any value. Use this hook for initialization logic that doesn't affect the initial state.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 // Using state constant
 const counter1 = actor({
@@ -112,7 +112,7 @@ This is called after the actor has been initialized but before any connections a
 Use this hook to set up any resources or start any background tasks, such as `setInterval`.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
@@ -150,7 +150,7 @@ const counter = actor({
 Called whenever the actor's state changes. This is often used to broadcast state updates.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
@@ -188,7 +188,7 @@ The `onBeforeConnect` hook is called whenever a new client connects to the actor
 The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { messages: [] },
@@ -233,7 +233,7 @@ Connections cannot interact with the actor until this method completes successfu
 Executed after the client has successfully connected.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { users: {}, messages: [] },
@@ -265,7 +265,7 @@ Messages will not be processed for this actor until this hook succeeds. Errors t
 Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { users: {}, messages: [] },
@@ -293,7 +293,7 @@ const chatRoom = actor({
 The `onFetch` hook handles HTTP requests sent to your actor. It receives the actor context and a standard `Request` object, and should return a `Response` object or `void` to continue default routing.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const apiActor = actor({
   state: { requestCount: 0 },
@@ -324,7 +324,7 @@ const apiActor = actor({
 The `onWebSocket` hook handles WebSocket connections to your actor. It receives the actor context, a `WebSocket` object, and the initial `Request`. Use this to set up WebSocket event listeners and handle real-time communication.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const realtimeActor = actor({
   state: { connectionCount: 0 },
@@ -367,7 +367,7 @@ The `onAuth` hook is called on the HTTP server before clients can interact with 
 This hook runs on the HTTP server (not the actor) to reduce load and prevent denial of service attacks against individual actors. Only called for public endpoints - calls to actors from within the backend do not trigger this handler.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const secureActor = actor({
   // Authentication handler - runs on HTTP server
@@ -426,7 +426,7 @@ const secureActor = actor({
 The `onBeforeActionResponse` hook is called before sending an action response to the client. Use this hook to modify or transform the output of an action before it's sent to the client. This is useful for formatting responses, adding metadata, or applying transformations to the output.
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const loggingActor = actor({
   state: { requestCount: 0 },
@@ -486,7 +486,7 @@ Common use cases:
 - **State sync**: Populate external databases or APIs with updates to actor state in the background
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const gameRoom = actor({
   state: { players: {}, scores: {} },
@@ -519,7 +519,7 @@ const gameRoom = actor({
 When extracting logic from lifecycle hooks or actions into external functions, you'll often need to define the type of the context parameter. Rivet provides helper types that make it easy to extract and pass these context types to external functions.
 
 ```typescript
-import { actor, ActorContextOf } from "@rivetkit/actor";
+import { actor, ActorContextOf } from "rivetkit";
 
 const myActor = actor({
   state: { count: 0 },
@@ -539,7 +539,7 @@ See [Helper Types](/docs/actors/helper-types) for more details on using `ActorCo
 ## Full Example
 
 ```typescript
-import { actor, ActorInitContext } from "@rivetkit/actor";
+import { actor, ActorInitContext } from "rivetkit";
 import { z } from "zod";
 
 interface CounterInput {

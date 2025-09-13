@@ -47,7 +47,7 @@ const region = c.region;
 <CodeGroup>
 
 ```typescript {{"title":"registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 const chatRoom = actor({
   state: {
@@ -73,7 +73,7 @@ export const registry = setup({
 ```
 
 ```typescript {{"title":"client.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 const client = createClient<typeof registry>("http://localhost:8080");

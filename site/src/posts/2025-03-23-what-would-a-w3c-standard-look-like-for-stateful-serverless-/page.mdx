@@ -201,7 +201,7 @@ At Rivet, we also manage a framework called [RivetKit](https://github.com/rivet-
 A Rivet Actor definition looks something like this:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { messages: [] },
@@ -387,7 +387,7 @@ export class Counter {
 
 ```typescript {{ "title": "RivetKit" }}
 // client.js - Client side
-import { createClient } from '@rivetkit/actor';
+import { createClient } from 'rivetkit';
 
 const client = createClient();
 const counter = await client.counter.get('counter-1');
@@ -395,7 +395,7 @@ const result = await counter.increment(5);
 console.log('Counter:', result);
 
 // counter.js - Actor definition
-import { actor } from '@rivetkit/actor';
+import { actor } from 'rivetkit';
 
 export const counter = actor({
   state: { value: 0 },

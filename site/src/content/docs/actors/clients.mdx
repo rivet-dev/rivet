@@ -47,7 +47,7 @@ There are several ways to create a client for communicating with actors:
 		For frontend applications or external services connecting to your Rivet backend:
 
 		```typescript {{"title":"client.ts"}}
-		import { createClient } from "@rivetkit/actor/client";
+		import { createClient } from "rivetkit/client";
 		import type { registry } from "./registry";  // IMPORTANT: Must use `type`
 
 		const client = createClient<typeof registry>("http://localhost:8080");
@@ -393,7 +393,7 @@ const result = await chat.sendMessage("Hello world!");
 Actors can validate authentication using the `onAuth` hook:
 
 ```typescript
-import { actor, UserError } from "@rivetkit/actor";
+import { actor, UserError } from "rivetkit";
 
 const protectedActor = actor({
   onAuth: async (opts) => {

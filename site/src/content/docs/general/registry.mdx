@@ -9,7 +9,7 @@ The registry is the central configuration hub for your Rivet application. It def
 Create a registry by importing your actors and using the `setup` function:
 
 ```typescript
-import { setup } from "@rivetkit/actor";
+import { setup } from "rivetkit";
 import { counterActor } from "./actors/counter";
 import { chatRoomActor } from "./actors/chat-room";
 
@@ -232,7 +232,7 @@ export { chatRoomActor } from "./chat-room";
 export { gameActor } from "./game";
 
 // registry.ts - Import and configure
-import { setup } from "@rivetkit/actor";
+import { setup } from "rivetkit";
 import * as actors from "./actors";
 
 export const registry = setup({

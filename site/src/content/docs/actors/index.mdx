@@ -62,7 +62,7 @@ Actors are perfect for applications that need persistent state and real-time upd
 Actors maintain persistent state that survives restarts, crashes, and deployments. State can be defined as a constant or created dynamically:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
@@ -85,7 +85,7 @@ Learn more about [state management](/docs/actors/state).
 Actions are the primary way to interact with actors. They're type-safe functions that can modify state and communicate with clients:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const chatRoom = actor({
   state: { messages: [] as Array<{text: string, userId: string}> },
@@ -119,7 +119,7 @@ Actors support real-time bidirectional communication through WebSocket and SSE c
 For example, to send events to all connected clients:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const liveAuction = actor({
   state: { currentBid: 0 },
@@ -154,7 +154,7 @@ Learn more about [events](/docs/actors/events) and [client communication](/docs/
 Actors support scheduled tasks and lifecycle management:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const reminder = actor({
   state: { message: "" },

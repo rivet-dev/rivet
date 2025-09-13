@@ -2751,7 +2751,7 @@ console.log("Actor metadata:", metadata);
 Get started with Rivet Actors in Node.js and Bun
 
 ```sh
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 Create a simple counter actor:
@@ -3001,7 +3001,7 @@ For more examples how to connect to your actors using React, check the [RivetKit
 Build real-time React applications with Rivet Actors
 
 ```sh
-npm install @rivetkit/actor @rivetkit/react
+npm install rivetkit @rivetkit/react
 ```
 
 Create your actor registry on the backend:
@@ -3908,10 +3908,10 @@ The File System driver is ideal for development and single-node deployments. For
 
 ## Setup
 
-The File System driver is included with `@rivetkit/actor` - no additional packages needed:
+The File System driver is included with `rivetkit` - no additional packages needed:
 
 ```bash
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 Use the default configuration with automatic path based on your current working directory:
@@ -3967,10 +3967,10 @@ The Memory driver does not persist data between server restarts. For production 
 
 ## Setup
 
-The Memory driver is included with `@rivetkit/actor` - no additional packages needed:
+The Memory driver is included with `rivetkit` - no additional packages needed:
 
 ```bash
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 Create and use the Memory driver:
@@ -4383,100 +4383,91 @@ See [Create  Manage Actors](/actors/communicating-with-actors) for more informat
 
 Actors provide a built-in way to log complex data to the console.
 
-When dealing with lots of data, `console.log` often doesn't cut it. Using the context's log object (`c.log`) allows you to log complex data using structured logging.
+Using the context's log object (`c.log`) allows you to log complex data using structured logging.
 
 Using the actor logging API is completely optional.
 
 ## Log levels
 
-There are 5 log levels:
+There are 7 log levels:
 
-| Level    | Call                            | Description                                                      |
-| -------- | ------------------------------- | ---------------------------------------------------------------- |
-| Critical | `c.log.critical(message, ...args);` | Severe errors that prevent core functionality                    |
-| Error    | `c.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation   |
-| Warning  | `c.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed          |
-| Info     | `c.log.info(message, ...args);`     | General information about significant events & state changes     |
-| Debug    | `c.log.debug(message, ...args);`    | Detailed debugging information, usually used only in development |
+| Level  | Call                            | Description                                                      |
+| ------ | ------------------------------- | ---------------------------------------------------------------- |
+| Fatal  | `c.log.fatal(message, ...args);`   | Critical errors that prevent core functionality                 |
+| Error  | `c.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation  |
+| Warn   | `c.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed         |
+| Info   | `c.log.info(message, ...args);`     | General information about significant events & state changes    |
+| Debug  | `c.log.debug(message, ...args);`    | Detailed debugging information, usually used in development     |
+| Trace  | `c.log.trace(message, ...args);`    | Very detailed debugging information, usually for tracing flow   |
+| Silent | N/A                             | Disables all logging output                                     |
 
 ## Structured logging
 
 The built-in logging API (using `c.log`) provides structured logging to let you log key-value
-pairs instead of raw strings. Structures logs are readable by both machines &
+pairs instead of raw strings. Structured logs are readable by both machines &
 humans to make them easier to parse & search.
 
-Passing an object to a log will print as structured data. For example:
+When using `c.log`, the actor's name, key, and actor ID are automatically included in every log output. This makes it easy to filter and trace logs by specific actors in production environments.
+
+### Examples
 
 ```typescript
-c.log.info('increment', );
-// Prints: level=INFO msg=increment connection=123 count=456
+// Just a message
+c.log.info('server started');
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="server started"
+
+// Message with an object
+c.log.info('user connected', );
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 msg="user connected" userId=123 ip="192.168.1.1"
+
+// Just an object (no message)
+c.log.info();
+// Prints: level=INFO actor=myActor key=foo actorId=44096d46632fd087 action="purchase" amount=99.99 currency="USD"
 ```
 
-The first parameter in each log method is the message. The rest of the arguments are used for structured logging.
+The logging system is built on [Pino](https://getpino.io/#/docs/api?id=logger), a high-performance structured logger for Node.js.
 
-## `c.log` vs `console.log` logging
+## Configuration
 
-`c.log` makes it easier to manage complex logs, while `console.log` can
-become unmaintainable at scale.
+### Environment Variables
 
-Consider this example:
+You can configure logging behavior using environment variables:
 
-```typescript structured_logging.ts
-const counter = actor(,
-  
-  actions: );
+| Variable | Description | Values | Default |
+| -------- | ----------- | ------ | ------- |
+| `LOG_LEVEL` | Sets the minimum log level to display | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` | `warn` |
+| `LOG_TARGET` | Include the module name that logged the message | `1` to enable, `0` to disable | `0` |
+| `LOG_TIMESTAMP` | Include timestamp in log output | `1` to enable, `0` to disable | `0` |
 
-      c.state.count += count;
-      return c.state.count;
-    }
-  }
-});
+Example:
+```bash
+LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
 ```
 
-```typescript unstructured_logging.ts
-const counter = actor(,
-  
-  actions:  with count $`);
+### Log Level
 
-      c.state.count += count;
-      return c.state.count;
-    }
-  }
-});
-```
-
-If you need to search through a lot of logs, it's easier to read the structured logs. To find increments for a single connection, you can search `connection=123`.
-
-Additionally, structured logs can be parsed and queried at scale using tools like Elasticsearch, Loki, or Datadog. For example, you can parse the log `level=INFO msg=increment connection=123 count=456` in to the JSON object `` and then query it as you would any other structured data.
-
-## Usage in lifecycle hooks
-
-The logger is available in all lifecycle hooks:
+You can configure the log level programmatically when running your server:
 
 ```typescript
-const loggingExample = actor(,
-  
-  onStart: (c) => );
-  },
-  
-  onBeforeConnect: (c, ) => );
-    
-    return ;
-  },
-  
-  onConnect: (c) => );
-    
-    c.state.events.push();
-  },
-  
-  onDisconnect: (c) => );
-    
-    c.state.events.push();
-  },
-  
-  actions: 
-});
+registry.runServer(
+})
 ```
+
+### Custom Pino Logger
+
+You can also provide a custom Pino base logger for more advanced logging configurations:
+
+```typescript
+const customLogger = pino(
+});
+
+registry.runServer(
+})
+```
+
+If using a custom base logger, you must manually configure your own log level in the Pino logger.
+
+For more advanced Pino configuration options, see the [Pino API documentation](https://getpino.io/#/docs/api?id=export).
 ## Registry
 
 # Registry
@@ -5447,6 +5438,18 @@ const  = toNextHandler(server);
 
 #### Returns
 - An object containing Next.js-compatible handlers for the HTTP methods.
+## Pino
+
+# Pino
+
+Rivet's actor system uses [Pino](https://getpino.io/), a high-performance structured logging library for Node.js, to power its logging infrastructure.
+
+For detailed information on how to use and configure logging in your actors, see the [Logging documentation](/docs/general/logging).
+
+## Learn More
+
+- [Logging in RivetKit](/docs/general/logging) - Complete guide to using logs in your actors
+- [Pino Documentation](https://getpino.io/#/docs/api) - Official Pino API documentation
 ## tRPC
 
 # tRPC

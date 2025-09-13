@@ -40,7 +40,7 @@ test("my actor test", async (test) => {
 ```
 
 ```ts src/index.ts
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 const myActor = actor({
   state: { value: "initial" },
@@ -87,7 +87,7 @@ test("actor should persist state", async (test) => {
 ```
 
 ```ts src/index.ts
-import { setup } from "@rivetkit/actor";
+import { setup } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },
@@ -138,7 +138,7 @@ test("actor should emit events", async (test) => {
 ```
 
 ```ts src/index.ts
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 export const chatRoom = actor({
   state: { 
@@ -189,7 +189,7 @@ test("scheduled tasks should execute", async (test) => {
 ```
 
 ```ts src/index.ts
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 const scheduler = actor({
   state: { 

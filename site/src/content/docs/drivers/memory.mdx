@@ -21,10 +21,10 @@ The Memory driver does not persist data between server restarts. For production 
 <Steps>
 <Step title="Install packages">
 
-The Memory driver is included with `@rivetkit/actor` - no additional packages needed:
+The Memory driver is included with `rivetkit` - no additional packages needed:
 
 ```bash
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 </Step>
@@ -34,7 +34,7 @@ npm install @rivetkit/actor
 Create and use the Memory driver:
 
 ```typescript {{"title":"server.ts"}}
-import { createMemoryDriver } from "@rivetkit/actor";
+import { createMemoryDriver } from "rivetkit";
 import { registry } from "./registry";
 
 const driver = createMemoryDriver();

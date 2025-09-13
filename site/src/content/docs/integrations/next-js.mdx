@@ -21,7 +21,7 @@ Next.js is a powerful React framework that allows you to build server-rendered a
 <Step title="Installation">
   
 Install the RivetKit Next.js package:
-<InstallPackage name="@rivetkit/actor @rivetkit/next-js" />
+<InstallPackage name="rivetkit @rivetkit/next-js" />
 
 </Step>
 
@@ -30,7 +30,7 @@ Install the RivetKit Next.js package:
 Create a simple counter actor:
 
 ```ts {{"title":"src/rivet/registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 export const counter = actor({
 	state: { count: 0 },
@@ -80,7 +80,7 @@ export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(server);
 Converts a RivetKit server to a Next.js handler for API routes.
 
 ```ts
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 import { toNextHandler } from "@rivetkit/next-js";
 
 const counter = actor({

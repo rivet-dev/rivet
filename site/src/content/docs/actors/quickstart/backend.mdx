@@ -8,7 +8,7 @@ Get started with Rivet Actors in Node.js and Bun
 <Step title="Install Rivet">
 
 ```sh
-npm install @rivetkit/actor
+npm install rivetkit
 ```
 
 </Step>
@@ -18,7 +18,7 @@ npm install @rivetkit/actor
 Create a simple counter actor:
 
 ```ts {{"title":"registry.ts"}}
-import { actor, setup } from "@rivetkit/actor";
+import { actor, setup } from "rivetkit";
 
 export const counter = actor({
 	state: { count: 0 },
@@ -192,7 +192,7 @@ Create a type-safe client to connect from your frontend:
 <Tab title="JavaScript">
 
 ```ts {{"title":"client.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { registry } from "./registry";
 
 // Create typed client

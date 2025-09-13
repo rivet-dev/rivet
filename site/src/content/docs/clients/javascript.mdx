@@ -10,7 +10,7 @@ The Rivet JavaScript client allows you to connect to and interact with actors fr
 <Steps>
 <Step title="Installation">
 Install the RivetKit package:
-<InstallPackage name="@rivetkit/actor" />
+<InstallPackage name="rivetkit" />
 </Step>
 
 <Step title="Create Client and Connect to Actor">
@@ -22,7 +22,7 @@ Install the RivetKit package:
 Create client and connect to actors and listen for real-time updates:
 
 ```tsx {{"title":"index.ts"}}
-import { createClient } from "@rivetkit/actor/client";
+import { createClient } from "rivetkit/client";
 import type { Registry } from "../src/registry";
 
 async function main() {

@@ -11,7 +11,7 @@ Rivet provides multiple authentication methods to secure your actors. Use `onAut
 The `onAuth` hook runs on the HTTP server before clients can access actors. This is the preferred method for most authentication scenarios.
 
 ```typescript
-import { actor, UserError } from "@rivetkit/actor";
+import { actor, UserError } from "rivetkit";
 
 const chatRoom = actor({
   onAuth: async (params: { authToken?: string }, { request, intents }) => {
@@ -156,7 +156,7 @@ const secureActor = actor({
 Use specific error types for different authentication failures:
 
 ```typescript
-import { UserError, Unauthorized, Forbidden } from "@rivetkit/actor/errors";
+import { UserError, Unauthorized, Forbidden } from "rivetkit/errors";
 
 const protectedActor = actor({
   onAuth: async (params: { authToken?: string }) => {
@@ -219,7 +219,7 @@ try {
 ### JWT Authentication
 
 ```typescript
-import { actor, UserError } from "@rivetkit/actor";
+import { actor, UserError } from "rivetkit";
 import jwt from "jsonwebtoken";
 
 const jwtActor = actor({

@@ -13,7 +13,7 @@ We recommend reading the [clients documentation](/docs/actors/clients) first. Th
 The server-side actor client allows actors to call other actors within the same registry. Access it via `c.client()` in your actor context:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const orderProcessor = actor({
   state: { orders: [] },
@@ -46,7 +46,7 @@ const orderProcessor = actor({
 Use a coordinator actor to manage complex workflows:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const workflowActor = actor({
   state: { workflows: [] },
@@ -79,7 +79,7 @@ const workflowActor = actor({
 Collect data from multiple actors:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const analyticsActor = actor({
   state: { reports: [] },
@@ -118,7 +118,7 @@ const analyticsActor = actor({
 Use connections to listen for events from other actors:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const auditLogActor = actor({
   state: { logs: [] },

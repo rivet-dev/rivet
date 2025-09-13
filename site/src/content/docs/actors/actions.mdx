@@ -15,7 +15,7 @@ For advanced use cases that require direct access to HTTP requests or WebSocket 
 Actions are defined in the `actions` object when creating an actor:
 
 ```typescript
-import { actor } from "@rivetkit/actor";
+import { actor } from "rivetkit";
 
 const mathUtils = actor({
   state: {},
@@ -53,7 +53,7 @@ Learn more about [communicating with actors from the frontend](/docs/actors/comm
 <Tab title="Backend (registry.runServer)">
 
 ```typescript {{"title":"server.ts"}}
-import { setup } from "@rivetkit/actor";
+import { setup } from "rivetkit";
 
 const registry = setup({
   use: { counter }
@@ -101,7 +101,7 @@ The actor client includes type safety out of the box. When you use `createClient
 <CodeGroup>
 
 ```typescript {{"title":"registry.ts"}}
-import { setup } from "@rivetkit/actor";
+import { setup } from "rivetkit";
 
 // Create simple counter
 const counter = actor({
@@ -152,7 +152,7 @@ For example:
 <CodeGroup>
 
 ```typescript {{"title":"actor.ts"}}
-import { actor, UserError } from "@rivetkit/actor";
+import { actor, UserError } from "rivetkit";
 
 const user = actor({
   state: { users: [] },
@@ -200,7 +200,7 @@ If passing data to an actor from the frontend, use a library like [Zod](https://
 For example, to validate action parameters:
 
 ```typescript {{"title":"actor.ts"}}
-import { actor, UserError } from "@rivetkit/actor";
+import { actor, UserError } from "rivetkit";
 import { z } from "zod";
 
 // Define schema for action parameters
@@ -246,7 +246,7 @@ When writing complex logic for actions, you may want to extract parts of your im
 Rivet provides the `ActionContextOf` utility type for exactly this purpose:
 
 ```typescript
-import { actor, ActionContextOf } from "@rivetkit/actor";
+import { actor, ActionContextOf } from "rivetkit";
 
 const counter = actor({
   state: { count: 0 },

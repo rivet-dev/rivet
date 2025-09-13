@@ -12,7 +12,7 @@ When working with actors, you often need to access the context object outside of
 Extracts the full actor context type from an actor definition. This is the type of the context object (`c`) available in [lifecycle hooks](/docs/actors/lifecycle) and in [actions](/docs/actors/actions).
 
 ```typescript
-import { actor, ActorContextOf } from "@rivetkit/actor";
+import { actor, ActorContextOf } from "rivetkit";
 
 const chatRoom = actor({
   state: { messages: [] },
@@ -41,7 +41,7 @@ function logMessage(context: ActorContextOf<typeof chatRoom>, message: string) {
 Extracts the action context type from an actor definition. This is the type of the context object (`c`) available in [actions](/docs/actors/actions). This cannot be used in [lifecycle hooks](/docs/actors/lifecycle).
 
 ```typescript
-import { actor, ActionContextOf } from "@rivetkit/actor";
+import { actor, ActionContextOf } from "rivetkit";
 
 const counterWithProcessing = actor({
   state: { count: 0 },

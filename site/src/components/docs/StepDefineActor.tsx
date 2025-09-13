@@ -8,7 +8,7 @@ export default function StepDefineActor() {
 
       <Code language='typescript' title='actors/counter.ts'>
         <CodeBlock
-          code={`import { Actor } from '@rivetkit/actor';
+          code={`import { Actor } from 'rivetkit';
 
 export interface CounterState {
   count: number;
