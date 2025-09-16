@@ -1,77 +1,41 @@
-use rivet_util::Id;
+use gas::prelude::*;
 
-pub struct TunnelHttpRunnerSubject<'a> {
-	runner_id: Id,
+pub struct TunnelRunnerReceiverSubject<'a> {
+	runner_key: &'a str,
 	port_name: &'a str,
 }
 
-impl<'a> TunnelHttpRunnerSubject<'a> {
-	pub fn new(runner_id: Id, port_name: &'a str) -> Self {
+impl<'a> TunnelRunnerReceiverSubject<'a> {
+	pub fn new(runner_key: &'a str, port_name: &'a str) -> Self {
 		Self {
-			runner_id,
+			runner_key,
 			port_name,
 		}
 	}
 }
 
-impl std::fmt::Display for TunnelHttpRunnerSubject<'_> {
+impl std::fmt::Display for TunnelRunnerReceiverSubject<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"pegboard.tunnel.http.runner.{}.{}",
-			self.runner_id, self.port_name
+			"pegboard.tunnel.runner_receiver.{}.{}",
+			self.runner_key, self.port_name
 		)
 	}
 }
 
-pub struct TunnelHttpResponseSubject<'a> {
-	runner_id: Id,
-	port_name: &'a str,
-	request_id: u64,
+pub struct TunnelGatewayReceiverSubject {
+	gateway_id: Uuid,
 }
 
-impl<'a> TunnelHttpResponseSubject<'a> {
-	pub fn new(runner_id: Id, port_name: &'a str, request_id: u64) -> Self {
-		Self {
-			runner_id,
-			port_name,
-			request_id,
-		}
+impl<'a> TunnelGatewayReceiverSubject {
+	pub fn new(gateway_id: Uuid) -> Self {
+		Self { gateway_id }
 	}
 }
 
-impl std::fmt::Display for TunnelHttpResponseSubject<'_> {
+impl std::fmt::Display for TunnelGatewayReceiverSubject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"pegboard.tunnel.http.request.{}.{}.{}",
-			self.runner_id, self.port_name, self.request_id
-		)
-	}
-}
-
-pub struct TunnelHttpWebSocketSubject<'a> {
-	runner_id: Id,
-	port_name: &'a str,
-	websocket_id: u64,
-}
-
-impl<'a> TunnelHttpWebSocketSubject<'a> {
-	pub fn new(runner_id: Id, port_name: &'a str, websocket_id: u64) -> Self {
-		Self {
-			runner_id,
-			port_name,
-			websocket_id,
-		}
-	}
-}
-
-impl std::fmt::Display for TunnelHttpWebSocketSubject<'_> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"pegboard.tunnel.http.websocket.{}.{}.{}",
-			self.runner_id, self.port_name, self.websocket_id
-		)
+		write!(f, "pegboard.gateway.receiver.{}", self.gateway_id)
 	}
 }

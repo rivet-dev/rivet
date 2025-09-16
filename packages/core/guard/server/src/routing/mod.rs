@@ -5,7 +5,7 @@ use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::RoutingFn;
 
-use crate::errors;
+use crate::{errors, shared_state::SharedState};
 
 mod api_peer;
 mod api_public;
@@ -17,13 +17,14 @@ pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-t
 
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]
-pub fn create_routing_function(ctx: StandaloneCtx) -> RoutingFn {
+pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) -> RoutingFn {
 	Arc::new(
 		move |hostname: &str,
 		      path: &str,
 		      port_type: rivet_guard_core::proxy_service::PortType,
 		      headers: &hyper::HeaderMap| {
 			let ctx = ctx.clone();
+			let shared_state = shared_state.clone();
 
 			Box::pin(
 				async move {
@@ -41,9 +42,15 @@ pub fn create_routing_function(ctx: StandaloneCtx) -> RoutingFn {
 							return Ok(routing_output);
 						}
 
-						if let Some(routing_output) =
-							pegboard_gateway::route_request(&ctx, target, host, path, headers)
-								.await?
+						if let Some(routing_output) = pegboard_gateway::route_request(
+							&ctx,
+							&shared_state,
+							target,
+							host,
+							path,
+							headers,
+						)
+						.await?
 						{
 							return Ok(routing_output);
 						}

@@ -133,9 +133,7 @@ type CommandWrapper struct {
 }
 
 type ToServerInit struct {
-	runnerId: optional<Id>
 	name: str
-	key: str
 	version: u32
 	totalSlots: u32
 	addressesHttp: optional<map<str><RunnerAddressHttp>>

@@ -270,6 +270,7 @@ async fn build_connection(
 	UrlData {
 		protocol_version,
 		namespace,
+		runner_key,
 	}: UrlData,
 ) -> Result<(Id, Arc<Connection>)> {
 	let namespace = ctx
@@ -300,9 +301,7 @@ async fn build_connection(
 			.map_err(|err: anyhow::Error| WsError::InvalidPacket(err.to_string()).build())?;
 
 		let (runner_id, workflow_id) = if let protocol::ToServer::Init {
-			runner_id,
 			name,
-			key,
 			version,
 			total_slots,
 			addresses_http,
@@ -311,7 +310,16 @@ async fn build_connection(
 			..
 		} = &packet
 		{
-			let runner_id = if let Some(runner_id) = runner_id {
+			// Look up existing runner by key
+			let existing_runner = ctx
+				.op(pegboard::ops::runner::get_by_key::Input {
+					namespace_id: namespace.namespace_id,
+					name: name.clone(),
+					key: runner_key.clone(),
+				})
+				.await?;
+
+			let runner_id = if let Some(runner) = existing_runner.runner {
 				// IMPORTANT: Before we spawn/get the workflow, we try to update the runner's last ping ts.
 				// This ensures if the workflow is currently checking for expiry that it will not expire
 				// (because we are about to send signals to it) and if it is already expired (but not
@@ -319,7 +327,7 @@ async fn build_connection(
 				let update_ping_res = ctx
 					.op(pegboard::ops::runner::update_alloc_idx::Input {
 						runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
-							runner_id: *runner_id,
+							runner_id: runner.runner_id,
 							action: Action::UpdatePing { rtt: 0 },
 						}],
 					})
@@ -332,11 +340,14 @@ async fn build_connection(
 					.map(|notif| matches!(notif.eligibility, RunnerEligibility::Expired))
 					.unwrap_or_default()
 				{
+					// Runner expired, create a new one
 					Id::new_v1(ctx.config().dc_label())
 				} else {
-					*runner_id
+					// Use existing runner
+					runner.runner_id
 				}
 			} else {
+				// No existing runner for this key, create a new one
 				Id::new_v1(ctx.config().dc_label())
 			};
 
@@ -346,7 +357,7 @@ async fn build_connection(
 					runner_id,
 					namespace_id: namespace.namespace_id,
 					name: name.clone(),
-					key: key.clone(),
+					key: runner_key.clone(),
 					version: version.clone(),
 					total_slots: *total_slots,
 
@@ -790,19 +801,17 @@ async fn msg_thread_inner(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) 
 struct UrlData {
 	protocol_version: u16,
 	namespace: String,
+	runner_key: String,
 }
 
 fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> Result<UrlData> {
 	let url = url::Url::parse(&format!("ws://{addr}{uri}"))?;
 
-	// Get protocol version from last path segment
-	let last_segment = url
-		.path_segments()
-		.context("invalid url")?
-		.last()
-		.context("no path segments")?;
-	ensure!(last_segment.starts_with('v'), "invalid protocol version");
-	let protocol_version = last_segment[1..]
+	// Read protocol version from query parameters (required)
+	let protocol_version = url
+		.query_pairs()
+		.find_map(|(n, v)| (n == "protocol_version").then_some(v))
+		.context("missing `protocol_version` query parameter")?
 		.parse::<u16>()
 		.context("invalid protocol version")?;
 
@@ -813,9 +822,17 @@ fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> Result<UrlData> {
 		.context("missing `namespace` query parameter")?
 		.to_string();
 
+	// Read runner key from query parameters (required)
+	let runner_key = url
+		.query_pairs()
+		.find_map(|(n, v)| (n == "runner_key").then_some(v))
+		.context("missing `runner_key` query parameter")?
+		.to_string();
+
 	Ok(UrlData {
 		protocol_version,
 		namespace,
+		runner_key,
 	})
 }
 

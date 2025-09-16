@@ -3270,9 +3270,11 @@ dependencies = [
  "rivet-guard-core",
  "rivet-tunnel-protocol",
  "rivet-util",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite",
  "universalpubsub",
+ "versioned-data-util",
 ]
 
 [[package]]
@@ -3304,6 +3306,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bytes",
  "futures",
  "gasoline",
  "http-body-util",
@@ -4340,6 +4343,7 @@ dependencies = [
  "tracing",
  "udb-util",
  "universaldb",
+ "universalpubsub",
  "url",
  "uuid",
 ]
@@ -6329,12 +6333,12 @@ dependencies = [
  "base64 0.22.1",
  "deadpool-postgres",
  "futures-util",
- "moka",
  "rivet-config",
  "rivet-env",
  "rivet-error",
  "rivet-test-deps-docker",
  "rivet-ups-protocol",
+ "rivet-util",
  "serde",
  "serde_json",
  "sha2",
@@ -6342,6 +6346,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-postgres",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uuid",

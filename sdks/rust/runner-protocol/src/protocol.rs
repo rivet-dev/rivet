@@ -20,9 +20,7 @@ pub enum ToClient {
 #[serde(rename_all = "snake_case")]
 pub enum ToServer {
 	Init {
-		runner_id: Option<Id>,
 		name: String,
-		key: String,
 		version: u32,
 		total_slots: u32,
 

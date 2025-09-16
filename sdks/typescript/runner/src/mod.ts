@@ -1,16 +1,18 @@
 import WebSocket from "ws";
 import { importWebSocket } from "./websocket.js";
 import * as protocol from "@rivetkit/engine-runner-protocol";
-import { unreachable, calculateBackoff } from "./utils.js";
-import { Tunnel } from "./tunnel.js";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter.js";
+import { unreachable, calculateBackoff } from "./utils";
+import { Tunnel } from "./tunnel";
+import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const KV_EXPIRE: number = 30_000;
 
-interface ActorInstance {
+export interface ActorInstance {
 	actorId: string;
 	generation: number;
 	config: ActorConfig;
+	requests: Set<string>; // Track active request IDs
+	webSockets: Set<string>; // Track active WebSocket IDs
 }
 
 export interface ActorConfig {
@@ -60,6 +62,11 @@ interface KvRequestEntry {
 
 export class Runner {
 	#config: RunnerConfig;
+
+	get config(): RunnerConfig {
+		return this.#config;
+	}
+
 	#actors: Map<string, ActorInstance> = new Map();
 	#actorWebSockets: Map<string, Set<WebSocketTunnelAdapter>> = new Map();
 
@@ -110,7 +117,7 @@ export class Runner {
 
 	// MARK: Manage actors
 	sleepActor(actorId: string, generation?: number) {
-		const actor = this.#getActor(actorId, generation);
+		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
 
 		// Keep the actor instance in memory during sleep
@@ -126,7 +133,7 @@ export class Runner {
 
 		// Unregister actor from tunnel
 		if (this.#tunnel) {
-			this.#tunnel.unregisterActor(actorId);
+			this.#tunnel.unregisterActor(actor);
 		}
 
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
@@ -147,7 +154,7 @@ export class Runner {
 		}
 	}
 
-	#getActor(actorId: string, generation?: number): ActorInstance | undefined {
+	getActor(actorId: string, generation?: number): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
 			console.error(`Actor ${actorId} not found`);
@@ -363,10 +370,10 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		return `${wsEndpoint}/v1?namespace=${encodeURIComponent(this.#config.namespace)}`;
+		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
-	get pegboardRelayUrl() {
+	get pegboardTunnelUrl() {
 		const endpoint =
 			this.#config.pegboardRelayEndpoint ||
 			this.#config.pegboardEndpoint ||
@@ -374,26 +381,19 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		// Include runner ID if we have it
-		if (this.runnerId) {
-			return `${wsEndpoint}/tunnel?namespace=${encodeURIComponent(this.#config.namespace)}&runner_id=${this.runnerId}`;
-		}
-		return `${wsEndpoint}/tunnel?namespace=${encodeURIComponent(this.#config.namespace)}`;
+		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${this.#config.runnerKey}`;
 	}
 
 	async #openTunnelAndWait(): Promise<void> {
 		return new Promise((resolve, reject) => {
-			const url = this.pegboardRelayUrl;
+			const url = this.pegboardTunnelUrl;
 			//console.log("[RUNNER] Opening tunnel to:", url);
 			//console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
 			//console.log("[RUNNER] Active actors count:", this.#actors.size);
 
 			let connected = false;
 
-			this.#tunnel = new Tunnel(url);
-			this.#tunnel.setCallbacks({
-				fetch: this.#config.fetch,
-				websocket: this.#config.websocket,
+			this.#tunnel = new Tunnel(this, url, {
 				onConnected: () => {
 					if (!connected) {
 						connected = true;
@@ -410,33 +410,7 @@ export class Runner {
 				},
 			});
 			this.#tunnel.start();
-
-			// Re-register all active actors with the new tunnel
-			for (const actorId of this.#actors.keys()) {
-				//console.log("[RUNNER] Re-registering actor with tunnel:", actorId);
-				this.#tunnel.registerActor(actorId);
-			}
 		});
-	}
-
-	#openTunnel() {
-		const url = this.pegboardRelayUrl;
-		//console.log("[RUNNER] Opening tunnel to:", url);
-		//console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
-		//console.log("[RUNNER] Active actors count:", this.#actors.size);
-
-		this.#tunnel = new Tunnel(url);
-		this.#tunnel.setCallbacks({
-			fetch: this.#config.fetch,
-			websocket: this.#config.websocket,
-		});
-		this.#tunnel.start();
-
-		// Re-register all active actors with the new tunnel
-		for (const actorId of this.#actors.keys()) {
-			//console.log("[RUNNER] Re-registering actor with tunnel:", actorId);
-			this.#tunnel.registerActor(actorId);
-		}
 	}
 
 	// MARK: Runner protocol
@@ -469,9 +443,7 @@ export class Runner {
 
 			// Send init message
 			const init: protocol.ToServerInit = {
-				runnerId: this.runnerId || null,
 				name: this.#config.runnerName,
-				key: this.#config.runnerKey,
 				version: this.#config.version,
 				totalSlots: this.#config.totalSlots,
 				addressesHttp: new Map(), // No addresses needed with tunnel
@@ -559,18 +531,6 @@ export class Runner {
 				//	lastEventIdx: init.lastEventIdx,
 				//	runnerLostThreshold: this.#runnerLostThreshold,
 				//});
-
-				// Only reopen tunnel if we didn't have a runner ID before
-				// This happens on reconnection after losing connection
-				if (!hadRunnerId && this.runnerId) {
-					// Reopen tunnel with runner ID
-					//console.log("[RUNNER] Received runner ID, reopening tunnel");
-					if (this.#tunnel) {
-						//console.log("[RUNNER] Shutting down existing tunnel");
-						this.#tunnel.shutdown();
-					}
-					this.#openTunnel();
-				}
 
 				// Resend events that haven't been acknowledged
 				this.#resendUnacknowledgedEvents(init.lastEventIdx);
@@ -664,20 +624,11 @@ export class Runner {
 			actorId,
 			generation,
 			config: actorConfig,
+			requests: new Set(),
+			webSockets: new Set(),
 		};
 
 		this.#actors.set(actorId, instance);
-
-		// Register actor with tunnel
-		if (this.#tunnel) {
-			//console.log("[RUNNER] Registering new actor with tunnel:", actorId);
-			this.#tunnel.registerActor(actorId);
-		} else {
-			console.error(
-				"[RUNNER] WARNING: No tunnel available to register actor:",
-				actorId,
-			);
-		}
 
 		this.#sendActorStateUpdate(actorId, generation, "running");
 

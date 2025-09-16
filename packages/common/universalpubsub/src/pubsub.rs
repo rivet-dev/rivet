@@ -8,6 +8,8 @@ use tokio::sync::broadcast;
 use tokio::sync::{RwLock, oneshot};
 use uuid::Uuid;
 
+use rivet_util::backoff::Backoff;
+
 use crate::chunking::{ChunkTracker, encode_chunk, split_payload_into_chunks};
 use crate::driver::{PubSubDriverHandle, PublishOpts, SubscriberDriverHandle};
 
@@ -131,7 +133,8 @@ impl PubSub {
 					break;
 				}
 			} else {
-				self.driver.publish(subject, &encoded).await?;
+				// Use backoff when publishing through the driver
+				self.publish_with_backoff(subject, &encoded).await?;
 			}
 		}
 		Ok(())
@@ -174,7 +177,26 @@ impl PubSub {
 					break;
 				}
 			} else {
-				self.driver.publish(subject, &encoded).await?;
+				// Use backoff when publishing through the driver
+				self.publish_with_backoff(subject, &encoded).await?;
+			}
+		}
+		Ok(())
+	}
+
+	async fn publish_with_backoff(&self, subject: &str, encoded: &[u8]) -> Result<()> {
+		let mut backoff = Backoff::default();
+		loop {
+			match self.driver.publish(subject, encoded).await {
+				Result::Ok(_) => break,
+				Err(err) if !backoff.tick().await => {
+					tracing::info!(?err, "error publishing, cannot retry again");
+					return Err(crate::errors::Ups::PublishFailed.build().into());
+				}
+				Err(err) => {
+					tracing::info!(?err, "error publishing, retrying");
+					// Continue retrying
+				}
 			}
 		}
 		Ok(())
@@ -293,7 +315,10 @@ impl Subscriber {
 	pub async fn next(&mut self) -> Result<NextOutput> {
 		loop {
 			match self.driver.next().await? {
-				DriverOutput::Message { subject, payload } => {
+				DriverOutput::Message {
+					subject: _,
+					payload,
+				} => {
 					// Process chunks
 					let mut tracker = self.pubsub.chunk_tracker.lock().unwrap();
 					match tracker.process_chunk(&payload) {

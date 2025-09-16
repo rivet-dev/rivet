@@ -1,30 +1,38 @@
+import assert from "node:assert"
 import * as bare from "@bare-ts/lib"
 
 const DEFAULT_CONFIG = /* @__PURE__ */ bare.Config({})
 
 export type u16 = number
-export type u64 = bigint
 
-export type RequestId = u64
+export type RequestId = ArrayBuffer
 
 export function readRequestId(bc: bare.ByteCursor): RequestId {
-    return bare.readU64(bc)
+    return bare.readFixedData(bc, 16)
 }
 
 export function writeRequestId(bc: bare.ByteCursor, x: RequestId): void {
-    bare.writeU64(bc, x)
+    assert(x.byteLength === 16)
+    bare.writeFixedData(bc, x)
 }
 
-export type WebSocketId = u64
+/**
+ * UUIDv4
+ */
+export type MessageId = ArrayBuffer
 
-export function readWebSocketId(bc: bare.ByteCursor): WebSocketId {
-    return bare.readU64(bc)
+export function readMessageId(bc: bare.ByteCursor): MessageId {
+    return bare.readFixedData(bc, 16)
 }
 
-export function writeWebSocketId(bc: bare.ByteCursor, x: WebSocketId): void {
-    bare.writeU64(bc, x)
+export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
+    assert(x.byteLength === 16)
+    bare.writeFixedData(bc, x)
 }
 
+/**
+ * UUIDv4
+ */
 export type Id = string
 
 export function readId(bc: bare.ByteCursor): Id {
@@ -35,38 +43,10 @@ export function writeId(bc: bare.ByteCursor, x: Id): void {
     bare.writeString(bc, x)
 }
 
-export enum StreamFinishReason {
-    Complete = "Complete",
-    Abort = "Abort",
-}
-
-export function readStreamFinishReason(bc: bare.ByteCursor): StreamFinishReason {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return StreamFinishReason.Complete
-        case 1:
-            return StreamFinishReason.Abort
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeStreamFinishReason(bc: bare.ByteCursor, x: StreamFinishReason): void {
-    switch (x) {
-        case StreamFinishReason.Complete: {
-            bare.writeU8(bc, 0)
-            break
-        }
-        case StreamFinishReason.Abort: {
-            bare.writeU8(bc, 1)
-            break
-        }
-    }
-}
+/**
+ * MARK: Ack
+ */
+export type Ack = null
 
 function read0(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
@@ -103,10 +83,9 @@ function write1(bc: bare.ByteCursor, x: ArrayBuffer | null): void {
 }
 
 /**
- * MARK: HTTP Request Forwarding
+ * MARK: HTTP
  */
 export type ToServerRequestStart = {
-    readonly requestId: RequestId
     readonly actorId: Id
     readonly method: string
     readonly path: string
@@ -117,7 +96,6 @@ export type ToServerRequestStart = {
 
 export function readToServerRequestStart(bc: bare.ByteCursor): ToServerRequestStart {
     return {
-        requestId: readRequestId(bc),
         actorId: readId(bc),
         method: bare.readString(bc),
         path: bare.readString(bc),
@@ -128,7 +106,6 @@ export function readToServerRequestStart(bc: bare.ByteCursor): ToServerRequestSt
 }
 
 export function writeToServerRequestStart(bc: bare.ByteCursor, x: ToServerRequestStart): void {
-    writeRequestId(bc, x.requestId)
     writeId(bc, x.actorId)
     bare.writeString(bc, x.method)
     bare.writeString(bc, x.path)
@@ -138,41 +115,25 @@ export function writeToServerRequestStart(bc: bare.ByteCursor, x: ToServerReques
 }
 
 export type ToServerRequestChunk = {
-    readonly requestId: RequestId
     readonly body: ArrayBuffer
+    readonly finish: boolean
 }
 
 export function readToServerRequestChunk(bc: bare.ByteCursor): ToServerRequestChunk {
     return {
-        requestId: readRequestId(bc),
         body: bare.readData(bc),
+        finish: bare.readBool(bc),
     }
 }
 
 export function writeToServerRequestChunk(bc: bare.ByteCursor, x: ToServerRequestChunk): void {
-    writeRequestId(bc, x.requestId)
     bare.writeData(bc, x.body)
+    bare.writeBool(bc, x.finish)
 }
 
-export type ToServerRequestFinish = {
-    readonly requestId: RequestId
-    readonly reason: StreamFinishReason
-}
-
-export function readToServerRequestFinish(bc: bare.ByteCursor): ToServerRequestFinish {
-    return {
-        requestId: readRequestId(bc),
-        reason: readStreamFinishReason(bc),
-    }
-}
-
-export function writeToServerRequestFinish(bc: bare.ByteCursor, x: ToServerRequestFinish): void {
-    writeRequestId(bc, x.requestId)
-    writeStreamFinishReason(bc, x.reason)
-}
+export type ToServerRequestAbort = null
 
 export type ToClientResponseStart = {
-    readonly requestId: RequestId
     readonly status: u16
     readonly headers: ReadonlyMap<string, string>
     readonly body: ArrayBuffer | null
@@ -181,7 +142,6 @@ export type ToClientResponseStart = {
 
 export function readToClientResponseStart(bc: bare.ByteCursor): ToClientResponseStart {
     return {
-        requestId: readRequestId(bc),
         status: bare.readU16(bc),
         headers: read0(bc),
         body: read1(bc),
@@ -190,7 +150,6 @@ export function readToClientResponseStart(bc: bare.ByteCursor): ToClientResponse
 }
 
 export function writeToClientResponseStart(bc: bare.ByteCursor, x: ToClientResponseStart): void {
-    writeRequestId(bc, x.requestId)
     bare.writeU16(bc, x.status)
     write0(bc, x.headers)
     write1(bc, x.body)
@@ -198,45 +157,29 @@ export function writeToClientResponseStart(bc: bare.ByteCursor, x: ToClientRespo
 }
 
 export type ToClientResponseChunk = {
-    readonly requestId: RequestId
     readonly body: ArrayBuffer
+    readonly finish: boolean
 }
 
 export function readToClientResponseChunk(bc: bare.ByteCursor): ToClientResponseChunk {
     return {
-        requestId: readRequestId(bc),
         body: bare.readData(bc),
+        finish: bare.readBool(bc),
     }
 }
 
 export function writeToClientResponseChunk(bc: bare.ByteCursor, x: ToClientResponseChunk): void {
-    writeRequestId(bc, x.requestId)
     bare.writeData(bc, x.body)
+    bare.writeBool(bc, x.finish)
 }
 
-export type ToClientResponseFinish = {
-    readonly requestId: RequestId
-    readonly reason: StreamFinishReason
-}
-
-export function readToClientResponseFinish(bc: bare.ByteCursor): ToClientResponseFinish {
-    return {
-        requestId: readRequestId(bc),
-        reason: readStreamFinishReason(bc),
-    }
-}
-
-export function writeToClientResponseFinish(bc: bare.ByteCursor, x: ToClientResponseFinish): void {
-    writeRequestId(bc, x.requestId)
-    writeStreamFinishReason(bc, x.reason)
-}
+export type ToClientResponseAbort = null
 
 /**
- * MARK: WebSocket Forwarding
+ * MARK: WebSocket
  */
 export type ToServerWebSocketOpen = {
     readonly actorId: Id
-    readonly webSocketId: WebSocketId
     readonly path: string
     readonly headers: ReadonlyMap<string, string>
 }
@@ -244,7 +187,6 @@ export type ToServerWebSocketOpen = {
 export function readToServerWebSocketOpen(bc: bare.ByteCursor): ToServerWebSocketOpen {
     return {
         actorId: readId(bc),
-        webSocketId: readWebSocketId(bc),
         path: bare.readString(bc),
         headers: read0(bc),
     }
@@ -252,27 +194,23 @@ export function readToServerWebSocketOpen(bc: bare.ByteCursor): ToServerWebSocke
 
 export function writeToServerWebSocketOpen(bc: bare.ByteCursor, x: ToServerWebSocketOpen): void {
     writeId(bc, x.actorId)
-    writeWebSocketId(bc, x.webSocketId)
     bare.writeString(bc, x.path)
     write0(bc, x.headers)
 }
 
 export type ToServerWebSocketMessage = {
-    readonly webSocketId: WebSocketId
     readonly data: ArrayBuffer
     readonly binary: boolean
 }
 
 export function readToServerWebSocketMessage(bc: bare.ByteCursor): ToServerWebSocketMessage {
     return {
-        webSocketId: readWebSocketId(bc),
         data: bare.readData(bc),
         binary: bare.readBool(bc),
     }
 }
 
 export function writeToServerWebSocketMessage(bc: bare.ByteCursor, x: ToServerWebSocketMessage): void {
-    writeWebSocketId(bc, x.webSocketId)
     bare.writeData(bc, x.data)
     bare.writeBool(bc, x.binary)
 }
@@ -300,75 +238,54 @@ function write3(bc: bare.ByteCursor, x: string | null): void {
 }
 
 export type ToServerWebSocketClose = {
-    readonly webSocketId: WebSocketId
     readonly code: u16 | null
     readonly reason: string | null
 }
 
 export function readToServerWebSocketClose(bc: bare.ByteCursor): ToServerWebSocketClose {
     return {
-        webSocketId: readWebSocketId(bc),
         code: read2(bc),
         reason: read3(bc),
     }
 }
 
 export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebSocketClose): void {
-    writeWebSocketId(bc, x.webSocketId)
     write2(bc, x.code)
     write3(bc, x.reason)
 }
 
-export type ToClientWebSocketOpen = {
-    readonly webSocketId: WebSocketId
-}
-
-export function readToClientWebSocketOpen(bc: bare.ByteCursor): ToClientWebSocketOpen {
-    return {
-        webSocketId: readWebSocketId(bc),
-    }
-}
-
-export function writeToClientWebSocketOpen(bc: bare.ByteCursor, x: ToClientWebSocketOpen): void {
-    writeWebSocketId(bc, x.webSocketId)
-}
+export type ToClientWebSocketOpen = null
 
 export type ToClientWebSocketMessage = {
-    readonly webSocketId: WebSocketId
     readonly data: ArrayBuffer
     readonly binary: boolean
 }
 
 export function readToClientWebSocketMessage(bc: bare.ByteCursor): ToClientWebSocketMessage {
     return {
-        webSocketId: readWebSocketId(bc),
         data: bare.readData(bc),
         binary: bare.readBool(bc),
     }
 }
 
 export function writeToClientWebSocketMessage(bc: bare.ByteCursor, x: ToClientWebSocketMessage): void {
-    writeWebSocketId(bc, x.webSocketId)
     bare.writeData(bc, x.data)
     bare.writeBool(bc, x.binary)
 }
 
 export type ToClientWebSocketClose = {
-    readonly webSocketId: WebSocketId
     readonly code: u16 | null
     readonly reason: string | null
 }
 
 export function readToClientWebSocketClose(bc: bare.ByteCursor): ToClientWebSocketClose {
     return {
-        webSocketId: readWebSocketId(bc),
         code: read2(bc),
         reason: read3(bc),
     }
 }
 
 export function writeToClientWebSocketClose(bc: bare.ByteCursor, x: ToClientWebSocketClose): void {
-    writeWebSocketId(bc, x.webSocketId)
     write2(bc, x.code)
     write3(bc, x.reason)
 }
@@ -376,16 +293,17 @@ export function writeToClientWebSocketClose(bc: bare.ByteCursor, x: ToClientWebS
 /**
  * MARK: Message
  */
-export type MessageBody =
+export type MessageKind =
+    | { readonly tag: "Ack"; readonly val: Ack }
     /**
      * HTTP
      */
     | { readonly tag: "ToServerRequestStart"; readonly val: ToServerRequestStart }
     | { readonly tag: "ToServerRequestChunk"; readonly val: ToServerRequestChunk }
-    | { readonly tag: "ToServerRequestFinish"; readonly val: ToServerRequestFinish }
+    | { readonly tag: "ToServerRequestAbort"; readonly val: ToServerRequestAbort }
     | { readonly tag: "ToClientResponseStart"; readonly val: ToClientResponseStart }
     | { readonly tag: "ToClientResponseChunk"; readonly val: ToClientResponseChunk }
-    | { readonly tag: "ToClientResponseFinish"; readonly val: ToClientResponseFinish }
+    | { readonly tag: "ToClientResponseAbort"; readonly val: ToClientResponseAbort }
     /**
      * WebSocket
      */
@@ -396,33 +314,35 @@ export type MessageBody =
     | { readonly tag: "ToClientWebSocketMessage"; readonly val: ToClientWebSocketMessage }
     | { readonly tag: "ToClientWebSocketClose"; readonly val: ToClientWebSocketClose }
 
-export function readMessageBody(bc: bare.ByteCursor): MessageBody {
+export function readMessageKind(bc: bare.ByteCursor): MessageKind {
     const offset = bc.offset
     const tag = bare.readU8(bc)
     switch (tag) {
         case 0:
-            return { tag: "ToServerRequestStart", val: readToServerRequestStart(bc) }
+            return { tag: "Ack", val: null }
         case 1:
-            return { tag: "ToServerRequestChunk", val: readToServerRequestChunk(bc) }
+            return { tag: "ToServerRequestStart", val: readToServerRequestStart(bc) }
         case 2:
-            return { tag: "ToServerRequestFinish", val: readToServerRequestFinish(bc) }
+            return { tag: "ToServerRequestChunk", val: readToServerRequestChunk(bc) }
         case 3:
-            return { tag: "ToClientResponseStart", val: readToClientResponseStart(bc) }
+            return { tag: "ToServerRequestAbort", val: null }
         case 4:
-            return { tag: "ToClientResponseChunk", val: readToClientResponseChunk(bc) }
+            return { tag: "ToClientResponseStart", val: readToClientResponseStart(bc) }
         case 5:
-            return { tag: "ToClientResponseFinish", val: readToClientResponseFinish(bc) }
+            return { tag: "ToClientResponseChunk", val: readToClientResponseChunk(bc) }
         case 6:
-            return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
+            return { tag: "ToClientResponseAbort", val: null }
         case 7:
-            return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
+            return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
         case 8:
-            return { tag: "ToServerWebSocketClose", val: readToServerWebSocketClose(bc) }
+            return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
         case 9:
-            return { tag: "ToClientWebSocketOpen", val: readToClientWebSocketOpen(bc) }
+            return { tag: "ToServerWebSocketClose", val: readToServerWebSocketClose(bc) }
         case 10:
-            return { tag: "ToClientWebSocketMessage", val: readToClientWebSocketMessage(bc) }
+            return { tag: "ToClientWebSocketOpen", val: null }
         case 11:
+            return { tag: "ToClientWebSocketMessage", val: readToClientWebSocketMessage(bc) }
+        case 12:
             return { tag: "ToClientWebSocketClose", val: readToClientWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -431,65 +351,66 @@ export function readMessageBody(bc: bare.ByteCursor): MessageBody {
     }
 }
 
-export function writeMessageBody(bc: bare.ByteCursor, x: MessageBody): void {
+export function writeMessageKind(bc: bare.ByteCursor, x: MessageKind): void {
     switch (x.tag) {
-        case "ToServerRequestStart": {
+        case "Ack": {
             bare.writeU8(bc, 0)
+            break
+        }
+        case "ToServerRequestStart": {
+            bare.writeU8(bc, 1)
             writeToServerRequestStart(bc, x.val)
             break
         }
         case "ToServerRequestChunk": {
-            bare.writeU8(bc, 1)
+            bare.writeU8(bc, 2)
             writeToServerRequestChunk(bc, x.val)
             break
         }
-        case "ToServerRequestFinish": {
-            bare.writeU8(bc, 2)
-            writeToServerRequestFinish(bc, x.val)
+        case "ToServerRequestAbort": {
+            bare.writeU8(bc, 3)
             break
         }
         case "ToClientResponseStart": {
-            bare.writeU8(bc, 3)
+            bare.writeU8(bc, 4)
             writeToClientResponseStart(bc, x.val)
             break
         }
         case "ToClientResponseChunk": {
-            bare.writeU8(bc, 4)
+            bare.writeU8(bc, 5)
             writeToClientResponseChunk(bc, x.val)
             break
         }
-        case "ToClientResponseFinish": {
-            bare.writeU8(bc, 5)
-            writeToClientResponseFinish(bc, x.val)
+        case "ToClientResponseAbort": {
+            bare.writeU8(bc, 6)
             break
         }
         case "ToServerWebSocketOpen": {
-            bare.writeU8(bc, 6)
+            bare.writeU8(bc, 7)
             writeToServerWebSocketOpen(bc, x.val)
             break
         }
         case "ToServerWebSocketMessage": {
-            bare.writeU8(bc, 7)
+            bare.writeU8(bc, 8)
             writeToServerWebSocketMessage(bc, x.val)
             break
         }
         case "ToServerWebSocketClose": {
-            bare.writeU8(bc, 8)
+            bare.writeU8(bc, 9)
             writeToServerWebSocketClose(bc, x.val)
             break
         }
         case "ToClientWebSocketOpen": {
-            bare.writeU8(bc, 9)
-            writeToClientWebSocketOpen(bc, x.val)
+            bare.writeU8(bc, 10)
             break
         }
         case "ToClientWebSocketMessage": {
-            bare.writeU8(bc, 10)
+            bare.writeU8(bc, 11)
             writeToClientWebSocketMessage(bc, x.val)
             break
         }
         case "ToClientWebSocketClose": {
-            bare.writeU8(bc, 11)
+            bare.writeU8(bc, 12)
             writeToClientWebSocketClose(bc, x.val)
             break
         }
@@ -497,35 +418,89 @@ export function writeMessageBody(bc: bare.ByteCursor, x: MessageBody): void {
 }
 
 /**
- * Main tunnel message
+ * MARK: Message sent over tunnel WebSocket
  */
-export type TunnelMessage = {
-    readonly body: MessageBody
+export type RunnerMessage = {
+    readonly requestId: RequestId
+    readonly messageId: MessageId
+    readonly messageKind: MessageKind
 }
 
-export function readTunnelMessage(bc: bare.ByteCursor): TunnelMessage {
+export function readRunnerMessage(bc: bare.ByteCursor): RunnerMessage {
     return {
-        body: readMessageBody(bc),
+        requestId: readRequestId(bc),
+        messageId: readMessageId(bc),
+        messageKind: readMessageKind(bc),
     }
 }
 
-export function writeTunnelMessage(bc: bare.ByteCursor, x: TunnelMessage): void {
-    writeMessageBody(bc, x.body)
+export function writeRunnerMessage(bc: bare.ByteCursor, x: RunnerMessage): void {
+    writeRequestId(bc, x.requestId)
+    writeMessageId(bc, x.messageId)
+    writeMessageKind(bc, x.messageKind)
 }
 
-export function encodeTunnelMessage(x: TunnelMessage, config?: Partial<bare.Config>): Uint8Array {
+export function encodeRunnerMessage(x: RunnerMessage, config?: Partial<bare.Config>): Uint8Array {
     const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
     const bc = new bare.ByteCursor(
         new Uint8Array(fullConfig.initialBufferLength),
         fullConfig,
     )
-    writeTunnelMessage(bc, x)
+    writeRunnerMessage(bc, x)
     return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
 }
 
-export function decodeTunnelMessage(bytes: Uint8Array): TunnelMessage {
+export function decodeRunnerMessage(bytes: Uint8Array): RunnerMessage {
     const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
-    const result = readTunnelMessage(bc)
+    const result = readRunnerMessage(bc)
+    if (bc.offset < bc.view.byteLength) {
+        throw new bare.BareError(bc.offset, "remaining bytes")
+    }
+    return result
+}
+
+/**
+ * MARK: Message sent over UPS
+ */
+export type PubSubMessage = {
+    readonly requestId: RequestId
+    readonly messageId: MessageId
+    /**
+     * Subject to send replies to. Only sent when opening a new request from gateway -> runner.
+     */
+    readonly replyTo: string | null
+    readonly messageKind: MessageKind
+}
+
+export function readPubSubMessage(bc: bare.ByteCursor): PubSubMessage {
+    return {
+        requestId: readRequestId(bc),
+        messageId: readMessageId(bc),
+        replyTo: read3(bc),
+        messageKind: readMessageKind(bc),
+    }
+}
+
+export function writePubSubMessage(bc: bare.ByteCursor, x: PubSubMessage): void {
+    writeRequestId(bc, x.requestId)
+    writeMessageId(bc, x.messageId)
+    write3(bc, x.replyTo)
+    writeMessageKind(bc, x.messageKind)
+}
+
+export function encodePubSubMessage(x: PubSubMessage, config?: Partial<bare.Config>): Uint8Array {
+    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
+    const bc = new bare.ByteCursor(
+        new Uint8Array(fullConfig.initialBufferLength),
+        fullConfig,
+    )
+    writePubSubMessage(bc, x)
+    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
+}
+
+export function decodePubSubMessage(bytes: Uint8Array): PubSubMessage {
+    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
+    const result = readPubSubMessage(bc)
     if (bc.offset < bc.view.byteLength) {
         throw new bare.BareError(bc.offset, "remaining bytes")
     }

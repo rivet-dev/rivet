@@ -91,7 +91,9 @@ async fn test_pubsub_to_websocket(
 	};
 
 	// Serialize the message
-	let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))?;
+	let serialized = versioned::RunnerMessage::serialize_with_embedded_version(
+		versioned::RunnerMessage::V1(message),
+	)?;
 
 	// Publish to pubsub topic using proper subject
 	let topic = TunnelHttpRunnerSubject::new(&runner_id.to_string(), port_name).to_string();
@@ -105,7 +107,7 @@ async fn test_pubsub_to_websocket(
 	match received? {
 		WsMessage::Binary(data) => {
 			// Deserialize and verify the message
-			let tunnel_msg = versioned::TunnelMessage::deserialize(&data)?;
+			let tunnel_msg = versioned::RunnerMessage::deserialize_with_embedded_version(&data)?;
 			match tunnel_msg.body {
 				MessageBody::ToServerRequestStart(req) => {
 					assert_eq!(req.request_id, request_id);
@@ -150,7 +152,9 @@ async fn test_websocket_to_pubsub(
 	};
 
 	// Serialize and send via WebSocket
-	let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))?;
+	let serialized = versioned::RunnerMessage::serialize_with_embedded_version(
+		versioned::RunnerMessage::V1(message),
+	)?;
 	ws_stream.send(WsMessage::Binary(serialized.into())).await?;
 
 	// Wait for message on pubsub
@@ -159,7 +163,8 @@ async fn test_websocket_to_pubsub(
 	match received {
 		universalpubsub::pubsub::NextOutput::Message(msg) => {
 			// Deserialize and verify the message
-			let tunnel_msg = versioned::TunnelMessage::deserialize(&msg.payload)?;
+			let tunnel_msg =
+				versioned::RunnerMessage::deserialize_with_embedded_version(&msg.payload)?;
 			match tunnel_msg.body {
 				MessageBody::ToClientResponseStart(resp) => {
 					assert_eq!(resp.request_id, request_id);

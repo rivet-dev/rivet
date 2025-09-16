@@ -12,13 +12,10 @@ pub async fn route_request(
 	_host: &str,
 	_path: &str,
 ) -> Result<Option<RoutingOutput>> {
-	// Check target
 	if target != "tunnel" {
 		return Ok(None);
 	}
 
-	// Create pegboard-tunnel service instance
-	let tunnel = pegboard_tunnel::PegboardTunnelCustomServe::new(ctx.clone()).await?;
-
+	let tunnel = pegboard_tunnel::PegboardTunnelCustomServe::new(ctx.clone());
 	Ok(Some(RoutingOutput::CustomServe(Arc::new(tunnel))))
 }

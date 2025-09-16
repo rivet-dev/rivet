@@ -73,6 +73,114 @@ impl DockerRunConfig {
 		Ok(true)
 	}
 
+	pub async fn restart(&self) -> Result<()> {
+		let container_id = self
+			.container_id
+			.as_ref()
+			.ok_or_else(|| anyhow!("No container ID found, container not started"))?;
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"restarting docker container"
+		);
+
+		let output = Command::new("docker")
+			.arg("restart")
+			.arg(container_id)
+			.output()
+			.await?;
+
+		if !output.status.success() {
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			anyhow::bail!(
+				"Failed to restart container {}: {}",
+				self.container_name,
+				stderr
+			);
+		}
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"container restarted successfully"
+		);
+
+		Ok(())
+	}
+
+	pub async fn stop_container(&self) -> Result<()> {
+		let container_id = self
+			.container_id
+			.as_ref()
+			.ok_or_else(|| anyhow!("No container ID found, container not started"))?;
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"stopping docker container"
+		);
+
+		let output = Command::new("docker")
+			.arg("stop")
+			.arg(container_id)
+			.output()
+			.await?;
+
+		if !output.status.success() {
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			anyhow::bail!(
+				"Failed to stop container {}: {}",
+				self.container_name,
+				stderr
+			);
+		}
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"container stopped successfully"
+		);
+
+		Ok(())
+	}
+
+	pub async fn start_container(&self) -> Result<()> {
+		let container_id = self
+			.container_id
+			.as_ref()
+			.ok_or_else(|| anyhow!("No container ID found, container not started"))?;
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"starting docker container"
+		);
+
+		let output = Command::new("docker")
+			.arg("start")
+			.arg(container_id)
+			.output()
+			.await?;
+
+		if !output.status.success() {
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			anyhow::bail!(
+				"Failed to start container {}: {}",
+				self.container_name,
+				stderr
+			);
+		}
+
+		tracing::debug!(
+			container_name = %self.container_name,
+			container_id = %container_id,
+			"container started successfully"
+		);
+
+		Ok(())
+	}
+
 	pub fn container_id(&self) -> Option<&str> {
 		self.container_id.as_deref()
 	}

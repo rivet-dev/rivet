@@ -20,6 +20,7 @@ hyper-tungstenite.workspace = true
 tower.workspace = true
 udb-util.workspace = true
 universaldb.workspace = true
+universalpubsub.workspace = true
 futures.workspace = true
 # TODO: Make this use workspace version
 hyper = "1.6.0"

@@ -5,6 +5,7 @@ pub mod cache;
 pub mod errors;
 pub mod middleware;
 pub mod routing;
+pub mod shared_state;
 pub mod tls;
 
 #[tracing::instrument(skip_all)]
@@ -26,8 +27,12 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		tracing::warn!("crypto provider already installed in this process");
 	}
 
+	// Share shared context
+	let shared_state = shared_state::SharedState::new(ctx.ups()?);
+	shared_state.start().await?;
+
 	// Create handlers
-	let routing_fn = routing::create_routing_function(ctx.clone());
+	let routing_fn = routing::create_routing_function(ctx.clone(), shared_state.clone());
 	let cache_key_fn = cache::create_cache_key_function(ctx.clone());
 	let middleware_fn = middleware::create_middleware_function(ctx.clone());
 	let cert_resolver = tls::create_cert_resolver(&ctx).await?;

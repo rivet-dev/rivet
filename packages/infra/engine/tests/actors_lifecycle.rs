@@ -4,7 +4,7 @@ use std::time::Duration;
 
 #[test]
 fn actor_lifecycle_single_dc() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(1), |ctx| async move {
 		actor_lifecycle_inner(&ctx, false).await;
 	});
 }
@@ -29,10 +29,6 @@ async fn actor_lifecycle_inner(ctx: &common::TestCtx, multi_dc: bool) {
 
 	let actor_id = common::create_actor(&namespace, target_dc.guard_port()).await;
 
-	// TODO: This is a race condition. we might need to move this after the guard ping since guard
-	// correctly waits for the actor to start.
-	tokio::time::sleep(Duration::from_millis(500)).await;
-
 	// Test ping via guard
 	let ping_response =
 		common::ping_actor_via_guard(ctx.leader_dc().guard_port(), &actor_id, "main").await;
@@ -52,11 +48,10 @@ async fn actor_lifecycle_inner(ctx: &common::TestCtx, multi_dc: bool) {
 
 	// Destroy
 	tracing::info!("destroying actor");
-	tokio::time::sleep(Duration::from_millis(500)).await;
 	common::destroy_actor(&actor_id, &namespace, target_dc.guard_port()).await;
-	tokio::time::sleep(Duration::from_millis(500)).await;
 
 	// Validate runner state
+	tokio::time::sleep(Duration::from_millis(500)).await;
 	assert!(
 		!runner.has_actor(&actor_id).await,
 		"Runner should not have the actor after destroy"

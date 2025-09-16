@@ -285,9 +285,7 @@ impl TryFrom<v1::ToServer> for protocol::ToServer {
 	fn try_from(value: v1::ToServer) -> Result<Self> {
 		match value {
 			v1::ToServer::ToServerInit(init) => Ok(protocol::ToServer::Init {
-				runner_id: init.runner_id.map(|id| util::Id::parse(&id)).transpose()?,
 				name: init.name,
-				key: init.key,
 				version: init.version,
 				total_slots: init.total_slots,
 				addresses_http: init

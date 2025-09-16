@@ -590,18 +590,7 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
-function read3(bc: bare.ByteCursor): Id | null {
-    return bare.readBool(bc) ? readId(bc) : null
-}
-
-function write3(bc: bare.ByteCursor, x: Id | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        writeId(bc, x)
-    }
-}
-
-function read4(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressHttp> {
+function read3(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressHttp> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, RunnerAddressHttp>()
     for (let i = 0; i < len; i++) {
@@ -616,7 +605,7 @@ function read4(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressHttp> {
     return result
 }
 
-function write4(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressHttp>): void {
+function write3(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressHttp>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -624,18 +613,18 @@ function write4(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressHttp>):
     }
 }
 
-function read5(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressHttp> | null {
-    return bare.readBool(bc) ? read4(bc) : null
+function read4(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressHttp> | null {
+    return bare.readBool(bc) ? read3(bc) : null
 }
 
-function write5(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressHttp> | null): void {
+function write4(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressHttp> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write4(bc, x)
+        write3(bc, x)
     }
 }
 
-function read6(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressTcp> {
+function read5(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressTcp> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, RunnerAddressTcp>()
     for (let i = 0; i < len; i++) {
@@ -650,7 +639,7 @@ function read6(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressTcp> {
     return result
 }
 
-function write6(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressTcp>): void {
+function write5(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressTcp>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -658,18 +647,18 @@ function write6(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressTcp>): 
     }
 }
 
-function read7(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressTcp> | null {
-    return bare.readBool(bc) ? read6(bc) : null
+function read6(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressTcp> | null {
+    return bare.readBool(bc) ? read5(bc) : null
 }
 
-function write7(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressTcp> | null): void {
+function write6(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressTcp> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write6(bc, x)
+        write5(bc, x)
     }
 }
 
-function read8(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressUdp> {
+function read7(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressUdp> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, RunnerAddressUdp>()
     for (let i = 0; i < len; i++) {
@@ -684,7 +673,7 @@ function read8(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressUdp> {
     return result
 }
 
-function write8(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressUdp>): void {
+function write7(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressUdp>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -692,18 +681,18 @@ function write8(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressUdp>): 
     }
 }
 
-function read9(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressUdp> | null {
-    return bare.readBool(bc) ? read8(bc) : null
+function read8(bc: bare.ByteCursor): ReadonlyMap<string, RunnerAddressUdp> | null {
+    return bare.readBool(bc) ? read7(bc) : null
 }
 
-function write9(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressUdp> | null): void {
+function write8(bc: bare.ByteCursor, x: ReadonlyMap<string, RunnerAddressUdp> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write8(bc, x)
+        write7(bc, x)
     }
 }
 
-function read10(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read9(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -718,7 +707,7 @@ function read10(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write10(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write9(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -726,22 +715,22 @@ function write10(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read10(bc) : null
+function read10(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read9(bc) : null
 }
 
-function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write10(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write10(bc, x)
+        write9(bc, x)
     }
 }
 
-function read12(bc: bare.ByteCursor): Json | null {
+function read11(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write12(bc: bare.ByteCursor, x: Json | null): void {
+function write11(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -749,9 +738,7 @@ function write12(bc: bare.ByteCursor, x: Json | null): void {
 }
 
 export type ToServerInit = {
-    readonly runnerId: Id | null
     readonly name: string
-    readonly key: string
     readonly version: u32
     readonly totalSlots: u32
     readonly addressesHttp: ReadonlyMap<string, RunnerAddressHttp> | null
@@ -764,32 +751,28 @@ export type ToServerInit = {
 
 export function readToServerInit(bc: bare.ByteCursor): ToServerInit {
     return {
-        runnerId: read3(bc),
         name: bare.readString(bc),
-        key: bare.readString(bc),
         version: bare.readU32(bc),
         totalSlots: bare.readU32(bc),
-        addressesHttp: read5(bc),
-        addressesTcp: read7(bc),
-        addressesUdp: read9(bc),
+        addressesHttp: read4(bc),
+        addressesTcp: read6(bc),
+        addressesUdp: read8(bc),
         lastCommandIdx: read1(bc),
-        prepopulateActorNames: read11(bc),
-        metadata: read12(bc),
+        prepopulateActorNames: read10(bc),
+        metadata: read11(bc),
     }
 }
 
 export function writeToServerInit(bc: bare.ByteCursor, x: ToServerInit): void {
-    write3(bc, x.runnerId)
     bare.writeString(bc, x.name)
-    bare.writeString(bc, x.key)
     bare.writeU32(bc, x.version)
     bare.writeU32(bc, x.totalSlots)
-    write5(bc, x.addressesHttp)
-    write7(bc, x.addressesTcp)
-    write9(bc, x.addressesUdp)
+    write4(bc, x.addressesHttp)
+    write6(bc, x.addressesTcp)
+    write8(bc, x.addressesUdp)
     write1(bc, x.lastCommandIdx)
-    write11(bc, x.prepopulateActorNames)
-    write12(bc, x.metadata)
+    write10(bc, x.prepopulateActorNames)
+    write11(bc, x.metadata)
 }
 
 export type ToServerEvents = readonly EventWrapper[]
@@ -843,7 +826,7 @@ export function writeToServerPing(bc: bare.ByteCursor, x: ToServerPing): void {
     bare.writeI64(bc, x.ts)
 }
 
-function read13(bc: bare.ByteCursor): readonly KvKey[] {
+function read12(bc: bare.ByteCursor): readonly KvKey[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -855,7 +838,7 @@ function read13(bc: bare.ByteCursor): readonly KvKey[] {
     return result
 }
 
-function write13(bc: bare.ByteCursor, x: readonly KvKey[]): void {
+function write12(bc: bare.ByteCursor, x: readonly KvKey[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeKvKey(bc, x[i])
@@ -868,30 +851,30 @@ export type KvGetRequest = {
 
 export function readKvGetRequest(bc: bare.ByteCursor): KvGetRequest {
     return {
-        keys: read13(bc),
+        keys: read12(bc),
     }
 }
 
 export function writeKvGetRequest(bc: bare.ByteCursor, x: KvGetRequest): void {
-    write13(bc, x.keys)
+    write12(bc, x.keys)
 }
 
-function read14(bc: bare.ByteCursor): boolean | null {
+function read13(bc: bare.ByteCursor): boolean | null {
     return bare.readBool(bc) ? bare.readBool(bc) : null
 }
 
-function write14(bc: bare.ByteCursor, x: boolean | null): void {
+function write13(bc: bare.ByteCursor, x: boolean | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeBool(bc, x)
     }
 }
 
-function read15(bc: bare.ByteCursor): u64 | null {
+function read14(bc: bare.ByteCursor): u64 | null {
     return bare.readBool(bc) ? bare.readU64(bc) : null
 }
 
-function write15(bc: bare.ByteCursor, x: u64 | null): void {
+function write14(bc: bare.ByteCursor, x: u64 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeU64(bc, x)
@@ -907,18 +890,18 @@ export type KvListRequest = {
 export function readKvListRequest(bc: bare.ByteCursor): KvListRequest {
     return {
         query: readKvListQuery(bc),
-        reverse: read14(bc),
-        limit: read15(bc),
+        reverse: read13(bc),
+        limit: read14(bc),
     }
 }
 
 export function writeKvListRequest(bc: bare.ByteCursor, x: KvListRequest): void {
     writeKvListQuery(bc, x.query)
-    write14(bc, x.reverse)
-    write15(bc, x.limit)
+    write13(bc, x.reverse)
+    write14(bc, x.limit)
 }
 
-function read16(bc: bare.ByteCursor): readonly KvValue[] {
+function read15(bc: bare.ByteCursor): readonly KvValue[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -930,7 +913,7 @@ function read16(bc: bare.ByteCursor): readonly KvValue[] {
     return result
 }
 
-function write16(bc: bare.ByteCursor, x: readonly KvValue[]): void {
+function write15(bc: bare.ByteCursor, x: readonly KvValue[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeKvValue(bc, x[i])
@@ -944,14 +927,14 @@ export type KvPutRequest = {
 
 export function readKvPutRequest(bc: bare.ByteCursor): KvPutRequest {
     return {
-        keys: read13(bc),
-        values: read16(bc),
+        keys: read12(bc),
+        values: read15(bc),
     }
 }
 
 export function writeKvPutRequest(bc: bare.ByteCursor, x: KvPutRequest): void {
-    write13(bc, x.keys)
-    write16(bc, x.values)
+    write12(bc, x.keys)
+    write15(bc, x.values)
 }
 
 export type KvDeleteRequest = {
@@ -960,12 +943,12 @@ export type KvDeleteRequest = {
 
 export function readKvDeleteRequest(bc: bare.ByteCursor): KvDeleteRequest {
     return {
-        keys: read13(bc),
+        keys: read12(bc),
     }
 }
 
 export function writeKvDeleteRequest(bc: bare.ByteCursor, x: KvDeleteRequest): void {
-    write13(bc, x.keys)
+    write12(bc, x.keys)
 }
 
 export type KvDropRequest = null
@@ -1214,7 +1197,7 @@ export function writeKvErrorResponse(bc: bare.ByteCursor, x: KvErrorResponse): v
     bare.writeString(bc, x.message)
 }
 
-function read17(bc: bare.ByteCursor): readonly KvMetadata[] {
+function read16(bc: bare.ByteCursor): readonly KvMetadata[] {
     const len = bare.readUintSafe(bc)
     if (len === 0) {
         return []
@@ -1226,7 +1209,7 @@ function read17(bc: bare.ByteCursor): readonly KvMetadata[] {
     return result
 }
 
-function write17(bc: bare.ByteCursor, x: readonly KvMetadata[]): void {
+function write16(bc: bare.ByteCursor, x: readonly KvMetadata[]): void {
     bare.writeUintSafe(bc, x.length)
     for (let i = 0; i < x.length; i++) {
         writeKvMetadata(bc, x[i])
@@ -1241,16 +1224,16 @@ export type KvGetResponse = {
 
 export function readKvGetResponse(bc: bare.ByteCursor): KvGetResponse {
     return {
-        keys: read13(bc),
-        values: read16(bc),
-        metadata: read17(bc),
+        keys: read12(bc),
+        values: read15(bc),
+        metadata: read16(bc),
     }
 }
 
 export function writeKvGetResponse(bc: bare.ByteCursor, x: KvGetResponse): void {
-    write13(bc, x.keys)
-    write16(bc, x.values)
-    write17(bc, x.metadata)
+    write12(bc, x.keys)
+    write15(bc, x.values)
+    write16(bc, x.metadata)
 }
 
 export type KvListResponse = {
@@ -1261,16 +1244,16 @@ export type KvListResponse = {
 
 export function readKvListResponse(bc: bare.ByteCursor): KvListResponse {
     return {
-        keys: read13(bc),
-        values: read16(bc),
-        metadata: read17(bc),
+        keys: read12(bc),
+        values: read15(bc),
+        metadata: read16(bc),
     }
 }
 
 export function writeKvListResponse(bc: bare.ByteCursor, x: KvListResponse): void {
-    write13(bc, x.keys)
-    write16(bc, x.values)
-    write17(bc, x.metadata)
+    write12(bc, x.keys)
+    write15(bc, x.values)
+    write16(bc, x.metadata)
 }
 
 export type KvPutResponse = null

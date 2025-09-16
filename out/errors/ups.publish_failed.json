@@ -1,0 +1,5 @@
+{
+  "code": "publish_failed",
+  "group": "ups",
+  "message": "Failed to publish message after retries"
+}

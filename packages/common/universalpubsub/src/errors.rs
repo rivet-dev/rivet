@@ -6,4 +6,6 @@ use serde::{Deserialize, Serialize};
 pub enum Ups {
 	#[error("request_timeout", "Request timeout.")]
 	RequestTimeout,
+	#[error("publish_failed", "Failed to publish message after retries")]
+	PublishFailed,
 }

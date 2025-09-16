@@ -1,54 +1,29 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
 use anyhow::*;
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use gas::prelude::*;
 use http_body_util::Full;
-use hyper::body::{Bytes, Incoming as BodyIncoming};
-use hyper::{Request, Response, StatusCode};
-use hyper_tungstenite::tungstenite::Utf8Bytes as WsUtf8Bytes;
-use hyper_tungstenite::tungstenite::protocol::frame::CloseFrame as WsCloseFrame;
-use hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode as WsCloseCode;
+use hyper::{Response, StatusCode};
 use hyper_tungstenite::{HyperWebsocket, tungstenite::Message as WsMessage};
-use pegboard::pubsub_subjects::{
-	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
+use rivet_guard_core::{
+	custom_serve::CustomServeTrait, proxy_service::ResponseBody, request_context::RequestContext,
 };
-use rivet_guard_core::custom_serve::CustomServeTrait;
-use rivet_guard_core::proxy_service::ResponseBody;
-use rivet_guard_core::request_context::RequestContext;
-use rivet_pools::Pools;
-use rivet_tunnel_protocol::{MessageBody, TunnelMessage, versioned};
-use rivet_util::Id;
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
+use rivet_tunnel_protocol::{
+	MessageKind, PROTOCOL_VERSION, PubSubMessage, RequestId, RunnerMessage, versioned,
+};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-use tokio::sync::RwLock;
-use tokio_tungstenite::accept_async;
-use tracing::{error, info};
-use universalpubsub::pubsub::NextOutput;
-
-const UPS_REQ_TIMEOUT: Duration = Duration::from_secs(2);
-
-struct RunnerConnection {
-	_runner_id: Id,
-	_port_name: String,
-}
-
-type Connections = Arc<RwLock<HashMap<Id, Arc<RunnerConnection>>>>;
+use universalpubsub::{PublishOpts, pubsub::NextOutput};
+use versioned_data_util::OwnedVersionedData as _;
 
 pub struct PegboardTunnelCustomServe {
 	ctx: StandaloneCtx,
-	connections: Connections,
 }
 
 impl PegboardTunnelCustomServe {
-	pub async fn new(ctx: StandaloneCtx) -> Result<Self> {
-		let connections = Arc::new(RwLock::new(HashMap::new()));
-
-		Ok(Self { ctx, connections })
+	pub fn new(ctx: StandaloneCtx) -> Self {
+		Self { ctx }
 	}
 }
 
@@ -82,654 +57,258 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 			Result::Ok(u) => u,
 			Err(e) => return Err((client_ws, e.into())),
 		};
-		let connections = self.connections.clone();
 
-		// Extract runner_id from query parameters
-		let runner_id = if let std::result::Result::Ok(url) =
-			url::Url::parse(&format!("ws://placeholder/{path}"))
+		// Parse URL to extract runner_id and protocol version
+		let url = match url::Url::parse(&format!("ws://placeholder/{path}")) {
+			Result::Ok(u) => u,
+			Err(e) => return Err((client_ws, e.into())),
+		};
+
+		// Extract runner_key from query parameters (required)
+		let runner_key = match url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "runner_key").then_some(v))
 		{
-			url.query_pairs()
-				.find_map(|(n, v)| (n == "runner_id").then_some(v))
-				.as_ref()
-				.and_then(|id| Id::parse(id).ok())
-				.unwrap_or(Id::nil())
-		} else {
-			Id::nil()
+			Some(key) => key.to_string(),
+			None => {
+				return Err((client_ws, anyhow!("runner_key query parameter is required")));
+			}
+		};
+
+		// Extract protocol version from query parameters (required)
+		let protocol_version = match url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "protocol_version").then_some(v))
+			.as_ref()
+			.and_then(|v| v.parse::<u16>().ok())
+		{
+			Some(version) => version,
+			None => {
+				return Err((
+					client_ws,
+					anyhow!("protocol_version query parameter is required and must be a valid u16"),
+				));
+			}
 		};
 
 		let port_name = "main".to_string(); // Use "main" as default port name
 
-		info!(
-			?runner_id,
+		tracing::info!(
+			?runner_key,
 			?port_name,
+			?protocol_version,
 			?path,
 			"tunnel WebSocket connection established"
 		);
 
-		let connection_id = Id::nil();
-
 		// Subscribe to pubsub topic for this runner before accepting the client websocket so
 		// that failures can be retried by the proxy.
-		let topic = TunnelHttpRunnerSubject::new(runner_id, &port_name).to_string();
-		info!(%topic, ?runner_id, "subscribing to pubsub topic");
-
+		let topic =
+			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&runner_key, &port_name)
+				.to_string();
+		tracing::info!(%topic, ?runner_key, "subscribing to runner receiver topic");
 		let mut sub = match ups.subscribe(&topic).await {
 			Result::Ok(s) => s,
 			Err(e) => return Err((client_ws, e.into())),
 		};
 
+		// Accept WS
 		let ws_stream = match client_ws.await {
 			Result::Ok(ws) => ws,
 			Err(e) => {
 				// Handshake already in progress; cannot retry safely here
-				error!(error=?e, "client websocket await failed");
+				tracing::error!(error=?e, "client websocket await failed");
 				return std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(());
 			}
 		};
 
-		// Split WebSocket stream into read and write halves
 		let (ws_write, mut ws_read) = ws_stream.split();
 		let ws_write = Arc::new(tokio::sync::Mutex::new(ws_write));
 
-		// Store connection
-		let connection = Arc::new(RunnerConnection {
-			_runner_id: runner_id,
-			_port_name: port_name.clone(),
-		});
+		struct ActiveRequest {
+			/// Subject to send replies to.
+			reply_to: String,
+		}
 
-		connections
-			.write()
-			.await
-			.insert(connection_id, connection.clone());
+		// Active HTTP & WebSocket requests. They are separate but use the same mechanism to
+		// maintain state.
+		let active_requests = Arc::new(Mutex::new(HashMap::<RequestId, ActiveRequest>::new()));
 
-		// Handle bidirectional message forwarding
+		// Forward pubsub -> WebSocket
 		let ws_write_pubsub_to_ws = ws_write.clone();
-		let connections_clone = connections.clone();
 		let ups_clone = ups.clone();
-
-		// Task for forwarding pubsub -> WebSocket
+		let active_requests_clone = active_requests.clone();
 		let pubsub_to_ws = tokio::spawn(async move {
-			info!("starting pubsub to WebSocket forwarding task");
-			while let ::std::result::Result::Ok(NextOutput::Message(msg)) = sub.next().await {
-				// Ack message
-				match msg.reply(&[]).await {
-					Result::Ok(_) => {}
+			while let Result::Ok(NextOutput::Message(ups_msg)) = sub.next().await {
+				tracing::info!(
+					payload_len = ups_msg.payload.len(),
+					"received message from pubsub, forwarding to WebSocket"
+				);
+
+				// Parse message
+				let msg = match versioned::PubSubMessage::deserialize_with_embedded_version(
+					&ups_msg.payload,
+				) {
+					Result::Ok(x) => x,
 					Err(err) => {
-						tracing::warn!(?err, "failed to ack gateway request response message")
+						tracing::error!(?err, "failed to parse tunnel message");
+						continue;
 					}
 				};
 
-				info!(
-					payload_len = msg.payload.len(),
-					"received message from pubsub, forwarding to WebSocket"
-				);
+				// Save active request
+				if let Some(reply_to) = msg.reply_to {
+					let mut active_requests = active_requests_clone.lock().await;
+					active_requests.insert(msg.request_id, ActiveRequest { reply_to });
+				}
+
+				// If terminal, remove active request tracking
+				if is_message_kind_request_close(&msg.message_kind) {
+					let mut active_requests = active_requests_clone.lock().await;
+					active_requests.remove(&msg.request_id);
+				}
+
 				// Forward raw message to WebSocket
-				let ws_msg = WsMessage::Binary(msg.payload.to_vec().into());
+				let tunnel_msg = match versioned::RunnerMessage::latest(RunnerMessage {
+					request_id: msg.request_id,
+					message_id: msg.message_id,
+					message_kind: msg.message_kind,
+				})
+				.serialize_version(protocol_version)
+				{
+					Result::Ok(x) => x,
+					Err(err) => {
+						tracing::error!(?err, "failed to serialize tunnel message");
+						continue;
+					}
+				};
+				let ws_msg = WsMessage::Binary(tunnel_msg.into());
 				{
 					let mut stream = ws_write_pubsub_to_ws.lock().await;
 					if let Err(e) = stream.send(ws_msg).await {
-						error!(?e, "failed to send message to WebSocket");
+						tracing::error!(?e, "failed to send message to WebSocket");
 						break;
 					}
 				}
 			}
-			info!("pubsub to WebSocket forwarding task ended");
+			tracing::info!("pubsub to WebSocket forwarding task ended");
 		});
 
-		// Task for forwarding WebSocket -> pubsub
-		let ws_write_ws_to_pubsub = ws_write.clone();
+		// Forward WebSocket -> pubsub
+		let active_requests_clone = active_requests.clone();
+		let runner_key_clone = runner_key.clone();
 		let ws_to_pubsub = tokio::spawn(async move {
-			info!("starting WebSocket to pubsub forwarding task");
+			tracing::info!("starting WebSocket to pubsub forwarding task");
 			while let Some(msg) = ws_read.next().await {
 				match msg {
-					::std::result::Result::Ok(WsMessage::Binary(data)) => {
-						info!(
+					Result::Ok(WsMessage::Binary(data)) => {
+						tracing::info!(
 							data_len = data.len(),
 							"received binary message from WebSocket"
 						);
-						// Parse the tunnel message to extract request_id
-						match versioned::TunnelMessage::deserialize(&data) {
-							::std::result::Result::Ok(tunnel_msg) => {
-								// Handle different message types
-								match &tunnel_msg.body {
-									MessageBody::ToClientResponseStart(resp) => {
-										info!(?resp.request_id, status = resp.status, "forwarding HTTP response to pubsub");
-										let response_topic = TunnelHttpResponseSubject::new(
-											runner_id,
-											&port_name,
-											resp.request_id,
-										)
-										.to_string();
 
-										info!(%response_topic, ?resp.request_id, "publishing HTTP response to pubsub");
-
-										if let Err(e) = ups_clone
-											.request_with_timeout(
-												&response_topic,
-												&data.to_vec(),
-												UPS_REQ_TIMEOUT,
-											)
-											.await
-										{
-											let err_any: anyhow::Error = e.into();
-											if is_tunnel_closed_error(&err_any) {
-												info!(
-													"tunnel closed while publishing HTTP response; closing client websocket"
-												);
-												// Close client websocket with reason
-												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_pubsub,
-												)
-												.await;
-												break;
-											} else {
-												error!(?err_any, ?resp.request_id, "failed to publish HTTP response to pubsub");
-											}
-										} else {
-											info!(?resp.request_id, "successfully published HTTP response to pubsub");
-										}
-									}
-									MessageBody::ToClientWebSocketMessage(ws_msg) => {
-										info!(?ws_msg.web_socket_id, "forwarding WebSocket message to pubsub");
-										// Forward WebSocket messages to the topic that pegboard-gateway subscribes to
-										let ws_topic = TunnelHttpWebSocketSubject::new(
-											runner_id,
-											&port_name,
-											ws_msg.web_socket_id,
-										)
-										.to_string();
-
-										info!(%ws_topic, ?ws_msg.web_socket_id, "publishing WebSocket message to pubsub");
-
-										if let Err(e) = ups_clone
-											.request_with_timeout(
-												&ws_topic,
-												&data.to_vec(),
-												UPS_REQ_TIMEOUT,
-											)
-											.await
-										{
-											let err_any: anyhow::Error = e.into();
-											if is_tunnel_closed_error(&err_any) {
-												info!(
-													"tunnel closed while publishing WebSocket message; closing client websocket"
-												);
-												// Close client websocket with reason
-												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_pubsub,
-												)
-												.await;
-												break;
-											} else {
-												error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to pubsub");
-											}
-										} else {
-											info!(?ws_msg.web_socket_id, "successfully published WebSocket message to pubsub");
-										}
-									}
-									MessageBody::ToClientWebSocketOpen(ws_open) => {
-										info!(?ws_open.web_socket_id, "forwarding WebSocket open to pubsub");
-										let ws_topic = TunnelHttpWebSocketSubject::new(
-											runner_id,
-											&port_name,
-											ws_open.web_socket_id,
-										)
-										.to_string();
-
-										if let Err(e) = ups_clone
-											.request_with_timeout(
-												&ws_topic,
-												&data.to_vec(),
-												UPS_REQ_TIMEOUT,
-											)
-											.await
-										{
-											let err_any: anyhow::Error = e.into();
-											if is_tunnel_closed_error(&err_any) {
-												info!(
-													"tunnel closed while publishing WebSocket open; closing client websocket"
-												);
-												// Close client websocket with reason
-												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_pubsub,
-												)
-												.await;
-												break;
-											} else {
-												error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to pubsub");
-											}
-										} else {
-											info!(?ws_open.web_socket_id, "successfully published WebSocket open to pubsub");
-										}
-									}
-									MessageBody::ToClientWebSocketClose(ws_close) => {
-										info!(?ws_close.web_socket_id, "forwarding WebSocket close to pubsub");
-										let ws_topic = TunnelHttpWebSocketSubject::new(
-											runner_id,
-											&port_name,
-											ws_close.web_socket_id,
-										)
-										.to_string();
-
-										if let Err(e) = ups_clone
-											.request_with_timeout(
-												&ws_topic,
-												&data.to_vec(),
-												UPS_REQ_TIMEOUT,
-											)
-											.await
-										{
-											let err_any: anyhow::Error = e.into();
-											if is_tunnel_closed_error(&err_any) {
-												info!(
-													"tunnel closed while publishing WebSocket close; closing client websocket"
-												);
-												// Close client websocket with reason
-												send_tunnel_closed_close_hyper(
-													&ws_write_ws_to_pubsub,
-												)
-												.await;
-												break;
-											} else {
-												error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to pubsub");
-											}
-										} else {
-											info!(?ws_close.web_socket_id, "successfully published WebSocket close to pubsub");
-										}
-									}
-									_ => {
-										// For other message types, we might not need to forward to pubsub
-										info!(
-											"Received non-response message from WebSocket, skipping pubsub forward"
-										);
-										continue;
-									}
-								}
+						// Parse message
+						let msg = match versioned::RunnerMessage::deserialize_version(
+							&data,
+							protocol_version,
+						)
+						.and_then(|x| x.into_latest())
+						{
+							Result::Ok(x) => x,
+							Err(err) => {
+								tracing::error!(?err, "failed to deserialize message");
+								continue;
 							}
-							::std::result::Result::Err(e) => {
-								error!(?e, "failed to deserialize tunnel message from WebSocket");
+						};
+
+						// Determine reply to subject
+						let request_id = msg.request_id;
+						let reply_to = {
+							let active_requests = active_requests_clone.lock().await;
+							if let Some(req) = active_requests.get(&request_id) {
+								req.reply_to.clone()
+							} else {
+								tracing::warn!(
+									"no active request for tunnel message, may have timed out"
+								);
+								continue;
+							}
+						};
+
+						// Remove active request entries when terminal
+						if is_message_kind_request_close(&msg.message_kind) {
+							let mut active_requests = active_requests_clone.lock().await;
+							active_requests.remove(&request_id);
+						}
+
+						// Publish message to UPS
+						let message_serialized =
+							match versioned::PubSubMessage::latest(PubSubMessage {
+								request_id: msg.request_id,
+								message_id: msg.message_id,
+								reply_to: None,
+								message_kind: msg.message_kind,
+							})
+							.serialize_with_embedded_version(PROTOCOL_VERSION)
+							{
+								Result::Ok(x) => x,
+								Err(err) => {
+									tracing::error!(?err, "failed to serialize tunnel to gateway");
+									continue;
+								}
+							};
+						match ups_clone
+							.publish(&reply_to, &message_serialized, PublishOpts::one())
+							.await
+						{
+							Result::Ok(_) => {}
+							Err(err) => {
+								tracing::error!(?err, "error publishing ups message");
 							}
 						}
 					}
-					::std::result::Result::Ok(WsMessage::Close(_)) => {
-						info!(?runner_id, "WebSocket closed");
+					Result::Ok(WsMessage::Close(_)) => {
+						tracing::info!(?runner_key_clone, "WebSocket closed");
 						break;
 					}
-					::std::result::Result::Ok(_) => {
+					Result::Ok(_) => {
 						// Ignore other message types
 					}
 					Err(e) => {
-						error!(?e, "WebSocket error");
+						tracing::error!(?e, "WebSocket error");
 						break;
 					}
 				}
 			}
-			info!("WebSocket to pubsub forwarding task ended");
-
-			// Clean up connection
-			connections_clone.write().await.remove(&connection_id);
+			tracing::info!("WebSocket to pubsub forwarding task ended");
 		});
 
 		// Wait for either task to complete
 		tokio::select! {
 			_ = pubsub_to_ws => {
-				info!("pubsub to WebSocket task completed");
+				tracing::info!("pubsub to WebSocket task completed");
 			}
 			_ = ws_to_pubsub => {
-				info!("WebSocket to pubsub task completed");
+				tracing::info!("WebSocket to pubsub task completed");
 			}
 		}
 
 		// Clean up
-		connections.write().await.remove(&connection_id);
-		info!(?runner_id, "connection closed");
+		tracing::info!(?runner_key, "connection closed");
 
 		std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(())
 	}
 }
 
-// Keep the old start function for backward compatibility in tests
-pub async fn start(config: rivet_config::Config, pools: Pools) -> Result<()> {
-	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
-	let ctx = StandaloneCtx::new(
-		gas::db::DatabaseKv::from_pools(pools.clone()).await?,
-		config.clone(),
-		pools.clone(),
-		cache,
-		"pegboard-tunnel",
-		Id::new_v1(config.dc_label()),
-		Id::new_v1(config.dc_label()),
-	)?;
-
-	main_loop(ctx).await
-}
-
-async fn main_loop(ctx: gas::prelude::StandaloneCtx) -> Result<()> {
-	let connections: Connections = Arc::new(RwLock::new(HashMap::new()));
-
-	// Start WebSocket server
-	// Use pegboard config since pegboard_tunnel doesn't exist
-	let server_addr = SocketAddr::new(
-		ctx.config().pegboard().host(),
-		ctx.config().pegboard().port(),
-	);
-
-	info!(?server_addr, "starting pegboard-tunnel");
-
-	let listener = TcpListener::bind(&server_addr).await?;
-
-	// Accept connections
-	loop {
-		let (tcp_stream, addr) = listener.accept().await?;
-		let connections = connections.clone();
-		let ctx = ctx.clone();
-
-		tokio::spawn(async move {
-			if let Err(e) = handle_connection(ctx, tcp_stream, addr, connections).await {
-				error!(?e, ?addr, "connection handler error");
-			}
-		});
+fn is_message_kind_request_close(kind: &MessageKind) -> bool {
+	match kind {
+		// HTTP terminal states
+		MessageKind::ToClientResponseStart(resp) => !resp.stream,
+		MessageKind::ToClientResponseChunk(chunk) => chunk.finish,
+		MessageKind::ToClientResponseAbort => true,
+		// WebSocket terminal states (either side closes)
+		MessageKind::ToClientWebSocketClose(_) => true,
+		MessageKind::ToServerWebSocketClose(_) => true,
+		_ => false,
 	}
-}
-
-async fn handle_connection(
-	ctx: gas::prelude::StandaloneCtx,
-	tcp_stream: tokio::net::TcpStream,
-	addr: std::net::SocketAddr,
-	connections: Connections,
-) -> Result<()> {
-	info!(?addr, "new connection");
-
-	// Parse WebSocket upgrade request
-	let ws_stream = accept_async(tcp_stream).await?;
-
-	// For now, we'll expect the runner to send an initial message with its ID
-	// In production, this would be parsed from the URL path or headers
-	let runner_id = rivet_util::Id::nil(); // Placeholder - should be extracted from connection
-	let port_name = "default".to_string(); // Placeholder - should be extracted
-
-	let connection_id = rivet_util::Id::nil();
-
-	// Subscribe to pubsub topic for this runner using raw pubsub client
-	let topic = TunnelHttpRunnerSubject::new(runner_id, &port_name).to_string();
-	info!(%topic, ?runner_id, "subscribing to pubsub topic");
-
-	// Get UPS (UniversalPubSub) client
-	let ups = ctx.pools().ups()?;
-	let mut sub = ups.subscribe(&topic).await?;
-
-	// Split WebSocket stream into read and write halves
-	let (ws_write, mut ws_read) = ws_stream.split();
-	let ws_write = Arc::new(Mutex::new(ws_write));
-
-	// Store connection
-	let connection = Arc::new(RunnerConnection {
-		_runner_id: runner_id,
-		_port_name: port_name.clone(),
-	});
-
-	connections
-		.write()
-		.await
-		.insert(connection_id, connection.clone());
-
-	// Handle bidirectional message forwarding
-	let ws_write_clone = ws_write.clone();
-	let connections_clone = connections.clone();
-	let ups_clone = ups.clone();
-
-	// Task for forwarding pubsub -> WebSocket
-	let pubsub_to_ws = tokio::spawn(async move {
-		while let ::std::result::Result::Ok(NextOutput::Message(msg)) = sub.next().await {
-			// Ack message
-			match msg.reply(&[]).await {
-				Result::Ok(_) => {}
-				Err(err) => {
-					tracing::warn!(?err, "failed to ack gateway request response message")
-				}
-			};
-
-			// Forward raw message to WebSocket
-			let ws_msg =
-				tokio_tungstenite::tungstenite::Message::Binary(msg.payload.to_vec().into());
-			{
-				let mut stream = ws_write_clone.lock().await;
-				if let Err(e) = stream.send(ws_msg).await {
-					error!(?e, "failed to send message to WebSocket");
-					break;
-				}
-			}
-		}
-	});
-
-	// Task for forwarding WebSocket -> pubsub
-	let ws_write_ws_to_pubsub = ws_write.clone();
-	let ws_to_pubsub = tokio::spawn(async move {
-		while let Some(msg) = ws_read.next().await {
-			match msg {
-				::std::result::Result::Ok(tokio_tungstenite::tungstenite::Message::Binary(
-					data,
-				)) => {
-					// Parse the tunnel message to extract request_id
-					match versioned::TunnelMessage::deserialize(&data) {
-						::std::result::Result::Ok(tunnel_msg) => {
-							// Handle different message types
-							match &tunnel_msg.body {
-								MessageBody::ToClientResponseStart(resp) => {
-									let response_topic = TunnelHttpResponseSubject::new(
-										runner_id,
-										&port_name,
-										resp.request_id,
-									)
-									.to_string();
-
-									if let Err(e) = ups_clone
-										.request_with_timeout(
-											&response_topic,
-											&data.to_vec(),
-											UPS_REQ_TIMEOUT,
-										)
-										.await
-									{
-										let err_any: anyhow::Error = e.into();
-										if is_tunnel_closed_error(&err_any) {
-											info!(
-												"tunnel closed while publishing HTTP response; closing client websocket"
-											);
-											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
-												.await;
-											break;
-										} else {
-											error!(?err_any, ?resp.request_id, "failed to publish HTTP response to pubsub");
-										}
-									}
-								}
-								MessageBody::ToClientWebSocketMessage(ws_msg) => {
-									let ws_topic = TunnelHttpWebSocketSubject::new(
-										runner_id,
-										&port_name,
-										ws_msg.web_socket_id,
-									)
-									.to_string();
-
-									if let Err(e) = ups_clone
-										.request_with_timeout(
-											&ws_topic,
-											&data.to_vec(),
-											UPS_REQ_TIMEOUT,
-										)
-										.await
-									{
-										let err_any: anyhow::Error = e.into();
-										if is_tunnel_closed_error(&err_any) {
-											info!(
-												"tunnel closed while publishing WebSocket message; closing client websocket"
-											);
-											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
-												.await;
-											break;
-										} else {
-											error!(?err_any, ?ws_msg.web_socket_id, "failed to publish WebSocket message to pubsub");
-										}
-									}
-								}
-								MessageBody::ToClientWebSocketOpen(ws_open) => {
-									let ws_topic = TunnelHttpWebSocketSubject::new(
-										runner_id,
-										&port_name,
-										ws_open.web_socket_id,
-									)
-									.to_string();
-
-									if let Err(e) = ups_clone
-										.request_with_timeout(
-											&ws_topic,
-											&data.to_vec(),
-											UPS_REQ_TIMEOUT,
-										)
-										.await
-									{
-										let err_any: anyhow::Error = e.into();
-										if is_tunnel_closed_error(&err_any) {
-											info!(
-												"tunnel closed while publishing WebSocket open; closing client websocket"
-											);
-											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
-												.await;
-											break;
-										} else {
-											error!(?err_any, ?ws_open.web_socket_id, "failed to publish WebSocket open to pubsub");
-										}
-									}
-								}
-								MessageBody::ToClientWebSocketClose(ws_close) => {
-									let ws_topic = TunnelHttpWebSocketSubject::new(
-										runner_id,
-										&port_name,
-										ws_close.web_socket_id,
-									)
-									.to_string();
-
-									if let Err(e) = ups_clone
-										.request_with_timeout(
-											&ws_topic,
-											&data.to_vec(),
-											UPS_REQ_TIMEOUT,
-										)
-										.await
-									{
-										let err_any: anyhow::Error = e.into();
-										if is_tunnel_closed_error(&err_any) {
-											info!(
-												"tunnel closed while publishing WebSocket close; closing client websocket"
-											);
-											// Close client websocket with reason
-											send_tunnel_closed_close_tokio(&ws_write_ws_to_pubsub)
-												.await;
-											break;
-										} else {
-											error!(?err_any, ?ws_close.web_socket_id, "failed to publish WebSocket close to pubsub");
-										}
-									}
-								}
-								_ => {
-									// For other message types, we might not need to forward to pubsub
-									info!(
-										"Received non-response message from WebSocket, skipping pubsub forward"
-									);
-									continue;
-								}
-							}
-						}
-						::std::result::Result::Err(e) => {
-							error!(?e, "failed to deserialize tunnel message from WebSocket");
-						}
-					}
-				}
-				::std::result::Result::Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
-					info!(?runner_id, "WebSocket closed");
-					break;
-				}
-				::std::result::Result::Ok(_) => {
-					// Ignore other message types
-				}
-				Err(e) => {
-					error!(?e, "WebSocket error");
-					break;
-				}
-			}
-		}
-
-		// Clean up connection
-		connections_clone.write().await.remove(&connection_id);
-	});
-
-	// Wait for either task to complete
-	tokio::select! {
-		_ = pubsub_to_ws => {
-			info!("pubsub to WebSocket task completed");
-		}
-		_ = ws_to_pubsub => {
-			info!("WebSocket to pubsub task completed");
-		}
-	}
-
-	// Clean up
-	connections.write().await.remove(&connection_id);
-	info!(?runner_id, "connection closed");
-
-	Ok(())
-}
-
-/// Determines if the tunnel is closed by if the UPS service is no longer responding.
-fn is_tunnel_closed_error(err: &anyhow::Error) -> bool {
-	if let Some(err) = err
-		.chain()
-		.find_map(|x| x.downcast_ref::<rivet_error::RivetError>())
-		&& err.group() == "ups"
-		&& err.code() == "request_timeout"
-	{
-		true
-	} else {
-		false
-	}
-}
-
-// Helper: Build and send a standard tunnel-closed Close frame (hyper-tungstenite)
-fn tunnel_closed_close_msg_hyper() -> WsMessage {
-	WsMessage::Close(Some(WsCloseFrame {
-		code: WsCloseCode::Error,
-		reason: WsUtf8Bytes::from_static("Tunnel closed"),
-	}))
-}
-
-// Helper: Build and send a standard tunnel-closed Close frame (tokio-tungstenite)
-fn tunnel_closed_close_msg_tokio() -> tokio_tungstenite::tungstenite::Message {
-	tokio_tungstenite::tungstenite::Message::Close(Some(
-		tokio_tungstenite::tungstenite::protocol::frame::CloseFrame {
-			code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-			reason: tokio_tungstenite::tungstenite::Utf8Bytes::from_static("Tunnel closed"),
-		},
-	))
-}
-
-// Helper: Send the tunnel-closed Close frame on a hyper-tungstenite sink
-async fn send_tunnel_closed_close_hyper<S>(ws_write: &tokio::sync::Mutex<S>)
-where
-	S: futures::Sink<WsMessage> + Unpin,
-{
-	let mut stream = ws_write.lock().await;
-	let _ = stream.send(tunnel_closed_close_msg_hyper()).await;
-}
-
-// Helper: Send the tunnel-closed Close frame on a tokio-tungstenite sink
-async fn send_tunnel_closed_close_tokio<S>(ws_write: &tokio::sync::Mutex<S>)
-where
-	S: futures::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
-{
-	let mut stream = ws_write.lock().await;
-	let _ = stream.send(tunnel_closed_close_msg_tokio()).await;
 }

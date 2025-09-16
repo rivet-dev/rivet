@@ -2,7 +2,7 @@
 // Implements a subset of the WebSocket interface for compatibility with runner code
 
 export class WebSocketTunnelAdapter {
-	#webSocketId: bigint;
+	#webSocketId: string;
 	#readyState: number = 0; // CONNECTING
 	#eventListeners: Map<string, Set<(event: any) => void>> = new Map();
 	#onopen: ((this: any, ev: any) => any) | null = null;
@@ -24,7 +24,7 @@ export class WebSocketTunnelAdapter {
 	}> = [];
 
 	constructor(
-		webSocketId: bigint,
+		webSocketId: string,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
 		closeCallback: (code?: number, reason?: string) => void
 	) {

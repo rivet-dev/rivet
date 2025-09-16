@@ -14,12 +14,14 @@ gas.workspace = true
 http-body-util.workspace = true
 hyper = "1.6"
 hyper-tungstenite.workspace = true
-pegboard = { path = "../../services/pegboard" }
+pegboard.workspace = true
 rand.workspace = true
 rivet-error.workspace = true
-rivet-guard-core = { path = "../guard/core" }
+rivet-guard-core.workspace = true
 rivet-tunnel-protocol.workspace = true
 rivet-util.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
 universalpubsub.workspace = true
+versioned-data-util.workspace = true
+thiserror.workspace = true

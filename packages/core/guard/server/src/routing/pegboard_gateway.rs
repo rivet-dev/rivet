@@ -6,7 +6,7 @@ use hyper::header::HeaderName;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
 use udb_util::{SERIALIZABLE, TxnExt};
 
-use crate::errors;
+use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
@@ -16,6 +16,7 @@ pub const X_RIVET_PORT: HeaderName = HeaderName::from_static("x-rivet-port");
 #[tracing::instrument(skip_all)]
 pub async fn route_request(
 	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
 	target: &str,
 	_host: &str,
 	path: &str,
@@ -73,7 +74,7 @@ pub async fn route_request(
 	let port_name = port_name.to_str()?;
 
 	// Lookup actor
-	find_actor(ctx, actor_id, port_name, path).await
+	find_actor(ctx, shared_state, actor_id, port_name, path).await
 }
 
 struct FoundActor {
@@ -86,6 +87,7 @@ struct FoundActor {
 #[tracing::instrument(skip_all, fields(%actor_id, %port_name, %path))]
 async fn find_actor(
 	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
 	actor_id: Id,
 	port_name: &str,
 	path: &str,
@@ -158,10 +160,10 @@ async fn find_actor(
 		actor_ids: vec![actor_id],
 	});
 	let res = tokio::time::timeout(Duration::from_secs(5), get_runner_fut).await??;
-	let runner_info = res.actors.into_iter().next().filter(|x| x.is_connectable);
+	let actor = res.actors.into_iter().next().filter(|x| x.is_connectable);
 
-	let runner_id = if let Some(runner_info) = runner_info {
-		runner_info.runner_id
+	let runner_id = if let Some(actor) = actor {
+		actor.runner_id
 	} else {
 		tracing::info!(?actor_id, "waiting for actor to become ready");
 
@@ -185,11 +187,23 @@ async fn find_actor(
 
 	tracing::debug!(?actor_id, ?runner_id, "actor ready");
 
+	// Get runner key from runner_id
+	let runner_key = ctx
+		.udb()?
+		.run(|tx, _mc| async move {
+			let txs = tx.subspace(pegboard::keys::subspace());
+			let key_key = pegboard::keys::runner::KeyKey::new(runner_id);
+			txs.read_opt(&key_key, SERIALIZABLE).await
+		})
+		.await?
+		.context("runner key not found")?;
+
 	// Return pegboard-gateway instance
 	let gateway = pegboard_gateway::PegboardGateway::new(
 		ctx.clone(),
+		shared_state.pegboard_gateway.clone(),
 		actor_id,
-		runner_id,
+		runner_key,
 		port_name.to_string(),
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(

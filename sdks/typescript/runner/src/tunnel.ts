@@ -1,162 +1,269 @@
 import WebSocket from "ws";
 import * as tunnel from "@rivetkit/engine-tunnel-protocol";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter.js";
-import { calculateBackoff } from "./utils.js";
+import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import { calculateBackoff } from "./utils";
+import type { Runner, ActorInstance } from "./mod";
+import { v4 as uuidv4 } from "uuid";
+
+const GC_INTERVAL = 60000; // 60 seconds
+const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
+
+interface PendingRequest {
+	resolve: (response: Response) => void;
+	reject: (error: Error) => void;
+	streamController?: ReadableStreamDefaultController<Uint8Array>;
+	actorId?: string;
+}
+
+interface TunnelCallbacks {
+	onConnected(): void;
+	onDisconnected(): void;
+}
+
+interface PendingMessage {
+	sentAt: number;
+	requestIdStr: string;
+}
 
 export class Tunnel {
 	#pegboardTunnelUrl: string;
-	#ws?: WebSocket;
-	#pendingRequests: Map<bigint, {
-		resolve: (response: Response) => void;
-		reject: (error: Error) => void;
-		streamController?: ReadableStreamDefaultController<Uint8Array>;
-		actorId?: string;
-	}> = new Map();
-	#webSockets: Map<bigint, WebSocketTunnelAdapter> = new Map();
+
+	#runner: Runner;
+
+	#tunnelWs?: WebSocket;
 	#shutdown = false;
 	#reconnectTimeout?: NodeJS.Timeout;
 	#reconnectAttempt = 0;
-	
-	// Track actors and their connections
-	#activeActors: Set<string> = new Set();
-	#actorRequests: Map<string, Set<bigint>> = new Map();
-	#actorWebSockets: Map<string, Set<bigint>> = new Map();
-	
-	// Callbacks
-	#onConnected?: () => void;
-	#onDisconnected?: () => void;
-	#fetchHandler?: (actorId: string, request: Request) => Promise<Response>;
-	#websocketHandler?: (actorId: string, ws: any, request: Request) => Promise<void>;
 
-	constructor(pegboardTunnelUrl: string) {
+	#actorPendingRequests: Map<string, PendingRequest> = new Map();
+	#actorWebSockets: Map<string, WebSocketTunnelAdapter> = new Map();
+
+	#pendingMessages: Map<string, PendingMessage> = new Map();
+	#gcInterval?: NodeJS.Timeout;
+
+	#callbacks: TunnelCallbacks;
+
+	constructor(
+		runner: Runner,
+		pegboardTunnelUrl: string,
+		callbacks: TunnelCallbacks,
+	) {
 		this.#pegboardTunnelUrl = pegboardTunnelUrl;
-	}
-
-	setCallbacks(options: {
-		onConnected?: () => void;
-		onDisconnected?: () => void;
-		fetch?: (actorId: string, request: Request) => Promise<Response>;
-		websocket?: (actorId: string, ws: any, request: Request) => Promise<void>;
-	}) {
-		this.#onConnected = options.onConnected;
-		this.#onDisconnected = options.onDisconnected;
-		this.#fetchHandler = options.fetch;
-		this.#websocketHandler = options.websocket;
+		this.#runner = runner;
+		this.#callbacks = callbacks;
 	}
 
 	start(): void {
-		if (this.#ws?.readyState === WebSocket.OPEN) {
+		if (this.#tunnelWs?.readyState === WebSocket.OPEN) {
 			return;
 		}
-		
+
 		this.#connect();
+		this.#startGarbageCollector();
 	}
 
 	shutdown() {
 		this.#shutdown = true;
-		
+
 		if (this.#reconnectTimeout) {
 			clearTimeout(this.#reconnectTimeout);
 			this.#reconnectTimeout = undefined;
 		}
 
-		if (this.#ws) {
-			this.#ws.close();
-			this.#ws = undefined;
+		if (this.#gcInterval) {
+			clearInterval(this.#gcInterval);
+			this.#gcInterval = undefined;
 		}
+
+		if (this.#tunnelWs) {
+			this.#tunnelWs.close();
+			this.#tunnelWs = undefined;
+		}
+
+		// TODO: Should we use unregisterActor instead
 
 		// Reject all pending requests
-		for (const [_, request] of this.#pendingRequests) {
+		for (const [_, request] of this.#actorPendingRequests) {
 			request.reject(new Error("Tunnel shutting down"));
 		}
-		this.#pendingRequests.clear();
+		this.#actorPendingRequests.clear();
 
 		// Close all WebSockets
-		for (const [_, ws] of this.#webSockets) {
+		for (const [_, ws] of this.#actorWebSockets) {
 			ws.close();
 		}
-		this.#webSockets.clear();
-		
-		// Clear actor tracking
-		this.#activeActors.clear();
-		this.#actorRequests.clear();
 		this.#actorWebSockets.clear();
 	}
 
-	registerActor(actorId: string) {
-		this.#activeActors.add(actorId);
-		this.#actorRequests.set(actorId, new Set());
-		this.#actorWebSockets.set(actorId, new Set());
+	#sendMessage(requestId: tunnel.RequestId, messageKind: tunnel.MessageKind) {
+		if (!this.#tunnelWs || this.#tunnelWs.readyState !== WebSocket.OPEN) {
+			console.warn("Cannot send tunnel message, WebSocket not connected");
+			return;
+		}
+
+		// Build message
+		const messageId = generateUuidBuffer();
+
+		const requestIdStr = bufferToString(requestId);
+		this.#pendingMessages.set(bufferToString(messageId), {
+			sentAt: Date.now(),
+			requestIdStr,
+		});
+
+		// Send message
+		const message: tunnel.RunnerMessage = {
+			requestId,
+			messageId,
+			messageKind,
+		};
+
+		const encoded = tunnel.encodeRunnerMessage(message);
+		this.#tunnelWs.send(encoded);
 	}
 
-	unregisterActor(actorId: string) {
-		this.#activeActors.delete(actorId);
-		
+	#sendAck(requestId: tunnel.RequestId, messageId: tunnel.MessageId) {
+		if (!this.#tunnelWs || this.#tunnelWs.readyState !== WebSocket.OPEN) {
+			return;
+		}
+
+		const message: tunnel.RunnerMessage = {
+			requestId,
+			messageId,
+			messageKind: { tag: "Ack", val: null },
+		};
+
+		const encoded = tunnel.encodeRunnerMessage(message);
+		this.#tunnelWs.send(encoded);
+	}
+
+	#startGarbageCollector() {
+		if (this.#gcInterval) {
+			clearInterval(this.#gcInterval);
+		}
+
+		this.#gcInterval = setInterval(() => {
+			this.#gc();
+		}, GC_INTERVAL);
+	}
+
+	#gc() {
+		const now = Date.now();
+		const messagesToDelete: string[] = [];
+
+		for (const [messageId, pendingMessage] of this.#pendingMessages) {
+			// Check if message is older than timeout
+			if (
+				now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT
+			) {
+				messagesToDelete.push(messageId);
+
+				const requestIdStr = pendingMessage.requestIdStr;
+
+				// Check if this is an HTTP request
+				const pendingRequest =
+					this.#actorPendingRequests.get(requestIdStr);
+				if (pendingRequest) {
+					// Reject the pending HTTP request
+					pendingRequest.reject(
+						new Error("Message acknowledgment timeout"),
+					);
+
+					// Close stream controller if it exists
+					if (pendingRequest.streamController) {
+						pendingRequest.streamController.error(
+							new Error("Message acknowledgment timeout"),
+						);
+					}
+
+					// Clean up from actorPendingRequests map
+					this.#actorPendingRequests.delete(requestIdStr);
+				}
+
+				// Check if this is a WebSocket
+				const webSocket = this.#actorWebSockets.get(requestIdStr);
+				if (webSocket) {
+					// Close the WebSocket connection
+					webSocket.close(1000, "Message acknowledgment timeout");
+
+					// Clean up from actorWebSockets map
+					this.#actorWebSockets.delete(requestIdStr);
+				}
+			}
+		}
+
+		// Remove timed out messages
+		for (const messageId of messagesToDelete) {
+			this.#pendingMessages.delete(messageId);
+			console.warn(`Purged unacked message: ${messageId}`);
+		}
+	}
+
+	unregisterActor(actor: ActorInstance) {
+		const actorId = actor.actorId;
+
 		// Terminate all requests for this actor
-		const requests = this.#actorRequests.get(actorId);
-		if (requests) {
-			for (const requestId of requests) {
-				const pending = this.#pendingRequests.get(requestId);
-				if (pending) {
-					pending.reject(new Error(`Actor ${actorId} stopped`));
-					this.#pendingRequests.delete(requestId);
-				}
+		for (const requestId of actor.requests) {
+			const pending = this.#actorPendingRequests.get(requestId);
+			if (pending) {
+				pending.reject(new Error(`Actor ${actorId} stopped`));
+				this.#actorPendingRequests.delete(requestId);
 			}
-			this.#actorRequests.delete(actorId);
 		}
-		
+		actor.requests.clear();
+
 		// Close all WebSockets for this actor
-		const webSockets = this.#actorWebSockets.get(actorId);
-		if (webSockets) {
-			for (const webSocketId of webSockets) {
-				const ws = this.#webSockets.get(webSocketId);
-				if (ws) {
-					ws.close(1000, "Actor stopped");
-					this.#webSockets.delete(webSocketId);
-				}
+		for (const webSocketId of actor.webSockets) {
+			const ws = this.#actorWebSockets.get(webSocketId);
+			if (ws) {
+				ws.close(1000, "Actor stopped");
+				this.#actorWebSockets.delete(webSocketId);
 			}
-			this.#actorWebSockets.delete(actorId);
 		}
+		actor.webSockets.clear();
 	}
 
 	async #fetch(actorId: string, request: Request): Promise<Response> {
 		// Validate actor exists
-		if (!this.#activeActors.has(actorId)) {
-			console.warn(`[TUNNEL] Ignoring request for unknown actor: ${actorId}`);
+		if (!this.#runner.hasActor(actorId)) {
+			console.warn(
+				`[TUNNEL] Ignoring request for unknown actor: ${actorId}`,
+			);
 			return new Response("Actor not found", { status: 404 });
 		}
-		
-		if (!this.#fetchHandler) {
+
+		const fetchHandler = this.#runner.config.fetch(actorId, request);
+
+		if (!fetchHandler) {
 			return new Response("Not Implemented", { status: 501 });
 		}
-		
-		return this.#fetchHandler(actorId, request);
+
+		return fetchHandler;
 	}
 
 	#connect() {
 		if (this.#shutdown) return;
 
 		try {
-			this.#ws = new WebSocket(this.#pegboardTunnelUrl, {
+			this.#tunnelWs = new WebSocket(this.#pegboardTunnelUrl, {
 				headers: {
 					"x-rivet-target": "tunnel",
 				},
 			});
 
-			this.#ws.binaryType = "arraybuffer";
+			this.#tunnelWs.binaryType = "arraybuffer";
 
-			this.#ws.addEventListener("open", () => {
+			this.#tunnelWs.addEventListener("open", () => {
 				this.#reconnectAttempt = 0;
-				
+
 				if (this.#reconnectTimeout) {
 					clearTimeout(this.#reconnectTimeout);
 					this.#reconnectTimeout = undefined;
 				}
 
-				this.#onConnected?.();
+				this.#callbacks.onConnected();
 			});
 
-			this.#ws.addEventListener("message", async (event) => {
+			this.#tunnelWs.addEventListener("message", async (event) => {
 				try {
 					await this.#handleMessage(event.data as ArrayBuffer);
 				} catch (error) {
@@ -164,12 +271,12 @@ export class Tunnel {
 				}
 			});
 
-			this.#ws.addEventListener("error", (event) => {
+			this.#tunnelWs.addEventListener("error", (event) => {
 				console.error("Tunnel WebSocket error:", event);
 			});
 
-			this.#ws.addEventListener("close", () => {
-				this.#onDisconnected?.();
+			this.#tunnelWs.addEventListener("close", () => {
+				this.#callbacks.onDisconnected();
 
 				if (!this.#shutdown) {
 					this.#scheduleReconnect();
@@ -192,9 +299,8 @@ export class Tunnel {
 			multiplier: 2,
 			jitter: true,
 		});
-		
-		this.#reconnectAttempt++;
 
+		this.#reconnectAttempt++;
 
 		this.#reconnectTimeout = setTimeout(() => {
 			this.#connect();
@@ -202,53 +308,97 @@ export class Tunnel {
 	}
 
 	async #handleMessage(data: ArrayBuffer) {
-		const message = tunnel.decodeTunnelMessage(new Uint8Array(data));
-		
-		switch (message.body.tag) {
-			case "ToServerRequestStart":
-				await this.#handleRequestStart(message.body.val);
-				break;
-			case "ToServerRequestChunk":
-				await this.#handleRequestChunk(message.body.val);
-				break;
-			case "ToServerRequestFinish":
-				await this.#handleRequestFinish(message.body.val);
-				break;
-			case "ToServerWebSocketOpen":
-				await this.#handleWebSocketOpen(message.body.val);
-				break;
-			case "ToServerWebSocketMessage":
-				await this.#handleWebSocketMessage(message.body.val);
-				break;
-			case "ToServerWebSocketClose":
-				await this.#handleWebSocketClose(message.body.val);
-				break;
-			case "ToClientResponseStart":
-				this.#handleResponseStart(message.body.val);
-				break;
-			case "ToClientResponseChunk":
-				this.#handleResponseChunk(message.body.val);
-				break;
-			case "ToClientResponseFinish":
-				this.#handleResponseFinish(message.body.val);
-				break;
-			case "ToClientWebSocketOpen":
-				this.#handleWebSocketOpenResponse(message.body.val);
-				break;
-			case "ToClientWebSocketMessage":
-				this.#handleWebSocketMessageResponse(message.body.val);
-				break;
-			case "ToClientWebSocketClose":
-				this.#handleWebSocketCloseResponse(message.body.val);
-				break;
+		const message = tunnel.decodeRunnerMessage(new Uint8Array(data));
+
+		if (message.messageKind.tag === "Ack") {
+			// Mark pending message as acknowledged and remove it
+			const msgIdStr = bufferToString(message.messageId);
+			const pending = this.#pendingMessages.get(msgIdStr);
+			if (pending) {
+				this.#pendingMessages.delete(msgIdStr);
+			}
+		} else {
+			this.#sendAck(message.requestId, message.messageId);
+			switch (message.messageKind.tag) {
+				case "ToServerRequestStart":
+					await this.#handleRequestStart(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToServerRequestChunk":
+					await this.#handleRequestChunk(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToServerRequestAbort":
+					await this.#handleRequestAbort(message.requestId);
+					break;
+				case "ToServerWebSocketOpen":
+					await this.#handleWebSocketOpen(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToServerWebSocketMessage":
+					await this.#handleWebSocketMessage(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToServerWebSocketClose":
+					await this.#handleWebSocketClose(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToClientResponseStart":
+					this.#handleResponseStart(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToClientResponseChunk":
+					this.#handleResponseChunk(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToClientResponseAbort":
+					this.#handleResponseAbort(message.requestId);
+					break;
+				case "ToClientWebSocketOpen":
+					this.#handleWebSocketOpenResponse(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToClientWebSocketMessage":
+					this.#handleWebSocketMessageResponse(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+				case "ToClientWebSocketClose":
+					this.#handleWebSocketCloseResponse(
+						message.requestId,
+						message.messageKind.val,
+					);
+					break;
+			}
 		}
 	}
 
-	async #handleRequestStart(req: tunnel.ToServerRequestStart) {
+	async #handleRequestStart(
+		requestId: ArrayBuffer,
+		req: tunnel.ToServerRequestStart,
+	) {
 		// Track this request for the actor
-		const requests = this.#actorRequests.get(req.actorId);
-		if (requests) {
-			requests.add(req.requestId);
+		const requestIdStr = bufferToString(requestId);
+		const actor = this.#runner.getActor(req.actorId);
+		if (actor) {
+			actor.requests.add(requestIdStr);
 		}
 
 		try {
@@ -271,12 +421,13 @@ export class Tunnel {
 				const stream = new ReadableStream<Uint8Array>({
 					start: (controller) => {
 						// Store controller for chunks
-						const existing = this.#pendingRequests.get(req.requestId);
+						const existing =
+							this.#actorPendingRequests.get(requestIdStr);
 						if (existing) {
 							existing.streamController = controller;
 							existing.actorId = req.actorId;
 						} else {
-							this.#pendingRequests.set(req.requestId, {
+							this.#actorPendingRequests.set(requestIdStr, {
 								resolve: () => {},
 								reject: () => {},
 								streamController: controller,
@@ -293,194 +444,193 @@ export class Tunnel {
 				} as any);
 
 				// Call fetch handler with validation
-				const response = await this.#fetch(req.actorId, streamingRequest);
-				await this.#sendResponse(req.requestId, response);
+				const response = await this.#fetch(
+					req.actorId,
+					streamingRequest,
+				);
+				await this.#sendResponse(requestId, response);
 			} else {
 				// Non-streaming request
 				const response = await this.#fetch(req.actorId, request);
-				await this.#sendResponse(req.requestId, response);
+				await this.#sendResponse(requestId, response);
 			}
 		} catch (error) {
 			console.error("Error handling request:", error);
-			this.#sendResponseError(req.requestId, 500, "Internal Server Error");
+			this.#sendResponseError(requestId, 500, "Internal Server Error");
 		} finally {
 			// Clean up request tracking
-			const requests = this.#actorRequests.get(req.actorId);
-			if (requests) {
-				requests.delete(req.requestId);
+			const actor = this.#runner.getActor(req.actorId);
+			if (actor) {
+				actor.requests.delete(requestIdStr);
 			}
 		}
 	}
 
-	async #handleRequestChunk(chunk: tunnel.ToServerRequestChunk) {
-		const pending = this.#pendingRequests.get(chunk.requestId);
+	async #handleRequestChunk(
+		requestId: ArrayBuffer,
+		chunk: tunnel.ToServerRequestChunk,
+	) {
+		const requestIdStr = bufferToString(requestId);
+		const pending = this.#actorPendingRequests.get(requestIdStr);
 		if (pending?.streamController) {
 			pending.streamController.enqueue(new Uint8Array(chunk.body));
-		}
-	}
-
-	async #handleRequestFinish(finish: tunnel.ToServerRequestFinish) {
-		const pending = this.#pendingRequests.get(finish.requestId);
-		if (pending?.streamController) {
-			if (finish.reason === tunnel.StreamFinishReason.Complete) {
+			if (chunk.finish) {
 				pending.streamController.close();
-			} else {
-				pending.streamController.error(new Error("Request aborted"));
+				this.#actorPendingRequests.delete(requestIdStr);
 			}
 		}
-		this.#pendingRequests.delete(finish.requestId);
 	}
 
-	async #sendResponse(requestId: bigint, response: Response) {
+	async #handleRequestAbort(requestId: ArrayBuffer) {
+		const requestIdStr = bufferToString(requestId);
+		const pending = this.#actorPendingRequests.get(requestIdStr);
+		if (pending?.streamController) {
+			pending.streamController.error(new Error("Request aborted"));
+		}
+		this.#actorPendingRequests.delete(requestIdStr);
+	}
+
+	async #sendResponse(requestId: ArrayBuffer, response: Response) {
 		// Always treat responses as non-streaming for now
 		// In the future, we could detect streaming responses based on:
 		// - Transfer-Encoding: chunked
 		// - Content-Type: text/event-stream
 		// - Explicit stream flag from the handler
-		
+
 		// Read the body first to get the actual content
 		const body = response.body ? await response.arrayBuffer() : null;
-		
+
 		// Convert headers to map and add Content-Length if not present
 		const headers = new Map<string, string>();
 		response.headers.forEach((value, key) => {
 			headers.set(key, value);
 		});
-		
+
 		// Add Content-Length header if we have a body and it's not already set
 		if (body && !headers.has("content-length")) {
 			headers.set("content-length", String(body.byteLength));
 		}
 
 		// Send as non-streaming response
-		this.#send({
-			body: {
-				tag: "ToClientResponseStart",
-				val: {
-					requestId,
-					status: response.status as tunnel.u16,
-					headers,
-					body: body || null,
-					stream: false,
-				},
+		this.#sendMessage(requestId, {
+			tag: "ToClientResponseStart",
+			val: {
+				status: response.status as tunnel.u16,
+				headers,
+				body: body || null,
+				stream: false,
 			},
 		});
 	}
 
-	#sendResponseError(requestId: bigint, status: number, message: string) {
+	#sendResponseError(
+		requestId: ArrayBuffer,
+		status: number,
+		message: string,
+	) {
 		const headers = new Map<string, string>();
 		headers.set("content-type", "text/plain");
 
-		this.#send({
-			body: {
-				tag: "ToClientResponseStart",
-				val: {
-					requestId,
-					status: status as tunnel.u16,
-					headers,
-					body: new TextEncoder().encode(message).buffer as ArrayBuffer,
-					stream: false,
-				},
+		this.#sendMessage(requestId, {
+			tag: "ToClientResponseStart",
+			val: {
+				status: status as tunnel.u16,
+				headers,
+				body: new TextEncoder().encode(message).buffer as ArrayBuffer,
+				stream: false,
 			},
 		});
 	}
 
-	async #handleWebSocketOpen(open: tunnel.ToServerWebSocketOpen) {
+	async #handleWebSocketOpen(
+		requestId: ArrayBuffer,
+		open: tunnel.ToServerWebSocketOpen,
+	) {
+		const webSocketId = bufferToString(requestId);
 		// Validate actor exists
-		if (!this.#activeActors.has(open.actorId)) {
-			console.warn(`Ignoring WebSocket for unknown actor: ${open.actorId}`);
+		const actor = this.#runner.getActor(open.actorId);
+		if (!actor) {
+			console.warn(
+				`Ignoring WebSocket for unknown actor: ${open.actorId}`,
+			);
 			// Send close immediately
-			this.#send({
-				body: {
-					tag: "ToClientWebSocketClose",
-					val: {
-						webSocketId: open.webSocketId,
-						code: 1011,
-						reason: "Actor not found",
-					},
+			this.#sendMessage(requestId, {
+				tag: "ToClientWebSocketClose",
+				val: {
+					code: 1011,
+					reason: "Actor not found",
 				},
 			});
 			return;
 		}
 
-		if (!this.#websocketHandler) {
+		const websocketHandler = this.#runner.config.websocket;
+
+		if (!websocketHandler) {
 			console.error("No websocket handler configured for tunnel");
 			// Send close immediately
-			this.#send({
-				body: {
-					tag: "ToClientWebSocketClose",
-					val: {
-						webSocketId: open.webSocketId,
-						code: 1011,
-						reason: "Not Implemented",
-					},
+			this.#sendMessage(requestId, {
+				tag: "ToClientWebSocketClose",
+				val: {
+					code: 1011,
+					reason: "Not Implemented",
 				},
 			});
 			return;
 		}
 
 		// Track this WebSocket for the actor
-		const webSockets = this.#actorWebSockets.get(open.actorId);
-		if (webSockets) {
-			webSockets.add(open.webSocketId);
+		if (actor) {
+			actor.webSockets.add(webSocketId);
 		}
 
 		try {
 			// Create WebSocket adapter
 			const adapter = new WebSocketTunnelAdapter(
-				open.webSocketId,
+				webSocketId,
 				(data: ArrayBuffer | string, isBinary: boolean) => {
 					// Send message through tunnel
-					const dataBuffer = typeof data === "string" 
-						? new TextEncoder().encode(data).buffer as ArrayBuffer
-						: data;
-					
-					this.#send({
-						body: {
-							tag: "ToClientWebSocketMessage",
-							val: {
-								webSocketId: open.webSocketId,
-								data: dataBuffer,
-								binary: isBinary,
-							},
+					const dataBuffer =
+						typeof data === "string"
+							? (new TextEncoder().encode(data)
+									.buffer as ArrayBuffer)
+							: data;
+
+					this.#sendMessage(requestId, {
+						tag: "ToClientWebSocketMessage",
+						val: {
+							data: dataBuffer,
+							binary: isBinary,
 						},
 					});
 				},
 				(code?: number, reason?: string) => {
 					// Send close through tunnel
-					this.#send({
-						body: {
-							tag: "ToClientWebSocketClose",
-							val: {
-								webSocketId: open.webSocketId,
-								code: code || null,
-								reason: reason || null,
-							},
+					this.#sendMessage(requestId, {
+						tag: "ToClientWebSocketClose",
+						val: {
+							code: code || null,
+							reason: reason || null,
 						},
 					});
-					
+
 					// Remove from map
-					this.#webSockets.delete(open.webSocketId);
-					
+					this.#actorWebSockets.delete(webSocketId);
+
 					// Clean up actor tracking
-					const webSockets = this.#actorWebSockets.get(open.actorId);
-					if (webSockets) {
-						webSockets.delete(open.webSocketId);
+					if (actor) {
+						actor.webSockets.delete(webSocketId);
 					}
-				}
+				},
 			);
 
 			// Store adapter
-			this.#webSockets.set(open.webSocketId, adapter);
+			this.#actorWebSockets.set(webSocketId, adapter);
 
 			// Send open confirmation
-			this.#send({
-				body: {
-					tag: "ToClientWebSocketOpen",
-					val: {
-						webSocketId: open.webSocketId,
-					},
-				},
+			this.#sendMessage(requestId, {
+				tag: "ToClientWebSocketOpen",
+				val: null,
 			});
 
 			// Notify adapter that connection is open
@@ -490,7 +640,10 @@ export class Tunnel {
 			// Include original headers from the open message
 			const headerInit: Record<string, string> = {};
 			if (open.headers) {
-				for (const [k, v] of open.headers as ReadonlyMap<string, string>) {
+				for (const [k, v] of open.headers as ReadonlyMap<
+					string,
+					string
+				>) {
 					headerInit[k] = v;
 				}
 			}
@@ -504,55 +657,68 @@ export class Tunnel {
 			});
 
 			// Call websocket handler
-			await this.#websocketHandler(open.actorId, adapter, request);
+			await websocketHandler(open.actorId, adapter, request);
 		} catch (error) {
 			console.error("Error handling WebSocket open:", error);
-			
+
 			// Send close on error
-			this.#send({
-				body: {
-					tag: "ToClientWebSocketClose",
-					val: {
-						webSocketId: open.webSocketId,
-						code: 1011,
-						reason: "Server Error",
-					},
+			this.#sendMessage(requestId, {
+				tag: "ToClientWebSocketClose",
+				val: {
+					code: 1011,
+					reason: "Server Error",
 				},
 			});
-			
-			this.#webSockets.delete(open.webSocketId);
-			
+
+			this.#actorWebSockets.delete(webSocketId);
+
 			// Clean up actor tracking
-			const webSockets = this.#actorWebSockets.get(open.actorId);
-			if (webSockets) {
-				webSockets.delete(open.webSocketId);
+			if (actor) {
+				actor.webSockets.delete(webSocketId);
 			}
 		}
 	}
 
-	async #handleWebSocketMessage(msg: tunnel.ToServerWebSocketMessage) {
-		const adapter = this.#webSockets.get(msg.webSocketId);
+	async #handleWebSocketMessage(
+		requestId: ArrayBuffer,
+		msg: tunnel.ToServerWebSocketMessage,
+	) {
+		const webSocketId = bufferToString(requestId);
+		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
 			const data = msg.binary
 				? new Uint8Array(msg.data)
 				: new TextDecoder().decode(new Uint8Array(msg.data));
-			
+
 			adapter._handleMessage(data, msg.binary);
 		}
 	}
 
-	async #handleWebSocketClose(close: tunnel.ToServerWebSocketClose) {
-		const adapter = this.#webSockets.get(close.webSocketId);
+	async #handleWebSocketClose(
+		requestId: ArrayBuffer,
+		close: tunnel.ToServerWebSocketClose,
+	) {
+		const webSocketId = bufferToString(requestId);
+		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
-			adapter._handleClose(close.code || undefined, close.reason || undefined);
-			this.#webSockets.delete(close.webSocketId);
+			adapter._handleClose(
+				close.code || undefined,
+				close.reason || undefined,
+			);
+			this.#actorWebSockets.delete(webSocketId);
 		}
 	}
 
-	#handleResponseStart(resp: tunnel.ToClientResponseStart) {
-		const pending = this.#pendingRequests.get(resp.requestId);
+	#handleResponseStart(
+		requestId: ArrayBuffer,
+		resp: tunnel.ToClientResponseStart,
+	) {
+		const requestIdStr = bufferToString(requestId);
+		const pending = this.#actorPendingRequests.get(requestIdStr);
 		if (!pending) {
-			console.warn(`Received response for unknown request ${resp.requestId}`);
+			console.warn(
+				`Received response for unknown request ${requestIdStr}`,
+			);
 			return;
 		}
 
@@ -585,62 +751,84 @@ export class Tunnel {
 			});
 
 			pending.resolve(response);
-			this.#pendingRequests.delete(resp.requestId);
+			this.#actorPendingRequests.delete(requestIdStr);
 		}
 	}
 
-	#handleResponseChunk(chunk: tunnel.ToClientResponseChunk) {
-		const pending = this.#pendingRequests.get(chunk.requestId);
+	#handleResponseChunk(
+		requestId: ArrayBuffer,
+		chunk: tunnel.ToClientResponseChunk,
+	) {
+		const requestIdStr = bufferToString(requestId);
+		const pending = this.#actorPendingRequests.get(requestIdStr);
 		if (pending?.streamController) {
 			pending.streamController.enqueue(new Uint8Array(chunk.body));
-		}
-	}
-
-	#handleResponseFinish(finish: tunnel.ToClientResponseFinish) {
-		const pending = this.#pendingRequests.get(finish.requestId);
-		if (pending?.streamController) {
-			if (finish.reason === tunnel.StreamFinishReason.Complete) {
+			if (chunk.finish) {
 				pending.streamController.close();
-			} else {
-				pending.streamController.error(new Error("Response aborted"));
+				this.#actorPendingRequests.delete(requestIdStr);
 			}
 		}
-		this.#pendingRequests.delete(finish.requestId);
 	}
 
-	#handleWebSocketOpenResponse(open: tunnel.ToClientWebSocketOpen) {
-		const adapter = this.#webSockets.get(open.webSocketId);
+	#handleResponseAbort(requestId: ArrayBuffer) {
+		const requestIdStr = bufferToString(requestId);
+		const pending = this.#actorPendingRequests.get(requestIdStr);
+		if (pending?.streamController) {
+			pending.streamController.error(new Error("Response aborted"));
+		}
+		this.#actorPendingRequests.delete(requestIdStr);
+	}
+
+	#handleWebSocketOpenResponse(
+		requestId: ArrayBuffer,
+		open: tunnel.ToClientWebSocketOpen,
+	) {
+		const webSocketId = bufferToString(requestId);
+		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
 			adapter._handleOpen();
 		}
 	}
 
-	#handleWebSocketMessageResponse(msg: tunnel.ToClientWebSocketMessage) {
-		const adapter = this.#webSockets.get(msg.webSocketId);
+	#handleWebSocketMessageResponse(
+		requestId: ArrayBuffer,
+		msg: tunnel.ToClientWebSocketMessage,
+	) {
+		const webSocketId = bufferToString(requestId);
+		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
 			const data = msg.binary
 				? new Uint8Array(msg.data)
 				: new TextDecoder().decode(new Uint8Array(msg.data));
-			
+
 			adapter._handleMessage(data, msg.binary);
 		}
 	}
 
-	#handleWebSocketCloseResponse(close: tunnel.ToClientWebSocketClose) {
-		const adapter = this.#webSockets.get(close.webSocketId);
+	#handleWebSocketCloseResponse(
+		requestId: ArrayBuffer,
+		close: tunnel.ToClientWebSocketClose,
+	) {
+		const webSocketId = bufferToString(requestId);
+		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
-			adapter._handleClose(close.code || undefined, close.reason || undefined);
-			this.#webSockets.delete(close.webSocketId);
+			adapter._handleClose(
+				close.code || undefined,
+				close.reason || undefined,
+			);
+			this.#actorWebSockets.delete(webSocketId);
 		}
 	}
+}
 
-	#send(message: tunnel.TunnelMessage) {
-		if (!this.#ws || this.#ws.readyState !== WebSocket.OPEN) {
-			console.warn("Cannot send tunnel message, WebSocket not connected");
-			return;
-		}
+/** Converts a buffer to a string. Used for storing strings in a lookup map. */
+function bufferToString(buffer: ArrayBuffer): string {
+	return Buffer.from(buffer).toString("base64");
+}
 
-		const encoded = tunnel.encodeTunnelMessage(message);
-		this.#ws.send(encoded);
-	}
+/** Generates a UUID as bytes. */
+function generateUuidBuffer(): ArrayBuffer {
+	const buffer = new Uint8Array(16);
+	uuidv4(undefined, buffer);
+	return buffer.buffer;
 }

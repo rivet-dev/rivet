@@ -4,56 +4,48 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, body::Incoming as BodyIncoming};
+use hyper::{Request, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
-use pegboard::pubsub_subjects::{
-	TunnelHttpResponseSubject, TunnelHttpRunnerSubject, TunnelHttpWebSocketSubject,
-};
-use rivet_error::*;
 use rivet_guard_core::{
 	custom_serve::CustomServeTrait,
 	proxy_service::{ResponseBody, X_RIVET_ERROR},
 	request_context::RequestContext,
 };
 use rivet_tunnel_protocol::{
-	MessageBody, StreamFinishReason, ToServerRequestFinish, ToServerRequestStart,
-	ToServerWebSocketClose, ToServerWebSocketMessage, ToServerWebSocketOpen, TunnelMessage,
-	versioned,
+	MessageKind, ToServerRequestStart, ToServerWebSocketClose, ToServerWebSocketMessage,
+	ToServerWebSocketOpen,
 };
 use rivet_util::serde::HashableMap;
-use std::result::Result::Ok as ResultOk;
-use std::{
-	collections::HashMap,
-	sync::{
-		Arc,
-		atomic::{AtomicU64, Ordering},
-	},
-	time::Duration,
-};
-use tokio::{
-	sync::{Mutex, oneshot},
-	time::timeout,
-};
+use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
-use universalpubsub::NextOutput;
+
+use crate::shared_state::{SharedState, TunnelMessageData};
+
+pub mod shared_state;
 
 const UPS_REQ_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct PegboardGateway {
 	ctx: StandaloneCtx,
-	request_counter: AtomicU64,
+	shared_state: SharedState,
 	actor_id: Id,
-	runner_id: Id,
+	runner_key: String,
 	port_name: String,
 }
 
 impl PegboardGateway {
-	pub fn new(ctx: StandaloneCtx, actor_id: Id, runner_id: Id, port_name: String) -> Self {
+	pub fn new(
+		ctx: StandaloneCtx,
+		shared_state: SharedState,
+		actor_id: Id,
+		runner_key: String,
+		port_name: String,
+	) -> Self {
 		Self {
 			ctx,
-			request_counter: AtomicU64::new(0),
+			shared_state,
 			actor_id,
-			runner_id,
+			runner_key,
 			port_name,
 		}
 	}
@@ -70,7 +62,7 @@ impl CustomServeTrait for PegboardGateway {
 		match res {
 			Result::Ok(x) => Ok(x),
 			Err(err) => {
-				if is_tunnel_closed_error(&err) {
+				if is_tunnel_service_unavailable(&err) {
 					// This will force the request to be retried with a new tunnel
 					Ok(Response::builder()
 						.status(StatusCode::SERVICE_UNAVAILABLE)
@@ -96,7 +88,7 @@ impl CustomServeTrait for PegboardGateway {
 		{
 			Result::Ok(()) => std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(()),
 			Result::Err((client_ws, err)) => {
-				if is_tunnel_closed_error(&err) {
+				if is_tunnel_service_unavailable(&err) {
 					Err((
 						client_ws,
 						rivet_guard_core::errors::WebSocketServiceUnavailable.build(),
@@ -124,13 +116,10 @@ impl PegboardGateway {
 			.map_err(|_| anyhow!("invalid x-rivet-actor header"))?
 			.to_string();
 
-		// Generate request ID using atomic counter
-		let request_id = self.request_counter.fetch_add(1, Ordering::SeqCst);
-
 		// Extract request parts
 		let mut headers = HashableMap::new();
 		for (name, value) in req.headers() {
-			if let ResultOk(value_str) = value.to_str() {
+			if let Result::Ok(value_str) = value.to_str() {
 				headers.insert(name.to_string(), value_str.to_string());
 			}
 		}
@@ -149,9 +138,21 @@ impl PegboardGateway {
 			.map_err(|e| anyhow!("failed to read body: {}", e))?
 			.to_bytes();
 
-		// Create tunnel message
-		let request_start = ToServerRequestStart {
-			request_id,
+		// Build subject to publish to
+		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
+			&self.runner_key,
+			&self.port_name,
+		)
+		.to_string();
+
+		// Start listening for request responses
+		let (request_id, mut msg_rx) = self
+			.shared_state
+			.start_in_flight_request(tunnel_subject)
+			.await;
+
+		// Start request
+		let message = MessageKind::ToServerRequestStart(ToServerRequestStart {
 			actor_id: actor_id.clone(),
 			method,
 			path,
@@ -162,117 +163,33 @@ impl PegboardGateway {
 				Some(body_bytes.to_vec())
 			},
 			stream: false,
-		};
+		});
+		self.shared_state.send_message(request_id, message).await?;
 
-		let message = TunnelMessage {
-			body: MessageBody::ToServerRequestStart(request_start),
-		};
+		// Wait for response
+		tracing::info!("starting response handler task");
+		let response_start = loop {
+			let Some(msg) = msg_rx.recv().await else {
+				tracing::warn!("received no message response");
+				return Err(RequestError::ServiceUnavailable.into());
+			};
 
-		// Serialize message
-		let serialized = versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(message))
-			.map_err(|e| anyhow!("failed to serialize message: {}", e))?;
-
-		// Build pubsub topic
-		let tunnel_subject = TunnelHttpRunnerSubject::new(self.runner_id, &self.port_name);
-		let topic = tunnel_subject.to_string();
-
-		tracing::info!(
-			%topic,
-			?self.runner_id,
-			%self.port_name,
-			?request_id,
-			"publishing request to pubsub"
-		);
-
-		// Create response channel
-		let (response_tx, response_rx) = oneshot::channel();
-		let response_map = Arc::new(Mutex::new(HashMap::new()));
-		response_map.lock().await.insert(request_id, response_tx);
-
-		// Subscribe to response topic
-		let response_subject =
-			TunnelHttpResponseSubject::new(self.runner_id, &self.port_name, request_id);
-		let response_topic = response_subject.to_string();
-
-		tracing::info!(
-			?response_topic,
-			?request_id,
-			"subscribing to response topic"
-		);
-
-		let mut subscriber = self.ctx.ups()?.subscribe(&response_topic).await?;
-
-		// Spawn task to handle response
-		let response_map_clone = response_map.clone();
-		tokio::spawn(async move {
-			tracing::info!("starting response handler task");
-			while let ResultOk(NextOutput::Message(msg)) = subscriber.next().await {
-				// Ack message
-				match msg.reply(&[]).await {
-					Result::Ok(_) => {}
-					Err(err) => {
-						tracing::warn!(?err, "failed to ack gateway request response message")
+			match msg {
+				TunnelMessageData::Message(msg) => match msg {
+					MessageKind::ToClientResponseStart(response_start) => {
+						break response_start;
 					}
-				};
-
-				tracing::info!(
-					payload_len = msg.payload.len(),
-					"received response from pubsub"
-				);
-				if let ResultOk(tunnel_msg) = versioned::TunnelMessage::deserialize(&msg.payload) {
-					match tunnel_msg.body {
-						MessageBody::ToClientResponseStart(response_start) => {
-							tracing::info!(request_id = ?response_start.request_id, status = response_start.status, "received response from tunnel");
-							if let Some(tx) = response_map_clone
-								.lock()
-								.await
-								.remove(&response_start.request_id)
-							{
-								tracing::info!(request_id = ?response_start.request_id, "sending response to handler");
-								let _ = tx.send(response_start);
-							} else {
-								tracing::warn!(request_id = ?response_start.request_id, "no handler found for response");
-							}
-						}
-						_ => {
-							tracing::warn!("received non-response message from pubsub");
-						}
+					_ => {
+						tracing::warn!("received non-response message from pubsub");
 					}
-				} else {
-					tracing::error!("failed to deserialize response from pubsub");
+				},
+				TunnelMessageData::Timeout => {
+					tracing::warn!("tunnel message timeout");
+					return Err(RequestError::ServiceUnavailable.into());
 				}
 			}
-			tracing::info!("response handler task ended");
-		});
-
-		// Publish request
-		self.ctx
-			.ups()?
-			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
-			.await
-			.map_err(|e| anyhow!("failed to publish request: {}", e))?;
-
-		// Send finish message
-		let finish_message = TunnelMessage {
-			body: MessageBody::ToServerRequestFinish(ToServerRequestFinish {
-				request_id,
-				reason: StreamFinishReason::Complete,
-			}),
 		};
-		let finish_serialized =
-			versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(finish_message))
-				.map_err(|e| anyhow!("failed to serialize finish message: {}", e))?;
-		self.ctx
-			.ups()?
-			.request_with_timeout(&topic, &finish_serialized, UPS_REQ_TIMEOUT)
-			.await
-			.map_err(|e| anyhow!("failed to publish finish message: {}", e))?;
-
-		// Wait for response with timeout
-		let response_start = match timeout(Duration::from_secs(30), response_rx).await {
-			ResultOk(ResultOk(response)) => response,
-			_ => return Err(anyhow!("request timed out")),
-		};
+		tracing::info!("response handler task ended");
 
 		// Build HTTP response
 		let mut response_builder =
@@ -309,62 +226,69 @@ impl PegboardGateway {
 			Err(err) => return Err((client_ws, err)),
 		};
 
-		// Generate WebSocket ID using atomic counter
-		let websocket_id = self.request_counter.fetch_add(1, Ordering::SeqCst);
-
 		// Extract headers
 		let mut request_headers = HashableMap::new();
 		for (name, value) in headers {
-			if let ResultOk(value_str) = value.to_str() {
+			if let Result::Ok(value_str) = value.to_str() {
 				request_headers.insert(name.to_string(), value_str.to_string());
 			}
 		}
 
-		let ups = match self.ctx.ups() {
-			Result::Ok(u) => u,
-			Err(err) => return Err((client_ws, err.into())),
-		};
+		// Build subject to publish to
+		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
+			&self.runner_key,
+			&self.port_name,
+		)
+		.to_string();
 
-		// Subscribe to messages from server before informing server that a client websocket is connecting to
-		// prevent race conditions.
-		let ws_subject =
-			TunnelHttpWebSocketSubject::new(self.runner_id, &self.port_name, websocket_id);
-		let response_topic = ws_subject.to_string();
-		let mut subscriber = match ups.subscribe(&response_topic).await {
-			Result::Ok(sub) => sub,
-			Err(err) => return Err((client_ws, err.into())),
-		};
-
-		// Build pubsub topic
-		let tunnel_subject = TunnelHttpRunnerSubject::new(self.runner_id, &self.port_name);
-		let topic = tunnel_subject.to_string();
+		// Start listening for WebSocket messages
+		let (request_id, mut msg_rx) = self
+			.shared_state
+			.start_in_flight_request(tunnel_subject.clone())
+			.await;
 
 		// Send WebSocket open message
-		let open_message = TunnelMessage {
-			body: MessageBody::ToServerWebSocketOpen(ToServerWebSocketOpen {
-				actor_id: actor_id.clone(),
-				web_socket_id: websocket_id,
-				path: path.to_string(),
-				headers: request_headers,
-			}),
-		};
+		let open_message = MessageKind::ToServerWebSocketOpen(ToServerWebSocketOpen {
+			actor_id: actor_id.clone(),
+			path: path.to_string(),
+			headers: request_headers,
+		});
 
-		let serialized =
-			match versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(open_message)) {
-				Result::Ok(s) => s,
-				Err(e) => {
-					return Err((
-						client_ws,
-						anyhow!("failed to serialize websocket open: {}", e),
-					));
-				}
-			};
-
-		if let Err(err) = ups
-			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+		if let Err(err) = self
+			.shared_state
+			.send_message(request_id, open_message)
 			.await
 		{
-			return Err((client_ws, err.into()));
+			return Err((client_ws, err));
+		}
+
+		// Wait for WebSocket open acknowledgment
+		let open_ack_received = loop {
+			let Some(msg) = msg_rx.recv().await else {
+				tracing::warn!("received no websocket open response");
+				return Err((client_ws, RequestError::ServiceUnavailable.into()));
+			};
+
+			match msg {
+				TunnelMessageData::Message(MessageKind::ToClientWebSocketOpen) => {
+					break true;
+				}
+				TunnelMessageData::Message(MessageKind::ToClientWebSocketClose(close)) => {
+					tracing::info!(?close, "websocket closed before opening");
+					return Err((client_ws, RequestError::ServiceUnavailable.into()));
+				}
+				TunnelMessageData::Timeout => {
+					tracing::warn!("websocket open timeout");
+					return Err((client_ws, RequestError::ServiceUnavailable.into()));
+				}
+				_ => {
+					tracing::warn!("received unexpected message while waiting for websocket open");
+				}
+			}
+		};
+
+		if !open_ack_received {
+			return Err((client_ws, anyhow!("failed to open websocket")));
 		}
 
 		// Accept the WebSocket
@@ -379,33 +303,30 @@ impl PegboardGateway {
 		let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
 		// Spawn task to forward messages from server to client
+		let mut msg_rx_for_task = msg_rx;
 		tokio::spawn(async move {
-			while let ResultOk(NextOutput::Message(msg)) = subscriber.next().await {
-				// Ack message
-				match msg.reply(&[]).await {
-					Result::Ok(_) => {}
-					Err(err) => {
-						tracing::warn!(?err, "failed to ack gateway websocket message")
-					}
-				};
-
-				if let ResultOk(tunnel_msg) = versioned::TunnelMessage::deserialize(&msg.payload) {
-					match tunnel_msg.body {
-						MessageBody::ToClientWebSocketMessage(ws_msg) => {
-							if ws_msg.web_socket_id == websocket_id {
-								let msg = if ws_msg.binary {
-									Message::Binary(ws_msg.data.into())
-								} else {
-									Message::Text(
-										String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
-									)
-								};
-								let _ = ws_sink.send(msg).await;
-							}
+			while let Some(msg) = msg_rx_for_task.recv().await {
+				match msg {
+					TunnelMessageData::Message(MessageKind::ToClientWebSocketMessage(ws_msg)) => {
+						let msg = if ws_msg.binary {
+							Message::Binary(ws_msg.data.into())
+						} else {
+							Message::Text(String::from_utf8_lossy(&ws_msg.data).into_owned().into())
+						};
+						if let Err(e) = ws_sink.send(msg).await {
+							tracing::warn!(?e, "failed to send websocket message to client");
+							break;
 						}
-						MessageBody::ToClientWebSocketClose(_) => break,
-						_ => {}
 					}
+					TunnelMessageData::Message(MessageKind::ToClientWebSocketClose(close)) => {
+						tracing::info!(?close, "server closed websocket");
+						break;
+					}
+					TunnelMessageData::Timeout => {
+						tracing::warn!("websocket message timeout");
+						break;
+					}
+					_ => {}
 				}
 			}
 		});
@@ -414,25 +335,14 @@ impl PegboardGateway {
 		let mut close_reason = None;
 		while let Some(msg) = ws_stream.next().await {
 			match msg {
-				ResultOk(Message::Binary(data)) => {
-					let ws_message = TunnelMessage {
-						body: MessageBody::ToServerWebSocketMessage(ToServerWebSocketMessage {
-							web_socket_id: websocket_id,
+				Result::Ok(Message::Binary(data)) => {
+					let ws_message =
+						MessageKind::ToServerWebSocketMessage(ToServerWebSocketMessage {
 							data: data.into(),
 							binary: true,
-						}),
-					};
-					let serialized = match versioned::TunnelMessage::serialize(
-						versioned::TunnelMessage::V1(ws_message),
-					) {
-						Result::Ok(s) => s,
-						Err(_) => break,
-					};
-					if let Err(err) = ups
-						.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
-						.await
-					{
-						if is_tunnel_closed_error(&err) {
+						});
+					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
+						if is_tunnel_service_unavailable(&err) {
 							tracing::warn!("tunnel closed sending binary message");
 							close_reason = Some("Tunnel closed".to_string());
 							break;
@@ -441,25 +351,14 @@ impl PegboardGateway {
 						}
 					}
 				}
-				ResultOk(Message::Text(text)) => {
-					let ws_message = TunnelMessage {
-						body: MessageBody::ToServerWebSocketMessage(ToServerWebSocketMessage {
-							web_socket_id: websocket_id,
+				Result::Ok(Message::Text(text)) => {
+					let ws_message =
+						MessageKind::ToServerWebSocketMessage(ToServerWebSocketMessage {
 							data: text.as_bytes().to_vec(),
 							binary: false,
-						}),
-					};
-					let serialized = match versioned::TunnelMessage::serialize(
-						versioned::TunnelMessage::V1(ws_message),
-					) {
-						Result::Ok(s) => s,
-						Err(_) => break,
-					};
-					if let Err(err) = ups
-						.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
-						.await
-					{
-						if is_tunnel_closed_error(&err) {
+						});
+					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
+						if is_tunnel_service_unavailable(&err) {
 							tracing::warn!("tunnel closed sending text message");
 							close_reason = Some("Tunnel closed".to_string());
 							break;
@@ -468,32 +367,23 @@ impl PegboardGateway {
 						}
 					}
 				}
-				ResultOk(Message::Close(_)) | Err(_) => break,
+				Result::Ok(Message::Close(_)) | Err(_) => break,
 				_ => {}
 			}
 		}
 
 		// Send WebSocket close message
-		let close_message = TunnelMessage {
-			body: MessageBody::ToServerWebSocketClose(ToServerWebSocketClose {
-				web_socket_id: websocket_id,
-				code: None,
-				reason: close_reason,
-			}),
-		};
+		let close_message = MessageKind::ToServerWebSocketClose(ToServerWebSocketClose {
+			code: None,
+			reason: close_reason,
+		});
 
-		let serialized = match versioned::TunnelMessage::serialize(versioned::TunnelMessage::V1(
-			close_message,
-		)) {
-			Result::Ok(s) => s,
-			Err(_) => Vec::new(),
-		};
-
-		if let Err(err) = ups
-			.request_with_timeout(&topic, &serialized, UPS_REQ_TIMEOUT)
+		if let Err(err) = self
+			.shared_state
+			.send_message(request_id, close_message)
 			.await
 		{
-			if is_tunnel_closed_error(&err) {
+			if is_tunnel_service_unavailable(&err) {
 				tracing::warn!("tunnel closed sending close message");
 			} else {
 				tracing::error!(?err, "error sending close message");
@@ -504,14 +394,13 @@ impl PegboardGateway {
 	}
 }
 
+#[derive(thiserror::Error, Debug)]
+enum RequestError {
+	#[error("service unavailable")]
+	ServiceUnavailable,
+}
+
 /// Determines if the tunnel is closed by if the UPS service is no longer responding.
-fn is_tunnel_closed_error(err: &anyhow::Error) -> bool {
-	if let Some(err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>())
-		&& err.group() == "ups"
-		&& err.code() == "request_timeout"
-	{
-		true
-	} else {
-		false
-	}
+fn is_tunnel_service_unavailable(err: &anyhow::Error) -> bool {
+	err.chain().any(|x| x.is::<RequestError>())
 }
