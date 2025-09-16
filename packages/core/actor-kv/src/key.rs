@@ -3,7 +3,7 @@ use universaldb::tuple::{
 	Bytes, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset,
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KeyWrapper(pub rp::KvKey);
 
 impl KeyWrapper {

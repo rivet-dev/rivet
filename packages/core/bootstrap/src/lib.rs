@@ -75,7 +75,8 @@ async fn create_default_namespace(ctx: &StandaloneCtx) -> Result<()> {
 		.op(namespace::ops::resolve_for_name_local::Input {
 			name: "default".to_string(),
 		})
-		.await?;
+		.await
+		.context("failed resolving default name")?;
 
 	if existing_namespace.is_none() {
 		// Create namespace

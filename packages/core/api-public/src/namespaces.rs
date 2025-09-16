@@ -137,3 +137,54 @@ async fn create_inner(
 		.await
 	}
 }
+
+#[utoipa::path(
+	put,
+	operation_id = "namespaces_update",
+	path = "/namespaces/{namespace_id}",
+	params(
+		("namespace_id" = Id, Path),
+		UpdateQuery,
+	),
+	request_body(content = UpdateRequest, content_type = "application/json"),
+	responses(
+		(status = 200, body = UpdateResponse),
+	),
+)]
+pub async fn update(
+	Extension(ctx): Extension<ApiCtx>,
+	headers: HeaderMap,
+	Path(path): Path<UpdatePath>,
+	Query(query): Query<UpdateQuery>,
+	Json(body): Json<UpdateRequest>,
+) -> Response {
+	match update_inner(ctx, headers, path, query, body).await {
+		Ok(response) => response,
+		Err(err) => ApiError::from(err).into_response(),
+	}
+}
+
+async fn update_inner(
+	ctx: ApiCtx,
+	headers: HeaderMap,
+	path: UpdatePath,
+	query: UpdateQuery,
+	body: UpdateRequest,
+) -> Result<Response> {
+	if ctx.config().is_leader() {
+		let res = rivet_api_peer::namespaces::update(ctx, path, query, body).await?;
+		Ok(Json(res).into_response())
+	} else {
+		let leader_dc = ctx.config().leader_dc()?;
+		request_remote_datacenter_raw(
+			&ctx,
+			leader_dc.datacenter_label,
+			&format!("/namespaces/{}", path.namespace_id),
+			axum::http::Method::PUT,
+			headers,
+			Some(&query),
+			Some(&body),
+		)
+		.await
+	}
+}

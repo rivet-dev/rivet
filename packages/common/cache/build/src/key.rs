@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 /// A type that can be serialized in to a key that can be used in the cache.
@@ -78,3 +79,18 @@ impl_to_string!(i32);
 impl_to_string!(i64);
 impl_to_string!(i128);
 impl_to_string!(isize);
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RawCacheKey(String);
+
+impl CacheKey for RawCacheKey {
+	fn cache_key(&self) -> String {
+		self.0.clone()
+	}
+}
+
+impl From<String> for RawCacheKey {
+	fn from(value: String) -> Self {
+		RawCacheKey(value)
+	}
+}

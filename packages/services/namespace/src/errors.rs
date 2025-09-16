@@ -19,4 +19,11 @@ pub enum Namespace {
 
 	#[error("not_leader", "Attempting to run operation in non-leader datacenter.")]
 	NotLeader,
+
+	#[error(
+		"invalid_update",
+		"Failed to update namespace.",
+		"Failed to update namespace: {reason}"
+	)]
+	InvalidUpdate { reason: String },
 }

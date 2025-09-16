@@ -1,6 +1,6 @@
 use rivet_api_builder::{create_router, prelude::*};
 
-use crate::{actors, namespaces, runners};
+use crate::{actors, internal, namespaces, runners};
 
 pub async fn router(
 	name: &'static str,
@@ -14,6 +14,7 @@ pub async fn router(
 			.route("/namespaces", get(namespaces::list))
 			.route("/namespaces", post(namespaces::create))
 			.route("/namespaces/{namespace_id}", get(namespaces::get))
+			.route("/namespaces/{namespace_id}", put(namespaces::update))
 			.route(
 				"/namespaces/resolve/{name}",
 				get(namespaces::resolve_for_name),
@@ -28,6 +29,8 @@ pub async fn router(
 			.route("/runners", get(runners::list))
 			.route("/runners/{runner_id}", get(runners::get))
 			.route("/runners/names", get(runners::list_names))
+			// MARK: Internal
+			.route("/cache/purge", post(internal::cache_purge))
 	})
 	.await
 }

@@ -237,7 +237,10 @@ pub(crate) async fn clear_slot(
 
 	if let RunnerKind::Outbound { .. } = ns_runner_kind {
 		txs.atomic_op(
-			&keys::ns::OutboundDesiredSlotsKey::new(namespace_id, runner_name_selector.to_string()),
+			&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
+				namespace_id,
+				runner_name_selector.to_string(),
+			),
 			&(-1i32).to_le_bytes(),
 			MutationType::Add,
 		);

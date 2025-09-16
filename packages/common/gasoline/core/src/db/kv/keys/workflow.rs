@@ -71,6 +71,7 @@ impl TuplePack for LeaseSubspaceKey {
 	}
 }
 
+#[derive(Debug)]
 pub struct TagKey {
 	workflow_id: Id,
 	pub k: String,
@@ -882,6 +883,7 @@ impl TuplePack for PendingSignalSubspaceKey {
 	}
 }
 
+#[derive(Debug)]
 pub struct ByNameAndTagKey {
 	workflow_name: String,
 	k: String,

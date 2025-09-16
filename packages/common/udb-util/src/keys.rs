@@ -121,4 +121,5 @@ define_keys! {
 	(93, INSTANCE_BALLOT, "instance_ballot"),
 	(94, OUTBOUND, "outbound"),
 	(95, DESIRED_SLOTS, "desired_slots"),
+	(96, RUNNER_KIND, "runner_kind"),
 }

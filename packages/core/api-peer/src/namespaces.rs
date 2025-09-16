@@ -1,4 +1,5 @@
 use anyhow::Result;
+use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::pagination::Pagination;
 use rivet_util::Id;
@@ -73,6 +74,7 @@ pub struct ListQuery {
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 	pub name: Option<String>,
+	#[serde(default)]
 	pub namespace_id: Vec<Id>,
 }
 
@@ -84,15 +86,6 @@ pub struct ListResponse {
 	pub pagination: Pagination,
 }
 
-#[utoipa::path(
-    get,
-	operation_id = "namespaces_list",
-    path = "/namespaces",
-    params(ListQuery),
-    responses(
-        (status = 200, body = ListResponse),
-    ),
-)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	// If name filter is provided, resolve and return only that namespace
 	if let Some(name) = query.name {
@@ -155,15 +148,6 @@ pub struct CreateResponse {
 	pub namespace: namespace::types::Namespace,
 }
 
-#[utoipa::path(
-    post,
-	operation_id = "namespaces_create",
-    path = "/namespaces",
-	request_body(content = CreateRequest, content_type = "application/json"),
-    responses(
-        (status = 200, body = CreateResponse),
-    ),
-)]
 pub async fn create(
 	ctx: ApiCtx,
 	_path: (),
@@ -210,4 +194,63 @@ pub async fn create(
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	Ok(CreateResponse { namespace })
+}
+
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+#[serde(deny_unknown_fields)]
+#[into_params(parameter_in = Query)]
+pub struct UpdateQuery {}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdatePath {
+	pub namespace_id: Id,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = NamespacesUpdateRequest)]
+pub struct UpdateRequest(namespace::workflows::namespace::Update);
+
+#[derive(Serialize, ToSchema)]
+#[schema(as = NamespacesUpdateResponse)]
+pub struct UpdateResponse {}
+
+pub async fn update(
+	ctx: ApiCtx,
+	path: UpdatePath,
+	_query: UpdateQuery,
+	body: UpdateRequest,
+) -> Result<UpdateResponse> {
+	let mut sub = ctx
+		.subscribe::<namespace::workflows::namespace::UpdateResult>((
+			"namespace_id",
+			path.namespace_id,
+		))
+		.await?;
+
+	let res = ctx
+		.signal(body.0)
+		.to_workflow::<namespace::workflows::namespace::Workflow>()
+		.tag("namespace_id", path.namespace_id)
+		.send()
+		.await;
+
+	if let Some(WorkflowError::WorkflowNotFound) = res
+		.as_ref()
+		.err()
+		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+	{
+		return Err(namespace::errors::Namespace::NotFound.build());
+	} else {
+		res?;
+	}
+
+	sub.next()
+		.await?
+		.into_body()
+		.res
+		.map_err(|err| err.build())?;
+
+	Ok(UpdateResponse {})
 }

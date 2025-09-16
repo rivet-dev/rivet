@@ -2379,6 +2379,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "internal"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "gasoline",
+ "rivet-api-client",
+ "serde",
+]
+
+[[package]]
 name = "io-uring"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2771,15 +2781,18 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "gasoline",
+ "internal",
  "rivet-api-builder",
  "rivet-api-util",
  "rivet-data",
  "rivet-error",
+ "rivet-types",
  "rivet-util",
  "serde",
  "tracing",
  "udb-util",
  "universaldb",
+ "url",
  "utoipa",
  "versioned-data-util",
 ]
@@ -3313,6 +3326,24 @@ dependencies = [
  "tokio-tungstenite",
  "universalpubsub",
  "versioned-data-util",
+]
+
+[[package]]
+name = "pegboard-outbound"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "epoxy",
+ "gasoline",
+ "namespace",
+ "pegboard",
+ "reqwest-eventsource",
+ "rivet-config",
+ "rivet-runner-protocol",
+ "rivet-types",
+ "tracing",
+ "udb-util",
+ "universaldb",
 ]
 
 [[package]]
@@ -4677,7 +4708,9 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-util",
  "serde",
+ "udb-util",
  "utoipa",
+ "versioned-data-util",
 ]
 
 [[package]]

@@ -1151,6 +1151,7 @@ impl<'de> TupleUnpack<'de> for InnerEventTypeKey {
 	}
 }
 
+#[derive(Debug)]
 pub struct TagKey {
 	workflow_id: Id,
 	location: Location,

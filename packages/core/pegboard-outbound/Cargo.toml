@@ -12,6 +12,7 @@ gas.workspace = true
 reqwest-eventsource.workspace = true
 rivet-config.workspace = true
 rivet-runner-protocol.workspace = true
+rivet-types.workspace = true
 tracing.workspace = true
 udb-util.workspace = true
 universaldb.workspace = true

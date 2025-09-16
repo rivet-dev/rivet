@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Deref, result::Result::Ok};
+use std::{ops::Deref, result::Result::Ok};
 
 use anyhow::*;
 use futures_util::TryStreamExt;
@@ -44,6 +44,7 @@ impl<'a> TxnSubspace<'a> {
 	) -> Result<T, udb::FdbBindingError> {
 		self.subspace
 			.unpack(key)
+			.context("failed unpacking key")
 			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 	}
 
@@ -55,13 +56,19 @@ impl<'a> TxnSubspace<'a> {
 		self.tx.set(
 			&self.subspace.pack(key),
 			&key.serialize(value)
+				.with_context(|| {
+					format!(
+						"failed serializing key value of {}",
+						std::any::type_name::<T>()
+					)
+				})
 				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
 		);
 
 		Ok(())
 	}
 
-	pub async fn read<'de, T: Debug + FormalKey + TuplePack + TupleUnpack<'de>>(
+	pub async fn read<'de, T: FormalKey + TuplePack + TupleUnpack<'de>>(
 		&self,
 		key: &'de T,
 		snapshot: bool,
@@ -99,6 +106,11 @@ impl<'a> TxnSubspace<'a> {
 		self.tx.clear(&self.subspace.pack(key));
 	}
 
+	pub fn delete_key_subspace<T: TuplePack>(&self, key: &T) {
+		self.tx
+			.clear_subspace_range(&self.subspace(&self.subspace.pack(key)));
+	}
+
 	pub fn read_entry<T: FormalKey + for<'de> TupleUnpack<'de>>(
 		&self,
 		entry: &udb::future::FdbValue,
@@ -106,6 +118,12 @@ impl<'a> TxnSubspace<'a> {
 		let key = self.unpack::<T>(entry.key())?;
 		let value = key
 			.deserialize(entry.value())
+			.with_context(|| {
+				format!(
+					"failed deserializing key value of {}",
+					std::any::type_name::<T>()
+				)
+			})
 			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
 
 		Ok((key, value))
@@ -131,7 +149,7 @@ impl<'a> TxnSubspace<'a> {
 			.map_err(Into::into)
 	}
 
-	pub fn atomic_op<'de, T: Debug + FormalKey + TuplePack + TupleUnpack<'de>>(
+	pub fn atomic_op<'de, T: FormalKey + TuplePack + TupleUnpack<'de>>(
 		&self,
 		key: &'de T,
 		param: &[u8],
@@ -157,7 +175,7 @@ pub trait SliceExt {
 }
 
 pub trait OptSliceExt {
-	fn read<'de, T: Debug + FormalKey + TupleUnpack<'de>>(
+	fn read<'de, T: FormalKey + TupleUnpack<'de>>(
 		&self,
 		key: &'de T,
 	) -> Result<T::Value, udb::FdbBindingError>;
@@ -173,18 +191,30 @@ impl SliceExt for udb::future::FdbSlice {
 		key: &'de T,
 	) -> Result<T::Value, udb::FdbBindingError> {
 		key.deserialize(self)
+			.with_context(|| {
+				format!(
+					"failed deserializing key value of {}",
+					std::any::type_name::<T>()
+				)
+			})
 			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 	}
 }
 
 impl OptSliceExt for Option<udb::future::FdbSlice> {
-	fn read<'de, T: Debug + FormalKey + TupleUnpack<'de>>(
+	fn read<'de, T: FormalKey + TupleUnpack<'de>>(
 		&self,
 		key: &'de T,
 	) -> Result<T::Value, udb::FdbBindingError> {
 		key.deserialize(&self.as_ref().ok_or(udb::FdbBindingError::CustomError(
-			format!("key should exist: {key:?}").into(),
+			format!("key should exist: {}", std::any::type_name::<T>()).into(),
 		))?)
+		.with_context(|| {
+			format!(
+				"failed deserializing key value of {}",
+				std::any::type_name::<T>()
+			)
+		})
 		.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 	}
 
@@ -195,6 +225,12 @@ impl OptSliceExt for Option<udb::future::FdbSlice> {
 		if let Some(data) = self {
 			key.deserialize(data)
 				.map(Some)
+				.with_context(|| {
+					format!(
+						"failed deserializing key value of {}",
+						std::any::type_name::<T>()
+					)
+				})
 				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 		} else {
 			Ok(None)

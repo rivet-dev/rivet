@@ -22,6 +22,7 @@ use crate::{actors, datacenters, namespaces, runners, ui};
 	runners::list_names,
 	namespaces::list,
 	namespaces::get,
+	namespaces::update,
 	namespaces::create,
 	datacenters::list,
 ))]
@@ -45,6 +46,10 @@ pub async fn router(
 			.route(
 				"/namespaces/{namespace_id}",
 				axum::routing::get(namespaces::get),
+			)
+			.route(
+				"/namespaces/{namespace_id}",
+				axum::routing::put(namespaces::update),
 			)
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))

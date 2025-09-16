@@ -8,14 +8,17 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 gas.workspace = true
+internal.workspace = true
 rivet-api-builder.workspace = true
 rivet-api-util.workspace = true
 rivet-data.workspace = true
 rivet-error.workspace = true
+rivet-types.workspace = true
 rivet-util.workspace = true
 serde.workspace = true
 tracing.workspace = true
 udb-util.workspace = true
 universaldb.workspace = true
+url.workspace = true
 utoipa.workspace = true
 versioned-data-util.workspace = true

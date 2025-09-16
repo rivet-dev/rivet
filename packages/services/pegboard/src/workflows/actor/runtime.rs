@@ -116,7 +116,7 @@ async fn allocate_actor(
 			// Increment desired slots if namespace has an outbound runner kind
 			if let RunnerKind::Outbound { .. } = ns_runner_kind {
 				txs.atomic_op(
-					&keys::ns::OutboundDesiredSlotsKey::new(
+					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
 						namespace_id,
 						input.runner_name_selector.clone(),
 					),
@@ -347,7 +347,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 				.await?;
 			} else if let RunnerKind::Outbound { .. } = ns_runner_kind {
 				txs.atomic_op(
-					&keys::ns::OutboundDesiredSlotsKey::new(
+					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
 						namespace_id,
 						runner_name_selector.clone(),
 					),
@@ -391,7 +391,7 @@ pub async fn spawn_actor(
 				"failed to allocate (no availability), waiting for allocation",
 			);
 
-			ctx.msg(crate::messages::BumpOutboundAutoscaler {})
+			ctx.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
 				.send()
 				.await?;
 

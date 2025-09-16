@@ -99,6 +99,7 @@ impl<'de> TupleUnpack<'de> for EntryValueChunkKey {
 	}
 }
 
+#[derive(Debug)]
 pub struct EntryMetadataKey {
 	pub key: KeyWrapper,
 }

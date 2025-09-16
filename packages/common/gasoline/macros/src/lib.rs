@@ -166,6 +166,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
+	let generics = &item_fn.sig.generics;
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
@@ -186,7 +187,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 			const NAME: &'static str = #fn_name;
 			const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(#timeout);
 
-			async fn run(#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> Result<Self::Output> {
+			async fn run #generics (#ctx_ident: #ctx_ty, #input_ident: &Self::Input) -> Result<Self::Output> {
 				#fn_body
 			}
 		}

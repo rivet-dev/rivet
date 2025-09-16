@@ -180,7 +180,7 @@ impl TuplePack for RunnerKindKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (DATA, self.namespace_id, CREATE_TS);
+		let t = (DATA, self.namespace_id, RUNNER_KIND);
 		t.pack(w, tuple_depth)
 	}
 }

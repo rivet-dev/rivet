@@ -36,7 +36,7 @@ fn apply_add(current: Option<&[u8]>, param: &[u8]) -> Vec<u8> {
 	let param_int = bytes_to_i64_le(param);
 
 	let result = current_int.wrapping_add(param_int);
-	i64_to_bytes_le(result, param.len().max(current.len()).max(8))
+	i64_to_bytes_le(result, param.len().max(current.len()))
 }
 
 fn apply_bit_and(current: Option<&[u8]>, param: &[u8]) -> Vec<u8> {
@@ -174,7 +174,7 @@ fn bytes_to_i64_le(bytes: &[u8]) -> i64 {
 	}
 
 	let mut padded = [0u8; 8];
-	let len = bytes.len().min(8);
+	let len = bytes.len();
 	padded[..len].copy_from_slice(&bytes[..len]);
 
 	i64::from_le_bytes(padded)
@@ -182,10 +182,9 @@ fn bytes_to_i64_le(bytes: &[u8]) -> i64 {
 
 fn i64_to_bytes_le(value: i64, min_len: usize) -> Vec<u8> {
 	let bytes = value.to_le_bytes();
-	let len = min_len.max(8);
 
-	let mut result = vec![0u8; len];
-	result[..8].copy_from_slice(&bytes);
+	let mut result = vec![0u8; min_len];
+	result.copy_from_slice(&bytes[..min_len]);
 
 	result
 }

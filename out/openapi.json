@@ -469,7 +469,7 @@
           {
             "name": "namespace_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "array",
               "items": {
@@ -543,6 +543,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NamespacesGetResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "namespaces"
+        ],
+        "operationId": "namespaces_update",
+        "parameters": [
+          {
+            "name": "namespace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NamespacesUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesUpdateResponse"
                 }
               }
             }
@@ -1071,7 +1109,7 @@
             "$ref": "#/components/schemas/RivetId"
           },
           "runner_kind": {
-            "$ref": "#/components/schemas/RunnerKind"
+            "$ref": "#/components/schemas/NamespacesRunnerKind"
           }
         }
       },
@@ -1132,6 +1170,95 @@
           }
         },
         "additionalProperties": false
+      },
+      "NamespacesRunnerKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "outbound"
+            ],
+            "properties": {
+              "outbound": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "request_lifespan",
+                  "slots_per_runner",
+                  "min_runners",
+                  "max_runners",
+                  "runners_margin"
+                ],
+                "properties": {
+                  "max_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "min_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "request_lifespan": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "runners_margin": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "slots_per_runner": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "custom"
+            ]
+          }
+        ]
+      },
+      "NamespacesUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "update_runner_kind"
+            ],
+            "properties": {
+              "update_runner_kind": {
+                "type": "object",
+                "required": [
+                  "runner_kind"
+                ],
+                "properties": {
+                  "runner_kind": {
+                    "$ref": "#/components/schemas/NamespacesRunnerKind"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "NamespacesUpdateRequest": {
+        "$ref": "#/components/schemas/NamespacesUpdate"
+      },
+      "NamespacesUpdateResponse": {
+        "type": "object"
       },
       "Pagination": {
         "type": "object",
@@ -1252,59 +1379,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "RunnerKind": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "outbound"
-            ],
-            "properties": {
-              "outbound": {
-                "type": "object",
-                "required": [
-                  "url",
-                  "slots_per_runner",
-                  "min_runners",
-                  "max_runners",
-                  "runners_margin"
-                ],
-                "properties": {
-                  "max_runners": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "min_runners": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "runners_margin": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "slots_per_runner": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "url": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "string",
-            "enum": [
-              "custom"
-            ]
-          }
-        ]
       },
       "RunnersGetResponse": {
         "type": "object",

@@ -17,8 +17,6 @@ use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use udb_util::{SNAPSHOT, TxnExt};
 use universaldb::{self as udb, options::StreamingMode};
 
-const OUTBOUND_REQUEST_LIFESPAN: Duration = Duration::from_secs(14 * 60 + 30);
-
 struct OutboundConnection {
 	handle: JoinHandle<()>,
 	shutdown_tx: oneshot::Sender<()>,
@@ -39,7 +37,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	)?;
 
 	let mut sub = ctx
-		.subscribe::<pegboard::messages::BumpOutboundAutoscaler>(())
+		.subscribe::<rivet_types::msgs::pegboard::BumpOutboundAutoscaler>(())
 		.await?;
 	let mut outbound_connections = HashMap::new();
 
@@ -54,36 +52,35 @@ async fn tick(
 	ctx: &StandaloneCtx,
 	outbound_connections: &mut HashMap<(Id, String), Vec<OutboundConnection>>,
 ) -> Result<()> {
-	let outbound_data = ctx
-		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
-			let outbound_desired_subspace =
-				txs.subspace(&keys::ns::OutboundDesiredSlotsKey::subspace());
+	let outbound_data =
+		ctx.udb()?
+			.run(|tx, _mc| async move {
+				let txs = tx.subspace(keys::subspace());
+				let outbound_desired_subspace = txs.subspace(
+					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::entire_subspace(),
+				);
 
-			txs.get_ranges_keyvalues(
-				udb::RangeOption {
-					mode: StreamingMode::WantAll,
-					..(&outbound_desired_subspace).into()
-				},
-				// NOTE: This is a snapshot to prevent conflict with updates to this subspace
-				SNAPSHOT,
-			)
-			.map(|res| match res {
-				Ok(entry) => {
-					let (key, desired_slots) =
-						txs.read_entry::<keys::ns::OutboundDesiredSlotsKey>(&entry)?;
+				txs.get_ranges_keyvalues(
+					udb::RangeOption {
+						mode: StreamingMode::WantAll,
+						..(&outbound_desired_subspace).into()
+					},
+					// NOTE: This is a snapshot to prevent conflict with updates to this subspace
+					SNAPSHOT,
+				)
+				.map(|res| match res {
+					Ok(entry) => {
+						let (key, desired_slots) =
+						txs.read_entry::<rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey>(&entry)?;
 
-					Ok((key.namespace_id, key.runner_name_selector, desired_slots))
-				}
-				Err(err) => Err(err.into()),
+						Ok((key.namespace_id, key.runner_name_selector, desired_slots))
+					}
+					Err(err) => Err(err.into()),
+				})
+				.try_collect::<Vec<_>>()
+				.await
 			})
-			.try_collect::<Vec<_>>()
-			.await
-
-			// outbound/{ns_id}/{runner_name_selector}/desired_slots
-		})
-		.await?;
+			.await?;
 
 	let mut namespace_ids = outbound_data
 		.iter()
@@ -103,6 +100,7 @@ async fn tick(
 
 		let RunnerKind::Outbound {
 			url,
+			request_lifespan,
 			slots_per_runner,
 			min_runners,
 			max_runners,
@@ -123,11 +121,9 @@ async fn tick(
 		// Remove finished and draining connections from list
 		curr.retain(|conn| !conn.handle.is_finished() && !conn.draining.load(Ordering::SeqCst));
 
-		let desired_count = (desired_slots
-			.div_ceil(*slots_per_runner)
-			.max(*min_runners)
-			.min(*max_runners)
+		let desired_count = (desired_slots.div_ceil(*slots_per_runner).max(*min_runners)
 			+ runners_margin)
+			.min(*max_runners)
 			.try_into()?;
 
 		// Calculate diff
@@ -147,8 +143,14 @@ async fn tick(
 			}
 		}
 
-		let starting_connections =
-			std::iter::repeat_with(|| spawn_connection(ctx.clone(), url.clone())).take(start_count);
+		let starting_connections = std::iter::repeat_with(|| {
+			spawn_connection(
+				ctx.clone(),
+				url.clone(),
+				Duration::from_secs(*request_lifespan as u64),
+			)
+		})
+		.take(start_count);
 		curr.extend(starting_connections);
 	}
 
@@ -164,13 +166,19 @@ async fn tick(
 	Ok(())
 }
 
-fn spawn_connection(ctx: StandaloneCtx, url: String) -> OutboundConnection {
+fn spawn_connection(
+	ctx: StandaloneCtx,
+	url: String,
+	request_lifespan: Duration,
+) -> OutboundConnection {
 	let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 	let draining = Arc::new(AtomicBool::new(false));
 
 	let draining2 = draining.clone();
 	let handle = tokio::spawn(async move {
-		if let Err(err) = outbound_handler(&ctx, url, shutdown_rx, draining2).await {
+		if let Err(err) =
+			outbound_handler(&ctx, url, request_lifespan, shutdown_rx, draining2).await
+		{
 			tracing::error!(?err, "outbound req failed");
 
 			// TODO: Add backoff
@@ -178,7 +186,7 @@ fn spawn_connection(ctx: StandaloneCtx, url: String) -> OutboundConnection {
 
 			// On error, bump the autoscaler loop again
 			let _ = ctx
-				.msg(pegboard::messages::BumpOutboundAutoscaler {})
+				.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
 				.send()
 				.await;
 		}
@@ -194,6 +202,7 @@ fn spawn_connection(ctx: StandaloneCtx, url: String) -> OutboundConnection {
 async fn outbound_handler(
 	ctx: &StandaloneCtx,
 	url: String,
+	request_lifespan: Duration,
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -226,13 +235,13 @@ async fn outbound_handler(
 
 	tokio::select! {
 		res = stream_handler => return res.map_err(Into::into),
-		_ = tokio::time::sleep(OUTBOUND_REQUEST_LIFESPAN) => {}
+		_ = tokio::time::sleep(request_lifespan) => {}
 		_ = shutdown_rx => {}
 	}
 
 	draining.store(true, Ordering::SeqCst);
 
-	ctx.msg(pegboard::messages::BumpOutboundAutoscaler {})
+	ctx.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
 		.send()
 		.await?;
 
