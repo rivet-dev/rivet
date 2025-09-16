@@ -1,10 +1,14 @@
-use crate::{
-	FdbResult, KeySelector, RangeOption,
-	atomic::apply_atomic_op,
-	future::{FdbKeyValue, FdbSlice, FdbValues},
-	options::{ConflictRangeType, MutationType},
-};
 use std::collections::BTreeMap;
+
+use anyhow::Result;
+
+use crate::{
+	atomic::apply_atomic_op,
+	key_selector::KeySelector,
+	options::{ConflictRangeType, MutationType},
+	range_option::RangeOption,
+	value::{KeyValue, Slice, Values},
+};
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -134,14 +138,14 @@ impl TransactionOperations {
 		&self,
 		key: &[u8],
 		get_from_db: F,
-	) -> FdbResult<Option<FdbSlice>>
+	) -> Result<Option<Slice>>
 	where
 		F: FnOnce() -> Fut,
-		Fut: std::future::Future<Output = FdbResult<Option<FdbSlice>>>,
+		Fut: std::future::Future<Output = Result<Option<Slice>>>,
 	{
 		// Check local operations first
 		match self.get(key) {
-			GetOutput::Value(value) => Ok(Some(value)),
+			GetOutput::Value(value) => Ok(Some(value.into())),
 			GetOutput::Cleared => Ok(None),
 			GetOutput::None => {
 				// Fall back to database
@@ -154,7 +158,12 @@ impl TransactionOperations {
 
 				// Apply all atomic operations in order
 				for (param, op_type) in atomic_ops {
-					result_value = apply_atomic_op(result_value.as_deref(), &param, op_type);
+					result_value = apply_atomic_op(
+						result_value.as_ref().map(|x| x.as_slice()),
+						&param,
+						op_type,
+					)
+					.map(Into::into);
 				}
 
 				Ok(result_value)
@@ -162,14 +171,10 @@ impl TransactionOperations {
 		}
 	}
 
-	pub async fn get_key<F, Fut>(
-		&self,
-		selector: &KeySelector<'_>,
-		get_from_db: F,
-	) -> FdbResult<FdbSlice>
+	pub async fn get_key<F, Fut>(&self, selector: &KeySelector<'_>, get_from_db: F) -> Result<Slice>
 	where
 		F: FnOnce() -> Fut,
-		Fut: std::future::Future<Output = FdbResult<FdbSlice>>,
+		Fut: std::future::Future<Output = Result<Slice>>,
 	{
 		// Get the database result first
 		let db_key = get_from_db().await?;
@@ -252,31 +257,27 @@ impl TransactionOperations {
 					if db_key.as_slice() < local.as_slice() {
 						Ok(db_key)
 					} else {
-						Ok(local)
+						Ok(local.into())
 					}
 				} else {
 					// Return the larger key
 					if db_key.as_slice() > local.as_slice() {
 						Ok(db_key)
 					} else {
-						Ok(local)
+						Ok(local.into())
 					}
 				}
 			}
-			(Some(local), _) => Ok(local),
+			(Some(local), _) => Ok(local.into()),
 			(None, false) => Ok(db_key),
-			(None, true) => Ok(vec![]),
+			(None, true) => Ok(vec![].into()),
 		}
 	}
 
-	pub async fn get_range<F, Fut>(
-		&self,
-		opt: &RangeOption<'_>,
-		get_from_db: F,
-	) -> FdbResult<FdbValues>
+	pub async fn get_range<F, Fut>(&self, opt: &RangeOption<'_>, get_from_db: F) -> Result<Values>
 	where
 		F: FnOnce() -> Fut,
-		Fut: std::future::Future<Output = FdbResult<FdbValues>>,
+		Fut: std::future::Future<Output = Result<Values>>,
 	{
 		// Get database results
 		let db_values = get_from_db().await?;
@@ -349,10 +350,10 @@ impl TransactionOperations {
 		let limit = opt.limit.unwrap_or(usize::MAX);
 
 		for (key, value) in result_map.into_iter().take(limit) {
-			keyvalues.push(FdbKeyValue::new(key, value));
+			keyvalues.push(KeyValue::new(key, value));
 		}
 
-		Ok(FdbValues::new(keyvalues))
+		Ok(Values::new(keyvalues))
 	}
 
 	pub fn clear_all(&mut self) {

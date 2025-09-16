@@ -7,7 +7,7 @@ use clap::{Parser, ValueEnum};
 use futures_util::TryStreamExt;
 use rivet_pools::UdbPool;
 use rivet_term::console::style;
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::{options::StreamingMode, utils::IsolationLevel::*};
 
 use crate::util::{
 	format::indent_string,
@@ -123,11 +123,11 @@ impl SubCommand {
 					return CommandResult::Error;
 				}
 
-				let fut = pool.run(|tx, _mc| {
+				let fut = pool.run(|tx| {
 					let current_tuple = current_tuple.clone();
 					async move {
-						let key = udb::tuple::pack(&current_tuple);
-						let entry = tx.get(&key, true).await?;
+						let key = universaldb::tuple::pack(&current_tuple);
+						let entry = tx.get(&key, Snapshot).await?;
 						Ok(entry)
 					}
 				});
@@ -166,18 +166,18 @@ impl SubCommand {
 					return CommandResult::Error;
 				}
 
-				let subspace = udb::tuple::Subspace::all().subspace(&current_tuple);
+				let subspace = universaldb::tuple::Subspace::all().subspace(&current_tuple);
 
-				let fut = pool.run(|tx, _mc| {
+				let fut = pool.run(|tx| {
 					let subspace = subspace.clone();
 					async move {
 						let entries = tx
 							.get_ranges_keyvalues(
-								udb::RangeOption {
+								universaldb::RangeOption {
 									mode: StreamingMode::WantAll,
 									..(&subspace).into()
 								},
-								true,
+								Snapshot,
 							)
 							.try_collect::<Vec<_>>()
 							.await?;
@@ -355,21 +355,23 @@ impl SubCommand {
 					return CommandResult::Error;
 				}
 
-				let fut = pool.run(|tx, _mc| {
+				let fut = pool.run(|tx| {
 					let old_tuple = old_tuple.clone();
 					let new_tuple = new_tuple.clone();
 					async move {
 						if recursive {
-							let old_subspace = udb::tuple::Subspace::all().subspace(&old_tuple);
-							let new_subspace = udb::tuple::Subspace::all().subspace(&new_tuple);
+							let old_subspace =
+								universaldb::tuple::Subspace::all().subspace(&old_tuple);
+							let new_subspace =
+								universaldb::tuple::Subspace::all().subspace(&new_tuple);
 
 							// Get all key-value pairs from the old subspace
 							let mut stream = tx.get_ranges_keyvalues(
-								udb::RangeOption {
+								universaldb::RangeOption {
 									mode: StreamingMode::WantAll,
 									..(&old_subspace).into()
 								},
-								true,
+								Snapshot,
 							);
 
 							let mut keys_moved = 0;
@@ -393,10 +395,10 @@ impl SubCommand {
 
 							Ok(keys_moved)
 						} else {
-							let old_key = udb::tuple::pack(&old_tuple);
-							let new_key = udb::tuple::pack(&new_tuple);
+							let old_key = universaldb::tuple::pack(&old_tuple);
+							let new_key = universaldb::tuple::pack(&new_tuple);
 
-							let Some(value) = tx.get(&old_key, true).await? else {
+							let Some(value) = tx.get(&old_key, Snapshot).await? else {
 								return Ok(0);
 							};
 
@@ -451,14 +453,12 @@ impl SubCommand {
 					}
 				};
 
-				let fut = pool.run(|tx, _mc| {
+				let fut = pool.run(|tx| {
 					let current_tuple = current_tuple.clone();
 					let value = parsed_value.clone();
 					async move {
-						let key = udb::tuple::pack(&current_tuple);
-						let value = value
-							.serialize()
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let key = universaldb::tuple::pack(&current_tuple);
+						let value = value.serialize()?;
 
 						tx.set(&key, &value);
 						Ok(())
@@ -495,14 +495,15 @@ impl SubCommand {
 					}
 				}
 
-				let fut = pool.run(|tx, _mc| {
+				let fut = pool.run(|tx| {
 					let current_tuple = current_tuple.clone();
 					async move {
 						if clear_range {
-							let subspace = udb::tuple::Subspace::all().subspace(&current_tuple);
+							let subspace =
+								universaldb::utils::Subspace::all().subspace(&current_tuple);
 							tx.clear_subspace_range(&subspace);
 						} else {
-							let key = udb::tuple::pack(&current_tuple);
+							let key = universaldb::tuple::pack(&current_tuple);
 							tx.clear(&key);
 						}
 

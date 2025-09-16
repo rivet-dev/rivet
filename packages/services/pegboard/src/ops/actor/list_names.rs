@@ -1,8 +1,8 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::ActorNameKeyData;
-use udb_util::{SNAPSHOT, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
 
@@ -22,15 +22,15 @@ pub struct Output {
 pub async fn pegboard_actor_list_names(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let names = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			let actor_name_subspace =
-				txs.subspace(&keys::ns::ActorNameKey::subspace(input.namespace_id));
+				keys::subspace().subspace(&keys::ns::ActorNameKey::subspace(input.namespace_id));
 			let (start, end) = actor_name_subspace.range();
 
 			let start = if let Some(name) = &input.after_name {
-				txs.pack(&keys::ns::ActorNameKey::new(
+				tx.pack(&keys::ns::ActorNameKey::new(
 					input.namespace_id,
 					name.clone(),
 				))
@@ -38,22 +38,19 @@ pub async fn pegboard_actor_list_names(ctx: &OperationCtx, input: &Input) -> Res
 				start
 			};
 
-			txs.get_ranges_keyvalues(
-				udb::RangeOption {
+			tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::WantAll,
 					limit: Some(input.limit),
 					..(start, end).into()
 				},
-				// NOTE: This is not SERIALIZABLE to prevent contention with inserting new names
-				SNAPSHOT,
+				// NOTE: This is not Serializable to prevent contention with inserting new names
+				Snapshot,
 			)
-			.map(|res| match res {
-				Ok(entry) => {
-					let (key, metadata) = txs.read_entry::<keys::ns::ActorNameKey>(&entry)?;
+			.map(|res| {
+				let (key, metadata) = tx.read_entry::<keys::ns::ActorNameKey>(&res?)?;
 
-					Ok((key.name, metadata))
-				}
-				Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
+				Ok((key.name, metadata))
 			})
 			.try_collect::<Vec<(_, _)>>()
 			.await

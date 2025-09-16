@@ -1,8 +1,7 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_types::actors::Actor;
-use udb_util::{FormalKey, SERIALIZABLE};
-use universaldb as udb;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::keys;
 
@@ -20,7 +19,7 @@ pub struct Output {
 pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let actors_with_wf_ids = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			futures_util::stream::iter(input.actor_ids.clone())
 				.map(|actor_id| {
 					let tx = tx.clone();
@@ -28,16 +27,14 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 						let workflow_id_key = keys::actor::WorkflowIdKey::new(actor_id);
 
 						let workflow_id_entry = tx
-							.get(&keys::subspace().pack(&workflow_id_key), SERIALIZABLE)
+							.get(&keys::subspace().pack(&workflow_id_key), Serializable)
 							.await?;
 
 						let Some(workflow_id_entry) = workflow_id_entry else {
 							return Ok(None);
 						};
 
-						let workflow_id = workflow_id_key
-							.deserialize(&workflow_id_entry)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let workflow_id = workflow_id_key.deserialize(&workflow_id_entry)?;
 
 						Ok(Some((actor_id, workflow_id)))
 					}

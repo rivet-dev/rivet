@@ -1,8 +1,8 @@
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
 use rivet_runner_protocol::protocol;
-use udb_util::{SERIALIZABLE, TxnExt};
-use universaldb::{self as udb, options::MutationType};
+use universaldb::options::MutationType;
+use universaldb::utils::IsolationLevel::*;
 
 use super::{DestroyComplete, DestroyStarted, State};
 
@@ -28,7 +28,7 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 		.await?;
 
 	let res = ctx
-		.activity(UpdateStateAndFdbInput {
+		.activity(UpdateStateAndDbInput {
 			actor_id: input.actor_id,
 		})
 		.await?;
@@ -53,31 +53,31 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdateStateAndFdbInput {
+struct UpdateStateAndDbInput {
 	actor_id: Id,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdateStateAndFdbOutput {
+struct UpdateStateAndDbOutput {
 	runner_workflow_id: Option<Id>,
 }
 
-#[activity(UpdateStateAndFdb)]
-async fn update_state_and_fdb(
+#[activity(UpdateStateAndDb)]
+async fn update_state_and_db(
 	ctx: &ActivityCtx,
-	input: &UpdateStateAndFdbInput,
-) -> Result<UpdateStateAndFdbOutput> {
+	input: &UpdateStateAndDbInput,
+) -> Result<UpdateStateAndDbOutput> {
 	let mut state = ctx.state::<State>()?;
 	let destroy_ts = util::timestamp::now();
 
 	ctx.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let state = (*state).clone();
 
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 
-				txs.write(&keys::actor::DestroyTsKey::new(input.actor_id), destroy_ts)?;
+				tx.write(&keys::actor::DestroyTsKey::new(input.actor_id), destroy_ts)?;
 
 				if let Some(runner_id) = state.runner_id {
 					clear_slot(
@@ -92,7 +92,7 @@ async fn update_state_and_fdb(
 				}
 
 				// Update namespace indexes
-				txs.delete(&keys::ns::ActiveActorKey::new(
+				tx.delete(&keys::ns::ActiveActorKey::new(
 					state.namespace_id,
 					state.name.clone(),
 					state.create_ts,
@@ -100,7 +100,7 @@ async fn update_state_and_fdb(
 				));
 
 				if let Some(k) = &state.key {
-					txs.write(
+					tx.write(
 						&keys::ns::ActorByKeyKey::new(
 							state.namespace_id,
 							state.name.clone(),
@@ -125,7 +125,7 @@ async fn update_state_and_fdb(
 	state.runner_id = None;
 	let runner_workflow_id = state.runner_workflow_id.take();
 
-	Ok(UpdateStateAndFdbOutput { runner_workflow_id })
+	Ok(UpdateStateAndDbOutput { runner_workflow_id })
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -143,7 +143,7 @@ async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutp
 	// Matches `delete_all` from actor_kv (can't import because of cyclical dep)
 	let final_size = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let subspace = keys::actor_kv_subspace().subspace(&input.actor_id);
 
 			let (start, end) = subspace.range();
@@ -164,15 +164,15 @@ pub(crate) async fn clear_slot(
 	runner_name_selector: &str,
 	runner_id: Id,
 	for_serverless: bool,
-	tx: &udb::RetryableTransaction,
-) -> Result<(), udb::FdbBindingError> {
-	let txs = tx.subspace(keys::subspace());
+	tx: &universaldb::Transaction,
+) -> Result<()> {
+	let tx = tx.with_subspace(keys::subspace());
 
-	txs.delete(&keys::actor::RunnerIdKey::new(actor_id));
+	tx.delete(&keys::actor::RunnerIdKey::new(actor_id));
 
 	// This is cleared when the state changes as well as when the actor is destroyed to ensure
 	// consistency during rescheduling and forced deletion.
-	txs.delete(&keys::runner::ActorKey::new(runner_id, actor_id));
+	tx.delete(&keys::runner::ActorKey::new(runner_id, actor_id));
 
 	let runner_workflow_id_key = keys::runner::WorkflowIdKey::new(runner_id);
 	let runner_version_key = keys::runner::VersionKey::new(runner_id);
@@ -187,18 +187,18 @@ pub(crate) async fn clear_slot(
 		runner_total_slots,
 		runner_last_ping_ts,
 	) = tokio::try_join!(
-		txs.read(&runner_workflow_id_key, SERIALIZABLE),
-		txs.read(&runner_version_key, SERIALIZABLE),
-		txs.read(&runner_remaining_slots_key, SERIALIZABLE),
-		txs.read(&runner_total_slots_key, SERIALIZABLE),
-		txs.read(&runner_last_ping_ts_key, SERIALIZABLE),
+		tx.read(&runner_workflow_id_key, Serializable),
+		tx.read(&runner_version_key, Serializable),
+		tx.read(&runner_remaining_slots_key, Serializable),
+		tx.read(&runner_total_slots_key, Serializable),
+		tx.read(&runner_last_ping_ts_key, Serializable),
 	)?;
 
 	let old_runner_remaining_millislots = (runner_remaining_slots * 1000) / runner_total_slots;
 	let new_runner_remaining_slots = runner_remaining_slots + 1;
 
 	// Write new remaining slots
-	txs.write(&runner_remaining_slots_key, new_runner_remaining_slots)?;
+	tx.write(&runner_remaining_slots_key, new_runner_remaining_slots)?;
 
 	let old_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
 		namespace_id,
@@ -210,9 +210,9 @@ pub(crate) async fn clear_slot(
 	);
 
 	// Only update allocation idx if it existed before
-	if txs.exists(&old_runner_alloc_key, SERIALIZABLE).await? {
+	if tx.exists(&old_runner_alloc_key, Serializable).await? {
 		// Clear old key
-		txs.delete(&old_runner_alloc_key);
+		tx.delete(&old_runner_alloc_key);
 
 		let new_remaining_millislots = (new_runner_remaining_slots * 1000) / runner_total_slots;
 		let new_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
@@ -224,7 +224,7 @@ pub(crate) async fn clear_slot(
 			runner_id,
 		);
 
-		txs.write(
+		tx.write(
 			&new_runner_alloc_key,
 			rivet_data::converted::RunnerAllocIdxKeyData {
 				workflow_id: runner_workflow_id,
@@ -235,7 +235,7 @@ pub(crate) async fn clear_slot(
 	}
 
 	if for_serverless {
-		txs.atomic_op(
+		tx.atomic_op(
 			&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 				namespace_id,
 				runner_name_selector.to_string(),

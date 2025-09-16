@@ -4,7 +4,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, shared_state::SharedState};
 
@@ -98,17 +98,17 @@ async fn find_actor(
 	let actor_res = tokio::time::timeout(
 		Duration::from_secs(5),
 		ctx.udb()?
-			.run(|tx, _mc| async move {
-				let txs = tx.subspace(pegboard::keys::subspace());
+			.run(|tx| async move {
+				let tx = tx.with_subspace(pegboard::keys::subspace());
 
 				let workflow_id_key = pegboard::keys::actor::WorkflowIdKey::new(actor_id);
 				let sleep_ts_key = pegboard::keys::actor::SleepTsKey::new(actor_id);
 				let destroy_ts_key = pegboard::keys::actor::DestroyTsKey::new(actor_id);
 
 				let (workflow_id_entry, sleeping, destroyed) = tokio::try_join!(
-					txs.read_opt(&workflow_id_key, SERIALIZABLE),
-					txs.exists(&sleep_ts_key, SERIALIZABLE),
-					txs.exists(&destroy_ts_key, SERIALIZABLE),
+					tx.read_opt(&workflow_id_key, Serializable),
+					tx.exists(&sleep_ts_key, Serializable),
+					tx.exists(&destroy_ts_key, Serializable),
 				)?;
 
 				let Some(workflow_id) = workflow_id_entry else {
@@ -177,10 +177,13 @@ async fn find_actor(
 	// Get runner key from runner_id
 	let runner_key = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(pegboard::keys::subspace());
-			let key_key = pegboard::keys::runner::KeyKey::new(runner_id);
-			txs.read_opt(&key_key, SERIALIZABLE).await
+		.run(|tx| async move {
+			let tx = tx.with_subspace(pegboard::keys::subspace());
+			tx.read_opt(
+				&pegboard::keys::runner::KeyKey::new(runner_id),
+				Serializable,
+			)
+			.await
 		})
 		.await?
 		.context("runner key not found")?;

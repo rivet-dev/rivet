@@ -4,15 +4,19 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
+use anyhow::{Context, Result};
 use deadpool_postgres::Pool;
 use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::{
-	FdbError, FdbResult, KeySelector, RangeOption, TransactionCommitError, TransactionCommitted,
 	driver::TransactionDriver,
-	future::{FdbSlice, FdbValues},
+	error::DatabaseError,
+	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
+	range_option::RangeOption,
 	tx_ops::{Operation, TransactionOperations},
+	utils::IsolationLevel,
+	value::{KeyValue, Slice, Value, Values},
 };
 
 use super::transaction_task::{TransactionCommand, TransactionIsolationLevel, TransactionTask};
@@ -49,7 +53,7 @@ impl PostgresTransactionDriver {
 	}
 
 	/// Get or create the transaction task
-	async fn ensure_transaction(&self) -> FdbResult<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
 		self.tx_sender
 			.get_or_try_init(|| async {
 				let (sender, receiver) = mpsc::channel(100);
@@ -62,16 +66,16 @@ impl PostgresTransactionDriver {
 				);
 				tokio::spawn(task.run());
 
-				Ok(sender)
+				anyhow::Ok(sender)
 			})
 			.await
-			.map_err(|_: anyhow::Error| FdbError::from_code(1510))
+			.context("failed to initialize postgres transaction task")
 	}
 
 	/// Get or create the snapshot transaction task
 	/// This creates a separate REPEATABLE READ READ ONLY transaction
 	/// to enforce reading from a consistent snapshot
-	async fn ensure_snapshot_transaction(&self) -> FdbResult<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_snapshot_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
 		self.snapshot_tx_sender
 			.get_or_try_init(|| async {
 				let (sender, receiver) = mpsc::channel(100);
@@ -84,10 +88,10 @@ impl PostgresTransactionDriver {
 				);
 				tokio::spawn(task.run());
 
-				Ok(sender)
+				anyhow::Ok(sender)
 			})
 			.await
-			.map_err(|_: anyhow::Error| FdbError::from_code(1510))
+			.context("failed to initialize postgres transaction task")
 	}
 }
 
@@ -101,8 +105,8 @@ impl TransactionDriver for PostgresTransactionDriver {
 	fn get<'a>(
 		&'a self,
 		key: &[u8],
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<Option<FdbSlice>>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Option<Slice>>> + Send + 'a>> {
 		let key = key.to_vec();
 		Box::pin(async move {
 			// Both snapshot and non-snapshot reads check local operations first
@@ -113,7 +117,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 			};
 
 			ops.get_with_callback(&key, || async {
-				let tx_sender = if snapshot {
+				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
 					self.ensure_snapshot_transaction().await?
 				} else {
 					self.ensure_transaction().await?
@@ -127,12 +131,14 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for response
-				let value = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				let value = response_rx
+					.await
+					.context("failed to receive postgres response")??;
 
-				Ok(value)
+				Ok(value.map(Into::into))
 			})
 			.await
 		})
@@ -141,8 +147,8 @@ impl TransactionDriver for PostgresTransactionDriver {
 	fn get_key<'a>(
 		&'a self,
 		selector: &KeySelector<'a>,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbSlice>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Slice>> + Send + 'a>> {
 		let selector = selector.clone();
 
 		Box::pin(async move {
@@ -158,7 +164,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 			};
 
 			ops.get_key(&selector, || async {
-				let tx_sender = if snapshot {
+				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
 					self.ensure_snapshot_transaction().await?
 				} else {
 					self.ensure_transaction().await?
@@ -174,13 +180,15 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for response
-				let result_key = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				let result_key = response_rx
+					.await
+					.context("failed to receive postgres key selector response")??;
 
 				// Return the key if found, or empty vector if not
-				Ok(result_key.unwrap_or_else(Vec::new))
+				Ok(result_key.map(Into::into).unwrap_or_else(Slice::new))
 			})
 			.await
 		})
@@ -190,8 +198,8 @@ impl TransactionDriver for PostgresTransactionDriver {
 		&'a self,
 		opt: &RangeOption<'a>,
 		_iteration: usize,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbValues>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>> {
 		let opt = opt.clone();
 
 		Box::pin(async move {
@@ -212,7 +220,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 			};
 
 			ops.get_range(&opt, || async {
-				let tx_sender = if snapshot {
+				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
 					self.ensure_snapshot_transaction().await?
 				} else {
 					self.ensure_transaction().await?
@@ -233,17 +241,19 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for response
-				let keyvalues_data = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				let keyvalues_data = response_rx
+					.await
+					.context("failed to receive postgres range response")??;
 
 				let keyvalues: Vec<_> = keyvalues_data
 					.into_iter()
-					.map(|(key, value)| crate::future::FdbKeyValue::new(key, value))
+					.map(|(key, value)| KeyValue::new(key, value))
 					.collect();
 
-				Ok(crate::future::FdbValues::new(keyvalues))
+				Ok(Values::new(keyvalues))
 			})
 			.await
 		})
@@ -252,16 +262,16 @@ impl TransactionDriver for PostgresTransactionDriver {
 	fn get_ranges_keyvalues<'a>(
 		&'a self,
 		opt: RangeOption<'a>,
-		snapshot: bool,
-	) -> crate::future::FdbStream<'a, crate::future::FdbValue> {
+		isolation_level: IsolationLevel,
+	) -> crate::value::Stream<'a, Value> {
 		use futures_util::{StreamExt, stream};
 
 		// Convert the range result into a stream
 		let fut = async move {
-			match self.get_range(&opt, 1, snapshot).await {
+			match self.get_range(&opt, 1, isolation_level).await {
 				Ok(values) => values
 					.into_iter()
-					.map(|kv| Ok(crate::future::FdbValue::from_keyvalue(kv)))
+					.map(|kv| Ok(Value::from_keyvalue(kv)))
 					.collect::<Vec<_>>(),
 				Err(e) => vec![Err(e)],
 			}
@@ -288,10 +298,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 		}
 	}
 
-	fn commit(
-		self: Box<Self>,
-	) -> Pin<Box<dyn Future<Output = Result<TransactionCommitted, TransactionCommitError>> + Send>>
-	{
+	fn commit(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
 		Box::pin(async move {
 			// Get operations and mark as committed
 			let operations = {
@@ -321,16 +328,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::Clear { key } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -340,16 +342,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::ClearRange { begin, end } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -360,16 +357,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::AtomicOp {
 							key,
@@ -385,16 +377,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 					}
 				}
@@ -407,20 +394,15 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for commit response
 				response_rx
 					.await
-					.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?
-					.map_err(TransactionCommitError::new)?;
+					.context("failed to receive postgres commit response")??;
 			} else if !operations.operations().is_empty() {
 				// We have operations but no transaction - create one just for commit
-				let tx_sender = self
-					.ensure_transaction()
-					.await
-					.map_err(TransactionCommitError::new)?;
-
+				let tx_sender = self.ensure_transaction().await?;
 				// Execute all operations
 				for op in operations.operations() {
 					match op {
@@ -433,16 +415,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::Clear { key } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -452,16 +429,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::ClearRange { begin, end } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -472,16 +444,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 						Operation::AtomicOp {
 							key,
@@ -497,16 +464,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?;
+								.context("failed to send postgres transaction command")?;
 
 							response_rx
 								.await
-								.map_err(|_| {
-									TransactionCommitError::new(FdbError::from_code(1510))
-								})?
-								.map_err(TransactionCommitError::new)?;
+								.context("failed to receive postgres response")??;
 						}
 					}
 				}
@@ -519,13 +481,12 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for commit response
 				response_rx
 					.await
-					.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?
-					.map_err(TransactionCommitError::new)?;
+					.context("failed to receive postgres commit response")??;
 			}
 
 			Ok(())
@@ -554,7 +515,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 		begin: &[u8],
 		end: &[u8],
 		conflict_type: ConflictRangeType,
-	) -> FdbResult<()> {
+	) -> Result<()> {
 		// For PostgreSQL, we implement conflict ranges using the conflict_ranges table
 		// This ensures serializable isolation for the specified range
 
@@ -585,31 +546,21 @@ impl TransactionDriver for PostgresTransactionDriver {
 		// Try to send the add conflict range command
 		// Since this is a synchronous method, we use try_send
 		let (response_tx, _response_rx) = oneshot::channel();
-		match tx_sender.try_send(TransactionCommand::AddConflictRange {
-			begin: begin_vec,
-			end: end_vec,
-			conflict_type,
-			response: response_tx,
-		}) {
-			Ok(_) => {
-				// Command sent successfully
-				// Note: We can't wait for the response in a sync method
-				// The actual conflict range acquisition will happen asynchronously
-				Ok(())
-			}
-			Err(_) => {
-				// Channel is full or closed
-				// Return an error indicating we couldn't add the conflict range
-				Err(FdbError::from_code(1020)) // Transaction conflict error
-			}
-		}
+		tx_sender
+			.try_send(TransactionCommand::AddConflictRange {
+				begin: begin_vec,
+				end: end_vec,
+				conflict_type,
+				response: response_tx,
+			})
+			.map_err(|_| DatabaseError::NotCommitted.into())
 	}
 
 	fn get_estimated_range_size_bytes<'a>(
 		&'a self,
 		begin: &'a [u8],
 		end: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = FdbResult<i64>> + Send + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>> {
 		let begin = begin.to_vec();
 		let end = end.to_vec();
 
@@ -625,16 +576,18 @@ impl TransactionDriver for PostgresTransactionDriver {
 					response: response_tx,
 				})
 				.await
-				.map_err(|_| FdbError::from_code(1510))?;
+				.context("failed to send postgres command")?;
 
 			// Wait for response
-			let size = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+			let size = response_rx
+				.await
+				.context("failed to receive postgres size response")??;
 
 			Ok(size)
 		})
 	}
 
-	fn commit_owned(&self) -> Pin<Box<dyn Future<Output = FdbResult<()>> + Send + '_>> {
+	fn commit_ref(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
 		Box::pin(async move {
 			// Get operations and mark as committed
 			let operations = {
@@ -664,9 +617,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::Clear { key } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -676,9 +631,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::ClearRange { begin, end } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -689,9 +646,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::AtomicOp {
 							key,
@@ -707,9 +666,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 					}
 				}
@@ -722,10 +683,12 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for commit response
-				response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				response_rx
+					.await
+					.context("failed to receive postgres commit response")??;
 			} else if !operations.operations().is_empty() {
 				// We have operations but no transaction - create one just for commit
 				let tx_sender = self.ensure_transaction().await?;
@@ -742,9 +705,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::Clear { key } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -754,9 +719,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::ClearRange { begin, end } => {
 							let (response_tx, response_rx) = oneshot::channel();
@@ -767,9 +734,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 						Operation::AtomicOp {
 							key,
@@ -785,9 +754,11 @@ impl TransactionDriver for PostgresTransactionDriver {
 									response: response_tx,
 								})
 								.await
-								.map_err(|_| FdbError::from_code(1510))?;
+								.context("failed to send postgres transaction command")?;
 
-							response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+							response_rx
+								.await
+								.context("failed to receive postgres response")??;
 						}
 					}
 				}
@@ -800,10 +771,12 @@ impl TransactionDriver for PostgresTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send postgres transaction command")?;
 
 				// Wait for commit response
-				response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				response_rx
+					.await
+					.context("failed to receive postgres commit response")??;
 			}
 
 			Ok(())

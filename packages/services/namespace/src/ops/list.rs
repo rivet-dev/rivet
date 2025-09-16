@@ -1,8 +1,8 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
-use udb_util::SNAPSHOT;
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys, types::Namespace};
 
@@ -24,16 +24,16 @@ pub async fn namespace_list(ctx: &OperationCtx, input: &Input) -> Result<Output>
 
 	let namespaces = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let mut namespaces = Vec::new();
 			let limit = input.limit.unwrap_or(1000); // Default limit to 1000
 
 			let mut stream = tx.get_ranges_keyvalues(
-				udb::RangeOption {
+				universaldb::RangeOption {
 					mode: StreamingMode::Iterator,
 					..(&keys::subspace()).into()
 				},
-				SNAPSHOT,
+				Snapshot,
 			);
 
 			let mut seen_namespaces = std::collections::HashSet::new();
@@ -59,7 +59,7 @@ pub async fn namespace_list(ctx: &OperationCtx, input: &Input) -> Result<Output>
 				}
 			}
 
-			Result::<_, udb::FdbBindingError>::Ok(namespaces)
+			Ok(namespaces)
 		})
 		.custom_instrument(tracing::info_span!("namespace_list_tx"))
 		.await?;

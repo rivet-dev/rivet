@@ -2,8 +2,8 @@ use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_types::runners::Runner;
-use udb_util::{FormalChunkedKey, SERIALIZABLE, SNAPSHOT, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::{FormalChunkedKey, IsolationLevel::*};
 
 use crate::keys;
 
@@ -23,7 +23,7 @@ pub async fn pegboard_runner_get(ctx: &OperationCtx, input: &Input) -> Result<Ou
 
 	let runners = ctx
 		.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let dc_name = dc_name.to_string();
 			async move {
 				let mut runners = Vec::new();
@@ -34,7 +34,7 @@ pub async fn pegboard_runner_get(ctx: &OperationCtx, input: &Input) -> Result<Ou
 					}
 				}
 
-				std::result::Result::<_, udb::FdbBindingError>::Ok(runners)
+				Ok(runners)
 			}
 		})
 		.await?;
@@ -44,18 +44,18 @@ pub async fn pegboard_runner_get(ctx: &OperationCtx, input: &Input) -> Result<Ou
 
 pub(crate) async fn get_inner(
 	dc_name: &str,
-	tx: &udb::Transaction,
+	tx: &universaldb::Transaction,
 	runner_id: Id,
-) -> std::result::Result<Option<Runner>, udb::FdbBindingError> {
-	let txs = tx.subspace(keys::subspace());
+) -> Result<Option<Runner>> {
+	let tx = tx.with_subspace(keys::subspace());
 
 	// TODO: Make this part of the below try join to reduce round trip count
 	// Check if runner exists by looking for workflow ID
-	if !txs
-		.exists(&keys::runner::WorkflowIdKey::new(runner_id), SERIALIZABLE)
+	if !tx
+		.exists(&keys::runner::WorkflowIdKey::new(runner_id), Serializable)
 		.await?
 	{
-		return std::result::Result::Ok(None);
+		return Ok(None);
 	}
 
 	let namespace_id_key = keys::runner::NamespaceIdKey::new(runner_id);
@@ -71,7 +71,7 @@ pub(crate) async fn get_inner(
 	let last_ping_ts_key = keys::runner::LastPingTsKey::new(runner_id);
 	let last_rtt_key = keys::runner::LastRttKey::new(runner_id);
 	let metadata_key = keys::runner::MetadataKey::new(runner_id);
-	let metadata_subspace = txs.subspace(&metadata_key);
+	let metadata_subspace = keys::subspace().subspace(&metadata_key);
 
 	let (
 		namespace_id,
@@ -88,27 +88,27 @@ pub(crate) async fn get_inner(
 		last_rtt,
 		metadata_chunks,
 	) = tokio::try_join!(
-		// NOTE: These are not SERIALIZABLE because this op is meant for basic information (i.e. data for the
+		// NOTE: These are not Serializable because this op is meant for basic information (i.e. data for the
 		// API)
-		txs.read(&namespace_id_key, SNAPSHOT),
-		txs.read(&name_key, SNAPSHOT),
-		txs.read(&key_key, SNAPSHOT),
-		txs.read(&version_key, SNAPSHOT),
-		txs.read(&total_slots_key, SNAPSHOT),
-		txs.read(&remaining_slots_key, SNAPSHOT),
-		txs.read(&create_ts_key, SNAPSHOT),
-		txs.read_opt(&connected_ts_key, SNAPSHOT),
-		txs.read_opt(&drain_ts_key, SNAPSHOT),
-		txs.read_opt(&stop_ts_key, SNAPSHOT),
-		txs.read_opt(&last_ping_ts_key, SNAPSHOT),
-		txs.read_opt(&last_rtt_key, SNAPSHOT),
+		tx.read(&namespace_id_key, Snapshot),
+		tx.read(&name_key, Snapshot),
+		tx.read(&key_key, Snapshot),
+		tx.read(&version_key, Snapshot),
+		tx.read(&total_slots_key, Snapshot),
+		tx.read(&remaining_slots_key, Snapshot),
+		tx.read(&create_ts_key, Snapshot),
+		tx.read_opt(&connected_ts_key, Snapshot),
+		tx.read_opt(&drain_ts_key, Snapshot),
+		tx.read_opt(&stop_ts_key, Snapshot),
+		tx.read_opt(&last_ping_ts_key, Snapshot),
+		tx.read_opt(&last_rtt_key, Snapshot),
 		async {
-			txs.get_ranges_keyvalues(
-				udb::RangeOption {
+			tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::WantAll,
 					..(&metadata_subspace).into()
 				},
-				SNAPSHOT,
+				Snapshot,
 			)
 			.try_collect::<Vec<_>>()
 			.await
@@ -119,12 +119,7 @@ pub(crate) async fn get_inner(
 	let metadata = if metadata_chunks.is_empty() {
 		None
 	} else {
-		Some(
-			metadata_key
-				.combine(metadata_chunks)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-				.metadata,
-		)
+		Some(metadata_key.combine(metadata_chunks)?.metadata)
 	};
 
 	std::result::Result::Ok(Some(Runner {

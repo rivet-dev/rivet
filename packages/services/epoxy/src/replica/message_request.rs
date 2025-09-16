@@ -20,12 +20,9 @@ pub async fn message_request(
 
 			// Store the configuration
 			ctx.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
-					async move {
-						replica::update_config::update_config(&*tx, replica_id, req)
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-					}
+					async move { replica::update_config::update_config(&*tx, replica_id, req) }
 				})
 				.await?;
 
@@ -34,13 +31,9 @@ pub async fn message_request(
 		protocol::RequestKind::PreAcceptRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
-					async move {
-						replica::messages::pre_accept(&*tx, replica_id, req)
-							.await
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-					}
+					async move { replica::messages::pre_accept(&*tx, replica_id, req).await }
 				})
 				.await?;
 			protocol::ResponseKind::PreAcceptResponse(response)
@@ -48,13 +41,9 @@ pub async fn message_request(
 		protocol::RequestKind::AcceptRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
-					async move {
-						replica::messages::accept(&*tx, replica_id, req)
-							.await
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-					}
+					async move { replica::messages::accept(&*tx, replica_id, req).await }
 				})
 				.await?;
 			protocol::ResponseKind::AcceptResponse(response)
@@ -62,13 +51,10 @@ pub async fn message_request(
 		protocol::RequestKind::CommitRequest(req) => {
 			// Commit and update KV store
 			ctx.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
 					async move {
-						replica::messages::commit(&*tx, replica_id, req, true)
-							.await
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))?;
-
+						replica::messages::commit(&*tx, replica_id, req, true).await?;
 						Result::Ok(())
 					}
 				})
@@ -79,28 +65,20 @@ pub async fn message_request(
 		protocol::RequestKind::PrepareRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
-					async move {
-						replica::messages::prepare(&*tx, replica_id, req)
-							.await
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-					}
+					async move { replica::messages::prepare(&*tx, replica_id, req).await }
 				})
 				.await?;
 			protocol::ResponseKind::PrepareResponse(response)
 		}
 		protocol::RequestKind::DownloadInstancesRequest(req) => {
-			// Handle download instances request - read from FDB and return instances
+			// Handle download instances request - read from UDB and return instances
 			let instances = ctx
 				.udb()?
-				.run(move |tx, _| {
+				.run(move |tx| {
 					let req = req.clone();
-					async move {
-						replica::messages::download_instances(&*tx, replica_id, req)
-							.await
-							.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-					}
+					async move { replica::messages::download_instances(&*tx, replica_id, req).await }
 				})
 				.await?;
 

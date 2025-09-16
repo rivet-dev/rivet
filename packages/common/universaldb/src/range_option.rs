@@ -15,8 +15,8 @@ use std::{
 	ops::{Range, RangeInclusive},
 };
 
-use super::{keyselector::*, options};
-use crate::{future::*, tuple::Subspace};
+use super::{key_selector::KeySelector, options};
+use crate::{tuple::Subspace, value::Values};
 
 /// `RangeOption` represents a query parameters for range scan query.
 #[derive(Debug, Clone)]
@@ -47,7 +47,7 @@ impl RangeOption<'_> {
 		self
 	}
 
-	pub fn next_range(mut self, kvs: &FdbValues) -> Option<Self> {
+	pub fn next_range(mut self, kvs: &Values) -> Option<Self> {
 		if !kvs.more() {
 			return None;
 		}

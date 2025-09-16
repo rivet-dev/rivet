@@ -1,7 +1,6 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use udb_util::{FormalKey, SERIALIZABLE};
-use universaldb as udb;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::keys;
 
@@ -27,7 +26,7 @@ pub struct Actor {
 pub async fn pegboard_actor_get_runner(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let actors = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			futures_util::stream::iter(input.actor_ids.clone())
 				.map(|actor_id| {
 					let tx = tx.clone();
@@ -36,17 +35,15 @@ pub async fn pegboard_actor_get_runner(ctx: &OperationCtx, input: &Input) -> Res
 						let connectable_key = keys::actor::ConnectableKey::new(actor_id);
 
 						let (runner_id_entry, connectable_entry) = tokio::try_join!(
-							tx.get(&keys::subspace().pack(&runner_id_key), SERIALIZABLE),
-							tx.get(&keys::subspace().pack(&connectable_key), SERIALIZABLE),
+							tx.get(&keys::subspace().pack(&runner_id_key), Serializable),
+							tx.get(&keys::subspace().pack(&connectable_key), Serializable),
 						)?;
 
 						let Some(runner_id_entry) = runner_id_entry else {
 							return Ok(None);
 						};
 
-						let runner_id = runner_id_key
-							.deserialize(&runner_id_entry)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let runner_id = runner_id_key.deserialize(&runner_id_entry)?;
 
 						Ok(Some(Actor {
 							actor_id,

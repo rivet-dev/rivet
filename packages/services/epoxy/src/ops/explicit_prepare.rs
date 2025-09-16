@@ -1,7 +1,6 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
-use universaldb::FdbBindingError;
 
 use crate::{http_client, replica, types, utils};
 
@@ -33,21 +32,13 @@ pub async fn explicit_prepare(ctx: &OperationCtx, input: &Input) -> Result<Expli
 	// Read config
 	let config = ctx
 		.udb()?
-		.run(move |tx, _| async move {
-			utils::read_config(&tx, replica_id)
-				.await
-				.map_err(|x| FdbBindingError::CustomError(x.into()))
-		})
+		.run(move |tx| async move { utils::read_config(&tx, replica_id).await })
 		.await?;
 
 	// EPaxos Step 25: Increment ballot number
 	let new_ballot = ctx
 		.udb()?
-		.run(move |tx, _| async move {
-			replica::ballot::increment_ballot(&tx, replica_id)
-				.await
-				.map_err(|x| FdbBindingError::CustomError(x.into()))
-		})
+		.run(move |tx| async move { replica::ballot::increment_ballot(&tx, replica_id).await })
 		.await?;
 
 	// Get quorum members

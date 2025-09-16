@@ -1,9 +1,13 @@
+use anyhow::Result;
 use rivet_test_deps_docker::TestDatabase;
 use std::{borrow::Cow, sync::Arc};
 use universaldb::{
-	Database, FdbBindingError, KeySelector, RangeOption,
+	Database,
+	key_selector::KeySelector,
 	options::{ConflictRangeType, StreamingMode},
+	range_option::RangeOption,
 	tuple::{Element, Subspace, Versionstamp, pack_with_versionstamp},
+	utils::IsolationLevel::*,
 	versionstamp::generate_versionstamp,
 };
 use uuid::Uuid;
@@ -123,7 +127,7 @@ async fn run_all_tests(db: universaldb::Database) {
 async fn test_database_options(db: &Database) {
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicU32, Ordering};
-	use universaldb::FdbError;
+	use universaldb::error::DatabaseError;
 	use universaldb::options::DatabaseOption;
 
 	// Test setting transaction retry limit
@@ -135,7 +139,7 @@ async fn test_database_options(db: &Database) {
 	let counter_clone = conflict_counter.clone();
 
 	let result = db
-		.run(|tx, _maybe_committed| {
+		.run(|tx| {
 			let counter = counter_clone.clone();
 			async move {
 				// Increment counter to track retry attempts
@@ -143,7 +147,7 @@ async fn test_database_options(db: &Database) {
 
 				// Force a retry on first few attempts by returning a retryable error
 				if attempts < 3 {
-					return Err(FdbBindingError::from(FdbError::from_code(1020))); // not_committed
+					return Err(DatabaseError::NotCommitted.into());
 				}
 
 				// Should succeed on the third attempt
@@ -166,7 +170,7 @@ async fn test_database_options(db: &Database) {
 	let counter_clone2 = conflict_counter2.clone();
 
 	let result = db
-		.run(|_tx, _maybe_committed| {
+		.run(|_tx| {
 			let counter = counter_clone2.clone();
 			async move {
 				// Increment counter to track retry attempts
@@ -174,7 +178,7 @@ async fn test_database_options(db: &Database) {
 
 				// Always force a retry
 				if attempts < 10 {
-					return Err(FdbBindingError::from(FdbError::from_code(1020))); // not_committed
+					return Err(DatabaseError::NotCommitted.into());
 				}
 
 				Ok(())
@@ -195,8 +199,8 @@ async fn test_database_options(db: &Database) {
 		.unwrap();
 }
 
-async fn clear_test_namespace(db: &Database) -> Result<(), FdbBindingError> {
-	db.run(|tx, _maybe_committed| async move {
+async fn clear_test_namespace(db: &Database) -> Result<()> {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let (begin, end) = test_subspace.range();
 		tx.clear_range(&begin, &end);
@@ -207,7 +211,7 @@ async fn clear_test_namespace(db: &Database) -> Result<(), FdbBindingError> {
 
 async fn test_basic_operations(db: &Database) {
 	// Test set and get using subspace and tuple syntax
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("key1",));
 		tx.set(&key, b"value1");
@@ -217,22 +221,22 @@ async fn test_basic_operations(db: &Database) {
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
-	assert_eq!(value, Some(b"value1".to_vec()));
+	assert_eq!(value, Some(b"value1".to_vec().into()));
 
 	// Test get non-existent key
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -240,7 +244,7 @@ async fn test_basic_operations(db: &Database) {
 	assert_eq!(value, None);
 
 	// Test clear
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("key1",));
 		tx.clear(&key);
@@ -250,10 +254,10 @@ async fn test_basic_operations(db: &Database) {
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -263,7 +267,7 @@ async fn test_basic_operations(db: &Database) {
 
 async fn test_range_operations(db: &Database) {
 	// Setup test data using subspace keys
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key_a = test_subspace.pack(&("a",));
 		let key_b = test_subspace.pack(&("b",));
@@ -281,7 +285,7 @@ async fn test_range_operations(db: &Database) {
 
 	// Test get_range using subspace range for keys "b" through "d" (exclusive)
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("b",));
 			let key_d = test_subspace.pack(&("d",));
@@ -296,7 +300,7 @@ async fn test_range_operations(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals)
 		})
 		.await
@@ -316,7 +320,7 @@ async fn test_range_operations(db: &Database) {
 	assert_eq!(values[1].value(), b"3");
 
 	// Test clear_range using subspace keys
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key_b = test_subspace.pack(&("b",));
 		let key_d = test_subspace.pack(&("d",));
@@ -328,7 +332,7 @@ async fn test_range_operations(db: &Database) {
 
 	// Verify range was cleared
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("b",));
 			let key_d = test_subspace.pack(&("d",));
@@ -343,7 +347,7 @@ async fn test_range_operations(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals)
 		})
 		.await
@@ -352,31 +356,31 @@ async fn test_range_operations(db: &Database) {
 
 	// Verify keys outside range still exist
 	let value_a = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("a",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
-	assert_eq!(value_a, Some(b"1".to_vec()));
+	assert_eq!(value_a, Some(b"1".to_vec().into()));
 
 	let value_d = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("d",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
-	assert_eq!(value_d, Some(b"4".to_vec()));
+	assert_eq!(value_d, Some(b"4".to_vec().into()));
 }
 
 async fn test_transaction_isolation(db: &Database) {
 	// Set initial value using subspace
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("counter",));
 		tx.set(&key, b"0");
@@ -387,18 +391,18 @@ async fn test_transaction_isolation(db: &Database) {
 
 	// Test that each transaction sees consistent state
 	let val1 = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("counter",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
-	assert_eq!(val1, Some(b"0".to_vec()));
+	assert_eq!(val1, Some(b"0".to_vec().into()));
 
 	// Set value in one transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("counter",));
 		tx.set(&key, b"1");
@@ -409,20 +413,20 @@ async fn test_transaction_isolation(db: &Database) {
 
 	// Verify the change is visible in new transaction
 	let val3 = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("counter",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
-	assert_eq!(val3, Some(b"1".to_vec()));
+	assert_eq!(val3, Some(b"1".to_vec().into()));
 }
 
 async fn test_conflict_ranges(db: &Database) {
 	// Test 1: Basic conflict range with read type
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("conflict",));
 		tx.set(&key, b"initial");
@@ -435,7 +439,7 @@ async fn test_conflict_ranges(db: &Database) {
 	.unwrap();
 
 	// Test 2: Conflict range with write type
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("range_test1",));
 		let key2 = test_subspace.pack(&("range_test2",));
@@ -452,7 +456,7 @@ async fn test_conflict_ranges(db: &Database) {
 	.unwrap();
 
 	// Test 3: Multiple conflict ranges
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 
 		// Add multiple conflict ranges
@@ -472,7 +476,7 @@ async fn test_conflict_ranges(db: &Database) {
 
 async fn test_get_key(db: &Database) {
 	// Setup test data using subspace keys
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("k1",));
 		let key2 = test_subspace.pack(&("k2",));
@@ -488,11 +492,11 @@ async fn test_get_key(db: &Database) {
 
 	// Test first_greater_or_equal
 	let key = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let search_key = test_subspace.pack(&("k2",));
 			let selector = KeySelector::first_greater_or_equal(Cow::Owned(search_key));
-			let k = tx.get_key(&selector, false).await?;
+			let k = tx.get_key(&selector, Serializable).await?;
 			Ok(k)
 		})
 		.await
@@ -500,27 +504,27 @@ async fn test_get_key(db: &Database) {
 
 	let test_subspace = Subspace::from("test");
 	let expected_key = test_subspace.pack(&("k2",));
-	assert_eq!(key, expected_key);
+	assert_eq!(key, expected_key.into());
 
 	// Test with first_greater_than
 	let key = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let search_key = test_subspace.pack(&("k1",));
 			let selector = KeySelector::first_greater_than(Cow::Owned(search_key));
-			let k = tx.get_key(&selector, false).await?;
+			let k = tx.get_key(&selector, Serializable).await?;
 			Ok(k)
 		})
 		.await
 		.unwrap();
 
 	let expected_key = test_subspace.pack(&("k2",));
-	assert_eq!(key, expected_key);
+	assert_eq!(key, expected_key.into());
 }
 
 async fn test_range_options(db: &Database) {
 	// Setup test data
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key_a = test_subspace.pack(&("range_a",));
 		let key_b = test_subspace.pack(&("range_b",));
@@ -540,7 +544,7 @@ async fn test_range_options(db: &Database) {
 
 	// Test 1: first_greater_or_equal on both bounds (inclusive range [b, d))
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("range_b",));
 			let key_d = test_subspace.pack(&("range_d",));
@@ -555,7 +559,7 @@ async fn test_range_options(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals.into_vec())
 		})
 		.await
@@ -575,7 +579,7 @@ async fn test_range_options(db: &Database) {
 	// Test 2: first_greater_than on lower, first_greater_or_equal on upper (b, d)
 	// Note: Some drivers may not correctly implement first_greater_than and include the boundary key
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("range_b",));
 			let key_d = test_subspace.pack(&("range_d",));
@@ -590,7 +594,7 @@ async fn test_range_options(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals.into_vec())
 		})
 		.await
@@ -617,7 +621,7 @@ async fn test_range_options(db: &Database) {
 
 	// Test 3: first_greater_or_equal on lower, first_greater_than on upper [b, d]
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("range_b",));
 			let key_d = test_subspace.pack(&("range_d",));
@@ -632,7 +636,7 @@ async fn test_range_options(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals.into_vec())
 		})
 		.await
@@ -652,7 +656,7 @@ async fn test_range_options(db: &Database) {
 
 	// Test 4: first_greater_than on both bounds (b, e)
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key_b = test_subspace.pack(&("range_b",));
 			let key_e = test_subspace.pack(&("range_e",));
@@ -667,7 +671,7 @@ async fn test_range_options(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let vals = tx.get_range(&range, 1, false).await?;
+			let vals = tx.get_range(&range, 1, Serializable).await?;
 			Ok(vals.into_vec())
 		})
 		.await
@@ -686,7 +690,7 @@ async fn test_range_options(db: &Database) {
 	assert_eq!(results[2].value(), b"val_e");
 
 	// Clear test data
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let (begin, end) = test_subspace.range();
 		tx.clear_range(&begin, &end);
@@ -698,7 +702,7 @@ async fn test_range_options(db: &Database) {
 
 async fn test_read_after_write(db: &Database) {
 	// Test 1: Basic set and get within same transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("raw_key1",));
 
@@ -706,12 +710,12 @@ async fn test_read_after_write(db: &Database) {
 		tx.set(&key1, b"value1");
 
 		// Read it back immediately (read-after-write)
-		let value = tx.get(&key1, false).await?;
-		assert_eq!(value, Some(b"value1".to_vec()));
+		let value = tx.get(&key1, Serializable).await?;
+		assert_eq!(value, Some(b"value1".to_vec().into()));
 
 		// Read a non-existent key
 		let key2 = test_subspace.pack(&("raw_key2",));
-		let value = tx.get(&key2, false).await?;
+		let value = tx.get(&key2, Serializable).await?;
 		assert_eq!(value, None);
 
 		Ok(())
@@ -720,19 +724,19 @@ async fn test_read_after_write(db: &Database) {
 	.unwrap();
 
 	// Test 2: Clear and get
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("raw_key1",));
 
 		// First verify the key exists from previous test
-		let value = tx.get(&key1, false).await?;
-		assert_eq!(value, Some(b"value1".to_vec()));
+		let value = tx.get(&key1, Serializable).await?;
+		assert_eq!(value, Some(b"value1".to_vec().into()));
 
 		// Clear it
 		tx.clear(&key1);
 
 		// Read should return None
-		let value = tx.get(&key1, false).await?;
+		let value = tx.get(&key1, Serializable).await?;
 		assert_eq!(value, None);
 
 		Ok(())
@@ -741,7 +745,7 @@ async fn test_read_after_write(db: &Database) {
 	.unwrap();
 
 	// Test 3: Clear range and get
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key_a = test_subspace.pack(&("raw_a",));
 		let key_b = test_subspace.pack(&("raw_b",));
@@ -758,10 +762,16 @@ async fn test_read_after_write(db: &Database) {
 		tx.clear_range(&key_b, &key_d);
 
 		// Check values
-		assert_eq!(tx.get(&key_a, false).await?, Some(b"value_a".to_vec()));
-		assert_eq!(tx.get(&key_b, false).await?, None);
-		assert_eq!(tx.get(&key_c, false).await?, None);
-		assert_eq!(tx.get(&key_d, false).await?, Some(b"value_d".to_vec()));
+		assert_eq!(
+			tx.get(&key_a, Serializable).await?,
+			Some(b"value_a".to_vec().into())
+		);
+		assert_eq!(tx.get(&key_b, Serializable).await?, None);
+		assert_eq!(tx.get(&key_c, Serializable).await?, None);
+		assert_eq!(
+			tx.get(&key_d, Serializable).await?,
+			Some(b"value_d".to_vec().into())
+		);
 
 		Ok(())
 	})
@@ -769,7 +779,7 @@ async fn test_read_after_write(db: &Database) {
 	.unwrap();
 
 	// Test 4: Get range with local modifications
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let range_key1 = test_subspace.pack(&("range_key1",));
 		let range_key3 = test_subspace.pack(&("range_key3",));
@@ -786,7 +796,7 @@ async fn test_read_after_write(db: &Database) {
 			end: KeySelector::first_greater_or_equal(Cow::Owned(end)),
 			..RangeOption::default()
 		};
-		let values = tx.get_range(&range_opt, 1, false).await?;
+		let values = tx.get_range(&range_opt, 1, Serializable).await?;
 
 		let mut keys = Vec::new();
 		for kv in values.into_iter() {
@@ -803,18 +813,27 @@ async fn test_read_after_write(db: &Database) {
 	.unwrap();
 
 	// Test 5: Overwrite value multiple times
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("overwrite_key",));
 
 		tx.set(&key, b"value1");
-		assert_eq!(tx.get(&key, false).await?, Some(b"value1".to_vec()));
+		assert_eq!(
+			tx.get(&key, Serializable).await?,
+			Some(b"value1".to_vec().into())
+		);
 
 		tx.set(&key, b"value2");
-		assert_eq!(tx.get(&key, false).await?, Some(b"value2".to_vec()));
+		assert_eq!(
+			tx.get(&key, Serializable).await?,
+			Some(b"value2".to_vec().into())
+		);
 
 		tx.set(&key, b"value3");
-		assert_eq!(tx.get(&key, false).await?, Some(b"value3".to_vec()));
+		assert_eq!(
+			tx.get(&key, Serializable).await?,
+			Some(b"value3".to_vec().into())
+		);
 
 		Ok(())
 	})
@@ -824,7 +843,7 @@ async fn test_read_after_write(db: &Database) {
 
 async fn test_set_clear_set(db: &Database) {
 	// Test the bug where set → clear → set sequence doesn't work correctly
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bug_key",));
 
@@ -838,10 +857,10 @@ async fn test_set_clear_set(db: &Database) {
 		tx.set(&key, b"value2");
 
 		// This should return the latest value "value2", not None or Cleared
-		let value = tx.get(&key, false).await?;
+		let value = tx.get(&key, Serializable).await?;
 		assert_eq!(
 			value,
-			Some(b"value2".to_vec()),
+			Some(b"value2".to_vec().into()),
 			"Expected to get the latest set value after set-clear-set sequence"
 		);
 
@@ -853,7 +872,7 @@ async fn test_set_clear_set(db: &Database) {
 
 async fn test_get_key_with_local_writes(db: &Database) {
 	// Setup: Store keys with values 2 and 10 in the database
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key2 = test_subspace.pack(&(2,));
 		let key10 = test_subspace.pack(&(10,));
@@ -866,7 +885,7 @@ async fn test_get_key_with_local_writes(db: &Database) {
 
 	// Test: Write a key with value 5 in the transaction, then get_key with >= 3
 	let result_key = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 
 			// Write key 5 in the transaction
@@ -876,7 +895,7 @@ async fn test_get_key_with_local_writes(db: &Database) {
 			// Use get_key with >= 3 selector
 			let search_key = test_subspace.pack(&(3,));
 			let selector = KeySelector::first_greater_or_equal(Cow::Owned(search_key));
-			let k = tx.get_key(&selector, false).await?;
+			let k = tx.get_key(&selector, Serializable).await?;
 			Ok(k)
 		})
 		.await
@@ -886,13 +905,14 @@ async fn test_get_key_with_local_writes(db: &Database) {
 	let test_subspace = Subspace::from("test");
 	let expected_key5 = test_subspace.pack(&(5,));
 	assert_eq!(
-		result_key, expected_key5,
+		result_key,
+		expected_key5.clone().into(),
 		"get_key should return key 5 from local writes, not key 10 from database"
 	);
 
 	// Test with first_greater_than
 	let result_key = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 
 			// Write key 5 in the transaction
@@ -902,7 +922,7 @@ async fn test_get_key_with_local_writes(db: &Database) {
 			// Use get_key with > 4 selector
 			let search_key = test_subspace.pack(&(4,));
 			let selector = KeySelector::first_greater_than(Cow::Owned(search_key));
-			let k = tx.get_key(&selector, false).await?;
+			let k = tx.get_key(&selector, Serializable).await?;
 			Ok(k)
 		})
 		.await
@@ -910,14 +930,15 @@ async fn test_get_key_with_local_writes(db: &Database) {
 
 	// Should return key5, not key10
 	assert_eq!(
-		result_key, expected_key5,
+		result_key,
+		expected_key5.into(),
 		"get_key with > selector should return key 5 from local writes"
 	);
 }
 
 async fn test_snapshot_reads(db: &Database) {
 	// Setup: Store initial data in the database
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("snap_key1",));
 		let key2 = test_subspace.pack(&("snap_key2",));
@@ -932,7 +953,7 @@ async fn test_snapshot_reads(db: &Database) {
 	.unwrap();
 
 	// Test 1: Just snapshot reads
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("snap_key1",));
 		let key2 = test_subspace.pack(&("snap_key2",));
@@ -940,10 +961,10 @@ async fn test_snapshot_reads(db: &Database) {
 		let key4 = test_subspace.pack(&("snap_key4",));
 
 		// Snapshot read should see database value
-		let snapshot_value = tx.get(&key1, true).await?;
+		let snapshot_value = tx.get(&key1, Snapshot).await?;
 		assert_eq!(
 			snapshot_value,
-			Some(b"db_value1".to_vec()),
+			Some(b"db_value1".to_vec().into()),
 			"Snapshot read should see database value"
 		);
 
@@ -957,7 +978,7 @@ async fn test_snapshot_reads(db: &Database) {
 		};
 
 		// Snapshot range read
-		let snapshot_values = tx.get_range(&range_opt, 1, true).await?;
+		let snapshot_values = tx.get_range(&range_opt, 1, Snapshot).await?;
 		let mut snapshot_keys = Vec::new();
 		for kv in snapshot_values.into_iter() {
 			snapshot_keys.push((kv.key().to_vec(), kv.value().to_vec()));
@@ -987,7 +1008,7 @@ async fn test_snapshot_reads(db: &Database) {
 	.unwrap();
 
 	// Test 2: Snapshot read should skip local set operations within a transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("snap_key1",));
 
@@ -995,18 +1016,18 @@ async fn test_snapshot_reads(db: &Database) {
 		tx.set(&key1, b"local_value1");
 
 		// Non-snapshot read should see local value
-		let value = tx.get(&key1, false).await?;
+		let value = tx.get(&key1, Serializable).await?;
 		assert_eq!(
 			value,
-			Some(b"local_value1".to_vec()),
+			Some(b"local_value1".to_vec().into()),
 			"Non-snapshot read should see local write"
 		);
 
 		// Snapshot read should see local write
-		let snapshot_value = tx.get(&key1, true).await?;
+		let snapshot_value = tx.get(&key1, Snapshot).await?;
 		assert_eq!(
 			snapshot_value,
-			Some(b"local_value1".to_vec()),
+			Some(b"local_value1".to_vec().into()),
 			"Snapshot read should see local write"
 		);
 
@@ -1018,7 +1039,7 @@ async fn test_snapshot_reads(db: &Database) {
 	// Reset state
 	{
 		clear_test_namespace(&db).await.unwrap();
-		db.run(|tx, _maybe_committed| async move {
+		db.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key1 = test_subspace.pack(&("snap_key1",));
 			let key2 = test_subspace.pack(&("snap_key2",));
@@ -1034,7 +1055,7 @@ async fn test_snapshot_reads(db: &Database) {
 	}
 
 	// Test 3: Snapshot read should skip local clear operations
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key2 = test_subspace.pack(&("snap_key2",));
 
@@ -1042,11 +1063,11 @@ async fn test_snapshot_reads(db: &Database) {
 		tx.clear(&key2);
 
 		// Non-snapshot read should see None (cleared)
-		let value = tx.get(&key2, false).await?;
+		let value = tx.get(&key2, Serializable).await?;
 		assert_eq!(value, None, "Non-snapshot read should see cleared value");
 
 		// Snapshot read should still see database value
-		let snapshot_value = tx.get(&key2, true).await?;
+		let snapshot_value = tx.get(&key2, Snapshot).await?;
 		assert_eq!(snapshot_value, None, "Snapshot read should see local clear");
 
 		Ok(())
@@ -1057,7 +1078,7 @@ async fn test_snapshot_reads(db: &Database) {
 	// Reset state
 	{
 		clear_test_namespace(&db).await.unwrap();
-		db.run(|tx, _maybe_committed| async move {
+		db.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key1 = test_subspace.pack(&("snap_key1",));
 			let key2 = test_subspace.pack(&("snap_key2",));
@@ -1073,7 +1094,7 @@ async fn test_snapshot_reads(db: &Database) {
 	}
 
 	// Test 4: Snapshot get_range should skip local operations
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key1 = test_subspace.pack(&("snap_key1",));
 		let key2 = test_subspace.pack(&("snap_key2",));
@@ -1095,7 +1116,7 @@ async fn test_snapshot_reads(db: &Database) {
 		};
 
 		// Non-snapshot range read
-		let values = tx.get_range(&range_opt, 1, false).await?;
+		let values = tx.get_range(&range_opt, 1, Serializable).await?;
 		let mut non_snapshot_keys = Vec::new();
 		for kv in values.into_iter() {
 			non_snapshot_keys.push((kv.key().to_vec(), kv.value().to_vec()));
@@ -1121,7 +1142,7 @@ async fn test_snapshot_reads(db: &Database) {
 		);
 
 		// Snapshot range read
-		let snapshot_values = tx.get_range(&range_opt, 1, true).await?;
+		let snapshot_values = tx.get_range(&range_opt, 1, Snapshot).await?;
 		let mut snapshot_keys = Vec::new();
 		for kv in snapshot_values.into_iter() {
 			snapshot_keys.push((kv.key().to_vec(), kv.value().to_vec()));
@@ -1154,7 +1175,7 @@ async fn test_snapshot_reads(db: &Database) {
 	// Reset state
 	{
 		clear_test_namespace(&db).await.unwrap();
-		db.run(|tx, _maybe_committed| async move {
+		db.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key1 = test_subspace.pack(&("snap_key1",));
 			let key2 = test_subspace.pack(&("snap_key2",));
@@ -1170,7 +1191,7 @@ async fn test_snapshot_reads(db: &Database) {
 	}
 
 	// Test 5: Snapshot get_key should skip local operations
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 
 		// Add a local key between existing database keys
@@ -1180,13 +1201,18 @@ async fn test_snapshot_reads(db: &Database) {
 		// Non-snapshot get_key >= "snap_key14" should find the local key15
 		let search_key = test_subspace.pack(&("snap_key14",));
 		let selector = KeySelector::first_greater_or_equal(Cow::Owned(search_key));
-		let result = tx.get_key(&selector, false).await?;
-		assert_eq!(result, key15, "Non-snapshot get_key should find local key");
+		let result = tx.get_key(&selector, Serializable).await?;
+		assert_eq!(
+			result,
+			key15.clone().into(),
+			"Non-snapshot get_key should find local key"
+		);
 
 		// Snapshot get_key >= "snap_key14" should find the local key15
-		let snapshot_result = tx.get_key(&selector, true).await?;
+		let snapshot_result = tx.get_key(&selector, Snapshot).await?;
 		assert_eq!(
-			snapshot_result, key15,
+			snapshot_result,
+			key15.into(),
 			"Snapshot get_key should find local key"
 		);
 
@@ -1234,12 +1260,13 @@ async fn test_atomic_add(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test 1: Add to non-existent key (should treat as 0)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("add_key1",));
 
 		// Add 42 to non-existent key
-		tx.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
@@ -1247,73 +1274,75 @@ async fn test_atomic_add(db: &Database) {
 
 	// Verify the result
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("add_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(
 		result, 42,
 		"Add to non-existent key should equal the parameter"
 	);
 
 	// Test 2: Add to existing value
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("add_key1",));
 
 		// Add 10 to existing value (42)
-		tx.atomic_op(&key, &10i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &10i64.to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("add_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 52, "42 + 10 should equal 52");
 
 	// Test 3: Add negative number
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("add_key1",));
 
 		// Add -20 to existing value (52)
-		tx.atomic_op(&key, &(-20i64).to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &(-20i64).to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("add_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 32, "52 + (-20) should equal 32");
 
 	// Test 4: Test wrapping behavior with overflow
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("add_overflow",));
 
@@ -1324,28 +1353,29 @@ async fn test_atomic_add(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("add_overflow",));
 
 		// Add 1 to max i64 (should wrap)
-		tx.atomic_op(&key, &1i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &1i64.to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("add_overflow",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, i64::MIN, "Max i64 + 1 should wrap to min i64");
 }
 
@@ -1353,7 +1383,7 @@ async fn test_atomic_bitwise(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test BitAnd operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_and",));
 
@@ -1364,22 +1394,23 @@ async fn test_atomic_bitwise(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_and",));
 
 		// AND with 0b10101010 (170)
-		tx.atomic_op(&key, &[0b10101010], MutationType::BitAnd);
+		tx.informal()
+			.atomic_op(&key, &[0b10101010], MutationType::BitAnd);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("bit_and",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1392,7 +1423,7 @@ async fn test_atomic_bitwise(db: &Database) {
 	);
 
 	// Test BitOr operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_or",));
 
@@ -1403,22 +1434,23 @@ async fn test_atomic_bitwise(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_or",));
 
 		// OR with 0b00001111 (15)
-		tx.atomic_op(&key, &[0b00001111], MutationType::BitOr);
+		tx.informal()
+			.atomic_op(&key, &[0b00001111], MutationType::BitOr);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("bit_or",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1431,7 +1463,7 @@ async fn test_atomic_bitwise(db: &Database) {
 	);
 
 	// Test BitXor operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_xor",));
 
@@ -1442,22 +1474,23 @@ async fn test_atomic_bitwise(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_xor",));
 
 		// XOR with 0b10101010 (170)
-		tx.atomic_op(&key, &[0b10101010], MutationType::BitXor);
+		tx.informal()
+			.atomic_op(&key, &[0b10101010], MutationType::BitXor);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("bit_xor",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1470,7 +1503,7 @@ async fn test_atomic_bitwise(db: &Database) {
 	);
 
 	// Test bitwise operations with different lengths
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_len",));
 
@@ -1481,22 +1514,23 @@ async fn test_atomic_bitwise(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("bit_len",));
 
 		// AND with 1-byte value (should extend current to match param length)
-		tx.atomic_op(&key, &[0b10101010], MutationType::BitAnd);
+		tx.informal()
+			.atomic_op(&key, &[0b10101010], MutationType::BitAnd);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("bit_len",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1518,61 +1552,63 @@ async fn test_atomic_append_if_fits(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test 1: Append to non-existent key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("append_key1",));
 
-		tx.atomic_op(&key, b"hello", MutationType::AppendIfFits);
+		tx.informal()
+			.atomic_op(&key, b"hello", MutationType::AppendIfFits);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("append_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"hello",
 		"Append to non-existent key should create the key"
 	);
 
 	// Test 2: Append to existing key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("append_key1",));
 
-		tx.atomic_op(&key, b" world", MutationType::AppendIfFits);
+		tx.informal()
+			.atomic_op(&key, b" world", MutationType::AppendIfFits);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("append_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"hello world",
 		"Append should concatenate values"
 	);
 
 	// Test 3: Append that would exceed size limit (should not append)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("append_large",));
 
@@ -1584,23 +1620,24 @@ async fn test_atomic_append_if_fits(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("append_large",));
 
 		// Try to append 2KB more (should not fit)
 		let append_value = vec![b'y'; 2000];
-		tx.atomic_op(&key, &append_value, MutationType::AppendIfFits);
+		tx.informal()
+			.atomic_op(&key, &append_value, MutationType::AppendIfFits);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("append_large",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1622,7 +1659,7 @@ async fn test_atomic_min_max(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test Max operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("max_key",));
 
@@ -1634,55 +1671,57 @@ async fn test_atomic_min_max(db: &Database) {
 	.unwrap();
 
 	// Max with larger value (should replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("max_key",));
 
-		tx.atomic_op(&key, &20i64.to_le_bytes(), MutationType::Max);
+		tx.informal()
+			.atomic_op(&key, &20i64.to_le_bytes(), MutationType::Max);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("max_key",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 20, "Max should select the larger value");
 
 	// Max with smaller value (should not replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("max_key",));
 
-		tx.atomic_op(&key, &15i64.to_le_bytes(), MutationType::Max);
+		tx.informal()
+			.atomic_op(&key, &15i64.to_le_bytes(), MutationType::Max);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("max_key",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 20, "Max should keep the larger value");
 
 	// Test Min operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("min_key",));
 
@@ -1694,75 +1733,78 @@ async fn test_atomic_min_max(db: &Database) {
 	.unwrap();
 
 	// Min with smaller value (should replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("min_key",));
 
-		tx.atomic_op(&key, &5i64.to_le_bytes(), MutationType::Min);
+		tx.informal()
+			.atomic_op(&key, &5i64.to_le_bytes(), MutationType::Min);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("min_key",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 5, "Min should select the smaller value");
 
 	// Min with larger value (should not replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("min_key",));
 
-		tx.atomic_op(&key, &15i64.to_le_bytes(), MutationType::Min);
+		tx.informal()
+			.atomic_op(&key, &15i64.to_le_bytes(), MutationType::Min);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("min_key",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 5, "Min should keep the smaller value");
 
 	// Test Max/Min with non-existent key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("max_nonexistent",));
 
-		tx.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Max);
+		tx.informal()
+			.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Max);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("max_nonexistent",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 42, "Max on non-existent key should set the value");
 }
 
@@ -1770,7 +1812,7 @@ async fn test_atomic_byte_min_max(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test ByteMax operation (lexicographic comparison)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_max",));
 
@@ -1782,61 +1824,63 @@ async fn test_atomic_byte_min_max(db: &Database) {
 	.unwrap();
 
 	// ByteMax with lexicographically larger string (should replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_max",));
 
-		tx.atomic_op(&key, b"cherry", MutationType::ByteMax);
+		tx.informal()
+			.atomic_op(&key, b"cherry", MutationType::ByteMax);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("byte_max",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"cherry",
 		"ByteMax should select lexicographically larger value"
 	);
 
 	// ByteMax with lexicographically smaller string (should not replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_max",));
 
-		tx.atomic_op(&key, b"apple", MutationType::ByteMax);
+		tx.informal()
+			.atomic_op(&key, b"apple", MutationType::ByteMax);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("byte_max",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"cherry",
 		"ByteMax should keep lexicographically larger value"
 	);
 
 	// Test ByteMin operation
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_min",));
 
@@ -1848,82 +1892,85 @@ async fn test_atomic_byte_min_max(db: &Database) {
 	.unwrap();
 
 	// ByteMin with lexicographically smaller string (should replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_min",));
 
-		tx.atomic_op(&key, b"apple", MutationType::ByteMin);
+		tx.informal()
+			.atomic_op(&key, b"apple", MutationType::ByteMin);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("byte_min",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"apple",
 		"ByteMin should select lexicographically smaller value"
 	);
 
 	// ByteMin with lexicographically larger string (should not replace)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_min",));
 
-		tx.atomic_op(&key, b"cherry", MutationType::ByteMin);
+		tx.informal()
+			.atomic_op(&key, b"cherry", MutationType::ByteMin);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("byte_min",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"apple",
 		"ByteMin should keep lexicographically smaller value"
 	);
 
 	// Test ByteMin/ByteMax with non-existent key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("byte_nonexistent",));
 
-		tx.atomic_op(&key, b"first", MutationType::ByteMin);
+		tx.informal()
+			.atomic_op(&key, b"first", MutationType::ByteMin);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("byte_nonexistent",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"first",
 		"ByteMin on non-existent key should set the value"
 	);
@@ -1933,7 +1980,7 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test 1: Compare and clear with matching value
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_key1",));
 
@@ -1944,22 +1991,23 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_key1",));
 
 		// Compare and clear with matching value
-		tx.atomic_op(&key, b"target_value", MutationType::CompareAndClear);
+		tx.informal()
+			.atomic_op(&key, b"target_value", MutationType::CompareAndClear);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("cac_key1",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -1968,7 +2016,7 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	assert_eq!(value, None, "Key should be cleared when values match");
 
 	// Test 2: Compare and clear with non-matching value
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_key2",));
 
@@ -1979,50 +2027,52 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_key2",));
 
 		// Compare and clear with non-matching value
-		tx.atomic_op(&key, b"different_value", MutationType::CompareAndClear);
+		tx.informal()
+			.atomic_op(&key, b"different_value", MutationType::CompareAndClear);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("cac_key2",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"keep_this",
 		"Key should remain unchanged when values don't match"
 	);
 
 	// Test 3: Compare and clear on non-existent key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_nonexistent",));
 
 		// Compare and clear on non-existent key (treated as empty value)
-		tx.atomic_op(&key, b"", MutationType::CompareAndClear);
+		tx.informal()
+			.atomic_op(&key, b"", MutationType::CompareAndClear);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("cac_nonexistent",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -2034,7 +2084,7 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	);
 
 	// Test 4: Compare and clear with empty value on existing key
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_empty",));
 
@@ -2045,22 +2095,23 @@ async fn test_atomic_compare_and_clear(db: &Database) {
 	.await
 	.unwrap();
 
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("cac_empty",));
 
 		// Compare and clear with empty value
-		tx.atomic_op(&key, b"", MutationType::CompareAndClear);
+		tx.informal()
+			.atomic_op(&key, b"", MutationType::CompareAndClear);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("cac_empty",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -2076,7 +2127,7 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 	use universaldb::options::MutationType;
 
 	// Test that atomic operations within a transaction are visible to subsequent reads
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("isolation_key",));
 
@@ -2084,11 +2135,12 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 		tx.set(&key, &10i64.to_le_bytes());
 
 		// Perform atomic add
-		tx.atomic_op(&key, &5i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &5i64.to_le_bytes(), MutationType::Add);
 
 		// Read the value within the same transaction
-		let value = tx.get(&key, false).await?;
-		let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+		let value = tx.get(&key, Serializable).await?;
+		let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 
 		assert_eq!(
 			result, 15,
@@ -2096,11 +2148,12 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 		);
 
 		// Perform another atomic operation
-		tx.atomic_op(&key, &3i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &3i64.to_le_bytes(), MutationType::Add);
 
 		// Read again
-		let value = tx.get(&key, false).await?;
-		let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+		let value = tx.get(&key, Serializable).await?;
+		let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 
 		assert_eq!(
 			result, 18,
@@ -2114,7 +2167,7 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 
 	// Test that atomic operations are isolated between transactions
 	// Set initial value in one transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("isolation_key2",));
 
@@ -2125,11 +2178,12 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 	.unwrap();
 
 	// Perform atomic operation in another transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("isolation_key2",));
 
-		tx.atomic_op(&key, &50i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &50i64.to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
@@ -2137,16 +2191,16 @@ async fn test_atomic_transaction_isolation(db: &Database) {
 
 	// Verify the result in a third transaction
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("isolation_key2",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(
 		result, 150,
 		"Atomic operation should be committed and visible in new transaction"
@@ -2159,45 +2213,47 @@ async fn test_atomic_nonexistent_keys(db: &Database) {
 	// Test atomic operations on non-existent keys behave correctly
 
 	// Test Add (should treat as 0)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("nonexistent_add",));
 
-		tx.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Add);
+		tx.informal()
+			.atomic_op(&key, &42i64.to_le_bytes(), MutationType::Add);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent_add",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(result, 42, "Add on non-existent key should treat as 0");
 
 	// Test BitOr (should treat as 0)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("nonexistent_or",));
 
-		tx.atomic_op(&key, &[0b11110000], MutationType::BitOr);
+		tx.informal()
+			.atomic_op(&key, &[0b11110000], MutationType::BitOr);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent_or",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -2210,75 +2266,78 @@ async fn test_atomic_nonexistent_keys(db: &Database) {
 	);
 
 	// Test Max (should set the parameter value)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("nonexistent_max",));
 
-		tx.atomic_op(&key, &123i64.to_le_bytes(), MutationType::Max);
+		tx.informal()
+			.atomic_op(&key, &123i64.to_le_bytes(), MutationType::Max);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent_max",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
-	let result = i64::from_le_bytes(value.unwrap().try_into().unwrap());
+	let result = i64::from_le_bytes(Vec::from(value.unwrap()).try_into().unwrap());
 	assert_eq!(
 		result, 123,
 		"Max on non-existent key should set the parameter value"
 	);
 
 	// Test ByteMin (should set the parameter value)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("nonexistent_bytemin",));
 
-		tx.atomic_op(&key, b"hello", MutationType::ByteMin);
+		tx.informal()
+			.atomic_op(&key, b"hello", MutationType::ByteMin);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent_bytemin",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
 		.unwrap();
 
 	assert_eq!(
-		value.unwrap(),
+		value.unwrap().as_slice(),
 		b"hello",
 		"ByteMin on non-existent key should set the parameter value"
 	);
 
 	// Test CompareAndClear with empty comparison (should clear since non-existent = empty)
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
 		let key = test_subspace.pack(&("nonexistent_cac",));
 
-		tx.atomic_op(&key, b"", MutationType::CompareAndClear);
+		tx.informal()
+			.atomic_op(&key, b"", MutationType::CompareAndClear);
 		Ok(())
 	})
 	.await
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test");
 			let key = test_subspace.pack(&("nonexistent_cac",));
-			let val = tx.get(&key, false).await?;
+			let val = tx.get(&key, Serializable).await?;
 			Ok(val)
 		})
 		.await
@@ -2292,7 +2351,7 @@ async fn test_atomic_nonexistent_keys(db: &Database) {
 
 async fn test_versionstamps(db: &Database) {
 	// Test 1: Basic versionstamp insertion and ordering within a single transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test_vs");
 
 		// Create multiple values with incomplete versionstamps in the same transaction
@@ -2317,7 +2376,7 @@ async fn test_versionstamps(db: &Database) {
 	// Verify that versionstamps were substituted and have the same transaction version
 	// but different user versions (counter values)
 	let results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test_vs");
 			let (begin, end) = test_subspace.range();
 
@@ -2327,7 +2386,7 @@ async fn test_versionstamps(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let values = tx.get_range(&range_opt, 1, false).await?;
+			let values = tx.get_range(&range_opt, 1, Serializable).await?;
 			let mut results = Vec::new();
 
 			for kv in values.into_iter() {
@@ -2375,7 +2434,7 @@ async fn test_versionstamps(db: &Database) {
 
 	for i in 0..3 {
 		let vs = db
-			.run(|tx, _maybe_committed| async move {
+			.run(|tx| async move {
 				let test_subspace = Subspace::from("test_vs");
 				let incomplete = Versionstamp::from([0xff; 12]);
 
@@ -2401,7 +2460,7 @@ async fn test_versionstamps(db: &Database) {
 
 	// Read back and verify ordering
 	let multi_tx_results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test_vs");
 			let begin = test_subspace.pack(&("tx_",));
 			let end = test_subspace.pack(&("tx_z",));
@@ -2412,7 +2471,7 @@ async fn test_versionstamps(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let values = tx.get_range(&range_opt, 1, false).await?;
+			let values = tx.get_range(&range_opt, 1, Serializable).await?;
 			let mut results = Vec::new();
 
 			for kv in values.into_iter() {
@@ -2444,7 +2503,7 @@ async fn test_versionstamps(db: &Database) {
 	}
 
 	// Test 3: Already complete versionstamps should not be modified
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test_vs");
 
 		// Create a complete versionstamp manually
@@ -2468,10 +2527,10 @@ async fn test_versionstamps(db: &Database) {
 
 	// Read back and verify the versionstamp remains unchanged
 	let complete_result = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test_vs");
 			let key = test_subspace.pack(&("complete_entry",));
-			let value = tx.get(&key, false).await?.unwrap();
+			let value = tx.get(&key, Serializable).await?.unwrap();
 
 			let unpacked: Vec<Element> = universaldb::tuple::unpack(&value).unwrap();
 			if let Element::Versionstamp(vs) = &unpacked[1] {
@@ -2488,7 +2547,7 @@ async fn test_versionstamps(db: &Database) {
 
 	// Test 4: Verify correct count and order within a transaction
 	// Insert 10 entries in one transaction and verify they have sequential counters
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test_vs");
 
 		for i in 0..10 {
@@ -2510,7 +2569,7 @@ async fn test_versionstamps(db: &Database) {
 
 	// Read back and verify count and ordering
 	let count_results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test_vs");
 			let begin = test_subspace.pack(&("count_",));
 			let end = test_subspace.pack(&("count_z",));
@@ -2521,7 +2580,7 @@ async fn test_versionstamps(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let values = tx.get_range(&range_opt, 1, false).await?;
+			let values = tx.get_range(&range_opt, 1, Serializable).await?;
 			let mut results = Vec::new();
 
 			for kv in values.into_iter() {
@@ -2566,7 +2625,7 @@ async fn test_versionstamps(db: &Database) {
 	}
 
 	// Test 5: Mixed incomplete and complete versionstamps in same transaction
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test_vs");
 
 		// Insert an incomplete versionstamp
@@ -2598,7 +2657,7 @@ async fn test_versionstamps(db: &Database) {
 
 	// Verify both were stored correctly
 	let mixed_results = db
-		.run(|tx, _maybe_committed| async move {
+		.run(|tx| async move {
 			let test_subspace = Subspace::from("test_vs");
 			let begin = test_subspace.pack(&("mixed_",));
 			let end = test_subspace.pack(&("mixed_z",));
@@ -2609,7 +2668,7 @@ async fn test_versionstamps(db: &Database) {
 				..RangeOption::default()
 			};
 
-			let values = tx.get_range(&range_opt, 1, false).await?;
+			let values = tx.get_range(&range_opt, 1, Serializable).await?;
 			let mut results = Vec::new();
 
 			for kv in values.into_iter() {

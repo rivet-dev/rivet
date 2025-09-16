@@ -1,6 +1,6 @@
 use gas::prelude::*;
-use udb_util::{SERIALIZABLE, TxnExt};
 use universaldb::options::ConflictRangeType;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{keys, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
 
@@ -47,11 +47,11 @@ pub enum RunnerEligibility {
 pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let notifications = ctx
 		.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let runners = input.runners.clone();
 
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 				let mut notifications = Vec::new();
 
 				// TODO: Parallelize
@@ -76,14 +76,14 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						last_ping_ts_entry,
 						expired_ts_entry,
 					) = tokio::try_join!(
-						txs.read_opt(&workflow_id_key, SERIALIZABLE),
-						txs.read_opt(&namespace_id_key, SERIALIZABLE),
-						txs.read_opt(&name_key, SERIALIZABLE),
-						txs.read_opt(&version_key, SERIALIZABLE),
-						txs.read_opt(&remaining_slots_key, SERIALIZABLE),
-						txs.read_opt(&total_slots_key, SERIALIZABLE),
-						txs.read_opt(&last_ping_ts_key, SERIALIZABLE),
-						txs.read_opt(&expired_ts_key, SERIALIZABLE),
+						tx.read_opt(&workflow_id_key, Serializable),
+						tx.read_opt(&namespace_id_key, Serializable),
+						tx.read_opt(&name_key, Serializable),
+						tx.read_opt(&version_key, Serializable),
+						tx.read_opt(&remaining_slots_key, Serializable),
+						tx.read_opt(&total_slots_key, Serializable),
+						tx.read_opt(&last_ping_ts_key, Serializable),
+						tx.read_opt(&expired_ts_key, Serializable),
 					)?;
 
 					let (
@@ -131,14 +131,14 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 					);
 
 					// Add read conflict
-					txs.add_conflict_key(&old_alloc_key, ConflictRangeType::Read)?;
+					tx.add_conflict_key(&old_alloc_key, ConflictRangeType::Read)?;
 
 					match runner.action {
 						Action::ClearIdx => {
-							txs.delete(&old_alloc_key);
+							tx.delete(&old_alloc_key);
 						}
 						Action::AddIdx => {
-							txs.write(
+							tx.write(
 								&old_alloc_key,
 								rivet_data::converted::RunnerAllocIdxKeyData {
 									workflow_id,
@@ -151,17 +151,17 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 							let last_ping_ts = util::timestamp::now();
 
 							// Write new ping
-							txs.write(&last_ping_ts_key, last_ping_ts)?;
+							tx.write(&last_ping_ts_key, last_ping_ts)?;
 
 							let last_rtt_key = keys::runner::LastRttKey::new(runner.runner_id);
-							txs.write(&last_rtt_key, rtt)?;
+							tx.write(&last_rtt_key, rtt)?;
 
 							// Only update allocation idx if it existed before
-							if txs.exists(&old_alloc_key, SERIALIZABLE).await? {
+							if tx.exists(&old_alloc_key, Serializable).await? {
 								// Clear old key
-								txs.delete(&old_alloc_key);
+								tx.delete(&old_alloc_key);
 
-								txs.write(
+								tx.write(
 									&keys::ns::RunnerAllocIdxKey::new(
 										namespace_id,
 										name.clone(),

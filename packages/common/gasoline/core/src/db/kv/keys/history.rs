@@ -2,7 +2,7 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use rivet_util::Id;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 use crate::history::{
 	event::{EventType, SleepState},
@@ -147,7 +147,7 @@ impl TuplePack for EventHistorySubspaceKey {
 
 		// This ensures we are only reading events under the given location and not event data at the current
 		// location
-		w.write_all(&[udb_util::codes::NESTED])?;
+		w.write_all(&[universaldb::utils::codes::NESTED])?;
 		offset += 1;
 
 		if let Some(idx) = self.idx {
@@ -550,7 +550,7 @@ impl InputKey {
 		Ok(value
 			.get()
 			.as_bytes()
-			.chunks(udb_util::CHUNK_SIZE)
+			.chunks(universaldb::utils::CHUNK_SIZE)
 			.map(|x| x.to_vec())
 			.collect())
 	}
@@ -569,7 +569,7 @@ impl FormalChunkedKey for InputKey {
 		}
 	}
 
-	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value> {
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
 		serde_json::value::RawValue::from_string(String::from_utf8(
 			chunks
 				.iter()
@@ -666,7 +666,7 @@ impl OutputKey {
 		Ok(value
 			.get()
 			.as_bytes()
-			.chunks(udb_util::CHUNK_SIZE)
+			.chunks(universaldb::utils::CHUNK_SIZE)
 			.map(|x| x.to_vec())
 			.collect())
 	}
@@ -685,7 +685,7 @@ impl FormalChunkedKey for OutputKey {
 		}
 	}
 
-	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value> {
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
 		serde_json::value::RawValue::from_string(String::from_utf8(
 			chunks
 				.iter()
@@ -1301,8 +1301,7 @@ fn unpack_history_key<'de>(
 pub mod insert {
 	use anyhow::Result;
 	use rivet_util::Id;
-	use udb_util::{FormalChunkedKey, FormalKey};
-	use universaldb as udb;
+	use universaldb::utils::{FormalChunkedKey, FormalKey};
 
 	use super::super::super::value_to_str;
 	use crate::{
@@ -1314,8 +1313,8 @@ pub mod insert {
 	};
 
 	pub fn common(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		event_type: EventType,
@@ -1344,8 +1343,8 @@ pub mod insert {
 	}
 
 	pub fn signal_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1379,12 +1378,7 @@ pub mod insert {
 		let signal_body_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write signal body
-		for (i, chunk) in signal_body_key
-			.split_ref(&body)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in signal_body_key.split_ref(&body)?.into_iter().enumerate() {
 			let chunk_key = signal_body_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1394,8 +1388,8 @@ pub mod insert {
 	}
 
 	pub fn signal_send_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1430,12 +1424,7 @@ pub mod insert {
 		let signal_body_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write signal body
-		for (i, chunk) in signal_body_key
-			.split_ref(&body)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in signal_body_key.split_ref(&body)?.into_iter().enumerate() {
 			let chunk_key = signal_body_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1451,8 +1440,8 @@ pub mod insert {
 	}
 
 	pub fn sub_workflow_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1490,34 +1479,22 @@ pub mod insert {
 				x.as_object()
 					.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
 			})
-			.transpose()
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+			.transpose()?
 			.into_iter()
 			.flatten()
 			.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-			.collect::<WorkflowResult<Vec<_>>>()
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+			.collect::<WorkflowResult<Vec<_>>>()?;
 
 		for (k, v) in &tags {
 			// Write tag key
 			let tag_key = super::TagKey::new(workflow_id, location.clone(), k.clone(), v.clone());
-			tx.set(
-				&subspace.pack(&tag_key),
-				&tag_key
-					.serialize(())
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-			);
+			tx.set(&subspace.pack(&tag_key), &tag_key.serialize(())?);
 		}
 
 		let input_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write input
-		for (i, chunk) in input_key
-			.split_ref(&input)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in input_key.split_ref(&input)?.into_iter().enumerate() {
 			let chunk_key = input_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1527,8 +1504,8 @@ pub mod insert {
 	}
 
 	pub fn activity_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1563,12 +1540,7 @@ pub mod insert {
 		let input_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write input
-		for (i, chunk) in input_key
-			.split_ref(&input)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in input_key.split_ref(&input)?.into_iter().enumerate() {
 			let chunk_key = input_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1579,12 +1551,7 @@ pub mod insert {
 				let output_key = super::OutputKey::new(workflow_id, location.clone());
 
 				// Write output
-				for (i, chunk) in output_key
-					.split_ref(&output)
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.enumerate()
-				{
+				for (i, chunk) in output_key.split_ref(&output)?.into_iter().enumerate() {
 					let chunk_key = output_key.chunk(i);
 
 					tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1605,8 +1572,8 @@ pub mod insert {
 	}
 
 	pub fn message_send_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1628,22 +1595,15 @@ pub mod insert {
 		// Write tags
 		let tags = tags
 			.as_object()
-			.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+			.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
 			.into_iter()
 			.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-			.collect::<WorkflowResult<Vec<_>>>()
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+			.collect::<WorkflowResult<Vec<_>>>()?;
 
 		for (k, v) in &tags {
 			// Write tag key
 			let tag_key = super::TagKey::new(workflow_id, location.clone(), k.clone(), v.clone());
-			tx.set(
-				&subspace.pack(&tag_key),
-				&tag_key
-					.serialize(())
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-			);
+			tx.set(&subspace.pack(&tag_key), &tag_key.serialize(())?);
 		}
 
 		let message_name_key = super::NameKey::new(workflow_id, location.clone());
@@ -1655,12 +1615,7 @@ pub mod insert {
 		let body_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write body
-		for (i, chunk) in body_key
-			.split_ref(&body)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in body_key.split_ref(&body)?.into_iter().enumerate() {
 			let chunk_key = body_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1670,8 +1625,8 @@ pub mod insert {
 	}
 
 	pub fn loop_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1699,12 +1654,7 @@ pub mod insert {
 		let state_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write state
-		for (i, chunk) in state_key
-			.split_ref(&state)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in state_key.split_ref(&state)?.into_iter().enumerate() {
 			let chunk_key = state_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1714,12 +1664,7 @@ pub mod insert {
 			let output_key = super::OutputKey::new(workflow_id, location.clone());
 
 			// Write output
-			for (i, chunk) in output_key
-				.split_ref(&output)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-				.into_iter()
-				.enumerate()
-			{
+			for (i, chunk) in output_key.split_ref(&output)?.into_iter().enumerate() {
 				let chunk_key = output_key.chunk(i);
 
 				tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1730,8 +1675,8 @@ pub mod insert {
 	}
 
 	pub fn update_loop_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		iteration: usize,
@@ -1747,12 +1692,7 @@ pub mod insert {
 		let state_key = super::InputKey::new(workflow_id, location.clone());
 
 		// Write state
-		for (i, chunk) in state_key
-			.split_ref(&state)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in state_key.split_ref(&state)?.into_iter().enumerate() {
 			let chunk_key = state_key.chunk(i);
 
 			tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1762,12 +1702,7 @@ pub mod insert {
 			let output_key = super::OutputKey::new(workflow_id, location.clone());
 
 			// Write output
-			for (i, chunk) in output_key
-				.split_ref(&output)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-				.into_iter()
-				.enumerate()
-			{
+			for (i, chunk) in output_key.split_ref(&output)?.into_iter().enumerate() {
 				let chunk_key = output_key.chunk(i);
 
 				tx.set(&subspace.pack(&chunk_key), &chunk);
@@ -1778,8 +1713,8 @@ pub mod insert {
 	}
 
 	pub fn sleep_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1813,8 +1748,8 @@ pub mod insert {
 	}
 
 	pub fn update_sleep_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		sleep_state: SleepState,
@@ -1829,8 +1764,8 @@ pub mod insert {
 	}
 
 	pub fn branch_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1850,8 +1785,8 @@ pub mod insert {
 	}
 
 	pub fn removed_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
@@ -1887,8 +1822,8 @@ pub mod insert {
 	}
 
 	pub fn version_check_event(
-		subspace: &udb::tuple::Subspace,
-		tx: &udb::RetryableTransaction,
+		subspace: &universaldb::tuple::Subspace,
+		tx: &universaldb::RetryableTransaction,
 		workflow_id: Id,
 		location: &Location,
 		version: usize,

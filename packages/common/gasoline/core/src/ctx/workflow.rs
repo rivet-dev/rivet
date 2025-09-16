@@ -671,34 +671,35 @@ impl WorkflowCtx {
 		exec.execute(self).await
 	}
 
-	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
-	/// Should always be used when trying to handle activity errors manually.
-	#[tracing::instrument(skip_all)]
-	pub fn catch_unrecoverable<T>(&mut self, res: Result<T>) -> Result<Result<T>> {
-		match res {
-			Err(err) => {
-				// TODO: This should check .chain() for the error
-				match err.downcast::<WorkflowError>() {
-					Ok(inner_err) => {
-						// Despite "history diverged" errors being unrecoverable, they should not have be returned
-						// by this function because the state of the history is already messed up and no new
-						// workflow items should be run.
-						if !inner_err.is_recoverable()
-							&& !matches!(inner_err, WorkflowError::HistoryDiverged(_))
-						{
-							self.cursor.inc();
+	// TODO: Replace with some method on WorkflowError
+	// /// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
+	// /// Should always be used when trying to handle activity errors manually.
+	// #[tracing::instrument(skip_all)]
+	// pub fn catch_unrecoverable<T>(&mut self, res: Result<T>) -> Result<Result<T>> {
+	// 	match res {
+	// 		Err(err) => {
+	// 			// TODO: This should check .chain() for the error
+	// 			match err.downcast::<WorkflowError>() {
+	// 				Ok(inner_err) => {
+	// 					// Despite "history diverged" errors being unrecoverable, they should not have be returned
+	// 					// by this function because the state of the history is already messed up and no new
+	// 					// workflow items should be run.
+	// 					if !inner_err.is_recoverable()
+	// 						&& !matches!(inner_err, WorkflowError::HistoryDiverged(_))
+	// 					{
+	// 						self.cursor.inc();
 
-							Ok(Err(inner_err.into()))
-						} else {
-							Err(inner_err.into())
-						}
-					}
-					Err(err) => Err(err),
-				}
-			}
-			Ok(x) => Ok(Ok(x)),
-		}
-	}
+	// 						Ok(Err(inner_err.into()))
+	// 					} else {
+	// 						Err(inner_err.into())
+	// 					}
+	// 				}
+	// 				Err(err) => Err(err),
+	// 			}
+	// 		}
+	// 		Ok(x) => Ok(Ok(x)),
+	// 	}
+	// }
 
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::signal::SignalBuilder<T> {

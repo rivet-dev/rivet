@@ -2,8 +2,8 @@ use anyhow::Result;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_types::runners::Runner;
-use udb_util::{SNAPSHOT, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
 
@@ -27,24 +27,24 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 
 	let runners = ctx
 		.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let dc_name = dc_name.to_string();
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 				let mut results = Vec::new();
 
 				// TODO: Lots of duplicate code
 				if let Some(name) = &input.name {
 					if input.include_stopped {
 						let runner_subspace =
-							txs.subspace(&keys::ns::AllRunnerByNameKey::subspace(
+							keys::subspace().subspace(&keys::ns::AllRunnerByNameKey::subspace(
 								input.namespace_id,
 								name.clone(),
 							));
 						let (start, end) = runner_subspace.range();
 
 						let end = if let Some(created_before) = input.created_before {
-							udb_util::end_of_key_range(&txs.pack(
+							universaldb::utils::end_of_key_range(&tx.pack(
 								&keys::ns::AllRunnerByNameKey::subspace_with_create_ts(
 									input.namespace_id,
 									name.clone(),
@@ -55,19 +55,18 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 							end
 						};
 
-						let mut stream = txs.get_ranges_keyvalues(
-							udb::RangeOption {
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
 								mode: StreamingMode::Iterator,
 								reverse: true,
 								..(start, end).into()
 							},
 							// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-							SNAPSHOT,
+							Snapshot,
 						);
 
 						while let Some(entry) = stream.try_next().await? {
-							let idx_key =
-								txs.unpack::<keys::ns::AllRunnerByNameKey>(entry.key())?;
+							let idx_key = tx.unpack::<keys::ns::AllRunnerByNameKey>(entry.key())?;
 
 							results.push(idx_key.runner_id);
 
@@ -77,14 +76,14 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 						}
 					} else {
 						let runner_subspace =
-							txs.subspace(&keys::ns::ActiveRunnerByNameKey::subspace(
+							keys::subspace().subspace(&keys::ns::ActiveRunnerByNameKey::subspace(
 								input.namespace_id,
 								name.clone(),
 							));
 						let (start, end) = runner_subspace.range();
 
 						let end = if let Some(created_before) = input.created_before {
-							udb_util::end_of_key_range(&txs.pack(
+							universaldb::utils::end_of_key_range(&tx.pack(
 								&keys::ns::ActiveRunnerByNameKey::subspace_with_create_ts(
 									input.namespace_id,
 									name.clone(),
@@ -95,19 +94,19 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 							end
 						};
 
-						let mut stream = txs.get_ranges_keyvalues(
-							udb::RangeOption {
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
 								mode: StreamingMode::Iterator,
 								reverse: true,
 								..(start, end).into()
 							},
 							// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-							SNAPSHOT,
+							Snapshot,
 						);
 
 						while let Some(entry) = stream.try_next().await? {
 							let idx_key =
-								txs.unpack::<keys::ns::ActiveRunnerByNameKey>(entry.key())?;
+								tx.unpack::<keys::ns::ActiveRunnerByNameKey>(entry.key())?;
 
 							results.push(idx_key.runner_id);
 
@@ -118,12 +117,12 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 					}
 				} else {
 					if input.include_stopped {
-						let runner_subspace =
-							txs.subspace(&keys::ns::AllRunnerKey::subspace(input.namespace_id));
+						let runner_subspace = keys::subspace()
+							.subspace(&keys::ns::AllRunnerKey::subspace(input.namespace_id));
 						let (start, end) = runner_subspace.range();
 
 						let end = if let Some(created_before) = input.created_before {
-							udb_util::end_of_key_range(&txs.pack(
+							universaldb::utils::end_of_key_range(&tx.pack(
 								&keys::ns::AllRunnerKey::subspace_with_create_ts(
 									input.namespace_id,
 									created_before,
@@ -133,18 +132,18 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 							end
 						};
 
-						let mut stream = txs.get_ranges_keyvalues(
-							udb::RangeOption {
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
 								mode: StreamingMode::Iterator,
 								reverse: true,
 								..(start, end).into()
 							},
 							// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-							SNAPSHOT,
+							Snapshot,
 						);
 
 						while let Some(entry) = stream.try_next().await? {
-							let idx_key = txs.unpack::<keys::ns::AllRunnerKey>(entry.key())?;
+							let idx_key = tx.unpack::<keys::ns::AllRunnerKey>(entry.key())?;
 
 							results.push(idx_key.runner_id);
 
@@ -153,12 +152,12 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 							}
 						}
 					} else {
-						let runner_subspace =
-							txs.subspace(&keys::ns::ActiveRunnerKey::subspace(input.namespace_id));
+						let runner_subspace = keys::subspace()
+							.subspace(&keys::ns::ActiveRunnerKey::subspace(input.namespace_id));
 						let (start, end) = runner_subspace.range();
 
 						let end = if let Some(created_before) = input.created_before {
-							udb_util::end_of_key_range(&txs.pack(
+							universaldb::utils::end_of_key_range(&tx.pack(
 								&keys::ns::ActiveRunnerKey::subspace_with_create_ts(
 									input.namespace_id,
 									created_before,
@@ -168,18 +167,18 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 							end
 						};
 
-						let mut stream = txs.get_ranges_keyvalues(
-							udb::RangeOption {
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
 								mode: StreamingMode::Iterator,
 								reverse: true,
 								..(start, end).into()
 							},
 							// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-							SNAPSHOT,
+							Snapshot,
 						);
 
 						while let Some(entry) = stream.try_next().await? {
-							let idx_key = txs.unpack::<keys::ns::ActiveRunnerKey>(entry.key())?;
+							let idx_key = tx.unpack::<keys::ns::ActiveRunnerKey>(entry.key())?;
 
 							results.push(idx_key.runner_id);
 

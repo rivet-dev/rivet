@@ -1,6 +1,5 @@
 use gas::prelude::*;
 use rivet_cache::CacheKey;
-use udb_util::TxnExt;
 use universaldb::options::MutationType;
 
 use crate::{errors, keys, types::RunnerConfig};
@@ -19,17 +18,17 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 	}
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			// TODO: Once other types of configs get added, delete previous config before writing
-			txs.write(
+			tx.write(
 				&keys::RunnerConfigKey::new(input.namespace_id, input.name.clone()),
 				input.config.clone(),
 			)?;
 
 			// Write to secondary idx
-			txs.write(
+			tx.write(
 				&keys::RunnerConfigByVariantKey::new(
 					input.namespace_id,
 					input.config.variant(),
@@ -59,8 +58,8 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 					}
 
 					// Sets desired count to 0 if it doesn't exist
-					let txs = tx.subspace(rivet_types::keys::pegboard::subspace());
-					txs.atomic_op(
+					let tx = tx.with_subspace(rivet_types::keys::pegboard::subspace());
+					tx.atomic_op(
 						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 							input.namespace_id,
 							input.name.clone(),

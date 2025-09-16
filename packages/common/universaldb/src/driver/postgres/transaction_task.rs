@@ -1,10 +1,11 @@
+use anyhow::{Result, anyhow};
 use deadpool_postgres::Pool;
 use tokio::sync::{mpsc, oneshot};
 use tokio_postgres::IsolationLevel;
 
 use crate::{
-	FdbError, FdbResult,
 	atomic::apply_atomic_op,
+	error::DatabaseError,
 	options::{ConflictRangeType, MutationType},
 	versionstamp::substitute_versionstamp_if_incomplete,
 };
@@ -20,13 +21,13 @@ pub enum TransactionCommand {
 	// Read operations
 	Get {
 		key: Vec<u8>,
-		response: oneshot::Sender<FdbResult<Option<Vec<u8>>>>,
+		response: oneshot::Sender<Result<Option<Vec<u8>>>>,
 	},
 	GetKey {
 		key: Vec<u8>,
 		or_equal: bool,
 		offset: i32,
-		response: oneshot::Sender<FdbResult<Option<Vec<u8>>>>,
+		response: oneshot::Sender<Result<Option<Vec<u8>>>>,
 	},
 	GetRange {
 		begin: Vec<u8>,
@@ -37,45 +38,45 @@ pub enum TransactionCommand {
 		end_offset: i32,
 		limit: Option<usize>,
 		reverse: bool,
-		response: oneshot::Sender<FdbResult<Vec<(Vec<u8>, Vec<u8>)>>>,
+		response: oneshot::Sender<Result<Vec<(Vec<u8>, Vec<u8>)>>>,
 	},
 	// Write operations
 	Set {
 		key: Vec<u8>,
 		value: Vec<u8>,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	Clear {
 		key: Vec<u8>,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	ClearRange {
 		begin: Vec<u8>,
 		end: Vec<u8>,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	AtomicOp {
 		key: Vec<u8>,
 		param: Vec<u8>,
 		op_type: MutationType,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	// Transaction control
 	Commit {
 		has_conflict_ranges: bool,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	// Conflict ranges
 	AddConflictRange {
 		begin: Vec<u8>,
 		end: Vec<u8>,
 		conflict_type: ConflictRangeType,
-		response: oneshot::Sender<FdbResult<()>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	GetEstimatedRangeSize {
 		begin: Vec<u8>,
 		end: Vec<u8>,
-		response: oneshot::Sender<FdbResult<i64>>,
+		response: oneshot::Sender<Result<i64>>,
 	},
 }
 
@@ -117,34 +118,44 @@ impl TransactionTask {
 				while let Some(cmd) = self.receiver.recv().await {
 					match cmd {
 						TransactionCommand::Get { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetKey { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Set { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Clear { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::ClearRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::AtomicOp { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Commit { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::AddConflictRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetEstimatedRangeSize { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 					}
 				}
@@ -176,34 +187,44 @@ impl TransactionTask {
 				while let Some(cmd) = self.receiver.recv().await {
 					match cmd {
 						TransactionCommand::Get { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetKey { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Set { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Clear { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::ClearRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::AtomicOp { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::Commit { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::AddConflictRange { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 						TransactionCommand::GetEstimatedRangeSize { response, .. } => {
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 						}
 					}
 				}
@@ -262,7 +283,8 @@ impl TransactionTask {
 						_ => {
 							// For other offset values, we need more complex logic
 							// This is a simplified fallback that may not handle all cases perfectly
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 							continue;
 						}
 					};
@@ -373,10 +395,12 @@ impl TransactionTask {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
 						tracing::error!("cannot set in read only txn");
-						let _ = response.send(Err(FdbError::from_code(1510)));
+						let _ =
+							response.send(Err(anyhow!("postgres transaction connection failed")));
 						continue;
 					};
 
+					// TODO: versionstamps need to be calculated on the sql side, not in rust
 					let value = substitute_versionstamp_if_incomplete(value, 0);
 
 					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
@@ -395,7 +419,8 @@ impl TransactionTask {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
 						tracing::error!("cannot set in read only txn");
-						let _ = response.send(Err(FdbError::from_code(1510)));
+						let _ =
+							response.send(Err(anyhow!("postgres transaction connection failed")));
 						continue;
 					};
 
@@ -419,7 +444,8 @@ impl TransactionTask {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
 						tracing::error!("cannot clear range in read only txn");
-						let _ = response.send(Err(FdbError::from_code(1510)));
+						let _ =
+							response.send(Err(anyhow!("postgres transaction connection failed")));
 						continue;
 					};
 
@@ -453,7 +479,8 @@ impl TransactionTask {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
 						tracing::error!("cannot apply atomic op in read only txn");
-						let _ = response.send(Err(FdbError::from_code(1510)));
+						let _ =
+							response.send(Err(anyhow!("postgres transaction connection failed")));
 						continue;
 					};
 
@@ -513,7 +540,8 @@ impl TransactionTask {
 							self.isolation_level
 						{
 							tracing::error!("cannot release conflict ranges in read only txn");
-							let _ = response.send(Err(FdbError::from_code(1510)));
+							let _ = response
+								.send(Err(anyhow!("postgres transaction connection failed")));
 							continue;
 						};
 
@@ -540,7 +568,8 @@ impl TransactionTask {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
 						tracing::error!("cannot add conflict range in read only txn");
-						let _ = response.send(Err(FdbError::from_code(1510)));
+						let _ =
+							response.send(Err(anyhow!("postgres transaction connection failed")));
 						continue;
 					};
 
@@ -605,26 +634,26 @@ impl TransactionTask {
 	}
 }
 
-/// Maps PostgreSQL errors to FdbError codes
-fn map_postgres_error(err: tokio_postgres::Error) -> FdbError {
+/// Maps PostgreSQL error to DatabaseError
+fn map_postgres_error(err: tokio_postgres::Error) -> anyhow::Error {
 	let error_str = err.to_string();
 	if error_str.contains("exclusion_violation")
 		|| error_str.contains("violates exclusion constraint")
 	{
 		// Retryable - another transaction has a conflicting range
-		FdbError::from_code(1020)
+		DatabaseError::NotCommitted.into()
 	} else if error_str.contains("serialization failure")
 		|| error_str.contains("could not serialize")
 		|| error_str.contains("deadlock detected")
 	{
 		// Retryable - transaction conflict
-		FdbError::from_code(1020)
+		DatabaseError::NotCommitted.into()
 	} else if error_str.contains("current transaction is aborted") {
 		// Returned by the rest of the commands in a txn if it failed for exclusion reasons
-		FdbError::from_code(1020)
+		DatabaseError::NotCommitted.into()
 	} else {
 		tracing::error!(%err, "postgres error");
 		// Non-retryable error
-		FdbError::from_code(1510)
+		anyhow::Error::new(err)
 	}
 }

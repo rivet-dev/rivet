@@ -2,7 +2,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rivet_util::Id;
 use tokio::time::Instant;
-use universaldb as udb;
 
 use crate::ctx::common::RETRY_TIMEOUT_MS;
 
@@ -134,8 +133,8 @@ pub enum WorkflowError {
 	#[error("failed to deserialize event data: {0}")]
 	DeserializeEventData(#[source] anyhow::Error),
 
-	#[error("fdb error: {0}")]
-	Fdb(#[from] udb::FdbBindingError),
+	#[error("udb error: {0}")]
+	Udb(#[source] anyhow::Error),
 
 	#[error("pools error: {0}")]
 	Pools(#[from] rivet_pools::Error),
@@ -217,7 +216,7 @@ impl WorkflowError {
 	}
 
 	/// Any error that the workflow can continue on with its execution from.
-	pub fn is_recoverable(&self) -> bool {
+	pub(crate) fn is_recoverable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
 			| WorkflowError::ActivityTimeout(_)

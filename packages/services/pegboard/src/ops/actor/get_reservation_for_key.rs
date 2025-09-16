@@ -1,5 +1,5 @@
 use gas::prelude::*;
-use udb_util::FormalKey;
+use universaldb::utils::FormalKey;
 
 use crate::keys;
 

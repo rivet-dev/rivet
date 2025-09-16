@@ -1,34 +1,38 @@
-use std::result::Result::Ok;
+use crate::tuple::{PackError, PackResult};
 
-use universaldb::tuple::{PackError, PackResult};
-
+mod cherry_pick;
 pub mod codes;
 mod ext;
 mod formal_key;
 pub mod keys;
-mod metrics;
 mod subspace;
 
+pub use cherry_pick::*;
 pub use ext::*;
 pub use formal_key::*;
 pub use subspace::Subspace;
 
-/// Makes the code blatantly obvious if its using a snapshot read.
-pub const SNAPSHOT: bool = true;
-pub const SERIALIZABLE: bool = false;
 pub const CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
-pub mod prelude {
-	pub use universaldb::{
-		FdbBindingError, KeySelector, RangeOption,
-		future::FdbValue,
-		options::StreamingMode,
-		tuple::{PackError, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset},
-	};
+#[derive(Debug, Clone, Copy)]
+pub enum IsolationLevel {
+	Serializable,
+	Snapshot,
+}
 
-	pub use super::{FormalChunkedKey, FormalKey, OptSliceExt, SliceExt, TxnExt, keys::*};
+/// Indicates the transaction might have committed
+#[derive(Debug, Clone, Copy)]
+pub struct MaybeCommitted(pub bool);
 
-	pub use crate::{SERIALIZABLE, SNAPSHOT};
+pub fn calculate_tx_retry_backoff(attempt: usize) -> u64 {
+	// TODO: Update this to mirror fdb 1:1:
+	// https://github.com/apple/foundationdb/blob/21407341d9b49e1d343514a7a5f395bd5f232079/fdbclient/NativeAPI.actor.cpp#L3162
+
+	let base_backoff_ms = 2_u64.pow((attempt as u32).min(10)) * 10;
+
+	let jitter_ms = rand::random::<u64>() % 100;
+
+	base_backoff_ms + jitter_ms
 }
 
 /// When using `add_conflict_range` to add a conflict for a single key, you cannot set both the start and end

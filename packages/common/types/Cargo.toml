@@ -13,6 +13,6 @@ rivet-data.workspace = true
 rivet-runner-protocol.workspace = true
 rivet-util.workspace = true
 serde.workspace = true
-udb-util.workspace = true
+universaldb.workspace = true
 utoipa.workspace = true
 versioned-data-util.workspace = true

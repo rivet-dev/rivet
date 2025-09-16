@@ -1,5 +1,6 @@
+use anyhow::Result;
 use epoxy_protocol::protocol;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
 
 use crate::replica::utils;
 
@@ -7,7 +8,7 @@ pub fn decide_path(
 	_tx: &Transaction,
 	pre_accept_oks: Vec<protocol::Payload>,
 	payload: &protocol::Payload,
-) -> Result<protocol::Path, FdbBindingError> {
+) -> Result<protocol::Path> {
 	tracing::info!(instance=?payload.instance, "deciding path");
 
 	let mut new_payload = payload.clone();

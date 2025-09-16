@@ -1,7 +1,7 @@
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 pub mod ns;
 
-pub fn subspace() -> udb_util::Subspace {
-	udb_util::Subspace::new(&(RIVET, PEGBOARD))
+pub fn subspace() -> universaldb::utils::Subspace {
+	universaldb::utils::Subspace::new(&(RIVET, PEGBOARD))
 }

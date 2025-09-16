@@ -1,13 +1,15 @@
 use std::sync::{Arc, Mutex};
 
+use anyhow::{Context, Result};
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use tokio_postgres::NoTls;
 
 use crate::{
-	FdbBindingError, FdbError, FdbResult, MaybeCommitted, RetryableTransaction, Transaction,
+	RetryableTransaction, Transaction,
 	driver::{BoxFut, DatabaseDriver, Erased},
+	error::DatabaseError,
 	options::DatabaseOption,
-	utils::calculate_tx_retry_backoff,
+	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
 use super::transaction::PostgresTransactionDriver;
@@ -18,7 +20,7 @@ pub struct PostgresDatabaseDriver {
 }
 
 impl PostgresDatabaseDriver {
-	pub async fn new(connection_string: String) -> FdbResult<Self> {
+	pub async fn new(connection_string: String) -> Result<Self> {
 		tracing::debug!(connection_string = ?connection_string, "Creating PostgresDatabaseDriver");
 
 		// Create deadpool config from connection string
@@ -36,22 +38,19 @@ impl PostgresDatabaseDriver {
 		// Create the pool
 		let pool = config
 			.create_pool(Some(Runtime::Tokio1), NoTls)
-			.map_err(|e| {
-				tracing::error!(error = ?e, "Failed to create Postgres pool");
-				FdbError::from_code(1510)
-			})?;
+			.context("failed to create postgres connection pool")?;
 
 		tracing::debug!("Getting Postgres connection from pool");
 		// Get a connection from the pool to create the table
-		let conn = pool.get().await.map_err(|e| {
-			tracing::error!(error = ?e, "Failed to get Postgres connection");
-			FdbError::from_code(1510)
-		})?;
+		let conn = pool
+			.get()
+			.await
+			.context("failed to get connection from postgres pool")?;
 
 		// Enable btree gist
 		conn.execute("CREATE EXTENSION IF NOT EXISTS btree_gist", &[])
 			.await
-			.map_err(|_| FdbError::from_code(1510))?;
+			.context("failed to create btree_gist extension")?;
 
 		// Create the KV table if it doesn't exist
 		conn.execute(
@@ -62,7 +61,7 @@ impl PostgresDatabaseDriver {
 			&[],
 		)
 		.await
-		.map_err(|_| FdbError::from_code(1510))?;
+		.context("failed to create kv table")?;
 
 		// Create range_type type if it doesn't exist
 		conn.execute(
@@ -74,7 +73,7 @@ impl PostgresDatabaseDriver {
 			&[],
 		)
 		.await
-		.map_err(|_| FdbError::from_code(1510))?;
+		.context("failed to create range_type enum")?;
 
 		// Create bytearange type if it doesn't exist
 		conn.execute(
@@ -89,7 +88,7 @@ impl PostgresDatabaseDriver {
 			&[],
 		)
 		.await
-		.map_err(|_| FdbError::from_code(1510))?;
+		.context("failed to create bytearange type")?;
 
 		// Create the conflict ranges table for non-snapshot reads
 		// This enforces consistent reads for ranges by preventing overlapping conflict ranges
@@ -110,7 +109,7 @@ impl PostgresDatabaseDriver {
 			&[],
 		)
 		.await
-		.map_err(|_| FdbError::from_code(1510))?;
+		.context("failed to create conflict_ranges table")?;
 
 		// Connection is automatically returned to the pool when dropped
 		drop(conn);
@@ -123,69 +122,60 @@ impl PostgresDatabaseDriver {
 }
 
 impl DatabaseDriver for PostgresDatabaseDriver {
-	fn create_trx(&self) -> FdbResult<Transaction> {
+	fn create_trx(&self) -> Result<Transaction> {
 		// Pass the connection pool to the transaction driver
-		Ok(Transaction::new(Box::new(PostgresTransactionDriver::new(
+		Ok(Transaction::new(Arc::new(PostgresTransactionDriver::new(
 			self.pool.clone(),
 		))))
 	}
 
 	fn run<'a>(
 		&'a self,
-		closure: Box<
-			dyn Fn(
-					RetryableTransaction,
-					MaybeCommitted,
-				) -> BoxFut<'a, Result<Erased, FdbBindingError>>
-				+ Send
-				+ Sync
-				+ 'a,
-		>,
-	) -> BoxFut<'a, Result<Erased, FdbBindingError>> {
+		closure: Box<dyn Fn(RetryableTransaction) -> BoxFut<'a, Result<Erased>> + Send + Sync + 'a>,
+	) -> BoxFut<'a, Result<Erased>> {
 		Box::pin(async move {
 			let mut maybe_committed = MaybeCommitted(false);
 			let max_retries = *self.max_retries.lock().unwrap();
 
 			for attempt in 0..max_retries {
 				let tx = self.create_trx()?;
-				let retryable = RetryableTransaction::new(tx);
+				let mut retryable = RetryableTransaction::new(tx);
+				retryable.maybe_committed = maybe_committed;
 
 				// Execute transaction
-				let result = closure(retryable.clone(), maybe_committed).await;
-				let fdb_error = match result {
-					std::result::Result::Ok(res) => {
-						match retryable.inner.driver.commit_owned().await {
-							Ok(_) => return Ok(res),
-							Err(e) => e,
-						}
-					}
-					std::result::Result::Err(e) => {
-						if let Some(fdb_error) = e.get_fdb_error() {
-							fdb_error
-						} else {
-							return Err(e);
-						}
-					}
+				let error = match closure(retryable.clone()).await {
+					Ok(res) => match retryable.inner.driver.commit_ref().await {
+						Ok(_) => return Ok(res),
+						Err(e) => e,
+					},
+					Err(e) => e,
 				};
 
-				// Handle retry or return error
-				if fdb_error.is_retryable() {
-					if fdb_error.is_maybe_committed() {
-						maybe_committed = MaybeCommitted(true);
-					}
+				let chain = error
+					.chain()
+					.find_map(|x| x.downcast_ref::<DatabaseError>());
 
-					let backoff_ms = calculate_tx_retry_backoff(attempt as usize);
-					tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
-				} else {
-					return Err(FdbBindingError::from(fdb_error));
+				if let Some(db_error) = chain {
+					// Handle retry or return error
+					if db_error.is_retryable() {
+						if db_error.is_maybe_committed() {
+							maybe_committed = MaybeCommitted(true);
+						}
+
+						let backoff_ms = calculate_tx_retry_backoff(attempt as usize);
+						tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+						continue;
+					}
 				}
+
+				return Err(error);
 			}
 
-			Err(FdbBindingError::from(FdbError::from_code(1007))) // Retry limit exceeded
+			Err(DatabaseError::MaxRetriesReached.into())
 		})
 	}
 
-	fn set_option(&self, opt: DatabaseOption) -> FdbResult<()> {
+	fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		match opt {
 			DatabaseOption::TransactionRetryLimit(limit) => {
 				*self.max_retries.lock().unwrap() = limit;

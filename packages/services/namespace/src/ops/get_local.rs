@@ -1,7 +1,6 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use udb_util::{SERIALIZABLE, TxnExt};
-use universaldb as udb;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys, types::Namespace};
 
@@ -18,7 +17,7 @@ pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Ve
 
 	let namespaces = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			futures_util::stream::iter(input.namespace_ids.clone())
 				.map(|namespace_id| {
 					let tx = tx.clone();
@@ -38,18 +37,18 @@ pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Ve
 
 pub(crate) async fn get_inner(
 	namespace_id: Id,
-	tx: &udb::RetryableTransaction,
-) -> std::result::Result<Option<Namespace>, udb::FdbBindingError> {
-	let txs = tx.subspace(keys::subspace());
+	tx: &universaldb::Transaction,
+) -> Result<Option<Namespace>> {
+	let tx = tx.with_subspace(keys::subspace());
 
 	let name_key = keys::NameKey::new(namespace_id);
 	let display_name_key = keys::DisplayNameKey::new(namespace_id);
 	let create_ts_key = keys::CreateTsKey::new(namespace_id);
 
 	let (name, display_name, create_ts) = tokio::try_join!(
-		txs.read_opt(&name_key, SERIALIZABLE),
-		txs.read_opt(&display_name_key, SERIALIZABLE),
-		txs.read_opt(&create_ts_key, SERIALIZABLE),
+		tx.read_opt(&name_key, Serializable),
+		tx.read_opt(&display_name_key, Serializable),
+		tx.read_opt(&create_ts_key, Serializable),
 	)?;
 
 	// Namespace not found
@@ -57,12 +56,8 @@ pub(crate) async fn get_inner(
 		return Ok(None);
 	};
 
-	let display_name = display_name.ok_or(udb::FdbBindingError::CustomError(
-		format!("key should exist: {display_name_key:?}").into(),
-	))?;
-	let create_ts = create_ts.ok_or(udb::FdbBindingError::CustomError(
-		format!("key should exist: {create_ts_key:?}").into(),
-	))?;
+	let display_name = display_name.context("key should exist")?;
+	let create_ts = create_ts.context("key should exist")?;
 
 	Ok(Some(Namespace {
 		namespace_id,

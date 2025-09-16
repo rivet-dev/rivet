@@ -1,6 +1,7 @@
+use anyhow::Result;
 use epoxy_protocol::protocol;
-use udb_util::FormalKey as _;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::keys;
 use crate::replica::{ballot, messages, utils};
@@ -9,18 +10,16 @@ pub async fn lead_consensus(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	proposal: protocol::Proposal,
-) -> Result<protocol::Payload, FdbBindingError> {
+) -> Result<protocol::Payload> {
 	tracing::info!(?replica_id, "leading consensus");
 
 	// EPaxos Step 1
 	let instance_num_key = keys::replica::InstanceNumberKey;
 	let packed_key = keys::subspace(replica_id).pack(&instance_num_key);
 
-	let value = tx.get(&packed_key, false).await?;
+	let value = tx.get(&packed_key, Serializable).await?;
 	let current_slot = if let Some(ref bytes) = value {
-		let current = instance_num_key
-			.deserialize(bytes)
-			.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+		let current = instance_num_key.deserialize(bytes)?;
 		current
 	} else {
 		0
@@ -28,12 +27,7 @@ pub async fn lead_consensus(
 
 	// Increment and store the new instance number
 	let slot_id = current_slot + 1;
-	tx.set(
-		&packed_key,
-		&instance_num_key
-			.serialize(slot_id)
-			.map_err(|e| FdbBindingError::CustomError(e.into()))?,
-	);
+	tx.set(&packed_key, &instance_num_key.serialize(slot_id)?);
 
 	// Find interference for this key
 	let interf = utils::find_interference(tx, replica_id, &proposal.commands).await?;

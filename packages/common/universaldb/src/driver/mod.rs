@@ -1,11 +1,14 @@
 use std::{any::Any, future::Future, pin::Pin, sync::Arc};
 
+use anyhow::{Result, bail};
+
 use crate::{
-	FdbBindingError, FdbError, FdbResult, KeySelector, RangeOption, RetryableTransaction,
-	Transaction,
-	future::{FdbSlice, FdbValues},
+	key_selector::KeySelector,
 	options::{ConflictRangeType, DatabaseOption, MutationType},
-	types::{MaybeCommitted, TransactionCommitError, TransactionCommitted},
+	range_option::RangeOption,
+	transaction::{RetryableTransaction, Transaction},
+	utils::IsolationLevel,
+	value::{Slice, Value, Values},
 };
 
 mod postgres;
@@ -20,20 +23,12 @@ pub type Erased = Box<dyn Any + Send>;
 pub type DatabaseDriverHandle = Arc<dyn DatabaseDriver>;
 
 pub trait DatabaseDriver: Send + Sync {
-	fn create_trx(&self) -> FdbResult<Transaction>;
+	fn create_trx(&self) -> Result<Transaction>;
 	fn run<'a>(
 		&'a self,
-		closure: Box<
-			dyn Fn(
-					RetryableTransaction,
-					MaybeCommitted,
-				) -> BoxFut<'a, Result<Erased, FdbBindingError>>
-				+ Send
-				+ Sync
-				+ 'a,
-		>,
-	) -> BoxFut<'a, Result<Erased, FdbBindingError>>;
-	fn set_option(&self, opt: DatabaseOption) -> FdbResult<()>;
+		closure: Box<dyn Fn(RetryableTransaction) -> BoxFut<'a, Result<Erased>> + Send + Sync + 'a>,
+	) -> BoxFut<'a, Result<Erased>>;
+	fn set_option(&self, opt: DatabaseOption) -> Result<()>;
 }
 
 pub trait TransactionDriver: Send + Sync {
@@ -43,24 +38,24 @@ pub trait TransactionDriver: Send + Sync {
 	fn get<'a>(
 		&'a self,
 		key: &[u8],
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<Option<FdbSlice>>> + Send + 'a>>;
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Option<Slice>>> + Send + 'a>>;
 	fn get_key<'a>(
 		&'a self,
 		selector: &KeySelector<'a>,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbSlice>> + Send + 'a>>;
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Slice>> + Send + 'a>>;
 	fn get_range<'a>(
 		&'a self,
 		opt: &RangeOption<'a>,
 		iteration: usize,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbValues>> + Send + 'a>>;
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>>;
 	fn get_ranges_keyvalues<'a>(
 		&'a self,
 		opt: RangeOption<'a>,
-		snapshot: bool,
-	) -> crate::future::FdbStream<'a, crate::future::FdbValue>;
+		isolation_level: IsolationLevel,
+	) -> crate::value::Stream<'a, Value>;
 
 	// Write operations
 	fn set(&self, key: &[u8], value: &[u8]);
@@ -68,9 +63,7 @@ pub trait TransactionDriver: Send + Sync {
 	fn clear_range(&self, begin: &[u8], end: &[u8]);
 
 	// Transaction management
-	fn commit(
-		self: Box<Self>,
-	) -> Pin<Box<dyn Future<Output = Result<TransactionCommitted, TransactionCommitError>> + Send>>;
+	fn commit(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 	fn reset(&mut self);
 	fn cancel(&self);
 	fn add_conflict_range(
@@ -78,18 +71,17 @@ pub trait TransactionDriver: Send + Sync {
 		begin: &[u8],
 		end: &[u8],
 		conflict_type: ConflictRangeType,
-	) -> FdbResult<()>;
+	) -> Result<()>;
 	fn get_estimated_range_size_bytes<'a>(
 		&'a self,
 		begin: &'a [u8],
 		end: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = FdbResult<i64>> + Send + 'a>>;
+	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>>;
 
 	// Helper for committing without consuming self (for database drivers that need it)
-	fn commit_owned(&self) -> Pin<Box<dyn Future<Output = FdbResult<()>> + Send + '_>> {
+	fn commit_ref(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
 		Box::pin(async move {
-			// Default implementation returns error - drivers that need this should override
-			Err(FdbError::from_code(1510))
+			bail!("`commit_ref` unimplemented");
 		})
 	}
 }

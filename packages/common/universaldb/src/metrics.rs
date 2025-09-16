@@ -4,7 +4,7 @@ use rivet_metrics::{
 };
 
 lazy_static::lazy_static! {
-	static ref METER: Meter = meter("rivet-udb-util");
+	static ref METER: Meter = meter("rivet-universaldb");
 
 	/// Has no expected attributes
 	pub static ref PING_DURATION: Histogram<f64> = METER.f64_histogram("rivet_udb_ping_duration")

@@ -1,5 +1,5 @@
 use gas::prelude::*;
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys, ops::get_local::get_inner, types::Namespace};
 
@@ -18,13 +18,13 @@ pub async fn namespace_resolve_for_name_local(
 	}
 
 	ctx.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let name = input.name.clone();
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 
-				let Some(namespace_id) = txs
-					.read_opt(&keys::ByNameKey::new(name.clone()), SERIALIZABLE)
+				let Some(namespace_id) = tx
+					.read_opt(&keys::ByNameKey::new(name.clone()), Serializable)
 					.await?
 				else {
 					// Namespace not found

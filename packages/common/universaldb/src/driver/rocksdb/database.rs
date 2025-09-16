@@ -3,13 +3,15 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
+use anyhow::{Context, Result};
 use rocksdb::{OptimisticTransactionDB, Options};
 
 use crate::{
-	FdbBindingError, FdbError, FdbResult, MaybeCommitted, RetryableTransaction, Transaction,
+	RetryableTransaction, Transaction,
 	driver::{BoxFut, DatabaseDriver, Erased},
+	error::DatabaseError,
 	options::DatabaseOption,
-	utils::calculate_tx_retry_backoff,
+	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
 use super::{conflict_range_tracker::ConflictRangeTracker, transaction::RocksDbTransactionDriver};
@@ -21,9 +23,9 @@ pub struct RocksDbDatabaseDriver {
 }
 
 impl RocksDbDatabaseDriver {
-	pub async fn new(db_path: PathBuf) -> FdbResult<Self> {
+	pub async fn new(db_path: PathBuf) -> Result<Self> {
 		// Create directory if it doesn't exist
-		std::fs::create_dir_all(&db_path).map_err(|_| FdbError::from_code(1510))?;
+		std::fs::create_dir_all(&db_path).context("failed to create database directory")?;
 
 		// Configure RocksDB options
 		let mut opts = Options::default();
@@ -33,8 +35,7 @@ impl RocksDbDatabaseDriver {
 		opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MB
 
 		// Open the OptimisticTransactionDB
-		let db =
-			OptimisticTransactionDB::open(&opts, db_path).map_err(|_| FdbError::from_code(1510))?;
+		let db = OptimisticTransactionDB::open(&opts, db_path).context("failed to open rocksdb")?;
 
 		Ok(RocksDbDatabaseDriver {
 			db: Arc::new(db),
@@ -45,8 +46,8 @@ impl RocksDbDatabaseDriver {
 }
 
 impl DatabaseDriver for RocksDbDatabaseDriver {
-	fn create_trx(&self) -> FdbResult<Transaction> {
-		Ok(Transaction::new(Box::new(RocksDbTransactionDriver::new(
+	fn create_trx(&self) -> Result<Transaction> {
+		Ok(Transaction::new(Arc::new(RocksDbTransactionDriver::new(
 			self.db.clone(),
 			self.conflict_tracker.clone(),
 		))))
@@ -54,61 +55,51 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 
 	fn run<'a>(
 		&'a self,
-		closure: Box<
-			dyn Fn(
-					RetryableTransaction,
-					MaybeCommitted,
-				) -> BoxFut<'a, Result<Erased, FdbBindingError>>
-				+ Send
-				+ Sync
-				+ 'a,
-		>,
-	) -> BoxFut<'a, Result<Erased, FdbBindingError>> {
+		closure: Box<dyn Fn(RetryableTransaction) -> BoxFut<'a, Result<Erased>> + Send + Sync + 'a>,
+	) -> BoxFut<'a, Result<Erased>> {
 		Box::pin(async move {
 			let mut maybe_committed = MaybeCommitted(false);
 			let max_retries = *self.max_retries.lock().unwrap();
 
 			for attempt in 0..max_retries {
 				let tx = self.create_trx()?;
-				let retryable = RetryableTransaction::new(tx);
+				let mut retryable = RetryableTransaction::new(tx);
+				retryable.maybe_committed = maybe_committed;
 
 				// Execute transaction
-				let result = closure(retryable.clone(), maybe_committed).await;
-				let fdb_error = match result {
-					std::result::Result::Ok(res) => {
-						match retryable.inner.driver.commit_owned().await {
-							Ok(_) => return Ok(res),
-							Err(e) => e,
-						}
-					}
-					std::result::Result::Err(e) => {
-						if let Some(fdb_error) = e.get_fdb_error() {
-							fdb_error
-						} else {
-							return Err(e);
-						}
-					}
+				let error = match closure(retryable.clone()).await {
+					Ok(res) => match retryable.inner.driver.commit_ref().await {
+						Ok(_) => return Ok(res),
+						Err(e) => e,
+					},
+					Err(e) => e,
 				};
 
-				// Handle retry or return error
-				if fdb_error.is_retryable() {
-					if fdb_error.is_maybe_committed() {
-						maybe_committed = MaybeCommitted(true);
-					}
+				let chain = error
+					.chain()
+					.find_map(|x| x.downcast_ref::<DatabaseError>());
 
-					let backoff_ms = calculate_tx_retry_backoff(attempt as usize);
-					tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
-				} else {
-					return Err(FdbBindingError::from(fdb_error));
+				if let Some(db_error) = chain {
+					// Handle retry or return error
+					if db_error.is_retryable() {
+						if db_error.is_maybe_committed() {
+							maybe_committed = MaybeCommitted(true);
+						}
+
+						let backoff_ms = calculate_tx_retry_backoff(attempt as usize);
+						tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+						continue;
+					}
 				}
+
+				return Err(error);
 			}
 
-			// Max retries exceeded
-			Err(FdbBindingError::from(FdbError::from_code(1007)))
+			Err(DatabaseError::MaxRetriesReached.into())
 		})
 	}
 
-	fn set_option(&self, opt: DatabaseOption) -> FdbResult<()> {
+	fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		match opt {
 			DatabaseOption::TransactionRetryLimit(limit) => {
 				*self.max_retries.lock().unwrap() = limit;

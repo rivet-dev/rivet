@@ -1,8 +1,7 @@
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
 use rivet_types::runners::Runner;
-use udb_util::{SERIALIZABLE, TxnExt};
-use universaldb as udb;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
 
@@ -24,24 +23,24 @@ pub async fn pegboard_runner_get_by_key(ctx: &OperationCtx, input: &Input) -> Re
 
 	let runner = ctx
 		.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let dc_name = dc_name.to_string();
 			let input = input.clone();
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 
 				// Look up runner by key
 				let runner_by_key_key =
 					keys::ns::RunnerByKeyKey::new(input.namespace_id, input.name, input.key);
 
-				let runner_data = txs.read_opt(&runner_by_key_key, SERIALIZABLE).await?;
+				let runner_data = tx.read_opt(&runner_by_key_key, Serializable).await?;
 
 				if let Some(data) = runner_data {
 					// Get full runner details using the runner_id
 					let runner = super::get::get_inner(&dc_name, &tx, data.runner_id).await?;
-					std::result::Result::<_, udb::FdbBindingError>::Ok(runner)
+					Ok(runner)
 				} else {
-					std::result::Result::<_, udb::FdbBindingError>::Ok(None)
+					Ok(None)
 				}
 			}
 		})

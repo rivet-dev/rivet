@@ -2,7 +2,7 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use rivet_util::Id;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 pub struct BodyKey {
 	signal_id: Id,
@@ -17,7 +17,7 @@ impl BodyKey {
 		Ok(value
 			.get()
 			.as_bytes()
-			.chunks(udb_util::CHUNK_SIZE)
+			.chunks(universaldb::utils::CHUNK_SIZE)
 			.map(|x| x.to_vec())
 			.collect())
 	}
@@ -34,7 +34,7 @@ impl FormalChunkedKey for BodyKey {
 		}
 	}
 
-	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value> {
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
 		serde_json::value::RawValue::from_string(String::from_utf8(
 			chunks
 				.iter()

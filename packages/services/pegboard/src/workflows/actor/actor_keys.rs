@@ -5,8 +5,8 @@ use epoxy::{
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
-use udb_util::prelude::*;
-use universaldb::{self as udb, FdbBindingError, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::prelude::*;
 
 use crate::keys;
 
@@ -231,27 +231,27 @@ pub async fn reserve_actor_key(
 ) -> Result<ReserveActorKeyOutput> {
 	let res = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if there are any actors that share the same key that are not destroyed
-			let actor_key_subspace = txs.subspace(&keys::ns::ActorByKeyKey::subspace(
+			let actor_key_subspace = keys::subspace().subspace(&keys::ns::ActorByKeyKey::subspace(
 				input.namespace_id,
 				input.name.clone(),
 				input.key.clone(),
 			));
 			let (start, end) = actor_key_subspace.range();
 
-			let mut stream = txs.get_ranges_keyvalues(
-				udb::RangeOption {
+			let mut stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::Iterator,
 					..(start, end).into()
 				},
-				SERIALIZABLE,
+				Serializable,
 			);
 
 			while let Some(entry) = stream.try_next().await? {
-				let (_idx_key, data) = txs.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
+				let (_idx_key, data) = tx.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
 				if !data.is_destroyed {
 					return Ok(ReserveActorKeyOutput::ExistingActor {
 						existing_actor_id: _idx_key.actor_id,
@@ -260,7 +260,7 @@ pub async fn reserve_actor_key(
 			}
 
 			// Write key
-			txs.write(
+			tx.write(
 				&keys::ns::ActorByKeyKey::new(
 					input.namespace_id,
 					input.name.clone(),
@@ -274,7 +274,7 @@ pub async fn reserve_actor_key(
 				},
 			)?;
 
-			Result::<_, FdbBindingError>::Ok(ReserveActorKeyOutput::Success)
+			Ok(ReserveActorKeyOutput::Success)
 		})
 		.await?;
 

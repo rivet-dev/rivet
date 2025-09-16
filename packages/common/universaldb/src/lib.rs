@@ -1,27 +1,24 @@
 pub(crate) mod atomic;
 mod database;
 pub mod driver;
-pub mod future;
-pub mod inherited;
+pub mod error;
+pub mod key_selector;
+mod metrics;
+pub mod options;
+pub mod prelude;
+pub mod range_option;
 mod transaction;
 pub(crate) mod tx_ops;
-mod types;
 pub mod utils;
+pub mod value;
 pub mod versionstamp;
 
-// Export UDB-specific types
 pub use database::Database;
 pub use driver::DatabaseDriverHandle;
+pub use key_selector::KeySelector;
+pub use range_option::RangeOption;
+pub use transaction::{RetryableTransaction, Transaction};
+pub use utils::{Subspace, calculate_tx_retry_backoff};
 
 // Re-export FDB types
 pub use foundationdb_tuple as tuple;
-pub use future::{FdbKeyValue, FdbValue};
-pub use inherited::options;
-pub use inherited::{
-	error::FdbBindingError, error::FdbError, error::FdbResult, keyselector::KeySelector,
-	rangeoption::RangeOption,
-};
-pub use options::DatabaseOption;
-pub use transaction::{RetryableTransaction, Transaction};
-pub use types::*;
-pub use utils::calculate_tx_retry_backoff;

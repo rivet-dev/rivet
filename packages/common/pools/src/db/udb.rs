@@ -2,15 +2,14 @@ use std::{ops::Deref, sync::Arc};
 
 use anyhow::*;
 use rivet_config::{Config, config};
-use universaldb as udb;
 
 #[derive(Clone)]
 pub struct UdbPool {
-	db: udb::Database,
+	db: universaldb::Database,
 }
 
 impl Deref for UdbPool {
-	type Target = udb::Database;
+	type Target = universaldb::Database;
 
 	fn deref(&self) -> &Self::Target {
 		&self.db
@@ -21,18 +20,18 @@ impl Deref for UdbPool {
 pub async fn setup(config: Config) -> Result<Option<UdbPool>> {
 	let db_driver = match config.database() {
 		config::Database::Postgres(pg) => {
-			Arc::new(udb::driver::PostgresDatabaseDriver::new(pg.url.read().clone()).await?)
-				as udb::DatabaseDriverHandle
+			Arc::new(universaldb::driver::PostgresDatabaseDriver::new(pg.url.read().clone()).await?)
+				as universaldb::DatabaseDriverHandle
 		}
 		config::Database::FileSystem(fs) => {
-			Arc::new(udb::driver::RocksDbDatabaseDriver::new(fs.path.clone()).await?)
-				as udb::DatabaseDriverHandle
+			Arc::new(universaldb::driver::RocksDbDatabaseDriver::new(fs.path.clone()).await?)
+				as universaldb::DatabaseDriverHandle
 		}
 	};
 
 	tracing::debug!("udb started");
 
 	Ok(Some(UdbPool {
-		db: udb::Database::new(db_driver),
+		db: universaldb::Database::new(db_driver),
 	}))
 }

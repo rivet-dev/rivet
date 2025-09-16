@@ -1,5 +1,6 @@
+use anyhow::Result;
 use epoxy_protocol::protocol;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
 
 use crate::replica::ballot;
 
@@ -9,7 +10,7 @@ pub async fn commit(
 	replica_id: protocol::ReplicaId,
 	commit_req: protocol::CommitRequest,
 	commit_to_kv: bool,
-) -> Result<(), FdbBindingError> {
+) -> Result<()> {
 	let protocol::Payload {
 		proposal,
 		seq,

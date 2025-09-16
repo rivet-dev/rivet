@@ -1413,7 +1413,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-slog",
- "udb-util",
  "universaldb",
  "url",
  "uuid",
@@ -1723,7 +1722,6 @@ dependencies = [
  "tracing-logfmt",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "udb-util",
  "universaldb",
  "universalpubsub",
  "url",
@@ -2792,7 +2790,6 @@ dependencies = [
  "serde",
  "strum",
  "tracing",
- "udb-util",
  "universaldb",
  "url",
  "utoipa",
@@ -3280,7 +3277,6 @@ dependencies = [
  "serde_json",
  "strum",
  "tracing",
- "udb-util",
  "universaldb",
  "utoipa",
  "versioned-data-util",
@@ -3301,7 +3297,6 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
- "udb-util",
  "universaldb",
 ]
 
@@ -3367,7 +3362,6 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-types",
  "tracing",
- "udb-util",
  "universaldb",
 ]
 
@@ -4373,7 +4367,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
- "udb-util",
  "universaldb",
  "url",
  "uuid",
@@ -4450,7 +4443,6 @@ dependencies = [
  "tokio",
  "tower 0.5.2",
  "tracing",
- "udb-util",
  "universaldb",
  "universalpubsub",
  "url",
@@ -4560,7 +4552,6 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
- "udb-util",
  "universaldb",
  "universalpubsub",
  "url",
@@ -4710,7 +4701,7 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-util",
  "serde",
- "udb-util",
+ "universaldb",
  "utoipa",
  "versioned-data-util",
 ]
@@ -4767,7 +4758,7 @@ version = "0.0.1"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
- "udb-util",
+ "universaldb",
  "utoipa",
  "uuid",
 ]
@@ -6336,20 +6327,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
-name = "udb-util"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "futures-util",
- "lazy_static",
- "rivet-metrics",
- "tokio",
- "tracing",
- "universaldb",
-]
-
-[[package]]
 name = "uname"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6416,16 +6393,17 @@ dependencies = [
  "rand 0.8.5",
  "rivet-config",
  "rivet-env",
+ "rivet-metrics",
  "rivet-pools",
  "rivet-test-deps-docker",
  "rocksdb",
  "serde",
  "tempfile",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-postgres",
  "tracing",
  "tracing-subscriber",
- "udb-util",
  "uuid",
 ]
 

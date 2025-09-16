@@ -1,14 +1,14 @@
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 pub mod actor;
 pub mod epoxy;
 pub mod ns;
 pub mod runner;
 
-pub fn subspace() -> udb_util::Subspace {
+pub fn subspace() -> universaldb::utils::Subspace {
 	rivet_types::keys::pegboard::subspace()
 }
 
-pub fn actor_kv_subspace() -> udb_util::Subspace {
-	udb_util::Subspace::new(&(RIVET, PEGBOARD, ACTOR_KV))
+pub fn actor_kv_subspace() -> universaldb::utils::Subspace {
+	universaldb::utils::Subspace::new(&(RIVET, PEGBOARD, ACTOR_KV))
 }

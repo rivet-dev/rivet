@@ -5,11 +5,8 @@ use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol::protocol;
-use udb_util::{FormalKey, SERIALIZABLE, SNAPSHOT, TxnExt};
-use universaldb::{
-	self as udb,
-	options::{ConflictRangeType, MutationType, StreamingMode},
-};
+use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{keys, metrics, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
 
@@ -107,24 +104,24 @@ async fn allocate_actor(
 	// client wf
 	let (for_serverless, res) = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
-			let txs = tx.subspace(keys::subspace());
+			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if runner is an serverless runner
-			let for_serverless = txs
+			let for_serverless = tx
 				.exists(
 					&namespace::keys::RunnerConfigByVariantKey::new(
 						namespace_id,
 						namespace::keys::RunnerConfigVariant::Serverless,
 						input.runner_name_selector.clone(),
 					),
-					SERIALIZABLE,
+					Serializable,
 				)
 				.await?;
 
 			if for_serverless {
-				txs.atomic_op(
+				tx.atomic_op(
 					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 						namespace_id,
 						input.runner_name_selector.clone(),
@@ -135,40 +132,42 @@ async fn allocate_actor(
 			}
 
 			// Check if a queue exists
-			let pending_actor_subspace =
-				txs.subspace(&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
+			let pending_actor_subspace = keys::subspace().subspace(
+				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
 					namespace_id,
 					input.runner_name_selector.clone(),
-				));
-			let queue_exists = txs
+				),
+			);
+			let queue_exists = tx
 				.get_ranges_keyvalues(
-					udb::RangeOption {
+					universaldb::RangeOption {
 						mode: StreamingMode::Exact,
 						limit: Some(1),
 						..(&pending_actor_subspace).into()
 					},
-					// NOTE: This is not SERIALIZABLE because we don't want to conflict with other
+					// NOTE: This is not Serializable because we don't want to conflict with other
 					// inserts/clears to this range
-					SNAPSHOT,
+					Snapshot,
 				)
 				.next()
 				.await
 				.is_some();
 
 			if !queue_exists {
-				let runner_alloc_subspace = txs.subspace(&keys::ns::RunnerAllocIdxKey::subspace(
-					namespace_id,
-					input.runner_name_selector.clone(),
-				));
+				let runner_alloc_subspace =
+					keys::subspace().subspace(&keys::ns::RunnerAllocIdxKey::subspace(
+						namespace_id,
+						input.runner_name_selector.clone(),
+					));
 
-				let mut stream = txs.get_ranges_keyvalues(
-					udb::RangeOption {
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
 						..(&runner_alloc_subspace).into()
 					},
-					// NOTE: This is not SERIALIZABLE because we don't want to conflict with all of the
+					// NOTE: This is not Serializable because we don't want to conflict with all of the
 					// keys, just the one we choose
-					SNAPSHOT,
+					Snapshot,
 				);
 
 				let mut highest_version = None;
@@ -179,7 +178,7 @@ async fn allocate_actor(
 					};
 
 					let (old_runner_alloc_key, old_runner_alloc_key_data) =
-						txs.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
+						tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
 
 					if let Some(highest_version) = highest_version {
 						// We have passed all of the runners with the highest version. This is reachable if
@@ -202,10 +201,10 @@ async fn allocate_actor(
 					}
 
 					// Add read conflict only for this key
-					txs.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
+					tx.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
 
 					// Clear old entry
-					txs.delete(&old_runner_alloc_key);
+					tx.delete(&old_runner_alloc_key);
 
 					let new_remaining_slots =
 						old_runner_alloc_key_data.remaining_slots.saturating_sub(1);
@@ -213,7 +212,7 @@ async fn allocate_actor(
 						(new_remaining_slots * 1000) / old_runner_alloc_key_data.total_slots;
 
 					// Write new allocation key with 1 less slot
-					txs.write(
+					tx.write(
 						&keys::ns::RunnerAllocIdxKey::new(
 							namespace_id,
 							input.runner_name_selector.clone(),
@@ -230,19 +229,19 @@ async fn allocate_actor(
 					)?;
 
 					// Update runner record
-					txs.write(
+					tx.write(
 						&keys::runner::RemainingSlotsKey::new(old_runner_alloc_key.runner_id),
 						new_remaining_slots,
 					)?;
 
 					// Set runner id of actor
-					txs.write(
+					tx.write(
 						&keys::actor::RunnerIdKey::new(input.actor_id),
 						old_runner_alloc_key.runner_id,
 					)?;
 
 					// Insert actor index key
-					txs.write(
+					tx.write(
 						&keys::runner::ActorKey::new(
 							old_runner_alloc_key.runner_id,
 							input.actor_id,
@@ -251,7 +250,7 @@ async fn allocate_actor(
 					)?;
 
 					// Set actor as not sleeping
-					txs.delete(&keys::actor::SleepTsKey::new(input.actor_id));
+					tx.delete(&keys::actor::SleepTsKey::new(input.actor_id));
 
 					return Ok((
 						for_serverless,
@@ -270,7 +269,7 @@ async fn allocate_actor(
 			// NOTE: This will conflict with serializable reads to the alloc queue, which is the behavior we
 			// want. If a runner reads from the queue while this is being inserted, one of the two txns will
 			// retry and we ensure the actor does not end up in queue limbo.
-			txs.write(
+			tx.write(
 				&keys::ns::PendingActorByRunnerNameSelectorKey::new(
 					namespace_id,
 					input.runner_name_selector.clone(),
@@ -316,7 +315,7 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 	let mut state = ctx.state::<State>()?;
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 			tx.clear(&keys::subspace().pack(&connectable_key));
 
@@ -344,10 +343,10 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	let for_serverless = state.for_serverless;
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
-			txs.delete(&keys::actor::ConnectableKey::new(input.actor_id));
+			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
 			if let Some(runner_id) = runner_id {
 				destroy::clear_slot(
@@ -360,7 +359,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 				)
 				.await?;
 			} else if for_serverless {
-				txs.atomic_op(
+				tx.atomic_op(
 					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 						namespace_id,
 						runner_name_selector.clone(),
@@ -574,7 +573,7 @@ pub async fn clear_pending_allocation(
 	// Clear self from alloc queue
 	let cleared = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let pending_alloc_key =
 				keys::subspace().pack(&keys::ns::PendingActorByRunnerNameSelectorKey::new(
 					input.namespace_id,
@@ -583,7 +582,7 @@ pub async fn clear_pending_allocation(
 					input.actor_id,
 				));
 
-			let exists = tx.get(&pending_alloc_key, SERIALIZABLE).await?.is_some();
+			let exists = tx.get(&pending_alloc_key, Serializable).await?.is_some();
 
 			tx.clear(&pending_alloc_key);
 
@@ -620,13 +619,11 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 	state.connectable_ts = Some(util::timestamp::now());
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
 			tx.set(
 				&keys::subspace().pack(&connectable_key),
-				&connectable_key
-					.serialize(())
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+				&connectable_key.serialize(())?,
 			);
 
 			Ok(())
@@ -650,13 +647,13 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 	state.connectable_ts = None;
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			// Make not connectable
-			txs.delete(&keys::actor::ConnectableKey::new(input.actor_id));
+			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
-			txs.write(&keys::actor::SleepTsKey::new(input.actor_id), sleep_ts)?;
+			tx.write(&keys::actor::SleepTsKey::new(input.actor_id), sleep_ts)?;
 
 			Ok(())
 		})

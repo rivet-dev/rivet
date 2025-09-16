@@ -2,7 +2,7 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use rivet_util::Id;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 #[derive(Debug)]
 pub enum WakeCondition {

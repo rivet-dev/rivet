@@ -2,11 +2,8 @@ use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
 use rivet_runner_protocol::protocol;
-use udb_util::{FormalChunkedKey, SERIALIZABLE, SNAPSHOT, TxnExt};
-use universaldb::{
-	self as udb,
-	options::{ConflictRangeType, StreamingMode},
-};
+use universaldb::options::{ConflictRangeType, StreamingMode};
+use universaldb::utils::{FormalChunkedKey, IsolationLevel::*};
 
 use crate::{keys, workflows::actor::Allocate};
 
@@ -127,7 +124,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							}
 
 							if !state.draining {
-								ctx.activity(InsertFdbInput {
+								ctx.activity(InsertDbInput {
 									runner_id: input.runner_id,
 									namespace_id: input.namespace_id,
 									name: input.name.clone(),
@@ -207,7 +204,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							state.draining = true;
 
 							// Can't parallelize these two, requires reading from state
-							ctx.activity(ClearFdbInput {
+							ctx.activity(ClearDbInput {
 								runner_id: input.runner_id,
 								name: input.name.clone(),
 								key: input.key.clone(),
@@ -358,7 +355,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	})
 	.await?;
 
-	ctx.activity(ClearFdbInput {
+	ctx.activity(ClearDbInput {
 		runner_id: input.runner_id,
 		name: input.name.clone(),
 		key: input.key.clone(),
@@ -443,8 +440,8 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 
 	let evict_workflow_id = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			let runner_by_key_key = keys::ns::RunnerByKeyKey::new(
 				input.namespace_id,
@@ -453,13 +450,13 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 			);
 
 			// Read existing runner by key slot
-			let evict_workflow_id = txs
-				.read_opt(&runner_by_key_key, SERIALIZABLE)
+			let evict_workflow_id = tx
+				.read_opt(&runner_by_key_key, Serializable)
 				.await?
 				.map(|x| x.workflow_id);
 
 			// Allocate self
-			txs.write(
+			tx.write(
 				&runner_by_key_key,
 				RunnerByKeyKeyData {
 					runner_id: input.runner_id,
@@ -475,7 +472,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertFdbInput {
+struct InsertDbInput {
 	runner_id: Id,
 	namespace_id: Id,
 	name: String,
@@ -485,19 +482,19 @@ struct InsertFdbInput {
 	create_ts: i64,
 }
 
-#[activity(InsertFdb)]
-async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
+#[activity(InsertDb)]
+async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			let remaining_slots_key = keys::runner::RemainingSlotsKey::new(input.runner_id);
 			let last_ping_ts_key = keys::runner::LastPingTsKey::new(input.runner_id);
 			let workflow_id_key = keys::runner::WorkflowIdKey::new(input.runner_id);
 
 			let (remaining_slots_entry, last_ping_ts_entry) = tokio::try_join!(
-				txs.read_opt(&remaining_slots_key, SERIALIZABLE),
-				txs.read_opt(&last_ping_ts_key, SERIALIZABLE),
+				tx.read_opt(&remaining_slots_key, Serializable),
+				tx.read_opt(&last_ping_ts_key, Serializable),
 			)?;
 			let now = util::timestamp::now();
 
@@ -516,44 +513,44 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 			}
 			// NOTE: These properties are only inserted once
 			else {
-				txs.write(&workflow_id_key, ctx.workflow_id())?;
+				tx.write(&workflow_id_key, ctx.workflow_id())?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::NamespaceIdKey::new(input.runner_id),
 					input.namespace_id,
 				)?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::NameKey::new(input.runner_id),
 					input.name.clone(),
 				)?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::KeyKey::new(input.runner_id),
 					input.key.clone(),
 				)?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::VersionKey::new(input.runner_id),
 					input.version,
 				)?;
 
-				txs.write(&remaining_slots_key, input.total_slots)?;
+				tx.write(&remaining_slots_key, input.total_slots)?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::TotalSlotsKey::new(input.runner_id),
 					input.total_slots,
 				)?;
 
-				txs.write(
+				tx.write(
 					&keys::runner::CreateTsKey::new(input.runner_id),
 					input.create_ts,
 				)?;
 
-				txs.write(&last_ping_ts_key, now)?;
+				tx.write(&last_ping_ts_key, now)?;
 
 				// Populate ns indexes
-				txs.write(
+				tx.write(
 					&keys::ns::ActiveRunnerKey::new(
 						input.namespace_id,
 						input.create_ts,
@@ -561,7 +558,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 					),
 					ctx.workflow_id(),
 				)?;
-				txs.write(
+				tx.write(
 					&keys::ns::ActiveRunnerByNameKey::new(
 						input.namespace_id,
 						input.name.clone(),
@@ -570,7 +567,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 					),
 					ctx.workflow_id(),
 				)?;
-				txs.write(
+				tx.write(
 					&keys::ns::AllRunnerKey::new(
 						input.namespace_id,
 						input.create_ts,
@@ -578,7 +575,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 					),
 					ctx.workflow_id(),
 				)?;
-				txs.write(
+				tx.write(
 					&keys::ns::AllRunnerByNameKey::new(
 						input.namespace_id,
 						input.name.clone(),
@@ -589,7 +586,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 				)?;
 
 				// Write name into namespace runner names list
-				txs.write(
+				tx.write(
 					&keys::ns::RunnerNameKey::new(input.namespace_id, input.name.clone()),
 					(),
 				)?;
@@ -598,12 +595,12 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 			};
 
 			// Set last connect ts
-			txs.write(&keys::runner::ConnectedTsKey::new(input.runner_id), now)?;
+			tx.write(&keys::runner::ConnectedTsKey::new(input.runner_id), now)?;
 
 			let remaining_millislots = (remaining_slots * 1000) / input.total_slots;
 
 			// Insert into index (same as the `update_alloc_idx` op with `AddIdx`)
-			txs.write(
+			tx.write(
 				&keys::ns::RunnerAllocIdxKey::new(
 					input.namespace_id,
 					input.name.clone(),
@@ -628,7 +625,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct ClearFdbInput {
+struct ClearDbInput {
 	runner_id: Id,
 	name: String,
 	key: String,
@@ -641,44 +638,44 @@ enum RunnerState {
 	Stopped,
 }
 
-#[activity(ClearFdb)]
-async fn clear_fdb(ctx: &ActivityCtx, input: &ClearFdbInput) -> Result<()> {
+#[activity(ClearDb)]
+async fn clear_Db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 	let state = ctx.state::<State>()?;
 	let namespace_id = state.namespace_id;
 	let create_ts = state.create_ts;
 
-	// TODO: Combine into a single fdb txn
+	// TODO: Combine into a single udb txn
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 			let now = util::timestamp::now();
 
 			// Clear runner by key idx if its still the current runner
 			let runner_by_key_key =
 				keys::ns::RunnerByKeyKey::new(namespace_id, input.name.clone(), input.key.clone());
-			let runner_id = txs
-				.read_opt(&runner_by_key_key, SERIALIZABLE)
+			let runner_id = tx
+				.read_opt(&runner_by_key_key, Serializable)
 				.await?
 				.map(|x| x.runner_id);
 			if runner_id == Some(input.runner_id) {
-				txs.delete(&runner_by_key_key);
+				tx.delete(&runner_by_key_key);
 			}
 
 			match input.update_state {
 				RunnerState::Draining => {
-					txs.write(&keys::runner::DrainTsKey::new(input.runner_id), now)?;
-					txs.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
+					tx.write(&keys::runner::DrainTsKey::new(input.runner_id), now)?;
+					tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
 				}
 				RunnerState::Stopped => {
-					txs.write(&keys::runner::StopTsKey::new(input.runner_id), now)?;
+					tx.write(&keys::runner::StopTsKey::new(input.runner_id), now)?;
 
 					// Update namespace indexes
-					txs.delete(&keys::ns::ActiveRunnerKey::new(
+					tx.delete(&keys::ns::ActiveRunnerKey::new(
 						namespace_id,
 						create_ts,
 						input.runner_id,
 					));
-					txs.delete(&keys::ns::ActiveRunnerByNameKey::new(
+					tx.delete(&keys::ns::ActiveRunnerByNameKey::new(
 						namespace_id,
 						input.name.clone(),
 						create_ts,
@@ -723,8 +720,8 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 	let state = ctx.state::<State>()?;
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			// Populate actor names if provided
 			if let Some(actor_names) = &input.prepopulate_actor_names {
@@ -736,7 +733,7 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 						)
 						.unwrap_or_default();
 
-					txs.write(
+					tx.write(
 						&keys::ns::ActorNameKey::new(input.namespace_id, name.clone()),
 						ActorNameKeyData { metadata },
 					)?;
@@ -754,15 +751,10 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 				let metadata_key = keys::runner::MetadataKey::new(input.runner_id);
 
 				// Write metadata
-				for (i, chunk) in metadata_key
-					.split(metadata)
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.enumerate()
-				{
+				for (i, chunk) in metadata_key.split(metadata)?.into_iter().enumerate() {
 					let chunk_key = metadata_key.chunk(i);
 
-					txs.set(&txs.pack(&chunk_key), &chunk);
+					tx.set(&tx.pack(&chunk_key), &chunk);
 				}
 			}
 
@@ -872,26 +864,23 @@ async fn fetch_remaining_actors(
 ) -> Result<Vec<(Id, u32)>> {
 	let actors = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			let actor_subspace =
 				keys::subspace().subspace(&keys::runner::ActorKey::subspace(input.runner_id));
 
 			tx.get_ranges_keyvalues(
-				udb::RangeOption {
+				universaldb::RangeOption {
 					mode: StreamingMode::WantAll,
 					..(&actor_subspace).into()
 				},
-				SERIALIZABLE,
+				Serializable,
 			)
-			.map(|res| match res {
-				Ok(entry) => {
-					let (key, generation) = txs.read_entry::<keys::runner::ActorKey>(&entry)?;
+			.map(|res| {
+				let (key, generation) = tx.read_entry::<keys::runner::ActorKey>(&res?)?;
 
-					Ok((key.actor_id.into(), generation))
-				}
-				Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
+				Ok((key.actor_id.into(), generation))
 			})
 			.try_collect::<Vec<_>>()
 			.await
@@ -910,13 +899,13 @@ struct CheckExpiredInput {
 #[activity(CheckExpired)]
 async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<bool> {
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
-			let last_ping_ts = txs
+			let last_ping_ts = tx
 				.read(
 					&keys::runner::LastPingTsKey::new(input.runner_id),
-					SERIALIZABLE,
+					Serializable,
 				)
 				.await?;
 
@@ -924,7 +913,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 			let expired = last_ping_ts < now - RUNNER_LOST_THRESHOLD_MS;
 
 			if expired {
-				txs.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
+				tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
 			}
 
 			Ok(expired)
@@ -959,23 +948,24 @@ pub(crate) async fn allocate_pending_actors(
 	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
 	let res = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 			let mut results = Vec::new();
 
-			let pending_actor_subspace =
-				txs.subspace(&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
+			let pending_actor_subspace = keys::subspace().subspace(
+				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
 					input.namespace_id,
 					input.name.clone(),
-				));
-			let mut queue_stream = txs.get_ranges_keyvalues(
-				udb::RangeOption {
+				),
+			);
+			let mut queue_stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::Iterator,
 					..(&pending_actor_subspace).into()
 				},
-				// NOTE: This is not SERIALIZABLE because we don't want to conflict with all of the keys, just
+				// NOTE: This is not Serializable because we don't want to conflict with all of the keys, just
 				// the one we choose
-				SNAPSHOT,
+				Snapshot,
 			);
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
 
@@ -985,23 +975,22 @@ pub(crate) async fn allocate_pending_actors(
 				};
 
 				let (queue_key, generation) =
-					txs.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
+					tx.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
 
-				let runner_alloc_subspace = txs.subspace(&keys::ns::RunnerAllocIdxKey::subspace(
-					input.namespace_id,
-					input.name.clone(),
-				));
+				let runner_alloc_subspace = keys::subspace().subspace(
+					&keys::ns::RunnerAllocIdxKey::subspace(input.namespace_id, input.name.clone()),
+				);
 
-				let mut stream = txs.get_ranges_keyvalues(
-					udb::RangeOption {
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
 						// Containers bin pack so we reverse the order
 						reverse: true,
 						..(&runner_alloc_subspace).into()
 					},
-					// NOTE: This is not SERIALIZABLE because we don't want to conflict with all of the
+					// NOTE: This is not Serializable because we don't want to conflict with all of the
 					// keys, just the one we choose
-					SNAPSHOT,
+					Snapshot,
 				);
 
 				let mut highest_version = None;
@@ -1012,7 +1001,7 @@ pub(crate) async fn allocate_pending_actors(
 					};
 
 					let (old_runner_alloc_key, old_runner_alloc_key_data) =
-						txs.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
+						tx.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
 
 					if let Some(highest_version) = highest_version {
 						// We have passed all of the runners with the highest version. This is reachable if
@@ -1035,12 +1024,12 @@ pub(crate) async fn allocate_pending_actors(
 					}
 
 					// Add read conflict only for this runner key
-					txs.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
-					txs.delete(&old_runner_alloc_key);
+					tx.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
+					tx.delete(&old_runner_alloc_key);
 
 					// Add read conflict for the queue key
-					txs.add_conflict_key(&queue_key, ConflictRangeType::Read)?;
-					txs.delete(&queue_key);
+					tx.add_conflict_key(&queue_key, ConflictRangeType::Read)?;
+					tx.delete(&queue_key);
 
 					let new_remaining_slots =
 						old_runner_alloc_key_data.remaining_slots.saturating_sub(1);
@@ -1048,7 +1037,7 @@ pub(crate) async fn allocate_pending_actors(
 						(new_remaining_slots * 1000) / old_runner_alloc_key_data.total_slots;
 
 					// Write new allocation key with 1 less slot
-					txs.write(
+					tx.write(
 						&keys::ns::RunnerAllocIdxKey::new(
 							input.namespace_id,
 							input.name.clone(),
@@ -1065,19 +1054,19 @@ pub(crate) async fn allocate_pending_actors(
 					)?;
 
 					// Update runner record
-					txs.write(
+					tx.write(
 						&keys::runner::RemainingSlotsKey::new(old_runner_alloc_key.runner_id),
 						new_remaining_slots,
 					)?;
 
 					// Set runner id of actor
-					txs.write(
+					tx.write(
 						&keys::actor::RunnerIdKey::new(queue_key.actor_id),
 						old_runner_alloc_key.runner_id,
 					)?;
 
 					// Insert actor index key
-					txs.write(
+					tx.write(
 						&keys::runner::ActorKey::new(
 							old_runner_alloc_key.runner_id,
 							queue_key.actor_id,

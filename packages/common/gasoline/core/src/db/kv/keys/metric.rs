@@ -1,5 +1,5 @@
 use anyhow::*;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GaugeMetric {

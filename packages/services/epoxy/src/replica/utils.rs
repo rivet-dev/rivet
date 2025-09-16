@@ -1,8 +1,9 @@
+use anyhow::Result;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use futures_util::TryStreamExt;
 use std::{cmp::Ordering, collections::HashSet};
-use udb_util::prelude::*;
-use universaldb::{FdbBindingError, KeySelector, RangeOption, Transaction, options::StreamingMode};
+use universaldb::prelude::*;
+use universaldb::{KeySelector, RangeOption, Transaction, options::StreamingMode};
 
 use crate::keys;
 
@@ -11,7 +12,7 @@ pub async fn find_interference(
 	tx: &Transaction,
 	replica_id: ReplicaId,
 	commands: &Vec<protocol::Command>,
-) -> Result<Vec<protocol::Instance>, FdbBindingError> {
+) -> Result<Vec<protocol::Instance>> {
 	let mut interf = Vec::new();
 
 	// Get deduplicated keys
@@ -34,14 +35,12 @@ pub async fn find_interference(
 			..Default::default()
 		};
 
-		let mut stream = tx.get_ranges_keyvalues(range, SERIALIZABLE);
+		let mut stream = tx.get_ranges_keyvalues(range, Serializable);
 
 		while let Some(kv) = stream.try_next().await? {
 			// Parse the key to extract replica_id and slot_id
 			let key_bytes = kv.key();
-			let key = subspace
-				.unpack::<keys::replica::KeyInstanceKey>(key_bytes)
-				.map_err(|x| FdbBindingError::CustomError(x.into()))?;
+			let key = subspace.unpack::<keys::replica::KeyInstanceKey>(key_bytes)?;
 
 			interf.push(protocol::Instance {
 				replica_id: key.instance_replica_id,
@@ -59,7 +58,7 @@ pub async fn find_max_seq(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	interf: &Vec<protocol::Instance>,
-) -> Result<u64, FdbBindingError> {
+) -> Result<u64> {
 	let mut seq = 0;
 
 	for instance in interf {
@@ -67,11 +66,9 @@ pub async fn find_max_seq(
 		let key = keys::replica::LogEntryKey::new(instance.replica_id, instance.slot_id);
 		let subspace = keys::subspace(replica_id);
 
-		let value = tx.get(&subspace.pack(&key), false).await?;
+		let value = tx.get(&subspace.pack(&key), Serializable).await?;
 		if let Some(ref bytes) = value {
-			let log_entry: protocol::LogEntry = key
-				.deserialize(bytes)
-				.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+			let log_entry: protocol::LogEntry = key.deserialize(bytes)?;
 			if log_entry.seq > seq {
 				seq = log_entry.seq;
 			}

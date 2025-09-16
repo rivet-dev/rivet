@@ -43,7 +43,9 @@ impl SimpleTupleValue {
 			SimpleTupleValue::Uuid(v)
 		} else if let Ok(v) = rivet_util::Id::from_str(value) {
 			SimpleTupleValue::Id(v)
-		} else if let (true, Some(v)) = (convert_keys, udb_util::prelude::key_from_str(value)) {
+		} else if let (true, Some(v)) =
+			(convert_keys, universaldb::utils::keys::key_from_str(value))
+		{
 			SimpleTupleValue::U64(v as u64)
 		} else if nested && value.trim().starts_with('[') && value.trim().ends_with(']') {
 			let mut items = Vec::new();
@@ -227,7 +229,9 @@ impl SimpleTupleValue {
 		match &self {
 			SimpleTupleValue::U64(v) => {
 				if let Ok(v) = (*v).try_into() {
-					if let (true, Some(key)) = (convert_keys, udb_util::prelude::str_from_key(v)) {
+					if let (true, Some(key)) =
+						(convert_keys, universaldb::utils::keys::str_from_key(v))
+					{
 						write!(
 							f,
 							"{} {}",

@@ -1,6 +1,7 @@
+use anyhow::{Result, ensure};
 use epoxy_protocol::protocol;
 use std::cmp;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
 
 use crate::replica::{ballot, messages, utils};
 
@@ -8,7 +9,7 @@ pub async fn pre_accept(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	pre_accept_req: protocol::PreAcceptRequest,
-) -> Result<protocol::PreAcceptResponse, FdbBindingError> {
+) -> Result<protocol::PreAcceptResponse> {
 	tracing::info!(?replica_id, "handling pre-accept message");
 
 	let protocol::Payload {
@@ -25,11 +26,7 @@ pub async fn pre_accept(
 	let is_valid =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
 			.await?;
-	if !is_valid {
-		return Err(FdbBindingError::CustomError(
-			anyhow::anyhow!("ballot validation failed for pre_accept").into(),
-		));
-	}
+	ensure!(is_valid, "ballot validation failed for pre_accept");
 
 	// Find interference for this key
 	let interf = utils::find_interference(tx, replica_id, &proposal.commands).await?;

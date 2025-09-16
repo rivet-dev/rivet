@@ -1,10 +1,11 @@
 use std::{borrow::Cow, ops::Deref};
 
-use rivet_metrics::KeyValue;
-use universaldb::{
-	KeySelector, RangeOption,
+use crate::{
+	key_selector::KeySelector,
+	range_option::RangeOption,
 	tuple::{self, PackResult, TuplePack, TupleUnpack},
 };
+use rivet_metrics::KeyValue;
 
 use crate::metrics;
 
@@ -19,6 +20,12 @@ impl Subspace {
 	pub fn new<T: TuplePack>(t: &T) -> Self {
 		Self {
 			inner: tuple::Subspace::all().subspace(t),
+		}
+	}
+
+	pub fn all() -> Self {
+		Self {
+			inner: tuple::Subspace::all(),
 		}
 	}
 
@@ -60,6 +67,12 @@ impl Deref for Subspace {
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
+	}
+}
+
+impl From<tuple::Subspace> for Subspace {
+	fn from(value: tuple::Subspace) -> Self {
+		Subspace { inner: value }
 	}
 }
 

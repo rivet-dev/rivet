@@ -1,6 +1,7 @@
+use anyhow::{Result, ensure};
 use epoxy_protocol::protocol::{self, ReplicaId};
-use udb_util::FormalKey;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{keys, replica::utils};
 
@@ -19,7 +20,7 @@ pub async fn update_log(
 	replica_id: ReplicaId,
 	log_entry: protocol::LogEntry,
 	instance: &protocol::Instance,
-) -> Result<(), FdbBindingError> {
+) -> Result<()> {
 	tracing::debug!(?replica_id, ?instance, ?log_entry.state, "updating log");
 
 	let subspace = keys::subspace(replica_id);
@@ -27,12 +28,8 @@ pub async fn update_log(
 	let packed_key = subspace.pack(&log_key);
 
 	// Read existing log entry to validate state progression
-	let current_entry = match tx.get(&packed_key, false).await? {
-		Some(bytes) => Some(
-			log_key
-				.deserialize(&bytes)
-				.map_err(|e| FdbBindingError::CustomError(e.into()))?,
-		),
+	let current_entry = match tx.get(&packed_key, Serializable).await? {
+		Some(bytes) => Some(log_key.deserialize(&bytes)?),
 		None => None,
 	};
 
@@ -41,18 +38,14 @@ pub async fn update_log(
 		let current_order = state_order(&current.state);
 		let new_order = state_order(&log_entry.state);
 
-		if new_order <= current_order {
-			return Err(FdbBindingError::CustomError(
-				anyhow::anyhow!(
-					"invalid state transition: cannot transition from {:?} to {:?} (order {} to {})",
-					current.state,
-					log_entry.state,
-					current_order,
-					new_order
-				)
-				.into(),
-			));
-		}
+		ensure!(
+			new_order > current_order,
+			"invalid state transition: cannot transition from {:?} to {:?} (order {} to {})",
+			current.state,
+			log_entry.state,
+			current_order,
+			new_order,
+		);
 
 		tracing::debug!(
 			?current.state,
@@ -66,9 +59,7 @@ pub async fn update_log(
 	}
 
 	// Store log entry in UDB
-	let value = log_key
-		.serialize(log_entry.clone())
-		.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+	let value = log_key.serialize(log_entry.clone())?;
 	tx.set(&packed_key, &value);
 
 	// Store in keys for interference

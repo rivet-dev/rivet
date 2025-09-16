@@ -6,8 +6,8 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-udb-util.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-uuid.workspace = true
+universaldb.workspace = true
 utoipa.workspace = true
+uuid.workspace = true

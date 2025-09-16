@@ -31,7 +31,6 @@ slog.workspace = true
 tokio.workspace = true
 tracing-slog.workspace = true
 tracing.workspace = true
-udb-util.workspace = true
 universaldb.workspace = true
 url.workspace = true
 uuid.workspace = true

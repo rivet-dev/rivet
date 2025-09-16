@@ -7,18 +7,18 @@ use std::{
 	time::Instant,
 };
 
+use anyhow::{Context, Result};
 use futures_util::{StreamExt, TryStreamExt, stream::BoxStream};
 use rivet_util::Id;
 use rivet_util::future::CustomInstrumentExt;
 use serde_json::json;
 use tracing::Instrument;
-use udb_util::{
-	FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT, TxnExt, end_of_key_range, keys::*,
+use universaldb::utils::{
+	FormalChunkedKey, FormalKey, IsolationLevel::*, end_of_key_range, keys::*,
 };
 use universaldb::{
-	self as udb,
-	future::FdbValue,
 	options::{ConflictRangeType, MutationType, StreamingMode},
+	value::Value,
 };
 
 use rivet_metrics::KeyValue;
@@ -48,7 +48,7 @@ const WORKER_WAKE_SUBJECT: &str = "gasoline.worker.wake";
 
 pub struct DatabaseKv {
 	pools: rivet_pools::Pools,
-	subspace: udb_util::Subspace,
+	subspace: universaldb::utils::Subspace,
 }
 
 impl DatabaseKv {
@@ -81,23 +81,21 @@ impl DatabaseKv {
 	}
 }
 
-// MARK: FDB Helpers
+// MARK: UDB Helpers
 impl DatabaseKv {
 	fn write_signal_wake_idxs(
 		&self,
 		workflow_id: Id,
 		wake_signals: &[&str],
-		tx: &udb::RetryableTransaction,
-	) -> Result<(), udb::FdbBindingError> {
+		tx: &universaldb::Transaction,
+	) -> Result<()> {
 		for signal_name in wake_signals {
 			// Write to wake signals list
 			let wake_signal_key =
 				keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
 			tx.set(
 				&self.subspace.pack(&wake_signal_key),
-				&wake_signal_key
-					.serialize(())
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+				&wake_signal_key.serialize(())?,
 			);
 		}
 
@@ -109,16 +107,14 @@ impl DatabaseKv {
 		workflow_id: Id,
 		workflow_name: &str,
 		sub_workflow_id: Id,
-		tx: &udb::RetryableTransaction,
-	) -> Result<(), udb::FdbBindingError> {
+		tx: &universaldb::Transaction,
+	) -> Result<()> {
 		let sub_workflow_wake_key =
 			keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
 
 		tx.set(
 			&self.subspace.pack(&sub_workflow_wake_key),
-			&sub_workflow_wake_key
-				.serialize(workflow_name.to_string())
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&sub_workflow_wake_key.serialize(workflow_name.to_string())?,
 		);
 
 		Ok(())
@@ -131,8 +127,8 @@ impl DatabaseKv {
 		signal_id: Id,
 		signal_name: &str,
 		body: &serde_json::value::RawValue,
-		tx: &udb::RetryableTransaction,
-	) -> Result<(), udb::FdbBindingError> {
+		tx: &universaldb::Transaction,
+	) -> Result<()> {
 		tracing::debug!(
 			?ray_id,
 			?workflow_id,
@@ -145,36 +141,25 @@ impl DatabaseKv {
 
 		// Check if the workflow exists
 		let Some(workflow_name_entry) = tx
-			.get(&self.subspace.pack(&workflow_name_key), SERIALIZABLE)
+			.get(&self.subspace.pack(&workflow_name_key), Serializable)
 			.await?
 		else {
-			return Err(udb::FdbBindingError::CustomError(
-				WorkflowError::WorkflowNotFound.into(),
-			));
+			return Err(WorkflowError::WorkflowNotFound.into());
 		};
 
-		let workflow_name = workflow_name_key
-			.deserialize(&workflow_name_entry)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+		let workflow_name = workflow_name_key.deserialize(&workflow_name_entry)?;
 
 		// Write name
 		let name_key = keys::signal::NameKey::new(signal_id);
 		tx.set(
 			&self.subspace.pack(&name_key),
-			&name_key
-				.serialize(signal_name.to_string())
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&name_key.serialize(signal_name.to_string())?,
 		);
 
 		let signal_body_key = keys::signal::BodyKey::new(signal_id);
 
 		// Write signal body
-		for (i, chunk) in signal_body_key
-			.split_ref(body)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in signal_body_key.split_ref(body)?.into_iter().enumerate() {
 			let chunk_key = signal_body_key.chunk(i);
 
 			tx.set(&self.subspace.pack(&chunk_key), &chunk);
@@ -186,36 +171,28 @@ impl DatabaseKv {
 
 		tx.set(
 			&self.subspace.pack(&pending_signal_key),
-			&pending_signal_key
-				.serialize(())
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&pending_signal_key.serialize(())?,
 		);
 
 		// Write create ts
 		let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
 		tx.set(
 			&self.subspace.pack(&create_ts_key),
-			&create_ts_key
-				.serialize(pending_signal_key.ts)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&create_ts_key.serialize(pending_signal_key.ts)?,
 		);
 
 		// Write ray id
 		let ray_id_key = keys::signal::RayIdKey::new(signal_id);
 		tx.set(
 			&self.subspace.pack(&ray_id_key),
-			&ray_id_key
-				.serialize(ray_id)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&ray_id_key.serialize(ray_id)?,
 		);
 
 		// Write workflow id
 		let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
 		tx.set(
 			&self.subspace.pack(&workflow_id_key),
-			&workflow_id_key
-				.serialize(workflow_id)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+			&workflow_id_key.serialize(workflow_id)?,
 		);
 
 		let wake_signal_key =
@@ -223,7 +200,7 @@ impl DatabaseKv {
 
 		// If the workflow currently has a wake signal key for this signal, wake it
 		if tx
-			.get(&self.subspace.pack(&wake_signal_key), SERIALIZABLE)
+			.get(&self.subspace.pack(&wake_signal_key), Serializable)
 			.await?
 			.is_some()
 		{
@@ -237,14 +214,12 @@ impl DatabaseKv {
 			// Add wake condition for workflow
 			tx.set(
 				&self.subspace.pack(&wake_condition_key),
-				&wake_condition_key
-					.serialize(())
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+				&wake_condition_key.serialize(())?,
 			);
 		}
 
 		update_metric(
-			&tx.subspace(self.subspace.clone()),
+			&tx.with_subspace(self.subspace.clone()),
 			None,
 			Some(keys::metric::GaugeMetric::SignalPending(
 				signal_name.to_string(),
@@ -262,15 +237,15 @@ impl DatabaseKv {
 		tags: Option<&serde_json::Value>,
 		input: &serde_json::value::RawValue,
 		unique: bool,
-		tx: &udb::RetryableTransaction,
-	) -> Result<Id, udb::FdbBindingError> {
-		let txs = tx.subspace(self.subspace.clone());
+		tx: &universaldb::Transaction,
+	) -> Result<Id> {
+		let tx = tx.with_subspace(self.subspace.clone());
 
 		if unique {
 			let empty_tags = json!({});
 
 			if let Some(existing_workflow_id) = self
-				.find_workflow_inner(workflow_name, tags.unwrap_or(&empty_tags), tx)
+				.find_workflow_inner(workflow_name, tags.unwrap_or(&empty_tags), &tx)
 				.await?
 			{
 				tracing::debug!(?existing_workflow_id, "found existing workflow");
@@ -278,17 +253,17 @@ impl DatabaseKv {
 			}
 		}
 
-		txs.write(
+		tx.write(
 			&keys::workflow::CreateTsKey::new(workflow_id),
 			rivet_util::timestamp::now(),
 		)?;
 
-		txs.write(
+		tx.write(
 			&keys::workflow::NameKey::new(workflow_id),
 			workflow_name.to_string(),
 		)?;
 
-		txs.write(&keys::workflow::RayIdKey::new(workflow_id), ray_id)?;
+		tx.write(&keys::workflow::RayIdKey::new(workflow_id), ray_id)?;
 
 		// Write tags
 		let tags = tags
@@ -296,17 +271,15 @@ impl DatabaseKv {
 				x.as_object()
 					.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
 			})
-			.transpose()
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+			.transpose()?
 			.into_iter()
 			.flatten()
 			.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-			.collect::<WorkflowResult<Vec<_>>>()
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+			.collect::<WorkflowResult<Vec<_>>>()?;
 
 		for (k, v) in &tags {
 			// Write tag key
-			txs.write(
+			tx.write(
 				&keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone()),
 				(),
 			)?;
@@ -318,7 +291,7 @@ impl DatabaseKv {
 				.map(|(k, v)| (k.clone(), v.clone()))
 				.collect();
 
-			txs.write(
+			tx.write(
 				&keys::workflow::ByNameAndTagKey::new(
 					workflow_name.to_string(),
 					k.clone(),
@@ -330,7 +303,7 @@ impl DatabaseKv {
 		}
 
 		// Write null key for the "by name and first tag" secondary index (all workflows have this)
-		txs.write(
+		tx.write(
 			&keys::workflow::ByNameAndTagKey::null(workflow_name.to_string(), workflow_id),
 			tags,
 		)?;
@@ -338,19 +311,14 @@ impl DatabaseKv {
 		// Write input
 		let input_key = keys::workflow::InputKey::new(workflow_id);
 
-		for (i, chunk) in input_key
-			.split_ref(input)
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-			.into_iter()
-			.enumerate()
-		{
+		for (i, chunk) in input_key.split_ref(input)?.into_iter().enumerate() {
 			let chunk_key = input_key.chunk(i);
 
-			txs.set(&self.subspace.pack(&chunk_key), &chunk);
+			tx.set(&self.subspace.pack(&chunk_key), &chunk);
 		}
 
 		// Write immediate wake condition
-		txs.write(
+		tx.write(
 			&keys::wake::WorkflowWakeConditionKey::new(
 				workflow_name.to_string(),
 				workflow_id,
@@ -359,11 +327,11 @@ impl DatabaseKv {
 			(),
 		)?;
 
-		txs.write(&keys::workflow::HasWakeConditionKey::new(workflow_id), ())?;
+		tx.write(&keys::workflow::HasWakeConditionKey::new(workflow_id), ())?;
 
 		// Write metric
 		update_metric(
-			&txs,
+			&tx,
 			None,
 			Some(keys::metric::GaugeMetric::WorkflowSleeping(
 				workflow_name.to_string(),
@@ -377,20 +345,14 @@ impl DatabaseKv {
 		&self,
 		workflow_name: &str,
 		tags: &serde_json::Value,
-		tx: &udb::RetryableTransaction,
-	) -> Result<Option<Id>, udb::FdbBindingError> {
+		tx: &universaldb::Transaction,
+	) -> Result<Option<Id>> {
 		// Convert to flat vec of strings
 		let mut tag_iter = tags
 			.as_object()
-			.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
-			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+			.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
 			.iter()
-			.map(|(k, v)| {
-				Result::<_, udb::FdbBindingError>::Ok((
-					k.clone(),
-					value_to_str(v).map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-				))
-			});
+			.map(|(k, v)| Result::<_>::Ok((k.clone(), value_to_str(v)?)));
 		let first_tag = tag_iter.next().transpose()?;
 		let rest_of_tags = tag_iter.collect::<Result<Vec<_>, _>>()?;
 
@@ -412,11 +374,11 @@ impl DatabaseKv {
 			};
 
 		let mut stream = tx.get_ranges_keyvalues(
-			udb::RangeOption {
+			universaldb::RangeOption {
 				mode: StreamingMode::Iterator,
 				..(&workflow_by_name_and_tag_subspace).into()
 			},
-			SERIALIZABLE,
+			Serializable,
 		);
 
 		loop {
@@ -427,13 +389,10 @@ impl DatabaseKv {
 			// Unpack key
 			let workflow_by_name_and_tag_key = self
 				.subspace
-				.unpack::<keys::workflow::ByNameAndTagKey>(&entry.key())
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				.unpack::<keys::workflow::ByNameAndTagKey>(&entry.key())?;
 
 			// Deserialize value
-			let wf_rest_of_tags = workflow_by_name_and_tag_key
-				.deserialize(entry.value())
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+			let wf_rest_of_tags = workflow_by_name_and_tag_key.deserialize(entry.value())?;
 
 			// Compute intersection between wf tags and input
 			let tags_match = rest_of_tags.iter().all(|(k, v)| {
@@ -459,7 +418,7 @@ impl Database for DatabaseKv {
 	async fn from_pools(pools: rivet_pools::Pools) -> anyhow::Result<Arc<Self>> {
 		Ok(Arc::new(DatabaseKv {
 			pools,
-			subspace: udb_util::Subspace::new(&(RIVET, GASOLINE, KV)),
+			subspace: universaldb::utils::Subspace::new(&(RIVET, GASOLINE, KV)),
 		}))
 	}
 
@@ -496,7 +455,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let now = rivet_util::timestamp::now();
 
@@ -510,23 +469,21 @@ impl Database for DatabaseKv {
 
 					// List all active leases
 					let mut stream = tx.get_ranges_keyvalues(
-						udb::RangeOption {
+						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
 							..(&lease_subspace).into()
 						},
-						// Not SERIALIZABLE because we don't want this to conflict with other queries which write
+						// Not Serializable because we don't want this to conflict with other queries which write
 						// leases
-						SNAPSHOT,
+						Snapshot,
 					);
 
 					while let Some(lease_key_entry) = stream.try_next().await? {
 						let lease_key = self
 							.subspace
-							.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
-						let (workflow_name, worker_instance_id) = lease_key
-							.deserialize(lease_key_entry.value())
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+							.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())?;
+						let (workflow_name, worker_instance_id) =
+							lease_key.deserialize(lease_key_entry.value())?;
 						let last_ping_ts_key =
 							keys::worker_instance::LastPingTsKey::new(worker_instance_id);
 
@@ -539,15 +496,13 @@ impl Database for DatabaseKv {
 						} else if let Some(last_ping_entry) = tx
 							.get(
 								&self.subspace.pack(&last_ping_ts_key),
-								// Not SERIALIZABLE because we don't want this to conflict
-								SNAPSHOT,
+								// Not Serializable because we don't want this to conflict
+								Snapshot,
 							)
 							.await?
 						{
 							// Deserialize last ping value
-							let last_ping_ts = last_ping_ts_key
-								.deserialize(&last_ping_entry)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+							let last_ping_ts = last_ping_ts_key.deserialize(&last_ping_entry)?;
 
 							// Update cache
 							last_ping_cache.push((worker_instance_id, last_ping_ts));
@@ -566,7 +521,7 @@ impl Database for DatabaseKv {
 							let silence_ts_key =
 								keys::workflow::SilenceTsKey::new(lease_key.workflow_id);
 							if tx
-								.get(&self.subspace.pack(&silence_ts_key), SERIALIZABLE)
+								.get(&self.subspace.pack(&silence_ts_key), Serializable)
 								.await?
 								.is_some()
 							{
@@ -596,13 +551,11 @@ impl Database for DatabaseKv {
 							);
 							tx.set(
 								&self.subspace.pack(&wake_condition_key),
-								&wake_condition_key
-									.serialize(())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+								&wake_condition_key.serialize(())?,
 							);
 
 							update_metric(
-								&tx.subspace(self.subspace.clone()),
+								&tx.with_subspace(self.subspace.clone()),
 								Some(keys::metric::GaugeMetric::WorkflowActive(
 									workflow_name.to_string(),
 								)),
@@ -622,7 +575,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("clear_expired_leases_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		if expired_workflow_count != 0 {
 			tracing::info!(
@@ -644,13 +598,13 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
-					let txs = tx.subspace(self.subspace.clone());
+					let tx = tx.with_subspace(self.subspace.clone());
 
 					// Read existing lock
-					let lock_expired = if let Some(lock_ts) = txs
-						.read_opt(&keys::worker_instance::MetricsLockKey::new(), SERIALIZABLE)
+					let lock_expired = if let Some(lock_ts) = tx
+						.read_opt(&keys::worker_instance::MetricsLockKey::new(), Serializable)
 						.await?
 					{
 						lock_ts < rivet_util::timestamp::now() - METRICS_LOCK_TIMEOUT_MS
@@ -659,9 +613,9 @@ impl Database for DatabaseKv {
 					};
 
 					if lock_expired {
-						// Write to lock key. FDB transactions guarantee that if multiple workers are running this
+						// Write to lock key. UDB transactions guarantee that if multiple workers are running this
 						// query at the same time only one will succeed which means only one will have the lock.
-						txs.write(
+						tx.write(
 							&keys::worker_instance::MetricsLockKey::new(),
 							rivet_util::timestamp::now(),
 						)?;
@@ -671,33 +625,37 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("acquire_lock_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		if acquired_lock {
 			let entries = self
 				.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx, _mc| async move {
-					let txs = tx.subspace(self.subspace.clone());
+				.run(|tx| async move {
+					let tx = tx.with_subspace(self.subspace.clone());
 
-					let metrics_subspace = txs.subspace(&keys::metric::GaugeMetricKey::subspace());
-					txs.get_ranges_keyvalues(
-						udb::RangeOption {
+					let metrics_subspace = self
+						.subspace
+						.subspace(&keys::metric::GaugeMetricKey::subspace());
+					tx.get_ranges_keyvalues(
+						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
 							..(&metrics_subspace).into()
 						},
-						SERIALIZABLE,
+						Serializable,
 					)
 					.map(|res| match res {
-						Ok(entry) => txs.read_entry::<keys::metric::GaugeMetricKey>(&entry),
+						Ok(entry) => tx.read_entry::<keys::metric::GaugeMetricKey>(&entry),
 						Err(err) => Err(err.into()),
 					})
 					.try_collect::<Vec<_>>()
 					.await
 				})
 				.custom_instrument(tracing::info_span!("read_metrics_tx"))
-				.await?;
+				.await
+				.map_err(WorkflowError::Udb)?;
 
 			let mut total_workflow_counts: Vec<(String, usize)> = Vec::new();
 
@@ -779,14 +737,15 @@ impl Database for DatabaseKv {
 			self.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx, _mc| async move {
+				.run(|tx| async move {
 					let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
 					tx.clear(&self.subspace.pack(&metrics_lock_key));
 
 					Ok(())
 				})
 				.custom_instrument(tracing::info_span!("clear_lock_tx"))
-				.await?;
+				.await
+				.map_err(WorkflowError::Udb)?;
 		}
 
 		Ok(())
@@ -805,23 +764,22 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					// Update worker instance ping
 					let last_ping_ts_key =
 						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
 					tx.set(
 						&self.subspace.pack(&last_ping_ts_key),
-						&last_ping_ts_key
-							.serialize(rivet_util::timestamp::now())
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+						&last_ping_ts_key.serialize(rivet_util::timestamp::now())?,
 					);
 
 					Ok(())
 				}
 			})
 			.custom_instrument(tracing::info_span!("update_worker_ping_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -840,7 +798,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				self.dispatch_workflow_inner(
 					ray_id,
 					workflow_id,
@@ -853,7 +811,8 @@ impl Database for DatabaseKv {
 				.await
 			})
 			.custom_instrument(tracing::info_span!("dispatch_workflow_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		self.wake_worker();
 
@@ -865,7 +824,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				let workflow_ids = workflow_ids.clone();
 				async move {
 					futures_util::stream::iter(workflow_ids)
@@ -889,56 +848,50 @@ impl Database for DatabaseKv {
 									has_wake_condition_entry,
 								) = tokio::try_join!(
 									tx.get_ranges_keyvalues(
-										udb::RangeOption {
+										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
 											..(&input_subspace).into()
 										},
-										SERIALIZABLE,
+										Serializable,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get_ranges_keyvalues(
-										udb::RangeOption {
+										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
 											..(&state_subspace).into()
 										},
-										SERIALIZABLE,
+										Serializable,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get_ranges_keyvalues(
-										udb::RangeOption {
+										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
 											..(&output_subspace).into()
 										},
-										SERIALIZABLE,
+										Serializable,
 									)
 									.try_collect::<Vec<_>>(),
 									tx.get(
 										&self.subspace.pack(&has_wake_condition_key),
-										SERIALIZABLE
+										Serializable
 									),
 								)?;
 
 								if input_chunks.is_empty() {
 									Ok(None)
 								} else {
-									let input = input_key
-										.combine(input_chunks)
-										.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+									let input = input_key.combine(input_chunks)?;
 
 									let state = if state_chunks.is_empty() {
 										serde_json::value::RawValue::NULL.to_owned()
 									} else {
-										state_key.combine(state_chunks).map_err(|x| {
-											udb::FdbBindingError::CustomError(x.into())
-										})?
+										state_key.combine(state_chunks)?
 									};
 
 									let output = if output_chunks.is_empty() {
 										None
 									} else {
-										Some(output_key.combine(output_chunks).map_err(|x| {
-											udb::FdbBindingError::CustomError(x.into())
-										})?)
+										Some(output_key.combine(output_chunks)?)
 									};
 
 									Ok(Some(WorkflowData {
@@ -960,7 +913,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("get_workflow_tx"))
 			.await
-			.map_err(Into::into)
+			.map_err(WorkflowError::Udb)
 	}
 
 	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
@@ -978,9 +931,10 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move { self.find_workflow_inner(workflow_name, tags, &tx).await })
+			.run(|tx| async move { self.find_workflow_inner(workflow_name, tags, &tx).await })
 			.custom_instrument(tracing::info_span!("find_workflow_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::FIND_WORKFLOWS_DURATION.record(
@@ -1007,16 +961,14 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				let owned_filter = owned_filter.clone();
 
 				async move {
 					let now = rivet_util::timestamp::now();
 
 					// All wake conditions with a timestamp after this timestamp will be pulled
-					let pull_before = now
-						+ i64::try_from(self.worker_poll_interval().as_millis())
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+					let pull_before = now + i64::try_from(self.worker_poll_interval().as_millis())?;
 
 					// Pull all available wake conditions from all registered wf names
 					let entries = futures_util::stream::iter(owned_filter)
@@ -1044,24 +996,24 @@ impl Database for DatabaseKv {
 								.to_vec();
 
 							tx.get_ranges_keyvalues(
-								udb::RangeOption {
+								universaldb::RangeOption {
 									mode: StreamingMode::WantAll,
 									..(wake_subspace_start, wake_subspace_end).into()
 								},
-								// Must be a snapshot to not conflict with any new wake conditions being
+								// Must be a Snapshot to not conflict with any new wake conditions being
 								// inserted
-								SNAPSHOT,
+								Snapshot,
 							)
 						})
 						.flatten()
-						.map(|res| match res {
-							Ok(entry) => Ok((
+						.map(|res| {
+							let entry = res?;
+
+							anyhow::Ok((
 								entry.key().to_vec(),
 								self.subspace
-									.unpack::<keys::wake::WorkflowWakeConditionKey>(entry.key())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-							)),
-							Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
+									.unpack::<keys::wake::WorkflowWakeConditionKey>(entry.key())?,
+							))
 						})
 						.try_collect::<Vec<_>>()
 						.await?;
@@ -1101,17 +1053,16 @@ impl Database for DatabaseKv {
 								let lease_key_buf = self.subspace.pack(&lease_key);
 
 								// Check lease
-								if tx.get(&lease_key_buf, SERIALIZABLE).await?.is_some() {
-									Result::<_, udb::FdbBindingError>::Ok(None)
+								if tx.get(&lease_key_buf, Serializable).await?.is_some() {
+									Result::<_>::Ok(None)
 								} else {
 									// Write lease
 									tx.set(
 										&lease_key_buf,
-										&lease_key
-											.serialize((workflow_name.clone(), worker_instance_id))
-											.map_err(|x| {
-												udb::FdbBindingError::CustomError(x.into())
-											})?,
+										&lease_key.serialize((
+											workflow_name.clone(),
+											worker_instance_id,
+										))?,
 									);
 
 									// Write worker instance id
@@ -1119,15 +1070,11 @@ impl Database for DatabaseKv {
 										keys::workflow::WorkerInstanceIdKey::new(workflow_id);
 									tx.set(
 										&self.subspace.pack(&worker_instance_id_key),
-										&worker_instance_id_key
-											.serialize(worker_instance_id)
-											.map_err(|x| {
-												udb::FdbBindingError::CustomError(x.into())
-											})?,
+										&worker_instance_id_key.serialize(worker_instance_id)?,
 									);
 
 									update_metric(
-										&tx.subspace(self.subspace.clone()),
+										&tx.with_subspace(self.subspace.clone()),
 										Some(keys::metric::GaugeMetric::WorkflowSleeping(
 											workflow_name.clone(),
 										)),
@@ -1168,12 +1115,10 @@ impl Database for DatabaseKv {
 						let wake_sub_workflow_key =
 							keys::workflow::WakeSubWorkflowKey::new(*workflow_id);
 						if let Some(entry) = tx
-							.get(&self.subspace.pack(&wake_sub_workflow_key), SERIALIZABLE)
+							.get(&self.subspace.pack(&wake_sub_workflow_key), Serializable)
 							.await?
 						{
-							let sub_workflow_id = wake_sub_workflow_key
-								.deserialize(&entry)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+							let sub_workflow_id = wake_sub_workflow_key.deserialize(&entry)?;
 
 							let sub_workflow_wake_key =
 								keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, *workflow_id);
@@ -1194,7 +1139,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("pull_workflows_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		let worker_instance_id_str = worker_instance_id.to_string();
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1223,7 +1169,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				let leased_workflows = leased_workflows.clone();
 
 				async move {
@@ -1253,42 +1199,33 @@ impl Database for DatabaseKv {
 									events,
 								) = tokio::try_join!(
 									async {
-										tx.get(&self.subspace.pack(&create_ts_key), SERIALIZABLE)
+										tx.get(&self.subspace.pack(&create_ts_key), Serializable)
 											.await
-											.map_err(|x| {
-												udb::FdbBindingError::CustomError(x.into())
-											})
 									},
 									async {
-										tx.get(&self.subspace.pack(&ray_id_key), SERIALIZABLE)
-											.await
-											.map_err(|x| {
-												udb::FdbBindingError::CustomError(x.into())
-											})
+										tx.get(&self.subspace.pack(&ray_id_key), Serializable).await
 									},
 									async {
 										tx.get_ranges_keyvalues(
-											udb::RangeOption {
+											universaldb::RangeOption {
 												mode: StreamingMode::WantAll,
 												..(&input_subspace).into()
 											},
-											SERIALIZABLE,
+											Serializable,
 										)
 										.try_collect::<Vec<_>>()
 										.await
-										.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 									},
 									async {
 										tx.get_ranges_keyvalues(
-											udb::RangeOption {
+											universaldb::RangeOption {
 												mode: StreamingMode::WantAll,
 												..(&state_subspace).into()
 											},
-											SERIALIZABLE,
+											Serializable,
 										)
 										.try_collect::<Vec<_>>()
 										.await
-										.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 									},
 									async {
 										let mut events_by_location: HashMap<Location, Vec<Event>> =
@@ -1297,11 +1234,11 @@ impl Database for DatabaseKv {
 											WorkflowHistoryEventBuilder::new(Location::empty());
 
 										let mut stream = tx.get_ranges_keyvalues(
-											udb::RangeOption {
+											universaldb::RangeOption {
 												mode: StreamingMode::WantAll,
 												..(&active_history_subspace).into()
 											},
-											SERIALIZABLE,
+											Serializable,
 										);
 
 										loop {
@@ -1313,11 +1250,8 @@ impl Database for DatabaseKv {
 											let partial_key = self
 												.subspace
 												.unpack::<keys::history::PartialEventKey>(
-													entry.key(),
-												)
-												.map_err(|x| {
-													udb::FdbBindingError::CustomError(x.into())
-												})?;
+												entry.key(),
+											)?;
 
 											if current_event.location != partial_key.location {
 												if current_event.location.is_empty() {
@@ -1337,12 +1271,7 @@ impl Database for DatabaseKv {
 													events_by_location
 														.entry(previous_event.location.root())
 														.or_default()
-														.push(
-															Event::try_from(previous_event)
-																.map_err(|x| {
-																	udb::FdbBindingError::CustomError(x.into())
-																})?,
-														);
+														.push(Event::try_from(previous_event)?);
 												}
 											}
 
@@ -1351,53 +1280,35 @@ impl Database for DatabaseKv {
 												self.subspace.unpack::<keys::history::EventTypeKey>(
 													entry.key(),
 												) {
-												let event_type = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let event_type = key.deserialize(entry.value())?;
 
 												current_event.event_type = Some(event_type);
 											} else if let Ok(key) =
 												self.subspace.unpack::<keys::history::VersionKey>(
 													entry.key(),
 												) {
-												let version = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let version = key.deserialize(entry.value())?;
 
 												current_event.version = Some(version);
 											} else if let Ok(key) =
 												self.subspace.unpack::<keys::history::CreateTsKey>(
 													entry.key(),
 												) {
-												let create_ts = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let create_ts = key.deserialize(entry.value())?;
 
 												current_event.create_ts = Some(create_ts);
 											} else if let Ok(key) =
 												self.subspace
 													.unpack::<keys::history::NameKey>(entry.key())
 											{
-												let name = key.deserialize(entry.value()).map_err(
-													|x| udb::FdbBindingError::CustomError(x.into()),
-												)?;
+												let name = key.deserialize(entry.value())?;
 
 												current_event.name = Some(name);
 											} else if let Ok(key) =
 												self.subspace.unpack::<keys::history::SignalIdKey>(
 													entry.key(),
 												) {
-												let signal_id = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let signal_id = key.deserialize(entry.value())?;
 
 												current_event.signal_id = Some(signal_id);
 											} else if let Ok(key) = self
@@ -1405,11 +1316,8 @@ impl Database for DatabaseKv {
 												.unpack::<keys::history::SubWorkflowIdKey>(
 												entry.key(),
 											) {
-												let sub_workflow_id = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let sub_workflow_id =
+													key.deserialize(entry.value())?;
 
 												current_event.sub_workflow_id =
 													Some(sub_workflow_id);
@@ -1429,11 +1337,7 @@ impl Database for DatabaseKv {
 												self.subspace.unpack::<keys::history::InputHashKey>(
 													entry.key(),
 												) {
-												let input_hash = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let input_hash = key.deserialize(entry.value())?;
 
 												current_event.input_hash = Some(input_hash);
 											} else if let Ok(_key) =
@@ -1445,11 +1349,7 @@ impl Database for DatabaseKv {
 												self.subspace.unpack::<keys::history::IterationKey>(
 													entry.key(),
 												) {
-												let iteration = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let iteration = key.deserialize(entry.value())?;
 
 												current_event.iteration = Some(iteration);
 											} else if let Ok(key) = self
@@ -1457,11 +1357,7 @@ impl Database for DatabaseKv {
 												.unpack::<keys::history::DeadlineTsKey>(
 												entry.key(),
 											) {
-												let deadline_ts = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let deadline_ts = key.deserialize(entry.value())?;
 
 												current_event.deadline_ts = Some(deadline_ts);
 											} else if let Ok(key) = self
@@ -1469,11 +1365,7 @@ impl Database for DatabaseKv {
 												.unpack::<keys::history::SleepStateKey>(
 												entry.key(),
 											) {
-												let sleep_state = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let sleep_state = key.deserialize(entry.value())?;
 
 												current_event.sleep_state = Some(sleep_state);
 											} else if let Ok(key) = self
@@ -1481,11 +1373,8 @@ impl Database for DatabaseKv {
 												.unpack::<keys::history::InnerEventTypeKey>(
 												entry.key(),
 											) {
-												let inner_event_type = key
-													.deserialize(entry.value())
-													.map_err(|x| {
-														udb::FdbBindingError::CustomError(x.into())
-													})?;
+												let inner_event_type =
+													key.deserialize(entry.value())?;
 
 												current_event.inner_event_type =
 													Some(inner_event_type);
@@ -1498,9 +1387,7 @@ impl Database for DatabaseKv {
 											events_by_location
 												.entry(current_event.location.root())
 												.or_default()
-												.push(Event::try_from(current_event).map_err(
-													|x| udb::FdbBindingError::CustomError(x.into()),
-												)?);
+												.push(Event::try_from(current_event)?);
 										}
 
 										Ok(events_by_location)
@@ -1508,31 +1395,17 @@ impl Database for DatabaseKv {
 								)?;
 
 								let create_ts = create_ts_key
-									.deserialize(&create_ts_entry.ok_or(
-										udb::FdbBindingError::CustomError(
-											format!("key should exist: {create_ts_key:?}").into(),
-										),
-									)?)
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+									.deserialize(&create_ts_entry.context("key should exist")?)?;
 								let ray_id = ray_id_key
-									.deserialize(&ray_id_entry.ok_or(
-										udb::FdbBindingError::CustomError(
-											format!("key should exist: {ray_id_key:?}").into(),
-										),
-									)?)
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
-								let input = input_key
-									.combine(input_chunks)
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+									.deserialize(&ray_id_entry.context("key should exist")?)?;
+								let input = input_key.combine(input_chunks)?;
 								let state = if state_chunks.is_empty() {
 									serde_json::value::RawValue::NULL.to_owned()
 								} else {
-									state_key
-										.combine(state_chunks)
-										.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+									state_key.combine(state_chunks)?
 								};
 
-								Result::<_, udb::FdbBindingError>::Ok(PulledWorkflowData {
+								Result::<_>::Ok(PulledWorkflowData {
 									workflow_id,
 									workflow_name,
 									create_ts,
@@ -1552,7 +1425,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("pull_workflow_history_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		let dt2 = start_instant2.elapsed().as_secs_f64();
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1601,7 +1475,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let sub_workflow_wake_subspace = self
 						.subspace
@@ -1612,12 +1486,12 @@ impl Database for DatabaseKv {
 					let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
 
 					let mut stream = tx.get_ranges_keyvalues(
-						udb::RangeOption {
+						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
 							..(&sub_workflow_wake_subspace).into()
 						},
-						// NOTE: Must be serializable to conflict with `get_sub_workflow`
-						SERIALIZABLE,
+						// NOTE: Must be Serializable to conflict with `get_sub_workflow`
+						Serializable,
 					);
 
 					let (wrote_to_wake_idx, tag_keys, wake_deadline_entry) = tokio::try_join!(
@@ -1626,13 +1500,11 @@ impl Database for DatabaseKv {
 							let mut wrote_to_wake_idx = false;
 
 							while let Some(entry) = stream.try_next().await? {
-								let sub_workflow_wake_key = self
-									.subspace
-									.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
-								let workflow_name = sub_workflow_wake_key
-									.deserialize(entry.value())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+								let sub_workflow_wake_key =
+									self.subspace
+										.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())?;
+								let workflow_name =
+									sub_workflow_wake_key.deserialize(entry.value())?;
 
 								let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
 									workflow_name,
@@ -1645,9 +1517,7 @@ impl Database for DatabaseKv {
 								// Add wake condition for workflow
 								tx.set(
 									&self.subspace.pack(&wake_condition_key),
-									&wake_condition_key
-										.serialize(())
-										.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+									&wake_condition_key.serialize(())?,
 								);
 
 								// Clear secondary index
@@ -1656,33 +1526,23 @@ impl Database for DatabaseKv {
 								wrote_to_wake_idx = true;
 							}
 
-							Result::<_, udb::FdbBindingError>::Ok(wrote_to_wake_idx)
+							Ok(wrote_to_wake_idx)
 						},
 						// Read tags
-						async {
-							tx.get_ranges_keyvalues(
-								udb::RangeOption {
-									mode: StreamingMode::WantAll,
-									..(&tags_subspace).into()
-								},
-								SERIALIZABLE,
-							)
-							.map(|res| match res {
-								Ok(entry) => self
-									.subspace
-									.unpack::<keys::workflow::TagKey>(entry.key())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into())),
-								Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
-							})
-							.try_collect::<Vec<_>>()
-							.await
-							.map_err(Into::into)
-						},
-						async {
-							tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
-								.await
-								.map_err(Into::into)
-						},
+						tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&tags_subspace).into()
+							},
+							Serializable,
+						)
+						.map(|res| {
+							self.subspace
+								.unpack::<keys::workflow::TagKey>(res?.key())
+								.map_err(anyhow::Error::from)
+						})
+						.try_collect::<Vec<_>>(),
+						tx.get(&self.subspace.pack(&wake_deadline_key), Serializable),
 					)?;
 
 					for key in tag_keys {
@@ -1711,9 +1571,7 @@ impl Database for DatabaseKv {
 					// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
 					// wake conditions is because it might be in the future.
 					if let Some(raw) = wake_deadline_entry {
-						let deadline_ts = wake_deadline_key
-							.deserialize(&raw)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let deadline_ts = wake_deadline_key.deserialize(&raw)?;
 
 						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
 							workflow_name.to_string(),
@@ -1732,12 +1590,7 @@ impl Database for DatabaseKv {
 					// Write output
 					let output_key = keys::workflow::OutputKey::new(workflow_id);
 
-					for (i, chunk) in output_key
-						.split_ref(output)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-						.into_iter()
-						.enumerate()
-					{
+					for (i, chunk) in output_key.split_ref(output)?.into_iter().enumerate() {
 						let chunk_key = output_key.chunk(i);
 
 						tx.set(&self.subspace.pack(&chunk_key), &chunk);
@@ -1751,7 +1604,7 @@ impl Database for DatabaseKv {
 					tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
 					update_metric(
-						&tx.subspace(self.subspace.clone()),
+						&tx.with_subspace(self.subspace.clone()),
 						Some(keys::metric::GaugeMetric::WorkflowActive(
 							workflow_name.to_string(),
 						)),
@@ -1764,7 +1617,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("complete_workflows_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		// Wake worker again in case some other workflow was waiting for this one to complete
 		if wrote_to_wake_idx {
@@ -1796,12 +1650,12 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
 
 					let wake_deadline_entry = tx
-						.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+						.get(&self.subspace.pack(&wake_deadline_key), Serializable)
 						.await?;
 
 					// Add immediate wake for workflow
@@ -1813,9 +1667,7 @@ impl Database for DatabaseKv {
 						);
 						tx.set(
 							&self.subspace.pack(&wake_condition_key),
-							&wake_condition_key
-								.serialize(())
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+							&wake_condition_key.serialize(())?,
 						);
 					}
 
@@ -1826,9 +1678,7 @@ impl Database for DatabaseKv {
 					// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
 					// wake conditions is because it might be in the future.
 					if let Some(raw) = wake_deadline_entry {
-						let deadline_ts = wake_deadline_key
-							.deserialize(&raw)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let deadline_ts = wake_deadline_key.deserialize(&raw)?;
 
 						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
 							workflow_name.to_string(),
@@ -1850,17 +1700,13 @@ impl Database for DatabaseKv {
 						// Add wake condition for workflow
 						tx.set(
 							&self.subspace.pack(&wake_condition_key),
-							&wake_condition_key
-								.serialize(())
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+							&wake_condition_key.serialize(())?,
 						);
 
 						// Write to wake deadline
 						tx.set(
 							&self.subspace.pack(&wake_deadline_key),
-							&wake_deadline_key
-								.serialize(deadline_ts)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+							&wake_deadline_key.serialize(deadline_ts)?,
 						);
 					}
 
@@ -1886,9 +1732,7 @@ impl Database for DatabaseKv {
 					if has_wake_condition {
 						tx.set(
 							&self.subspace.pack(&has_wake_condition_key),
-							&has_wake_condition_key
-								.serialize(())
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+							&has_wake_condition_key.serialize(())?,
 						);
 					} else {
 						tx.clear(&self.subspace.pack(&has_wake_condition_key));
@@ -1898,9 +1742,7 @@ impl Database for DatabaseKv {
 					let error_key = keys::workflow::ErrorKey::new(workflow_id);
 					tx.set(
 						&self.subspace.pack(&error_key),
-						&error_key
-							.serialize(error.to_string())
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+						&error_key.serialize(error.to_string())?,
 					);
 
 					// Clear lease
@@ -1911,7 +1753,7 @@ impl Database for DatabaseKv {
 					tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
 					update_metric(
-						&tx.subspace(self.subspace.clone()),
+						&tx.with_subspace(self.subspace.clone()),
 						Some(keys::metric::GaugeMetric::WorkflowActive(
 							workflow_name.to_string(),
 						)),
@@ -1929,7 +1771,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		// Always wake the worker immediately again. This is an IMPORTANT implementation detail to prevent
 		// race conditions with workflow sleep. Imagine the scenario:
@@ -1975,12 +1818,12 @@ impl Database for DatabaseKv {
 			.map(|x| x.to_string())
 			.collect::<Vec<_>>();
 
-		// Fetch signal from FDB
+		// Fetch signal from UDB
 		let signal =
 			self.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx, _mc| {
+				.run(|tx| {
 					let owned_filter = owned_filter.clone();
 
 					async move {
@@ -1997,14 +1840,14 @@ impl Database for DatabaseKv {
 									);
 
 									tx.get_ranges_keyvalues(
-										udb::RangeOption {
+										universaldb::RangeOption {
 											mode: StreamingMode::WantAll,
 											limit: Some(1),
 											..(&pending_signal_subspace).into()
 										},
-										// NOTE: This is serializable because any insert into this subspace
+										// NOTE: This is Serializable because any insert into this subspace
 										// should cause a conflict and retry of this txn
-										SERIALIZABLE,
+										Serializable,
 									)
 								})
 								.collect::<Vec<_>>();
@@ -2013,15 +1856,12 @@ impl Database for DatabaseKv {
 							let mut results = futures_util::future::try_join_all(
 								streams.into_iter().map(|mut stream| async move {
 									if let Some(entry) = stream.try_next().await? {
-										Result::<_, udb::FdbBindingError>::Ok(Some((
+										Result::<_>::Ok(Some((
 											entry.key().to_vec(),
 											self.subspace
 												.unpack::<keys::workflow::PendingSignalKey>(
 													&entry.key(),
-												)
-												.map_err(|x| {
-													udb::FdbBindingError::CustomError(x.into())
-												})?,
+												)?,
 										)))
 									} else {
 										Ok(None)
@@ -2058,13 +1898,11 @@ impl Database for DatabaseKv {
 							)?;
 							tx.set(
 								&self.subspace.pack(&ack_ts_key),
-								&ack_ts_key
-									.serialize(rivet_util::timestamp::now())
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+								&ack_ts_key.serialize(rivet_util::timestamp::now())?,
 							);
 
 							update_metric(
-								&tx.subspace(self.subspace.clone()),
+								&tx.with_subspace(self.subspace.clone()),
 								Some(keys::metric::GaugeMetric::SignalPending(
 									signal_name.to_string(),
 								)),
@@ -2082,18 +1920,16 @@ impl Database for DatabaseKv {
 
 							let chunks = tx
 								.get_ranges_keyvalues(
-									udb::RangeOption {
+									universaldb::RangeOption {
 										mode: StreamingMode::WantAll,
 										..(&body_subspace).into()
 									},
-									SERIALIZABLE,
+									Serializable,
 								)
 								.try_collect::<Vec<_>>()
 								.await?;
 
-							let body = body_key
-								.combine(chunks)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+							let body = body_key.combine(chunks)?;
 
 							// Insert history event
 							keys::history::insert::signal_event(
@@ -2106,8 +1942,7 @@ impl Database for DatabaseKv {
 								signal_id,
 								&signal_name,
 								&body,
-							)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+							)?;
 
 							Ok(Some(SignalData {
 								signal_id,
@@ -2142,7 +1977,8 @@ impl Database for DatabaseKv {
 					}
 				})
 				.custom_instrument(tracing::info_span!("pull_next_signal_tx"))
-				.await?;
+				.await
+				.map_err(WorkflowError::Udb)?;
 
 		Ok(signal)
 	}
@@ -2157,7 +1993,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let input_key = keys::workflow::InputKey::new(sub_workflow_id);
 					let input_subspace = self.subspace.subspace(&input_key);
@@ -2171,45 +2007,41 @@ impl Database for DatabaseKv {
 					// Read input and output
 					let (input_chunks, state_chunks, output_chunks, has_wake_condition_entry) = tokio::try_join!(
 						tx.get_ranges_keyvalues(
-							udb::RangeOption {
+							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
 								..(&input_subspace).into()
 							},
-							SERIALIZABLE,
+							Serializable,
 						)
 						.try_collect::<Vec<_>>(),
 						tx.get_ranges_keyvalues(
-							udb::RangeOption {
+							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
 								..(&state_subspace).into()
 							},
-							SERIALIZABLE,
+							Serializable,
 						)
 						.try_collect::<Vec<_>>(),
 						tx.get_ranges_keyvalues(
-							udb::RangeOption {
+							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
 								..(&output_subspace).into()
 							},
-							SERIALIZABLE,
+							Serializable,
 						)
 						.try_collect::<Vec<_>>(),
-						tx.get(&self.subspace.pack(&has_wake_condition_key), SERIALIZABLE),
+						tx.get(&self.subspace.pack(&has_wake_condition_key), Serializable),
 					)?;
 
 					if input_chunks.is_empty() {
 						Ok(None)
 					} else {
-						let input = input_key
-							.combine(input_chunks)
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let input = input_key.combine(input_chunks)?;
 
 						let state = if state_chunks.is_empty() {
 							serde_json::value::RawValue::NULL.to_owned()
 						} else {
-							state_key
-								.combine(state_chunks)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+							state_key.combine(state_chunks)?
 						};
 
 						let output = if output_chunks.is_empty() {
@@ -2230,11 +2062,7 @@ impl Database for DatabaseKv {
 
 							None
 						} else {
-							Some(
-								output_key
-									.combine(output_chunks)
-									.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-							)
+							Some(output_key.combine(output_chunks)?)
 						};
 
 						Ok(Some(WorkflowData {
@@ -2249,7 +2077,7 @@ impl Database for DatabaseKv {
 			})
 			.custom_instrument(tracing::info_span!("get_sub_workflow_tx"))
 			.await
-			.map_err(Into::into)
+			.map_err(WorkflowError::Udb)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -2264,12 +2092,13 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				self.publish_signal_inner(ray_id, workflow_id, signal_id, signal_name, body, &tx)
 					.await
 			})
 			.custom_instrument(tracing::info_span!("publish_signal_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		self.wake_worker();
 
@@ -2292,7 +2121,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				self.publish_signal_inner(
 					ray_id,
 					to_workflow_id,
@@ -2315,13 +2144,13 @@ impl Database for DatabaseKv {
 					&signal_name,
 					&body,
 					to_workflow_id,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("publish_signal_from_workflow_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		self.wake_worker();
 
@@ -2346,7 +2175,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				let sub_workflow_id = self
 					.dispatch_workflow_inner(
 						ray_id,
@@ -2371,13 +2200,13 @@ impl Database for DatabaseKv {
 					sub_workflow_name,
 					tags,
 					input,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(sub_workflow_id)
 			})
 			.custom_instrument(tracing::info_span!("dispatch_sub_workflow_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		self.wake_worker();
 
@@ -2394,7 +2223,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let tags_subspace = self
 						.subspace
@@ -2403,18 +2232,16 @@ impl Database for DatabaseKv {
 					// Read old tags
 					let tag_keys = tx
 						.get_ranges_keyvalues(
-							udb::RangeOption {
+							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
 								..(&tags_subspace).into()
 							},
-							SERIALIZABLE,
+							Serializable,
 						)
-						.map(|res| match res {
-							Ok(entry) => self
-								.subspace
-								.unpack::<keys::workflow::TagKey>(entry.key())
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into())),
-							Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
+						.map(|res| {
+							self.subspace
+								.unpack::<keys::workflow::TagKey>(res?.key())
+								.map_err(anyhow::Error::from)
 						})
 						.try_collect::<Vec<_>>()
 						.await?;
@@ -2435,22 +2262,15 @@ impl Database for DatabaseKv {
 					// Write new tags
 					let tags = tags
 						.as_object()
-						.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
+						.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
 						.into_iter()
 						.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-						.collect::<WorkflowResult<Vec<_>>>()
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						.collect::<WorkflowResult<Vec<_>>>()?;
 
 					for (k, v) in &tags {
 						let tag_key =
 							keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
-						tx.set(
-							&self.subspace.pack(&tag_key),
-							&tag_key
-								.serialize(())
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-						);
+						tx.set(&self.subspace.pack(&tag_key), &tag_key.serialize(())?);
 
 						// Write new "by name and first tag" secondary index
 						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
@@ -2466,9 +2286,7 @@ impl Database for DatabaseKv {
 							.collect();
 						tx.set(
 							&self.subspace.pack(&by_name_and_tag_key),
-							&by_name_and_tag_key
-								.serialize(rest_of_tags)
-								.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
+							&by_name_and_tag_key.serialize(rest_of_tags)?,
 						);
 					}
 
@@ -2476,7 +2294,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_tags_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2490,17 +2309,12 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| {
+			.run(|tx| {
 				async move {
 					let state_key = keys::workflow::StateKey::new(workflow_id);
 
 					// Write state
-					for (i, chunk) in state_key
-						.split_ref(&state)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?
-						.into_iter()
-						.enumerate()
-					{
+					for (i, chunk) in state_key.split_ref(&state)?.into_iter().enumerate() {
 						let chunk_key = state_key.chunk(i);
 
 						tx.set(&self.subspace.pack(&chunk_key), &chunk);
@@ -2510,7 +2324,8 @@ impl Database for DatabaseKv {
 				}
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_state_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2530,7 +2345,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::activity_event(
 					&self.subspace,
 					&tx,
@@ -2542,13 +2357,13 @@ impl Database for DatabaseKv {
 					&event_id.input_hash.to_be_bytes(),
 					input,
 					res,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_activity_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2567,7 +2382,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::message_send_event(
 					&self.subspace,
 					&tx,
@@ -2578,13 +2393,13 @@ impl Database for DatabaseKv {
 					tags,
 					message_name,
 					body,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_message_send_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2604,7 +2419,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				if iteration == 0 {
 					keys::history::insert::loop_event(
 						&self.subspace,
@@ -2616,8 +2431,7 @@ impl Database for DatabaseKv {
 						iteration,
 						state,
 						output,
-					)
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+					)?;
 				} else {
 					keys::history::insert::update_loop_event(
 						&self.subspace,
@@ -2627,8 +2441,7 @@ impl Database for DatabaseKv {
 						iteration,
 						state,
 						output,
-					)
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+					)?;
 
 					let active_history_subspace =
 						self.subspace
@@ -2653,11 +2466,11 @@ impl Database for DatabaseKv {
 							));
 
 					let mut stream = tx.get_ranges_keyvalues(
-						udb::RangeOption {
+						universaldb::RangeOption {
 							mode: StreamingMode::WantAll,
 							..(&loop_events_subspace).into()
 						},
-						SERIALIZABLE,
+						Serializable,
 					);
 
 					// Move all current events under this loop to the forgotten history
@@ -2667,9 +2480,7 @@ impl Database for DatabaseKv {
 						};
 
 						if !active_history_subspace.is_start_of(entry.key()) {
-							return Err(udb::FdbBindingError::CustomError(
-								udb::tuple::PackError::BadPrefix.into(),
-							));
+							return Err(universaldb::tuple::PackError::BadPrefix.into());
 						}
 
 						// Truncate tuple up to ACTIVE and replace it with FORGOTTEN
@@ -2708,7 +2519,8 @@ impl Database for DatabaseKv {
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_sleep_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2725,7 +2537,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::sleep_event(
 					&self.subspace,
 					&tx,
@@ -2735,13 +2547,13 @@ impl Database for DatabaseKv {
 					rivet_util::timestamp::now(),
 					deadline_ts,
 					SleepState::Normal,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_sleep_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2756,20 +2568,20 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::update_sleep_event(
 					&self.subspace,
 					&tx,
 					from_workflow_id,
 					location,
 					state,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("update_workflow_sleep_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2785,7 +2597,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::branch_event(
 					&self.subspace,
 					&tx,
@@ -2793,13 +2605,13 @@ impl Database for DatabaseKv {
 					location,
 					version,
 					rivet_util::timestamp::now(),
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_branch_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2816,7 +2628,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::removed_event(
 					&self.subspace,
 					&tx,
@@ -2826,13 +2638,13 @@ impl Database for DatabaseKv {
 					rivet_util::timestamp::now(),
 					event_type,
 					event_name,
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!("commit_workflow_removed_event_tx"))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
@@ -2848,7 +2660,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx, _mc| async move {
+			.run(|tx| async move {
 				keys::history::insert::version_check_event(
 					&self.subspace,
 					&tx,
@@ -2856,22 +2668,22 @@ impl Database for DatabaseKv {
 					location,
 					version,
 					rivet_util::timestamp::now(),
-				)
-				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				)?;
 
 				Ok(())
 			})
 			.custom_instrument(tracing::info_span!(
 				"commit_workflow_version_check_event_tx"
 			))
-			.await?;
+			.await
+			.map_err(WorkflowError::Udb)?;
 
 		Ok(())
 	}
 }
 
 fn update_metric(
-	txs: &udb_util::TxnSubspace,
+	tx: &universaldb::Transaction,
 	previous: Option<keys::metric::GaugeMetric>,
 	current: Option<keys::metric::GaugeMetric>,
 ) {
@@ -2880,7 +2692,7 @@ fn update_metric(
 	}
 
 	if let Some(previous) = previous {
-		txs.atomic_op(
+		tx.atomic_op(
 			&keys::metric::GaugeMetricKey::new(previous),
 			&(-1isize).to_le_bytes(),
 			MutationType::Add,
@@ -2888,7 +2700,7 @@ fn update_metric(
 	}
 
 	if let Some(current) = current {
-		txs.atomic_op(
+		tx.atomic_op(
 			&keys::metric::GaugeMetricKey::new(current),
 			&1usize.to_le_bytes(),
 			MutationType::Add,
@@ -2904,8 +2716,8 @@ struct WorkflowHistoryEventBuilder {
 	name: Option<String>,
 	signal_id: Option<Id>,
 	sub_workflow_id: Option<Id>,
-	input_chunks: Vec<FdbValue>,
-	output_chunks: Vec<FdbValue>,
+	input_chunks: Vec<Value>,
+	output_chunks: Vec<Value>,
 	input_hash: Option<Vec<u8>>,
 	error_count: usize,
 	iteration: Option<usize>,

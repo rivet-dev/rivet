@@ -39,7 +39,6 @@ tokio-util.workspace = true
 tokio.workspace = true
 tracing-logfmt.workspace = true
 tracing-opentelemetry.workspace = true
-udb-util.workspace = true
 universaldb.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true

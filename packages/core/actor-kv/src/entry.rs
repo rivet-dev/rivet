@@ -1,7 +1,7 @@
 use std::result::Result::Ok;
 
 use anyhow::*;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 use rivet_runner_protocol as rp;
 

@@ -4,7 +4,7 @@ use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 use universaldb::{KeySelector, RangeOption, options::StreamingMode};
 
 use crate::types;
@@ -245,7 +245,7 @@ async fn apply_log_entry(
 
 	// Replay the log entry
 	ctx.udb()?
-		.run(move |tx, _| {
+		.run(move |tx| {
 			let log_entry = log_entry.clone();
 			let instance = instance.clone();
 
@@ -256,10 +256,8 @@ async fn apply_log_entry(
 				let packed_key = subspace.pack(&log_key);
 
 				// Read existing entry to determine if we need to replay this log entry
-				if let Some(bytes) = tx.get(&packed_key, SERIALIZABLE).await? {
-					let existing = log_key
-						.deserialize(&bytes)
-						.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+				if let Some(bytes) = tx.get(&packed_key, Serializable).await? {
+					let existing = log_key.deserialize(&bytes)?;
 
 					let existing_order = crate::replica::log::state_order(&existing.state);
 					let new_order = crate::replica::log::state_order(&log_entry.state);
@@ -286,21 +284,15 @@ async fn apply_log_entry(
 				match log_entry.state {
 					protocol::State::PreAccepted => {
 						let request = protocol::PreAcceptRequest { payload };
-						crate::replica::messages::pre_accept(&*tx, replica_id, request)
-							.await
-							.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+						crate::replica::messages::pre_accept(&*tx, replica_id, request).await?;
 					}
 					protocol::State::Accepted => {
 						let request = protocol::AcceptRequest { payload };
-						crate::replica::messages::accept(&*tx, replica_id, request)
-							.await
-							.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+						crate::replica::messages::accept(&*tx, replica_id, request).await?;
 					}
 					protocol::State::Committed => {
 						let request = protocol::CommitRequest { payload };
-						crate::replica::messages::commit(&*tx, replica_id, request, false)
-							.await
-							.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+						crate::replica::messages::commit(&*tx, replica_id, request, false).await?;
 					}
 				}
 
@@ -370,7 +362,7 @@ pub async fn recover_keys_chunk(
 
 	let (last_key, recovered_count) = ctx
 		.udb()?
-		.run(move |tx, _| {
+		.run(move |tx| {
 			let after_key = input.after_key.clone();
 			let count = input.count;
 
@@ -409,7 +401,7 @@ pub async fn recover_keys_chunk(
 					..Default::default()
 				};
 
-				let mut stream = tx.get_ranges_keyvalues(range_option, SERIALIZABLE);
+				let mut stream = tx.get_ranges_keyvalues(range_option, Serializable);
 
 				// Iterate over stream and aggregate data for each key
 				let mut current_key: Option<Vec<u8>> = None;
@@ -423,10 +415,8 @@ pub async fn recover_keys_chunk(
 					scanned_count += 1;
 
 					// Parse the key instance entry to extract the key and instance info
-					let key_instance = subspace
-						.unpack::<crate::keys::replica::KeyInstanceKey>(kv.key())
-						.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))?;
-
+					let key_instance =
+						subspace.unpack::<crate::keys::replica::KeyInstanceKey>(kv.key())?;
 					let key = key_instance.key;
 					let instance = (
 						key_instance.instance_replica_id,
@@ -483,13 +473,9 @@ pub async fn recover_keys_chunk(
 				// it means a single key has too many instances (i.e. larger than
 				// the range limit)
 				if recovered_count == 0 && scanned_count >= count {
-					return Err(universaldb::FdbBindingError::CustomError(
-						anyhow!(
-							"single key has more than {} instances, cannot process in one chunk",
-							count
-						)
-						.into(),
-					));
+					bail!(
+						"single key has more than {count} instances, cannot process in one chunk",
+					);
 				}
 
 				tracing::info!(
@@ -640,7 +626,7 @@ async fn recover_key_value_with_instances(
 	replica_id: protocol::ReplicaId,
 	key: &[u8],
 	instances: &[(protocol::ReplicaId, protocol::SlotId)],
-) -> Result<(), universaldb::FdbBindingError> {
+) -> Result<()> {
 	let subspace = crate::keys::subspace(replica_id);
 
 	tracing::debug!(
@@ -659,7 +645,7 @@ async fn recover_key_value_with_instances(
 			let log_key =
 				crate::keys::replica::LogEntryKey::new(instance_replica_id, instance_slot_id);
 			let packed_key = subspace.pack(&log_key);
-			futures.push(tx.get(&packed_key, SERIALIZABLE));
+			futures.push(tx.get(&packed_key, Serializable));
 			batch_keys.push((packed_key, log_key, instance_replica_id, instance_slot_id));
 		}
 		let batch_results = futures_util::future::try_join_all(futures).await?;
@@ -669,21 +655,15 @@ async fn recover_key_value_with_instances(
 			batch_results.into_iter().zip(batch_keys.iter())
 		{
 			// Missing log entry indicates data corruption
-			let bytes = bytes.ok_or_else(|| {
-				universaldb::FdbBindingError::CustomError(
-					anyhow!(
-						"missing log entry for instance ({}, {}), data corruption detected",
-						instance_replica_id,
-						instance_slot_id
-					)
-					.into(),
+			let bytes = bytes.with_context(|| {
+				format!(
+					"missing log entry for instance ({}, {}), data corruption detected",
+					instance_replica_id, instance_slot_id
 				)
 			})?;
 
 			// Collect committed entries
-			let entry = log_key
-				.deserialize(&bytes)
-				.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))?;
+			let entry = log_key.deserialize(&bytes)?;
 			if matches!(entry.state, protocol::State::Committed) {
 				committed_entries.push(CommittedEntry {
 					instance: (*instance_replica_id, *instance_slot_id),
@@ -702,9 +682,7 @@ async fn recover_key_value_with_instances(
 	// Sort entries topologically to respect dependencies
 	// This ensures that operations are applied in the correct order,
 	// particularly important for dependent operations like check-and-set
-	let sorted_entries = topological_sort_entries(&committed_entries)
-		.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))?;
-
+	let sorted_entries = topological_sort_entries(&committed_entries)?;
 	tracing::debug!(
 		key_len = key.len(),
 		sorted_count = sorted_entries.len(),

@@ -1,9 +1,9 @@
 use epoxy_protocol::protocol::ReplicaId;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 pub mod keys;
 pub mod replica;
 
-pub fn subspace(replica_id: ReplicaId) -> udb_util::Subspace {
-	udb_util::Subspace::new(&(RIVET, EPOXY, REPLICA, replica_id))
+pub fn subspace(replica_id: ReplicaId) -> universaldb::utils::Subspace {
+	universaldb::utils::Subspace::new(&(RIVET, EPOXY, REPLICA, replica_id))
 }

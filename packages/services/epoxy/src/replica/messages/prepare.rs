@@ -1,6 +1,7 @@
+use anyhow::Result;
 use epoxy_protocol::protocol;
-use udb_util::FormalKey;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{keys, replica::ballot};
 
@@ -8,7 +9,7 @@ pub async fn prepare(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	prepare_req: protocol::PrepareRequest,
-) -> Result<protocol::PrepareResponse, FdbBindingError> {
+) -> Result<protocol::PrepareResponse> {
 	tracing::info!(?replica_id, "handling prepare message");
 
 	let protocol::PrepareRequest { ballot, instance } = prepare_req;
@@ -19,14 +20,10 @@ pub async fn prepare(
 	let subspace = keys::subspace(replica_id);
 	let log_key = keys::replica::LogEntryKey::new(instance.replica_id, instance.slot_id);
 
-	let current_entry = match tx.get(&subspace.pack(&log_key), false).await? {
+	let current_entry = match tx.get(&subspace.pack(&log_key), Serializable).await? {
 		Some(bytes) => {
 			// Deserialize the existing log entry
-			Some(
-				log_key
-					.deserialize(&bytes)
-					.map_err(|e| FdbBindingError::CustomError(e.into()))?,
-			)
+			Some(log_key.deserialize(&bytes)?)
 		}
 		None => None,
 	};
@@ -72,10 +69,8 @@ pub async fn prepare(
 		let subspace = keys::subspace(replica_id);
 		let packed_key = subspace.pack(&instance_ballot_key);
 
-		let highest_ballot = match tx.get(&packed_key, false).await? {
-			Some(bytes) => instance_ballot_key
-				.deserialize(&bytes)
-				.map_err(|e| FdbBindingError::CustomError(e.into()))?,
+		let highest_ballot = match tx.get(&packed_key, Serializable).await? {
+			Some(bytes) => instance_ballot_key.deserialize(&bytes)?,
 			None => {
 				// Default ballot for the original replica
 				protocol::Ballot {

@@ -1,27 +1,29 @@
 use std::sync::Arc;
 
+use anyhow::{Context, Result, bail};
 use rocksdb::{
 	OptimisticTransactionDB, ReadOptions, Transaction as RocksDbTransaction, WriteOptions,
 };
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-	FdbError, FdbResult, KeySelector, TransactionCommitted,
 	atomic::apply_atomic_op,
-	future::{FdbKeyValue, FdbSlice, FdbValues},
+	error::DatabaseError,
+	key_selector::KeySelector,
 	tx_ops::{Operation, TransactionOperations},
+	value::{KeyValue, Slice, Values},
 };
 
 pub enum TransactionCommand {
 	Get {
 		key: Vec<u8>,
-		response: oneshot::Sender<FdbResult<Option<FdbSlice>>>,
+		response: oneshot::Sender<Result<Option<Slice>>>,
 	},
 	GetKey {
 		key: Vec<u8>,
 		or_equal: bool,
 		offset: i32,
-		response: oneshot::Sender<FdbResult<Option<FdbSlice>>>,
+		response: oneshot::Sender<Result<Option<Slice>>>,
 	},
 	GetRange {
 		begin_key: Vec<u8>,
@@ -33,16 +35,16 @@ pub enum TransactionCommand {
 		limit: Option<usize>,
 		reverse: bool,
 		iteration: usize,
-		response: oneshot::Sender<FdbResult<FdbValues>>,
+		response: oneshot::Sender<Result<Values>>,
 	},
 	Commit {
 		operations: TransactionOperations,
-		response: oneshot::Sender<FdbResult<TransactionCommitted>>,
+		response: oneshot::Sender<Result<()>>,
 	},
 	GetEstimatedRangeSize {
 		begin: Vec<u8>,
 		end: Vec<u8>,
-		response: oneshot::Sender<FdbResult<i64>>,
+		response: oneshot::Sender<Result<i64>>,
 	},
 	Cancel,
 }
@@ -138,16 +140,15 @@ impl TransactionTask {
 		self.db.transaction_opt(&write_opts, &txn_opts)
 	}
 
-	async fn handle_get(&mut self, key: &[u8]) -> FdbResult<Option<FdbSlice>> {
+	async fn handle_get(&mut self, key: &[u8]) -> Result<Option<Slice>> {
 		let txn = self.create_transaction();
 
 		let read_opts = ReadOptions::default();
 
-		match txn.get_opt(key, &read_opts) {
-			Ok(Some(value)) => Ok(Some(value)),
-			Ok(None) => Ok(None),
-			Err(_) => Err(FdbError::from_code(1510)),
-		}
+		Ok(txn
+			.get_opt(key, &read_opts)
+			.context("failed to read key from rocksdb")?
+			.map(|v| v.into()))
 	}
 
 	async fn handle_get_key(
@@ -155,7 +156,7 @@ impl TransactionTask {
 		key: &[u8],
 		or_equal: bool,
 		offset: i32,
-	) -> FdbResult<Option<FdbSlice>> {
+	) -> Result<Option<Slice>> {
 		let txn = self.create_transaction();
 
 		let read_opts = ReadOptions::default();
@@ -174,14 +175,9 @@ impl TransactionTask {
 					read_opts,
 				);
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							return Ok(Some(k.to_vec()));
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
-					}
+					let (k, _v) =
+						item.context("failed to iterate rocksdb for first_greater_or_equal")?;
+					return Ok(Some(k.to_vec().into()));
 				}
 				Ok(None)
 			}
@@ -192,18 +188,13 @@ impl TransactionTask {
 					read_opts,
 				);
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							// Skip if it's the exact key
-							if k.as_ref() == key {
-								continue;
-							}
-							return Ok(Some(k.to_vec()));
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
+					let (k, _v) =
+						item.context("failed to iterate rocksdb for first_greater_than")?;
+					// Skip if it's the exact key
+					if k.as_ref() == key {
+						continue;
 					}
+					return Ok(Some(k.to_vec().into()));
 				}
 				Ok(None)
 			}
@@ -216,16 +207,10 @@ impl TransactionTask {
 				);
 
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							// We want strictly less than
-							if k.as_ref() < key {
-								return Ok(Some(k.to_vec()));
-							}
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
+					let (k, _v) = item.context("failed to iterate rocksdb for last_less_than")?;
+					// We want strictly less than
+					if k.as_ref() < key {
+						return Ok(Some(k.to_vec().into()));
 					}
 				}
 				Ok(None)
@@ -239,23 +224,18 @@ impl TransactionTask {
 				);
 
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							// We want less than or equal
-							if k.as_ref() <= key {
-								return Ok(Some(k.to_vec()));
-							}
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
+					let (k, _v) =
+						item.context("failed to iterate rocksdb for last_less_or_equal")?;
+					// We want less than or equal
+					if k.as_ref() <= key {
+						return Ok(Some(k.to_vec().into()));
 					}
 				}
 				Ok(None)
 			}
 			_ => {
 				// For other offset values, return an error
-				Err(FdbError::from_code(1510))
+				bail!("invalid key selector offset")
 			}
 		}
 	}
@@ -266,7 +246,7 @@ impl TransactionTask {
 		txn: &RocksDbTransaction<OptimisticTransactionDB>,
 		selector: &KeySelector<'_>,
 		_read_opts: &ReadOptions,
-	) -> FdbResult<Vec<u8>> {
+	) -> Result<Vec<u8>> {
 		let key = selector.key();
 		let offset = selector.offset();
 		let or_equal = selector.or_equal();
@@ -285,14 +265,10 @@ impl TransactionTask {
 		let mut keys: Vec<Vec<u8>> = Vec::new();
 
 		for item in iter {
-			match item {
-				Ok((k, _v)) => {
-					keys.push(k.to_vec());
-					if keys.len() > (offset.abs() + 1) as usize {
-						break;
-					}
-				}
-				Err(_) => return Err(FdbError::from_code(1510)),
+			let (k, _v) = item.context("failed to iterate rocksdb for key selector")?;
+			keys.push(k.to_vec());
+			if keys.len() > (offset.abs() + 1) as usize {
+				break;
 			}
 		}
 
@@ -326,10 +302,7 @@ impl TransactionTask {
 		}
 	}
 
-	async fn handle_commit(
-		&mut self,
-		operations: TransactionOperations,
-	) -> FdbResult<TransactionCommitted> {
+	async fn handle_commit(&mut self, operations: TransactionOperations) -> Result<()> {
 		// Create a new transaction for this commit
 		let txn = self.create_transaction();
 
@@ -346,10 +319,11 @@ impl TransactionTask {
 					);
 
 					txn.put(key, &value)
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to set key in rocksdb")?;
 				}
 				Operation::Clear { key } => {
-					txn.delete(key).map_err(|_| FdbError::from_code(1510))?;
+					txn.delete(key)
+						.context("failed to delete key from rocksdb")?;
 				}
 				Operation::ClearRange { begin, end } => {
 					// RocksDB doesn't have a native clear_range, so we need to iterate and delete
@@ -360,15 +334,12 @@ impl TransactionTask {
 					);
 
 					for item in iter {
-						match item {
-							Ok((k, _v)) => {
-								if k.as_ref() >= end.as_slice() {
-									break;
-								}
-								txn.delete(&k).map_err(|_| FdbError::from_code(1510))?;
-							}
-							Err(_) => return Err(FdbError::from_code(1510)),
+						let (k, _v) = item.context("failed to iterate rocksdb for clear range")?;
+						if k.as_ref() >= end.as_slice() {
+							break;
 						}
+						txn.delete(&k)
+							.context("failed to delete key in range from rocksdb")?;
 					}
 				}
 				Operation::AtomicOp {
@@ -380,7 +351,7 @@ impl TransactionTask {
 					let read_opts = ReadOptions::default();
 					let current_value = txn
 						.get_opt(key, &read_opts)
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to get current value for atomic operation")?;
 
 					// Apply the atomic operation
 					let current_slice = current_value.as_deref();
@@ -389,9 +360,10 @@ impl TransactionTask {
 					// Store the result
 					if let Some(new_value) = &new_value {
 						txn.put(key, new_value)
-							.map_err(|_| FdbError::from_code(1510))?;
+							.context("failed to set atomic operation result")?;
 					} else {
-						txn.delete(key).map_err(|_| FdbError::from_code(1510))?;
+						txn.delete(key)
+							.context("failed to delete key after atomic operation")?;
 					}
 				}
 			}
@@ -407,10 +379,10 @@ impl TransactionTask {
 			Err(e) => {
 				// Check if this is a conflict error
 				if e.to_string().contains("conflict") {
-					// Return retryable error code 1020
-					Err(FdbError::from_code(1020))
+					// Return retryable error
+					Err(DatabaseError::NotCommitted.into())
 				} else {
-					Err(FdbError::from_code(1510))
+					Err(e.into())
 				}
 			}
 		}
@@ -427,7 +399,7 @@ impl TransactionTask {
 		limit: Option<usize>,
 		reverse: bool,
 		_iteration: usize,
-	) -> FdbResult<FdbValues> {
+	) -> Result<Values> {
 		let txn = self.create_transaction();
 		let read_opts = ReadOptions::default();
 
@@ -449,20 +421,16 @@ impl TransactionTask {
 		let limit = limit.unwrap_or(usize::MAX);
 
 		for item in iter {
-			match item {
-				Ok((k, v)) => {
-					// Check if we've reached the end key
-					if k.as_ref() >= resolved_end.as_slice() {
-						break;
-					}
+			let (k, v) = item.context("failed to iterate rocksdb for get range")?;
+			// Check if we've reached the end key
+			if k.as_ref() >= resolved_end.as_slice() {
+				break;
+			}
 
-					results.push(FdbKeyValue::new(k.to_vec(), v.to_vec()));
+			results.push(KeyValue::new(k.to_vec(), v.to_vec()));
 
-					if results.len() >= limit {
-						break;
-					}
-				}
-				Err(_) => return Err(FdbError::from_code(1510)),
+			if results.len() >= limit {
+				break;
 			}
 		}
 
@@ -471,7 +439,7 @@ impl TransactionTask {
 			results.reverse();
 		}
 
-		Ok(FdbValues::new(results))
+		Ok(Values::new(results))
 	}
 
 	fn resolve_key_selector_for_range(
@@ -480,7 +448,7 @@ impl TransactionTask {
 		key: &[u8],
 		or_equal: bool,
 		offset: i32,
-	) -> FdbResult<Vec<u8>> {
+	) -> Result<Vec<u8>> {
 		// Based on PostgreSQL's interpretation:
 		// (false, 1) => first_greater_or_equal
 		// (true, 1) => first_greater_than
@@ -497,14 +465,10 @@ impl TransactionTask {
 					read_opts,
 				);
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							return Ok(k.to_vec());
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
-					}
+					let (k, _v) = item.context(
+						"failed to iterate rocksdb for range selector first_greater_or_equal",
+					)?;
+					return Ok(k.to_vec());
 				}
 				// If no key found, return a key that will make the range empty
 				Ok(vec![0xff; 255])
@@ -516,18 +480,14 @@ impl TransactionTask {
 					read_opts,
 				);
 				for item in iter {
-					match item {
-						Ok((k, _v)) => {
-							// Skip if it's the exact key
-							if k.as_ref() == key {
-								continue;
-							}
-							return Ok(k.to_vec());
-						}
-						Err(_) => {
-							return Err(FdbError::from_code(1510));
-						}
+					let (k, _v) = item.context(
+						"failed to iterate rocksdb for range selector first_greater_than",
+					)?;
+					// Skip if it's the exact key
+					if k.as_ref() == key {
+						continue;
 					}
+					return Ok(k.to_vec());
 				}
 				// If no key found, return a key that will make the range empty
 				Ok(vec![0xff; 255])
@@ -540,11 +500,7 @@ impl TransactionTask {
 		}
 	}
 
-	async fn handle_get_estimated_range_size(
-		&mut self,
-		begin: &[u8],
-		end: &[u8],
-	) -> FdbResult<i64> {
+	async fn handle_get_estimated_range_size(&mut self, begin: &[u8], end: &[u8]) -> Result<i64> {
 		let range = rocksdb::Range::new(begin, end);
 
 		Ok(self

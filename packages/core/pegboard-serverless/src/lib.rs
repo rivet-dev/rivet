@@ -14,8 +14,8 @@ use pegboard::keys;
 use reqwest_eventsource as sse;
 use rivet_runner_protocol::protocol;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
-use udb_util::{SNAPSHOT, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 struct OutboundConnection {
 	handle: JoinHandle<()>,
@@ -54,25 +54,25 @@ async fn tick(
 ) -> Result<()> {
 	let serverless_data = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
-			let serverless_desired_subspace = txs.subspace(
+			let serverless_desired_subspace = keys::subspace().subspace(
 				&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace(),
 			);
 
-			txs.get_ranges_keyvalues(
-				udb::RangeOption {
+			tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::WantAll,
 					..(&serverless_desired_subspace).into()
 				},
 				// NOTE: This is a snapshot to prevent conflict with updates to this subspace
-				SNAPSHOT,
+				Snapshot,
 			)
 			.map(|res| match res {
 				Ok(entry) => {
 					let (key, desired_slots) =
-						txs.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
+						tx.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
 
 					Ok((key.namespace_id, key.runner_name, desired_slots))
 				}

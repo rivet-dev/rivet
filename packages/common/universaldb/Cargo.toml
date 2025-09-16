@@ -8,20 +8,21 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+deadpool-postgres.workspace = true
+foundationdb-tuple.workspace = true
 futures-util.workspace = true
 lazy_static.workspace = true
 rand.workspace = true
+rivet-metrics.workspace = true
 rocksdb.workspace = true
-foundationdb-tuple.workspace = true
 serde.workspace = true
-tokio.workspace = true
+thiserror.workspace = true
 tokio-postgres.workspace = true
+tokio.workspace = true
 tracing.workspace = true
-deadpool-postgres.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-udb-util.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true
 rivet-pools.workspace = true

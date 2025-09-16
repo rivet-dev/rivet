@@ -1,6 +1,6 @@
 use gas::prelude::*;
 use rivet_cache::CacheKey;
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys};
 
@@ -17,18 +17,18 @@ pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -
 	}
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			// Read existing config to determine variant
 			let runner_config_key =
 				keys::RunnerConfigKey::new(input.namespace_id, input.name.clone());
 
-			if let Some(config) = txs.read_opt(&runner_config_key, SERIALIZABLE).await? {
-				txs.delete(&runner_config_key);
+			if let Some(config) = tx.read_opt(&runner_config_key, Serializable).await? {
+				tx.delete(&runner_config_key);
 
 				// Clear secondary idx
-				txs.delete(&keys::RunnerConfigByVariantKey::new(
+				tx.delete(&keys::RunnerConfigByVariantKey::new(
 					input.namespace_id,
 					config.variant(),
 					input.name.clone(),

@@ -1,6 +1,6 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
-use universaldb::Transaction;
+use universaldb::{Transaction, utils::IsolationLevel::*};
 
 #[derive(Clone, Copy, Debug)]
 pub enum QuorumType {
@@ -44,13 +44,13 @@ pub async fn read_config(
 	tx: &Transaction,
 	replica_id: ReplicaId,
 ) -> Result<protocol::ClusterConfig> {
-	use udb_util::FormalKey;
+	use universaldb::utils::FormalKey;
 
 	let config_key = crate::keys::replica::ConfigKey;
 	let subspace = crate::keys::subspace(replica_id);
 	let packed_key = subspace.pack(&config_key);
 
-	match tx.get(&packed_key, false).await? {
+	match tx.get(&packed_key, Serializable).await? {
 		Some(value) => {
 			let config = config_key.deserialize(&value)?;
 			Ok(config)

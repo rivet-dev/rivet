@@ -1,7 +1,7 @@
 use std::{fmt, str::FromStr};
 
 use thiserror::Error;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -226,7 +226,7 @@ impl TuplePack for Id {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		w.write_all(&[udb_util::codes::ID])?;
+		w.write_all(&[universaldb::utils::codes::ID])?;
 
 		let bytes = self.as_bytes();
 
@@ -242,14 +242,14 @@ impl TuplePack for Id {
 
 impl<'de> TupleUnpack<'de> for Id {
 	fn unpack(input: &[u8], _tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let input = udb_util::parse_code(input, udb_util::codes::ID)?;
-		let (_, version) = udb_util::parse_byte(input)?;
+		let input = universaldb::utils::parse_code(input, universaldb::utils::codes::ID)?;
+		let (_, version) = universaldb::utils::parse_byte(input)?;
 
 		let (input, slice) = if version == 1 {
 			// Parse 19 bytes including version
-			udb_util::parse_bytes(input, 19)?
+			universaldb::utils::parse_bytes(input, 19)?
 		} else {
-			udb_util::parse_bytes(input, 1)?
+			universaldb::utils::parse_bytes(input, 1)?
 		};
 
 		let v = Id::from_slice(slice)

@@ -1,7 +1,7 @@
 use gas::prelude::*;
 use rivet_data::converted::ActorNameKeyData;
 use rivet_types::actors::CrashPolicy;
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use super::State;
 
@@ -69,8 +69,8 @@ pub struct InitStateAndUdbInput {
 	pub create_ts: i64,
 }
 
-#[activity(InitStateAndFdb)]
-pub async fn insert_state_and_fdb(ctx: &ActivityCtx, input: &InitStateAndUdbInput) -> Result<()> {
+#[activity(InitStateAndDb)]
+pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput) -> Result<()> {
 	let mut state = ctx.state::<Option<State>>()?;
 
 	*state = Some(State::new(
@@ -83,14 +83,14 @@ pub async fn insert_state_and_fdb(ctx: &ActivityCtx, input: &InitStateAndUdbInpu
 	));
 
 	ctx.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
-			txs.write(
+			tx.write(
 				&keys::actor::CreateTsKey::new(input.actor_id),
 				input.create_ts,
 			)?;
-			txs.write(
+			tx.write(
 				&keys::actor::WorkflowIdKey::new(input.actor_id),
 				ctx.workflow_id(),
 			)?;
@@ -120,15 +120,15 @@ pub async fn add_indexes_and_set_create_complete(
 
 	// Populate indexes
 	ctx.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let namespace_id = state.namespace_id;
 			let name = state.name.clone();
 			let create_ts = state.create_ts;
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 
 				// Populate indexes
-				txs.write(
+				tx.write(
 					&keys::ns::ActiveActorKey::new(
 						namespace_id,
 						name.clone(),
@@ -138,7 +138,7 @@ pub async fn add_indexes_and_set_create_complete(
 					ctx.workflow_id(),
 				)?;
 
-				txs.write(
+				tx.write(
 					&keys::ns::AllActorKey::new(
 						namespace_id,
 						name.clone(),
@@ -150,8 +150,8 @@ pub async fn add_indexes_and_set_create_complete(
 
 				// Write name into namespace actor names list with empty metadata (if it doesn't already exist)
 				let name_key = keys::ns::ActorNameKey::new(namespace_id, name.clone());
-				if !txs.exists(&name_key, SERIALIZABLE).await? {
-					txs.write(
+				if !tx.exists(&name_key, Serializable).await? {
+					tx.write(
 						&name_key,
 						ActorNameKeyData {
 							metadata: serde_json::Map::new(),

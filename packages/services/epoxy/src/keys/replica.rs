@@ -1,7 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{ReplicaId, SlotId};
-use udb_util::prelude::*;
-use versioned_data_util::OwnedVersionedData as _;
+use universaldb::prelude::*;
+use versioned_data_util::OwnedVersionedData;
 
 #[derive(Debug)]
 pub struct InstanceNumberKey;

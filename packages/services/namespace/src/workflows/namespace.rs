@@ -1,7 +1,7 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys};
 
@@ -32,7 +32,7 @@ pub async fn namespace(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	}
 
 	let insert_res = ctx
-		.activity(InsertFdbInput {
+		.activity(InsertDbInput {
 			namespace_id: input.namespace_id,
 			name: input.name.clone(),
 			display_name: input.display_name.clone(),
@@ -135,39 +135,39 @@ pub async fn validate(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-struct InsertFdbInput {
+struct InsertDbInput {
 	namespace_id: Id,
 	name: String,
 	display_name: String,
 	create_ts: i64,
 }
 
-#[activity(InsertFdb)]
-async fn insert_fdb(
+#[activity(InsertDb)]
+async fn insert_db(
 	ctx: &ActivityCtx,
-	input: &InsertFdbInput,
+	input: &InsertDbInput,
 ) -> Result<std::result::Result<(), errors::Namespace>> {
 	ctx.udb()?
-		.run(|tx, _mc| {
+		.run(|tx| {
 			let namespace_id = input.namespace_id;
 			let name = input.name.clone();
 			let display_name = input.display_name.clone();
 
 			async move {
-				let txs = tx.subspace(keys::subspace());
+				let tx = tx.with_subspace(keys::subspace());
 
 				let name_idx_key = keys::ByNameKey::new(name.clone());
 
-				if txs.exists(&name_idx_key, SERIALIZABLE).await? {
+				if tx.exists(&name_idx_key, Serializable).await? {
 					return Ok(Err(errors::Namespace::NameNotUnique));
 				}
 
-				txs.write(&keys::NameKey::new(namespace_id), name)?;
-				txs.write(&keys::DisplayNameKey::new(namespace_id), display_name)?;
-				txs.write(&keys::CreateTsKey::new(namespace_id), input.create_ts)?;
+				tx.write(&keys::NameKey::new(namespace_id), name)?;
+				tx.write(&keys::DisplayNameKey::new(namespace_id), display_name)?;
+				tx.write(&keys::CreateTsKey::new(namespace_id), input.create_ts)?;
 
 				// Insert idx
-				txs.write(&name_idx_key, namespace_id)?;
+				tx.write(&name_idx_key, namespace_id)?;
 
 				Ok(Ok(()))
 			}

@@ -4,15 +4,19 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
+use anyhow::{Context, Result, anyhow};
 use rocksdb::OptimisticTransactionDB;
 use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::{
-	FdbError, FdbResult, KeySelector, RangeOption, TransactionCommitError, TransactionCommitted,
 	driver::TransactionDriver,
-	future::{FdbSlice, FdbValues},
+	error::DatabaseError,
+	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
+	range_option::RangeOption,
 	tx_ops::TransactionOperations,
+	utils::IsolationLevel,
+	value::{Slice, Value, Values},
 };
 
 use super::{
@@ -63,7 +67,7 @@ impl RocksDbTransactionDriver {
 	}
 
 	/// Get or create the transaction task for non-snapshot operations
-	async fn ensure_transaction(&self) -> FdbResult<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
 		self.tx_sender
 			.get_or_try_init(|| async {
 				let (sender, receiver) = mpsc::channel(100);
@@ -76,14 +80,14 @@ impl RocksDbTransactionDriver {
 				);
 				tokio::spawn(task.run());
 
-				Ok(sender)
+				anyhow::Ok(sender)
 			})
 			.await
-			.map_err(|_: anyhow::Error| FdbError::from_code(1510))
+			.context("failed to initialize transaction task")
 	}
 
 	/// Get or create the transaction task for snapshot operations
-	async fn ensure_snapshot_transaction(&self) -> FdbResult<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_snapshot_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
 		self.snapshot_tx_sender
 			.get_or_try_init(|| async {
 				let (sender, receiver) = mpsc::channel(100);
@@ -96,10 +100,10 @@ impl RocksDbTransactionDriver {
 				);
 				tokio::spawn(task.run());
 
-				Ok(sender)
+				anyhow::Ok(sender)
 			})
 			.await
-			.map_err(|_: anyhow::Error| FdbError::from_code(1510))
+			.context("failed to initialize transaction task")
 	}
 }
 
@@ -120,8 +124,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	fn get<'a>(
 		&'a self,
 		key: &[u8],
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<Option<FdbSlice>>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Option<Slice>>> + Send + 'a>> {
 		let key = key.to_vec();
 		Box::pin(async move {
 			// Both snapshot and non-snapshot reads check local operations first
@@ -132,7 +136,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			};
 
 			ops.get_with_callback(&key, || async {
-				if snapshot {
+				if let IsolationLevel::Snapshot = isolation_level {
 					// For snapshot reads, don't add conflict ranges
 					let tx_sender = self.ensure_snapshot_transaction().await?;
 
@@ -144,10 +148,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							response: response_tx,
 						})
 						.await
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to send transaction command")?;
 
 					// Wait for response
-					let value = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+					let value = response_rx
+						.await
+						.context("failed to receive transaction response")??;
 
 					Ok(value)
 				} else {
@@ -169,10 +175,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							response: response_tx,
 						})
 						.await
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to send transaction command")?;
 
 					// Wait for response
-					let value = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+					let value = response_rx
+						.await
+						.context("failed to receive transaction response")??;
 
 					Ok(value)
 				}
@@ -184,8 +192,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	fn get_key<'a>(
 		&'a self,
 		selector: &KeySelector<'a>,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbSlice>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Slice>> + Send + 'a>> {
 		let selector = selector.clone();
 
 		Box::pin(async move {
@@ -201,7 +209,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			};
 
 			ops.get_key(&selector, || async {
-				let tx_sender = if snapshot {
+				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
 					self.ensure_snapshot_transaction().await?
 				} else {
 					self.ensure_transaction().await?
@@ -217,13 +225,15 @@ impl TransactionDriver for RocksDbTransactionDriver {
 						response: response_tx,
 					})
 					.await
-					.map_err(|_| FdbError::from_code(1510))?;
+					.context("failed to send commit command")?;
 
 				// Wait for response
-				let result_key = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+				let result_key = response_rx
+					.await
+					.context("failed to receive key selector response")??;
 
 				// Return the key if found, or empty vector if not
-				Ok(result_key.unwrap_or_else(Vec::new))
+				Ok(result_key.unwrap_or_else(Slice::new))
 			})
 			.await
 		})
@@ -233,8 +243,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		&'a self,
 		opt: &RangeOption<'a>,
 		iteration: usize,
-		snapshot: bool,
-	) -> Pin<Box<dyn Future<Output = FdbResult<FdbValues>> + Send + 'a>> {
+		isolation_level: IsolationLevel,
+	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>> {
 		// Extract fields from RangeOption for the async closure
 		let opt = opt.clone();
 		let begin_selector = opt.begin.clone();
@@ -251,7 +261,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			};
 
 			ops.get_range(&opt, || async {
-				if snapshot {
+				if let IsolationLevel::Snapshot = isolation_level {
 					// For snapshot reads, don't add conflict ranges
 					let tx_sender = self.ensure_snapshot_transaction().await?;
 
@@ -271,10 +281,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							response: response_tx,
 						})
 						.await
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to send transaction command")?;
 
 					// Wait for response
-					let values = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+					let values = response_rx
+						.await
+						.context("failed to receive range response")??;
 
 					Ok(values)
 				} else {
@@ -304,10 +316,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							response: response_tx,
 						})
 						.await
-						.map_err(|_| FdbError::from_code(1510))?;
+						.context("failed to send transaction command")?;
 
 					// Wait for response
-					let values = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+					let values = response_rx
+						.await
+						.context("failed to receive range response")??;
 
 					Ok(values)
 				}
@@ -319,8 +333,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	fn get_ranges_keyvalues<'a>(
 		&'a self,
 		opt: RangeOption<'a>,
-		snapshot: bool,
-	) -> crate::future::FdbStream<'a, crate::future::FdbValue> {
+		isolation_level: IsolationLevel,
+	) -> crate::value::Stream<'a, Value> {
 		use futures_util::StreamExt;
 
 		// Extract the selectors from RangeOption, same as get_range does
@@ -332,7 +346,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		Box::pin(
 			futures_util::stream::once(async move {
 				// Get the transaction sender based on snapshot mode
-				let tx_sender = if snapshot {
+				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
 					match self.ensure_snapshot_transaction().await {
 						Ok(sender) => sender,
 						Err(e) => return futures_util::stream::iter(vec![Err(e)]),
@@ -360,26 +374,25 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					})
 					.await
 				{
-					return futures_util::stream::iter(vec![Err(FdbError::from_code(1510))]);
+					return futures_util::stream::iter(vec![Err(anyhow!(
+						"failed to send stream command"
+					))]);
 				}
 
 				match response_rx.await {
 					Ok(Ok(result)) => {
-						// Convert to FdbValues for the stream
+						// Convert to Values for the stream
 						let values: Vec<_> = result
 							.iter()
-							.map(|kv| {
-								Ok(crate::future::FdbValue::new(
-									kv.key().to_vec(),
-									kv.value().to_vec(),
-								))
-							})
+							.map(|kv| Ok(Value::new(kv.key().to_vec(), kv.value().to_vec())))
 							.collect();
 
 						futures_util::stream::iter(values)
 					}
 					Ok(Err(e)) => futures_util::stream::iter(vec![Err(e)]),
-					Err(_) => futures_util::stream::iter(vec![Err(FdbError::from_code(1510))]),
+					Err(_) => futures_util::stream::iter(vec![Err(anyhow!(
+						"failed to receive stream response"
+					))]),
 				}
 			})
 			.flatten(),
@@ -422,16 +435,13 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		state.operations.clear_range(begin, end);
 	}
 
-	fn commit(
-		self: Box<Self>,
-	) -> Pin<Box<dyn Future<Output = Result<TransactionCommitted, TransactionCommitError>> + Send>>
-	{
+	fn commit(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
 		Box::pin(async move {
 			// Get the operations and conflict ranges to commit
 			let operations = {
 				let mut state = self.state.lock().unwrap();
 				if state.committed {
-					return Err(TransactionCommitError::new(FdbError::from_code(2017)));
+					return Err(DatabaseError::UsedDuringCommit.into());
 				}
 				state.committed = true;
 
@@ -439,10 +449,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			};
 
 			// Get the transaction sender
-			let tx_sender = self
-				.ensure_transaction()
-				.await
-				.map_err(|e| TransactionCommitError::new(e))?;
+			let tx_sender = self.ensure_transaction().await.map_err(|e| e)?;
 
 			// Send commit command with operations and conflict ranges
 			let (response_tx, response_rx) = oneshot::channel();
@@ -452,19 +459,19 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					response: response_tx,
 				})
 				.await
-				.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?;
+				.context("failed to send commit command")?;
 
 			// Wait for response
 			let result = response_rx
 				.await
-				.map_err(|_| TransactionCommitError::new(FdbError::from_code(1510)))?;
+				.context("failed to receive commit response")?;
 
 			// Release conflict ranges after successful commit
 			if result.is_ok() {
 				self.conflict_tracker.release_transaction(self.tx_id);
 			}
 
-			result.map_err(|e| TransactionCommitError::new(e))
+			result.map_err(|e| e)
 		})
 	}
 
@@ -500,7 +507,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		begin: &[u8],
 		end: &[u8],
 		conflict_type: ConflictRangeType,
-	) -> FdbResult<()> {
+	) -> Result<()> {
 		// Determine if this is a write conflict range
 		let is_write = match conflict_type {
 			ConflictRangeType::Write => true,
@@ -523,7 +530,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		&'a self,
 		begin: &'a [u8],
 		end: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = FdbResult<i64>> + Send + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>> {
 		let begin = begin.to_vec();
 		let end = end.to_vec();
 
@@ -539,22 +546,24 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					response: response_tx,
 				})
 				.await
-				.map_err(|_| FdbError::from_code(1510))?;
+				.context("failed to send commit command")?;
 
 			// Wait for response
-			let size = response_rx.await.map_err(|_| FdbError::from_code(1510))??;
+			let size = response_rx
+				.await
+				.context("failed to receive size response")??;
 
 			Ok(size)
 		})
 	}
 
-	fn commit_owned(&self) -> Pin<Box<dyn Future<Output = FdbResult<()>> + Send + '_>> {
+	fn commit_ref(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
 		Box::pin(async move {
 			// Get the operations to commit
 			let operations = {
 				let mut state = self.state.lock().unwrap();
 				if state.committed {
-					return Err(FdbError::from_code(2017));
+					return Err(DatabaseError::UsedDuringCommit.into());
 				}
 				state.committed = true;
 
@@ -572,10 +581,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					response: response_tx,
 				})
 				.await
-				.map_err(|_| FdbError::from_code(1510))?;
+				.context("failed to send commit command")?;
 
 			// Wait for response
-			let result = response_rx.await.map_err(|_| FdbError::from_code(1510))?;
+			let result = response_rx
+				.await
+				.context("failed to receive commit response")?;
 
 			// Release conflict ranges after successful commit
 			if result.is_ok() {

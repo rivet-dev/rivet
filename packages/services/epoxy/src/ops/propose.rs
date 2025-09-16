@@ -3,7 +3,6 @@ use epoxy_protocol::protocol::{self, Path, Payload, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
 use rivet_config::Config;
-use universaldb::FdbBindingError;
 
 use crate::{http_client, replica, utils};
 
@@ -34,23 +33,15 @@ pub async fn propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult
 	// Read config
 	let config = ctx
 		.udb()?
-		.run(move |tx, _| async move {
-			utils::read_config(&tx, replica_id)
-				.await
-				.map_err(|x| FdbBindingError::CustomError(x.into()))
-		})
+		.run(move |tx| async move { utils::read_config(&tx, replica_id).await })
 		.await?;
 
 	// Lead consensus
 	let payload = ctx
 		.udb()?
-		.run(move |tx, _| {
+		.run(move |tx| {
 			let proposal = input.proposal.clone();
-			async move {
-				replica::lead_consensus::lead_consensus(&*tx, replica_id, proposal)
-					.await
-					.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-			}
+			async move { replica::lead_consensus::lead_consensus(&*tx, replica_id, proposal).await }
 		})
 		.await?;
 
@@ -63,13 +54,10 @@ pub async fn propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult
 	// Decide path
 	let path = ctx
 		.udb()?
-		.run(move |tx, _| {
+		.run(move |tx| {
 			let pre_accept_oks = pre_accept_oks.clone();
 			let payload = payload.clone();
-			async move {
-				replica::decide_path::decide_path(&*tx, pre_accept_oks, &payload)
-					.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-			}
+			async move { replica::decide_path::decide_path(&*tx, pre_accept_oks, &payload) }
 		})
 		.await?;
 
@@ -95,13 +83,9 @@ pub async fn run_paxos_accept(
 
 	// Mark as accepted
 	ctx.udb()?
-		.run(move |tx, _| {
+		.run(move |tx| {
 			let payload = payload.clone();
-			async move {
-				replica::messages::accepted(&*tx, replica_id, payload)
-					.await
-					.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))
-			}
+			async move { replica::messages::accepted(&*tx, replica_id, payload).await }
 		})
 		.await?;
 
@@ -138,12 +122,10 @@ pub async fn commit(
 	let cmd_err = {
 		let payload = payload.clone();
 		ctx.udb()?
-			.run(move |tx, _| {
+			.run(move |tx| {
 				let payload = payload.clone();
 				async move {
-					let cmd_err = replica::messages::committed(&*tx, replica_id, &payload)
-						.await
-						.map_err(|e| universaldb::FdbBindingError::CustomError(e.into()))?;
+					let cmd_err = replica::messages::committed(&*tx, replica_id, &payload).await?;
 
 					Result::Ok(cmd_err)
 				}

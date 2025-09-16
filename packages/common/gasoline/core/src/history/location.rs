@@ -158,9 +158,9 @@ impl Deref for Coordinate {
 	}
 }
 
-mod fdb {
+mod udb {
 	use super::Coordinate;
-	use udb_util::prelude::*;
+	use universaldb::prelude::*;
 
 	impl TuplePack for Coordinate {
 		fn pack<W: std::io::Write>(

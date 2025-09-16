@@ -20,12 +20,12 @@ impl TuplePack for KeyWrapper {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		w.write_all(&[udb_util::codes::NESTED])?;
+		w.write_all(&[universaldb::utils::codes::NESTED])?;
 		offset += 1;
 
 		offset += self.0.pack(w, tuple_depth.increment())?;
 
-		w.write_all(&[udb_util::codes::NIL])?;
+		w.write_all(&[universaldb::utils::codes::NIL])?;
 		offset += 1;
 
 		Ok(offset)
@@ -34,11 +34,11 @@ impl TuplePack for KeyWrapper {
 
 impl<'de> TupleUnpack<'de> for KeyWrapper {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let input = udb_util::parse_code(input, udb_util::codes::NESTED)?;
+		let input = universaldb::utils::parse_code(input, universaldb::utils::codes::NESTED)?;
 
 		let (input, inner) = Bytes::unpack(input, tuple_depth.increment())?;
 
-		let input = udb_util::parse_code(input, udb_util::codes::NIL)?;
+		let input = universaldb::utils::parse_code(input, universaldb::utils::codes::NIL)?;
 
 		Ok((input, KeyWrapper(inner.into_owned())))
 	}
@@ -55,7 +55,7 @@ impl TuplePack for ListKeyWrapper {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		w.write_all(&[udb_util::codes::NESTED])?;
+		w.write_all(&[universaldb::utils::codes::NESTED])?;
 		offset += 1;
 
 		offset += self.0.pack(w, tuple_depth.increment())?;

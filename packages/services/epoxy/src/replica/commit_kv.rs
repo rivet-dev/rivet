@@ -1,7 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
-use udb_util::prelude::*;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
+use universaldb::prelude::*;
 
 use crate::{keys, ops::propose::CommandError, replica::utils};
 
@@ -10,7 +10,7 @@ pub async fn commit_kv(
 	tx: &Transaction,
 	replica_id: ReplicaId,
 	commands: &[protocol::Command],
-) -> Result<Option<CommandError>, FdbBindingError> {
+) -> Result<Option<CommandError>> {
 	let subspace = keys::subspace(replica_id);
 
 	for command in commands.iter() {
@@ -23,12 +23,8 @@ pub async fn commit_kv(
 				// Read current value
 				let kv_key = keys::keys::KvValueKey::new(cmd.key.clone());
 				let packed_key = subspace.pack(&kv_key);
-				let current_value = if let Some(bytes) = tx.get(&packed_key, false).await? {
-					Some(
-						kv_key
-							.deserialize(&bytes)
-							.map_err(|x| FdbBindingError::CustomError(x.into()))?,
-					)
+				let current_value = if let Some(bytes) = tx.get(&packed_key, Serializable).await? {
+					Some(kv_key.deserialize(&bytes)?)
 				} else {
 					None
 				};
@@ -67,9 +63,7 @@ pub async fn commit_kv(
 
 		// Update the value
 		if let Some(value) = new_value {
-			let serialized = kv_key
-				.serialize(value.clone())
-				.map_err(|x| FdbBindingError::CustomError(x.into()))?;
+			let serialized = kv_key.serialize(value.clone())?;
 			tx.set(&packed_key, &serialized);
 		} else {
 			tx.clear(&packed_key);

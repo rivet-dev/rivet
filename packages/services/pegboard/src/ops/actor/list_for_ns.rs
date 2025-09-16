@@ -1,8 +1,8 @@
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_types::actors::Actor;
-use udb_util::{SNAPSHOT, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::keys;
 
@@ -25,12 +25,12 @@ pub struct Output {
 pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let actors_with_wf_ids = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 			let mut results = Vec::new();
 
 			if let Some(key) = &input.key {
-				let actor_subspace = txs.subspace(&keys::ns::ActorByKeyKey::subspace(
+				let actor_subspace = keys::subspace().subspace(&keys::ns::ActorByKeyKey::subspace(
 					input.namespace_id,
 					input.name.clone(),
 					key.clone(),
@@ -38,7 +38,7 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 				let (start, end) = actor_subspace.range();
 
 				let end = if let Some(created_before) = input.created_before {
-					udb_util::end_of_key_range(&txs.pack(
+					universaldb::utils::end_of_key_range(&tx.pack(
 						&keys::ns::ActorByKeyKey::subspace_with_create_ts(
 							input.namespace_id,
 							input.name.clone(),
@@ -50,18 +50,18 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 					end
 				};
 
-				let mut stream = txs.get_ranges_keyvalues(
-					udb::RangeOption {
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
 						reverse: true,
 						..(start, end).into()
 					},
 					// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-					SNAPSHOT,
+					Snapshot,
 				);
 
 				while let Some(entry) = stream.try_next().await? {
-					let (idx_key, data) = txs.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
+					let (idx_key, data) = tx.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
 
 					if !data.is_destroyed || input.include_destroyed {
 						results.push((idx_key.actor_id, data.workflow_id));
@@ -72,14 +72,14 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 					}
 				}
 			} else if input.include_destroyed {
-				let actor_subspace = txs.subspace(&keys::ns::AllActorKey::subspace(
+				let actor_subspace = keys::subspace().subspace(&keys::ns::AllActorKey::subspace(
 					input.namespace_id,
 					input.name.clone(),
 				));
 				let (start, end) = actor_subspace.range();
 
 				let end = if let Some(created_before) = input.created_before {
-					udb_util::end_of_key_range(&txs.pack(
+					universaldb::utils::end_of_key_range(&tx.pack(
 						&keys::ns::AllActorKey::subspace_with_create_ts(
 							input.namespace_id,
 							input.name.clone(),
@@ -90,18 +90,18 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 					end
 				};
 
-				let mut stream = txs.get_ranges_keyvalues(
-					udb::RangeOption {
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
 						reverse: true,
 						..(start, end).into()
 					},
 					// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-					SNAPSHOT,
+					Snapshot,
 				);
 
 				while let Some(entry) = stream.try_next().await? {
-					let (idx_key, workflow_id) = txs.read_entry::<keys::ns::AllActorKey>(&entry)?;
+					let (idx_key, workflow_id) = tx.read_entry::<keys::ns::AllActorKey>(&entry)?;
 
 					results.push((idx_key.actor_id, workflow_id));
 
@@ -110,14 +110,13 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 					}
 				}
 			} else {
-				let actor_subspace = txs.subspace(&keys::ns::ActiveActorKey::subspace(
-					input.namespace_id,
-					input.name.clone(),
-				));
+				let actor_subspace = keys::subspace().subspace(
+					&keys::ns::ActiveActorKey::subspace(input.namespace_id, input.name.clone()),
+				);
 				let (start, end) = actor_subspace.range();
 
 				let end = if let Some(created_before) = input.created_before {
-					udb_util::end_of_key_range(&txs.pack(
+					universaldb::utils::end_of_key_range(&tx.pack(
 						&keys::ns::ActiveActorKey::subspace_with_create_ts(
 							input.namespace_id,
 							input.name.clone(),
@@ -128,19 +127,19 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 					end
 				};
 
-				let mut stream = txs.get_ranges_keyvalues(
-					udb::RangeOption {
+				let mut stream = tx.get_ranges_keyvalues(
+					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
 						reverse: true,
 						..(start, end).into()
 					},
 					// NOTE: Does not have to be serializable because we are listing, stale data does not matter
-					SNAPSHOT,
+					Snapshot,
 				);
 
 				while let Some(entry) = stream.try_next().await? {
 					let (idx_key, workflow_id) =
-						txs.read_entry::<keys::ns::ActiveActorKey>(&entry)?;
+						tx.read_entry::<keys::ns::ActiveActorKey>(&entry)?;
 
 					results.push((idx_key.actor_id, workflow_id));
 

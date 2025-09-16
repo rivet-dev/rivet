@@ -1,7 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
-use udb_util::FormalKey;
+use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{http_client, keys, utils};
 
@@ -45,7 +45,7 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 
 	let value = ctx
 		.udb()?
-		.run(|tx, _| {
+		.run(|tx| {
 			let packed_key = packed_key.clone();
 			let packed_cache_key = packed_cache_key.clone();
 			let kv_key = kv_key.clone();
@@ -54,7 +54,7 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 				(async move {
 					let (value, cache_value) = tokio::try_join!(
 						async {
-							let v = tx.get(&packed_key, false).await?;
+							let v = tx.get(&packed_key, Serializable).await?;
 							if let Some(ref bytes) = v {
 								Ok(Some(kv_key.deserialize(bytes)?))
 							} else {
@@ -62,7 +62,7 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 							}
 						},
 						async {
-							let v = tx.get(&packed_cache_key, false).await?;
+							let v = tx.get(&packed_cache_key, Serializable).await?;
 							if let Some(ref bytes) = v {
 								Ok(Some(cache_key.deserialize(bytes)?))
 							} else {
@@ -74,7 +74,6 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 					Ok(value.or(cache_value))
 				})
 				.await
-				.map_err(|e: anyhow::Error| universaldb::FdbBindingError::CustomError(e.into()))
 			}
 		})
 		.await?;
@@ -129,7 +128,7 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 		if let Some(value) = response {
 			// Cache value
 			ctx.udb()?
-				.run(|tx, _| {
+				.run(|tx| {
 					let packed_cache_key = packed_cache_key.clone();
 					let cache_key = cache_key.clone();
 					let value_to_cache = value.clone();
@@ -140,9 +139,6 @@ pub async fn get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output>
 							Ok(())
 						})
 						.await
-						.map_err(|e: anyhow::Error| {
-							universaldb::FdbBindingError::CustomError(e.into())
-						})
 					}
 				})
 				.await?;

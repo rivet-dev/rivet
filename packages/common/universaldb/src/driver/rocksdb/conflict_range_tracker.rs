@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::{FdbError, FdbResult};
+use anyhow::Result;
+
+use crate::error::DatabaseError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionId(u64);
@@ -58,7 +60,7 @@ impl ConflictRangeTracker {
 		begin: &[u8],
 		end: &[u8],
 		is_write: bool,
-	) -> FdbResult<()> {
+	) -> Result<()> {
 		let new_range = ConflictRange {
 			begin: begin.to_vec(),
 			end: end.to_vec(),
@@ -77,7 +79,7 @@ impl ConflictRangeTracker {
 			for existing_range in ranges {
 				if new_range.conflicts_with(existing_range) {
 					// Found a conflict - return retryable error
-					return Err(FdbError::from_code(1020));
+					return Err(DatabaseError::NotCommitted.into());
 				}
 			}
 		}
@@ -92,7 +94,7 @@ impl ConflictRangeTracker {
 		begin: &[u8],
 		end: &[u8],
 		is_write: bool,
-	) -> FdbResult<()> {
+	) -> Result<()> {
 		// First check for conflicts
 		self.check_conflict(tx_id, begin, end, is_write)?;
 
@@ -200,9 +202,12 @@ mod tests {
 		// Try to add overlapping write range for tx2 - should conflict
 		let result = tracker.add_range(tx2, b"b", b"d", true);
 		assert!(result.is_err());
-		// Check for conflict error code 1020
+		// Check for conflict error
 		if let Err(e) = result {
-			assert_eq!(e.code(), 1020);
+			assert!(matches!(
+				e.downcast::<DatabaseError>().unwrap(),
+				DatabaseError::NotCommitted
+			));
 		}
 	}
 
@@ -220,9 +225,12 @@ mod tests {
 		// Try to add overlapping write range for tx2 - should conflict
 		let result = tracker.add_range(tx2, b"b", b"d", true);
 		assert!(result.is_err());
-		// Check for conflict error code 1020
+		// Check for conflict error
 		if let Err(e) = result {
-			assert_eq!(e.code(), 1020);
+			assert!(matches!(
+				e.downcast::<DatabaseError>().unwrap(),
+				DatabaseError::NotCommitted
+			));
 		}
 	}
 
@@ -264,9 +272,12 @@ mod tests {
 		// Try to add overlapping read range for tx2 - should conflict
 		let result = tracker.add_range(tx2, b"b", b"d", false);
 		assert!(result.is_err());
-		// Check for conflict error code 1020
+		// Check for conflict error
 		if let Err(e) = result {
-			assert_eq!(e.code(), 1020);
+			assert!(matches!(
+				e.downcast::<DatabaseError>().unwrap(),
+				DatabaseError::NotCommitted
+			));
 		}
 	}
 

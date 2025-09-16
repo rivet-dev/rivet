@@ -6,8 +6,8 @@ use futures_util::{StreamExt, TryStreamExt};
 use key::{KeyWrapper, ListKeyWrapper};
 use rivet_runner_protocol as rp;
 use rivet_util_id::Id;
-use udb_util::prelude::*;
-use universaldb::{self as udb, tuple::Subspace};
+use universaldb::prelude::*;
+use universaldb::tuple::Subspace;
 use utils::{validate_entries, validate_keys};
 
 mod entry;
@@ -22,12 +22,12 @@ const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 const MAX_STORAGE_SIZE: usize = 1024 * 1024 * 1024; // 1 GiB
 const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
-fn subspace(actor_id: Id) -> udb_util::Subspace {
+fn subspace(actor_id: Id) -> universaldb::utils::Subspace {
 	pegboard::keys::actor_kv_subspace().subspace(&actor_id)
 }
 
 /// Returns estimated size of the given subspace.
-pub async fn get_subspace_size(db: &udb::Database, subspace: &Subspace) -> Result<i64> {
+pub async fn get_subspace_size(db: &universaldb::Database, subspace: &Subspace) -> Result<i64> {
 	let (start, end) = subspace.range();
 
 	// This txn does not have to be committed because we are not modifying any data
@@ -39,30 +39,30 @@ pub async fn get_subspace_size(db: &udb::Database, subspace: &Subspace) -> Resul
 
 /// Gets keys from the KV store.
 pub async fn get(
-	db: &udb::Database,
+	db: &universaldb::Database,
 	actor_id: Id,
 	keys: Vec<rp::KvKey>,
 ) -> Result<(Vec<rp::KvKey>, Vec<rp::KvValue>, Vec<rp::KvMetadata>)> {
 	validate_keys(&keys)?;
 
-	db.run(|tx, _mc| {
+	db.run(|tx| {
 		let keys = keys.clone();
 		async move {
-			let txs = tx.subspace(subspace(actor_id));
+			let tx = tx.with_subspace(subspace(actor_id));
 
 			let size_estimate = keys.len().min(1024);
 
 			let mut stream = futures_util::stream::iter(keys)
 				.map(|key| {
-					let key_subspace = txs.subspace(&KeyWrapper(key));
+					let key_subspace = subspace(actor_id).subspace(&KeyWrapper(key));
 
 					// Get all sub keys in the key subspace
-					txs.get_ranges_keyvalues(
-						udb::RangeOption {
-							mode: udb::options::StreamingMode::WantAll,
+					tx.get_ranges_keyvalues(
+						universaldb::RangeOption {
+							mode: universaldb::options::StreamingMode::WantAll,
 							..key_subspace.range().into()
 						},
-						false,
+						Serializable,
 					)
 				})
 				// Should remain in order
@@ -79,13 +79,12 @@ pub async fn get(
 					break;
 				};
 
-				let key = txs.unpack::<EntryBaseKey>(&entry.key())?.key;
+				let key = tx.unpack::<EntryBaseKey>(&entry.key())?.key;
 
 				let current_entry = if let Some(inner) = &mut current_entry {
 					if inner.key != key {
-						let (key, value, meta) = std::mem::replace(inner, EntryBuilder::new(key))
-							.build()
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let (key, value, meta) =
+							std::mem::replace(inner, EntryBuilder::new(key)).build()?;
 
 						keys.push(key);
 						values.push(value);
@@ -99,25 +98,19 @@ pub async fn get(
 					current_entry.as_mut().expect("must be set")
 				};
 
-				if let Ok(chunk_key) = txs.unpack::<EntryValueChunkKey>(&entry.key()) {
+				if let Ok(chunk_key) = tx.unpack::<EntryValueChunkKey>(&entry.key()) {
 					current_entry.append_chunk(chunk_key.chunk, entry.value());
-				} else if let Ok(metadata_key) = txs.unpack::<EntryMetadataKey>(&entry.key()) {
-					let value = metadata_key
-						.deserialize(entry.value())
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				} else if let Ok(metadata_key) = tx.unpack::<EntryMetadataKey>(&entry.key()) {
+					let value = metadata_key.deserialize(entry.value())?;
 
 					current_entry.append_metadata(value);
 				} else {
-					return Err(udb::FdbBindingError::CustomError(
-						"unexpected sub key".into(),
-					));
+					bail!("unexpected sub key");
 				}
 			}
 
 			if let Some(inner) = current_entry {
-				let (key, value, meta) = inner
-					.build()
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				let (key, value, meta) = inner.build()?;
 
 				keys.push(key);
 				values.push(value);
@@ -133,7 +126,7 @@ pub async fn get(
 
 /// Gets keys from the KV store.
 pub async fn list(
-	db: &udb::Database,
+	db: &universaldb::Database,
 	actor_id: Id,
 	query: rp::KvListQuery,
 	reverse: bool,
@@ -145,20 +138,20 @@ pub async fn list(
 	let subspace = subspace(actor_id);
 	let list_range = list_query_range(query, &subspace);
 
-	db.run(|tx, _mc| {
+	db.run(|tx| {
 		let list_range = list_range.clone();
 		let subspace = subspace.clone();
 
 		async move {
-			let txs = tx.subspace(subspace);
+			let tx = tx.with_subspace(subspace);
 
-			let mut stream = txs.get_ranges_keyvalues(
-				udb::RangeOption {
-					mode: udb::options::StreamingMode::Iterator,
+			let mut stream = tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
+					mode: universaldb::options::StreamingMode::Iterator,
 					reverse,
 					..list_range.into()
 				},
-				false,
+				Serializable,
 			);
 
 			let mut keys = Vec::new();
@@ -171,13 +164,12 @@ pub async fn list(
 					break;
 				};
 
-				let key = txs.unpack::<EntryBaseKey>(&entry.key())?.key;
+				let key = tx.unpack::<EntryBaseKey>(&entry.key())?.key;
 
 				let curr = if let Some(inner) = &mut current_entry {
 					if inner.key != key {
-						let (key, value, meta) = std::mem::replace(inner, EntryBuilder::new(key))
-							.build()
-							.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+						let (key, value, meta) =
+							std::mem::replace(inner, EntryBuilder::new(key)).build()?;
 
 						keys.push(key);
 						values.push(value);
@@ -196,25 +188,19 @@ pub async fn list(
 					current_entry.as_mut().expect("must be set")
 				};
 
-				if let Ok(chunk_key) = txs.unpack::<EntryValueChunkKey>(&entry.key()) {
+				if let Ok(chunk_key) = tx.unpack::<EntryValueChunkKey>(&entry.key()) {
 					curr.append_chunk(chunk_key.chunk, entry.value());
-				} else if let Ok(metadata_key) = txs.unpack::<EntryMetadataKey>(&entry.key()) {
-					let value = metadata_key
-						.deserialize(entry.value())
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				} else if let Ok(metadata_key) = tx.unpack::<EntryMetadataKey>(&entry.key()) {
+					let value = metadata_key.deserialize(entry.value())?;
 
 					curr.append_metadata(value);
 				} else {
-					return Err(udb::FdbBindingError::CustomError(
-						"unexpected sub key".into(),
-					));
+					bail!("unexpected sub key");
 				}
 			}
 
 			if let Some(inner) = current_entry {
-				let (key, value, meta) = inner
-					.build()
-					.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+				let (key, value, meta) = inner.build()?;
 
 				keys.push(key);
 				values.push(value);
@@ -230,7 +216,7 @@ pub async fn list(
 
 /// Puts keys into the KV store.
 pub async fn put(
-	db: &udb::Database,
+	db: &universaldb::Database,
 	actor_id: Id,
 	keys: Vec<rp::KvKey>,
 	values: Vec<rp::KvValue>,
@@ -240,27 +226,27 @@ pub async fn put(
 
 	validate_entries(&keys, &values, total_size)?;
 
-	db.run(|tx, _mc| {
+	db.run(|tx| {
 		// TODO: Costly clone
 		let keys = keys.clone();
 		let values = values.clone();
 		let subspace = subspace.clone();
 
 		async move {
-			let txs = tx.subspace(subspace.clone());
+			let tx = tx.with_subspace(subspace.clone());
 
 			futures_util::stream::iter(keys.into_iter().zip(values.into_iter()))
 				.map(|(key, value)| {
-					let txs = txs.clone();
+					let tx = tx.clone();
 					let key = KeyWrapper(key.clone());
 					let subspace = subspace.clone();
 
 					async move {
 						// Clear previous key data before setting
-						txs.clear_subspace_range(&subspace.subspace(&key));
+						tx.clear_subspace_range(&subspace.subspace(&key));
 
 						// Set metadata
-						txs.write(
+						tx.write(
 							&EntryMetadataKey::new(key.clone()),
 							rp::KvMetadata {
 								version: VERSION.as_bytes().to_vec(),
@@ -273,12 +259,9 @@ pub async fn put(
 							let idx = start / VALUE_CHUNK_SIZE;
 							let end = (start + VALUE_CHUNK_SIZE).min(value.len());
 
-							txs.set(
+							tx.set(
 								&subspace.pack(&EntryValueChunkKey::new(key.clone(), idx)),
-								&value
-									.get(start..end)
-									.context("bad slice")
-									.map_err(|err| udb::FdbBindingError::CustomError(err.into()))?,
+								&value.get(start..end).context("bad slice")?,
 							);
 						}
 
@@ -295,10 +278,10 @@ pub async fn put(
 }
 
 /// Deletes keys from the KV store. Cannot be undone.
-pub async fn delete(db: &udb::Database, actor_id: Id, keys: Vec<rp::KvKey>) -> Result<()> {
+pub async fn delete(db: &universaldb::Database, actor_id: Id, keys: Vec<rp::KvKey>) -> Result<()> {
 	validate_keys(&keys)?;
 
-	db.run(|tx, _mc| {
+	db.run(|tx| {
 		let keys = keys.clone();
 		async move {
 			for key in keys {
@@ -315,8 +298,8 @@ pub async fn delete(db: &udb::Database, actor_id: Id, keys: Vec<rp::KvKey>) -> R
 }
 
 /// Deletes all keys from the KV store. Cannot be undone.
-pub async fn delete_all(db: &udb::Database, actor_id: Id) -> Result<()> {
-	db.run(|tx, _mc| async move {
+pub async fn delete_all(db: &universaldb::Database, actor_id: Id) -> Result<()> {
+	db.run(|tx| async move {
 		tx.clear_subspace_range(&subspace(actor_id));
 		Ok(())
 	})

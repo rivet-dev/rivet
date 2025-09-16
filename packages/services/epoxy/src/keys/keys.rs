@@ -1,7 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::ReplicaId;
 use std::result::Result::Ok;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct KvValueKey {

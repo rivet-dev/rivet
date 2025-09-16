@@ -2,7 +2,7 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use gas::prelude::*;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 use versioned_data_util::OwnedVersionedData;
 
 #[derive(Debug)]
@@ -753,7 +753,7 @@ impl FormalChunkedKey for MetadataKey {
 		}
 	}
 
-	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value> {
+	fn combine(&self, chunks: Vec<Value>) -> Result<Self::Value> {
 		rivet_data::versioned::MetadataKeyData::deserialize_with_embedded_version(
 			&chunks
 				.iter()
@@ -768,7 +768,7 @@ impl FormalChunkedKey for MetadataKey {
 		Ok(
 			rivet_data::versioned::MetadataKeyData::latest(value.try_into()?)
 				.serialize_with_embedded_version(rivet_data::PEGBOARD_RUNNER_METADATA_VERSION)?
-				.chunks(udb_util::CHUNK_SIZE)
+				.chunks(universaldb::utils::CHUNK_SIZE)
 				.map(|x| x.to_vec())
 				.collect(),
 		)

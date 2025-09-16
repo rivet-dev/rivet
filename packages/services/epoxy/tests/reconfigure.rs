@@ -7,8 +7,8 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use serde_json::json;
 use std::collections::HashSet;
-use udb_util::prelude::*;
-use universaldb::{FdbBindingError, KeySelector, RangeOption, options::StreamingMode};
+use universaldb::prelude::*;
+use universaldb::{KeySelector, RangeOption, options::StreamingMode};
 
 mod common;
 
@@ -456,7 +456,7 @@ async fn verify_log_entries_match(
 	// Read log entries from replica 1
 	let log_entries_1 = ctx_1
 		.udb()?
-		.run(move |tx, _| async move {
+		.run(move |tx| async move {
 			let subspace = epoxy::keys::subspace(replica_1_id);
 
 			// Range scan to get all log entries for this replica
@@ -467,7 +467,7 @@ async fn verify_log_entries_match(
 				..Default::default()
 			};
 
-			let mut stream = tx.get_ranges_keyvalues(range, SERIALIZABLE);
+			let mut stream = tx.get_ranges_keyvalues(range, Serializable);
 			let mut log_entries = Vec::new();
 
 			while let Some(kv) = stream.try_next().await? {
@@ -475,29 +475,26 @@ async fn verify_log_entries_match(
 				let value_bytes = kv.value();
 
 				// Parse the key to get replica_id and slot_id
-				let key = subspace
-					.unpack::<epoxy::keys::replica::LogEntryKey>(key_bytes)
-					.map_err(|x| FdbBindingError::CustomError(x.into()))?;
+				let key = subspace.unpack::<epoxy::keys::replica::LogEntryKey>(key_bytes)?;
 
 				// Deserialize the log entry
 				let log_entry = epoxy::keys::replica::LogEntryKey::new(
 					key.instance_replica_id,
 					key.instance_slot_id,
 				)
-				.deserialize(value_bytes)
-				.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+				.deserialize(value_bytes)?;
 
 				log_entries.push((key.instance_replica_id, key.instance_slot_id, log_entry));
 			}
 
-			Result::<_, FdbBindingError>::Ok(log_entries)
+			Ok(log_entries)
 		})
 		.await?;
 
 	// Read log entries from replica 2
 	let log_entries_2 = ctx_2
 		.udb()?
-		.run(move |tx, _| async move {
+		.run(move |tx| async move {
 			let subspace = epoxy::keys::subspace(replica_2_id);
 
 			// Range scan to get all log entries for this replica
@@ -508,7 +505,7 @@ async fn verify_log_entries_match(
 				..Default::default()
 			};
 
-			let mut stream = tx.get_ranges_keyvalues(range, SERIALIZABLE);
+			let mut stream = tx.get_ranges_keyvalues(range, Serializable);
 			let mut log_entries = Vec::new();
 
 			while let Some(kv) = stream.try_next().await? {
@@ -516,22 +513,19 @@ async fn verify_log_entries_match(
 				let value_bytes = kv.value();
 
 				// Parse the key to get replica_id and slot_id
-				let key = subspace
-					.unpack::<epoxy::keys::replica::LogEntryKey>(key_bytes)
-					.map_err(|x| FdbBindingError::CustomError(x.into()))?;
+				let key = subspace.unpack::<epoxy::keys::replica::LogEntryKey>(key_bytes)?;
 
 				// Deserialize the log entry
 				let log_entry = epoxy::keys::replica::LogEntryKey::new(
 					key.instance_replica_id,
 					key.instance_slot_id,
 				)
-				.deserialize(value_bytes)
-				.map_err(|e| FdbBindingError::CustomError(e.into()))?;
+				.deserialize(value_bytes)?;
 
 				log_entries.push((key.instance_replica_id, key.instance_slot_id, log_entry));
 			}
 
-			Result::<_, FdbBindingError>::Ok(log_entries)
+			Ok(log_entries)
 		})
 		.await?;
 
@@ -593,15 +587,15 @@ async fn verify_kv_replication(
 	for (i, (key, expected_value)) in expected_keys.iter().enumerate() {
 		// Read the KV value from the replica's UDB
 		let actual_value = udb
-			.run(move |tx, _| {
+			.run(move |tx| {
 				let key_clone = key.clone();
 				async move {
 					let subspace = epoxy::keys::subspace(replica_id);
 					let kv_key = epoxy::keys::keys::KvValueKey::new(key_clone);
-					let result = tx.get(&subspace.pack(&kv_key), SERIALIZABLE).await?;
+					let result = tx.get(&subspace.pack(&kv_key), Serializable).await?;
 
 					// KvValueKey stores Vec<u8> directly, so we can return it as is
-					Result::<_, FdbBindingError>::Ok(result)
+					Ok(result)
 				}
 			})
 			.await?;

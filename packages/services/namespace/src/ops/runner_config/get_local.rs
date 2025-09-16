@@ -1,7 +1,7 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
-use udb_util::{SERIALIZABLE, TxnExt};
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys};
 
@@ -28,20 +28,20 @@ pub async fn namespace_runner_config_get_local(
 
 	let runner_configs = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
+		.run(|tx| async move {
 			futures_util::stream::iter(input.runners.clone())
 				.map(|(namespace_id, runner_name)| {
 					let tx = tx.clone();
 
 					async move {
-						let txs = tx.subspace(keys::subspace());
+						let tx = tx.with_subspace(keys::subspace());
 
 						let runner_config_key =
 							keys::RunnerConfigKey::new(namespace_id, runner_name.clone());
 
 						// Runner config not found
 						let Some(runner_config) =
-							txs.read_opt(&runner_config_key, SERIALIZABLE).await?
+							tx.read_opt(&runner_config_key, Serializable).await?
 						else {
 							return Ok(None);
 						};

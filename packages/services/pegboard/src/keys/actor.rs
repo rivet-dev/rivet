@@ -2,7 +2,7 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use gas::prelude::*;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 
 #[derive(Debug)]
 pub struct CreateTsKey {

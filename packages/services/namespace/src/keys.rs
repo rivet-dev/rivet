@@ -3,12 +3,12 @@ use std::result::Result::Ok;
 use anyhow::*;
 use gas::prelude::*;
 use serde::Serialize;
-use udb_util::prelude::*;
+use universaldb::prelude::*;
 use utoipa::ToSchema;
 use versioned_data_util::OwnedVersionedData;
 
-pub fn subspace() -> udb_util::Subspace {
-	udb_util::Subspace::new(&(RIVET, NAMESPACE))
+pub fn subspace() -> universaldb::utils::Subspace {
+	universaldb::utils::Subspace::new(&(RIVET, NAMESPACE))
 }
 
 #[derive(Debug)]

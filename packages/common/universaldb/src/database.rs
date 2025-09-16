@@ -1,12 +1,12 @@
 use std::future::Future;
 
+use anyhow::{Result, anyhow};
 use futures_util::FutureExt;
 
-use crate::{FdbBindingError, FdbResult, driver::Erased};
-
 use crate::{
-	MaybeCommitted, RetryableTransaction, Transaction, driver::DatabaseDriverHandle,
+	driver::{DatabaseDriverHandle, Erased},
 	options::DatabaseOption,
+	transaction::{RetryableTransaction, Transaction},
 };
 
 #[derive(Clone)]
@@ -20,32 +20,32 @@ impl Database {
 	}
 
 	/// Run a closure with automatic retry logic
-	pub async fn run<'a, F, Fut, T>(&'a self, closure: F) -> Result<T, FdbBindingError>
+	pub async fn run<'a, F, Fut, T>(&'a self, closure: F) -> Result<T>
 	where
-		F: Fn(RetryableTransaction, MaybeCommitted) -> Fut + Send + Sync,
-		Fut: Future<Output = Result<T, FdbBindingError>> + Send,
+		F: Fn(RetryableTransaction) -> Fut + Send + Sync,
+		Fut: Future<Output = Result<T>> + Send,
 		T: Send + 'a + 'static,
 	{
 		let closure = &closure;
 		self.driver
-			.run(Box::new(|tx, mc| {
-				async move { closure(tx, mc).await.map(|value| Box::new(value) as Erased) }.boxed()
+			.run(Box::new(|tx| {
+				async move { closure(tx).await.map(|value| Box::new(value) as Erased) }.boxed()
 			}))
 			.await
 			.and_then(|res| {
-				res.downcast::<T>().map(|x| *x).map_err(|_| {
-					FdbBindingError::CustomError("failed to downcast `run` return type".into())
-				})
+				res.downcast::<T>()
+					.map(|x| *x)
+					.map_err(|_| anyhow!("failed to downcast `run` return type"))
 			})
 	}
 
 	/// Creates a new txn instance.
-	pub fn create_trx(&self) -> FdbResult<Transaction> {
+	pub fn create_trx(&self) -> Result<Transaction> {
 		self.driver.create_trx()
 	}
 
 	/// Set a database option
-	pub fn set_option(&self, opt: DatabaseOption) -> FdbResult<()> {
+	pub fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		self.driver.set_option(opt)
 	}
 }

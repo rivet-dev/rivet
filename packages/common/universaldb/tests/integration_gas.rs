@@ -1,7 +1,9 @@
 use futures_util::TryStreamExt;
 use rivet_test_deps_docker::TestDatabase;
 use std::sync::Arc;
-use universaldb::{Database, RangeOption, options::StreamingMode, tuple::Subspace};
+use universaldb::{
+	Database, RangeOption, options::StreamingMode, tuple::Subspace, utils::IsolationLevel::*,
+};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -51,7 +53,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	println!("Running simple write/read test...");
 
 	// Simple test: write a single key and read it back
-	db.run(|tx, _maybe_committed| async move {
+	db.run(|tx| async move {
 		tx.set(b"simple_test_key", b"simple_test_value");
 		Ok(())
 	})
@@ -59,8 +61,8 @@ pub async fn test_gasoline_operations(db: &Database) {
 	.unwrap();
 
 	let value = db
-		.run(|tx, _maybe_committed| async move {
-			let val = tx.get(b"simple_test_key", false).await?;
+		.run(|tx| async move {
+			let val = tx.get(b"simple_test_key", Serializable).await?;
 			println!(
 				"Simple test read result: {:?}",
 				val.as_ref()
@@ -87,7 +89,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	let workflow_id = Uuid::new_v4();
 
 	// Test 1: Write workflow data like gasoline does
-	db.run(|tx, _maybe_committed| {
+	db.run(|tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			// Write create timestamp (similar to CreateTsKey)
@@ -128,7 +130,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 
 	// Test 2: Read workflow data back like gasoline does
 	let (input_found, state_found, wake_found) = db
-		.run(|tx, _maybe_committed| {
+		.run(|tx| {
 			let workflow_subspace = workflow_subspace.clone();
 			async move {
 				// Read input chunks using range query
@@ -141,7 +143,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 							mode: StreamingMode::WantAll,
 							..(&input_subspace).into()
 						},
-						false,
+						Serializable,
 					)
 					.try_collect::<Vec<_>>()
 					.await?;
@@ -156,7 +158,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 							mode: StreamingMode::WantAll,
 							..(&state_subspace).into()
 						},
-						false,
+						Serializable,
 					)
 					.try_collect::<Vec<_>>()
 					.await?;
@@ -164,7 +166,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 				// Read wake condition
 				let wake_condition_key =
 					workflow_subspace.pack(&("workflow", "has_wake_condition", workflow_id));
-				let wake_condition = tx.get(&wake_condition_key, false).await?;
+				let wake_condition = tx.get(&wake_condition_key, Serializable).await?;
 
 				println!("Input chunks found: {}", input_chunks.len());
 				println!("State chunks found: {}", state_chunks.len());
@@ -185,7 +187,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	assert!(wake_found, "Should find wake condition");
 
 	// Test 3: Test the exact pattern gasoline uses with subspace operations
-	db.run(|tx, _maybe_committed| {
+	db.run(|tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			// Create a new workflow ID
@@ -208,7 +210,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 
 	// Test 4: Verify the data was written correctly
 	let workflow_id2 = db
-		.run(|tx, _maybe_committed| {
+		.run(|tx| {
 			let workflow_subspace = workflow_subspace.clone();
 			async move {
 				// Generate the same workflow_id2 again (for test purposes, we'll store it)
@@ -223,10 +225,10 @@ pub async fn test_gasoline_operations(db: &Database) {
 				tx.set(&chunk_key, b"test_data");
 
 				// Read it back in the same transaction
-				let value = tx.get(&chunk_key, false).await?;
+				let value = tx.get(&chunk_key, Serializable).await?;
 				assert_eq!(
 					value,
-					Some(b"test_data".to_vec()),
+					Some(b"test_data".to_vec().into()),
 					"Should read back the same data"
 				);
 
@@ -237,7 +239,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 		.unwrap();
 
 	// Test 5: Read in a separate transaction (like gasoline does)
-	db.run(|tx, _maybe_committed| {
+	db.run(|tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			let input_key_base = workflow_subspace.pack(&("workflow", "input", workflow_id2));
@@ -245,7 +247,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 
 			// Read using range query like gasoline
 			let input_chunks = tx
-				.get_ranges_keyvalues((&input_subspace).into(), false)
+				.get_ranges_keyvalues((&input_subspace).into(), Serializable)
 				.try_collect::<Vec<_>>()
 				.await?;
 

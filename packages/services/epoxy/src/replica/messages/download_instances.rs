@@ -1,7 +1,8 @@
+use anyhow::Result;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use futures_util::TryStreamExt;
-use udb_util::prelude::*;
-use universaldb::{FdbBindingError, KeySelector, RangeOption, Transaction, options::StreamingMode};
+use universaldb::prelude::*;
+use universaldb::{KeySelector, RangeOption, Transaction, options::StreamingMode};
 
 use crate::keys;
 
@@ -9,7 +10,7 @@ pub async fn download_instances(
 	tx: &Transaction,
 	replica_id: ReplicaId,
 	req: protocol::DownloadInstancesRequest,
-) -> Result<Vec<protocol::DownloadInstancesEntry>, FdbBindingError> {
+) -> Result<Vec<protocol::DownloadInstancesEntry>> {
 	tracing::info!(?replica_id, "handling download instances message");
 
 	let mut entries = Vec::new();
@@ -25,13 +26,13 @@ pub async fn download_instances(
 	} else {
 		// TODO: Use ::subspace()
 		// Start from the beginning of the log
-		let prefix = subspace.pack(&(udb_util::keys::LOG,));
+		let prefix = subspace.pack(&(universaldb::utils::keys::LOG,));
 		KeySelector::first_greater_or_equal(prefix)
 	};
 
 	// TODO: Is there a cleaner way to do this
 	// End key is after all log entries
-	let end_prefix = subspace.pack(&(udb_util::keys::LOG + 1,));
+	let end_prefix = subspace.pack(&(universaldb::utils::keys::LOG + 1,));
 	let end_key = KeySelector::first_greater_or_equal(end_prefix);
 
 	let range = RangeOption {
@@ -43,20 +44,14 @@ pub async fn download_instances(
 	};
 
 	// Query the range
-	let mut stream = tx.get_ranges_keyvalues(range, SERIALIZABLE);
+	let mut stream = tx.get_ranges_keyvalues(range, Serializable);
 
 	while let Some(kv) = stream.try_next().await? {
 		// Parse the key to extract instance info
 		let key_bytes = kv.key();
-		let log_key = subspace
-			.unpack::<keys::replica::LogEntryKey>(key_bytes)
-			.map_err(|e| FdbBindingError::CustomError(e.into()))?;
-
+		let log_key = subspace.unpack::<keys::replica::LogEntryKey>(key_bytes)?;
 		// Deserialize the log entry
-		let log_entry = log_key
-			.deserialize(kv.value())
-			.map_err(|e| FdbBindingError::CustomError(e.into()))?;
-
+		let log_entry = log_key.deserialize(kv.value())?;
 		// Create the instance from the key
 		let instance = protocol::Instance {
 			replica_id: log_key.instance_replica_id,

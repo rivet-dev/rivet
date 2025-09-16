@@ -1,11 +1,3 @@
-// Copyright 2018 foundationdb-rs developers, https://github.com/Clikengo/foundationdb-rs/graphs/contributors
-// Copyright 2013-2018 Apple, Inc and the FoundationDB project authors.
-//
-// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
-// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-
 //! A `KeySelector` identifies a particular key in the database.
 
 use crate::tuple::Bytes;
@@ -29,8 +21,6 @@ use std::borrow::Cow;
 /// - `last_less_or_equal`
 /// - `first_greater_than`
 /// - `first_greater_or_equal`
-///
-/// A dedicated [example](https://github.com/foundationdb-rs/foundationdb-rs/blob/main/foundationdb/examples/key_selectors.rs) is available on Github.
 #[derive(Clone, Debug)]
 pub struct KeySelector<'a> {
 	key: Bytes<'a>,

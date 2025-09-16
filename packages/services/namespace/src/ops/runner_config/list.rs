@@ -1,7 +1,7 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use udb_util::{SERIALIZABLE, TxnExt};
-use universaldb::{self as udb, options::StreamingMode};
+use universaldb::options::StreamingMode;
+use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys, types::RunnerConfig};
 
@@ -24,11 +24,11 @@ pub async fn namespace_runner_config_list(
 
 	let runner_configs = ctx
 		.udb()?
-		.run(|tx, _mc| async move {
-			let txs = tx.subspace(keys::subspace());
+		.run(|tx| async move {
+			let tx = tx.with_subspace(keys::subspace());
 
 			let (start, end) = if let Some(variant) = input.variant {
-				let (start, end) = txs
+				let (start, end) = keys::subspace()
 					.subspace(&keys::RunnerConfigByVariantKey::subspace_with_variant(
 						input.namespace_id,
 						variant,
@@ -36,7 +36,7 @@ pub async fn namespace_runner_config_list(
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					txs.pack(&keys::RunnerConfigByVariantKey::new(
+					tx.pack(&keys::RunnerConfigByVariantKey::new(
 						input.namespace_id,
 						variant,
 						name.clone(),
@@ -47,12 +47,12 @@ pub async fn namespace_runner_config_list(
 
 				(start, end)
 			} else {
-				let (start, end) = txs
+				let (start, end) = keys::subspace()
 					.subspace(&keys::RunnerConfigKey::subspace(input.namespace_id))
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					txs.pack(&keys::RunnerConfigKey::new(
+					tx.pack(&keys::RunnerConfigKey::new(
 						input.namespace_id,
 						name.clone(),
 					))
@@ -63,22 +63,22 @@ pub async fn namespace_runner_config_list(
 				(start, end)
 			};
 
-			txs.get_ranges_keyvalues(
-				udb::RangeOption {
+			tx.get_ranges_keyvalues(
+				universaldb::RangeOption {
 					mode: StreamingMode::WantAll,
 					limit: Some(input.limit),
 					..(start, end).into()
 				},
-				SERIALIZABLE,
+				Serializable,
 			)
 			.map(|res| match res {
 				Ok(entry) => {
 					if input.variant.is_some() {
 						let (key, config) =
-							txs.read_entry::<keys::RunnerConfigByVariantKey>(&entry)?;
+							tx.read_entry::<keys::RunnerConfigByVariantKey>(&entry)?;
 						Ok((key.name, config))
 					} else {
-						let (key, config) = txs.read_entry::<keys::RunnerConfigKey>(&entry)?;
+						let (key, config) = tx.read_entry::<keys::RunnerConfigKey>(&entry)?;
 						Ok((key.name, config))
 					}
 				}

@@ -1,5 +1,6 @@
+use anyhow::{Result, ensure};
 use epoxy_protocol::protocol;
-use universaldb::{FdbBindingError, Transaction};
+use universaldb::Transaction;
 
 use crate::replica::{ballot, messages};
 
@@ -7,7 +8,7 @@ pub async fn accept(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	accept_req: protocol::AcceptRequest,
-) -> Result<protocol::AcceptResponse, FdbBindingError> {
+) -> Result<protocol::AcceptResponse> {
 	let protocol::Payload {
 		proposal,
 		seq,
@@ -22,11 +23,7 @@ pub async fn accept(
 	let is_valid =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
 			.await?;
-	if !is_valid {
-		return Err(FdbBindingError::CustomError(
-			anyhow::anyhow!("ballot validation failed for pre_accept").into(),
-		));
-	}
+	ensure!(is_valid, "ballot validation failed for pre_accept");
 
 	// EPaxos Step 18
 	let log_entry = protocol::LogEntry {
