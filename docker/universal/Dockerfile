@@ -105,7 +105,8 @@ LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
-CMD ["/usr/bin/rivet-engine", "start"]
+ENTRYPOINT ["/usr/bin/rivet-engine"]
+CMD ["start"]
 
 # MARK: Engine (Slim)
 FROM --platform=linux/amd64 debian:12.9-slim AS engine-slim
@@ -128,4 +129,5 @@ RUN apt-get update -y && \
 
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
-CMD ["/usr/bin/rivet-engine", "start"]
+ENTRYPOINT ["/usr/bin/rivet-engine"]
+CMD ["start"]
