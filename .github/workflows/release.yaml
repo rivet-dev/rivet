@@ -79,22 +79,22 @@ jobs:
       matrix:
         include:
           - platform: linux
-            runner: ubuntu-latest
+            runner: depot-ubuntu-24.04
             target: x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
           - platform: windows
-            runner: ubuntu-latest
+            runner: depot-ubuntu-24.04
             target: x86_64-pc-windows-gnu
             binary_ext: ".exe"
             arch: x86_64
           - platform: macos
-            runner: ubuntu-latest
+            runner: depot-ubuntu-24.04
             target: x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
           - platform: macos
-            runner: ubuntu-latest
+            runner: depot-ubuntu-24.04
             target: aarch64-apple-darwin
             binary_ext: ""
             arch: aarch64
@@ -155,10 +155,10 @@ jobs:
         include:
           # TODO(RVT-4479): Add back ARM builder once manifest generation fixed
           # - platform: linux/arm64
-          #   runner: ubuntu-latest
+          #   runner: depot-ubuntu-24.04
           #   arch_suffix: -arm64
           - platform: linux/x86_64
-            runner: ubuntu-latest
+            runner: depot-ubuntu-24.04
             # TODO: Replace with appropriate arch_suffix when needed
             # arch_suffix: -amd64
             arch_suffix: ''

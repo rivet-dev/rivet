@@ -43,7 +43,7 @@ jobs:
 
   # clippy:
   #   name: Clippy
-  #   runs-on: ubuntu-latest
+  #   runs-on: depot-ubuntu-24.04
   #   steps:
   #     - uses: actions/checkout@v4
       
@@ -59,7 +59,7 @@ jobs:
 
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       
@@ -77,7 +77,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       

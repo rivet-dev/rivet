@@ -127,7 +127,7 @@ export class Runner {
 		// The server will send a StopActor command if it wants to fully stop
 	}
 
-	stopActor(actorId: string, generation?: number) {
+	async stopActor(actorId: string, generation?: number) {
 		const actor = this.#removeActor(actorId, generation);
 		if (!actor) return;
 
@@ -136,11 +136,14 @@ export class Runner {
 			this.#tunnel.unregisterActor(actor);
 		}
 
-		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
-
-		this.#config.onActorStop(actorId, actor.generation).catch((err) => {
+		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
+		try {
+			await this.#config.onActorStop(actorId, actor.generation);
+		} catch (err) {
 			console.error(`Error in onActorStop for actor ${actorId}:`, err);
-		});
+		}
+
+		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
 	}
 
 	#stopAllActors() {
