@@ -6,8 +6,6 @@ use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-pub mod runner_configs;
-
 #[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]

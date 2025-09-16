@@ -78,9 +78,6 @@ impl TestCtx {
 			let pools = pools.clone();
 			async move {
 				let services = vec![
-					Service::new("api-public", ServiceKind::ApiPublic, |config, pools| {
-						Box::pin(rivet_api_public::start(config, pools))
-					}),
 					Service::new("api-peer", ServiceKind::ApiPeer, |config, pools| {
 						Box::pin(rivet_api_peer::start(config, pools))
 					}),
@@ -109,9 +106,8 @@ impl TestCtx {
 		// Wait for ports to open
 		tracing::info!(dc_label, "waiting for services to be ready");
 		tokio::join!(
-			wait_for_port("api-public", test_deps.api_public_port()),
-			wait_for_port("guard", test_deps.guard_port()),
 			wait_for_port("api-peer", test_deps.api_peer_port()),
+			wait_for_port("guard", test_deps.guard_port()),
 			wait_for_port("pegboard", test_deps.pegboard_port()),
 		);
 

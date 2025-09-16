@@ -195,7 +195,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-a:6420
-      - RUNNER_HOST=runner-dc-a
     stop_grace_period: 4s
     ports:
       - '5050:5050'
@@ -343,7 +342,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-b:6420
-      - RUNNER_HOST=runner-dc-b
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-b:
@@ -489,7 +487,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-c:6420
-      - RUNNER_HOST=runner-dc-c
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-c:

@@ -260,7 +260,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-0:6420
-      - RUNNER_HOST=runner-0
     stop_grace_period: 4s
     ports:
       - '5050:5050'
@@ -277,7 +276,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-0:6420
-      - RUNNER_HOST=runner-1
     stop_grace_period: 4s
     depends_on:
       rivet-engine-0:
@@ -292,7 +290,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-0:6420
-      - RUNNER_HOST=runner-2
     stop_grace_period: 4s
     depends_on:
       rivet-engine-0:

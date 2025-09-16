@@ -6,6 +6,7 @@ pub mod actors;
 pub mod internal;
 pub mod namespaces;
 pub mod router;
+pub mod runner_configs;
 pub mod runners;
 
 pub use router::router as create_router;

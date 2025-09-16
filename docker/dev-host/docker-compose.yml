@@ -164,7 +164,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://127.0.0.1:6420
-      - RUNNER_HOST=127.0.0.1
     stop_grace_period: 4s
     depends_on:
       rivet-engine:

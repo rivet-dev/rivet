@@ -1,6 +1,6 @@
 use rivet_api_builder::{create_router, prelude::*};
 
-use crate::{actors, internal, namespaces, runners};
+use crate::{actors, internal, namespaces, runner_configs, runners};
 
 pub async fn router(
 	name: &'static str,
@@ -19,21 +19,11 @@ pub async fn router(
 				get(namespaces::resolve_for_name),
 			)
 			// MARK: Runner configs
+			.route("/runner-configs", get(runner_configs::list))
+			.route("/runner-configs/{runner_name}", put(runner_configs::upsert))
 			.route(
-				"/namespaces/{namespace_id}/runner-configs",
-				get(namespaces::runner_configs::list),
-			)
-			.route(
-				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
-				put(namespaces::runner_configs::upsert),
-			)
-			.route(
-				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
-				get(namespaces::runner_configs::get),
-			)
-			.route(
-				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
-				delete(namespaces::runner_configs::delete),
+				"/runner-configs/{runner_name}",
+				delete(runner_configs::delete),
 			)
 			// MARK: Actors
 			.route("/actors", get(actors::list::list))

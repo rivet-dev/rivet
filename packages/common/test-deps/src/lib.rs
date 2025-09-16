@@ -12,7 +12,6 @@ pub struct TestDeps {
 	pub pools: rivet_pools::Pools,
 	pub config: rivet_config::Config,
 	container_names: Vec<String>,
-	api_public_port: u16,
 	api_peer_port: u16,
 	pegboard_port: u16,
 	guard_port: u16,
@@ -82,10 +81,6 @@ impl TestDeps {
 			rivet_config::config::PubSub::Nats(nats) => nats.addresses.first().cloned(),
 			_ => None,
 		}
-	}
-
-	pub fn api_public_port(&self) -> u16 {
-		self.api_public_port
 	}
 
 	pub fn api_peer_port(&self) -> u16 {

@@ -13,7 +13,6 @@ pub struct Namespace {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
-#[schema(as = NamespacesRunnerConfig)]
 pub enum RunnerConfig {
 	Serverless {
 		url: String,

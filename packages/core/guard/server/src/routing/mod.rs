@@ -7,7 +7,6 @@ use rivet_guard_core::RoutingFn;
 
 use crate::{errors, shared_state::SharedState};
 
-mod api_peer;
 mod api_public;
 pub mod pegboard_gateway;
 mod pegboard_tunnel;
@@ -63,12 +62,6 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 
 						if let Some(routing_output) =
 							api_public::route_request(&ctx, target, host, path).await?
-						{
-							return Ok(routing_output);
-						}
-
-						if let Some(routing_output) =
-							api_peer::route_request(&ctx, target, host, path).await?
 						{
 							return Ok(routing_output);
 						}

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use futures_util::StreamExt;
 use gas::prelude::*;
-use rivet_api_client::{HeaderMap, Method, request_remote_datacenter};
+use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
 use rivet_cache::RawCacheKey;
 use serde::Serialize;
 

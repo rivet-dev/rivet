@@ -12,7 +12,6 @@ gas.workspace = true
 lazy_static.workspace = true
 namespace.workspace = true
 nix.workspace = true
-rivet-api-client.workspace = true
 rivet-api-types.workspace = true
 rivet-api-util.workspace = true
 rivet-data.workspace = true

@@ -5,8 +5,8 @@ use axum::{
 	response::{IntoResponse, Json, Response},
 };
 use rivet_api_builder::{ApiCtx, ApiError};
-use rivet_api_client::request_remote_datacenter;
 use rivet_api_types::actors::create::{CreateRequest, CreateResponse};
+use rivet_api_util::request_remote_datacenter;
 use rivet_types::actors::CrashPolicy;
 use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;

@@ -5,8 +5,8 @@ use axum::{
 	response::{IntoResponse, Json, Response},
 };
 use rivet_api_builder::{ApiCtx, ApiError};
-use rivet_api_client::fanout_to_datacenters;
 use rivet_api_types::{actors::list_names::*, pagination::Pagination};
+use rivet_api_util::fanout_to_datacenters;
 use rivet_types::actors::ActorName;
 
 /// ## Datacenter Round Trips

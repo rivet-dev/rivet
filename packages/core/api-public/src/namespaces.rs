@@ -7,10 +7,8 @@ use axum::{
 use rivet_api_builder::{ApiCtx, ApiError};
 use rivet_util::Id;
 
-use rivet_api_client::{request_remote_datacenter, request_remote_datacenter_raw};
 use rivet_api_peer::namespaces::*;
-
-pub mod runner_configs;
+use rivet_api_util::{request_remote_datacenter, request_remote_datacenter_raw};
 
 #[utoipa::path(
     get,

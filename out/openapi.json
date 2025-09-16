@@ -550,19 +550,19 @@
         }
       }
     },
-    "/namespaces/{namespace_id}/runner-configs": {
+    "/runner-configs": {
       "get": {
         "tags": [
-          "namespaces::runner_configs"
+          "runner_configs"
         ],
-        "operationId": "namespaces_runner_configs_list",
+        "operationId": "runner_configs_list",
         "parameters": [
           {
-            "name": "namespace_id",
-            "in": "path",
+            "name": "namespace",
+            "in": "query",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/RivetId"
+              "type": "string"
             }
           },
           {
@@ -587,7 +587,18 @@
             "in": "query",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/NamespacesRunnerConfigVariant"
+              "$ref": "#/components/schemas/RunnerConfigVariant"
+            }
+          },
+          {
+            "name": "runner_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         ],
@@ -597,7 +608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespacesRunnerConfigsListResponse"
+                  "$ref": "#/components/schemas/RunnerConfigsListResponse"
                 }
               }
             }
@@ -605,21 +616,13 @@
         }
       }
     },
-    "/namespaces/{namespace_id}/runner-configs/{runner_name}": {
-      "get": {
+    "/runner-configs/{runner_name}": {
+      "put": {
         "tags": [
-          "namespaces::runner_configs"
+          "runner_configs"
         ],
-        "operationId": "namespaces_runner_configs_get",
+        "operationId": "runner_configs_upsert",
         "parameters": [
-          {
-            "name": "namespace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
           {
             "name": "runner_name",
             "in": "path",
@@ -627,38 +630,10 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NamespacesRunnerConfigsGetResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "namespaces::runner_configs"
-        ],
-        "operationId": "namespaces_runner_configs_upsert",
-        "parameters": [
-          {
-            "name": "namespace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
           },
           {
-            "name": "runner_name",
-            "in": "path",
+            "name": "namespace",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "string"
@@ -669,7 +644,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NamespacesRunnerConfigsUpsertRequest"
+                "$ref": "#/components/schemas/RunnerConfigsUpsertRequest"
               }
             }
           },
@@ -681,7 +656,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespacesRunnerConfigsUpsertResponse"
+                  "$ref": "#/components/schemas/RunnerConfigsUpsertResponse"
                 }
               }
             }
@@ -690,21 +665,21 @@
       },
       "delete": {
         "tags": [
-          "namespaces::runner_configs"
+          "runner_configs"
         ],
-        "operationId": "namespaces_runner_configs_delete",
+        "operationId": "runner_configs_delete",
         "parameters": [
-          {
-            "name": "namespace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
           {
             "name": "runner_name",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "string"
@@ -717,7 +692,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespacesRunnerConfigsDeleteResponse"
+                  "$ref": "#/components/schemas/RunnerConfigsDeleteResponse"
                 }
               }
             }
@@ -1301,108 +1276,6 @@
         },
         "additionalProperties": false
       },
-      "NamespacesRunnerConfig": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "serverless"
-            ],
-            "properties": {
-              "serverless": {
-                "type": "object",
-                "required": [
-                  "url",
-                  "request_lifespan",
-                  "slots_per_runner",
-                  "min_runners",
-                  "max_runners",
-                  "runners_margin"
-                ],
-                "properties": {
-                  "max_runners": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "min_runners": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "request_lifespan": {
-                    "type": "integer",
-                    "format": "int32",
-                    "description": "Seconds.",
-                    "minimum": 0
-                  },
-                  "runners_margin": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "slots_per_runner": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "url": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      "NamespacesRunnerConfigVariant": {
-        "type": "string",
-        "enum": [
-          "serverless"
-        ]
-      },
-      "NamespacesRunnerConfigsDeleteResponse": {
-        "type": "object"
-      },
-      "NamespacesRunnerConfigsGetResponse": {
-        "type": "object",
-        "required": [
-          "runner_config"
-        ],
-        "properties": {
-          "runner_config": {
-            "$ref": "#/components/schemas/NamespacesRunnerConfig"
-          }
-        }
-      },
-      "NamespacesRunnerConfigsListResponse": {
-        "type": "object",
-        "required": [
-          "runner_configs",
-          "pagination"
-        ],
-        "properties": {
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
-          },
-          "runner_configs": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NamespacesRunnerConfig"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "NamespacesRunnerConfigsUpsertRequest": {
-        "$ref": "#/components/schemas/NamespacesRunnerConfig"
-      },
-      "NamespacesRunnerConfigsUpsertResponse": {
-        "type": "object"
-      },
       "Pagination": {
         "type": "object",
         "properties": {
@@ -1510,6 +1383,97 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunnerConfig": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "serverless"
+            ],
+            "properties": {
+              "serverless": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "request_lifespan",
+                  "slots_per_runner",
+                  "min_runners",
+                  "max_runners",
+                  "runners_margin"
+                ],
+                "properties": {
+                  "max_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "min_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "request_lifespan": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "runners_margin": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "slots_per_runner": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigVariant": {
+        "type": "string",
+        "enum": [
+          "serverless"
+        ]
+      },
+      "RunnerConfigsDeleteResponse": {
+        "type": "object"
+      },
+      "RunnerConfigsListResponse": {
+        "type": "object",
+        "required": [
+          "runner_configs",
+          "pagination"
+        ],
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "runner_configs": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfig"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsUpsertRequest": {
+        "$ref": "#/components/schemas/RunnerConfig"
+      },
+      "RunnerConfigsUpsertResponse": {
+        "type": "object"
       },
       "RunnersGetResponse": {
         "type": "object",

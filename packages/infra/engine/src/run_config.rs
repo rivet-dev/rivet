@@ -3,9 +3,6 @@ use rivet_service_manager::{RunConfigData, Service, ServiceKind};
 
 pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let services = vec![
-		Service::new("api_public", ServiceKind::ApiPublic, |config, pools| {
-			Box::pin(rivet_api_public::start(config, pools))
-		}),
 		Service::new("api_peer", ServiceKind::ApiPeer, |config, pools| {
 			Box::pin(rivet_api_peer::start(config, pools))
 		}),

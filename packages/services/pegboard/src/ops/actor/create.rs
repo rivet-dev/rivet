@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_api_client::{Method, request_remote_datacenter};
+use rivet_api_util::{Method, request_remote_datacenter};
 use rivet_types::actors::{Actor, CrashPolicy};
 
 #[derive(Debug)]

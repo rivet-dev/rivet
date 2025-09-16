@@ -194,7 +194,6 @@ impl<'de> TupleUnpack<'de> for ByNameKey {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, strum::FromRepr, ToSchema)]
 #[serde(rename_all = "snake_case")]
-#[schema(as = NamespacesRunnerConfigVariant)]
 pub enum RunnerConfigVariant {
 	Serverless = 0,
 }

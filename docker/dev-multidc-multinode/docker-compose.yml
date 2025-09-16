@@ -277,7 +277,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
-      - RUNNER_HOST=runner-dc-a-0
     stop_grace_period: 4s
     ports:
       - '5050:5050'
@@ -294,7 +293,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
-      - RUNNER_HOST=runner-dc-a-1
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-a-0:
@@ -309,7 +307,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-a-0:6420
-      - RUNNER_HOST=runner-dc-a-2
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-a-0:
@@ -537,7 +534,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
-      - RUNNER_HOST=runner-dc-b-0
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-b-0:
@@ -552,7 +548,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
-      - RUNNER_HOST=runner-dc-b-1
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-b-0:
@@ -567,7 +562,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-b-0:6420
-      - RUNNER_HOST=runner-dc-b-2
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-b-0:
@@ -795,7 +789,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
-      - RUNNER_HOST=runner-dc-c-0
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-c-0:
@@ -810,7 +803,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
-      - RUNNER_HOST=runner-dc-c-1
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-c-0:
@@ -825,7 +817,6 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-c-0:6420
-      - RUNNER_HOST=runner-dc-c-2
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-c-0:

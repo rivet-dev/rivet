@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::http::{HeaderMap, Method};
 use rivet_api_builder::ApiCtx;
-use rivet_api_client::request_remote_datacenter;
+use rivet_api_util::request_remote_datacenter;
 use rivet_error::RivetError;
 use rivet_types::actors::Actor;
 use rivet_util::Id;

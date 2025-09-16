@@ -60,15 +60,11 @@ pub async fn setup_single_datacenter(
 		dc = dc.datacenter_label,
 		"containers started, waiting for services to be ready"
 	);
-
 	// Pick ports for other services
-	// TODO: Race condition with picking before binding
-	let api_public_port = portpicker::pick_unused_port().context("api_public_port")?;
 	let pegboard_port = portpicker::pick_unused_port().context("pegboard_port")?;
 
 	tracing::info!(
 		dc = dc.datacenter_label,
-		api_public_port,
 		api_peer_port,
 		pegboard_port,
 		guard_port,
@@ -79,10 +75,7 @@ pub async fn setup_single_datacenter(
 	let mut root = rivet_config::config::Root::default();
 	root.database = Some(db_config);
 	root.pubsub = Some(pubsub_config);
-	root.api_public = Some(rivet_config::config::ApiPublic {
-		port: Some(api_public_port),
-		..Default::default()
-	});
+	root.api_public = Some(Default::default());
 	root.api_peer = Some(rivet_config::config::ApiPeer {
 		port: Some(api_peer_port),
 		..Default::default()
@@ -116,7 +109,6 @@ pub async fn setup_single_datacenter(
 		pools,
 		config,
 		container_names,
-		api_public_port,
 		api_peer_port,
 		guard_port,
 		pegboard_port,

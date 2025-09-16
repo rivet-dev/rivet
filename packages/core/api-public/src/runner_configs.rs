@@ -7,66 +7,14 @@ use axum::{
 use rivet_api_builder::{ApiCtx, ApiError};
 use rivet_util::Id;
 
-use rivet_api_client::request_remote_datacenter;
-use rivet_api_peer::namespaces::runner_configs::*;
+use rivet_api_peer::runner_configs::*;
+use rivet_api_util::request_remote_datacenter;
 
 #[utoipa::path(
 	get,
-	operation_id = "namespaces_runner_configs_get",
-	path = "/namespaces/{namespace_id}/runner-configs/{runner_name}",
+	operation_id = "runner_configs_list",
+	path = "/runner-configs",
 	params(
-		("namespace_id" = Id, Path),
-		("runner_name" = String, Path),
-		GetQuery,
-	),
-	responses(
-		(status = 200, body = GetResponse),
-	),
-)]
-pub async fn get(
-	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
-	Path(path): Path<GetPath>,
-	Query(query): Query<GetQuery>,
-) -> Response {
-	match get_inner(ctx, headers, path, query).await {
-		Ok(response) => Json(response).into_response(),
-		Err(err) => ApiError::from(err).into_response(),
-	}
-}
-
-async fn get_inner(
-	ctx: ApiCtx,
-	headers: HeaderMap,
-	path: GetPath,
-	query: GetQuery,
-) -> Result<GetResponse> {
-	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::runner_configs::get(ctx, path, query).await
-	} else {
-		let leader_dc = ctx.config().leader_dc()?;
-		request_remote_datacenter::<GetResponse>(
-			ctx.config(),
-			leader_dc.datacenter_label,
-			&format!(
-				"/namespaces/{}/runner-configs/{}",
-				path.namespace_id, path.runner_name
-			),
-			axum::http::Method::GET,
-			headers,
-			Some(&query),
-			Option::<&()>::None,
-		)
-		.await
-	}
-}
-
-#[utoipa::path(
-	get,
-	operation_id = "namespaces_runner_configs_list",
-	path = "/namespaces/{namespace_id}/runner-configs",
-	params(
-		("namespace_id" = Id, Path),
 		ListQuery,
 	),
 	responses(
@@ -92,13 +40,13 @@ async fn list_inner(
 	query: ListQuery,
 ) -> Result<ListResponse> {
 	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::runner_configs::list(ctx, path, query).await
+		rivet_api_peer::runner_configs::list(ctx, path, query).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<ListResponse>(
 			ctx.config(),
 			leader_dc.datacenter_label,
-			&format!("/namespaces/{}/runner-configs", path.namespace_id),
+			"/runner-configs",
 			axum::http::Method::GET,
 			headers,
 			Some(&query),
@@ -110,10 +58,9 @@ async fn list_inner(
 
 #[utoipa::path(
 	put,
-	operation_id = "namespaces_runner_configs_upsert",
-	path = "/namespaces/{namespace_id}/runner-configs/{runner_name}",
+	operation_id = "runner_configs_upsert",
+	path = "/runner-configs/{runner_name}",
 	params(
-		("namespace_id" = Id, Path),
 		("runner_name" = String, Path),
 		UpsertQuery,
 	),
@@ -143,19 +90,16 @@ async fn upsert_inner(
 	body: UpsertRequest,
 ) -> Result<UpsertResponse> {
 	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::runner_configs::upsert(ctx, path, query, body).await
+		rivet_api_peer::runner_configs::upsert(ctx, path, query, body).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<UpsertResponse>(
 			ctx.config(),
 			leader_dc.datacenter_label,
-			&format!(
-				"/namespaces/{}/runner-configs/{}",
-				path.namespace_id, path.runner_name
-			),
+			&format!("/runner-configs/{}", path.runner_name),
 			axum::http::Method::PUT,
 			headers,
-			Option::<&()>::None,
+			Some(&query),
 			Some(&body),
 		)
 		.await
@@ -164,10 +108,9 @@ async fn upsert_inner(
 
 #[utoipa::path(
 	delete,
-	operation_id = "namespaces_runner_configs_delete",
-	path = "/namespaces/{namespace_id}/runner-configs/{runner_name}",
+	operation_id = "runner_configs_delete",
+	path = "/runner-configs/{runner_name}",
 	params(
-		("namespace_id" = Id, Path),
 		("runner_name" = String, Path),
 		DeleteQuery,
 	),
@@ -194,16 +137,13 @@ async fn delete_inner(
 	query: DeleteQuery,
 ) -> Result<DeleteResponse> {
 	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::runner_configs::delete(ctx, path, query).await
+		rivet_api_peer::runner_configs::delete(ctx, path, query).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<DeleteResponse>(
 			ctx.config(),
 			leader_dc.datacenter_label,
-			&format!(
-				"/namespaces/{}/runner-configs/{}",
-				path.namespace_id, path.runner_name
-			),
+			&format!("/runner-configs/{}", path.runner_name),
 			axum::http::Method::DELETE,
 			headers,
 			Some(&query),
