@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{Arc, Mutex};
-
 use anyhow::*;
 use async_trait::async_trait;
 use base64::Engine;
@@ -9,6 +5,9 @@ use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use futures_util::future::poll_fn;
 use rivet_util::backoff::Backoff;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast};
 use tokio_postgres::{AsyncMessage, NoTls};
 use tracing::Instrument;
