@@ -71,7 +71,6 @@ function RouteComponent() {
 								<TableRow>
 									<TableHead>ID</TableHead>
 									<TableHead>Name</TableHead>
-									<TableHead>HTTP</TableHead>
 									<TableHead>Slots</TableHead>
 									<TableHead>Last ping</TableHead>
 									<TableHead>Created</TableHead>
@@ -155,19 +154,11 @@ function RowSkeleton() {
 			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
 		</TableRow>
 	);
 }
 
-const MAX_TO_SHOW = 2;
-
 function Row(runner: Rivet.Runner) {
-	const [isExpanded, setExpanded] = useState(false);
-	const addresses = Object.values(runner.addressesHttp);
-
 	return (
 		<TableRow key={runner.runnerId}>
 			<TableCell>
@@ -184,36 +175,6 @@ function Row(runner: Rivet.Runner) {
 				<DiscreteCopyButton value={runner.name}>
 					{runner.name}
 				</DiscreteCopyButton>
-			</TableCell>
-
-			<TableCell>
-				<div className="flex gap-1 flex-wrap">
-					{addresses
-						.slice(0, isExpanded ? addresses.length : MAX_TO_SHOW)
-						.map((http) => {
-							const address = `${http.hostname}:${http.port}`;
-							return (
-								<DiscreteCopyButton
-									className="justify-start"
-									size="sm"
-									key={address}
-									value={address}
-								>
-									{address}
-								</DiscreteCopyButton>
-							);
-						})}
-
-					{addresses.length > MAX_TO_SHOW && !isExpanded ? (
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => setExpanded(!isExpanded)}
-						>
-							+{addresses.length - MAX_TO_SHOW}
-						</Button>
-					) : null}
-				</div>
 			</TableCell>
 
 			<TableCell>
