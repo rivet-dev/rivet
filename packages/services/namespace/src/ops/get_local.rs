@@ -10,13 +10,8 @@ pub struct Input {
 	pub namespace_ids: Vec<Id>,
 }
 
-#[derive(Debug)]
-pub struct Output {
-	pub namespaces: Vec<Namespace>,
-}
-
 #[operation]
-pub async fn namespace_get(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Vec<Namespace>> {
 	if !ctx.config().is_leader() {
 		return Err(errors::Namespace::NotLeader.build());
 	}
@@ -38,7 +33,7 @@ pub async fn namespace_get(ctx: &OperationCtx, input: &Input) -> Result<Output> 
 		.custom_instrument(tracing::info_span!("namespace_get_tx"))
 		.await?;
 
-	Ok(Output { namespaces })
+	Ok(namespaces)
 }
 
 pub(crate) async fn get_inner(
@@ -50,13 +45,11 @@ pub(crate) async fn get_inner(
 	let name_key = keys::NameKey::new(namespace_id);
 	let display_name_key = keys::DisplayNameKey::new(namespace_id);
 	let create_ts_key = keys::CreateTsKey::new(namespace_id);
-	let runner_kind_key = keys::RunnerKindKey::new(namespace_id);
 
-	let (name, display_name, create_ts, runner_kind) = tokio::try_join!(
+	let (name, display_name, create_ts) = tokio::try_join!(
 		txs.read_opt(&name_key, SERIALIZABLE),
 		txs.read_opt(&display_name_key, SERIALIZABLE),
 		txs.read_opt(&create_ts_key, SERIALIZABLE),
-		txs.read_opt(&runner_kind_key, SERIALIZABLE),
 	)?;
 
 	// Namespace not found
@@ -70,15 +63,11 @@ pub(crate) async fn get_inner(
 	let create_ts = create_ts.ok_or(udb::FdbBindingError::CustomError(
 		format!("key should exist: {create_ts_key:?}").into(),
 	))?;
-	let runner_kind = runner_kind.ok_or(udb::FdbBindingError::CustomError(
-		format!("key should exist: {runner_kind_key:?}").into(),
-	))?;
 
 	Ok(Some(Namespace {
 		namespace_id,
 		name,
 		display_name,
 		create_ts,
-		runner_kind,
 	}))
 }

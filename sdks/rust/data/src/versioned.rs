@@ -207,20 +207,20 @@ impl OwnedVersionedData for ActorNameKeyData {
 	}
 }
 
-pub enum NamespaceRunnerKind {
-	V1(namespace_runner_kind_v1::Data),
+pub enum NamespaceRunnerConfig {
+	V1(namespace_runner_config_v1::Data),
 }
 
-impl OwnedVersionedData for NamespaceRunnerKind {
-	type Latest = namespace_runner_kind_v1::Data;
+impl OwnedVersionedData for NamespaceRunnerConfig {
+	type Latest = namespace_runner_config_v1::Data;
 
-	fn latest(latest: namespace_runner_kind_v1::Data) -> Self {
-		NamespaceRunnerKind::V1(latest)
+	fn latest(latest: namespace_runner_config_v1::Data) -> Self {
+		NamespaceRunnerConfig::V1(latest)
 	}
 
 	fn into_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
-		if let NamespaceRunnerKind::V1(data) = self {
+		if let NamespaceRunnerConfig::V1(data) = self {
 			Ok(data)
 		} else {
 			bail!("version not latest");
@@ -229,14 +229,14 @@ impl OwnedVersionedData for NamespaceRunnerKind {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 => Ok(NamespaceRunnerKind::V1(serde_bare::from_slice(payload)?)),
+			1 => Ok(NamespaceRunnerConfig::V1(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
-			NamespaceRunnerKind::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			NamespaceRunnerConfig::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 }

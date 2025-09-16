@@ -47,25 +47,21 @@ async fn list_names_inner(
 	};
 
 	// Fanout to all datacenters
-	let mut all_names = fanout_to_datacenters::<
-		ListNamesResponse,
-		_,
-		_,
-		_,
-		_,
-		rivet_util::serde::FakeMap<String, ActorName>,
-	>(
-		ctx,
-		headers,
-		"/actors/names",
-		peer_query,
-		|ctx, query| async move { rivet_api_peer::actors::list_names::list_names(ctx, (), query).await },
-		|res, agg| agg.extend(res.names),
-	)
-	.await?;
+	let mut all_names =
+		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<(String, ActorName)>>(
+			ctx,
+			headers,
+			"/actors/names",
+			peer_query,
+			|ctx, query| async move {
+				rivet_api_peer::actors::list_names::list_names(ctx, (), query).await
+			},
+			|res, agg| agg.extend(res.names),
+		)
+		.await?;
 
 	// Sort by name for consistency
-	all_names.sort();
+	all_names.sort_by(|a, b| a.0.cmp(&b.0));
 
 	// Truncate to the requested limit
 	all_names.truncate(query.limit.unwrap_or(100));
@@ -73,8 +69,8 @@ async fn list_names_inner(
 	let cursor = all_names.last().map(|(name, _)| name.to_string());
 
 	Ok(ListNamesResponse {
-		// TODO: Implement ComposeSchema for FakeMap so we don't have to use .into()
-		names: all_names.into(),
+		// TODO: Implement ComposeSchema for FakeMap so we don't have to reallocate
+		names: all_names.into_iter().collect(),
 		pagination: Pagination { cursor },
 	})
 }

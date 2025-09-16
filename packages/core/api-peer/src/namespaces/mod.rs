@@ -6,6 +6,8 @@ use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+pub mod runner_configs;
+
 #[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
@@ -29,7 +31,6 @@ pub async fn get(ctx: ApiCtx, path: GetPath, _query: GetQuery) -> Result<GetResp
 			namespace_ids: vec![path.namespace_id],
 		})
 		.await?
-		.namespaces
 		.into_iter()
 		.next()
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
@@ -188,69 +189,9 @@ pub async fn create(
 			namespace_ids: vec![namespace_id],
 		})
 		.await?
-		.namespaces
 		.into_iter()
 		.next()
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	Ok(CreateResponse { namespace })
-}
-
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct UpdateQuery {}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct UpdatePath {
-	pub namespace_id: Id,
-}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = NamespacesUpdateRequest)]
-pub struct UpdateRequest(namespace::workflows::namespace::Update);
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = NamespacesUpdateResponse)]
-pub struct UpdateResponse {}
-
-pub async fn update(
-	ctx: ApiCtx,
-	path: UpdatePath,
-	_query: UpdateQuery,
-	body: UpdateRequest,
-) -> Result<UpdateResponse> {
-	let mut sub = ctx
-		.subscribe::<namespace::workflows::namespace::UpdateResult>((
-			"namespace_id",
-			path.namespace_id,
-		))
-		.await?;
-
-	let res = ctx
-		.signal(body.0)
-		.to_workflow::<namespace::workflows::namespace::Workflow>()
-		.tag("namespace_id", path.namespace_id)
-		.send()
-		.await;
-
-	if let Some(WorkflowError::WorkflowNotFound) = res
-		.as_ref()
-		.err()
-		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
-	{
-		return Err(namespace::errors::Namespace::NotFound.build());
-	} else {
-		res?;
-	}
-
-	sub.next()
-		.await?
-		.into_body()
-		.res
-		.map_err(|err| err.build())?;
-
-	Ok(UpdateResponse {})
 }

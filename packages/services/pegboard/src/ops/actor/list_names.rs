@@ -15,7 +15,7 @@ pub struct Input {
 
 #[derive(Debug)]
 pub struct Output {
-	pub names: util::serde::FakeMap<String, ActorNameKeyData>,
+	pub names: Vec<(String, ActorNameKeyData)>,
 }
 
 #[operation]
@@ -55,7 +55,7 @@ pub async fn pegboard_actor_list_names(ctx: &OperationCtx, input: &Input) -> Res
 				}
 				Err(err) => Err(Into::<udb::FdbBindingError>::into(err)),
 			})
-			.try_collect::<util::serde::FakeMap<_, _>>()
+			.try_collect::<Vec<(_, _)>>()
 			.await
 		})
 		.custom_instrument(tracing::info_span!("actor_list_names_tx"))

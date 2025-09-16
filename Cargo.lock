@@ -2385,6 +2385,7 @@ dependencies = [
  "anyhow",
  "gasoline",
  "rivet-api-client",
+ "rivet-types",
  "serde",
 ]
 
@@ -2789,6 +2790,7 @@ dependencies = [
  "rivet-types",
  "rivet-util",
  "serde",
+ "strum",
  "tracing",
  "udb-util",
  "universaldb",
@@ -3329,24 +3331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pegboard-outbound"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "epoxy",
- "gasoline",
- "namespace",
- "pegboard",
- "reqwest-eventsource",
- "rivet-config",
- "rivet-runner-protocol",
- "rivet-types",
- "tracing",
- "udb-util",
- "universaldb",
-]
-
-[[package]]
 name = "pegboard-runner-ws"
 version = "0.0.1"
 dependencies = [
@@ -3367,6 +3351,24 @@ dependencies = [
  "tracing",
  "url",
  "versioned-data-util",
+]
+
+[[package]]
+name = "pegboard-serverless"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "epoxy",
+ "gasoline",
+ "namespace",
+ "pegboard",
+ "reqwest-eventsource",
+ "rivet-config",
+ "rivet-runner-protocol",
+ "rivet-types",
+ "tracing",
+ "udb-util",
+ "universaldb",
 ]
 
 [[package]]
@@ -4337,8 +4339,8 @@ dependencies = [
  "lz4_flex",
  "namespace",
  "pegboard",
- "pegboard-outbound",
  "pegboard-runner-ws",
+ "pegboard-serverless",
  "portpicker",
  "rand 0.8.5",
  "reqwest",

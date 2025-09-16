@@ -1,20 +1,21 @@
 use gas::prelude::*;
 use utoipa::ToSchema;
 
+use crate::keys;
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Namespace {
 	pub namespace_id: Id,
 	pub name: String,
 	pub display_name: String,
 	pub create_ts: i64,
-	pub runner_kind: RunnerKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
-#[schema(as = NamespacesRunnerKind)]
-pub enum RunnerKind {
-	Outbound {
+#[schema(as = NamespacesRunnerConfig)]
+pub enum RunnerConfig {
+	Serverless {
 		url: String,
 		/// Seconds.
 		request_lifespan: u32,
@@ -23,21 +24,28 @@ pub enum RunnerKind {
 		max_runners: u32,
 		runners_margin: u32,
 	},
-	Custom,
 }
 
-impl From<RunnerKind> for rivet_data::generated::namespace_runner_kind_v1::Data {
-	fn from(value: RunnerKind) -> Self {
+impl RunnerConfig {
+	pub fn variant(&self) -> keys::RunnerConfigVariant {
+		match self {
+			RunnerConfig::Serverless { .. } => keys::RunnerConfigVariant::Serverless,
+		}
+	}
+}
+
+impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::Data {
+	fn from(value: RunnerConfig) -> Self {
 		match value {
-			RunnerKind::Outbound {
+			RunnerConfig::Serverless {
 				url,
 				request_lifespan,
 				slots_per_runner,
 				min_runners,
 				max_runners,
 				runners_margin,
-			} => rivet_data::generated::namespace_runner_kind_v1::Data::Outbound(
-				rivet_data::generated::namespace_runner_kind_v1::Outbound {
+			} => rivet_data::generated::namespace_runner_config_v1::Data::Serverless(
+				rivet_data::generated::namespace_runner_config_v1::Serverless {
 					url,
 					request_lifespan,
 					slots_per_runner,
@@ -46,16 +54,15 @@ impl From<RunnerKind> for rivet_data::generated::namespace_runner_kind_v1::Data 
 					runners_margin,
 				},
 			),
-			RunnerKind::Custom => rivet_data::generated::namespace_runner_kind_v1::Data::Custom,
 		}
 	}
 }
 
-impl From<rivet_data::generated::namespace_runner_kind_v1::Data> for RunnerKind {
-	fn from(value: rivet_data::generated::namespace_runner_kind_v1::Data) -> Self {
+impl From<rivet_data::generated::namespace_runner_config_v1::Data> for RunnerConfig {
+	fn from(value: rivet_data::generated::namespace_runner_config_v1::Data) -> Self {
 		match value {
-			rivet_data::generated::namespace_runner_kind_v1::Data::Outbound(o) => {
-				RunnerKind::Outbound {
+			rivet_data::generated::namespace_runner_config_v1::Data::Serverless(o) => {
+				RunnerConfig::Serverless {
 					url: o.url,
 					request_lifespan: o.request_lifespan,
 					slots_per_runner: o.slots_per_runner,
@@ -64,7 +71,6 @@ impl From<rivet_data::generated::namespace_runner_kind_v1::Data> for RunnerKind 
 					runners_margin: o.runners_margin,
 				}
 			}
-			rivet_data::generated::namespace_runner_kind_v1::Data::Custom => RunnerKind::Custom,
 		}
 	}
 }

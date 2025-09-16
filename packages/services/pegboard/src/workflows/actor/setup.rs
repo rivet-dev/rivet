@@ -1,5 +1,4 @@
 use gas::prelude::*;
-use namespace::types::RunnerKind;
 use rivet_data::converted::ActorNameKeyData;
 use rivet_types::actors::CrashPolicy;
 use udb_util::{SERIALIZABLE, TxnExt};
@@ -18,23 +17,18 @@ pub struct ValidateInput {
 	pub input: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValidateOutput {
-	pub ns_runner_kind: RunnerKind,
-}
-
 #[activity(Validate)]
 pub async fn validate(
 	ctx: &ActivityCtx,
 	input: &ValidateInput,
-) -> Result<std::result::Result<ValidateOutput, errors::Actor>> {
+) -> Result<std::result::Result<(), errors::Actor>> {
 	let ns_res = ctx
 		.op(namespace::ops::get_global::Input {
 			namespace_ids: vec![input.namespace_id],
 		})
 		.await?;
 
-	let Some(ns) = ns_res.into_iter().next() else {
+	if ns_res.is_empty() {
 		return Ok(Err(errors::Actor::NamespaceNotFound));
 	};
 
@@ -61,9 +55,7 @@ pub async fn validate(
 		}
 	}
 
-	Ok(Ok(ValidateOutput {
-		ns_runner_kind: ns.runner_kind,
-	}))
+	Ok(Ok(()))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -75,7 +67,6 @@ pub struct InitStateAndUdbInput {
 	pub runner_name_selector: String,
 	pub crash_policy: CrashPolicy,
 	pub create_ts: i64,
-	pub ns_runner_kind: RunnerKind,
 }
 
 #[activity(InitStateAndFdb)]
@@ -89,7 +80,6 @@ pub async fn insert_state_and_fdb(ctx: &ActivityCtx, input: &InitStateAndUdbInpu
 		input.runner_name_selector.clone(),
 		input.crash_policy,
 		input.create_ts,
-		input.ns_runner_kind.clone(),
 	));
 
 	ctx.udb()?

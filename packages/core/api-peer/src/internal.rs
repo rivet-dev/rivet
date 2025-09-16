@@ -1,7 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
-use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -26,4 +25,20 @@ pub async fn cache_purge(
 		.await?;
 
 	Ok(CachePurgeResponse {})
+}
+
+#[derive(Serialize)]
+pub struct BumpServerlessAutoscalerResponse {}
+
+pub async fn bump_serverless_autoscaler(
+	ctx: ApiCtx,
+	_path: (),
+	_query: (),
+	_body: (),
+) -> Result<BumpServerlessAutoscalerResponse> {
+	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+		.send()
+		.await?;
+
+	Ok(BumpServerlessAutoscalerResponse {})
 }

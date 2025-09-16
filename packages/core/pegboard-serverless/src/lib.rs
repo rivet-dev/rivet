@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use namespace::types::RunnerKind;
+use namespace::types::RunnerConfig;
 use pegboard::keys;
 use reqwest_eventsource as sse;
 use rivet_runner_protocol::protocol;
@@ -31,13 +31,13 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		config.clone(),
 		pools,
 		cache,
-		"pegboard-outbound",
+		"pegboard-serverless",
 		Id::new_v1(config.dc_label()),
 		Id::new_v1(config.dc_label()),
 	)?;
 
 	let mut sub = ctx
-		.subscribe::<rivet_types::msgs::pegboard::BumpOutboundAutoscaler>(())
+		.subscribe::<rivet_types::msgs::pegboard::BumpServerlessAutoscaler>(())
 		.await?;
 	let mut outbound_connections = HashMap::new();
 
@@ -52,77 +52,77 @@ async fn tick(
 	ctx: &StandaloneCtx,
 	outbound_connections: &mut HashMap<(Id, String), Vec<OutboundConnection>>,
 ) -> Result<()> {
-	let outbound_data =
-		ctx.udb()?
-			.run(|tx, _mc| async move {
-				let txs = tx.subspace(keys::subspace());
-				let outbound_desired_subspace = txs.subspace(
-					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::entire_subspace(),
-				);
+	let serverless_data = ctx
+		.udb()?
+		.run(|tx, _mc| async move {
+			let txs = tx.subspace(keys::subspace());
 
-				txs.get_ranges_keyvalues(
-					udb::RangeOption {
-						mode: StreamingMode::WantAll,
-						..(&outbound_desired_subspace).into()
-					},
-					// NOTE: This is a snapshot to prevent conflict with updates to this subspace
-					SNAPSHOT,
-				)
-				.map(|res| match res {
-					Ok(entry) => {
-						let (key, desired_slots) =
-						txs.read_entry::<rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey>(&entry)?;
+			let serverless_desired_subspace = txs.subspace(
+				&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace(),
+			);
 
-						Ok((key.namespace_id, key.runner_name_selector, desired_slots))
-					}
-					Err(err) => Err(err.into()),
-				})
-				.try_collect::<Vec<_>>()
-				.await
+			txs.get_ranges_keyvalues(
+				udb::RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&serverless_desired_subspace).into()
+				},
+				// NOTE: This is a snapshot to prevent conflict with updates to this subspace
+				SNAPSHOT,
+			)
+			.map(|res| match res {
+				Ok(entry) => {
+					let (key, desired_slots) =
+						txs.read_entry::<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey>(&entry)?;
+
+					Ok((key.namespace_id, key.runner_name, desired_slots))
+				}
+				Err(err) => Err(err.into()),
 			})
-			.await?;
-
-	let mut namespace_ids = outbound_data
-		.iter()
-		.map(|(ns_id, _, _)| *ns_id)
-		.collect::<Vec<_>>();
-	namespace_ids.dedup();
-
-	let namespaces = ctx
-		.op(namespace::ops::get_global::Input { namespace_ids })
+			.try_collect::<Vec<_>>()
+			.await
+		})
 		.await?;
 
-	for (ns_id, runner_name_selector, desired_slots) in &outbound_data {
-		let namespace = namespaces
-			.iter()
-			.find(|ns| ns.namespace_id == *ns_id)
-			.context("ns not found")?;
+	let runner_configs = ctx
+		.op(namespace::ops::runner_config::get_global::Input {
+			runners: serverless_data
+				.iter()
+				.map(|(ns_id, runner_name, _)| (*ns_id, runner_name.clone()))
+				.collect(),
+		})
+		.await?;
 
-		let RunnerKind::Outbound {
+	for (ns_id, runner_name, desired_slots) in &serverless_data {
+		let runner_config = runner_configs
+			.iter()
+			.find(|rc| rc.namespace_id == *ns_id)
+			.context("runner config not found")?;
+
+		let RunnerConfig::Serverless {
 			url,
 			request_lifespan,
 			slots_per_runner,
 			min_runners,
 			max_runners,
 			runners_margin,
-		} = &namespace.runner_kind
+		} = &runner_config.config
 		else {
 			tracing::warn!(
 				?ns_id,
-				"this namespace should not be in the outbound subspace (wrong runner kind)"
+				"this runner config should not be in the serverless subspace (wrong config kind)"
 			);
 			continue;
 		};
 
 		let curr = outbound_connections
-			.entry((*ns_id, runner_name_selector.clone()))
+			.entry((*ns_id, runner_name.clone()))
 			.or_insert_with(Vec::new);
 
 		// Remove finished and draining connections from list
 		curr.retain(|conn| !conn.handle.is_finished() && !conn.draining.load(Ordering::SeqCst));
 
 		let desired_count = (desired_slots.div_ceil(*slots_per_runner).max(*min_runners)
-			+ runners_margin)
+			+ *runners_margin)
 			.min(*max_runners)
 			.try_into()?;
 
@@ -137,7 +137,7 @@ async fn tick(
 			for conn in draining_connections {
 				if conn.shutdown_tx.send(()).is_err() {
 					tracing::warn!(
-						"outbound connection shutdown channel dropped, likely already stopped"
+						"serverless connection shutdown channel dropped, likely already stopped"
 					);
 				}
 			}
@@ -146,7 +146,7 @@ async fn tick(
 		let starting_connections = std::iter::repeat_with(|| {
 			spawn_connection(
 				ctx.clone(),
-				url.clone(),
+				url.to_string(),
 				Duration::from_secs(*request_lifespan as u64),
 			)
 		})
@@ -155,12 +155,10 @@ async fn tick(
 	}
 
 	// Remove entries that aren't returned from udb
-	outbound_connections.retain(|(ns_id, runner_name_selector), _| {
-		outbound_data
+	outbound_connections.retain(|(ns_id, runner_name), _| {
+		serverless_data
 			.iter()
-			.any(|(ns_id2, runner_name_selector2, _)| {
-				ns_id == ns_id2 && runner_name_selector == runner_name_selector2
-			})
+			.any(|(ns_id2, runner_name2, _)| ns_id == ns_id2 && runner_name == runner_name2)
 	});
 
 	Ok(())
@@ -186,7 +184,7 @@ fn spawn_connection(
 
 			// On error, bump the autoscaler loop again
 			let _ = ctx
-				.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
+				.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 				.send()
 				.await;
 		}
@@ -241,7 +239,7 @@ async fn outbound_handler(
 
 	draining.store(true, Ordering::SeqCst);
 
-	ctx.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
+	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 		.send()
 		.await?;
 

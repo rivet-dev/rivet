@@ -5,29 +5,29 @@ use gas::prelude::*;
 use udb_util::prelude::*;
 
 #[derive(Debug)]
-pub struct OutboundDesiredSlotsKey {
+pub struct ServerlessDesiredSlotsKey {
 	pub namespace_id: Id,
-	pub runner_name_selector: String,
+	pub runner_name: String,
 }
 
-impl OutboundDesiredSlotsKey {
-	pub fn new(namespace_id: Id, runner_name_selector: String) -> Self {
-		OutboundDesiredSlotsKey {
+impl ServerlessDesiredSlotsKey {
+	pub fn new(namespace_id: Id, runner_name: String) -> Self {
+		ServerlessDesiredSlotsKey {
 			namespace_id,
-			runner_name_selector,
+			runner_name,
 		}
 	}
 
-	pub fn subspace(namespace_id: Id) -> OutboundDesiredSlotsSubspaceKey {
-		OutboundDesiredSlotsSubspaceKey::new(namespace_id)
+	pub fn subspace(namespace_id: Id) -> ServerlessDesiredSlotsSubspaceKey {
+		ServerlessDesiredSlotsSubspaceKey::new(namespace_id)
 	}
 
-	pub fn entire_subspace() -> OutboundDesiredSlotsSubspaceKey {
-		OutboundDesiredSlotsSubspaceKey::entire()
+	pub fn entire_subspace() -> ServerlessDesiredSlotsSubspaceKey {
+		ServerlessDesiredSlotsSubspaceKey::entire()
 	}
 }
 
-impl FormalKey for OutboundDesiredSlotsKey {
+impl FormalKey for ServerlessDesiredSlotsKey {
 	/// Count.
 	type Value = u32;
 
@@ -42,7 +42,7 @@ impl FormalKey for OutboundDesiredSlotsKey {
 	}
 }
 
-impl TuplePack for OutboundDesiredSlotsKey {
+impl TuplePack for ServerlessDesiredSlotsKey {
 	fn pack<W: std::io::Write>(
 		&self,
 		w: &mut W,
@@ -50,46 +50,46 @@ impl TuplePack for OutboundDesiredSlotsKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
 			NAMESPACE,
-			OUTBOUND,
+			SERVERLESS,
 			DESIRED_SLOTS,
 			self.namespace_id,
-			&self.runner_name_selector,
+			&self.runner_name,
 		);
 		t.pack(w, tuple_depth)
 	}
 }
 
-impl<'de> TupleUnpack<'de> for OutboundDesiredSlotsKey {
+impl<'de> TupleUnpack<'de> for ServerlessDesiredSlotsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, _, namespace_id, runner_name_selector)) =
+		let (input, (_, _, _, namespace_id, runner_name)) =
 			<(usize, usize, usize, Id, String)>::unpack(input, tuple_depth)?;
 
-		let v = OutboundDesiredSlotsKey {
+		let v = ServerlessDesiredSlotsKey {
 			namespace_id,
-			runner_name_selector,
+			runner_name,
 		};
 
 		Ok((input, v))
 	}
 }
 
-pub struct OutboundDesiredSlotsSubspaceKey {
+pub struct ServerlessDesiredSlotsSubspaceKey {
 	namespace_id: Option<Id>,
 }
 
-impl OutboundDesiredSlotsSubspaceKey {
+impl ServerlessDesiredSlotsSubspaceKey {
 	pub fn new(namespace_id: Id) -> Self {
-		OutboundDesiredSlotsSubspaceKey {
+		ServerlessDesiredSlotsSubspaceKey {
 			namespace_id: Some(namespace_id),
 		}
 	}
 
 	pub fn entire() -> Self {
-		OutboundDesiredSlotsSubspaceKey { namespace_id: None }
+		ServerlessDesiredSlotsSubspaceKey { namespace_id: None }
 	}
 }
 
-impl TuplePack for OutboundDesiredSlotsSubspaceKey {
+impl TuplePack for ServerlessDesiredSlotsSubspaceKey {
 	fn pack<W: std::io::Write>(
 		&self,
 		w: &mut W,
@@ -97,7 +97,7 @@ impl TuplePack for OutboundDesiredSlotsSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = (NAMESPACE, OUTBOUND, DESIRED_SLOTS);
+		let t = (NAMESPACE, SERVERLESS, DESIRED_SLOTS);
 		offset += t.pack(w, tuple_depth)?;
 
 		if let Some(namespace_id) = self.namespace_id {

@@ -9,4 +9,5 @@ edition.workspace = true
 anyhow.workspace = true
 gas.workspace = true
 rivet-api-client.workspace = true
+rivet-types.workspace = true
 serde.workspace = true

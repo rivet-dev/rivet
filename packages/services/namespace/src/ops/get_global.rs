@@ -10,13 +10,10 @@ pub struct Input {
 #[operation]
 pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<Vec<Namespace>> {
 	if ctx.config().is_leader() {
-		let namespaces_res = ctx
-			.op(crate::ops::get_local::Input {
-				namespace_ids: input.namespace_ids.clone(),
-			})
-			.await?;
-
-		Ok(namespaces_res.namespaces)
+		ctx.op(super::get_local::Input {
+			namespace_ids: input.namespace_ids.clone(),
+		})
+		.await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		let client = rivet_pools::reqwest::client().await?;
@@ -43,7 +40,8 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 							.send()
 							.await?;
 
-						let res = rivet_api_util::parse_response::<ListResponse>(res).await?;
+						let res =
+							rivet_api_util::parse_response::<NamespaceListResponse>(res).await?;
 
 						for ns in res.namespaces {
 							let namespace_id = ns.namespace_id;
@@ -60,6 +58,6 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 
 // TODO: Cyclical dependency with api_peer
 #[derive(Deserialize)]
-struct ListResponse {
+struct NamespaceListResponse {
 	namespaces: Vec<Namespace>,
 }

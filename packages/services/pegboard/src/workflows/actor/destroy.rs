@@ -1,5 +1,4 @@
 use gas::prelude::*;
-use namespace::types::RunnerKind;
 use rivet_data::converted::ActorByKeyKeyData;
 use rivet_runner_protocol::protocol;
 use udb_util::{SERIALIZABLE, TxnExt};
@@ -86,7 +85,7 @@ async fn update_state_and_fdb(
 						state.namespace_id,
 						&state.runner_name_selector,
 						runner_id,
-						&state.ns_runner_kind,
+						state.for_serverless,
 						&tx,
 					)
 					.await?;
@@ -164,7 +163,7 @@ pub(crate) async fn clear_slot(
 	namespace_id: Id,
 	runner_name_selector: &str,
 	runner_id: Id,
-	ns_runner_kind: &RunnerKind,
+	for_serverless: bool,
 	tx: &udb::RetryableTransaction,
 ) -> Result<(), udb::FdbBindingError> {
 	let txs = tx.subspace(keys::subspace());
@@ -235,9 +234,9 @@ pub(crate) async fn clear_slot(
 		)?;
 	}
 
-	if let RunnerKind::Outbound { .. } = ns_runner_kind {
+	if for_serverless {
 		txs.atomic_op(
-			&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
+			&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 				namespace_id,
 				runner_name_selector.to_string(),
 			),

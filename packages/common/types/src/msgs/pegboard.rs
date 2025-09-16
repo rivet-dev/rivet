@@ -1,4 +1,4 @@
 use gas::prelude::*;
 
-#[message("pegboard_bump_outbound_autoscaler")]
-pub struct BumpOutboundAutoscaler {}
+#[message("pegboard_bump_serverless_autoscaler")]
+pub struct BumpServerlessAutoscaler {}

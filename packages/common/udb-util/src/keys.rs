@@ -119,7 +119,7 @@ define_keys! {
 	(91, METRIC, "metric"),
 	(92, CURRENT_BALLOT, "current_ballot"),
 	(93, INSTANCE_BALLOT, "instance_ballot"),
-	(94, OUTBOUND, "outbound"),
+	(94, SERVERLESS, "serverless"),
 	(95, DESIRED_SLOTS, "desired_slots"),
-	(96, RUNNER_KIND, "runner_kind"),
+	(96, BY_VARIANT, "by_variant"),
 }

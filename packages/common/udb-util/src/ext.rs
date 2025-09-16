@@ -44,7 +44,7 @@ impl<'a> TxnSubspace<'a> {
 	) -> Result<T, udb::FdbBindingError> {
 		self.subspace
 			.unpack(key)
-			.context("failed unpacking key")
+			.with_context(|| format!("failed unpacking key of {}", std::any::type_name::<T>()))
 			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
 	}
 
@@ -59,7 +59,7 @@ impl<'a> TxnSubspace<'a> {
 				.with_context(|| {
 					format!(
 						"failed serializing key value of {}",
-						std::any::type_name::<T>()
+						std::any::type_name::<T>(),
 					)
 				})
 				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
@@ -194,7 +194,7 @@ impl SliceExt for udb::future::FdbSlice {
 			.with_context(|| {
 				format!(
 					"failed deserializing key value of {}",
-					std::any::type_name::<T>()
+					std::any::type_name::<T>(),
 				)
 			})
 			.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
@@ -212,7 +212,7 @@ impl OptSliceExt for Option<udb::future::FdbSlice> {
 		.with_context(|| {
 			format!(
 				"failed deserializing key value of {}",
-				std::any::type_name::<T>()
+				std::any::type_name::<T>(),
 			)
 		})
 		.map_err(|x| udb::FdbBindingError::CustomError(x.into()))
@@ -228,7 +228,7 @@ impl OptSliceExt for Option<udb::future::FdbSlice> {
 				.with_context(|| {
 					format!(
 						"failed deserializing key value of {}",
-						std::any::type_name::<T>()
+						std::any::type_name::<T>(),
 					)
 				})
 				.map_err(|x| udb::FdbBindingError::CustomError(x.into()))

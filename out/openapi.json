@@ -548,12 +548,14 @@
             }
           }
         }
-      },
-      "put": {
+      }
+    },
+    "/namespaces/{namespace_id}/runner-configs": {
+      "get": {
         "tags": [
-          "namespaces"
+          "namespaces::runner_configs"
         ],
-        "operationId": "namespaces_update",
+        "operationId": "namespaces_runner_configs_list",
         "parameters": [
           {
             "name": "namespace_id",
@@ -562,13 +564,112 @@
             "schema": {
               "$ref": "#/components/schemas/RivetId"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RunnerConfigVariant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesRunnerConfigsListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/namespaces/{namespace_id}/runner-configs/{runner_name}": {
+      "get": {
+        "tags": [
+          "namespaces::runner_configs"
+        ],
+        "operationId": "namespaces_runner_configs_get",
+        "parameters": [
+          {
+            "name": "namespace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesRunnerConfigsGetResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "namespaces::runner_configs"
+        ],
+        "operationId": "namespaces_runner_configs_upsert",
+        "parameters": [
+          {
+            "name": "namespace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NamespacesUpdateRequest"
+                "$ref": "#/components/schemas/NamespacesRunnerConfigsUpsertRequest"
               }
             }
           },
@@ -580,7 +681,43 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespacesUpdateResponse"
+                  "$ref": "#/components/schemas/NamespacesRunnerConfigsUpsertResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "namespaces::runner_configs"
+        ],
+        "operationId": "namespaces_runner_configs_delete",
+        "parameters": [
+          {
+            "name": "namespace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesRunnerConfigsDeleteResponse"
                 }
               }
             }
@@ -1091,8 +1228,7 @@
           "namespace_id",
           "name",
           "display_name",
-          "create_ts",
-          "runner_kind"
+          "create_ts"
         ],
         "properties": {
           "create_ts": {
@@ -1107,9 +1243,6 @@
           },
           "namespace_id": {
             "$ref": "#/components/schemas/RivetId"
-          },
-          "runner_kind": {
-            "$ref": "#/components/schemas/NamespacesRunnerKind"
           }
         }
       },
@@ -1171,15 +1304,15 @@
         },
         "additionalProperties": false
       },
-      "NamespacesRunnerKind": {
+      "NamespacesRunnerConfig": {
         "oneOf": [
           {
             "type": "object",
             "required": [
-              "outbound"
+              "serverless"
             ],
             "properties": {
-              "outbound": {
+              "serverless": {
                 "type": "object",
                 "required": [
                   "url",
@@ -1222,42 +1355,49 @@
                 }
               }
             }
-          },
-          {
-            "type": "string",
-            "enum": [
-              "custom"
-            ]
           }
         ]
       },
-      "NamespacesUpdate": {
-        "oneOf": [
-          {
+      "NamespacesRunnerConfigsDeleteResponse": {
+        "type": "object"
+      },
+      "NamespacesRunnerConfigsGetResponse": {
+        "type": "object",
+        "required": [
+          "runner_config"
+        ],
+        "properties": {
+          "runner_config": {
+            "$ref": "#/components/schemas/NamespacesRunnerConfig"
+          }
+        }
+      },
+      "NamespacesRunnerConfigsListResponse": {
+        "type": "object",
+        "required": [
+          "runner_configs",
+          "pagination"
+        ],
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "runner_configs": {
             "type": "object",
-            "required": [
-              "update_runner_kind"
-            ],
-            "properties": {
-              "update_runner_kind": {
-                "type": "object",
-                "required": [
-                  "runner_kind"
-                ],
-                "properties": {
-                  "runner_kind": {
-                    "$ref": "#/components/schemas/NamespacesRunnerKind"
-                  }
-                }
-              }
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NamespacesRunnerConfig"
+            },
+            "propertyNames": {
+              "type": "string"
             }
           }
-        ]
+        },
+        "additionalProperties": false
       },
-      "NamespacesUpdateRequest": {
-        "$ref": "#/components/schemas/NamespacesUpdate"
+      "NamespacesRunnerConfigsUpsertRequest": {
+        "$ref": "#/components/schemas/NamespacesRunnerConfig"
       },
-      "NamespacesUpdateResponse": {
+      "NamespacesRunnerConfigsUpsertResponse": {
         "type": "object"
       },
       "Pagination": {

@@ -3,7 +3,6 @@ use std::time::Instant;
 use futures_util::StreamExt;
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
-use namespace::types::RunnerKind;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol::protocol;
 use udb_util::{FormalKey, SERIALIZABLE, SNAPSHOT, TxnExt};
@@ -103,20 +102,30 @@ async fn allocate_actor(
 	let start_instant = Instant::now();
 	let mut state = ctx.state::<State>()?;
 	let namespace_id = state.namespace_id;
-	let ns_runner_kind = &state.ns_runner_kind;
 
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
-	let res = ctx
+	let (for_serverless, res) = ctx
 		.udb()?
 		.run(|tx, _mc| async move {
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
 			let txs = tx.subspace(keys::subspace());
 
-			// Increment desired slots if namespace has an outbound runner kind
-			if let RunnerKind::Outbound { .. } = ns_runner_kind {
+			// Check if runner is an serverless runner
+			let for_serverless = txs
+				.exists(
+					&namespace::keys::RunnerConfigByVariantKey::new(
+						namespace_id,
+						namespace::keys::RunnerConfigVariant::Serverless,
+						input.runner_name_selector.clone(),
+					),
+					SERIALIZABLE,
+				)
+				.await?;
+
+			if for_serverless {
 				txs.atomic_op(
-					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
+					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 						namespace_id,
 						input.runner_name_selector.clone(),
 					),
@@ -244,10 +253,13 @@ async fn allocate_actor(
 					// Set actor as not sleeping
 					txs.delete(&keys::actor::SleepTsKey::new(input.actor_id));
 
-					return Ok(Ok(AllocateActorOutput {
-						runner_id: old_runner_alloc_key.runner_id,
-						runner_workflow_id: old_runner_alloc_key_data.workflow_id,
-					}));
+					return Ok((
+						for_serverless,
+						Ok(AllocateActorOutput {
+							runner_id: old_runner_alloc_key.runner_id,
+							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
+						}),
+					));
 				}
 			}
 
@@ -268,7 +280,7 @@ async fn allocate_actor(
 				input.generation,
 			)?;
 
-			return Ok(Err(pending_ts));
+			return Ok((for_serverless, Err(pending_ts)));
 		})
 		.custom_instrument(tracing::info_span!("actor_allocate_tx"))
 		.await?;
@@ -276,6 +288,8 @@ async fn allocate_actor(
 	let dt = start_instant.elapsed().as_secs_f64();
 	metrics::ACTOR_ALLOCATE_DURATION
 		.record(dt, &[KeyValue::new("did_reserve", res.is_ok().to_string())]);
+
+	state.for_serverless = for_serverless;
 
 	match &res {
 		Ok(res) => {
@@ -327,7 +341,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	let runner_name_selector = &state.runner_name_selector;
 	let namespace_id = state.namespace_id;
 	let runner_id = state.runner_id;
-	let ns_runner_kind = &state.ns_runner_kind;
+	let for_serverless = state.for_serverless;
 
 	ctx.udb()?
 		.run(|tx, _mc| async move {
@@ -341,13 +355,13 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 					namespace_id,
 					runner_name_selector,
 					runner_id,
-					ns_runner_kind,
+					for_serverless,
 					&tx,
 				)
 				.await?;
-			} else if let RunnerKind::Outbound { .. } = ns_runner_kind {
+			} else if for_serverless {
 				txs.atomic_op(
-					&rivet_types::keys::pegboard::ns::OutboundDesiredSlotsKey::new(
+					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 						namespace_id,
 						runner_name_selector.clone(),
 					),
@@ -391,7 +405,7 @@ pub async fn spawn_actor(
 				"failed to allocate (no availability), waiting for allocation",
 			);
 
-			ctx.msg(rivet_types::msgs::pegboard::BumpOutboundAutoscaler {})
+			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 				.send()
 				.await?;
 

@@ -1,5 +1,5 @@
 [package]
-name = "pegboard-outbound"
+name = "pegboard-serverless"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

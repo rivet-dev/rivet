@@ -16,6 +16,7 @@ rivet-error.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
 serde.workspace = true
+strum.workspace = true
 tracing.workspace = true
 udb-util.workspace = true
 universaldb.workspace = true

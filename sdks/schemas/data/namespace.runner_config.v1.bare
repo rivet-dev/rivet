@@ -1,4 +1,4 @@
-type Outbound struct {
+type Serverless struct {
 	url: str
 	request_lifespan: u32
 	slots_per_runner: u32
@@ -7,9 +7,6 @@ type Outbound struct {
 	runners_margin: u32
 }
 
-type Custom void
-
 type Data union {
-	Outbound |
-	Custom
+	Serverless
 }

@@ -7,7 +7,6 @@ use anyhow::Result;
 use gas::prelude::*;
 
 use crate::routing::pegboard_gateway::{X_RIVET_ACTOR, X_RIVET_PORT};
-use hyper::header::HeaderName;
 
 #[tracing::instrument(skip_all)]
 pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> Result<u64> {

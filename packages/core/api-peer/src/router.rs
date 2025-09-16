@@ -14,10 +14,26 @@ pub async fn router(
 			.route("/namespaces", get(namespaces::list))
 			.route("/namespaces", post(namespaces::create))
 			.route("/namespaces/{namespace_id}", get(namespaces::get))
-			.route("/namespaces/{namespace_id}", put(namespaces::update))
 			.route(
 				"/namespaces/resolve/{name}",
 				get(namespaces::resolve_for_name),
+			)
+			// MARK: Runner configs
+			.route(
+				"/namespaces/{namespace_id}/runner-configs",
+				get(namespaces::runner_configs::list),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				put(namespaces::runner_configs::upsert),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				get(namespaces::runner_configs::get),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				delete(namespaces::runner_configs::delete),
 			)
 			// MARK: Actors
 			.route("/actors", get(actors::list::list))
@@ -31,6 +47,10 @@ pub async fn router(
 			.route("/runners/names", get(runners::list_names))
 			// MARK: Internal
 			.route("/cache/purge", post(internal::cache_purge))
+			.route(
+				"/bump-serverless-autoscaler",
+				post(internal::bump_serverless_autoscaler),
+			)
 	})
 	.await
 }

@@ -22,8 +22,11 @@ use crate::{actors, datacenters, namespaces, runners, ui};
 	runners::list_names,
 	namespaces::list,
 	namespaces::get,
-	namespaces::update,
 	namespaces::create,
+	namespaces::runner_configs::list,
+	namespaces::runner_configs::get,
+	namespaces::runner_configs::upsert,
+	namespaces::runner_configs::delete,
 	datacenters::list,
 ))]
 pub struct ApiDoc;
@@ -48,8 +51,20 @@ pub async fn router(
 				axum::routing::get(namespaces::get),
 			)
 			.route(
-				"/namespaces/{namespace_id}",
-				axum::routing::put(namespaces::update),
+				"/namespaces/{namespace_id}/runner-configs",
+				axum::routing::get(namespaces::runner_configs::list),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				axum::routing::get(namespaces::runner_configs::get),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				axum::routing::put(namespaces::runner_configs::upsert),
+			)
+			.route(
+				"/namespaces/{namespace_id}/runner-configs/{runner_name}",
+				axum::routing::delete(namespaces::runner_configs::delete),
 			)
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))

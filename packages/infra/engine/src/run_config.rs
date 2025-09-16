@@ -26,9 +26,9 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			Box::pin(rivet_bootstrap::start(config, pools))
 		}),
 		Service::new(
-			"pegboard_outbound",
+			"pegboard_serverless",
 			ServiceKind::Standalone,
-			|config, pools| Box::pin(pegboard_outbound::start(config, pools)),
+			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
 		),
 	];
 
