@@ -1084,6 +1084,47 @@ export class Runner {
 		await this.#sendKvRequest(actorId, requestData);
 	}
 
+	// MARK: Alarm Operations
+	setAlarm(actorId: string, alarmTs: number | null, generation?: number) {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
+		if (this.#shutdown) {
+			console.warn("Runner is shut down, cannot set alarm");
+			return;
+		}
+
+		const alarmEvent: protocol.EventActorSetAlarm = {
+			actorId,
+			generation: actor.generation,
+			alarmTs: alarmTs !== null ? BigInt(alarmTs) : null,
+		};
+
+		const eventIndex = this.#nextEventIdx++;
+		const eventWrapper: protocol.EventWrapper = {
+			index: eventIndex,
+			inner: {
+				tag: "EventActorSetAlarm",
+				val: alarmEvent,
+			},
+		};
+
+		// Store event in history for potential resending
+		this.#eventHistory.push({
+			event: eventWrapper,
+			timestamp: Date.now(),
+		});
+
+		this.#sendToServer({
+			tag: "ToServerEvents",
+			val: [eventWrapper],
+		});
+	}
+
+	clearAlarm(actorId: string, generation?: number) {
+		this.setAlarm(actorId, null, generation);
+	}
+
 	#sendKvRequest(
 		actorId: string,
 		requestData: protocol.KvRequestData,
