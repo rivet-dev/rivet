@@ -28,26 +28,22 @@ export async function updateVersion(opts: ReleaseOpts) {
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
 		},
-		{
-			path: "sdks/api/fern/definition/api.yml",
-			find: /version:\n\s\sheader: "X-API-Version"\n\s\sdefault: ".*"\n\s\svalues: \[".*"\]/,
-			replace: `version:\n  header: "X-API-Version"\n  default: "${opts.version}"\n  values: ["${opts.version}"]`,
-		},
-		{
-			path: "site/src/content/docs/cloud/install.mdx",
-			find: /rivet-cli@.*/g,
-			replace: `rivet-cli@${opts.version}`,
-		},
-		{
-			path: "site/src/content/docs/cloud/install.mdx",
-			find: /RIVET_CLI_VERSION=.*/g,
-			replace: `RIVET_CLI_VERSION=${opts.version}`,
-		},
-		{
-			path: "site/src/content/docs/cloud/install.mdx",
-			find: /\$env:RIVET_CLI_VERSION = ".*"/g,
-			replace: `$env:RIVET_CLI_VERSION = "${opts.version}"`,
-		},
+		// TODO: Update docs with pinned version
+		// {
+		// 	path: "site/src/content/docs/cloud/install.mdx",
+		// 	find: /rivet-cli@.*/g,
+		// 	replace: `rivet-cli@${opts.version}`,
+		// },
+		// {
+		// 	path: "site/src/content/docs/cloud/install.mdx",
+		// 	find: /RIVET_CLI_VERSION=.*/g,
+		// 	replace: `RIVET_CLI_VERSION=${opts.version}`,
+		// },
+		// {
+		// 	path: "site/src/content/docs/cloud/install.mdx",
+		// 	find: /\$env:RIVET_CLI_VERSION = ".*"/g,
+		// 	replace: `$env:RIVET_CLI_VERSION = "${opts.version}"`,
+		// },
 	];
 
 	// Substitute all files
