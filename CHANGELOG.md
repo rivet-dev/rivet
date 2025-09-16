@@ -5,6 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.6.1](https://github.com/rivet-dev/engine/compare/v25.6.0...v25.6.1) (2025-09-16)
+
+
+### Features
+
+* add telemetry via sentry ([#2865](https://github.com/rivet-dev/engine/issues/2865)) ([8a60a1f](https://github.com/rivet-dev/engine/commit/8a60a1ff35a9c21a86f4ae0a9784d9c39447eab3))
+* **ns:** implement namespace updates, global cache purge ([#2883](https://github.com/rivet-dev/engine/issues/2883)) ([a7bc0bc](https://github.com/rivet-dev/engine/commit/a7bc0bce0094030808c7eeec1542e0e421e3816c))
+* **pegboard:** outbound runners ([#2873](https://github.com/rivet-dev/engine/issues/2873)) ([8a4097f](https://github.com/rivet-dev/engine/commit/8a4097f78e876c7d9be977abc24553aeb262bae6))
+* **runner:** add pino logger ([#2917](https://github.com/rivet-dev/engine/issues/2917)) ([2abab1a](https://github.com/rivet-dev/engine/commit/2abab1a6d347c37ab44edced918971373882e68f))
+
+
+### Bug Fixes
+
+* **api:** fix creating actors in other dcs ([#2914](https://github.com/rivet-dev/engine/issues/2914)) ([43dfd64](https://github.com/rivet-dev/engine/commit/43dfd6412c5b0fc0f70022b9d8efcbf3eb79e5d1))
+* **api:** fix query serialization for remote req ([#2909](https://github.com/rivet-dev/engine/issues/2909)) ([469979a](https://github.com/rivet-dev/engine/commit/469979aa3549b36e779640fddb58330c31d25b36))
+* **ci:** get binaries uploading ([#2866](https://github.com/rivet-dev/engine/issues/2866)) ([1c5dbe6](https://github.com/rivet-dev/engine/commit/1c5dbe6b5de8a996ac51ae233e795fd571ea269f))
+* configure runner config per runner name ([#2891](https://github.com/rivet-dev/engine/issues/2891)) ([a78e100](https://github.com/rivet-dev/engine/commit/a78e10030503335897781bc15226801fa1086ff6))
+* **engine/fe:** remove addresses ([#2900](https://github.com/rivet-dev/engine/issues/2900)) ([eadcfcb](https://github.com/rivet-dev/engine/commit/eadcfcb6a372543a7fd9fbe55a9824ae3343f436))
+* **epoxy:** fix Any quorum type not reaching any node ([#2910](https://github.com/rivet-dev/engine/issues/2910)) ([2e35736](https://github.com/rivet-dev/engine/commit/2e357364bfc5f2ee0aab1527c1267dd95b48b507))
+* **epoxy:** fix sending msgs to self ([#2913](https://github.com/rivet-dev/engine/issues/2913)) ([eee75ee](https://github.com/rivet-dev/engine/commit/eee75ee685f3aa69ec7dd7db79ff3fcb12e83f61))
+* **guard:** remove incorrect connectability check ([#2856](https://github.com/rivet-dev/engine/issues/2856)) ([12b2e1a](https://github.com/rivet-dev/engine/commit/12b2e1a524f65051c9985e87ebbbd54375d68723))
+* **inspector:** use proper status indicator ([#2849](https://github.com/rivet-dev/engine/issues/2849)) ([e0d3cc0](https://github.com/rivet-dev/engine/commit/e0d3cc0cb19b9fc5b986e0b0d672bd74a21ebfdb))
+* **pegboard:** fix actor names not reserving on first reservation ([#2861](https://github.com/rivet-dev/engine/issues/2861)) ([fe6d7a9](https://github.com/rivet-dev/engine/commit/fe6d7a919763d30153f975793a3df87a5a49aa36))
+* proper turbo ([#2852](https://github.com/rivet-dev/engine/issues/2852)) ([e3ba990](https://github.com/rivet-dev/engine/commit/e3ba990dff34c48082b39bc34d48fcc8ba4bf5f6))
+* **release:** fix broken version updates ([23e3171](https://github.com/rivet-dev/engine/commit/23e31719c40aa899b3413bfd3f59a2433763bdb8))
+* **release:** fix reading r2 tokens ([8d9ce9c](https://github.com/rivet-dev/engine/commit/8d9ce9c3bce9c319787f42317c05864971697fe0))
+* **release:** fix update version ([7ccbd3e](https://github.com/rivet-dev/engine/commit/7ccbd3e5a07070e5fda30419a0ba87e0415843f4))
+* **runner:** remove top level await ([#2848](https://github.com/rivet-dev/engine/issues/2848)) ([c7919fa](https://github.com/rivet-dev/engine/commit/c7919faa8da6aca61c03bb2f7707af0b78f118a8))
+* **tunnel:** fix ups race condition ([#2858](https://github.com/rivet-dev/engine/issues/2858)) ([c0b1dd2](https://github.com/rivet-dev/engine/commit/c0b1dd293f7c965ba0ccc2c0b72057aaccc8ad72))
+* **udb:** revamp udb api ([#2898](https://github.com/rivet-dev/engine/issues/2898)) ([7f0b72a](https://github.com/rivet-dev/engine/commit/7f0b72abc18acf497109dd1e1d185ef66c816ebb))
+* **universalpubsub:** fix pg driver ([#2857](https://github.com/rivet-dev/engine/issues/2857)) ([9ce6721](https://github.com/rivet-dev/engine/commit/9ce6721467975e922bd3601953ca0eb73bf70eef))
+* **ups:** fix comp errors ([#2924](https://github.com/rivet-dev/engine/issues/2924)) ([26f9766](https://github.com/rivet-dev/engine/commit/26f976615253cfa268196bc9454b40a1a9534124))
+
+
+### Documentation
+
+* update imports from @rivetkit/actor to rivetkit ([#2916](https://github.com/rivet-dev/engine/issues/2916)) ([bf38cb9](https://github.com/rivet-dev/engine/commit/bf38cb9dc5ad94b3811baabda88cd1090d442d81))
+
+
+### Continuous Integration
+
+* fix release finish step ([056b1f0](https://github.com/rivet-dev/engine/commit/056b1f0e08082174be57b2859e6f423e8f6dfc2e))
+* run pkg-pr-new on main ([1df3ef5](https://github.com/rivet-dev/engine/commit/1df3ef5f381de02ddf26539f1e5fba94e069cc53))
+
+
+### Chores
+
+* add docker build justfile ([bc302dd](https://github.com/rivet-dev/engine/commit/bc302ddc26516bc12ed08ff196a8b8c9246f6be1))
+* add justfile ([33c980a](https://github.com/rivet-dev/engine/commit/33c980a0f28e907c73c87b782b2115d32d408819))
+* changelog Rivet v2.0 ([#2870](https://github.com/rivet-dev/engine/issues/2870)) ([e03d55f](https://github.com/rivet-dev/engine/commit/e03d55f0b5e2dafa0288a806e07b4bc9712e5b53))
+* clean up api-public ([#2922](https://github.com/rivet-dev/engine/issues/2922)) ([8ce8db5](https://github.com/rivet-dev/engine/commit/8ce8db551cdc228691cd3a6263a000a600b11259))
+* cleanup, move ee changes ([#2901](https://github.com/rivet-dev/engine/issues/2901)) ([8f9d944](https://github.com/rivet-dev/engine/commit/8f9d9448e4b036aa6afef41e2646ae33febcef17))
+* **docker:** force docker platform to amd64 ([eb67d5d](https://github.com/rivet-dev/engine/commit/eb67d5de5431ca4b77070e6dd1810f81a6ec4bc0))
+* document noWelcome ([#2918](https://github.com/rivet-dev/engine/issues/2918)) ([f841bef](https://github.com/rivet-dev/engine/commit/f841befe1286003270c8a07f6ee5a703094f12a9))
+* fix api gen ([#2921](https://github.com/rivet-dev/engine/issues/2921)) ([4d3726e](https://github.com/rivet-dev/engine/commit/4d3726e67b4a91cc09418aabbb6ce1dfad5f8862))
+* fix docker tag ([02ff409](https://github.com/rivet-dev/engine/commit/02ff409af8c295dfbcf0de0d4f117d28267f4c06))
+* fix linguist-generated for sdks ([eb510d1](https://github.com/rivet-dev/engine/commit/eb510d1b1e61890a227fd5889d7784de09375c8f))
+* fix twitter handle ([42a3aa1](https://github.com/rivet-dev/engine/commit/42a3aa1b968ec868176d66f4d5b656bdfd8a7340))
+* only exclude ts & js from site ([4f489eb](https://github.com/rivet-dev/engine/commit/4f489eb41f50a03a46f8fc3c4bb219cbd7de00f1))
+* **pegboard:** consolidate to single subscriber per gateway ([#2879](https://github.com/rivet-dev/engine/issues/2879)) ([2916549](https://github.com/rivet-dev/engine/commit/291654936d1aa80f437e2511b8a47cbd6e704dd2))
+* release 25.6.1 ([5b7101b](https://github.com/rivet-dev/engine/commit/5b7101b6e92d02346737e5d47b708fa657664cdd))
+* release 25.6.1 ([4d05113](https://github.com/rivet-dev/engine/commit/4d051133d549e1ef1ada5582cc43447ea4b7b9a4))
+* release 25.6.1 ([a150d68](https://github.com/rivet-dev/engine/commit/a150d68bd751428126d8df4f9bdc87120d8cd692))
+* release 25.6.1 ([b7b4728](https://github.com/rivet-dev/engine/commit/b7b47280626ade9a95abda28e6cccea7d1de265b))
+* release 25.6.1 ([0feded6](https://github.com/rivet-dev/engine/commit/0feded6d7364d5feedc17a9817778b515f104bd8))
+* **release:** disable publishing npm packages ([4118094](https://github.com/rivet-dev/engine/commit/4118094f15c4bd2e047ac997b70a403914167923))
+* **release:** update version to 25.6.1 ([8b22a17](https://github.com/rivet-dev/engine/commit/8b22a1721d34aa2b3e46474a8489e172e07b5784))
+* **release:** update version to 25.6.1 ([5538ecc](https://github.com/rivet-dev/engine/commit/5538ecc863c50adb4ec7ee5f9acb92d9c6e8e1d5))
+* **release:** update version to 25.6.1 ([c53d228](https://github.com/rivet-dev/engine/commit/c53d2283edb47761e885ae6198b717bffecf713d))
+* **release:** update version to 25.6.1 ([f53be13](https://github.com/rivet-dev/engine/commit/f53be1363c557b913fba1a4453580b8863024b47))
+* **release:** update version to 25.6.1 ([662465f](https://github.com/rivet-dev/engine/commit/662465fa4fe673da707ad78702e7e93cbe8f7c03))
+* remove frontend from linguist count ([bb521b1](https://github.com/rivet-dev/engine/commit/bb521b11b7dff5f3f8a83e57fe61c19d982c9f7b))
+* remove port name ([#2897](https://github.com/rivet-dev/engine/issues/2897)) ([3e0b3e8](https://github.com/rivet-dev/engine/commit/3e0b3e88895affb168c4c4562438f010906888d2))
+* remove site jsx from linguist ([febe657](https://github.com/rivet-dev/engine/commit/febe657f1a8693980c271d444e54cd4d7a9e53da))
+* **runner:** add ability to disable auto-shutdown ([#2859](https://github.com/rivet-dev/engine/issues/2859)) ([76488fd](https://github.com/rivet-dev/engine/commit/76488fd099975e2807f3a61f62f82f69be7797d4))
+* **runner:** add alarms api ([#2919](https://github.com/rivet-dev/engine/issues/2919)) ([2bcaf13](https://github.com/rivet-dev/engine/commit/2bcaf137a9b6ed2184088ebc35630b64d9d5ec8a))
+* **runner:** connect tunnel before connecting pb ws ([#2872](https://github.com/rivet-dev/engine/issues/2872)) ([c86e501](https://github.com/rivet-dev/engine/commit/c86e501a995edcfd52c7b366dd0d221f31bd297d))
+* **runner:** disable default logs ([#2862](https://github.com/rivet-dev/engine/issues/2862)) ([32eb1e0](https://github.com/rivet-dev/engine/commit/32eb1e0b8bd0e1d290e4338cce0a4f46b524cc74))
+* **runner:** handle async actor stop ([#2895](https://github.com/rivet-dev/engine/issues/2895)) ([9ea99a0](https://github.com/rivet-dev/engine/commit/9ea99a0b4bf9e86f278ae71a58e5f91cc66efb15))
+* **site:** doc pino ([#2915](https://github.com/rivet-dev/engine/issues/2915)) ([0efed00](https://github.com/rivet-dev/engine/commit/0efed00a3a6a7404519eca0c1a111abd3e84fadb))
+* **site:** document self-hosting ([#2854](https://github.com/rivet-dev/engine/issues/2854)) ([f1c054d](https://github.com/rivet-dev/engine/commit/f1c054db74707f06454ea6072da81cfbdc31873d))
+* throw the site in there too why not ([750e2c2](https://github.com/rivet-dev/engine/commit/750e2c27284bb2451eb9f5e17dc96a39c287b8ab))
+* update imge ([#2907](https://github.com/rivet-dev/engine/issues/2907)) ([911fd90](https://github.com/rivet-dev/engine/commit/911fd90c7877470fc70ea3b50ae10289e1af2a93))
+* update postgres and railway logo ([#2876](https://github.com/rivet-dev/engine/issues/2876)) ([b9309a2](https://github.com/rivet-dev/engine/commit/b9309a2205515272a3d7a3f8654816b25358c385))
+* updated region list ([#2867](https://github.com/rivet-dev/engine/issues/2867)) ([91e1c25](https://github.com/rivet-dev/engine/commit/91e1c25359293eb396af54a62bbc0f5f8e84ec87))
+* **ups:** add benches ([#2878](https://github.com/rivet-dev/engine/issues/2878)) ([ca5490e](https://github.com/rivet-dev/engine/commit/ca5490ee79a8c315cf12b8658c664cbc0b16d420))
+* **ups:** add message chunking & ups protocol ([#2874](https://github.com/rivet-dev/engine/issues/2874)) ([0977209](https://github.com/rivet-dev/engine/commit/0977209400cdad8642c7f5334a05b50d8fab1e55))
+* **ups:** add postgres auto-reconnect ([#2892](https://github.com/rivet-dev/engine/issues/2892)) ([32e2e01](https://github.com/rivet-dev/engine/commit/32e2e01edeef7a60c7f7e8cce32af387af5b009c))
+* **ups:** handle edge cases with postgres listen/unlisten/notify when disconnected/reconnecting ([#2893](https://github.com/rivet-dev/engine/issues/2893)) ([506246c](https://github.com/rivet-dev/engine/commit/506246ccec74b2c57616599a5e06a56e1d774288))
+* **ups:** remove no responders ([#2863](https://github.com/rivet-dev/engine/issues/2863)) ([6b4c00b](https://github.com/rivet-dev/engine/commit/6b4c00b17641cecdb2a11b17976e0e1182b3c472))
+* **util:** increase max ident len ([#2911](https://github.com/rivet-dev/engine/issues/2911)) ([1c246b7](https://github.com/rivet-dev/engine/commit/1c246b7b8c5e6b7eb72c8c8b0ca6c2a8c1adf967))
+* website language update ([#2860](https://github.com/rivet-dev/engine/issues/2860)) ([bdccba7](https://github.com/rivet-dev/engine/commit/bdccba7065d61e792e6f5dcefe90bd1551e0dc1c))
+* weekly release september 7th ([#2903](https://github.com/rivet-dev/engine/issues/2903)) ([6c99016](https://github.com/rivet-dev/engine/commit/6c99016e1b4c1426ff99556d76c522a1770c2428))
+
 ## [25.6.0](https://github.com/rivet-gg/rivet/compare/v25.5.2...v25.6.0) (2025-09-02)
 
 
