@@ -32,8 +32,6 @@ impl fmt::Debug for ApiCtx {
 
 impl ApiCtx {
 	pub fn new(global: GlobalApiCtx, ray_id: Id, req_id: Id) -> Result<Self> {
-		// Create StandaloneCtx synchronously by using a blocking call
-		// This is necessary because we need Clone support and async Clone is not possible
 		let standalone_ctx = StandaloneCtx::new(
 			global.db.clone(),
 			global.config.clone(),

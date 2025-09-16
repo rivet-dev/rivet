@@ -16,6 +16,7 @@ rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-pools.workspace = true
 rivet-util.workspace = true
+serde_html_form.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true

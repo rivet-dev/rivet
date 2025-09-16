@@ -153,19 +153,25 @@ pub async fn health_check_new_replicas(
 		async move {
 			tracing::info!(?replica_id, "sending health check to replica");
 
+			let from_replica_id = ctx.config().epoxy_replica_id();
 			let request = protocol::Request {
-				from_replica_id: ctx.config().epoxy_replica_id(),
+				from_replica_id,
 				to_replica_id: replica_id,
 				kind: protocol::RequestKind::HealthCheckRequest,
 			};
 
-			crate::http_client::send_message_to_address(
-				replica.api_peer_url.clone(),
-				replica_id,
-				request,
-			)
-			.await
-			.with_context(|| format!("health check failed for replica {}", replica_id))?;
+			// Call directly instead of sending request for same replica
+			if from_replica_id == replica_id {
+				tracing::info!(?replica_id, "skipping health check to self");
+			} else {
+				crate::http_client::send_message_to_address(
+					replica.api_peer_url.clone(),
+					replica_id,
+					request,
+				)
+				.await
+				.with_context(|| format!("health check failed for replica {}", replica_id))?;
+			}
 
 			tracing::info!(?replica_id, "health check successful");
 			Ok(())

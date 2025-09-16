@@ -21,7 +21,6 @@ pub async fn list(ctx: ApiCtx, _path: (), _query: ()) -> Result<ListResponse> {
 			.map(|dc| Datacenter {
 				datacenter_label: dc.datacenter_label,
 				name: dc.name.clone(),
-				url: dc.guard_url.to_string(),
 			})
 			.collect(),
 		pagination: Pagination { cursor: None },

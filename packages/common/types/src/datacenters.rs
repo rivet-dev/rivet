@@ -6,5 +6,4 @@ use utoipa::ToSchema;
 pub struct Datacenter {
 	pub datacenter_label: u16,
 	pub name: String,
-	pub url: String,
 }

@@ -25,20 +25,26 @@ pub async fn request_remote_datacenter_raw(
 		.ok_or_else(|| errors::Datacenter::NotFound.build())?;
 
 	let client = rivet_pools::reqwest::client().await?;
-	let url = dc.api_peer_url.join(endpoint)?;
+	let mut url = dc.api_peer_url.join(endpoint)?;
+
+	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters
+	if let Some(q) = query {
+		url.set_query(Some(&serde_html_form::to_string(q)?));
+	}
 
 	let mut request = client.request(method, url).headers(headers);
-
-	if let Some(q) = query {
-		request = request.query(q);
-	}
 
 	if let Some(b) = body {
 		request = request.json(b);
 	}
 
-	let res = request.send().await?;
-	rivet_api_util::reqwest_to_axum_response(res).await
+	let res = request
+		.send()
+		.await
+		.context("failed sending request to remote dc")?;
+	rivet_api_util::reqwest_to_axum_response(res)
+		.await
+		.context("failed parsing response from remote dc")
 }
 
 /// Generic function to make requests to a specific datacenter
@@ -59,20 +65,26 @@ where
 		.ok_or_else(|| errors::Datacenter::NotFound.build())?;
 
 	let client = rivet_pools::reqwest::client().await?;
-	let url = dc.api_peer_url.join(endpoint)?;
+	let mut url = dc.api_peer_url.join(endpoint)?;
+
+	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters
+	if let Some(q) = query {
+		url.set_query(Some(&serde_html_form::to_string(q)?));
+	}
 
 	let mut request = client.request(method, url).headers(headers);
-
-	if let Some(q) = query {
-		request = request.query(q);
-	}
 
 	if let Some(b) = body {
 		request = request.json(b);
 	}
 
-	let res = request.send().await?;
-	rivet_api_util::parse_response::<T>(res).await
+	let res = request
+		.send()
+		.await
+		.context("failed sending request to remote dc")?;
+	rivet_api_util::parse_response::<T>(res)
+		.await
+		.context("failed parsing response from remote dc")
 }
 
 /// Generic function to fanout requests to all datacenters and aggregate results

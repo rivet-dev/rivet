@@ -54,6 +54,7 @@ impl IntoResponse for ApiError {
 			internal: if error_response.group == rivet_error::INTERNAL_ERROR.group
 				&& error_response.code == rivet_error::INTERNAL_ERROR.code
 			{
+				tracing::debug!(err=?self.0, "internal debug error");
 				Some(format!("{}", self.0).into())
 			} else {
 				None
