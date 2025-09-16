@@ -2,6 +2,7 @@ use anyhow::*;
 use epoxy_protocol::protocol;
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
+use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use universaldb::prelude::*;
@@ -14,10 +15,10 @@ use crate::types;
 // activities which can cause the learning process to enter an invalid state.
 
 pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Result<()> {
-	// Wait for coordiinator to send begin learning signal
+	// Wait for cooridinator to send begin learning signal
 	let begin_learning = ctx.listen::<super::BeginLearning>().await?;
 
-	// TODO: Parallelize replicas
+	// TODO: Paralellize replicas
 	let total_replicas = begin_learning.config.replicas.len();
 	let mut replica_index = 0;
 
@@ -182,7 +183,8 @@ pub async fn download_instances_chunk(
 	};
 
 	let response =
-		crate::http_client::send_message(&proto_config, input.from_replica_id, request).await?;
+		crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &proto_config, request)
+			.await?;
 
 	// Extract instances from response
 	let protocol::ResponseKind::DownloadInstancesResponse(download_response) = response.kind else {
@@ -751,7 +753,8 @@ pub async fn notify_active(ctx: &ActivityCtx, input: &NotifyActiveInput) -> Resu
 		),
 	};
 
-	crate::http_client::send_message(&proto_config, config.coordinator_replica_id, request).await?;
+	crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &proto_config, request)
+		.await?;
 
 	tracing::info!("notified coordinator of active status");
 	Ok(())

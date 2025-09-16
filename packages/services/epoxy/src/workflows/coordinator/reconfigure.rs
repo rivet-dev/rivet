@@ -1,6 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
+use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
 
 use crate::types;
@@ -160,18 +161,13 @@ pub async fn health_check_new_replicas(
 				kind: protocol::RequestKind::HealthCheckRequest,
 			};
 
-			// Call directly instead of sending request for same replica
-			if from_replica_id == replica_id {
-				tracing::info!(?replica_id, "skipping health check to self");
-			} else {
-				crate::http_client::send_message_to_address(
-					replica.api_peer_url.clone(),
-					replica_id,
-					request,
-				)
-				.await
-				.with_context(|| format!("health check failed for replica {}", replica_id))?;
-			}
+			crate::http_client::send_message_to_address(
+				&ApiCtx::new_from_activity(ctx)?,
+				replica.api_peer_url.clone(),
+				request,
+			)
+			.await
+			.with_context(|| format!("health check failed for replica {}", replica_id))?;
 
 			tracing::info!(?replica_id, "health check successful");
 			Ok(())
@@ -243,7 +239,8 @@ pub async fn send_begin_learning(
 				}),
 			};
 
-			crate::http_client::send_message(&config, replica_id, request).await?;
+			crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &config, request)
+				.await?;
 
 			tracing::info!(?replica_id, "begin learning sent successfully");
 			Ok(())

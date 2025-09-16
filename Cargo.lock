@@ -4122,6 +4122,7 @@ dependencies = [
  "rivet-pools",
  "rivet-util",
  "serde",
+ "serde_html_form",
  "tokio",
  "tracing",
 ]

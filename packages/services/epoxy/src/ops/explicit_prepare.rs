@@ -1,6 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
+use rivet_api_builder::ApiCtx;
 
 use crate::{http_client, replica, types, utils};
 
@@ -48,8 +49,15 @@ pub async fn epoxy_explicit_prepare(
 	let quorum_members = utils::get_quorum_members(&config);
 
 	// EPaxos Step 26: Send Prepare to all replicas and wait for quorum
-	let prepare_responses =
-		send_prepares(&config, replica_id, &quorum_members, &new_ballot, instance).await?;
+	let prepare_responses = send_prepares(
+		ctx,
+		&config,
+		replica_id,
+		&quorum_members,
+		&new_ballot,
+		instance,
+	)
+	.await?;
 
 	// Check if we got enough responses for a quorum
 	let required_quorum = utils::calculate_quorum(quorum_members.len(), utils::QuorumType::Slow);
@@ -241,6 +249,7 @@ fn compare_ballots(a: &protocol::Ballot, b: &protocol::Ballot) -> std::cmp::Orde
 }
 
 async fn send_prepares(
+	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
 	replica_ids: &[ReplicaId],
@@ -257,8 +266,8 @@ async fn send_prepares(
 			let instance = instance.clone();
 			async move {
 				let response = http_client::send_message(
+					&ApiCtx::new_from_operation(&ctx)?,
 					&config,
-					to_replica_id,
 					protocol::Request {
 						from_replica_id,
 						to_replica_id,

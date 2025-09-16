@@ -5,6 +5,7 @@ use epoxy_protocol::{
 	versioned,
 };
 use futures_util::{StreamExt, stream::FuturesUnordered};
+use rivet_api_builder::ApiCtx;
 use std::future::Future;
 use versioned_data_util::OwnedVersionedData;
 
@@ -56,7 +57,7 @@ where
 	.await;
 	tracing::info!(?quorum_size, len = ?responses.len(), ?quorum_type, "fanout quorum size");
 
-	// Choow how many successful responses we need before considering a success
+	// Choose how many successful responses we need before considering a success
 	let target_responses = match quorum_type {
 		// Only require 1 response
 		utils::QuorumType::Any => 1,
@@ -93,19 +94,32 @@ where
 }
 
 pub async fn send_message(
+	ctx: &ApiCtx,
 	config: &protocol::ClusterConfig,
-	to_replica_id: ReplicaId,
 	request: protocol::Request,
 ) -> Result<protocol::Response> {
-	let replica_url = find_replica_address(config, to_replica_id)?;
-	send_message_to_address(replica_url, to_replica_id, request).await
+	let replica_url = find_replica_address(config, request.to_replica_id)?;
+	send_message_to_address(ctx, replica_url, request).await
 }
 
 pub async fn send_message_to_address(
+	ctx: &ApiCtx,
 	replica_url: String,
-	to_replica_id: ReplicaId,
 	request: protocol::Request,
 ) -> Result<protocol::Response> {
+	let from_replica_id = request.from_replica_id;
+	let to_replica_id = request.to_replica_id;
+
+	if from_replica_id == to_replica_id {
+		tracing::info!(
+			to_replica = to_replica_id,
+			"sending message to replica directly"
+		);
+
+		return crate::replica::message_request::message_request(&ctx, from_replica_id, request)
+			.await;
+	}
+
 	let mut replica_url = url::Url::parse(&replica_url)?;
 	replica_url.set_path(&format!("/v{PROTOCOL_VERSION}/epoxy/message"));
 

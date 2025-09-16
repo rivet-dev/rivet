@@ -49,6 +49,26 @@ impl ApiCtx {
 		})
 	}
 
+	pub fn new_from_activity(ctx: &ActivityCtx) -> Result<Self> {
+		let req_id = Id::new_v1(ctx.config().dc_label());
+
+		Ok(Self {
+			ray_id: ctx.ray_id(),
+			req_id,
+			standalone_ctx: StandaloneCtx::new_from_activity(ctx, req_id)?,
+		})
+	}
+
+	pub fn new_from_operation(ctx: &OperationCtx) -> Result<Self> {
+		let req_id = Id::new_v1(ctx.config().dc_label());
+
+		Ok(Self {
+			ray_id: ctx.ray_id(),
+			req_id,
+			standalone_ctx: StandaloneCtx::new_from_operation(ctx, req_id)?,
+		})
+	}
+
 	pub fn ray_id(&self) -> Id {
 		self.ray_id
 	}

@@ -123,7 +123,6 @@ pub async fn message_request(
 			})
 			.to_workflow::<crate::workflows::replica::Workflow>()
 			.tag("replica", replica_id)
-			.to_workflow::<crate::workflows::replica::Workflow>()
 			.send()
 			.await?;
 

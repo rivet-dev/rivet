@@ -7,7 +7,7 @@ use tracing::Instrument;
 
 use crate::{
 	builder::{WorkflowRepr, common as builder},
-	ctx::{MessageCtx, common, message::SubscriptionHandle},
+	ctx::{ActivityCtx, MessageCtx, OperationCtx, common, message::SubscriptionHandle},
 	db::{DatabaseHandle, WorkflowData},
 	error::WorkflowResult,
 	message::Message,
@@ -21,7 +21,7 @@ use crate::{
 pub struct StandaloneCtx {
 	ray_id: Id,
 	req_id: Id,
-	name: &'static str,
+	name: String,
 	ts: i64,
 
 	db: DatabaseHandle,
@@ -39,7 +39,7 @@ impl StandaloneCtx {
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 		cache: rivet_cache::Cache,
-		name: &'static str,
+		name: &str,
 		ray_id: Id,
 		req_id: Id,
 	) -> WorkflowResult<Self> {
@@ -54,7 +54,7 @@ impl StandaloneCtx {
 		Ok(StandaloneCtx {
 			ray_id,
 			req_id,
-			name,
+			name: name.to_string(),
 			ts,
 			db,
 			config,
@@ -62,6 +62,32 @@ impl StandaloneCtx {
 			cache,
 			msg_ctx,
 		})
+	}
+
+	#[tracing::instrument(skip_all)]
+	pub fn new_from_activity(ctx: &ActivityCtx, req_id: Id) -> WorkflowResult<Self> {
+		StandaloneCtx::new(
+			ctx.db().clone(),
+			ctx.config().clone(),
+			ctx.pools().clone(),
+			ctx.cache().clone(),
+			ctx.name(),
+			ctx.ray_id(),
+			req_id,
+		)
+	}
+
+	#[tracing::instrument(skip_all)]
+	pub fn new_from_operation(ctx: &OperationCtx, req_id: Id) -> WorkflowResult<Self> {
+		StandaloneCtx::new(
+			ctx.db().clone(),
+			ctx.config().clone(),
+			ctx.pools().clone(),
+			ctx.cache().clone(),
+			ctx.name(),
+			ctx.ray_id(),
+			req_id,
+		)
 	}
 }
 
@@ -154,12 +180,8 @@ impl StandaloneCtx {
 
 impl StandaloneCtx {
 	pub fn name(&self) -> &str {
-		self.name
+		&self.name
 	}
-
-	// pub fn timeout(&self) -> Duration {
-	// 	self.timeout
-	// }
 
 	pub fn ray_id(&self) -> Id {
 		self.ray_id

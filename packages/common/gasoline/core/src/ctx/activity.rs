@@ -144,6 +144,10 @@ impl ActivityCtx {
 }
 
 impl ActivityCtx {
+	pub(crate) fn db(&self) -> &DatabaseHandle {
+		&self.db
+	}
+
 	pub fn name(&self) -> &str {
 		self.name
 	}

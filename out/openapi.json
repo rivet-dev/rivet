@@ -1185,8 +1185,7 @@
         "type": "object",
         "required": [
           "datacenter_label",
-          "name",
-          "url"
+          "name"
         ],
         "properties": {
           "datacenter_label": {
@@ -1195,9 +1194,6 @@
             "minimum": 0
           },
           "name": {
-            "type": "string"
-          },
-          "url": {
             "type": "string"
           }
         },

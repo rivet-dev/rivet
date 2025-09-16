@@ -1,6 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol;
 use gas::prelude::*;
+use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
 
 use super::State;
@@ -126,7 +127,7 @@ pub async fn notify_all_replicas(
 				}),
 			};
 
-			crate::http_client::send_message(&config, replica_id, request)
+			crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &config, request)
 				.await
 				.with_context(|| format!("failed to update config for replica {}", replica_id))?;
 

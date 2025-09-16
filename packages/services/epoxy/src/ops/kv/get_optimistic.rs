@@ -1,6 +1,7 @@
 use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
+use rivet_api_builder::ApiCtx;
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{http_client, keys, utils};
@@ -35,7 +36,7 @@ pub struct Output {
 ///
 /// We cannot use quorum reads for the fanout read because of the constraints of Epaxos.
 #[operation]
-pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+pub async fn epoxy_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	// Try to read locally
 	let kv_key = keys::keys::KvValueKey::new(input.key.clone());
 	let cache_key = keys::keys::KvOptimisticCacheKey::new(input.key.clone());
@@ -113,7 +114,9 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 				};
 
 				// Send the message and extract the KV response
-				let response = http_client::send_message(&config, replica_id, request).await?;
+				let response =
+					http_client::send_message(&ApiCtx::new_from_operation(&ctx)?, &config, request)
+						.await?;
 
 				match response.kind {
 					protocol::ResponseKind::KvGetResponse(kv_response) => Ok(kv_response.value),

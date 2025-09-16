@@ -1,3 +1,13 @@
+use std::result::Result::Ok as ResultOk;
+use std::{
+	collections::HashMap,
+	sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
+
 use anyhow::*;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -108,9 +118,9 @@ impl PegboardGateway {
 		let actor_id = req
 			.headers()
 			.get("x-rivet-actor")
-			.ok_or_else(|| anyhow!("missing x-rivet-actor header"))?
+			.context("missing x-rivet-actor header")?
 			.to_str()
-			.map_err(|_| anyhow!("invalid x-rivet-actor header"))?
+			.context("invalid x-rivet-actor header")?
 			.to_string();
 
 		// Extract request parts
@@ -132,7 +142,7 @@ impl PegboardGateway {
 			.into_body()
 			.collect()
 			.await
-			.map_err(|e| anyhow!("failed to read body: {}", e))?
+			.context("failed to read body")?
 			.to_bytes();
 
 		// Build subject to publish to
@@ -212,11 +222,9 @@ impl PegboardGateway {
 		// Extract actor ID for the message
 		let actor_id = match headers
 			.get("x-rivet-actor")
-			.ok_or_else(|| anyhow!("missing x-rivet-actor header"))
-			.and_then(|v| {
-				v.to_str()
-					.map_err(|_| anyhow!("invalid x-rivet-actor header"))
-			}) {
+			.context("missing x-rivet-actor header")
+			.and_then(|v| v.to_str().context("invalid x-rivet-actor header"))
+		{
 			Result::Ok(v) => v.to_string(),
 			Err(err) => return Err((client_ws, err)),
 		};

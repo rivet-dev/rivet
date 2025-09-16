@@ -49,7 +49,8 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 	let quorum_members = utils::get_quorum_members(&config);
 
 	// EPaxos Step 5
-	let pre_accept_oks = send_pre_accepts(&config, replica_id, &quorum_members, &payload).await?;
+	let pre_accept_oks =
+		send_pre_accepts(ctx, &config, replica_id, &quorum_members, &payload).await?;
 
 	// Decide path
 	let path = ctx
@@ -90,7 +91,14 @@ pub async fn run_paxos_accept(
 		.await?;
 
 	// EPaxos Step 17
-	let quorum = send_accepts(&config, replica_id, &quorum_members, &payload_for_accepts).await?;
+	let quorum = send_accepts(
+		ctx,
+		&config,
+		replica_id,
+		&quorum_members,
+		&payload_for_accepts,
+	)
+	.await?;
 
 	// EPaxos Step 20
 	if quorum >= utils::calculate_quorum(quorum_members.len(), utils::QuorumType::Slow) {
@@ -137,12 +145,14 @@ pub async fn commit(
 	// Send commits to all replicas (not just quorum members)
 	let all_replicas = utils::get_all_replicas(config);
 	tokio::spawn({
+		let ctx = ctx.clone();
 		let config = config.clone();
 		let replica_id = replica_id;
 		let all_replicas = all_replicas.to_vec();
 		let payload = payload.clone();
+
 		async move {
-			let _ = send_commits(&config, replica_id, &all_replicas, &payload).await;
+			let _ = send_commits(&ctx, &config, replica_id, &all_replicas, &payload).await;
 		}
 	});
 
@@ -154,6 +164,7 @@ pub async fn commit(
 }
 
 async fn send_pre_accepts(
+	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
 	replica_ids: &[ReplicaId],
@@ -168,8 +179,8 @@ async fn send_pre_accepts(
 			let payload = payload.clone();
 			async move {
 				let response = http_client::send_message(
+					&ApiCtx::new_from_operation(&ctx)?,
 					&config,
-					to_replica_id,
 					protocol::Request {
 						from_replica_id,
 						to_replica_id,
@@ -197,6 +208,7 @@ async fn send_pre_accepts(
 }
 
 async fn send_accepts(
+	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
 	replica_ids: &[ReplicaId],
@@ -211,8 +223,8 @@ async fn send_accepts(
 			let payload = payload.clone();
 			async move {
 				let response = http_client::send_message(
+					&ApiCtx::new_from_operation(&ctx)?,
 					&config,
-					to_replica_id,
 					protocol::Request {
 						from_replica_id,
 						to_replica_id,
@@ -241,6 +253,7 @@ async fn send_accepts(
 }
 
 async fn send_commits(
+	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	from_replica_id: ReplicaId,
 	replica_ids: &[ReplicaId],
@@ -255,8 +268,8 @@ async fn send_commits(
 			let payload = payload.clone();
 			async move {
 				let response = http_client::send_message(
+					&ApiCtx::new_from_operation(&ctx)?,
 					&config,
-					to_replica_id,
 					protocol::Request {
 						from_replica_id,
 						to_replica_id,

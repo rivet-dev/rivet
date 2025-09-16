@@ -152,6 +152,10 @@ impl OperationCtx {
 }
 
 impl OperationCtx {
+	pub(crate) fn db(&self) -> &DatabaseHandle {
+		&self.db
+	}
+
 	pub fn name(&self) -> &str {
 		self.name
 	}
