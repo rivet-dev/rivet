@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 	description:
 		"Rivet is a library for long-lived processes with durable state, realtime, and scalability. Easily self-hostable and works with your infrastructure.",
 	twitter: {
-		site: "@rivetgg",
+		site: "@rivet_dev",
 		card: "summary_large_image",
 	},
 	openGraph: {
