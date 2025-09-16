@@ -2,7 +2,7 @@ use anyhow::*;
 use epoxy_protocol::protocol::{self, ReplicaId};
 use universaldb::Transaction;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum QuorumType {
 	Fast,
 	Slow,

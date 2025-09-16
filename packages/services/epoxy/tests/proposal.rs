@@ -4,7 +4,6 @@ use common::THREE_REPLICAS;
 use epoxy::ops::propose::ProposalResult;
 use epoxy_protocol::protocol;
 use gas::prelude::*;
-use rivet_acl::{Verifier, config::AclConfig};
 use rivet_api_builder::{ApiCtx, GlobalApiCtx};
 use rivet_util::Id;
 

@@ -54,12 +54,21 @@ where
 	)
 	.collect::<FuturesUnordered<_>>()
 	.await;
+	tracing::info!(?quorum_size, len = ?responses.len(), ?quorum_type, "fanout quorum size");
+
+	// Choow how many successful responses we need before considering a success
+	let target_responses = match quorum_type {
+		// Only require 1 response
+		utils::QuorumType::Any => 1,
+		// Include all responses
+		utils::QuorumType::All => responses.len(),
+		// Subtract 1 from quorum size since we're not counting ourselves
+		utils::QuorumType::Fast | utils::QuorumType::Slow => quorum_size - 1,
+	};
 
 	// Collect responses until we reach quorum or all futures complete
-	//
-	// Subtract 1 from quorum size since we're not counting ourselves
 	let mut successful_responses = Vec::new();
-	while successful_responses.len() < quorum_size - 1 {
+	while successful_responses.len() < target_responses {
 		if let Some(response) = responses.next().await {
 			match response {
 				std::result::Result::Ok(result) => match result {
