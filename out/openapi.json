@@ -1011,7 +1011,8 @@
           "actor": {
             "$ref": "#/components/schemas/Actor"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ActorsDeleteResponse": {
         "type": "object"

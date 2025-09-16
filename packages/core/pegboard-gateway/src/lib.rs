@@ -26,7 +26,6 @@ use rivet_tunnel_protocol::{
 	ToServerWebSocketOpen,
 };
 use rivet_util::serde::HashableMap;
-use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::shared_state::{SharedState, TunnelMessageData};

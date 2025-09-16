@@ -13,7 +13,6 @@ pub struct CreateQuery {
 #[serde(deny_unknown_fields)]
 #[schema(as = ActorsCreateRequest)]
 pub struct CreateRequest {
-	pub actor_id: Id,
 	pub name: String,
 	pub key: Option<String>,
 	pub input: Option<String>,

@@ -133,9 +133,6 @@ async fn forward_to_datacenter(
 		.next()
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	// Generate a new actor ID with the correct datacenter label
-	let actor_id = Id::new_v1(datacenter_label);
-
 	// Make request to remote datacenter
 	let response = request_remote_datacenter::<rivet_api_types::actors::create::CreateResponse>(
 		ctx.config(),
@@ -147,7 +144,6 @@ async fn forward_to_datacenter(
 			namespace: namespace.name.clone(),
 		}),
 		Some(&rivet_api_types::actors::create::CreateRequest {
-			actor_id,
 			name,
 			key,
 			input,

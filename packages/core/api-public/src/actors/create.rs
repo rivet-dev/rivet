@@ -1,33 +1,22 @@
 use anyhow::Result;
-use rivet_api_builder::ApiCtx;
+use axum::{
+	extract::{Extension, Query},
+	http::HeaderMap,
+	response::{IntoResponse, Json, Response},
+};
+use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_client::request_remote_datacenter;
+use rivet_api_types::actors::create::{CreateRequest, CreateResponse};
 use rivet_types::actors::CrashPolicy;
-use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct CreateQuery {
 	pub namespace: String,
 	pub datacenter: Option<String>,
-}
-
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = ActorsCreateRequest)]
-pub struct CreateRequest {
-	pub name: String,
-	pub key: Option<String>,
-	pub input: Option<String>,
-	pub runner_name_selector: String,
-	pub crash_policy: CrashPolicy,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsCreateResponse)]
-pub struct CreateResponse {
-	pub actor: rivet_types::actors::Actor,
 }
 
 /// ## Datacenter Round Trips
@@ -57,18 +46,23 @@ pub struct CreateResponse {
     ),
 )]
 pub async fn create(
+	Extension(ctx): Extension<ApiCtx>,
+	headers: HeaderMap,
+	Query(query): Query<CreateQuery>,
+	Json(body): Json<CreateRequest>,
+) -> Response {
+	match create_inner(ctx, headers, query, body).await {
+		Ok(response) => Json(response).into_response(),
+		Err(err) => ApiError::from(err).into_response(),
+	}
+}
+
+async fn create_inner(
 	ctx: ApiCtx,
-	_path: (),
+	headers: HeaderMap,
 	query: CreateQuery,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace.clone(),
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
 	// Determine which datacenter to create the actor in
 	let target_dc_label = if let Some(dc_name) = &query.datacenter {
 		ctx.config()
@@ -79,26 +73,22 @@ pub async fn create(
 		ctx.config().dc_label()
 	};
 
-	let actor_id = Id::new_v1(target_dc_label);
+	let query = rivet_api_types::actors::create::CreateQuery {
+		namespace: query.namespace,
+	};
 
-	let key: Option<String> = body.key;
-
-	let res = ctx
-		.op(pegboard::ops::actor::create::Input {
-			actor_id,
-			namespace_id: namespace.namespace_id,
-			name: body.name.clone(),
-			key,
-			runner_name_selector: body.runner_name_selector,
-			input: body.input.clone(),
-			crash_policy: body.crash_policy,
-			// Forward requests to the correct api-peer datacenter
-			forward_request: true,
-			datacenter_name: query.datacenter.clone(),
-		})
-		.await?;
-
-	let actor = res.actor;
-
-	Ok(CreateResponse { actor })
+	if target_dc_label == ctx.config().dc_label() {
+		rivet_api_peer::actors::create::create(ctx, (), query, body).await
+	} else {
+		request_remote_datacenter::<CreateResponse>(
+			ctx.config(),
+			target_dc_label,
+			"/actors",
+			axum::http::Method::POST,
+			headers,
+			Some(&query),
+			Some(&body),
+		)
+		.await
+	}
 }

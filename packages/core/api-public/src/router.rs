@@ -68,7 +68,7 @@ pub async fn router(
 			)
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))
-			.route("/actors", post(actors::create::create))
+			.route("/actors", axum::routing::post(actors::create::create))
 			.route(
 				"/actors",
 				axum::routing::put(actors::get_or_create::get_or_create),

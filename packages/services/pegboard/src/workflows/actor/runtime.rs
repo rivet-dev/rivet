@@ -106,10 +106,10 @@ async fn allocate_actor(
 		.udb()?
 		.run(|tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
-			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if runner is an serverless runner
 			let for_serverless = tx
+				.with_subspace(namespace::keys::subspace())
 				.exists(
 					&namespace::keys::RunnerConfigByVariantKey::new(
 						namespace_id,
@@ -119,6 +119,8 @@ async fn allocate_actor(
 					Serializable,
 				)
 				.await?;
+
+			let tx = tx.with_subspace(keys::subspace());
 
 			if for_serverless {
 				tx.atomic_op(

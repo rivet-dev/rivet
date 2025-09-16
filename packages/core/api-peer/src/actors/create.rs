@@ -1,4 +1,5 @@
 use anyhow::Result;
+use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::actors::create::{CreateQuery, CreateRequest, CreateResponse};
 
@@ -15,27 +16,24 @@ pub async fn create(
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
+	let actor_id = Id::new_v1(ctx.config().dc_label());
+
 	let res = ctx
 		.op(pegboard::ops::actor::create::Input {
-			actor_id: body.actor_id,
+			actor_id,
 			namespace_id: namespace.namespace_id,
 			name: body.name.clone(),
-			key: body.key.clone(),
-			runner_name_selector: body.runner_name_selector.clone(),
+			key: body.key,
+			runner_name_selector: body.runner_name_selector,
 			input: body.input.clone(),
 			crash_policy: body.crash_policy,
-			// Don't forward request since this request should be already forwarded if it is going
-			// to be forward.
-			//
-			// This should never throw a request needs to be forwarded error. If it does, something
-			// is broken.
-			forward_request: false,
+			// NOTE: This can forward if the user attempts to create an actor with a target dc and this dc
+			// ends up forwarding to another.
+			forward_request: true,
 			// api-peer is always creating in its own datacenter
 			datacenter_name: None,
 		})
 		.await?;
 
-	let actor = res.actor;
-
-	Ok(CreateResponse { actor })
+	Ok(CreateResponse { actor: res.actor })
 }
