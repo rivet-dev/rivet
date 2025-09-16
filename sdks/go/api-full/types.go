@@ -375,7 +375,6 @@ func (c CrashPolicy) Ptr() *CrashPolicy {
 type Datacenter struct {
 	DatacenterLabel int    `json:"datacenter_label"`
 	Name            string `json:"name"`
-	Url             string `json:"url"`
 
 	_rawJSON json.RawMessage
 }
@@ -553,6 +552,137 @@ func (n *NamespacesListResponse) String() string {
 	return fmt.Sprintf("%#v", n)
 }
 
+type NamespacesRunnerConfig struct {
+	Serverless *NamespacesRunnerConfigServerless `json:"serverless,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (n *NamespacesRunnerConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler NamespacesRunnerConfig
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*n = NamespacesRunnerConfig(value)
+	n._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (n *NamespacesRunnerConfig) String() string {
+	if len(n._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(n); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", n)
+}
+
+type NamespacesRunnerConfigServerless struct {
+	MaxRunners int `json:"max_runners"`
+	MinRunners int `json:"min_runners"`
+	// Seconds.
+	RequestLifespan int    `json:"request_lifespan"`
+	RunnersMargin   int    `json:"runners_margin"`
+	SlotsPerRunner  int    `json:"slots_per_runner"`
+	Url             string `json:"url"`
+
+	_rawJSON json.RawMessage
+}
+
+func (n *NamespacesRunnerConfigServerless) UnmarshalJSON(data []byte) error {
+	type unmarshaler NamespacesRunnerConfigServerless
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*n = NamespacesRunnerConfigServerless(value)
+	n._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (n *NamespacesRunnerConfigServerless) String() string {
+	if len(n._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(n); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", n)
+}
+
+type NamespacesRunnerConfigVariant = string
+
+type NamespacesRunnerConfigsDeleteResponse = map[string]interface{}
+
+type NamespacesRunnerConfigsGetResponse struct {
+	RunnerConfig *NamespacesRunnerConfig `json:"runner_config,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (n *NamespacesRunnerConfigsGetResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler NamespacesRunnerConfigsGetResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*n = NamespacesRunnerConfigsGetResponse(value)
+	n._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (n *NamespacesRunnerConfigsGetResponse) String() string {
+	if len(n._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(n); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", n)
+}
+
+type NamespacesRunnerConfigsListResponse struct {
+	Pagination    *Pagination                        `json:"pagination,omitempty"`
+	RunnerConfigs map[string]*NamespacesRunnerConfig `json:"runner_configs,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (n *NamespacesRunnerConfigsListResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler NamespacesRunnerConfigsListResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*n = NamespacesRunnerConfigsListResponse(value)
+	n._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (n *NamespacesRunnerConfigsListResponse) String() string {
+	if len(n._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(n); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", n)
+}
+
+type NamespacesRunnerConfigsUpsertRequest = *NamespacesRunnerConfig
+
+type NamespacesRunnerConfigsUpsertResponse = map[string]interface{}
+
 type Pagination struct {
 	Cursor *string `json:"cursor,omitempty"`
 
@@ -585,24 +715,21 @@ func (p *Pagination) String() string {
 type RivetId = string
 
 type Runner struct {
-	AddressesHttp   StringHttpAddressHashableMap `json:"addresses_http,omitempty"`
-	AddressesTcp    StringTcpAddressHashableMap  `json:"addresses_tcp,omitempty"`
-	AddressesUdp    StringUdpAddressHashableMap  `json:"addresses_udp,omitempty"`
-	CreateTs        int64                        `json:"create_ts"`
-	Datacenter      string                       `json:"datacenter"`
-	DrainTs         *int64                       `json:"drain_ts,omitempty"`
-	Key             string                       `json:"key"`
-	LastConnectedTs *int64                       `json:"last_connected_ts,omitempty"`
-	LastPingTs      int64                        `json:"last_ping_ts"`
-	LastRtt         int                          `json:"last_rtt"`
-	Metadata        map[string]interface{}       `json:"metadata,omitempty"`
-	Name            string                       `json:"name"`
-	NamespaceId     RivetId                      `json:"namespace_id"`
-	RemainingSlots  int                          `json:"remaining_slots"`
-	RunnerId        RivetId                      `json:"runner_id"`
-	StopTs          *int64                       `json:"stop_ts,omitempty"`
-	TotalSlots      int                          `json:"total_slots"`
-	Version         int                          `json:"version"`
+	CreateTs        int64                  `json:"create_ts"`
+	Datacenter      string                 `json:"datacenter"`
+	DrainTs         *int64                 `json:"drain_ts,omitempty"`
+	Key             string                 `json:"key"`
+	LastConnectedTs *int64                 `json:"last_connected_ts,omitempty"`
+	LastPingTs      int64                  `json:"last_ping_ts"`
+	LastRtt         int                    `json:"last_rtt"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Name            string                 `json:"name"`
+	NamespaceId     RivetId                `json:"namespace_id"`
+	RemainingSlots  int                    `json:"remaining_slots"`
+	RunnerId        RivetId                `json:"runner_id"`
+	StopTs          *int64                 `json:"stop_ts,omitempty"`
+	TotalSlots      int                    `json:"total_slots"`
+	Version         int                    `json:"version"`
 
 	_rawJSON json.RawMessage
 }
@@ -717,100 +844,4 @@ func (r *RunnersListResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", r)
-}
-
-type StringHttpAddressHashableMap = map[string]*StringHttpAddressHashableMapValue
-
-type StringHttpAddressHashableMapValue struct {
-	Hostname string `json:"hostname"`
-	Port     int    `json:"port"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *StringHttpAddressHashableMapValue) UnmarshalJSON(data []byte) error {
-	type unmarshaler StringHttpAddressHashableMapValue
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = StringHttpAddressHashableMapValue(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *StringHttpAddressHashableMapValue) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
-}
-
-type StringTcpAddressHashableMap = map[string]*StringTcpAddressHashableMapValue
-
-type StringTcpAddressHashableMapValue struct {
-	Hostname string `json:"hostname"`
-	Port     int    `json:"port"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *StringTcpAddressHashableMapValue) UnmarshalJSON(data []byte) error {
-	type unmarshaler StringTcpAddressHashableMapValue
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = StringTcpAddressHashableMapValue(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *StringTcpAddressHashableMapValue) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
-}
-
-type StringUdpAddressHashableMap = map[string]*StringUdpAddressHashableMapValue
-
-type StringUdpAddressHashableMapValue struct {
-	Hostname string `json:"hostname"`
-	Port     int    `json:"port"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *StringUdpAddressHashableMapValue) UnmarshalJSON(data []byte) error {
-	type unmarshaler StringUdpAddressHashableMapValue
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = StringUdpAddressHashableMapValue(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *StringUdpAddressHashableMapValue) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
 }

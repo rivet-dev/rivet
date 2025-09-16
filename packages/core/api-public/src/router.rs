@@ -29,6 +29,7 @@ use crate::{actors, datacenters, namespaces, runners, ui};
 	namespaces::runner_configs::delete,
 	datacenters::list,
 ))]
+#[openapi(components(schemas(namespace::keys::RunnerConfigVariant)))]
 pub struct ApiDoc;
 
 pub async fn router(

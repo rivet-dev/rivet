@@ -5,9 +5,6 @@
 import * as Rivet from "../index";
 
 export interface Runner {
-    addressesHttp: Rivet.StringHttpAddressHashableMap;
-    addressesTcp: Rivet.StringTcpAddressHashableMap;
-    addressesUdp: Rivet.StringUdpAddressHashableMap;
     createTs: number;
     datacenter: string;
     drainTs?: number;

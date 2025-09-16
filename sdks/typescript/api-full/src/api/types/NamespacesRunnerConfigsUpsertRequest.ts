@@ -4,4 +4,4 @@
 
 import * as Rivet from "../index";
 
-export type StringHttpAddressHashableMap = Record<string, Rivet.StringHttpAddressHashableMapValue>;
+export type NamespacesRunnerConfigsUpsertRequest = Rivet.NamespacesRunnerConfig;

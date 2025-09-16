@@ -9,7 +9,7 @@ use rivet_api_client::request_remote_datacenter;
 use rivet_api_types::actors::create::{CreateRequest, CreateResponse};
 use rivet_types::actors::CrashPolicy;
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use utoipa::IntoParams;
 
 #[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]

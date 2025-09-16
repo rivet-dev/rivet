@@ -4,4 +4,6 @@
 
 import * as Rivet from "../index";
 
-export type StringUdpAddressHashableMap = Record<string, Rivet.StringUdpAddressHashableMapValue>;
+export interface NamespacesRunnerConfigsGetResponse {
+    runnerConfig: Rivet.NamespacesRunnerConfig;
+}

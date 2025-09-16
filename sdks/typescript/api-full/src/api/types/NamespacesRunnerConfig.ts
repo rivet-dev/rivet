@@ -4,4 +4,6 @@
 
 import * as Rivet from "../index";
 
-export type StringTcpAddressHashableMap = Record<string, Rivet.StringTcpAddressHashableMapValue>;
+export interface NamespacesRunnerConfig {
+    serverless: Rivet.NamespacesRunnerConfigServerless;
+}

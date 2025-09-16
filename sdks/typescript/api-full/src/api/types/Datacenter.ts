@@ -5,5 +5,4 @@
 export interface Datacenter {
     datacenterLabel: number;
     name: string;
-    url: string;
 }

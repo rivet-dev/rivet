@@ -4,9 +4,6 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**addresses_http** | [**std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>**](StringHttpAddressHashableMap_value.md) |  | 
-**addresses_tcp** | [**std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>**](StringHttpAddressHashableMap_value.md) |  | 
-**addresses_udp** | [**std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>**](StringHttpAddressHashableMap_value.md) |  | 
 **create_ts** | **i64** |  | 
 **datacenter** | **String** |  | 
 **drain_ts** | Option<**i64**> |  | [optional]

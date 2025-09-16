@@ -8,7 +8,8 @@ type NamespacesCreateRequest struct {
 }
 
 type NamespacesListRequest struct {
-	Limit  *int    `json:"-"`
-	Cursor *string `json:"-"`
-	Name   *string `json:"-"`
+	Limit       *int       `json:"-"`
+	Cursor      *string    `json:"-"`
+	Name        *string    `json:"-"`
+	NamespaceId []*RivetId `json:"-"`
 }

@@ -38,6 +38,10 @@ Class | Method | HTTP request | Description
 *NamespacesApi* | [**namespaces_create**](docs/NamespacesApi.md#namespaces_create) | **POST** /namespaces | 
 *NamespacesApi* | [**namespaces_get**](docs/NamespacesApi.md#namespaces_get) | **GET** /namespaces/{namespace_id} | 
 *NamespacesApi* | [**namespaces_list**](docs/NamespacesApi.md#namespaces_list) | **GET** /namespaces | 
+*NamespacesRunnerConfigsApi* | [**namespaces_runner_configs_delete**](docs/NamespacesRunnerConfigsApi.md#namespaces_runner_configs_delete) | **DELETE** /namespaces/{namespace_id}/runner-configs/{runner_name} | 
+*NamespacesRunnerConfigsApi* | [**namespaces_runner_configs_get**](docs/NamespacesRunnerConfigsApi.md#namespaces_runner_configs_get) | **GET** /namespaces/{namespace_id}/runner-configs/{runner_name} | 
+*NamespacesRunnerConfigsApi* | [**namespaces_runner_configs_list**](docs/NamespacesRunnerConfigsApi.md#namespaces_runner_configs_list) | **GET** /namespaces/{namespace_id}/runner-configs | 
+*NamespacesRunnerConfigsApi* | [**namespaces_runner_configs_upsert**](docs/NamespacesRunnerConfigsApi.md#namespaces_runner_configs_upsert) | **PUT** /namespaces/{namespace_id}/runner-configs/{runner_name} | 
 *RunnersApi* | [**runners_get**](docs/RunnersApi.md#runners_get) | **GET** /runners/{runner_id} | 
 *RunnersApi* | [**runners_list**](docs/RunnersApi.md#runners_list) | **GET** /runners | 
 *RunnersApi* | [**runners_list_names**](docs/RunnersApi.md#runners_list_names) | **GET** /runners/names | ## Datacenter Round Trips
@@ -65,12 +69,16 @@ Class | Method | HTTP request | Description
  - [NamespacesCreateResponse](docs/NamespacesCreateResponse.md)
  - [NamespacesGetResponse](docs/NamespacesGetResponse.md)
  - [NamespacesListResponse](docs/NamespacesListResponse.md)
+ - [NamespacesRunnerConfig](docs/NamespacesRunnerConfig.md)
+ - [NamespacesRunnerConfigServerless](docs/NamespacesRunnerConfigServerless.md)
+ - [NamespacesRunnerConfigVariant](docs/NamespacesRunnerConfigVariant.md)
+ - [NamespacesRunnerConfigsGetResponse](docs/NamespacesRunnerConfigsGetResponse.md)
+ - [NamespacesRunnerConfigsListResponse](docs/NamespacesRunnerConfigsListResponse.md)
  - [Pagination](docs/Pagination.md)
  - [Runner](docs/Runner.md)
  - [RunnersGetResponse](docs/RunnersGetResponse.md)
  - [RunnersListNamesResponse](docs/RunnersListNamesResponse.md)
  - [RunnersListResponse](docs/RunnersListResponse.md)
- - [StringHttpAddressHashableMapValue](docs/StringHttpAddressHashableMapValue.md)
 
 
 To get access to the crate's generated documentation, use:

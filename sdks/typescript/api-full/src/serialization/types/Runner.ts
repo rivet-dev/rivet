@@ -5,18 +5,9 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
-import { StringHttpAddressHashableMap } from "./StringHttpAddressHashableMap";
-import { StringTcpAddressHashableMap } from "./StringTcpAddressHashableMap";
-import { StringUdpAddressHashableMap } from "./StringUdpAddressHashableMap";
 import { RivetId } from "./RivetId";
-import { StringHttpAddressHashableMapValue } from "./StringHttpAddressHashableMapValue";
-import { StringTcpAddressHashableMapValue } from "./StringTcpAddressHashableMapValue";
-import { StringUdpAddressHashableMapValue } from "./StringUdpAddressHashableMapValue";
 
 export const Runner: core.serialization.ObjectSchema<serializers.Runner.Raw, Rivet.Runner> = core.serialization.object({
-    addressesHttp: core.serialization.property("addresses_http", StringHttpAddressHashableMap),
-    addressesTcp: core.serialization.property("addresses_tcp", StringTcpAddressHashableMap),
-    addressesUdp: core.serialization.property("addresses_udp", StringUdpAddressHashableMap),
     createTs: core.serialization.property("create_ts", core.serialization.number()),
     datacenter: core.serialization.string(),
     drainTs: core.serialization.property("drain_ts", core.serialization.number().optional()),
@@ -36,9 +27,6 @@ export const Runner: core.serialization.ObjectSchema<serializers.Runner.Raw, Riv
 
 export declare namespace Runner {
     export interface Raw {
-        addresses_http: StringHttpAddressHashableMap.Raw;
-        addresses_tcp: StringTcpAddressHashableMap.Raw;
-        addresses_udp: StringUdpAddressHashableMap.Raw;
         create_ts: number;
         datacenter: string;
         drain_ts?: number | null;

@@ -13,12 +13,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Runner {
-    #[serde(rename = "addresses_http")]
-    pub addresses_http: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>,
-    #[serde(rename = "addresses_tcp")]
-    pub addresses_tcp: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>,
-    #[serde(rename = "addresses_udp")]
-    pub addresses_udp: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>,
     #[serde(rename = "create_ts")]
     pub create_ts: i64,
     #[serde(rename = "datacenter")]
@@ -52,11 +46,8 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn new(addresses_http: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>, addresses_tcp: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>, addresses_udp: std::collections::HashMap<String, models::StringHttpAddressHashableMapValue>, create_ts: i64, datacenter: String, key: String, last_ping_ts: i64, last_rtt: i32, name: String, namespace_id: String, remaining_slots: i32, runner_id: String, total_slots: i32, version: i32) -> Runner {
+    pub fn new(create_ts: i64, datacenter: String, key: String, last_ping_ts: i64, last_rtt: i32, name: String, namespace_id: String, remaining_slots: i32, runner_id: String, total_slots: i32, version: i32) -> Runner {
         Runner {
-            addresses_http,
-            addresses_tcp,
-            addresses_udp,
             create_ts,
             datacenter,
             drain_ts: None,

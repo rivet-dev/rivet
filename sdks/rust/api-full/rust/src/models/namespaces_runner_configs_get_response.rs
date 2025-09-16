@@ -12,18 +12,15 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct StringHttpAddressHashableMapValue {
-    #[serde(rename = "hostname")]
-    pub hostname: String,
-    #[serde(rename = "port")]
-    pub port: i32,
+pub struct NamespacesRunnerConfigsGetResponse {
+    #[serde(rename = "runner_config")]
+    pub runner_config: Box<models::NamespacesRunnerConfig>,
 }
 
-impl StringHttpAddressHashableMapValue {
-    pub fn new(hostname: String, port: i32) -> StringHttpAddressHashableMapValue {
-        StringHttpAddressHashableMapValue {
-            hostname,
-            port,
+impl NamespacesRunnerConfigsGetResponse {
+    pub fn new(runner_config: models::NamespacesRunnerConfig) -> NamespacesRunnerConfigsGetResponse {
+        NamespacesRunnerConfigsGetResponse {
+            runner_config: Box::new(runner_config),
         }
     }
 }

@@ -110,11 +110,12 @@ pub async fn namespaces_get(configuration: &configuration::Configuration, namesp
     }
 }
 
-pub async fn namespaces_list(configuration: &configuration::Configuration, limit: Option<i32>, cursor: Option<&str>, name: Option<&str>) -> Result<models::NamespacesListResponse, Error<NamespacesListError>> {
+pub async fn namespaces_list(configuration: &configuration::Configuration, limit: Option<i32>, cursor: Option<&str>, name: Option<&str>, namespace_id: Option<Vec<String>>) -> Result<models::NamespacesListResponse, Error<NamespacesListError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_limit = limit;
     let p_cursor = cursor;
     let p_name = name;
+    let p_namespace_id = namespace_id;
 
     let uri_str = format!("{}/namespaces", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
@@ -127,6 +128,12 @@ pub async fn namespaces_list(configuration: &configuration::Configuration, limit
     }
     if let Some(ref param_value) = p_name {
         req_builder = req_builder.query(&[("name", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_namespace_id {
+        req_builder = match "multi" {
+            "multi" => req_builder.query(&param_value.into_iter().map(|p| ("namespace_id".to_owned(), p.to_string())).collect::<Vec<(std::string::String, std::string::String)>>()),
+            _ => req_builder.query(&[("namespace_id", &param_value.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(",").to_string())]),
+        };
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());

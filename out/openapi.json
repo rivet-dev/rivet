@@ -587,7 +587,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/RunnerConfigVariant"
+              "$ref": "#/components/schemas/NamespacesRunnerConfigVariant"
             }
           }
         ],
@@ -1353,6 +1353,12 @@
               }
             }
           }
+        ]
+      },
+      "NamespacesRunnerConfigVariant": {
+        "type": "string",
+        "enum": [
+          "serverless"
         ]
       },
       "NamespacesRunnerConfigsDeleteResponse": {

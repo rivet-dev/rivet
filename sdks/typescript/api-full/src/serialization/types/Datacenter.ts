@@ -10,13 +10,11 @@ export const Datacenter: core.serialization.ObjectSchema<serializers.Datacenter.
     core.serialization.object({
         datacenterLabel: core.serialization.property("datacenter_label", core.serialization.number()),
         name: core.serialization.string(),
-        url: core.serialization.string(),
     });
 
 export declare namespace Datacenter {
     export interface Raw {
         datacenter_label: number;
         name: string;
-        url: string;
     }
 }

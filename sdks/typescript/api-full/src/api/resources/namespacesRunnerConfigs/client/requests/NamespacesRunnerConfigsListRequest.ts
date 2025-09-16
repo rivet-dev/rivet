@@ -8,9 +8,8 @@ import * as Rivet from "../../../../index";
  * @example
  *     {}
  */
-export interface NamespacesListRequest {
+export interface NamespacesRunnerConfigsListRequest {
     limit?: number;
     cursor?: string;
-    name?: string;
-    namespaceId?: Rivet.RivetId | Rivet.RivetId[];
+    variant?: Rivet.NamespacesRunnerConfigVariant;
 }

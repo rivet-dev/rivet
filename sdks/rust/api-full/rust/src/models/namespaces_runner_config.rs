@@ -12,18 +12,15 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Datacenter {
-    #[serde(rename = "datacenter_label")]
-    pub datacenter_label: i32,
-    #[serde(rename = "name")]
-    pub name: String,
+pub struct NamespacesRunnerConfig {
+    #[serde(rename = "serverless")]
+    pub serverless: Box<models::NamespacesRunnerConfigServerless>,
 }
 
-impl Datacenter {
-    pub fn new(datacenter_label: i32, name: String) -> Datacenter {
-        Datacenter {
-            datacenter_label,
-            name,
+impl NamespacesRunnerConfig {
+    pub fn new(serverless: models::NamespacesRunnerConfigServerless) -> NamespacesRunnerConfig {
+        NamespacesRunnerConfig {
+            serverless: Box::new(serverless),
         }
     }
 }

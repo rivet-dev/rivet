@@ -68,7 +68,7 @@ No authorization required
 
 ## namespaces_list
 
-> models::NamespacesListResponse namespaces_list(limit, cursor, name)
+> models::NamespacesListResponse namespaces_list(limit, cursor, name, namespace_id)
 
 
 ### Parameters
@@ -79,6 +79,7 @@ Name | Type | Description  | Required | Notes
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |
 **name** | Option<**String**> |  |  |
+**namespace_id** | Option<[**Vec<String>**](String.md)> |  |  |
 
 ### Return type
 

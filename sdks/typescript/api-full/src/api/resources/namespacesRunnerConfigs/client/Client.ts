@@ -8,7 +8,7 @@ import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
 import * as errors from "../../../../errors/index";
 
-export declare namespace Namespaces {
+export declare namespace NamespacesRunnerConfigs {
     export interface Options {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
@@ -28,21 +28,23 @@ export declare namespace Namespaces {
     }
 }
 
-export class Namespaces {
-    constructor(protected readonly _options: Namespaces.Options) {}
+export class NamespacesRunnerConfigs {
+    constructor(protected readonly _options: NamespacesRunnerConfigs.Options) {}
 
     /**
-     * @param {Rivet.NamespacesListRequest} request
-     * @param {Namespaces.RequestOptions} requestOptions - Request-specific configuration.
+     * @param {Rivet.RivetId} namespaceId
+     * @param {Rivet.NamespacesRunnerConfigsListRequest} request
+     * @param {NamespacesRunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @example
-     *     await client.namespaces.list()
+     *     await client.namespacesRunnerConfigs.list("namespace_id")
      */
     public async list(
-        request: Rivet.NamespacesListRequest = {},
-        requestOptions?: Namespaces.RequestOptions,
-    ): Promise<Rivet.NamespacesListResponse> {
-        const { limit, cursor, name, namespaceId } = request;
+        namespaceId: Rivet.RivetId,
+        request: Rivet.NamespacesRunnerConfigsListRequest = {},
+        requestOptions?: NamespacesRunnerConfigs.RequestOptions,
+    ): Promise<Rivet.NamespacesRunnerConfigsListResponse> {
+        const { limit, cursor, variant } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (limit != null) {
             _queryParams["limit"] = limit.toString();
@@ -52,25 +54,17 @@ export class Namespaces {
             _queryParams["cursor"] = cursor;
         }
 
-        if (name != null) {
-            _queryParams["name"] = name;
-        }
-
-        if (namespaceId != null) {
-            if (Array.isArray(namespaceId)) {
-                _queryParams["namespace_id"] = namespaceId.map((item) =>
-                    serializers.RivetId.jsonOrThrow(item, { unrecognizedObjectKeys: "strip" }),
-                );
-            } else {
-                _queryParams["namespace_id"] = namespaceId;
-            }
+        if (variant != null) {
+            _queryParams["variant"] = serializers.NamespacesRunnerConfigVariant.jsonOrThrow(variant, {
+                unrecognizedObjectKeys: "strip",
+            });
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
                     (await core.Supplier.get(this._options.environment)),
-                "namespaces",
+                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}/runner-configs`,
             ),
             method: "GET",
             headers: {
@@ -87,7 +81,7 @@ export class Namespaces {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return serializers.NamespacesListResponse.parseOrThrow(_response.body, {
+            return serializers.NamespacesRunnerConfigsListResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -110,73 +104,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /namespaces.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
-    }
-
-    /**
-     * @param {Rivet.NamespacesCreateRequest} request
-     * @param {Namespaces.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.namespaces.create({
-     *         displayName: "display_name",
-     *         name: "name"
-     *     })
-     */
-    public async create(
-        request: Rivet.NamespacesCreateRequest,
-        requestOptions?: Namespaces.RequestOptions,
-    ): Promise<Rivet.NamespacesCreateResponse> {
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                "namespaces",
-            ),
-            method: "POST",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            requestType: "json",
-            body: serializers.NamespacesCreateRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.NamespacesCreateResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /namespaces.");
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /namespaces/{namespace_id}/runner-configs.",
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -186,20 +116,22 @@ export class Namespaces {
 
     /**
      * @param {Rivet.RivetId} namespaceId
-     * @param {Namespaces.RequestOptions} requestOptions - Request-specific configuration.
+     * @param {string} runnerName
+     * @param {NamespacesRunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @example
-     *     await client.namespaces.get("namespace_id")
+     *     await client.namespacesRunnerConfigs.get("namespace_id", "runner_name")
      */
     public async get(
         namespaceId: Rivet.RivetId,
-        requestOptions?: Namespaces.RequestOptions,
-    ): Promise<Rivet.NamespacesGetResponse> {
+        runnerName: string,
+        requestOptions?: NamespacesRunnerConfigs.RequestOptions,
+    ): Promise<Rivet.NamespacesRunnerConfigsGetResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
                     (await core.Supplier.get(this._options.environment)),
-                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}`,
+                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}/runner-configs/${encodeURIComponent(runnerName)}`,
             ),
             method: "GET",
             headers: {
@@ -215,7 +147,7 @@ export class Namespaces {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return serializers.NamespacesGetResponse.parseOrThrow(_response.body, {
+            return serializers.NamespacesRunnerConfigsGetResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -238,7 +170,155 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /namespaces/{namespace_id}.");
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /namespaces/{namespace_id}/runner-configs/{runner_name}.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RivetId} namespaceId
+     * @param {string} runnerName
+     * @param {Rivet.NamespacesRunnerConfigsUpsertRequest} request
+     * @param {NamespacesRunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.namespacesRunnerConfigs.upsert("namespace_id", "runner_name", {
+     *         serverless: {
+     *             maxRunners: 1,
+     *             minRunners: 1,
+     *             requestLifespan: 1,
+     *             runnersMargin: 1,
+     *             slotsPerRunner: 1,
+     *             url: "url"
+     *         }
+     *     })
+     */
+    public async upsert(
+        namespaceId: Rivet.RivetId,
+        runnerName: string,
+        request: Rivet.NamespacesRunnerConfigsUpsertRequest,
+        requestOptions?: NamespacesRunnerConfigs.RequestOptions,
+    ): Promise<Rivet.NamespacesRunnerConfigsUpsertResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}/runner-configs/${encodeURIComponent(runnerName)}`,
+            ),
+            method: "PUT",
+            headers: {
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            body: serializers.NamespacesRunnerConfigsUpsertRequest.jsonOrThrow(request, {
+                unrecognizedObjectKeys: "strip",
+            }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.NamespacesRunnerConfigsUpsertResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling PUT /namespaces/{namespace_id}/runner-configs/{runner_name}.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RivetId} namespaceId
+     * @param {string} runnerName
+     * @param {NamespacesRunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.namespacesRunnerConfigs.delete("namespace_id", "runner_name")
+     */
+    public async delete(
+        namespaceId: Rivet.RivetId,
+        runnerName: string,
+        requestOptions?: NamespacesRunnerConfigs.RequestOptions,
+    ): Promise<Rivet.NamespacesRunnerConfigsDeleteResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}/runner-configs/${encodeURIComponent(runnerName)}`,
+            ),
+            method: "DELETE",
+            headers: {
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.NamespacesRunnerConfigsDeleteResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /namespaces/{namespace_id}/runner-configs/{runner_name}.",
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
