@@ -10,3 +10,7 @@ release-nolatest VERSION:
 	gh workflow run .github/workflows/release.yaml -f version={{ VERSION }} -f latest=false --ref $(git branch --show-current)
 	echo 'Once workflow is complete, manually merge Release Please'
 
+[group('docker')]
+docker-build:
+	docker build -f docker/universal/Dockerfile --target engine-full -t rivetkit/engine:local --platform linux/x86_64 .
+
