@@ -1,7 +1,8 @@
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 
-pub const MAX_IDENT_LEN: usize = 16;
+pub const MAX_IDENT_LEN: usize = 64;
+// TODO: Do we still need long idents?
 pub const MAX_IDENT_LONG_LEN: usize = 64;
 pub const MAX_DISPLAY_NAME_LEN: usize = 24;
 pub const MAX_DISPLAY_NAME_LONG_LEN: usize = 128;
