@@ -27,7 +27,7 @@ pub struct Input {
 }
 
 #[operation]
-pub async fn propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult> {
+pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<ProposalResult> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
 	// Read config

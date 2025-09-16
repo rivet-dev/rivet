@@ -284,7 +284,7 @@ async fn setup_epoxy_coordinator_wf(
 		)
 		.await?;
 	leader_ctx
-		.signal(epoxy::workflows::coordinator::ReconfigureSignal {})
+		.signal(epoxy::workflows::coordinator::Reconfigure {})
 		.to_workflow_id(workflow_id)
 		.send()
 		.await?;

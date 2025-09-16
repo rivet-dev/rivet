@@ -25,16 +25,16 @@ pub struct ReplicaState {
 }
 
 #[workflow]
-pub async fn coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<()> {
+pub async fn epoxy_coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<()> {
 	ctx.activity(InitInput {}).await?;
 
 	ctx.repeat(|ctx| {
 		async move {
 			match ctx.listen::<Main>().await? {
-				Main::ReconfigureSignal(_) => {
+				Main::Reconfigure(_) => {
 					reconfigure::reconfigure(ctx).await?;
 				}
-				Main::ReplicaStatusChangeSignal(sig) => {
+				Main::ReplicaStatusChange(sig) => {
 					replica_status_change::replica_status_change(ctx, sig).await?;
 				}
 			}
@@ -73,15 +73,15 @@ pub struct ConfigChangeMessage {
 ///
 /// This gets called any time an engine node starts.
 #[signal("epoxy_coordinator_reconfigure")]
-pub struct ReconfigureSignal {}
+pub struct Reconfigure {}
 
 #[signal("epoxy_coordinator_replica_status_change")]
-pub struct ReplicaStatusChangeSignal {
+pub struct ReplicaStatusChange {
 	pub replica_id: protocol::ReplicaId,
 	pub status: types::ReplicaStatus,
 }
 
 join_signal!(Main {
-	ReconfigureSignal,
-	ReplicaStatusChangeSignal,
+	Reconfigure,
+	ReplicaStatusChange,
 });

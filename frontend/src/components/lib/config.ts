@@ -31,6 +31,8 @@ const getApiEndpoint = (apiEndpoint: string) => {
 		}
 		// Default to staging servers for all other endpoints
 		return "https://api.staging2.gameinc.io";
+	} else if (apiEndpoint === "__SAME__") {
+		return location.origin;
 	}
 	return apiEndpoint;
 };

@@ -15,7 +15,7 @@ pub struct Output {
 }
 
 #[operation]
-pub async fn read_config(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+pub async fn epoxy_read_cluster_config(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let config = ctx
 		.udb()?
 		.run(|tx| {

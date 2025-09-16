@@ -61,8 +61,6 @@ app.get('/start', async (c) => {
 	});
 });
 
-app.get('*', (c) => c.text('ok'));
-
 serve({
 	fetch: app.fetch,
 	port: INTERNAL_SERVER_PORT,
@@ -72,6 +70,8 @@ console.log(`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`);
 if (AUTOSTART) runner = await startRunner();
 
 async function startRunner(): Promise<Runner> {
+	console.log("Starting runner");
+
 	const config: RunnerConfig = {
 		version: RIVET_RUNNER_VERSION,
 		endpoint: RIVET_ENDPOINT,
@@ -154,7 +154,7 @@ async function startRunner(): Promise<Runner> {
 		},
 	};
 
-	runner = new Runner(config);
+	let runner = new Runner(config);
 
 	// Start runner
 	await runner.start();
@@ -162,6 +162,8 @@ async function startRunner(): Promise<Runner> {
 	// Wait for runner to be ready
 	console.log("Waiting runner start...");
 	await runnerStarted.promise;
+
+	console.log("Runner started");
 
 	return runner;
 }

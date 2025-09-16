@@ -42,7 +42,7 @@ async fn setup_epoxy_coordinator(ctx: &StandaloneCtx) -> Result<()> {
 	//
 	// This does not guarantee the config will change immediately since we can't guarantee that the
 	// coordinator workflow is running on a node with the newest version of the config.
-	ctx.signal(epoxy::workflows::coordinator::ReconfigureSignal {})
+	ctx.signal(epoxy::workflows::coordinator::Reconfigure {})
 		.to_workflow_id(workflow_id)
 		.send()
 		.await?;

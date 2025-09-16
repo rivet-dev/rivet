@@ -8,7 +8,7 @@ use crate::types;
 
 pub async fn replica_status_change(
 	ctx: &mut WorkflowCtx,
-	signal: super::ReplicaStatusChangeSignal,
+	signal: super::ReplicaStatusChange,
 ) -> Result<()> {
 	// Update replica status
 	let should_increment_epoch = ctx

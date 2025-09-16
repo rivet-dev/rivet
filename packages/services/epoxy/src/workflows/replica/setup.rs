@@ -10,14 +10,14 @@ use universaldb::{KeySelector, RangeOption, options::StreamingMode};
 use crate::types;
 
 // IMPORTANT: Do not use `read_cluster_config`. Instead, use the config provided by
-// `BeginLearningSignal`. This is because the value of `read_cluster_config` may change between
+// `BeginLearning`. This is because the value of `read_cluster_config` may change between
 // activities which can cause the learning process to enter an invalid state.
 
 pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Result<()> {
-	// Wait for cooridinator to send begin learning signal
-	let begin_learning = ctx.listen::<super::BeginLearningSignal>().await?;
+	// Wait for coordiinator to send begin learning signal
+	let begin_learning = ctx.listen::<super::BeginLearning>().await?;
 
-	// TODO: Paralellize replicas
+	// TODO: Parallelize replicas
 	let total_replicas = begin_learning.config.replicas.len();
 	let mut replica_index = 0;
 
@@ -134,7 +134,7 @@ pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Resu
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct DownloadInstancesChunkInput {
-	/// Config received from BeginLearningSignal
+	/// Config received from BeginLearning
 	pub learning_config: types::ClusterConfig,
 	pub from_replica_id: protocol::ReplicaId,
 	pub after_instance: Option<types::Instance>,
@@ -312,7 +312,7 @@ async fn apply_log_entry(
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RecoverKeysChunkInput {
-	/// Config received from BeginLearningSignal
+	/// Config received from BeginLearning
 	pub learning_config: types::ClusterConfig,
 	/// The last key value from the previous chunk, used for pagination
 	pub after_key: Option<Vec<u8>>,
@@ -728,7 +728,7 @@ struct CommittedEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct NotifyActiveInput {
-	/// Config received from BeginLearningSignal
+	/// Config received from BeginLearning
 	pub learning_config: types::ClusterConfig,
 }
 

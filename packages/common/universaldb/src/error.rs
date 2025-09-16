@@ -12,8 +12,6 @@ pub enum DatabaseError {
 
 	#[error("operation issued while a commit was outstanding")]
 	UsedDuringCommit,
-	// #[error(transparent)]
-	// Custom(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl DatabaseError {

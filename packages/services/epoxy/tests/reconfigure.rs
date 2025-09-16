@@ -321,7 +321,7 @@ async fn test_inner(config: TestConfig) {
 		.await
 		.unwrap();
 	leader_ctx
-		.signal(epoxy::workflows::coordinator::ReconfigureSignal {})
+		.signal(epoxy::workflows::coordinator::Reconfigure {})
 		.to_workflow_id(test_ctx.coordinator_workflow_id)
 		.send()
 		.await

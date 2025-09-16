@@ -14,14 +14,14 @@ pub use setup::*;
 pub struct Input {}
 
 #[workflow]
-pub async fn replica(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn epoxy_replica(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	setup_replica(ctx, input).await?;
 
 	// Main loop
 	ctx.repeat(|ctx| {
 		async move {
 			// Noop for now
-			ctx.listen::<MainSignal>().await?;
+			ctx.listen::<Main>().await?;
 			Ok(Loop::<()>::Continue)
 		}
 		.boxed()
@@ -32,9 +32,9 @@ pub async fn replica(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 }
 
 #[signal("epoxy_replica_begin_learning")]
-pub struct BeginLearningSignal {
+pub struct BeginLearning {
 	pub config: types::ClusterConfig,
 }
 
-#[signal("main")]
-pub struct MainSignal {}
+#[signal("epoxy_replica_main")]
+pub struct Main {}

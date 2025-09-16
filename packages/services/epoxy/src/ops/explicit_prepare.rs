@@ -20,7 +20,10 @@ pub enum ExplicitPrepareResult {
 }
 
 #[operation]
-pub async fn explicit_prepare(ctx: &OperationCtx, input: &Input) -> Result<ExplicitPrepareResult> {
+pub async fn epoxy_explicit_prepare(
+	ctx: &OperationCtx,
+	input: &Input,
+) -> Result<ExplicitPrepareResult> {
 	let replica_id = ctx.config().epoxy_replica_id();
 	let instance = &input.instance;
 

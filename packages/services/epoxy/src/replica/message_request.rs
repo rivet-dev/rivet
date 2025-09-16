@@ -100,7 +100,7 @@ pub async fn message_request(
 				"received coordinator update replica status request"
 			);
 
-			ctx.signal(crate::workflows::coordinator::ReplicaStatusChangeSignal {
+			ctx.signal(crate::workflows::coordinator::ReplicaStatusChange {
 				replica_id: req.replica_id,
 				status: req.status.into(),
 			})
@@ -118,7 +118,7 @@ pub async fn message_request(
 				"received begin learning request"
 			);
 
-			ctx.signal(crate::workflows::replica::BeginLearningSignal {
+			ctx.signal(crate::workflows::replica::BeginLearning {
 				config: req.config.clone().into(),
 			})
 			.to_workflow::<crate::workflows::replica::Workflow>()

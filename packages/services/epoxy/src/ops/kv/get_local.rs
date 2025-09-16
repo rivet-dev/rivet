@@ -18,7 +18,7 @@ pub struct Output {
 }
 
 #[operation]
-pub async fn get_local(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+pub async fn epoxy_kv_get_local(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	// Read from local KV store only
 	let kv_key = keys::keys::KvValueKey::new(input.key.clone());
 	let subspace = keys::subspace(input.replica_id);
