@@ -4,6 +4,8 @@ import * as protocol from "@rivetkit/engine-runner-protocol";
 import { unreachable, calculateBackoff } from "./utils";
 import { Tunnel } from "./tunnel";
 import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import type { Logger } from "pino";
+import { setLogger, logger } from "./log.js";
 
 const KV_EXPIRE: number = 30_000;
 
@@ -23,6 +25,7 @@ export interface ActorConfig {
 }
 
 export interface RunnerConfig {
+	logger?: Logger;
 	version: number;
 	endpoint: string;
 	pegboardEndpoint?: string;
@@ -103,6 +106,7 @@ export class Runner {
 
 	constructor(config: RunnerConfig) {
 		this.#config = config;
+		if (this.#config.logger) setLogger(this.#config.logger);
 
 		// TODO(RVT-4986): Prune when server acks events
 		// Start pruning old events every minute
@@ -145,12 +149,20 @@ export class Runner {
 		}
 
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
+
+		this.#config.onActorStop(actorId, actor.generation).catch((err) => {
+			logger()?.error({
+				msg: "error in onactorstop for actor",
+				actorId,
+				err,
+			});
+		});
 	}
 
 	#stopAllActors() {
-		//console.log(
-		//	"Stopping all actors due to runner lost threshold exceeded",
-		//);
+		logger()?.info(
+			"stopping all actors due to runner lost threshold exceeded",
+		);
 
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
@@ -161,13 +173,15 @@ export class Runner {
 	getActor(actorId: string, generation?: number): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			console.error(`Actor ${actorId} not found`);
+			logger()?.error({ msg: "actor not found", actorId });
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
-			console.error(
-				`Actor ${actorId} does not match generation ${generation}`,
-			);
+			logger()?.error({
+				msg: "actor generation mismatch",
+				actorId,
+				generation,
+			});
 			return undefined;
 		}
 
@@ -189,13 +203,15 @@ export class Runner {
 	): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			console.error(`Actor ${actorId} not found`);
+			logger()?.error({ msg: "actor not found", actorId });
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
-			console.error(
-				`Actor ${actorId} does not match generation ${generation}`,
-			);
+			logger()?.error({
+				msg: "actor generation mismatch",
+				actorId,
+				generation,
+			});
 			return undefined;
 		}
 
@@ -208,10 +224,11 @@ export class Runner {
 				try {
 					ws.close(1000, "Actor stopped");
 				} catch (err) {
-					console.error(
-						`Error closing WebSocket for actor ${actorId}:`,
+					logger()?.error({
+						msg: "error closing websocket for actor",
+						actorId,
 						err,
-					);
+					});
 				}
 			}
 			this.#actorWebSockets.delete(actorId);
@@ -225,7 +242,7 @@ export class Runner {
 		if (this.#started) throw new Error("Cannot call runner.start twice");
 		this.#started = true;
 
-		//console.log("[RUNNER] Starting runner");
+		logger()?.info("starting runner");
 
 		try {
 			// Connect tunnel first and wait for it to be ready before connecting runner WebSocket
@@ -245,7 +262,7 @@ export class Runner {
 
 	// MARK: Shutdown
 	async shutdown(immediate: boolean, exit: boolean = false) {
-		console.log("Starting shutdown...", { immediate });
+		logger()?.info({ msg: "starting shutdown...", immediate });
 		this.#shutdown = true;
 
 		// Clear reconnect timeout
@@ -302,12 +319,12 @@ export class Runner {
 				// Stop immediately
 				pegboardWebSocket.close(1000, "Stopping");
 			} else {
-				// Wait for actors to shut down befoer stopping
+				// Wait for actors to shut down before stopping
 				try {
-					//console.log(
-					//	"Sending stopping message",
-					//	pegboardWebSocket.readyState,
-					//);
+					logger()?.info({
+						msg: "sending stopping message",
+						readyState: pegboardWebSocket.readyState,
+					});
 
 					// NOTE: We don't use #sendToServer here because that function checks if the runner is
 					// shut down
@@ -321,7 +338,7 @@ export class Runner {
 					) {
 						this.#pegboardWebSocket.send(encoded);
 					} else {
-						console.error(
+						logger()?.error(
 							"WebSocket not available or not open for sending data",
 						);
 					}
@@ -331,36 +348,39 @@ export class Runner {
 							throw new Error("missing pegboardWebSocket");
 
 						pegboardWebSocket.addEventListener("close", (ev) => {
-							//console.log(
-							//	"Connection closed",
-							//	ev.code,
-							//	ev.reason.toString(),
-							//);
+							logger()?.info({
+								msg: "connection closed",
+								code: ev.code,
+								reason: ev.reason.toString(),
+							});
 							resolve();
 						});
 					});
 
 					// TODO: Wait for all actors to stop before closing ws
 
-					//console.log("Closing WebSocket");
+					logger()?.info("closing WebSocket");
 					pegboardWebSocket.close(1000, "Stopping");
 
 					await closePromise;
 
-					//console.log("WebSocket shutdown completed");
+					logger()?.info("websocket shutdown completed");
 				} catch (error) {
-					console.error("Error during WebSocket shutdown:", error);
+					logger()?.error({
+						msg: "error during websocket shutdown:",
+						error,
+					});
 					pegboardWebSocket.close();
 				}
 			}
 		} else {
-			console.warn("No runner WebSocket to shutdown or already closed");
+			logger()?.warn("no runner WebSocket to shutdown or already closed");
 		}
 
 		// Close tunnel
 		if (this.#tunnel) {
 			this.#tunnel.shutdown();
-			//console.log("Tunnel shutdown completed");
+			logger()?.info("tunnel shutdown completed");
 		}
 
 		if (exit) process.exit(0);
@@ -391,9 +411,15 @@ export class Runner {
 	async #openTunnelAndWait(): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const url = this.pegboardTunnelUrl;
-			//console.log("[RUNNER] Opening tunnel to:", url);
-			//console.log("[RUNNER] Current runner ID:", this.runnerId || "none");
-			//console.log("[RUNNER] Active actors count:", this.#actors.size);
+			logger()?.info({ msg: "opening tunnel to:", url });
+			logger()?.info({
+				msg: "current runner id:",
+				runnerId: this.runnerId || "none",
+			});
+			logger()?.info({
+				msg: "active actors count:",
+				actors: this.#actors.size,
+			});
 
 			let connected = false;
 
@@ -401,7 +427,7 @@ export class Runner {
 				onConnected: () => {
 					if (!connected) {
 						connected = true;
-						//console.log("[RUNNER] Tunnel connected");
+						logger()?.info("tunnel connected");
 						resolve();
 					}
 				},
@@ -428,7 +454,7 @@ export class Runner {
 		this.#pegboardWebSocket = ws;
 
 		ws.addEventListener("open", () => {
-			//console.log("Connected");
+			logger()?.info("Connected");
 
 			// Reset reconnect attempt counter on successful connection
 			this.#reconnectAttempt = 0;
@@ -485,7 +511,7 @@ export class Runner {
 					});
 				} else {
 					clearInterval(pingLoop);
-					//console.log("WebSocket not open, stopping ping loop");
+					logger()?.info("WebSocket not open, stopping ping loop");
 				}
 			}, pingInterval);
 			this.#pingLoop = pingLoop;
@@ -497,7 +523,7 @@ export class Runner {
 					this.#sendCommandAcknowledgment();
 				} else {
 					clearInterval(ackLoop);
-					//console.log("WebSocket not open, stopping ack loop");
+					logger()?.info("WebSocket not open, stopping ack loop");
 				}
 			}, ackInterval);
 			this.#ackInterval = ackLoop;
@@ -527,11 +553,12 @@ export class Runner {
 					? Number(init.metadata.runnerLostThreshold)
 					: undefined;
 
-				//console.log("Received init", {
-				//	runnerId: init.runnerId,
-				//	lastEventIdx: init.lastEventIdx,
-				//	runnerLostThreshold: this.#runnerLostThreshold,
-				//});
+				logger()?.info({
+					msg: "received init",
+					runnerId: init.runnerId,
+					lastEventIdx: init.lastEventIdx,
+					runnerLostThreshold: this.#runnerLostThreshold,
+				});
 
 				// Resend events that haven't been acknowledged
 				this.#resendUnacknowledgedEvents(init.lastEventIdx);
@@ -549,11 +576,15 @@ export class Runner {
 		});
 
 		ws.addEventListener("error", (ev) => {
-			console.error("WebSocket error:", ev.error);
+			logger()?.error("WebSocket error:", ev.error);
 		});
 
 		ws.addEventListener("close", (ev) => {
-			//console.log("Connection closed", ev.code, ev.reason.toString());
+			logger()?.info({
+				msg: "connection closed",
+				code: ev.code,
+				reason: ev.reason.toString(),
+			});
 
 			this.#config.onDisconnected();
 
@@ -575,9 +606,10 @@ export class Runner {
 					this.#runnerLostThreshold &&
 					this.#runnerLostThreshold > 0
 				) {
-					//console.log(
-					//	`Starting runner lost timeout: ${this.#runnerLostThreshold / 1000}s`,
-					//);
+					logger()?.info({
+						msg: "starting runner lost timeout",
+						seconds: this.#runnerLostThreshold / 1000,
+					});
 					this.#runnerLostTimeout = setTimeout(() => {
 						this.#stopAllActors();
 					}, this.#runnerLostThreshold);
@@ -590,12 +622,13 @@ export class Runner {
 	}
 
 	#handleCommands(commands: protocol.ToClientCommands) {
-		//console.log("Received commands", {
-		//	commandCount: commands.length,
-		//});
+		logger()?.info({
+			msg: "received commands",
+			commandCount: commands.length,
+		});
 
 		for (const commandWrapper of commands) {
-			//console.log("Received command", commandWrapper);
+			logger()?.info({ msg: "received command", commandWrapper });
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
@@ -638,10 +671,11 @@ export class Runner {
 		this.#config
 			.onActorStart(actorId, generation, actorConfig)
 			.catch((err) => {
-				console.error(
-					`Error in onActorStart for actor ${actorId}:`,
+				logger()?.error({
+					msg: "error in onactorstart for actor",
+					actorId,
 					err,
-				);
+				});
 
 				// TODO: Mark as crashed
 				// Send stopped state update if start failed
@@ -665,7 +699,7 @@ export class Runner {
 		intentType: "sleep" | "stop",
 	) {
 		if (this.#shutdown) {
-			console.warn("Runner is shut down, cannot send actor intent");
+			logger()?.warn("Runner is shut down, cannot send actor intent");
 			return;
 		}
 		let actorIntent: protocol.ActorIntent;
@@ -702,12 +736,12 @@ export class Runner {
 			timestamp: Date.now(),
 		});
 
-		//console.log(
-		//	"Sending event to server",
-		//	eventWrapper.index,
-		//	eventWrapper.inner.tag,
-		//	eventWrapper.inner.val,
-		//);
+		logger()?.info({
+			msg: "sending event to server",
+			index: eventWrapper.index,
+			tag: eventWrapper.inner.tag,
+			val: eventWrapper.inner.val,
+		});
 
 		this.#sendToServer({
 			tag: "ToServerEvents",
@@ -721,7 +755,9 @@ export class Runner {
 		stateType: "running" | "stopped",
 	) {
 		if (this.#shutdown) {
-			console.warn("Runner is shut down, cannot send actor state update");
+			logger()?.warn(
+				"Runner is shut down, cannot send actor state update",
+			);
 			return;
 		}
 		let actorState: protocol.ActorState;
@@ -761,12 +797,12 @@ export class Runner {
 			timestamp: Date.now(),
 		});
 
-		//console.log(
-		//	"Sending event to server",
-		//	eventWrapper.index,
-		//	eventWrapper.inner.tag,
-		//	eventWrapper.inner.val,
-		//);
+		logger()?.info({
+			msg: "sending event to server",
+			index: eventWrapper.index,
+			tag: eventWrapper.inner.tag,
+			val: eventWrapper.inner.val,
+		});
 
 		this.#sendToServer({
 			tag: "ToServerEvents",
@@ -776,7 +812,7 @@ export class Runner {
 
 	#sendCommandAcknowledgment() {
 		if (this.#shutdown) {
-			console.warn(
+			logger()?.warn(
 				"Runner is shut down, cannot send command acknowledgment",
 			);
 			return;
@@ -787,7 +823,7 @@ export class Runner {
 			return;
 		}
 
-		//console.log("Sending command acknowledgment", this.#lastCommandIdx);
+		//logger()?.log("Sending command acknowledgment", this.#lastCommandIdx);
 
 		this.#sendToServer({
 			tag: "ToServerAckCommands",
@@ -802,9 +838,12 @@ export class Runner {
 		const request = this.#kvRequests.get(requestId);
 
 		if (!request) {
-			console.error(
-				`Received KV response for unknown request ID: ${requestId}`,
-			);
+			const msg = "received kv response for unknown request id";
+			if (logger()) {
+				logger()?.error({ msg, requestId });
+			} else {
+				logger()?.error({ msg, requestId });
+			}
 			return;
 		}
 
@@ -862,28 +901,28 @@ export class Runner {
 		return true;
 	}
 
-	#parseGetResponse(response: protocol.KvGetResponse) {
-		const keys: string[] = [];
-		const values: Uint8Array[] = [];
-		const metadata: { version: Uint8Array; createTs: bigint }[] = [];
-
-		for (const key of response.keys) {
-			keys.push(new TextDecoder().decode(key));
-		}
-
-		for (const value of response.values) {
-			values.push(new Uint8Array(value));
-		}
-
-		for (const meta of response.metadata) {
-			metadata.push({
-				version: new Uint8Array(meta.version),
-				createTs: meta.createTs,
-			});
-		}
-
-		return { keys, values, metadata };
-	}
+	//#parseGetResponse(response: protocol.KvGetResponse) {
+	//	const keys: string[] = [];
+	//	const values: Uint8Array[] = [];
+	//	const metadata: { version: Uint8Array; createTs: bigint }[] = [];
+	//
+	//	for (const key of response.keys) {
+	//		keys.push(new TextDecoder().decode(key));
+	//	}
+	//
+	//	for (const value of response.values) {
+	//		values.push(new Uint8Array(value));
+	//	}
+	//
+	//	for (const meta of response.metadata) {
+	//		metadata.push({
+	//			version: new Uint8Array(meta.version),
+	//			createTs: meta.createTs,
+	//		});
+	//	}
+	//
+	//	return { keys, values, metadata };
+	//}
 
 	#parseListResponseSimple(
 		response: protocol.KvListResponse,
@@ -904,28 +943,28 @@ export class Runner {
 		return result;
 	}
 
-	#parseListResponse(response: protocol.KvListResponse) {
-		const keys: string[] = [];
-		const values: Uint8Array[] = [];
-		const metadata: { version: Uint8Array; createTs: bigint }[] = [];
-
-		for (const key of response.keys) {
-			keys.push(new TextDecoder().decode(key));
-		}
-
-		for (const value of response.values) {
-			values.push(new Uint8Array(value));
-		}
-
-		for (const meta of response.metadata) {
-			metadata.push({
-				version: new Uint8Array(meta.version),
-				createTs: meta.createTs,
-			});
-		}
-
-		return { keys, values, metadata };
-	}
+	//#parseListResponse(response: protocol.KvListResponse) {
+	//	const keys: string[] = [];
+	//	const values: Uint8Array[] = [];
+	//	const metadata: { version: Uint8Array; createTs: bigint }[] = [];
+	//
+	//	for (const key of response.keys) {
+	//		keys.push(new TextDecoder().decode(key));
+	//	}
+	//
+	//	for (const value of response.values) {
+	//		values.push(new Uint8Array(value));
+	//	}
+	//
+	//	for (const meta of response.metadata) {
+	//		metadata.push({
+	//			version: new Uint8Array(meta.version),
+	//			createTs: meta.createTs,
+	//		});
+	//	}
+	//
+	//	return { keys, values, metadata };
+	//}
 
 	// MARK: KV Operations
 	async kvGet(
@@ -1201,13 +1240,15 @@ export class Runner {
 		}
 
 		if (processedCount > 0) {
-			//console.log(`Processed ${processedCount} queued KV requests`);
+			//logger()?.log(`Processed ${processedCount} queued KV requests`);
 		}
 	}
 
 	#sendToServer(message: protocol.ToServer) {
 		if (this.#shutdown) {
-			console.warn("Runner is shut down, cannot send message to server");
+			logger()?.warn(
+				"Runner is shut down, cannot send message to server",
+			);
 			return;
 		}
 
@@ -1218,7 +1259,7 @@ export class Runner {
 		) {
 			this.#pegboardWebSocket.send(encoded);
 		} else {
-			console.error(
+			logger()?.error(
 				"WebSocket not available or not open for sending data",
 			);
 		}
@@ -1226,7 +1267,7 @@ export class Runner {
 
 	#scheduleReconnect() {
 		if (this.#shutdown) {
-			//console.log("Runner is shut down, not attempting reconnect");
+			//logger()?.log("Runner is shut down, not attempting reconnect");
 			return;
 		}
 
@@ -1237,14 +1278,14 @@ export class Runner {
 			jitter: true,
 		});
 
-		//console.log(
+		//logger()?.log(
 		//	`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
 		//);
 
 		this.#reconnectTimeout = setTimeout(async () => {
 			if (!this.#shutdown) {
 				this.#reconnectAttempt++;
-				//console.log(
+				//logger()?.log(
 				//	`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
 				//);
 				await this.#openPegboardWebSocket();
@@ -1259,7 +1300,7 @@ export class Runner {
 
 		if (eventsToResend.length === 0) return;
 
-		//console.log(
+		//logger()?.log(
 		//	`Resending ${eventsToResend.length} unacknowledged events from index ${Number(lastEventIdx) + 1}`,
 		//);
 
@@ -1283,7 +1324,7 @@ export class Runner {
 
 		const prunedCount = originalLength - this.#eventHistory.length;
 		if (prunedCount > 0) {
-			//console.log(`Pruned ${prunedCount} old events from history`);
+			//logger()?.log(`Pruned ${prunedCount} old events from history`);
 		}
 	}
 
@@ -1307,7 +1348,7 @@ export class Runner {
 		}
 
 		if (toDelete.length > 0) {
-			//console.log(`Cleaned up ${toDelete.length} expired KV requests`);
+			//logger()?.log(`Cleaned up ${toDelete.length} expired KV requests`);
 		}
 	}
 }

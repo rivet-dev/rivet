@@ -3,7 +3,8 @@ import type { RunnerConfig, ActorConfig } from "@rivetkit/engine-runner";
 import WebSocket from "ws";
 import { serve } from "@hono/node-server";
 import { streamSSE } from "hono/streaming";
-import { Hono } from 'hono'
+import { Hono } from "hono";
+import pino from "pino";
 
 const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	? Number(process.env.INTERNAL_SERVER_PORT)
@@ -30,28 +31,28 @@ const actorWebSockets = new Map<string, WebSocket>();
 // Create internal server
 const app = new Hono();
 
-app.get('/wait-ready', async (c) => {
+app.get("/wait-ready", async (c) => {
 	await runnerStarted.promise;
 	return c.json(runner?.runnerId);
 });
 
-app.get('/has-actor', async (c) => {
-	let actorIdQuery = c.req.query('actor');
-	let generationQuery = c.req.query('generation');
+app.get("/has-actor", async (c) => {
+	let actorIdQuery = c.req.query("actor");
+	let generationQuery = c.req.query("generation");
 	let generation = generationQuery ? Number(generationQuery) : undefined;
 
 	if (!actorIdQuery || !runner?.hasActor(actorIdQuery, generation)) {
-		return c.text('', 404);
+		return c.text("", 404);
 	}
-	return c.text('ok');
+	return c.text("ok");
 });
 
-app.get('/shutdown', async (c) => {
+app.get("/shutdown", async (c) => {
 	await runner?.shutdown(true);
-	return c.text('ok');
+	return c.text("ok");
 });
 
-app.get('/start', async (c) => {
+app.get("/start", async (c) => {
 	return streamSSE(c, async (stream) => {
 		if (runner == null) runner = await startRunner();
 
@@ -73,6 +74,7 @@ async function startRunner(): Promise<Runner> {
 	console.log("Starting runner");
 
 	const config: RunnerConfig = {
+		logger: pino(),
 		version: RIVET_RUNNER_VERSION,
 		endpoint: RIVET_ENDPOINT,
 		namespace: RIVET_NAMESPACE,
@@ -83,12 +85,14 @@ async function startRunner(): Promise<Runner> {
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
 		fetch: async (actorId: string, request: Request) => {
-			console.log(`[TEST-RUNNER] Fetch called for actor ${actorId}, URL: ${request.url}`);
+			console.log(
+				`[TEST-RUNNER] Fetch called for actor ${actorId}, URL: ${request.url}`,
+			);
 			const url = new URL(request.url);
 			if (url.pathname === "/ping") {
 				// Return the actor ID in response
@@ -97,14 +101,14 @@ async function startRunner(): Promise<Runner> {
 					status: "ok",
 					timestamp: Date.now(),
 				};
-				console.log(`[TEST-RUNNER] Returning ping response:`, responseData);
-				return new Response(
-					JSON.stringify(responseData),
-					{
-						status: 200,
-						headers: { "Content-Type": "application/json" },
-					},
+				console.log(
+					`[TEST-RUNNER] Returning ping response:`,
+					responseData,
 				);
+				return new Response(JSON.stringify(responseData), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 
 			return new Response("ok", { status: 200 });
@@ -123,11 +127,7 @@ async function startRunner(): Promise<Runner> {
 				`Actor ${_actorId} stopped (generation ${_generation})`,
 			);
 		},
-		websocket: async (
-			actorId: string,
-			ws: WebSocket,
-			request: Request,
-		) => {
+		websocket: async (actorId: string, ws: WebSocket, request: Request) => {
 			console.log(`WebSocket connected for actor ${actorId}`);
 			websocketOpen.resolve(undefined);
 			actorWebSockets.set(actorId, ws);
@@ -135,10 +135,7 @@ async function startRunner(): Promise<Runner> {
 			// Echo server - send back any messages received
 			ws.addEventListener("message", (event) => {
 				const data = event.data;
-				console.log(
-					`WebSocket message from actor ${actorId}:`,
-					data,
-				);
+				console.log(`WebSocket message from actor ${actorId}:`, data);
 				ws.send(`Echo: ${data}`);
 			});
 

@@ -1,3 +1,5 @@
+import { logger } from "./log";
+
 // Global singleton promise that will be reused for subsequent calls
 let webSocketPromise: Promise<typeof WebSocket> | null = null;
 
@@ -14,13 +16,13 @@ export async function importWebSocket(): Promise<typeof WebSocket> {
 		if (typeof WebSocket !== "undefined") {
 			// Native
 			_WebSocket = WebSocket as unknown as typeof WebSocket;
-			console.debug("using native websocket");
+			logger()?.debug({ msg: "using native websocket" });
 		} else {
 			// Node.js package
 			try {
 				const ws = await import("ws");
 				_WebSocket = ws.default as unknown as typeof WebSocket;
-				console.debug("using websocket from npm");
+				logger()?.debug({ msg: "using websocket from npm" });
 			} catch {
 				// WS not available
 				_WebSocket = class MockWebSocket {
@@ -30,7 +32,7 @@ export async function importWebSocket(): Promise<typeof WebSocket> {
 						);
 					}
 				} as unknown as typeof WebSocket;
-				console.debug("using mock websocket");
+				logger()?.debug({ msg: "using mock websocket" });
 			}
 		}
 

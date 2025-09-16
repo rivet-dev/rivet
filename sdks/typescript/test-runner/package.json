@@ -8,10 +8,11 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@rivetkit/engine-runner": "workspace:*",
 		"@hono/node-server": "^1.18.2",
+		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
 		"hono": "^4.0.0",
+		"pino": "^9.9.5",
 		"ws": "^8.18.3"
 	},
 	"devDependencies": {

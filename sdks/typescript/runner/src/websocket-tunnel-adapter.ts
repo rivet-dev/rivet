@@ -1,6 +1,8 @@
 // WebSocket-like adapter for tunneled connections
 // Implements a subset of the WebSocket interface for compatibility with runner code
 
+import { logger } from "./log";
+
 export class WebSocketTunnelAdapter {
 	#webSocketId: string;
 	#readyState: number = 0; // CONNECTING
@@ -235,12 +237,12 @@ export class WebSocketTunnelAdapter {
 		if (listeners && listeners.size > 0) {
 			hasListeners = true;
 			for (const listener of listeners) {
-				try {
-					listener.call(this, event);
-				} catch (error) {
-					console.error("Error in websocket event listener", { error, type });
+					try {
+						listener.call(this, event);
+					} catch (error) {
+						logger()?.error({ msg: "error in websocket event listener", error, type });
+					}
 				}
-			}
 		}
 
 		// Call the onX property if set
@@ -251,7 +253,7 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onopen.call(this, event);
 					} catch (error) {
-						console.error("Error in onopen handler", { error });
+						logger()?.error({ msg: "error in onopen handler", error });
 					}
 				}
 				break;
@@ -261,7 +263,7 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onclose.call(this, event);
 					} catch (error) {
-						console.error("Error in onclose handler", { error });
+						logger()?.error({ msg: "error in onclose handler", error });
 					}
 				}
 				break;
@@ -271,7 +273,7 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onerror.call(this, event);
 					} catch (error) {
-						console.error("Error in onerror handler", { error });
+						logger()?.error({ msg: "error in onerror handler", error });
 					}
 				}
 				break;
@@ -281,7 +283,7 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onmessage.call(this, event);
 					} catch (error) {
-						console.error("Error in onmessage handler", { error });
+						logger()?.error({ msg: "error in onmessage handler", error });
 					}
 				}
 				break;
@@ -309,7 +311,8 @@ export class WebSocketTunnelAdapter {
 					try {
 						listener.call(this, event);
 					} catch (error) {
-						console.error("Error in websocket event listener", {
+						logger()?.error({
+							msg: "error in websocket event listener",
 							error,
 							type,
 						});
@@ -324,7 +327,7 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onopen.call(this, event);
 						} catch (error) {
-							console.error("Error in onopen handler", { error });
+							logger()?.error({ msg: "error in onopen handler", error });
 						}
 					}
 					break;
@@ -333,7 +336,7 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onclose.call(this, event);
 						} catch (error) {
-							console.error("Error in onclose handler", { error });
+							logger()?.error({ msg: "error in onclose handler", error });
 						}
 					}
 					break;
@@ -342,7 +345,7 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onerror.call(this, event);
 						} catch (error) {
-							console.error("Error in onerror handler", { error });
+							logger()?.error({ msg: "error in onerror handler", error });
 						}
 					}
 					break;
@@ -351,7 +354,7 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onmessage.call(this, event);
 						} catch (error) {
-							console.error("Error in onmessage handler", { error });
+							logger()?.error({ msg: "error in onmessage handler", error });
 						}
 					}
 					break;

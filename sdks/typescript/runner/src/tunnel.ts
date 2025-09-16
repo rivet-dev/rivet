@@ -4,6 +4,7 @@ import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 import { calculateBackoff } from "./utils";
 import type { Runner, ActorInstance } from "./mod";
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "./log";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
@@ -152,9 +153,7 @@ export class Tunnel {
 
 		for (const [messageId, pendingMessage] of this.#pendingMessages) {
 			// Check if message is older than timeout
-			if (
-				now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT
-			) {
+			if (now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT) {
 				messagesToDelete.push(messageId);
 
 				const requestIdStr = pendingMessage.requestIdStr;
@@ -225,9 +224,10 @@ export class Tunnel {
 	async #fetch(actorId: string, request: Request): Promise<Response> {
 		// Validate actor exists
 		if (!this.#runner.hasActor(actorId)) {
-			console.warn(
-				`[TUNNEL] Ignoring request for unknown actor: ${actorId}`,
-			);
+			logger()?.warn({
+				msg: "ignoring request for unknown actor",
+				actorId,
+			});
 			return new Response("Actor not found", { status: 404 });
 		}
 
@@ -267,12 +267,15 @@ export class Tunnel {
 				try {
 					await this.#handleMessage(event.data as ArrayBuffer);
 				} catch (error) {
-					console.error("Error handling tunnel message:", error);
+					logger()?.error({
+						msg: "error handling tunnel message",
+						error,
+					});
 				}
 			});
 
 			this.#tunnelWs.addEventListener("error", (event) => {
-				console.error("Tunnel WebSocket error:", event);
+				logger()?.error({ msg: "tunnel websocket error", event });
 			});
 
 			this.#tunnelWs.addEventListener("close", () => {
@@ -283,7 +286,7 @@ export class Tunnel {
 				}
 			});
 		} catch (error) {
-			console.error("Failed to connect tunnel:", error);
+			logger()?.error({ msg: "failed to connect tunnel", error });
 			if (!this.#shutdown) {
 				this.#scheduleReconnect();
 			}
@@ -455,7 +458,7 @@ export class Tunnel {
 				await this.#sendResponse(requestId, response);
 			}
 		} catch (error) {
-			console.error("Error handling request:", error);
+			logger()?.error({ msg: "error handling request", error });
 			this.#sendResponseError(requestId, 500, "Internal Server Error");
 		} finally {
 			// Clean up request tracking
@@ -550,9 +553,10 @@ export class Tunnel {
 		// Validate actor exists
 		const actor = this.#runner.getActor(open.actorId);
 		if (!actor) {
-			console.warn(
-				`Ignoring WebSocket for unknown actor: ${open.actorId}`,
-			);
+			logger()?.warn({
+				msg: "ignoring websocket for unknown actor",
+				actorId: open.actorId,
+			});
 			// Send close immediately
 			this.#sendMessage(requestId, {
 				tag: "ToClientWebSocketClose",
@@ -568,6 +572,9 @@ export class Tunnel {
 
 		if (!websocketHandler) {
 			console.error("No websocket handler configured for tunnel");
+			logger()?.error({
+				msg: "no websocket handler configured for tunnel",
+			});
 			// Send close immediately
 			this.#sendMessage(requestId, {
 				tag: "ToClientWebSocketClose",
@@ -659,8 +666,7 @@ export class Tunnel {
 			// Call websocket handler
 			await websocketHandler(open.actorId, adapter, request);
 		} catch (error) {
-			console.error("Error handling WebSocket open:", error);
-
+			logger()?.error({ msg: "error handling websocket open", error });
 			// Send close on error
 			this.#sendMessage(requestId, {
 				tag: "ToClientWebSocketClose",
@@ -716,9 +722,10 @@ export class Tunnel {
 		const requestIdStr = bufferToString(requestId);
 		const pending = this.#actorPendingRequests.get(requestIdStr);
 		if (!pending) {
-			console.warn(
-				`Received response for unknown request ${requestIdStr}`,
-			);
+			logger()?.warn({
+				msg: "received response for unknown request",
+				requestId: requestIdStr,
+			});
 			return;
 		}
 
