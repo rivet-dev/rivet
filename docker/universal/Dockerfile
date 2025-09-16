@@ -67,7 +67,7 @@ RUN \
     cp target/debug/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
-FROM debian:12.9-slim AS engine-full-base
+FROM --platform=linux/amd64 debian:12.9-slim AS engine-full-base
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -100,7 +100,7 @@ RUN apt-get update -y && \
     fi
 
 # MARK: Engine (Full)
-FROM engine-full-base AS engine-full
+FROM --platform=linux/amd64 engine-full-base AS engine-full
 
 LABEL org.opencontainers.image.source https://github.com/rivet-gg/rivet
 
@@ -109,7 +109,7 @@ COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 CMD ["/usr/bin/rivet-engine", "start"]
 
 # MARK: Engine (Slim)
-FROM debian:12.9-slim AS engine-slim
+FROM --platform=linux/amd64 debian:12.9-slim AS engine-slim
 
 LABEL org.opencontainers.image.source https://github.com/rivet-gg/rivet
 
