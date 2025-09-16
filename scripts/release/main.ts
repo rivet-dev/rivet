@@ -149,10 +149,11 @@ async function main() {
 		}
 	}
 
-	if (args.publishSdk || args.setupCi) {
-		console.log("==> Publishing SDKs");
-		await publishSdk(opts);
-	}
+	// TODO: Currently using pkg.pr.new
+	// if (args.publishSdk || args.setupCi) {
+	// 	console.log("==> Publishing SDKs");
+	// 	await publishSdk(opts);
+	// }
 
 	if (args.tagDocker || args.completeCi) {
 		console.log("==> Tagging Docker");
