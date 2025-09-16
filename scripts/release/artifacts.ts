@@ -13,16 +13,19 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 	// Get credentials and set them in the environment
 	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
 	if (!awsAccessKeyId) {
-		const result = await $`op read "op://Engineering/rivet-releases R2 Upload/username"`;
+		const result =
+			await $`op read ${"op://Engineering/rivet-releases R2 Upload/username"}`;
 		awsAccessKeyId = result.stdout.trim();
 	}
 	let awsSecretAccessKey = process.env.R2_RELEASES_SECRET_ACCESS_KEY;
 	if (!awsSecretAccessKey) {
-		const result = await $`op read "op://Engineering/rivet-releases R2 Upload/password"`;
+		const result =
+			await $`op read ${"op://Engineering/rivet-releases R2 Upload/password"}`;
 		awsSecretAccessKey = result.stdout.trim();
 	}
 
-	const endpointUrl = "https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
+	const endpointUrl =
+		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
 
 	// Create AWS environment for commands
 	const awsEnv = {
@@ -34,7 +37,10 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 	// List all files under engine/{commit}/
 	const commitPrefix = `engine/${opts.commit}/`;
 	console.log(`==> Listing Original Files: ${commitPrefix}`);
-	const listResult = await $({ env: awsEnv, shell: true })`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
+	const listResult = await $({
+		env: awsEnv,
+		shell: true,
+	})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
 	const commitFiles = JSON.parse(listResult.stdout);
 	assert(
 		Array.isArray(commitFiles?.Contents) && commitFiles.Contents.length > 0,
@@ -62,11 +68,17 @@ async function copyFiles(
 	console.log(`==> Copying Files: ${targetPrefix}`);
 	// Delete existing files in target directory using --recursive
 	console.log(`Deleting existing files in ${targetPrefix}`);
-	await $({ env: awsEnv, shell: true })`aws s3 rm s3://rivet-releases/${targetPrefix} --recursive --endpoint-url ${endpointUrl}`;
+	await $({
+		env: awsEnv,
+		shell: true,
+	})`aws s3 rm s3://rivet-releases/${targetPrefix} --recursive --endpoint-url ${endpointUrl}`;
 
 	// Copy new files using --recursive
 	console.log(`Copying files from ${sourcePrefix} to ${targetPrefix}`);
-	await $({ env: awsEnv, shell: true })`aws s3 cp s3://rivet-releases/${sourcePrefix} s3://rivet-releases/${targetPrefix} --recursive --copy-props none --endpoint-url ${endpointUrl}`;
+	await $({
+		env: awsEnv,
+		shell: true,
+	})`aws s3 cp s3://rivet-releases/${sourcePrefix} s3://rivet-releases/${targetPrefix} --recursive --copy-props none --endpoint-url ${endpointUrl}`;
 }
 
 async function generateInstallScripts(
@@ -81,13 +93,17 @@ async function generateInstallScripts(
 	];
 
 	for (const scriptPath of installScriptPaths) {
-		let scriptContent = await fs.readFile(scriptPath, 'utf-8');
+		let scriptContent = await fs.readFile(scriptPath, "utf-8");
 		scriptContent = scriptContent.replace(/__VERSION__/g, version);
 
 		const uploadKey = `engine/${version}/${scriptPath.split("/").pop() ?? ""}`;
 
 		// Upload the install script to S3
 		console.log(`==> Uploading Install Script: ${uploadKey}`);
-		await $({ env: awsEnv, input: scriptContent, shell: true })`aws s3 cp - s3://rivet-releases/${uploadKey} --endpoint-url ${endpointUrl}`;
+		await $({
+			env: awsEnv,
+			input: scriptContent,
+			shell: true,
+		})`aws s3 cp - s3://rivet-releases/${uploadKey} --endpoint-url ${endpointUrl}`;
 	}
 }
