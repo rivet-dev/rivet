@@ -1,8 +1,8 @@
 import { $ } from "execa";
 
 const REPOS = [
-	{ name: "rivetgg/rivet-engine", prefix: "slim", main: true },
-	{ name: "rivetgg/rivet-engine", prefix: "full" },
+	{ name: "rivetkit/engine", prefix: "slim", main: true },
+	{ name: "rivetkit/engine", prefix: "full" },
 ]
 
 export async function tagDocker(opts: { version: string; commit: string; latest: boolean }) {
