@@ -3,18 +3,16 @@ use std::time::Instant;
 use futures_util::StreamExt;
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
+use namespace::types::RunnerKind;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol::protocol;
 use udb_util::{FormalKey, SERIALIZABLE, SNAPSHOT, TxnExt};
 use universaldb::{
 	self as udb,
-	options::{ConflictRangeType, StreamingMode},
+	options::{ConflictRangeType, MutationType, StreamingMode},
 };
 
-use crate::{
-	keys, metrics,
-	workflows::runner::{AllocatePendingActorsInput, RUNNER_ELIGIBLE_THRESHOLD_MS},
-};
+use crate::{keys, metrics, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
 
 use super::{
 	ACTOR_START_THRESHOLD_MS, Allocate, BASE_RETRY_TIMEOUT_MS, Destroy, Input, PendingAllocation,
@@ -105,6 +103,7 @@ async fn allocate_actor(
 	let start_instant = Instant::now();
 	let mut state = ctx.state::<State>()?;
 	let namespace_id = state.namespace_id;
+	let ns_runner_kind = &state.ns_runner_kind;
 
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
@@ -114,13 +113,24 @@ async fn allocate_actor(
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
 			let txs = tx.subspace(keys::subspace());
 
+			// Increment desired slots if namespace has an outbound runner kind
+			if let RunnerKind::Outbound { .. } = ns_runner_kind {
+				txs.atomic_op(
+					&keys::ns::OutboundDesiredSlotsKey::new(
+						namespace_id,
+						input.runner_name_selector.clone(),
+					),
+					&1u32.to_le_bytes(),
+					MutationType::Add,
+				);
+			}
+
 			// Check if a queue exists
-			let pending_actor_subspace = txs.subspace(
-				&keys::datacenter::PendingActorByRunnerNameSelectorKey::subspace(
+			let pending_actor_subspace =
+				txs.subspace(&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
 					namespace_id,
 					input.runner_name_selector.clone(),
-				),
-			);
+				));
 			let queue_exists = txs
 				.get_ranges_keyvalues(
 					udb::RangeOption {
@@ -137,11 +147,10 @@ async fn allocate_actor(
 				.is_some();
 
 			if !queue_exists {
-				let runner_alloc_subspace =
-					txs.subspace(&keys::datacenter::RunnerAllocIdxKey::subspace(
-						namespace_id,
-						input.runner_name_selector.clone(),
-					));
+				let runner_alloc_subspace = txs.subspace(&keys::ns::RunnerAllocIdxKey::subspace(
+					namespace_id,
+					input.runner_name_selector.clone(),
+				));
 
 				let mut stream = txs.get_ranges_keyvalues(
 					udb::RangeOption {
@@ -161,7 +170,7 @@ async fn allocate_actor(
 					};
 
 					let (old_runner_alloc_key, old_runner_alloc_key_data) =
-						txs.read_entry::<keys::datacenter::RunnerAllocIdxKey>(&entry)?;
+						txs.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
 
 					if let Some(highest_version) = highest_version {
 						// We have passed all of the runners with the highest version. This is reachable if
@@ -196,7 +205,7 @@ async fn allocate_actor(
 
 					// Write new allocation key with 1 less slot
 					txs.write(
-						&keys::datacenter::RunnerAllocIdxKey::new(
+						&keys::ns::RunnerAllocIdxKey::new(
 							namespace_id,
 							input.runner_name_selector.clone(),
 							old_runner_alloc_key.version,
@@ -204,7 +213,7 @@ async fn allocate_actor(
 							old_runner_alloc_key.last_ping_ts,
 							old_runner_alloc_key.runner_id,
 						),
-						rivet_key_data::converted::RunnerAllocIdxKeyData {
+						rivet_data::converted::RunnerAllocIdxKeyData {
 							workflow_id: old_runner_alloc_key_data.workflow_id,
 							remaining_slots: new_remaining_slots,
 							total_slots: old_runner_alloc_key_data.total_slots,
@@ -250,7 +259,7 @@ async fn allocate_actor(
 			// want. If a runner reads from the queue while this is being inserted, one of the two txns will
 			// retry and we ensure the actor does not end up in queue limbo.
 			txs.write(
-				&keys::datacenter::PendingActorByRunnerNameSelectorKey::new(
+				&keys::ns::PendingActorByRunnerNameSelectorKey::new(
 					namespace_id,
 					input.runner_name_selector.clone(),
 					pending_ts,
@@ -299,7 +308,7 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 
 			Ok(())
 		})
-		.custom_instrument(tracing::info_span!("actor_deallocate_tx"))
+		.custom_instrument(tracing::info_span!("actor_set_not_connectable_tx"))
 		.await?;
 
 	state.connectable_ts = None;
@@ -318,11 +327,13 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	let runner_name_selector = &state.runner_name_selector;
 	let namespace_id = state.namespace_id;
 	let runner_id = state.runner_id;
+	let ns_runner_kind = &state.ns_runner_kind;
 
 	ctx.udb()?
 		.run(|tx, _mc| async move {
-			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
-			tx.clear(&keys::subspace().pack(&connectable_key));
+			let txs = tx.subspace(keys::subspace());
+
+			txs.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
 			if let Some(runner_id) = runner_id {
 				destroy::clear_slot(
@@ -330,9 +341,19 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 					namespace_id,
 					runner_name_selector,
 					runner_id,
+					ns_runner_kind,
 					&tx,
 				)
 				.await?;
+			} else if let RunnerKind::Outbound { .. } = ns_runner_kind {
+				txs.atomic_op(
+					&keys::ns::OutboundDesiredSlotsKey::new(
+						namespace_id,
+						runner_name_selector.clone(),
+					),
+					&(-1i32).to_le_bytes(),
+					MutationType::Add,
+				);
 			}
 
 			Ok(())
@@ -369,6 +390,10 @@ pub async fn spawn_actor(
 				actor_id=?input.actor_id,
 				"failed to allocate (no availability), waiting for allocation",
 			);
+
+			ctx.msg(crate::messages::BumpOutboundAutoscaler {})
+				.send()
+				.await?;
 
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
 			// an `Allocate` signal
@@ -441,34 +466,8 @@ pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut LifecycleState,
-	sleeping: bool,
 ) -> Result<bool> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
-
-	// There shouldn't be an allocation if the actor is sleeping
-	if !sleeping {
-		ctx.activity(DeallocateInput {
-			actor_id: input.actor_id,
-		})
-		.await?;
-
-		// Allocate other pending actors from queue
-		let res = ctx
-			.activity(AllocatePendingActorsInput {
-				namespace_id: input.namespace_id,
-				name: input.runner_name_selector.clone(),
-			})
-			.await?;
-
-		// Dispatch pending allocs
-		for alloc in res.allocations {
-			ctx.signal(alloc.signal)
-				.to_workflow::<super::Workflow>()
-				.tag("actor_id", alloc.actor_id)
-				.send()
-				.await?;
-		}
-	}
 
 	let next_generation = state.generation + 1;
 
@@ -563,7 +562,7 @@ pub async fn clear_pending_allocation(
 		.udb()?
 		.run(|tx, _mc| async move {
 			let pending_alloc_key =
-				keys::subspace().pack(&keys::datacenter::PendingActorByRunnerNameSelectorKey::new(
+				keys::subspace().pack(&keys::ns::PendingActorByRunnerNameSelectorKey::new(
 					input.namespace_id,
 					input.runner_name_selector.clone(),
 					input.pending_allocation_ts,

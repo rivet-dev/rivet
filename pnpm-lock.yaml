@@ -741,6 +741,9 @@ importers:
       '@rivetkit/engine-runner-protocol':
         specifier: workspace:*
         version: link:../runner-protocol
+      hono:
+        specifier: ^4.0.0
+        version: 4.8.12
       ws:
         specifier: ^8.18.3
         version: 8.18.3

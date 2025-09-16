@@ -3,6 +3,7 @@ use std::result::Result::Ok;
 use anyhow::*;
 use gas::prelude::*;
 use udb_util::prelude::*;
+use versioned_data_util::OwnedVersionedData;
 
 pub fn subspace() -> udb_util::Subspace {
 	udb_util::Subspace::new(&(RIVET, NAMESPACE))
@@ -139,6 +140,55 @@ impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, namespace_id, _)) = <(usize, Id, usize)>::unpack(input, tuple_depth)?;
 		let v = CreateTsKey { namespace_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct RunnerKindKey {
+	namespace_id: Id,
+}
+
+impl RunnerKindKey {
+	pub fn new(namespace_id: Id) -> Self {
+		RunnerKindKey { namespace_id }
+	}
+}
+
+impl FormalKey for RunnerKindKey {
+	type Value = crate::types::RunnerKind;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(
+			rivet_data::versioned::NamespaceRunnerKind::deserialize_with_embedded_version(raw)?
+				.into(),
+		)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		rivet_data::versioned::NamespaceRunnerKind::latest(value.into())
+			.serialize_with_embedded_version(
+				rivet_data::PEGBOARD_NAMESPACE_RUNNER_ALLOC_IDX_VERSION,
+			)
+	}
+}
+
+impl TuplePack for RunnerKindKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (DATA, self.namespace_id, CREATE_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for RunnerKindKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, namespace_id, _)) = <(usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let v = RunnerKindKey { namespace_id };
 
 		Ok((input, v))
 	}

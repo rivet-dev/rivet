@@ -1,13 +1,14 @@
 use anyhow::Result;
 use axum::{
 	body::Bytes,
-	extract::{Extension, Path, Query},
+	extract::{Extension, Path},
 	response::{IntoResponse, Json},
 	routing::{
 		delete as axum_delete, get as axum_get, patch as axum_patch, post as axum_post,
 		put as axum_put,
 	},
 };
+use axum_extra::extract::Query;
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 

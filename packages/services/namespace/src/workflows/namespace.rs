@@ -1,10 +1,9 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
-use udb_util::{FormalKey, SERIALIZABLE};
-use universaldb as udb;
+use udb_util::{SERIALIZABLE, TxnExt};
 
-use crate::{errors, keys};
+use crate::{errors, keys, types::RunnerKind};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Input {
@@ -59,7 +58,7 @@ pub async fn namespace(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Does nothing yet
 	ctx.repeat(|ctx| {
 		async move {
-			ctx.listen::<NamespaceUpdate>().await?;
+			ctx.listen::<Update>().await?;
 
 			Ok(Loop::<()>::Continue)
 		}
@@ -79,7 +78,7 @@ pub struct Failed {
 }
 
 #[signal("namespace_update")]
-pub struct NamespaceUpdate {}
+pub struct Update {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ValidateInput {
@@ -156,45 +155,29 @@ async fn insert_fdb(
 			let display_name = input.display_name.clone();
 
 			async move {
-				let name_key = keys::NameKey::new(namespace_id);
+				let txs = tx.subspace(keys::subspace());
+
 				let name_idx_key = keys::ByNameKey::new(name.clone());
-				let display_name_key = keys::DisplayNameKey::new(namespace_id);
-				let create_ts_key = keys::CreateTsKey::new(namespace_id);
 
-				let name_idx_entry = tx
-					.get(&keys::subspace().pack(&name_idx_key), SERIALIZABLE)
-					.await?;
-
-				if name_idx_entry.is_some() {
+				if txs.exists(&name_idx_key, SERIALIZABLE).await? {
 					return Ok(Err(errors::Namespace::NameNotUnique));
 				}
 
-				tx.set(
-					&keys::subspace().pack(&name_key),
-					&name_key
-						.serialize(name)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-				);
-				tx.set(
-					&keys::subspace().pack(&display_name_key),
-					&display_name_key
-						.serialize(display_name)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-				);
-				tx.set(
-					&keys::subspace().pack(&create_ts_key),
-					&create_ts_key
-						.serialize(input.create_ts)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-				);
+				txs.write(&keys::NameKey::new(namespace_id), name)?;
+				txs.write(&keys::DisplayNameKey::new(namespace_id), display_name)?;
+				txs.write(&keys::CreateTsKey::new(namespace_id), input.create_ts)?;
+				txs.write(&keys::RunnerKindKey::new(namespace_id), RunnerKind::Custom)?;
+
+				// RunnerKind::Outbound {
+				// 	url: "http://runner:5051/start".to_string(),
+				// 	slots_per_runner: 10,
+				// 	min_runners: 1,
+				// 	max_runners: 1,
+				// 	runners_margin: 0,
+				// }
 
 				// Insert idx
-				tx.set(
-					&keys::subspace().pack(&name_idx_key),
-					&name_idx_key
-						.serialize(namespace_id)
-						.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?,
-				);
+				txs.write(&name_idx_key, namespace_id)?;
 
 				Ok(Ok(()))
 			}

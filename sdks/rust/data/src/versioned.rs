@@ -4,13 +4,13 @@ use versioned_data_util::OwnedVersionedData;
 use crate::generated::*;
 
 pub enum RunnerAllocIdxKeyData {
-	V1(pegboard_datacenter_runner_alloc_idx_v1::Data),
+	V1(pegboard_namespace_runner_alloc_idx_v1::Data),
 }
 
 impl OwnedVersionedData for RunnerAllocIdxKeyData {
-	type Latest = pegboard_datacenter_runner_alloc_idx_v1::Data;
+	type Latest = pegboard_namespace_runner_alloc_idx_v1::Data;
 
-	fn latest(latest: pegboard_datacenter_runner_alloc_idx_v1::Data) -> Self {
+	fn latest(latest: pegboard_namespace_runner_alloc_idx_v1::Data) -> Self {
 		RunnerAllocIdxKeyData::V1(latest)
 	}
 
@@ -203,6 +203,40 @@ impl OwnedVersionedData for ActorNameKeyData {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ActorNameKeyData::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+pub enum NamespaceRunnerKind {
+	V1(namespace_runner_kind_v1::Data),
+}
+
+impl OwnedVersionedData for NamespaceRunnerKind {
+	type Latest = namespace_runner_kind_v1::Data;
+
+	fn latest(latest: namespace_runner_kind_v1::Data) -> Self {
+		NamespaceRunnerKind::V1(latest)
+	}
+
+	fn into_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let NamespaceRunnerKind::V1(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(NamespaceRunnerKind::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			NamespaceRunnerKind::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 }

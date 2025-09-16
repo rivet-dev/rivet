@@ -1,0 +1,14 @@
+type Outbound struct {
+	url: str
+	slots_per_runner: u32
+	min_runners: u32
+	max_runners: u32
+	runners_margin: u32
+}
+
+type Custom void
+
+type Data union {
+	Outbound |
+	Custom
+}

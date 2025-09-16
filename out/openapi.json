@@ -465,6 +465,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "namespace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RivetId"
+              }
+            }
           }
         ],
         "responses": {
@@ -1042,7 +1053,8 @@
           "namespace_id",
           "name",
           "display_name",
-          "create_ts"
+          "create_ts",
+          "runner_kind"
         ],
         "properties": {
           "create_ts": {
@@ -1057,6 +1069,9 @@
           },
           "namespace_id": {
             "$ref": "#/components/schemas/RivetId"
+          },
+          "runner_kind": {
+            "$ref": "#/components/schemas/RunnerKind"
           }
         }
       },
@@ -1237,6 +1252,59 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunnerKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "outbound"
+            ],
+            "properties": {
+              "outbound": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "slots_per_runner",
+                  "min_runners",
+                  "max_runners",
+                  "runners_margin"
+                ],
+                "properties": {
+                  "max_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "min_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "runners_margin": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "slots_per_runner": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "custom"
+            ]
+          }
+        ]
       },
       "RunnersGetResponse": {
         "type": "object",

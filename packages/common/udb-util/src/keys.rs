@@ -59,7 +59,7 @@ define_keys! {
 	(31, DBS, "dbs"),
 	(32, ACTOR, "actor"),
 	(33, BY_NAME, "by_name"),
-	(34, DATACENTER, "datacenter"),
+	// 34
 	(35, REMAINING_MEMORY, "remaining_memory"),
 	(36, REMAINING_CPU, "remaining_cpu"),
 	(37, TOTAL_MEMORY, "total_memory"),
@@ -119,4 +119,6 @@ define_keys! {
 	(91, METRIC, "metric"),
 	(92, CURRENT_BALLOT, "current_ballot"),
 	(93, INSTANCE_BALLOT, "instance_ballot"),
+	(94, OUTBOUND, "outbound"),
+	(95, DESIRED_SLOTS, "desired_slots"),
 }

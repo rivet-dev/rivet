@@ -125,8 +125,12 @@ async fn forward_to_datacenter(
 
 	// Get namespace name for the remote call
 	let namespace = ctx
-		.op(namespace::ops::get_global::Input { namespace_id })
+		.op(namespace::ops::get_global::Input {
+			namespace_ids: vec![namespace_id],
+		})
 		.await?
+		.into_iter()
+		.next()
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	// Generate a new actor ID with the correct datacenter label

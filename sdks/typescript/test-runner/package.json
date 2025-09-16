@@ -11,6 +11,7 @@
 		"@rivetkit/engine-runner": "workspace:*",
 		"@hono/node-server": "^1.18.2",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
+		"hono": "^4.0.0",
 		"ws": "^8.18.3"
 	},
 	"devDependencies": {

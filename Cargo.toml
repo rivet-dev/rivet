@@ -1,7 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["packages/common/api-builder","packages/common/api-client","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/udb-util","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner-ws","packages/core/pegboard-tunnel","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/bare_gen","sdks/rust/epoxy-protocol","sdks/rust/key-data","sdks/rust/runner-protocol","sdks/rust/tunnel-protocol","sdks/rust/ups-protocol"]
+members = ["packages/common/api-builder","packages/common/api-client","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/udb-util","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-outbound","packages/core/pegboard-runner-ws","packages/core/pegboard-tunnel","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/bare_gen","sdks/rust/data","sdks/rust/epoxy-protocol","sdks/rust/runner-protocol","sdks/rust/tunnel-protocol","sdks/rust/ups-protocol"]
 
 [workspace.package]
 version = "25.6.1"
@@ -79,6 +79,7 @@ tracing-core = "0.1"
 tracing-opentelemetry = "0.29"
 tracing-slog = "0.2"
 vergen = "9.0.4"
+reqwest-eventsource = "0.6.0"
 
 [workspace.dependencies.sentry]
 version = "0.37.0"
@@ -117,6 +118,10 @@ features = ["uuid"]
 [workspace.dependencies.axum]
 version = "0.8"
 features = ["http2"]
+
+[workspace.dependencies.axum-extra]
+version = "0.10.1"
+features = ["query"]
 
 [workspace.dependencies.tower-http]
 version = "0.6"
@@ -359,6 +364,9 @@ path = "packages/core/guard/server"
 [workspace.dependencies.pegboard-gateway]
 path = "packages/core/pegboard-gateway"
 
+[workspace.dependencies.pegboard-outbound]
+path = "packages/core/pegboard-outbound"
+
 [workspace.dependencies.pegboard-runner-ws]
 path = "packages/core/pegboard-runner-ws"
 
@@ -386,11 +394,11 @@ path = "sdks/rust/api-full"
 [workspace.dependencies.bare_gen]
 path = "sdks/rust/bare_gen"
 
+[workspace.dependencies.rivet-data]
+path = "sdks/rust/data"
+
 [workspace.dependencies.epoxy-protocol]
 path = "sdks/rust/epoxy-protocol"
-
-[workspace.dependencies.rivet-key-data]
-path = "sdks/rust/key-data"
 
 [workspace.dependencies.rivet-runner-protocol]
 path = "sdks/rust/runner-protocol"

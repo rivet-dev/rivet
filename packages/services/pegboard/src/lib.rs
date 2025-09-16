@@ -2,6 +2,7 @@ use gas::prelude::*;
 
 pub mod errors;
 pub mod keys;
+pub mod messages;
 mod metrics;
 pub mod ops;
 pub mod pubsub_subjects;

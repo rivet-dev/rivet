@@ -378,6 +378,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-extra"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45bf463831f5131b7d3c756525b305d40f1185b688565648a92e1392ca35713d"
+dependencies = [
+ "axum 0.8.4",
+ "axum-core 0.5.2",
+ "bytes",
+ "form_urlencoded",
+ "futures-util",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "rustversion",
+ "serde",
+ "serde_html_form",
+ "serde_path_to_error",
+ "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "axum-test"
 version = "17.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1451,6 +1476,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "eventsource-stream"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74fef4569247a5f429d9156b9d0a2599914385dd189c539334c625d8099d90ab"
+dependencies = [
+ "futures-core",
+ "nom",
  "pin-project-lite",
 ]
 
@@ -2737,6 +2773,7 @@ dependencies = [
  "gasoline",
  "rivet-api-builder",
  "rivet-api-util",
+ "rivet-data",
  "rivet-error",
  "rivet-util",
  "serde",
@@ -2744,6 +2781,7 @@ dependencies = [
  "udb-util",
  "universaldb",
  "utoipa",
+ "versioned-data-util",
 ]
 
 [[package]]
@@ -3217,8 +3255,8 @@ dependencies = [
  "rivet-api-client",
  "rivet-api-types",
  "rivet-api-util",
+ "rivet-data",
  "rivet-error",
- "rivet-key-data",
  "rivet-metrics",
  "rivet-runner-protocol",
  "rivet-types",
@@ -3960,14 +3998,32 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.26.2",
+ "tokio-util",
  "tower 0.5.2",
  "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 1.0.2",
+]
+
+[[package]]
+name = "reqwest-eventsource"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "632c55746dbb44275691640e7b40c907c16a2dc1a5842aa98aaec90da6ec6bde"
+dependencies = [
+ "eventsource-stream",
+ "futures-core",
+ "futures-timer",
+ "mime",
+ "nom",
+ "pin-project-lite",
+ "reqwest",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3999,6 +4055,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
+ "axum-extra",
  "axum-test",
  "chrono",
  "gasoline",
@@ -4205,6 +4262,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-data"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bare_gen",
+ "gasoline",
+ "indoc",
+ "prettyplease",
+ "rivet-runner-protocol",
+ "rivet-util",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "syn 2.0.104",
+ "versioned-data-util",
+]
+
+[[package]]
 name = "rivet-dump-openapi"
 version = "0.0.1"
 dependencies = [
@@ -4231,6 +4306,7 @@ dependencies = [
  "lz4_flex",
  "namespace",
  "pegboard",
+ "pegboard-outbound",
  "pegboard-runner-ws",
  "portpicker",
  "rand 0.8.5",
@@ -4327,9 +4403,9 @@ dependencies = [
  "rivet-api-public",
  "rivet-cache",
  "rivet-config",
+ "rivet-data",
  "rivet-error",
  "rivet-guard-core",
- "rivet-key-data",
  "rivet-logs",
  "rivet-metrics",
  "rivet-pools",
@@ -4390,24 +4466,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "rivet-key-data"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "bare_gen",
- "gasoline",
- "indoc",
- "prettyplease",
- "rivet-runner-protocol",
- "rivet-util",
- "serde",
- "serde_bare",
- "serde_json",
- "syn 2.0.104",
- "versioned-data-util",
 ]
 
 [[package]]
@@ -4615,7 +4673,7 @@ dependencies = [
  "anyhow",
  "gasoline",
  "rivet-api-builder",
- "rivet-key-data",
+ "rivet-data",
  "rivet-runner-protocol",
  "rivet-util",
  "serde",
@@ -5213,6 +5271,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "serde_html_form"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d2de91cf02bbc07cde38891769ccd5d4f073d22a40683aa4bc7a95781aaa2c4"
+dependencies = [
+ "form_urlencoded",
+ "indexmap 2.10.0",
+ "itoa 1.0.15",
+ "ryu",
+ "serde",
 ]
 
 [[package]]
@@ -6616,6 +6687,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

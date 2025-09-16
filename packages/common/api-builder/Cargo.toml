@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
 gas.workspace = true
 chrono.workspace = true
 hyper = { workspace = true, features = ["full"] }

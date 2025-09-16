@@ -9,10 +9,10 @@ pub struct RunnerAllocIdxKeyData {
 	pub total_slots: u32,
 }
 
-impl TryFrom<pegboard_datacenter_runner_alloc_idx_v1::Data> for RunnerAllocIdxKeyData {
+impl TryFrom<pegboard_namespace_runner_alloc_idx_v1::Data> for RunnerAllocIdxKeyData {
 	type Error = anyhow::Error;
 
-	fn try_from(value: pegboard_datacenter_runner_alloc_idx_v1::Data) -> Result<Self> {
+	fn try_from(value: pegboard_namespace_runner_alloc_idx_v1::Data) -> Result<Self> {
 		Ok(RunnerAllocIdxKeyData {
 			workflow_id: Id::from_slice(&value.workflow_id)?,
 			remaining_slots: value.remaining_slots,
@@ -21,11 +21,11 @@ impl TryFrom<pegboard_datacenter_runner_alloc_idx_v1::Data> for RunnerAllocIdxKe
 	}
 }
 
-impl TryFrom<RunnerAllocIdxKeyData> for pegboard_datacenter_runner_alloc_idx_v1::Data {
+impl TryFrom<RunnerAllocIdxKeyData> for pegboard_namespace_runner_alloc_idx_v1::Data {
 	type Error = anyhow::Error;
 
 	fn try_from(value: RunnerAllocIdxKeyData) -> Result<Self> {
-		Ok(pegboard_datacenter_runner_alloc_idx_v1::Data {
+		Ok(pegboard_namespace_runner_alloc_idx_v1::Data {
 			workflow_id: value.workflow_id.as_bytes(),
 			remaining_slots: value.remaining_slots,
 			total_slots: value.total_slots,

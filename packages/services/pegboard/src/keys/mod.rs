@@ -1,7 +1,6 @@
 use udb_util::prelude::*;
 
 pub mod actor;
-pub mod datacenter;
 pub mod epoxy;
 pub mod ns;
 pub mod runner;

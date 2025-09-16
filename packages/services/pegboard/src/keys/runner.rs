@@ -524,15 +524,15 @@ impl AddressKey {
 }
 
 impl FormalKey for AddressKey {
-	type Value = <rivet_key_data::versioned::AddressKeyData as OwnedVersionedData>::Latest;
+	type Value = <rivet_data::versioned::AddressKeyData as OwnedVersionedData>::Latest;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		rivet_key_data::versioned::AddressKeyData::deserialize_with_embedded_version(raw)
+		rivet_data::versioned::AddressKeyData::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		rivet_key_data::versioned::AddressKeyData::latest(value)
-			.serialize_with_embedded_version(rivet_key_data::PEGBOARD_RUNNER_ADDRESS_VERSION)
+		rivet_data::versioned::AddressKeyData::latest(value)
+			.serialize_with_embedded_version(rivet_data::PEGBOARD_RUNNER_ADDRESS_VERSION)
 	}
 }
 
@@ -816,7 +816,7 @@ impl MetadataKey {
 
 impl FormalChunkedKey for MetadataKey {
 	type ChunkKey = MetadataChunkKey;
-	type Value = rivet_key_data::converted::MetadataKeyData;
+	type Value = rivet_data::converted::MetadataKeyData;
 
 	fn chunk(&self, chunk: usize) -> Self::ChunkKey {
 		MetadataChunkKey {
@@ -826,7 +826,7 @@ impl FormalChunkedKey for MetadataKey {
 	}
 
 	fn combine(&self, chunks: Vec<FdbValue>) -> Result<Self::Value> {
-		rivet_key_data::versioned::MetadataKeyData::deserialize_with_embedded_version(
+		rivet_data::versioned::MetadataKeyData::deserialize_with_embedded_version(
 			&chunks
 				.iter()
 				.map(|x| x.value().iter().map(|x| *x))
@@ -838,8 +838,8 @@ impl FormalChunkedKey for MetadataKey {
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
 		Ok(
-			rivet_key_data::versioned::MetadataKeyData::latest(value.try_into()?)
-				.serialize_with_embedded_version(rivet_key_data::PEGBOARD_RUNNER_METADATA_VERSION)?
+			rivet_data::versioned::MetadataKeyData::latest(value.try_into()?)
+				.serialize_with_embedded_version(rivet_data::PEGBOARD_RUNNER_METADATA_VERSION)?
 				.chunks(udb_util::CHUNK_SIZE)
 				.map(|x| x.to_vec())
 				.collect(),

@@ -121,7 +121,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 
 					let remaining_millislots = (remaining_slots * 1000) / total_slots;
 
-					let old_alloc_key = keys::datacenter::RunnerAllocIdxKey::new(
+					let old_alloc_key = keys::ns::RunnerAllocIdxKey::new(
 						namespace_id,
 						name.clone(),
 						version,
@@ -140,7 +140,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						Action::AddIdx => {
 							txs.write(
 								&old_alloc_key,
-								rivet_key_data::converted::RunnerAllocIdxKeyData {
+								rivet_data::converted::RunnerAllocIdxKeyData {
 									workflow_id,
 									remaining_slots,
 									total_slots,
@@ -162,7 +162,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 								txs.delete(&old_alloc_key);
 
 								txs.write(
-									&keys::datacenter::RunnerAllocIdxKey::new(
+									&keys::ns::RunnerAllocIdxKey::new(
 										namespace_id,
 										name.clone(),
 										version,
@@ -170,7 +170,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 										last_ping_ts,
 										runner.runner_id,
 									),
-									rivet_key_data::converted::RunnerAllocIdxKeyData {
+									rivet_data::converted::RunnerAllocIdxKeyData {
 										workflow_id,
 										remaining_slots,
 										total_slots,

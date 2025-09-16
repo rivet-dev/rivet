@@ -1,7 +1,7 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
-use rivet_key_data::generated::pegboard_runner_address_v1::Data as AddressKeyData;
+use rivet_data::generated::pegboard_runner_address_v1::Data as AddressKeyData;
 use rivet_types::runners::Runner;
 use udb_util::{FormalChunkedKey, SERIALIZABLE, SNAPSHOT, TxnExt};
 use universaldb::{self as udb, options::StreamingMode};

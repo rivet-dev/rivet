@@ -61,7 +61,7 @@ fn main() {
 		.and_then(|p| p.parent())
 		.expect("Failed to find workspace root");
 
-	let schema_dir = workspace_root.join("sdks").join("schemas").join("key-data");
+	let schema_dir = workspace_root.join("sdks").join("schemas").join("data");
 
 	println!("cargo:rerun-if-changed={}", schema_dir.display());
 

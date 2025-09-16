@@ -1,6 +1,6 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_key_data::converted::ActorNameKeyData;
+use rivet_data::converted::ActorNameKeyData;
 use udb_util::{SNAPSHOT, TxnExt};
 use universaldb::{self as udb, options::StreamingMode};
 

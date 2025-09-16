@@ -13,3 +13,10 @@ pub async fn client() -> Result<Client, reqwest::Error> {
 		.await
 		.cloned()
 }
+
+pub async fn client_no_timeout() -> Result<Client, reqwest::Error> {
+	CLIENT
+		.get_or_try_init(|| async { Client::builder().build() })
+		.await
+		.cloned()
+}

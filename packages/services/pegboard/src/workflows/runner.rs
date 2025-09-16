@@ -1,6 +1,6 @@
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_key_data::{
+use rivet_data::{
 	converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData},
 	generated::pegboard_runner_address_v1::Data as AddressKeyData,
 };
@@ -639,7 +639,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 
 			// Insert into index (same as the `update_alloc_idx` op with `AddIdx`)
 			txs.write(
-				&keys::datacenter::RunnerAllocIdxKey::new(
+				&keys::ns::RunnerAllocIdxKey::new(
 					input.namespace_id,
 					input.name.clone(),
 					input.version,
@@ -647,7 +647,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> Result<()> {
 					last_ping_ts,
 					input.runner_id,
 				),
-				rivet_key_data::converted::RunnerAllocIdxKeyData {
+				rivet_data::converted::RunnerAllocIdxKeyData {
 					workflow_id: ctx.workflow_id(),
 					remaining_slots,
 					total_slots: input.total_slots,
@@ -998,12 +998,11 @@ pub(crate) async fn allocate_pending_actors(
 			let txs = tx.subspace(keys::subspace());
 			let mut results = Vec::new();
 
-			let pending_actor_subspace = txs.subspace(
-				&keys::datacenter::PendingActorByRunnerNameSelectorKey::subspace(
+			let pending_actor_subspace =
+				txs.subspace(&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
 					input.namespace_id,
 					input.name.clone(),
-				),
-			);
+				));
 			let mut queue_stream = txs.get_ranges_keyvalues(
 				udb::RangeOption {
 					mode: StreamingMode::Iterator,
@@ -1021,15 +1020,12 @@ pub(crate) async fn allocate_pending_actors(
 				};
 
 				let (queue_key, generation) =
-					txs.read_entry::<keys::datacenter::PendingActorByRunnerNameSelectorKey>(
-						&queue_entry,
-					)?;
+					txs.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
 
-				let runner_alloc_subspace =
-					txs.subspace(&keys::datacenter::RunnerAllocIdxKey::subspace(
-						input.namespace_id,
-						input.name.clone(),
-					));
+				let runner_alloc_subspace = txs.subspace(&keys::ns::RunnerAllocIdxKey::subspace(
+					input.namespace_id,
+					input.name.clone(),
+				));
 
 				let mut stream = txs.get_ranges_keyvalues(
 					udb::RangeOption {
@@ -1051,7 +1047,7 @@ pub(crate) async fn allocate_pending_actors(
 					};
 
 					let (old_runner_alloc_key, old_runner_alloc_key_data) =
-						txs.read_entry::<keys::datacenter::RunnerAllocIdxKey>(&entry)?;
+						txs.read_entry::<keys::ns::RunnerAllocIdxKey>(&entry)?;
 
 					if let Some(highest_version) = highest_version {
 						// We have passed all of the runners with the highest version. This is reachable if
@@ -1088,7 +1084,7 @@ pub(crate) async fn allocate_pending_actors(
 
 					// Write new allocation key with 1 less slot
 					txs.write(
-						&keys::datacenter::RunnerAllocIdxKey::new(
+						&keys::ns::RunnerAllocIdxKey::new(
 							input.namespace_id,
 							input.name.clone(),
 							old_runner_alloc_key.version,
@@ -1096,7 +1092,7 @@ pub(crate) async fn allocate_pending_actors(
 							old_runner_alloc_key.last_ping_ts,
 							old_runner_alloc_key.runner_id,
 						),
-						rivet_key_data::converted::RunnerAllocIdxKeyData {
+						rivet_data::converted::RunnerAllocIdxKeyData {
 							workflow_id: old_runner_alloc_key_data.workflow_id,
 							remaining_slots: new_remaining_slots,
 							total_slots: old_runner_alloc_key_data.total_slots,

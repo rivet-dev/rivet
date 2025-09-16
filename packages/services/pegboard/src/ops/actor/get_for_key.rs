@@ -60,9 +60,11 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 		// Get namespace name for the remote call
 		let namespace = ctx
 			.op(namespace::ops::get_global::Input {
-				namespace_id: input.namespace_id,
+				namespace_ids: vec![input.namespace_id],
 			})
 			.await?
+			.into_iter()
+			.next()
 			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 		// Make request to remote datacenter

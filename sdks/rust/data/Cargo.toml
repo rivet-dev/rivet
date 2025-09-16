@@ -1,5 +1,5 @@
 [package]
-name = "rivet-key-data"
+name = "rivet-data"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -1,5 +1,5 @@
 use gas::prelude::*;
-use rivet_key_data::generated::pegboard_runner_address_v1;
+use rivet_data::generated::pegboard_runner_address_v1;
 use rivet_runner_protocol::protocol;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};

@@ -61,6 +61,16 @@ impl AsTags for serde_json::Value {
 	}
 }
 
+impl AsTags for () {
+	fn as_tags(&self) -> WorkflowResult<serde_json::Value> {
+		Ok(serde_json::Value::Object(serde_json::Map::new()))
+	}
+
+	fn as_cjson_tags(&self) -> WorkflowResult<String> {
+		Ok(String::new())
+	}
+}
+
 impl<T: AsTags> AsTags for &T {
 	fn as_tags(&self) -> WorkflowResult<serde_json::Value> {
 		(*self).as_tags()

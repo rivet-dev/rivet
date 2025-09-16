@@ -1,6 +1,6 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use udb_util::{FormalKey, SERIALIZABLE};
+use udb_util::{SERIALIZABLE, TxnExt};
 use universaldb as udb;
 
 use crate::{errors, keys, types::Namespace};
@@ -45,39 +45,40 @@ pub(crate) async fn get_inner(
 	namespace_id: Id,
 	tx: &udb::RetryableTransaction,
 ) -> std::result::Result<Option<Namespace>, udb::FdbBindingError> {
+	let txs = tx.subspace(keys::subspace());
+
 	let name_key = keys::NameKey::new(namespace_id);
 	let display_name_key = keys::DisplayNameKey::new(namespace_id);
 	let create_ts_key = keys::CreateTsKey::new(namespace_id);
+	let runner_kind_key = keys::RunnerKindKey::new(namespace_id);
 
-	let (name_entry, display_name_entry, create_ts_entry) = tokio::try_join!(
-		tx.get(&keys::subspace().pack(&name_key), SERIALIZABLE),
-		tx.get(&keys::subspace().pack(&display_name_key), SERIALIZABLE),
-		tx.get(&keys::subspace().pack(&create_ts_key), SERIALIZABLE),
+	let (name, display_name, create_ts, runner_kind) = tokio::try_join!(
+		txs.read_opt(&name_key, SERIALIZABLE),
+		txs.read_opt(&display_name_key, SERIALIZABLE),
+		txs.read_opt(&create_ts_key, SERIALIZABLE),
+		txs.read_opt(&runner_kind_key, SERIALIZABLE),
 	)?;
 
 	// Namespace not found
-	let Some(name_entry) = name_entry else {
+	let Some(name) = name else {
 		return Ok(None);
 	};
 
-	let name = name_key
-		.deserialize(&name_entry)
-		.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
-	let display_name = display_name_key
-		.deserialize(&display_name_entry.ok_or(udb::FdbBindingError::CustomError(
-			format!("key should exist: {display_name_key:?}").into(),
-		))?)
-		.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
-	let create_ts = create_ts_key
-		.deserialize(&create_ts_entry.ok_or(udb::FdbBindingError::CustomError(
-			format!("key should exist: {create_ts_key:?}").into(),
-		))?)
-		.map_err(|x| udb::FdbBindingError::CustomError(x.into()))?;
+	let display_name = display_name.ok_or(udb::FdbBindingError::CustomError(
+		format!("key should exist: {display_name_key:?}").into(),
+	))?;
+	let create_ts = create_ts.ok_or(udb::FdbBindingError::CustomError(
+		format!("key should exist: {create_ts_key:?}").into(),
+	))?;
+	let runner_kind = runner_kind.ok_or(udb::FdbBindingError::CustomError(
+		format!("key should exist: {runner_kind_key:?}").into(),
+	))?;
 
 	Ok(Some(Namespace {
 		namespace_id,
 		name,
 		display_name,
 		create_ts,
+		runner_kind,
 	}))
 }

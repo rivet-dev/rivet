@@ -35,6 +35,7 @@ export interface RunnerConfig {
 	metadata?: Record<string, any>;
 	onConnected: () => void;
 	onDisconnected: () => void;
+	onShutdown: () => void;
 	fetch: (actorId: string, request: Request) => Promise<Response>;
 	websocket?: (actorId: string, ws: any, request: Request) => Promise<void>;
 	onActorStart: (
@@ -362,9 +363,9 @@ export class Runner {
 			//console.log("Tunnel shutdown completed");
 		}
 
-		if (exit) {
-			process.exit(0);
-		}
+		if (exit) process.exit(0);
+
+		this.#config.onShutdown();
 	}
 
 	// MARK: Networking

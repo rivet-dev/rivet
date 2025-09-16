@@ -1,8 +1,9 @@
 use gas::prelude::*;
-use rivet_key_data::converted::ActorByKeyKeyData;
+use namespace::types::RunnerKind;
+use rivet_data::converted::ActorByKeyKeyData;
 use rivet_runner_protocol::protocol;
 use udb_util::{SERIALIZABLE, TxnExt};
-use universaldb as udb;
+use universaldb::{self as udb, options::MutationType};
 
 use super::{DestroyComplete, DestroyStarted, State};
 
@@ -85,6 +86,7 @@ async fn update_state_and_fdb(
 						state.namespace_id,
 						&state.runner_name_selector,
 						runner_id,
+						&state.ns_runner_kind,
 						&tx,
 					)
 					.await?;
@@ -162,6 +164,7 @@ pub(crate) async fn clear_slot(
 	namespace_id: Id,
 	runner_name_selector: &str,
 	runner_id: Id,
+	ns_runner_kind: &RunnerKind,
 	tx: &udb::RetryableTransaction,
 ) -> Result<(), udb::FdbBindingError> {
 	let txs = tx.subspace(keys::subspace());
@@ -198,7 +201,7 @@ pub(crate) async fn clear_slot(
 	// Write new remaining slots
 	txs.write(&runner_remaining_slots_key, new_runner_remaining_slots)?;
 
-	let old_runner_alloc_key = keys::datacenter::RunnerAllocIdxKey::new(
+	let old_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
 		namespace_id,
 		runner_name_selector.to_string(),
 		runner_version,
@@ -213,7 +216,7 @@ pub(crate) async fn clear_slot(
 		txs.delete(&old_runner_alloc_key);
 
 		let new_remaining_millislots = (new_runner_remaining_slots * 1000) / runner_total_slots;
-		let new_runner_alloc_key = keys::datacenter::RunnerAllocIdxKey::new(
+		let new_runner_alloc_key = keys::ns::RunnerAllocIdxKey::new(
 			namespace_id,
 			runner_name_selector.to_string(),
 			runner_version,
@@ -224,12 +227,20 @@ pub(crate) async fn clear_slot(
 
 		txs.write(
 			&new_runner_alloc_key,
-			rivet_key_data::converted::RunnerAllocIdxKeyData {
+			rivet_data::converted::RunnerAllocIdxKeyData {
 				workflow_id: runner_workflow_id,
 				remaining_slots: new_runner_remaining_slots,
 				total_slots: runner_total_slots,
 			},
 		)?;
+	}
+
+	if let RunnerKind::Outbound { .. } = ns_runner_kind {
+		txs.atomic_op(
+			&keys::ns::OutboundDesiredSlotsKey::new(namespace_id, runner_name_selector.to_string()),
+			&(-1i32).to_le_bytes(),
+			MutationType::Add,
+		);
 	}
 
 	Ok(())

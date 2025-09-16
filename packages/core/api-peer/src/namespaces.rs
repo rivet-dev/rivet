@@ -73,6 +73,7 @@ pub struct ListQuery {
 	pub limit: Option<usize>,
 	pub cursor: Option<String>,
 	pub name: Option<String>,
+	pub namespace_id: Vec<Id>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -85,7 +86,7 @@ pub struct ListResponse {
 
 #[utoipa::path(
     get,
-	operation_id = "actors_list",
+	operation_id = "namespaces_list",
     path = "/namespaces",
     params(ListQuery),
     responses(
@@ -104,6 +105,17 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 		} else {
 			vec![]
 		};
+
+		Ok(ListResponse {
+			namespaces,
+			pagination: Pagination { cursor: None },
+		})
+	} else if !query.namespace_id.is_empty() {
+		let namespaces = ctx
+			.op(namespace::ops::get_global::Input {
+				namespace_ids: query.namespace_id,
+			})
+			.await?;
 
 		Ok(ListResponse {
 			namespaces,
@@ -145,7 +157,7 @@ pub struct CreateResponse {
 
 #[utoipa::path(
     post,
-	operation_id = "actors_create",
+	operation_id = "namespaces_create",
     path = "/namespaces",
 	request_body(content = CreateRequest, content_type = "application/json"),
     responses(

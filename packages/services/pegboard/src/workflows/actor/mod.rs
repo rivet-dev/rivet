@@ -1,5 +1,6 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
+use namespace::types::RunnerKind;
 use rivet_runner_protocol::protocol;
 use rivet_types::actors::CrashPolicy;
 
@@ -45,6 +46,9 @@ pub struct State {
 
 	pub create_ts: i64,
 	pub create_complete_ts: Option<i64>,
+
+	pub ns_runner_kind: RunnerKind,
+
 	pub start_ts: Option<i64>,
 	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
 	pub sleep_ts: Option<i64>,
@@ -66,6 +70,7 @@ impl State {
 		runner_name_selector: String,
 		crash_policy: CrashPolicy,
 		create_ts: i64,
+		ns_runner_kind: RunnerKind,
 	) -> Self {
 		State {
 			name,
@@ -77,6 +82,8 @@ impl State {
 
 			create_ts,
 			create_complete_ts: None,
+
+			ns_runner_kind,
 
 			start_ts: None,
 			pending_allocation_ts: None,
@@ -115,15 +122,18 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		})
 		.await?;
 
-	if let Err(error) = validation_res {
-		ctx.msg(Failed { error })
-			.tag("actor_id", input.actor_id)
-			.send()
-			.await?;
+	let metadata = match validation_res {
+		Ok(metadata) => metadata,
+		Err(error) => {
+			ctx.msg(Failed { error })
+				.tag("actor_id", input.actor_id)
+				.send()
+				.await?;
 
-		// TODO(RVT-3928): return Ok(Err);
-		return Ok(());
-	}
+			// TODO(RVT-3928): return Ok(Err);
+			return Ok(());
+		}
+	};
 
 	ctx.activity(setup::InitStateAndUdbInput {
 		actor_id: input.actor_id,
@@ -133,6 +143,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		runner_name_selector: input.runner_name_selector.clone(),
 		crash_policy: input.crash_policy,
 		create_ts: ctx.create_ts(),
+		ns_runner_kind: metadata.ns_runner_kind,
 	})
 	.await?;
 
@@ -156,6 +167,19 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				.tag("actor_id", input.actor_id)
 				.send()
 				.await?;
+
+				// Destroyed early
+				ctx.workflow(destroy::Input {
+					namespace_id: input.namespace_id,
+					actor_id: input.actor_id,
+					name: input.name.clone(),
+					key: input.key.clone(),
+					generation: 0,
+					kill: false,
+				})
+				.output()
+				.await?;
+
 				return Ok(());
 			}
 			actor_keys::ReserveKeyOutput::KeyExists { existing_actor_id } => {
@@ -170,8 +194,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				.await?;
 
 				// Destroyed early
-				//
-				// This will also deallocate any key that was already allocated to Epoxy
 				ctx.workflow(destroy::Input {
 					namespace_id: input.namespace_id,
 					actor_id: input.actor_id,
@@ -335,7 +357,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								state.alarm_ts = None;
 								state.sleeping = false;
 
-								if runtime::reschedule_actor(ctx, &input, state, true).await? {
+								if runtime::reschedule_actor(ctx, &input, state).await? {
 									// Destroyed early
 									return Ok(Loop::Break(runtime::LifecycleRes {
 										generation: state.generation,
@@ -466,7 +488,7 @@ async fn handle_stopped(
 					.await?;
 				}
 
-				if runtime::reschedule_actor(ctx, &input, state, false).await? {
+				if runtime::reschedule_actor(ctx, &input, state).await? {
 					// Destroyed early
 					return Ok(Some(runtime::LifecycleRes {
 						generation: state.generation,
