@@ -212,7 +212,7 @@ jobs:
 
   complete:
     name: "Complete"
-    needs: [docker]
+    needs: [docker, binaries]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
