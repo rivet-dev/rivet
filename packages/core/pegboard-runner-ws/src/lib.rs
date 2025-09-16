@@ -304,9 +304,6 @@ async fn build_connection(
 			name,
 			version,
 			total_slots,
-			addresses_http,
-			addresses_tcp,
-			addresses_udp,
 			..
 		} = &packet
 		{
@@ -360,10 +357,6 @@ async fn build_connection(
 					key: runner_key.clone(),
 					version: version.clone(),
 					total_slots: *total_slots,
-
-					addresses_http: addresses_http.clone().unwrap_or_default(),
-					addresses_tcp: addresses_tcp.clone().unwrap_or_default(),
-					addresses_udp: addresses_udp.clone().unwrap_or_default(),
 				})
 				.tag("runner_id", runner_id)
 				.unique()

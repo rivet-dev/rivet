@@ -37,7 +37,7 @@ async function createActorInDc(
 
 async function testActorInDc(dc: string) {
 	console.log(`\n=== Testing actor in ${dc} ===`);
-	
+
 	try {
 		// Create an actor in the specified datacenter
 		console.log(`Creating actor in ${dc}...`);
@@ -55,7 +55,6 @@ async function testActorInDc(dc: string) {
 			headers: {
 				"x-rivet-target": "actor",
 				"x-rivet-actor": actorResponse.actor.actor_id,
-				"x-rivet-addr": "main",
 			},
 		});
 
@@ -83,7 +82,7 @@ async function testActorInDc(dc: string) {
 async function main() {
 	const datacenters = ["dc-a", "dc-b", "dc-c"];
 	const results: Record<string, boolean> = {};
-	
+
 	console.log("Starting multi-datacenter actor E2E test...");
 	console.log(`Testing datacenters: ${datacenters.join(", ")}`);
 

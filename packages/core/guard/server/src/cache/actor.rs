@@ -6,7 +6,7 @@ use std::{
 use anyhow::Result;
 use gas::prelude::*;
 
-use crate::routing::pegboard_gateway::{X_RIVET_ACTOR, X_RIVET_PORT};
+use crate::routing::pegboard_gateway::X_RIVET_ACTOR;
 
 #[tracing::instrument(skip_all)]
 pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> Result<u64> {
@@ -22,19 +22,10 @@ pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> 
 	})?;
 	let actor_id = Id::parse(actor_id_str.to_str()?)?;
 
-	let port_name = headers.get(X_RIVET_PORT).ok_or_else(|| {
-		crate::errors::MissingHeader {
-			header: X_RIVET_PORT.to_string(),
-		}
-		.build()
-	})?;
-	let port_name = port_name.to_str()?;
-
-	// Create a hash using target, actor_id and port_name
+	// Create a hash using target, actor_id, and path
 	let mut hasher = DefaultHasher::new();
 	target.hash(&mut hasher);
 	actor_id.hash(&mut hasher);
-	port_name.hash(&mut hasher);
 	path.hash(&mut hasher);
 	let hash = hasher.finish();
 

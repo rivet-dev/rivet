@@ -34,21 +34,6 @@ type ActorName struct {
 	metadata: Json
 }
 
-type RunnerAddressHttp struct {
-	hostname: str
-	port: u16
-}
-
-type RunnerAddressTcp struct {
-	hostname: str
-	port: u16
-}
-
-type RunnerAddressUdp struct {
-	hostname: str
-	port: u16
-}
-
 type StopCode enum {
 	OK
 	ERROR
@@ -136,9 +121,6 @@ type ToServerInit struct {
 	name: str
 	version: u32
 	totalSlots: u32
-	addressesHttp: optional<map<str><RunnerAddressHttp>>
-	addressesTcp: optional<map<str><RunnerAddressTcp>>
-	addressesUdp: optional<map<str><RunnerAddressUdp>>
 	lastCommandIdx: optional<i64>
 	prepopulateActorNames: optional<map<str><ActorName>>
 	metadata: optional<Json>

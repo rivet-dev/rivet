@@ -37,40 +37,6 @@ impl OwnedVersionedData for RunnerAllocIdxKeyData {
 	}
 }
 
-pub enum AddressKeyData {
-	V1(pegboard_runner_address_v1::Data),
-}
-
-impl OwnedVersionedData for AddressKeyData {
-	type Latest = pegboard_runner_address_v1::Data;
-
-	fn latest(latest: pegboard_runner_address_v1::Data) -> Self {
-		AddressKeyData::V1(latest)
-	}
-
-	fn into_latest(self) -> Result<Self::Latest> {
-		#[allow(irrefutable_let_patterns)]
-		if let AddressKeyData::V1(data) = self {
-			Ok(data)
-		} else {
-			bail!("version not latest");
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(AddressKeyData::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
-		match self {
-			AddressKeyData::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
-		}
-	}
-}
-
 pub enum MetadataKeyData {
 	V1(pegboard_runner_metadata_v1::Data),
 }

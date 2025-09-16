@@ -94,24 +94,14 @@ pub async fn create_actor(namespace_name: &str, guard_port: u16) -> String {
 }
 
 /// Pings actor via Guard.
-pub async fn ping_actor_via_guard(
-	guard_port: u16,
-	actor_id: &str,
-	addr_name: &str,
-) -> serde_json::Value {
-	tracing::info!(
-		?guard_port,
-		?actor_id,
-		?addr_name,
-		"sending request to actor via guard"
-	);
+pub async fn ping_actor_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
+	tracing::info!(?guard_port, ?actor_id, "sending request to actor via guard");
 
 	let client = reqwest::Client::new();
 	let response = client
 		.get(format!("http://127.0.0.1:{}/ping", guard_port))
 		.header("X-Rivet-Target", "actor")
 		.header("X-Rivet-Actor", actor_id)
-		.header("X-Rivet-Port", addr_name)
 		.send()
 		.await
 		.expect("Failed to send ping request through guard");
@@ -425,11 +415,7 @@ pub async fn bulk_create_actors(
 }
 
 /// Tests WebSocket connection to actor via Guard using a simple ping pong.
-pub async fn ping_actor_websocket_via_guard(
-	guard_port: u16,
-	actor_id: &str,
-	addr_name: &str,
-) -> serde_json::Value {
+pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
 	use tokio_tungstenite::{
 		connect_async,
 		tungstenite::{Message, client::IntoClientRequest},
@@ -438,7 +424,6 @@ pub async fn ping_actor_websocket_via_guard(
 	tracing::info!(
 		?guard_port,
 		?actor_id,
-		?addr_name,
 		"testing websocket connection to actor via guard"
 	);
 
@@ -456,9 +441,6 @@ pub async fn ping_actor_websocket_via_guard(
 	request
 		.headers_mut()
 		.insert("X-Rivet-Actor", actor_id.parse().unwrap());
-	request
-		.headers_mut()
-		.insert("X-Rivet-Port", addr_name.parse().unwrap());
 
 	// Connect to WebSocket
 	let (ws_stream, response) = connect_async(request)

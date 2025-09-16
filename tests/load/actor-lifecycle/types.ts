@@ -10,12 +10,6 @@ export interface Config {
 
 export interface Actor {
 	actor_id: string;
-	addresses_http: {
-		main: {
-			hostname: string;
-			port: number;
-		};
-	};
 }
 
 export interface CreateActorResponse {

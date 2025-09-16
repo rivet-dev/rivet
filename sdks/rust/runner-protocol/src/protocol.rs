@@ -24,10 +24,6 @@ pub enum ToServer {
 		version: u32,
 		total_slots: u32,
 
-		addresses_http: Option<util::serde::HashableMap<String, RunnerAddressHttp>>,
-		addresses_tcp: Option<util::serde::HashableMap<String, RunnerAddressTcp>>,
-		addresses_udp: Option<util::serde::HashableMap<String, RunnerAddressUdp>>,
-
 		last_command_idx: Option<i64>,
 		prepopulate_actor_names: Option<util::serde::HashableMap<String, ActorName>>,
 		metadata: Option<String>,
@@ -154,24 +150,6 @@ pub enum ActorState {
 pub enum StopCode {
 	Ok,
 	Error,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, utoipa::ToSchema)]
-pub struct RunnerAddressHttp {
-	pub hostname: String,
-	pub port: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, utoipa::ToSchema)]
-pub struct RunnerAddressTcp {
-	pub hostname: String,
-	pub port: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, utoipa::ToSchema)]
-pub struct RunnerAddressUdp {
-	pub hostname: String,
-	pub port: u16,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash)]

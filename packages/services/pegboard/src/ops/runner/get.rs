@@ -1,7 +1,6 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
-use rivet_data::generated::pegboard_runner_address_v1::Data as AddressKeyData;
 use rivet_types::runners::Runner;
 use udb_util::{FormalChunkedKey, SERIALIZABLE, SNAPSHOT, TxnExt};
 use universaldb::{self as udb, options::StreamingMode};
@@ -87,7 +86,6 @@ pub(crate) async fn get_inner(
 		stop_ts,
 		last_ping_ts,
 		last_rtt,
-		(addresses_http, addresses_tcp, addresses_udp),
 		metadata_chunks,
 	) = tokio::try_join!(
 		// NOTE: These are not SERIALIZABLE because this op is meant for basic information (i.e. data for the
@@ -104,41 +102,6 @@ pub(crate) async fn get_inner(
 		txs.read_opt(&stop_ts_key, SNAPSHOT),
 		txs.read_opt(&last_ping_ts_key, SNAPSHOT),
 		txs.read_opt(&last_rtt_key, SNAPSHOT),
-		async {
-			// Get addresses by scanning all address keys for this runner
-			let mut addresses_http = util::serde::HashableMap::new();
-			let mut addresses_tcp = util::serde::HashableMap::new();
-			let mut addresses_udp = util::serde::HashableMap::new();
-
-			let address_subspace = txs.subspace(&keys::runner::AddressKey::subspace(runner_id));
-
-			let mut stream = txs.get_ranges_keyvalues(
-				udb::RangeOption {
-					mode: StreamingMode::Iterator,
-					..(&address_subspace).into()
-				},
-				SNAPSHOT,
-			);
-
-			while let Some(entry) = stream.try_next().await? {
-				let (address_key, address_data) =
-					txs.read_entry::<keys::runner::AddressKey>(&entry)?;
-
-				match address_data {
-					AddressKeyData::Http(addr) => {
-						addresses_http.insert(address_key.name.clone(), addr);
-					}
-					AddressKeyData::Tcp(addr) => {
-						addresses_tcp.insert(address_key.name.clone(), addr);
-					}
-					AddressKeyData::Udp(addr) => {
-						addresses_udp.insert(address_key.name.clone(), addr);
-					}
-				}
-			}
-
-			Ok((addresses_http, addresses_tcp, addresses_udp))
-		},
 		async {
 			txs.get_ranges_keyvalues(
 				udb::RangeOption {
@@ -173,9 +136,6 @@ pub(crate) async fn get_inner(
 		version,
 		total_slots,
 		remaining_slots,
-		addresses_http: addresses_http.into(),
-		addresses_tcp: addresses_tcp.into(),
-		addresses_udp: addresses_udp.into(),
 		create_ts,
 		last_connected_ts: connected_ts,
 		drain_ts,

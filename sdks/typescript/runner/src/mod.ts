@@ -450,9 +450,6 @@ export class Runner {
 				name: this.#config.runnerName,
 				version: this.#config.version,
 				totalSlots: this.#config.totalSlots,
-				addressesHttp: new Map(), // No addresses needed with tunnel
-				addressesTcp: null,
-				addressesUdp: null,
 				lastCommandIdx:
 					this.#lastCommandIdx >= 0
 						? BigInt(this.#lastCommandIdx)

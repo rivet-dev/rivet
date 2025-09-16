@@ -242,7 +242,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 // 		expect(actorPingResponse.ok).toBe(true);
@@ -255,7 +254,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 //
@@ -305,7 +303,6 @@
 // 				headers: {
 // 					"x-rivet-target": "actor",
 // 					"x-rivet-actor": actorId,
-// 					"x-rivet-addr": "main",
 // 				},
 // 			});
 // 			console.log(`Wake response status: ${wakeResponse.status}`);
@@ -340,7 +337,6 @@
 // 				headers: {
 // 					"x-rivet-target": "actor",
 // 					"x-rivet-actor": actorId,
-// 					"x-rivet-addr": "main",
 // 				},
 // 			});
 //
@@ -367,7 +363,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 //
@@ -413,7 +408,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 // 		expect(destroyedPingResponse.status).toBe(404);
@@ -424,7 +418,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 //

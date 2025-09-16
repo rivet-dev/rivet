@@ -19,7 +19,6 @@ async function main() {
 			headers: {
 				"X-Rivet-Target": "actor",
 				"X-Rivet-Actor": actorResponse.actor.actor_id,
-				"X-Rivet-Port": "main",
 			},
 		});
 
@@ -65,7 +64,6 @@ function testWebSocket(actorId: string): Promise<void> {
 			headers: {
 				"X-Rivet-Target": "actor",
 				"X-Rivet-Actor": actorId,
-				"X-Rivet-Port": "main",
 			},
 		});
 

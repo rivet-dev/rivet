@@ -1,9 +1,6 @@
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_data::{
-	converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData},
-	generated::pegboard_runner_address_v1::Data as AddressKeyData,
-};
+use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
 use rivet_runner_protocol::protocol;
 use udb_util::{FormalChunkedKey, SERIALIZABLE, SNAPSHOT, TxnExt};
 use universaldb::{
@@ -27,10 +24,6 @@ pub struct Input {
 	pub key: String,
 	pub version: u32,
 	pub total_slots: u32,
-
-	pub addresses_http: util::serde::HashableMap<String, protocol::RunnerAddressHttp>,
-	pub addresses_tcp: util::serde::HashableMap<String, protocol::RunnerAddressTcp>,
-	pub addresses_udp: util::serde::HashableMap<String, protocol::RunnerAddressUdp>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,9 +65,6 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 			key: input.key.clone(),
 			namespace_id: input.namespace_id,
 			create_ts: ctx.create_ts(),
-			addresses_http: input.addresses_http.clone(),
-			addresses_tcp: input.addresses_tcp.clone(),
-			addresses_udp: input.addresses_udp.clone(),
 		})
 		.await?;
 
@@ -437,10 +427,6 @@ struct InitInput {
 	key: String,
 	namespace_id: Id,
 	create_ts: i64,
-
-	addresses_http: util::serde::HashableMap<String, protocol::RunnerAddressHttp>,
-	addresses_tcp: util::serde::HashableMap<String, protocol::RunnerAddressTcp>,
-	addresses_udp: util::serde::HashableMap<String, protocol::RunnerAddressUdp>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -459,27 +445,6 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 		.udb()?
 		.run(|tx, _mc| async move {
 			let txs = tx.subspace(keys::subspace());
-
-			for (name, port_http) in &input.addresses_http {
-				txs.write(
-					&keys::runner::AddressKey::new(input.runner_id, name.into()),
-					AddressKeyData::Http(port_http.clone().into()),
-				)?;
-			}
-
-			for (name, port_tcp) in &input.addresses_tcp {
-				txs.write(
-					&keys::runner::AddressKey::new(input.runner_id, name.into()),
-					AddressKeyData::Tcp(port_tcp.clone().into()),
-				)?;
-			}
-
-			for (name, port_udp) in &input.addresses_udp {
-				txs.write(
-					&keys::runner::AddressKey::new(input.runner_id, name.into()),
-					AddressKeyData::Udp(port_udp.clone().into()),
-				)?;
-			}
 
 			let runner_by_key_key = keys::ns::RunnerByKeyKey::new(
 				input.namespace_id,

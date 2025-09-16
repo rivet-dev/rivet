@@ -10,7 +10,6 @@ use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
-pub const X_RIVET_PORT: HeaderName = HeaderName::from_static("x-rivet-port");
 
 /// Route requests to actor services based on hostname and path
 #[tracing::instrument(skip_all)]
@@ -65,16 +64,8 @@ pub async fn route_request(
 		})));
 	}
 
-	let port_name = headers.get(X_RIVET_PORT).ok_or_else(|| {
-		crate::errors::MissingHeader {
-			header: X_RIVET_PORT.to_string(),
-		}
-		.build()
-	})?;
-	let port_name = port_name.to_str()?;
-
 	// Lookup actor
-	find_actor(ctx, shared_state, actor_id, port_name, path).await
+	find_actor(ctx, shared_state, actor_id, path).await
 }
 
 struct FoundActor {
@@ -83,13 +74,12 @@ struct FoundActor {
 	destroyed: bool,
 }
 
-/// Find an actor by actor_id and port_name
-#[tracing::instrument(skip_all, fields(%actor_id, %port_name, %path))]
+/// Find an actor by actor_id
+#[tracing::instrument(skip_all, fields(%actor_id, %path))]
 async fn find_actor(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
 	actor_id: Id,
-	port_name: &str,
 	path: &str,
 ) -> Result<Option<RoutingOutput>> {
 	// TODO: Optimize this down to a single FDB call
@@ -136,11 +126,7 @@ async fn find_actor(
 	.await??;
 
 	let Some(actor) = actor_res else {
-		return Err(errors::ActorNotFound {
-			actor_id,
-			port_name: port_name.to_string(),
-		}
-		.build());
+		return Err(errors::ActorNotFound { actor_id }.build());
 	};
 
 	if actor.destroyed {
@@ -187,6 +173,7 @@ async fn find_actor(
 
 	tracing::debug!(?actor_id, ?runner_id, "actor ready");
 
+	// TODO: Remove round trip, return key from get_runner op above
 	// Get runner key from runner_id
 	let runner_key = ctx
 		.udb()?
@@ -204,7 +191,6 @@ async fn find_actor(
 		shared_state.pegboard_gateway.clone(),
 		actor_id,
 		runner_key,
-		port_name.to_string(),
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
 		gateway,

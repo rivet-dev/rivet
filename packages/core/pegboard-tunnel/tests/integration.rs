@@ -48,13 +48,12 @@ async fn test_tunnel_bidirectional_forwarding() -> Result<()> {
 	// Use the same placeholders as the tunnel implementation
 	// TODO: Update when tunnel properly extracts these from connection
 	let runner_id = Id::nil();
-	let port_name = "default";
 
 	// Give tunnel time to set up pubsub subscription after WebSocket connection
 	sleep(Duration::from_secs(1)).await;
 
 	// Test 1: pubsub to WebSocket forwarding
-	test_pubsub_to_websocket(&ups, &mut ws_stream, runner_id, port_name).await?;
+	test_pubsub_to_websocket(&ups, &mut ws_stream, runner_id).await?;
 
 	// Test 2: WebSocket to pubsub forwarding
 	test_websocket_to_pubsub(&ups, &mut ws_stream, runner_id).await?;
@@ -69,7 +68,6 @@ async fn test_pubsub_to_websocket(
 	ups: &PubSub,
 	ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
 	runner_id: Id,
-	port_name: &str,
 ) -> Result<()> {
 	// Create a test request message
 	let request_id = rand::random::<u64>();
@@ -96,7 +94,7 @@ async fn test_pubsub_to_websocket(
 	)?;
 
 	// Publish to pubsub topic using proper subject
-	let topic = TunnelHttpRunnerSubject::new(&runner_id.to_string(), port_name).to_string();
+	let topic = TunnelHttpRunnerSubject::new(&runner_id.to_string()).to_string();
 	ups.request(&topic, &serialized).await?;
 
 	// Wait for message on WebSocket

@@ -252,33 +252,6 @@ impl TryFrom<v1::StopCode> for protocol::StopCode {
 	}
 }
 
-impl From<v1::RunnerAddressHttp> for protocol::RunnerAddressHttp {
-	fn from(value: v1::RunnerAddressHttp) -> Self {
-		protocol::RunnerAddressHttp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<v1::RunnerAddressTcp> for protocol::RunnerAddressTcp {
-	fn from(value: v1::RunnerAddressTcp) -> Self {
-		protocol::RunnerAddressTcp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<v1::RunnerAddressUdp> for protocol::RunnerAddressUdp {
-	fn from(value: v1::RunnerAddressUdp) -> Self {
-		protocol::RunnerAddressUdp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
 impl TryFrom<v1::ToServer> for protocol::ToServer {
 	type Error = anyhow::Error;
 
@@ -288,18 +261,6 @@ impl TryFrom<v1::ToServer> for protocol::ToServer {
 				name: init.name,
 				version: init.version,
 				total_slots: init.total_slots,
-				addresses_http: init
-					.addresses_http
-					.map(|addrs| Ok(addrs.into_iter().map(|(k, v)| (k, v.into())).collect()))
-					.transpose()?,
-				addresses_tcp: init
-					.addresses_tcp
-					.map(|addrs| Ok(addrs.into_iter().map(|(k, v)| (k, v.into())).collect()))
-					.transpose()?,
-				addresses_udp: init
-					.addresses_udp
-					.map(|addrs| Ok(addrs.into_iter().map(|(k, v)| (k, v.into())).collect()))
-					.transpose()?,
 				last_command_idx: init.last_command_idx,
 				prepopulate_actor_names: init
 					.prepopulate_actor_names

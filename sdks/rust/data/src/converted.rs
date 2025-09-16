@@ -33,60 +33,6 @@ impl TryFrom<RunnerAllocIdxKeyData> for pegboard_namespace_runner_alloc_idx_v1::
 	}
 }
 
-impl From<pegboard_runner_address_v1::Http> for rivet_runner_protocol::protocol::RunnerAddressHttp {
-	fn from(value: pegboard_runner_address_v1::Http) -> Self {
-		rivet_runner_protocol::protocol::RunnerAddressHttp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<rivet_runner_protocol::protocol::RunnerAddressHttp> for pegboard_runner_address_v1::Http {
-	fn from(value: rivet_runner_protocol::protocol::RunnerAddressHttp) -> Self {
-		pegboard_runner_address_v1::Http {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<pegboard_runner_address_v1::Tcp> for rivet_runner_protocol::protocol::RunnerAddressTcp {
-	fn from(value: pegboard_runner_address_v1::Tcp) -> Self {
-		rivet_runner_protocol::protocol::RunnerAddressTcp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<rivet_runner_protocol::protocol::RunnerAddressTcp> for pegboard_runner_address_v1::Tcp {
-	fn from(value: rivet_runner_protocol::protocol::RunnerAddressTcp) -> Self {
-		pegboard_runner_address_v1::Tcp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<pegboard_runner_address_v1::Udp> for rivet_runner_protocol::protocol::RunnerAddressUdp {
-	fn from(value: pegboard_runner_address_v1::Udp) -> Self {
-		rivet_runner_protocol::protocol::RunnerAddressUdp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
-impl From<rivet_runner_protocol::protocol::RunnerAddressUdp> for pegboard_runner_address_v1::Udp {
-	fn from(value: rivet_runner_protocol::protocol::RunnerAddressUdp) -> Self {
-		pegboard_runner_address_v1::Udp {
-			hostname: value.hostname,
-			port: value.port,
-		}
-	}
-}
-
 pub struct MetadataKeyData {
 	pub metadata: serde_json::Map<String, serde_json::Value>,
 }

@@ -1426,23 +1426,11 @@
           "version",
           "total_slots",
           "remaining_slots",
-          "addresses_http",
-          "addresses_tcp",
-          "addresses_udp",
           "create_ts",
           "last_ping_ts",
           "last_rtt"
         ],
         "properties": {
-          "addresses_http": {
-            "$ref": "#/components/schemas/StringHttpAddressHashableMap"
-          },
-          "addresses_tcp": {
-            "$ref": "#/components/schemas/StringTcpAddressHashableMap"
-          },
-          "addresses_udp": {
-            "$ref": "#/components/schemas/StringUdpAddressHashableMap"
-          },
           "create_ts": {
             "type": "integer",
             "format": "int64"
@@ -1569,66 +1557,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "StringHttpAddressHashableMap": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "object",
-          "required": [
-            "hostname",
-            "port"
-          ],
-          "properties": {
-            "hostname": {
-              "type": "string"
-            },
-            "port": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          }
-        }
-      },
-      "StringTcpAddressHashableMap": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "object",
-          "required": [
-            "hostname",
-            "port"
-          ],
-          "properties": {
-            "hostname": {
-              "type": "string"
-            },
-            "port": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          }
-        }
-      },
-      "StringUdpAddressHashableMap": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "object",
-          "required": [
-            "hostname",
-            "port"
-          ],
-          "properties": {
-            "hostname": {
-              "type": "string"
-            },
-            "port": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          }
-        }
       }
     }
   }

@@ -19,6 +19,7 @@ impl Default for Database {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Postgres {
 	/// URL to connect to Postgres with
 	///

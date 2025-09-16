@@ -18,7 +18,6 @@ export const createEngineActorContext = ({
 				headers: {
 					"x-rivet-actor": actorId,
 					"x-rivet-target": "actor",
-					"x-rivet-port": "main",
 					...(token ? { authorization: `Bearer ${token}` } : {}),
 				},
 			};

@@ -91,11 +91,8 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 			}
 		};
 
-		let port_name = "main".to_string(); // Use "main" as default port name
-
 		tracing::info!(
 			?runner_key,
-			?port_name,
 			?protocol_version,
 			?path,
 			"tunnel WebSocket connection established"
@@ -104,8 +101,7 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 		// Subscribe to pubsub topic for this runner before accepting the client websocket so
 		// that failures can be retried by the proxy.
 		let topic =
-			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&runner_key, &port_name)
-				.to_string();
+			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&runner_key).to_string();
 		tracing::info!(%topic, ?runner_key, "subscribing to runner receiver topic");
 		let mut sub = match ups.subscribe(&topic).await {
 			Result::Ok(s) => s,

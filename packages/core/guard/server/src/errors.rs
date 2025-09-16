@@ -43,11 +43,10 @@ pub struct WrongAddrProtocol {
 	"guard",
 	"actor_not_found",
 	"Actor not found.",
-	"Actor with ID {actor_id} and port {port_name} not found."
+	"Actor with ID {actor_id} not found."
 )]
 pub struct ActorNotFound {
 	pub actor_id: Id,
-	pub port_name: String,
 }
 
 #[derive(RivetError, Serialize)]

@@ -93,7 +93,6 @@
 // 			headers: {
 // 				"x-rivet-target": "actor",
 // 				"x-rivet-actor": actorId,
-// 				"x-rivet-addr": "main",
 // 			},
 // 		});
 // 		if (!pingResponse.ok) throw "Request failed";
@@ -110,7 +109,6 @@
 // 	//			headers: {
 // 	//				"x-rivet-target": "actor",
 // 	//				"x-rivet-actor": wakeActorId,
-// 	//				"x-rivet-addr": "main",
 // 	//			},
 // 	//		});
 // 	//

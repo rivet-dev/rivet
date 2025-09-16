@@ -30,7 +30,6 @@ pub struct PegboardGateway {
 	shared_state: SharedState,
 	actor_id: Id,
 	runner_key: String,
-	port_name: String,
 }
 
 impl PegboardGateway {
@@ -39,14 +38,12 @@ impl PegboardGateway {
 		shared_state: SharedState,
 		actor_id: Id,
 		runner_key: String,
-		port_name: String,
 	) -> Self {
 		Self {
 			ctx,
 			shared_state,
 			actor_id,
 			runner_key,
-			port_name,
 		}
 	}
 }
@@ -139,11 +136,9 @@ impl PegboardGateway {
 			.to_bytes();
 
 		// Build subject to publish to
-		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
-			&self.runner_key,
-			&self.port_name,
-		)
-		.to_string();
+		let tunnel_subject =
+			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&self.runner_key)
+				.to_string();
 
 		// Start listening for request responses
 		let (request_id, mut msg_rx) = self
@@ -235,11 +230,9 @@ impl PegboardGateway {
 		}
 
 		// Build subject to publish to
-		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
-			&self.runner_key,
-			&self.port_name,
-		)
-		.to_string();
+		let tunnel_subject =
+			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&self.runner_key)
+				.to_string();
 
 		// Start listening for WebSocket messages
 		let (request_id, mut msg_rx) = self
