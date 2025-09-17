@@ -24,7 +24,7 @@ export const RivetCloudSection = () => {
 			icon: faCloud,
 			title: "Rivet Cloud",
 			description:
-				"Fully-managed serverless platform with enterprise support. Let us handle the infrastructure while you focus on your code.",
+				"Enterprise-scale actor orchestration built on FoundationDB. Connect your applications on Railway, Vercel, and other platforms with infinite scaling.",
 			buttonText: "See Pricing",
 			buttonHref: "/pricing",
 		},
@@ -32,7 +32,7 @@ export const RivetCloudSection = () => {
 			icon: faServer,
 			title: "Bring Your Own Cloud",
 			description:
-				"Specify your cloud of choice or provide your own API keys to deploy Rivet within your own cloud. Maintain control of where your where your backend runs while Rivet handles the maintenance.",
+				"Deploy the Rivet Engine on your preferred cloud infrastructure with FoundationDB backend. Maintain full control while leveraging enterprise-scale actor orchestration.",
 			buttonText: "Contact Us",
 			buttonHref: "/sales",
 		},
@@ -40,7 +40,7 @@ export const RivetCloudSection = () => {
 			icon: faGithub,
 			title: "Self-Hosted",
 			description:
-				"Run Rivet on your own infrastructure. Completely open-source and free to use.",
+				"Run the open-source Rivet Engine on your own infrastructure with PostgreSQL or FoundationDB. Complete control over your actor orchestration platform.",
 			buttonText: "View on GitHub",
 			buttonHref: "https://github.com/rivet-gg/rivet",
 		},
@@ -50,11 +50,10 @@ export const RivetCloudSection = () => {
 		<div className="mx-auto max-w-7xl px-6 py-32 lg:py-40">
 			<div className="text-center mb-12">
 				<h2 className="text-4xl font-medium tracking-tight text-white">
-					Rivet on Any Cloud
+					Scale Your Rivet Engine Anywhere
 				</h2>
 				<p className="mt-4 text-lg text-white/70">
-					Choose the deployment model that works best for your
-					organization
+					Enterprise-scale actor orchestration with FoundationDB, connecting to your applications on any platform
 				</p>
 			</div>
 

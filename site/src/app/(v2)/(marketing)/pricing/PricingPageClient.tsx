@@ -3,26 +3,31 @@ import { CheckIcon, MinusIcon, PlusIcon } from "@heroicons/react/16/solid";
 import { MobilePricingTabs } from "./components/MobilePricingTabs";
 import { useState } from "react";
 import clsx from "clsx";
+import Link from "next/link";
+import { Icon, faArrowRight } from "@rivet-gg/icons";
 
 const tiers = [
 	{
-		name: "Community",
+		name: "Free",
 		priceMonthly: "$0",
 		href: "https://hub.rivet.gg/",
 		highlights: [
-			{ description: "$5 Free credits", icon: "gift" },
+			{ description: "5GB Limit", icon: "check" },
+			{ description: "5 Million Writes /mo Limit", icon: "check" },
+			{ description: "200 Million Reads /mo Limit", icon: "check" },
+			{ description: "100GB Egress Limit", icon: "check" },
 			{ description: "Community Support", icon: "check" },
 		],
 	},
-	{
-		name: "Pro",
-		priceMonthly: "$20",
-		href: "https://hub.rivet.gg/",
+		{
+			name: "Hobby",
+			priceMonthly: "$5",
+			href: "https://hub.rivet.gg/",
 		highlights: [
-			{ description: "$20 Free credits /mo", icon: "gift" },
-			{ description: "Everything in Community", icon: "check" },
-			{ description: "No Usage Limits", icon: "check" },
-			{ description: "Unlimited Seats", icon: "check" },
+			{ description: "25 Billion Reads /mo included", icon: "gift" },
+			{ description: "50 Million Writes /mo included", icon: "gift" },
+			{ description: "5GB Storage included", icon: "gift" },
+			{ description: "1TB Egress included", icon: "gift" },
 			{ description: "Email Support", icon: "check" },
 		],
 	},
@@ -31,41 +36,82 @@ const tiers = [
 		priceMonthly: "$200",
 		href: "https://hub.rivet.gg/",
 		highlights: [
-			{ description: "$200 Free credits /mo", icon: "gift" },
-			{ description: "Everything in Pro", icon: "check" },
-			{ description: "Dedicated Hardware", icon: "check" },
-			{ description: "Custom Regions", icon: "check" },
+			{ description: "25 Billion Reads /mo included", icon: "gift" },
+			{ description: "50 Million Writes /mo included", icon: "gift" },
+			{ description: "5GB Storage included", icon: "gift" },
+			{ description: "1TB Egress included", icon: "gift" },
+			{ description: "MFA", icon: "check" },
 			{ description: "Slack Support", icon: "check" },
 		],
 	},
-	{
-		name: "Enterprise",
-		priceMonthly: "Custom",
-		href: "/sales",
-		highlights: [
-			{ description: "Everything in Team", icon: "check" },
-			{ description: "Priority Support", icon: "check" },
-			{ description: "SLA", icon: "check" },
-			{ description: "OIDC SSO provider", icon: "check" },
-			{ description: "On-Prem Deployment", icon: "check" },
-			{
-				description: "Custom Storage Reads, Writes, and Stored Data",
-				icon: "check",
-			},
-			{ description: "Custom Log Retention", icon: "check" },
-		],
-	},
+		{
+			name: "Enterprise",
+			priceMonthly: "Custom",
+			href: "/sales",
+			highlights: [
+				{ description: "Everything in Team", icon: "check" },
+				{ description: "Priority Support", icon: "check" },
+				{ description: "SLA", icon: "check" },
+				{ description: "OIDC SSO provider", icon: "check" },
+				{ description: "On-Prem Deployment", icon: "check" },
+				{ description: "Audit Logs", icon: "check" },
+				{ description: "Custom Roles", icon: "check" },
+				{ description: "Device Tracking", icon: "check" },
+				{ description: "Volume Pricing", icon: "check" },
+			],
+		},
 ];
 
 const sections = [
+	{
+		name: "Usage Included",
+		features: [
+			{
+				name: "Storage",
+				tiers: {
+					Free: "5GB",
+					Hobby: "5GB included",
+					Team: "5GB included",
+					Enterprise: "Custom",
+				},
+			},
+			{
+				name: "Reads per month",
+				tiers: {
+					Free: "200 Million",
+					Hobby: "25 Billion included",
+					Team: "25 Billion included", 
+					Enterprise: "Custom",
+				},
+			},
+			{
+				name: "Writes per month",
+				tiers: {
+					Free: "5 Million",
+					Hobby: "50 Million included",
+					Team: "50 Million included",
+					Enterprise: "Custom",
+				},
+			},
+			{
+				name: "Egress",
+				tiers: {
+					Free: "100GB Limit",
+					Hobby: "1TB included",
+					Team: "1TB included",
+					Enterprise: "Custom",
+				},
+			},
+		],
+	},
 	{
 		name: "Support",
 		features: [
 			{
 				name: "Support",
 				tiers: {
-					Community: "Community Support",
-					Pro: "Email",
+					Free: "Community Support",
+					Hobby: "Email",
 					Team: "Slack & Email",
 					Enterprise: "Slack & Email",
 				},
@@ -73,43 +119,69 @@ const sections = [
 		],
 	},
 	{
-		name: "Infrastructure Credits",
+		name: "Security & Enterprise",
 		features: [
 			{
-				name: "Credits",
+				name: "MFA",
 				tiers: {
-					Community: "$5.00 Credit",
-					Pro: "$20.00 Credits /Mo",
-					Team: "$200.00 Credits /Mo",
-					Enterprise: "Custom",
+					Free: false,
+					Hobby: false,
+					Team: true,
+					Enterprise: true,
 				},
 			},
-		],
-	},
-	{
-		name: "Seat Limits",
-		features: [
 			{
-				name: "Seat Limits",
+				name: "Custom Regions",
 				tiers: {
-					Community: "2 Seats",
-					Pro: "Unlimited",
-					Team: "Unlimited",
-					Enterprise: "Unlimited",
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
 				},
 			},
-		],
-	},
-	{
-		name: "Usage Limit",
-		features: [
 			{
-				name: "Usage Limit",
+				name: "SLA",
 				tiers: {
-					Community: "Limited",
-					Pro: "Unlimited",
-					Team: "Unlimited",
-					Enterprise: "Unlimited",
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
+				},
+			},
+			{
+				name: "Audit Logs",
+				tiers: {
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
+				},
+			},
+			{
+				name: "Custom Roles",
+				tiers: {
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
+				},
+			},
+			{
+				name: "Device Tracking",
+				tiers: {
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
+				},
+			},
+			{
+				name: "Volume Pricing",
+				tiers: {
+					Free: false,
+					Hobby: false,
+					Team: false,
+					Enterprise: true,
 				},
 			},
 		],
@@ -239,8 +311,8 @@ function PricingTiers() {
 								{tier.name}{" "}
 								<span className="sr-only">plan</span>
 							</h2>
-							<div className="mt-8 flex flex-col items-start gap-0 min-h-[120px]">
-								{(tier.name === "Pro" ||
+							<div className="mt-8 flex flex-col items-start gap-0 h-[120px]">
+								{(tier.name === "Hobby" ||
 									tier.name === "Team") && (
 									<div className="text-xs text-white/40 mb-1">
 										From
@@ -256,14 +328,14 @@ function PricingTiers() {
 										</span>
 									)}
 								</div>
-								{(tier.name === "Pro" ||
+								{(tier.name === "Hobby" ||
 									tier.name === "Team") && (
 									<div className="text-sm text-white/40 mt-1">
 										+ Usage
 									</div>
 								)}
 							</div>
-							<div className="mt-8 border-t border-white/10 pt-4">
+							<div className="mt-6 border-t border-white/10 pt-4">
 								<h3 className="text-sm font-normal text-white">
 									Includes:
 								</h3>
@@ -312,6 +384,72 @@ function PricingTiers() {
 	);
 }
 
+function UsagePricingTable() {
+	return (
+		<div className="mt-16">
+			<div className="text-center mb-8">
+				<h2 className="text-3xl font-600 text-white mb-4">
+					Usage Pricing
+				</h2>
+				<p className="text-lg text-white/60 max-w-2xl mx-auto">
+					Pay only for what you use beyond the included allowances
+				</p>
+			</div>
+			
+			<div className="max-w-2xl mx-auto">
+				<div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-white/10">
+								<th className="px-6 py-4 text-left text-sm font-medium text-white">
+									Resource
+								</th>
+								<th className="px-6 py-4 text-right text-sm font-medium text-white">
+									Price
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr className="border-b border-white/5">
+								<td className="px-6 py-4 text-sm text-white/80">
+									Storage
+								</td>
+								<td className="px-6 py-4 text-sm text-white text-right">
+									$0.40 per GB-month
+								</td>
+							</tr>
+							<tr className="border-b border-white/5">
+								<td className="px-6 py-4 text-sm text-white/80">
+									Reads
+								</td>
+								<td className="px-6 py-4 text-sm text-white text-right">
+									$1.00 per billion reads
+								</td>
+							</tr>
+									<tr className="border-b border-white/5">
+										<td className="px-6 py-4 text-sm text-white/80">
+											Writes
+										</td>
+										<td className="px-6 py-4 text-sm text-white text-right">
+											$1.00 per million writes
+										</td>
+									</tr>
+									<tr>
+										<td className="px-6 py-4 text-sm text-white/80">
+											Egress
+										</td>
+										<td className="px-6 py-4 text-sm text-white text-right">
+											$0.15 per GB
+										</td>
+									</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 interface ToggleProps {
 	options: { value: string; label: string }[];
 	activeValue: string;
@@ -351,13 +489,13 @@ export default function PricingPageClient() {
 
 	return (
 		<main className="min-h-screen w-full max-w-[1500px] mx-auto md:px-8">
-			<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-40">
+			<div className="relative isolate overflow-hidden pb-8 sm:pb-10 pt-48">
 				<div className="mx-auto max-w-[1200px] px-6 lg:px-8">
 					<div className="text-center">
-						<h1 className="text-6xl font-700 text-white leading-[1.1] tracking-normal">
+						<h1 className="text-6xl font-normal text-white leading-[1.1] tracking-normal">
 							Rivet {activeTab === "cloud" ? "Cloud Pricing" : "Self-Host"}
 						</h1>
-						<p className="mt-6 max-w-2xl mx-auto text-xl leading-[1.2] tracking-tight font-500 text-white/60">
+						<p className="mt-6 max-w-2xl mx-auto text-xl leading-[1.2] tracking-tight font-extralight text-white/60">
 							{activeTab === "cloud" 
 								? "Start with free and scale as you grow."
 								: "Deploy Rivet on your own infrastructure."
@@ -378,16 +516,7 @@ export default function PricingPageClient() {
 				<>
 					<div className="relative mx-auto max-w-2xl px-6 lg:max-w-7xl lg:px-8 pt-16 sm:pt-24">
 						<PricingTiers />
-						<div className="flex flex-col items-center mt-16">
-							<a
-								href="/docs/cloud/pricing"
-								target="_self"
-								rel="noopener noreferrer"
-								className="inline-flex items-center justify-center px-6 py-3 border border-white/20 text-white font-medium rounded-lg hover:bg-white/10 transition-colors"
-							>
-								View Usage Pricing
-							</a>
-						</div>
+						<UsagePricingTable />
 					</div>
 
 					<div className="mx-auto max-w-2xl px-6 pt-16 sm:pt-24 lg:max-w-7xl lg:px-8 pb-24">
@@ -470,3 +599,5 @@ export default function PricingPageClient() {
 		</main>
 	);
 }
+
+

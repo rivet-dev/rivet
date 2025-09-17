@@ -66,6 +66,51 @@ interface TabGroup {
 // Define all tab groups and their items at the top level
 const TAB_GROUPS: TabGroup[] = [
 	{
+		id: "scaling",
+		title: "Scaling",
+		items: [
+			{
+				id: "foundationdb",
+				icon: faDatabase,
+				title: "FoundationDB Backend",
+				description:
+					"Enterprise-grade distributed database that provides ACID transactions and infinite scalability for actor state management.",
+				image: imgPerTenantDatabase, // Reuse existing image
+				docs: {
+					actors: true,
+					containers: false,
+					functions: false,
+				},
+			},
+			{
+				id: "multi-region",
+				icon: faServer,
+				title: "Multi-Region Deployment",
+				description:
+					"Deploy actors across multiple geographic regions with automatic failover and data replication.",
+				image: imgLocalFirstSync, // Reuse existing image
+				docs: {
+					actors: true,
+					containers: false,
+					functions: false,
+				},
+			},
+			{
+				id: "fault-tolerance",
+				icon: faCogs,
+				title: "Fault Tolerance",
+				description:
+					"Built-in error handling and recovery with automatic actor restart and state preservation.",
+				image: imgManagedCi, // Reuse existing image
+				docs: {
+					actors: true,
+					containers: false,
+					functions: false,
+				},
+			},
+		],
+	},
+	{
 		id: "ai",
 		title: "AI",
 		items: [

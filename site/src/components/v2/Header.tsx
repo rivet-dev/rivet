@@ -176,14 +176,6 @@ export function Header({
 							Pricing
 						</TextNavItem>
 						<TextNavItem
-							href="/cloud"
-							ariaCurrent={
-								active === "cloud" ? "page" : undefined
-							}
-						>
-							Cloud
-						</TextNavItem>
-						<TextNavItem
 							href="/changelog"
 							ariaCurrent={
 								active === "blog" ? "page" : undefined
@@ -270,12 +262,6 @@ export function Header({
 					Pricing
 				</TextNavItem>
 				<TextNavItem
-					href="/cloud"
-					ariaCurrent={active === "cloud" ? "page" : undefined}
-				>
-					Cloud
-				</TextNavItem>
-				<TextNavItem
 					href="/changelog"
 					ariaCurrent={active === "blog" ? "page" : undefined}
 				>
@@ -290,43 +276,50 @@ export function Header({
 function DocsMobileNavigation({ tree }) {
 	const pathname = usePathname() || "";
 
-	const docsLinks = [
-		{ href: "/docs/actors", label: "Actors" },
-		{ href: "/docs/cloud", label: "Cloud" },
-	];
-
-	const otherLinks = [
+	const mainNavLinks = [
 		{ href: "/pricing", label: "Pricing" },
 		{ href: "/changelog", label: "Changelog" },
+		{ href: "/docs", label: "Documentation" },
 	];
+
+	const docsSubLinks = [
+		{ href: "/docs/actors", label: "Actors" },
+		{ href: "/docs/integrations", label: "Integrations" },
+		{ href: "/docs/general", label: "Reference" },
+		{ href: "/docs/self-hosting", label: "Self-Hosting" },
+		{ href: "/docs/cloud", label: "Enterprise Cloud" },
+	];
+
+	// Create a filtered tree that excludes the problematic section headers
+	const filteredTree = tree ? (
+		<div className="[&_.text-muted-foreground]:hidden">
+			{tree}
+		</div>
+	) : null;
 
 	return (
 		<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
-			{/* Docs section */}
-			<div className="text-foreground">Documentation</div>
+			{/* Main navigation */}
+			{mainNavLinks.map(({ href, label }) => (
+				<RivetHeader.NavItem key={href} asChild>
+					<ActiveLink href={href}>
+						{label}
+					</ActiveLink>
+				</RivetHeader.NavItem>
+			))}
+
+			{/* Documentation sub-links */}
 			<div className="">
-				{docsLinks.map(({ href, label }) => (
+				{docsSubLinks.map(({ href, label }) => (
 					<div key={href} className="ml-2">
 						<RivetHeader.NavItem asChild>
-							<ActiveLink includeChildren tree={tree} href={href}>
+							<ActiveLink href={href}>
 								{label}
 							</ActiveLink>
 						</RivetHeader.NavItem>
 					</div>
 				))}
 			</div>
-
-			{/* Other links */}
-			{otherLinks.map(({ href, external, label }) => (
-				<RivetHeader.NavItem key={href} asChild>
-					<ActiveLink
-						href={href}
-						target={external ? "_blank" : undefined}
-					>
-						{label}
-					</ActiveLink>
-				</RivetHeader.NavItem>
-			))}
 		</div>
 	);
 }

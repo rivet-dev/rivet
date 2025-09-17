@@ -180,24 +180,24 @@ export const FeaturesGrid = () => {
 	const features = [
 		{
 			//title: "Stateless Functions",
-			title: "Functions",
+			title: "Rivet Engine",
 			description: (
 				<>
-					Deploy <WT>serverless functions</WT> that scale
-					automatically.
+					<WT>Enterprise-scale orchestration</WT> built on FoundationDB for massive actor distribution and fault tolerance.
 				</>
 			),
-			faIcon: faCode,
-			href: "/docs/cloud/functions",
-			useCases: ["APIs", "edge computing"],
+			faIcon: faServer,
+			href: "/docs/self-hosting",
+			useCases: ["actor orchestration", "multi-region", "fault tolerance"],
+			badge: "FoundationDB",
 		},
 		{
 			//title: "Stateful Actors",
-			title: "Actors",
+			title: "Rivet Actors",
 			description: (
 				<>
 					<WT>Long running tasks</WT> with state persistence,
-					hibernation, and realtime.
+					hibernation, and realtime that scale infinitely.
 				</>
 			),
 			faIcon: faActorsBorderless,
@@ -207,16 +207,15 @@ export const FeaturesGrid = () => {
 		},
 		{
 			//title: "Sandboxed Containers",
-			title: "Containers",
+			title: "Platform Integration",
 			description: (
 				<>
-					<WT>Run CPU- & memory-intensive workloads</WT> in secure
-					containers with fast coldstarts and blitz scaling.
+					<WT>Connect to your applications</WT> on Railway, Vercel, and other platforms with seamless integration.
 				</>
 			),
-			faIcon: faServer,
-			href: "/docs/cloud/containers",
-			useCases: ["batch jobs", "code sandbox", "game servers"],
+			faIcon: faLayerGroup,
+			href: "/docs/self-hosting/connect-backend",
+			useCases: ["Railway", "Vercel", "any platform"],
 		},
 		//{
 		//	title: "Workflows",
@@ -248,21 +247,6 @@ export const FeaturesGrid = () => {
 						badge={feature.badge}
 					/>
 				))}
-			</div>
-			<div className="text-center mt-16">
-				<p className="text-white/70 text-lg">
-					<span className="font-normal text-white">
-						Select the tools that fit your needs
-					</span>{" "}
-					— integrated together into a single platform.
-				</p>
-				<Link
-					href="/pricing"
-					className="inline-flex items-center gap-2 mt-4 text-white/70 hover:text-white transition-colors"
-				>
-					<span>See pricing</span>
-					<Icon icon={faArrowRight} />
-				</Link>
 			</div>
 		</div>
 	);

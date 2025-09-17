@@ -1,6 +1,7 @@
 "use client";
 
-import { CtaButtons } from "./CtaButtons";
+import { Icon, faArrowRight } from "@rivet-gg/icons";
+import { MarketingButton } from "./MarketingButton";
 
 // CTA section
 export const CtaSection = () => {
@@ -16,7 +17,18 @@ export const CtaSection = () => {
 				</p>
 
 				<div className="mt-12 flex items-center justify-center gap-x-6">
-					<CtaButtons />
+					<div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+						<MarketingButton href="/talk-to-an-engineer" primary>
+							Get Started
+						</MarketingButton>
+						<MarketingButton href="/docs/cloud">
+							<span>Documentation</span>
+							<Icon
+								icon={faArrowRight}
+								className="ml-2 text-xs group-hover:translate-x-0.5 transition-transform duration-200"
+							/>
+						</MarketingButton>
+					</div>
 				</div>
 			</div>
 		</div>
