@@ -14,11 +14,13 @@ import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
 import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
 import { Route as ContextCloudJoinRouteImport } from './routes/_context/_cloud/join'
+import { Route as ContextCloudOrgsIndexRouteImport } from './routes/_context/_cloud/orgs.index'
 import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/_engine/ns.$namespace'
 import { Route as ContextCloudOrgsOrganizationRouteImport } from './routes/_context/_cloud/orgs.$organization'
 import { Route as ContextEngineNsNamespaceIndexRouteImport } from './routes/_context/_engine/ns.$namespace/index'
 import { Route as ContextCloudOrgsOrganizationIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/index'
 import { Route as ContextEngineNsNamespaceRunnersRouteImport } from './routes/_context/_engine/ns.$namespace/runners'
+import { Route as ContextCloudOrgsOrganizationProjectsIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.index'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/index'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace'
@@ -45,6 +47,11 @@ const ContextCloudRoute = ContextCloudRouteImport.update({
 const ContextCloudJoinRoute = ContextCloudJoinRouteImport.update({
   id: '/join',
   path: '/join',
+  getParentRoute: () => ContextCloudRoute,
+} as any)
+const ContextCloudOrgsIndexRoute = ContextCloudOrgsIndexRouteImport.update({
+  id: '/orgs/',
+  path: '/orgs/',
   getParentRoute: () => ContextCloudRoute,
 } as any)
 const ContextEngineNsNamespaceRoute =
@@ -76,6 +83,12 @@ const ContextEngineNsNamespaceRunnersRoute =
     id: '/runners',
     path: '/runners',
     getParentRoute: () => ContextEngineNsNamespaceRoute,
+  } as any)
+const ContextCloudOrgsOrganizationProjectsIndexRoute =
+  ContextCloudOrgsOrganizationProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => ContextCloudOrgsOrganizationRoute,
   } as any)
 const ContextCloudOrgsOrganizationProjectsProjectRoute =
   ContextCloudOrgsOrganizationProjectsProjectRouteImport.update({
@@ -119,10 +132,12 @@ export interface FileRoutesByFullPath {
   '/join': typeof ContextCloudJoinRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
+  '/orgs': typeof ContextCloudOrgsIndexRoute
   '/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
   '/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
+  '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
   '/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
@@ -131,9 +146,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof ContextIndexRoute
   '/join': typeof ContextCloudJoinRoute
+  '/orgs': typeof ContextCloudOrgsIndexRoute
   '/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
   '/ns/$namespace': typeof ContextEngineNsNamespaceIndexRoute
+  '/orgs/$organization/projects': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
@@ -147,10 +164,12 @@ export interface FileRoutesById {
   '/_context/_cloud/join': typeof ContextCloudJoinRoute
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
+  '/_context/_cloud/orgs/': typeof ContextCloudOrgsIndexRoute
   '/_context/_engine/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
   '/_context/_cloud/orgs/$organization/': typeof ContextCloudOrgsOrganizationIndexRoute
   '/_context/_engine/ns/$namespace/': typeof ContextEngineNsNamespaceIndexRoute
   '/_context/_cloud/orgs/$organization/projects/$project': typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
+  '/_context/_cloud/orgs/$organization/projects/': typeof ContextCloudOrgsOrganizationProjectsIndexRoute
   '/_context/_cloud/orgs/$organization/projects/$project/': typeof ContextCloudOrgsOrganizationProjectsProjectIndexRoute
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteWithChildren
   '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
@@ -163,10 +182,12 @@ export interface FileRouteTypes {
     | '/join'
     | '/orgs/$organization'
     | '/ns/$namespace'
+    | '/orgs'
     | '/ns/$namespace/runners'
     | '/orgs/$organization/'
     | '/ns/$namespace/'
     | '/orgs/$organization/projects/$project'
+    | '/orgs/$organization/projects'
     | '/orgs/$organization/projects/$project/'
     | '/orgs/$organization/projects/$project/ns/$namespace'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
@@ -175,9 +196,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/join'
+    | '/orgs'
     | '/ns/$namespace/runners'
     | '/orgs/$organization'
     | '/ns/$namespace'
+    | '/orgs/$organization/projects'
     | '/orgs/$organization/projects/$project'
     | '/orgs/$organization/projects/$project/ns/$namespace/connect'
     | '/orgs/$organization/projects/$project/ns/$namespace'
@@ -190,10 +213,12 @@ export interface FileRouteTypes {
     | '/_context/_cloud/join'
     | '/_context/_cloud/orgs/$organization'
     | '/_context/_engine/ns/$namespace'
+    | '/_context/_cloud/orgs/'
     | '/_context/_engine/ns/$namespace/runners'
     | '/_context/_cloud/orgs/$organization/'
     | '/_context/_engine/ns/$namespace/'
     | '/_context/_cloud/orgs/$organization/projects/$project'
+    | '/_context/_cloud/orgs/$organization/projects/'
     | '/_context/_cloud/orgs/$organization/projects/$project/'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace'
     | '/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect'
@@ -241,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextCloudJoinRouteImport
       parentRoute: typeof ContextCloudRoute
     }
+    '/_context/_cloud/orgs/': {
+      id: '/_context/_cloud/orgs/'
+      path: '/orgs'
+      fullPath: '/orgs'
+      preLoaderRoute: typeof ContextCloudOrgsIndexRouteImport
+      parentRoute: typeof ContextCloudRoute
+    }
     '/_context/_engine/ns/$namespace': {
       id: '/_context/_engine/ns/$namespace'
       path: '/ns/$namespace'
@@ -275,6 +307,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ns/$namespace/runners'
       preLoaderRoute: typeof ContextEngineNsNamespaceRunnersRouteImport
       parentRoute: typeof ContextEngineNsNamespaceRoute
+    }
+    '/_context/_cloud/orgs/$organization/projects/': {
+      id: '/_context/_cloud/orgs/$organization/projects/'
+      path: '/projects'
+      fullPath: '/orgs/$organization/projects'
+      preLoaderRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRouteImport
+      parentRoute: typeof ContextCloudOrgsOrganizationRoute
     }
     '/_context/_cloud/orgs/$organization/projects/$project': {
       id: '/_context/_cloud/orgs/$organization/projects/$project'
@@ -353,6 +392,7 @@ const ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren =
 interface ContextCloudOrgsOrganizationRouteChildren {
   ContextCloudOrgsOrganizationIndexRoute: typeof ContextCloudOrgsOrganizationIndexRoute
   ContextCloudOrgsOrganizationProjectsProjectRoute: typeof ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren
+  ContextCloudOrgsOrganizationProjectsIndexRoute: typeof ContextCloudOrgsOrganizationProjectsIndexRoute
 }
 
 const ContextCloudOrgsOrganizationRouteChildren: ContextCloudOrgsOrganizationRouteChildren =
@@ -361,6 +401,8 @@ const ContextCloudOrgsOrganizationRouteChildren: ContextCloudOrgsOrganizationRou
       ContextCloudOrgsOrganizationIndexRoute,
     ContextCloudOrgsOrganizationProjectsProjectRoute:
       ContextCloudOrgsOrganizationProjectsProjectRouteWithChildren,
+    ContextCloudOrgsOrganizationProjectsIndexRoute:
+      ContextCloudOrgsOrganizationProjectsIndexRoute,
   }
 
 const ContextCloudOrgsOrganizationRouteWithChildren =
@@ -371,12 +413,14 @@ const ContextCloudOrgsOrganizationRouteWithChildren =
 interface ContextCloudRouteChildren {
   ContextCloudJoinRoute: typeof ContextCloudJoinRoute
   ContextCloudOrgsOrganizationRoute: typeof ContextCloudOrgsOrganizationRouteWithChildren
+  ContextCloudOrgsIndexRoute: typeof ContextCloudOrgsIndexRoute
 }
 
 const ContextCloudRouteChildren: ContextCloudRouteChildren = {
   ContextCloudJoinRoute: ContextCloudJoinRoute,
   ContextCloudOrgsOrganizationRoute:
     ContextCloudOrgsOrganizationRouteWithChildren,
+  ContextCloudOrgsIndexRoute: ContextCloudOrgsIndexRoute,
 }
 
 const ContextCloudRouteWithChildren = ContextCloudRoute._addFileChildren(

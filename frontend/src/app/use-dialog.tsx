@@ -6,10 +6,10 @@ import {
 export const useDialog = {
 	...baseUseDialog,
 	CreateNamespace: createDialogHook(
-		() => import("@/app/dialogs/create-namespace-dialog"),
+		() => import("@/app/dialogs/create-namespace-frame"),
 	),
 	CreateProject: createDialogHook(
-		() => import("@/app/dialogs/create-project-dialog"),
+		() => import("@/app/dialogs/create-project-frame"),
 	),
 	ConnectVercel: createDialogHook(
 		() => import("@/app/dialogs/connect-vercel-frame"),
@@ -17,7 +17,8 @@ export const useDialog = {
 	ConnectRailway: createDialogHook(
 		() => import("@/app/dialogs/connect-railway-frame"),
 	),
+	Billing: createDialogHook(() => import("@/app/dialogs/billing-frame")),
 	ProvideEngineCredentials: createDialogHook(
-		() => import("@/app/dialogs/provide-engine-credentials-dialog"),
+		() => import("@/app/dialogs/provide-engine-credentials-frame"),
 	),
 };

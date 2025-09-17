@@ -16,7 +16,13 @@ import { ModalRenderer } from "@/components/modal-renderer";
 const searchSchema = z
 	.object({
 		modal: z
-			.enum(["go-to-actor", "feedback", "create-ns", "create-project"])
+			.enum([
+				"go-to-actor",
+				"feedback",
+				"create-ns",
+				"create-project",
+				"billing",
+			])
 			.or(z.string())
 			.optional(),
 		utm_source: z.string().optional(),

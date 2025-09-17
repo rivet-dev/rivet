@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { createProjectContext } from "@/app/data-providers/cloud-data-provider";
+import { useDialog } from "@/app/use-dialog";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project",
@@ -25,5 +26,42 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	return <Outlet />;
+	return (
+		<>
+			<Outlet />
+			<ProjectModals />
+		</>
+	);
+}
+
+function ProjectModals() {
+	const navigate = Route.useNavigate();
+	const search = Route.useSearch();
+
+	const BillingDialog = useDialog.Billing.Dialog;
+
+	return (
+		<>
+			<BillingDialog
+				dialogContentProps={{
+					className: "max-w-5xl",
+				}}
+				dialogProps={{
+					open: search.modal === "billing",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+		</>
+	);
 }

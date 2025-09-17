@@ -35,9 +35,11 @@ export const createDialogHook = <
 ) => {
 	const DialogImpl = ({
 		dialogProps,
+		dialogContentProps,
 		...props
 	}: ComponentProps<Awaited<ReturnType<Component>>["default"]> & {
 		dialogProps?: DialogProps;
+		dialogContentProps?: ComponentProps<typeof DialogContent>;
 	}) => {
 		// biome-ignore lint/correctness/useExhaustiveDependencies: component here is a static value, won't change over time
 		const Content = useMemo(() => lazy(component), []);
@@ -46,6 +48,7 @@ export const createDialogHook = <
 			<IsInModalContext.Provider value={true}>
 				<Dialog {...dialogProps}>
 					<DialogContent
+						{...dialogContentProps}
 						onOpenAutoFocus={(e) => {
 							if (opts.autoFocus === false) {
 								return e.preventDefault();

@@ -1,17 +1,14 @@
 import * as EngineCredentialsForm from "@/app/forms/engine-credentials-form";
 import {
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
+	type DialogContentProps,
 	Flex,
+	Frame,
 	getConfig,
 	ls,
 	toast,
 } from "@/components";
-import type { DialogContentProps } from "@/components/actors/hooks";
 import { queryClient } from "@/queries/global";
-import { createClient } from "@/queries/manager-engine";
+import { createClient } from "../data-providers/engine-data-provider";
 
 interface ProvideEngineCredentialsDialogContentProps
 	extends DialogContentProps {}
@@ -28,7 +25,7 @@ export default function ProvideEngineCredentialsDialogContent({
 					: {}
 			}
 			onSubmit={async (values, form) => {
-				const client = createClient({
+				const client = createClient(getConfig().apiUrl, {
 					token: values.token,
 				});
 
@@ -61,22 +58,24 @@ export default function ProvideEngineCredentialsDialogContent({
 				}
 			}}
 		>
-			<DialogHeader>
-				<DialogTitle>Missing Rivet Engine credentials</DialogTitle>
-				<DialogDescription>
+			<Frame.Header>
+				<Frame.Title>Missing Rivet Engine credentials</Frame.Title>
+				<Frame.Description>
 					It looks like the instance of Rivet Engine that you're
 					connected to requires additional credentials, please provide
 					them below.
-				</DialogDescription>
-			</DialogHeader>
-			<Flex gap="4" direction="col">
-				<EngineCredentialsForm.Token />
-			</Flex>
-			<DialogFooter>
+				</Frame.Description>
+			</Frame.Header>
+			<Frame.Content>
+				<Flex gap="4" direction="col">
+					<EngineCredentialsForm.Token />
+				</Flex>
+			</Frame.Content>
+			<Frame.Footer>
 				<EngineCredentialsForm.Submit type="submit" allowPristine>
 					Save
 				</EngineCredentialsForm.Submit>
-			</DialogFooter>
+			</Frame.Footer>
 		</EngineCredentialsForm.Form>
 	);
 }

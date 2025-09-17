@@ -28,9 +28,12 @@ export type Namespace = {
 	createdAt: string;
 };
 
-export function createClient(opts: { token: (() => string) | string }) {
+export function createClient(
+	baseUrl = engineEnv().VITE_APP_API_URL,
+	opts: { token: (() => string) | string },
+) {
 	return new RivetClient({
-		baseUrl: () => engineEnv().VITE_APP_API_URL,
+		baseUrl: () => baseUrl,
 		environment: "",
 		...opts,
 	});
@@ -39,7 +42,9 @@ export function createClient(opts: { token: (() => string) | string }) {
 export const createGlobalContext = (opts: {
 	engineToken: (() => string) | string;
 }) => {
-	const client = createClient({ token: opts.engineToken });
+	const client = createClient(engineEnv().VITE_APP_API_URL, {
+		token: opts.engineToken,
+	});
 	return {
 		client,
 		namespacesQueryOptions() {
@@ -116,6 +121,10 @@ export const createNamespaceContext = ({
 		statusQueryOptions() {
 			return queryOptions({
 				...def.statusQueryOptions(),
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.statusQueryOptions().queryKey,
+				],
 				enabled: true,
 				queryFn: async () => {
 					return true;
@@ -131,6 +140,10 @@ export const createNamespaceContext = ({
 			return infiniteQueryOptions({
 				...def.regionsQueryOptions(),
 				enabled: true,
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.regionsQueryOptions().queryKey,
+				],
 				queryFn: async () => {
 					const data = await client.datacenters.list();
 					return {
@@ -151,7 +164,10 @@ export const createNamespaceContext = ({
 		regionQueryOptions(regionId: string | undefined) {
 			return queryOptions({
 				...def.regionQueryOptions(regionId),
-				queryKey: ["region", regionId],
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.regionQueryOptions(regionId).queryKey,
+				],
 				queryFn: async ({ client }) => {
 					const regions = await client.ensureInfiniteQueryData(
 						this.regionsQueryOptions(),
@@ -177,7 +193,10 @@ export const createNamespaceContext = ({
 		actorQueryOptions(actorId) {
 			return queryOptions({
 				...def.actorQueryOptions(actorId),
-				queryKey: [namespace, "actor", actorId],
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.actorQueryOptions(actorId).queryKey,
+				],
 				enabled: true,
 				queryFn: async ({ signal: abortSignal }) => {
 					const data = await client.actorsList(
@@ -201,7 +220,10 @@ export const createNamespaceContext = ({
 		actorsQueryOptions(opts) {
 			return infiniteQueryOptions({
 				...def.actorsQueryOptions(opts),
-				queryKey: [namespace, "actors", opts],
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.actorsQueryOptions(opts).queryKey,
+				],
 				enabled: true,
 				initialPageParam: undefined,
 				queryFn: async ({
@@ -273,7 +295,10 @@ export const createNamespaceContext = ({
 		buildsQueryOptions() {
 			return infiniteQueryOptions({
 				...def.buildsQueryOptions(),
-				queryKey: [namespace, "builds"],
+				queryKey: [
+					{ namespace, namespaceId },
+					...def.buildsQueryOptions().queryKey,
+				],
 				enabled: true,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const data = await client.actorsListNames(
@@ -493,15 +518,13 @@ export const createNamespaceContext = ({
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const response = await client.namespacesRunnerConfigs.list(
-						namespaceId,
+						namespace,
 						{
 							cursor: pageParam ?? undefined,
 							limit: RECORDS_PER_PAGE,
 						},
 						{ abortSignal },
 					);
-
-					console.log(response);
 
 					return response;
 				},
