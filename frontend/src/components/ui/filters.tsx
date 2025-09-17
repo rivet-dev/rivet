@@ -116,7 +116,6 @@ function filterDefinitionToOptions(definition: FilterDefinition) {
 
 function defaultFilterDefinitionOperator({
 	definition,
-	filterValues,
 }: {
 	definition: FilterDefinition;
 	filterValues: string[];
@@ -129,7 +128,6 @@ function defaultFilterDefinitionOperator({
 
 const filterOperators = ({
 	definition,
-	filterValues,
 }: {
 	definition: FilterDefinition;
 	filterValues: string[];
@@ -311,7 +309,6 @@ const FilterValueCombobox = ({
 
 function FilterDateValueCombobox({
 	id,
-	definition,
 	operator,
 	value,
 	onChange,
@@ -390,8 +387,6 @@ function FilterBooleanValue({
 
 function FilterStringValue({
 	id,
-	operator,
-	definition,
 	value,
 	onChange,
 }: {
@@ -687,13 +682,14 @@ export type FilterDefinition =
 			// a filter that's only applied client-side and not sent to the server
 			ephemeral?: boolean;
 			excludes?: string[];
+			defaultValue?: string[];
 	  }
 	| FilterSelectDefinition;
 
 type FilterSelectDefinition = (
 	| FilterSelectStaticDefinition
 	| FilterSelectDynamicDefinition
-) & { ephemeral?: boolean };
+) & { ephemeral?: boolean; defaultValue?: string[] };
 
 type FilterSelectStaticDefinition = {
 	type: "select";
@@ -730,14 +726,12 @@ export const FilterCreator = ({
 	value,
 	text = "Filter",
 	icon = <Icon icon={faFilterList} />,
-	showExcluded,
 	onChange,
 }: {
 	definitions: FilterDefinitions;
 	value: Partial<Filters>;
 	text?: string;
 	icon?: FunctionComponentElement<any>;
-	showExcluded?: boolean;
 	onChange: OnFiltersChange;
 }) => {
 	const [open, setOpen] = useState(false);
@@ -1329,7 +1323,7 @@ export type FilterValue = z.infer<typeof FilterValueSchema>;
 
 export function createFiltersSchema(definitions: FilterDefinitions) {
 	const filters: Record<string, z.ZodTypeAny> = {};
-	for (const [key, definition] of Object.entries(definitions)) {
+	for (const [key] of Object.entries(definitions)) {
 		filters[key] = FilterValueSchema;
 	}
 
@@ -1347,6 +1341,21 @@ export function createFiltersPicker(definitions: FilterDefinitions) {
 						),
 					);
 		const keys = Object.keys(defs);
+
+		const filtersWithDefaultValues = Object.fromEntries(
+			Object.entries(defs)
+				.filter(([, def]) => def.defaultValue !== undefined)
+				.map(([key, def]) => [
+					key,
+					{
+						value: def.defaultValue!,
+						operator: def.operators?.[0] ?? FilterOp.EQUAL,
+					},
+				]),
+		);
+
+		// add missing default values to the object
+		object = { ...filtersWithDefaultValues, ...object };
 
 		return _.pick(object, keys);
 	};

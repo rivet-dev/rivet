@@ -208,6 +208,44 @@ export const defaultActorContext = {
 			},
 		};
 	},
+
+	actorWakeUpMutationOptions(actorId: ActorId) {
+		return {
+			mutationKey: ["actor", actorId, "wake-up"],
+			mutationFn: async () => {
+				const client = this.createActorInspector(actorId);
+				try {
+					await client.ping.$get();
+					return true;
+				} catch {
+					return false;
+				}
+			},
+		};
+	},
+
+	actorAutoWakeUpQueryOptions(
+		actorId: ActorId,
+		{ enabled }: { enabled?: boolean } = {},
+	) {
+		return queryOptions({
+			enabled,
+			refetchInterval: 1000,
+			staleTime: 0,
+			gcTime: 0,
+			queryKey: ["actor", actorId, "auto-wake-up"],
+			queryFn: async ({ queryKey: [, actorId] }) => {
+				const client = this.createActorInspector(actorId);
+				try {
+					await client.ping.$get();
+					return true;
+				} catch {
+					return false;
+				}
+			},
+			retry: false,
+		});
+	},
 };
 
 export type ActorContext = typeof defaultActorContext;

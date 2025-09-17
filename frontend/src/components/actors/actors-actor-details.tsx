@@ -1,12 +1,6 @@
 import { faQuestionSquare, Icon } from "@rivet-gg/icons";
-import {
-	useQuery,
-	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
-import { useMatch } from "@tanstack/react-router";
-import { memo, type ReactNode, Suspense, useMemo } from "react";
-import { useInspectorCredentials } from "@/app/credentials-context";
+import { useQuery } from "@tanstack/react-query";
+import { memo, type ReactNode, Suspense } from "react";
 import {
 	cn,
 	Flex,
@@ -15,12 +9,6 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@/components";
-import { createEngineActorContext } from "@/queries/actor-engine";
-import { createInspectorActorContext } from "@/queries/actor-inspector";
-import {
-	type NamespaceNameId,
-	runnersQueryOptions,
-} from "@/queries/manager-engine";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDatabaseTab } from "./actor-db-tab";
@@ -28,13 +16,13 @@ import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorEventsTab } from "./actor-events-tab";
 import { ActorLogsTab } from "./actor-logs-tab";
 import { ActorMetricsTab } from "./actor-metrics-tab";
-import { ActorProvider } from "./actor-queries-context";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatus } from "./actor-status";
 import { ActorStopButton } from "./actor-stop-button";
 import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
+import { GuardConnectableInspector } from "./guard-connectable-inspector";
 import { useManager } from "./manager-context";
 import { ActorFeature, type ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
@@ -57,34 +45,32 @@ export const ActorsActorDetails = memo(
 			useManager().actorFeaturesQueryOptions(actorId),
 		);
 
-		const supportsConsole = features?.includes(ActorFeature.Console);
+		const supportsConsole = features.includes(ActorFeature.Console);
 
 		return (
-			<ActorContextProvider actorId={actorId}>
-				<ActorDetailsSettingsProvider>
-					<ActorWorkerContextProvider
+			<ActorDetailsSettingsProvider>
+				<div className="flex flex-col h-full flex-1">
+					<ActorTabs
+						features={features}
 						actorId={actorId}
-						// notifyOnReconnect={features?.includes(
-						// 	ActorFeature.InspectReconnectNotification,
-						// )}
-					>
-						<div className="flex flex-col h-full flex-1">
-							<ActorTabs
-								features={features}
-								actorId={actorId}
-								tab={tab}
-								onTabChange={onTabChange}
-								// onExportLogs={onExportLogs}
-								// isExportingLogs={isExportingLogs}
-							/>
+						tab={tab}
+						onTabChange={onTabChange}
+						// onExportLogs={onExportLogs}
+						// isExportingLogs={isExportingLogs}
+					/>
 
-							{supportsConsole ? (
-								<ActorConsole actorId={actorId} />
-							) : null}
-						</div>
-					</ActorWorkerContextProvider>
-				</ActorDetailsSettingsProvider>
-			</ActorContextProvider>
+					{supportsConsole ? (
+						<ActorWorkerContextProvider
+							actorId={actorId}
+							// notifyOnReconnect={features?.includes(
+							// 	ActorFeature.InspectReconnectNotification,
+							// )}
+						>
+							<ActorConsole actorId={actorId} />
+						</ActorWorkerContextProvider>
+					) : null}
+				</div>
+			</ActorDetailsSettingsProvider>
 		);
 	},
 );
@@ -234,7 +220,9 @@ export function ActorTabs({
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab actorId={actorId} />
+								<GuardConnectableInspector actorId={actorId}>
+									<ActorLogsTab actorId={actorId} />
+								</GuardConnectableInspector>
 							</Suspense>
 						</TabsContent>
 					) : null}
@@ -251,7 +239,9 @@ export function ActorTabs({
 							value="connections"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<ActorConnectionsTab actorId={actorId} />
+							<GuardConnectableInspector actorId={actorId}>
+								<ActorConnectionsTab actorId={actorId} />
+							</GuardConnectableInspector>
 						</TabsContent>
 					) : null}
 					{supportsEvents ? (
@@ -259,7 +249,9 @@ export function ActorTabs({
 							value="events"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<ActorEventsTab actorId={actorId} />
+							<GuardConnectableInspector actorId={actorId}>
+								<ActorEventsTab actorId={actorId} />
+							</GuardConnectableInspector>
 						</TabsContent>
 					) : null}
 					{supportsDatabase ? (
@@ -267,7 +259,9 @@ export function ActorTabs({
 							value="database"
 							className="min-h-0 min-w-0 flex-1 mt-0 h-full"
 						>
-							<ActorDatabaseTab actorId={actorId} />
+							<GuardConnectableInspector actorId={actorId}>
+								<ActorDatabaseTab actorId={actorId} />
+							</GuardConnectableInspector>
 						</TabsContent>
 					) : null}
 					{supportsState ? (
@@ -275,7 +269,9 @@ export function ActorTabs({
 							value="state"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<ActorStateTab actorId={actorId} />
+							<GuardConnectableInspector actorId={actorId}>
+								<ActorStateTab actorId={actorId} />
+							</GuardConnectableInspector>
 						</TabsContent>
 					) : null}
 					{supportsMetrics ? (
@@ -283,7 +279,9 @@ export function ActorTabs({
 							value="metrics"
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
-							<ActorMetricsTab actorId={actorId} />
+							<GuardConnectableInspector actorId={actorId}>
+								<ActorMetricsTab actorId={actorId} />
+							</GuardConnectableInspector>
 						</TabsContent>
 					) : null}
 				</>
@@ -291,78 +289,4 @@ export function ActorTabs({
 			{children}
 		</Tabs>
 	);
-}
-
-function ActorContextProvider(props: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	return __APP_TYPE__ === "inspector" ? (
-		<ActorInspectorProvider {...props} />
-	) : (
-		<ActorEngineProvider {...props} />
-	);
-}
-
-function ActorInspectorProvider({
-	actorId,
-	children,
-}: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	const { data } = useSuspenseQuery(useManager().actorQueryOptions(actorId));
-	const { credentials } = useInspectorCredentials();
-
-	if (!credentials?.url || !credentials?.token) {
-		throw new Error("Missing inspector credentials");
-	}
-
-	const actorContext = useMemo(() => {
-		return createInspectorActorContext({
-			...credentials,
-			name: data.name || "",
-		});
-	}, [credentials, data.name]);
-
-	return <ActorProvider value={actorContext}>{children}</ActorProvider>;
-}
-
-function ActorEngineProvider({
-	actorId,
-	children,
-}: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	const { data: actor } = useSuspenseQuery(
-		useManager().actorQueryOptions(actorId),
-	);
-
-	const match = useMatch({
-		from: "/_layout/ns/$namespace",
-	});
-
-	if (!match.params.namespace || !actor.runner) {
-		throw new Error("Actor is missing required fields");
-	}
-
-	const { data: runners } = useSuspenseInfiniteQuery(
-		runnersQueryOptions({
-			namespace: match.params.namespace as NamespaceNameId,
-		}),
-	);
-
-	const runner = runners.find((runner) => runner.name === actor.runner);
-
-	if (!runner) {
-		throw new Error("Runner not found");
-	}
-
-	const actorContext = useMemo(() => {
-		return createEngineActorContext({
-			token: (runner.metadata?.inspectorToken as string) || "",
-		});
-	}, [runner.metadata?.inspectorToken]);
-	return <ActorProvider value={actorContext}>{children}</ActorProvider>;
 }

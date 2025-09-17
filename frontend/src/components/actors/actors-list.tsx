@@ -21,14 +21,13 @@ import {
 	FilterCreator,
 	FiltersDisplay,
 	type OnFiltersChange,
-	type PickFiltersOptions,
 	ScrollArea,
 	ShimmerLine,
 	SmallText,
 	WithTooltip,
 } from "@/components";
 import { VisibilitySensor } from "../visibility-sensor";
-import { useActorsFilters } from "./actor-filters-context";
+import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
 import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
@@ -198,14 +197,6 @@ export function ListSkeleton() {
 				))}
 		</div>
 	);
-}
-
-function useFiltersValue(opts: PickFiltersOptions = {}) {
-	const { pick } = useActorsFilters();
-	return useSearch({
-		from: "/_layout",
-		select: (state) => pick(state, opts),
-	});
 }
 
 function EmptyState({ count }: { count: number }) {

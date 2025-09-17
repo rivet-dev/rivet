@@ -1,22 +1,14 @@
 import { faHashtag, faKey } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
-import { CommandGroup, CommandItem } from "cmdk";
 import { createContext, useContext } from "react";
-import { cn } from "../lib/utils";
-import { Checkbox } from "../ui/checkbox";
 import {
 	createFiltersPicker,
 	createFiltersRemover,
 	createFiltersSchema,
 	type FilterDefinitions,
 	FilterOp,
-	type OptionsProviderProps,
+	type PickFiltersOptions,
 } from "../ui/filters";
-import { ActorRegion } from "./actor-region";
-import { ActorStatus } from "./actor-status";
-import { useManager } from "./manager-context";
-import type { ActorStatus as ActorStatusType } from "./queries";
 
 export const ACTORS_FILTERS_DEFINITIONS = {
 	id: {
@@ -47,6 +39,13 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		label: "Show IDs",
 		category: "display",
 		ephemeral: true,
+	},
+	wakeOnSelect: {
+		type: "boolean",
+		label: "Auto-wake Actors on select",
+		category: "display",
+		ephemeral: true,
+		defaultValue: ["1"],
 	},
 	// tags: {
 	// 	type: "select",
@@ -143,3 +142,11 @@ export const useFilters = (
 		select: (state) => fn(pick(state)),
 	});
 };
+
+export function useFiltersValue(opts: PickFiltersOptions = {}) {
+	const { pick } = useActorsFilters();
+	return useSearch({
+		from: "/_layout",
+		select: (state) => pick(state, opts),
+	});
+}

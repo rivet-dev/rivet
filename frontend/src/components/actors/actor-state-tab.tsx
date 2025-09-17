@@ -5,7 +5,6 @@ import { Button } from "../ui/button";
 import { ActorEditableState } from "./actor-editable-state";
 import { useActor } from "./actor-queries-context";
 import { useActorsView } from "./actors-view-context-provider";
-import { useManager } from "./manager-context";
 import type { ActorId } from "./queries";
 
 interface ActorStateTabProps {
@@ -13,10 +12,6 @@ interface ActorStateTabProps {
 }
 
 export function ActorStateTab({ actorId }: ActorStateTabProps) {
-	const { data: destroyedAt } = useQuery(
-		useManager().actorDestroyedAtQueryOptions(actorId),
-	);
-
 	const { links } = useActorsView();
 
 	const actorQueries = useActor();
@@ -24,13 +19,7 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 		data: state,
 		isError,
 		isLoading,
-	} = useQuery(
-		actorQueries.actorStateQueryOptions(actorId, { enabled: !destroyedAt }),
-	);
-
-	if (destroyedAt) {
-		return <Info>State Preview is unavailable for inactive Actors.</Info>;
-	}
+	} = useQuery(actorQueries.actorStateQueryOptions(actorId));
 
 	if (isError) {
 		return (
@@ -69,7 +58,7 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 
 export function Info({ children }: PropsWithChildren) {
 	return (
-		<div className="flex-1 flex flex-col gap-2 items-center justify-center h-full text-center">
+		<div className="flex-1 flex flex-col gap-2 items-center justify-center h-full text-center max-w-md mx-auto">
 			{children}
 		</div>
 	);

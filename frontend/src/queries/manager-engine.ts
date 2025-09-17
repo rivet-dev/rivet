@@ -281,6 +281,28 @@ export const runnerQueryOptions = (opts: {
 	});
 };
 
+export const runnerByNameQueryOptions = (opts: {
+	namespace: NamespaceNameId;
+	runnerName: string;
+}) => {
+	return queryOptions({
+		queryKey: [opts.namespace, "runner", opts.runnerName],
+		enabled: !!opts.runnerName,
+		queryFn: async ({ signal: abortSignal }) => {
+			const data = await client.runners.list(
+				{ namespace: opts.namespace, name: opts.runnerName },
+				{
+					abortSignal,
+				},
+			);
+			if (!data.runners[0]) {
+				throw new Error("Runner not found");
+			}
+			return data.runners[0];
+		},
+	});
+};
+
 export const runnerNamesQueryOptions = (opts: {
 	namespace: NamespaceNameId;
 }) => {
