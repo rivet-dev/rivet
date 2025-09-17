@@ -6,23 +6,6 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { Actor, ActorId, ManagerContext } from "@/components/actors";
 import { createDefaultManagerContext } from "@/components/actors/manager-context";
 import { ensureTrailingSlash } from "@/lib/utils";
-import { queryClient } from "./global";
-
-export const createClient = (url: string, token: string) => {
-	const newUrl = new URL(url);
-	if (!newUrl.pathname.endsWith("registry/inspect")) {
-		if (!newUrl.pathname.endsWith("registry")) {
-			newUrl.pathname = `${ensureTrailingSlash(newUrl.pathname)}registry`;
-		}
-		if (!newUrl.pathname.endsWith("inspect")) {
-			newUrl.pathname = `${ensureTrailingSlash(newUrl.pathname)}inspect`;
-		}
-	}
-
-	return createManagerInspectorClient(newUrl.href, {
-		headers: { Authorization: `Bearer ${token}` },
-	});
-};
 
 export const createInspectorManagerContext = ({
 	url,
@@ -31,7 +14,7 @@ export const createInspectorManagerContext = ({
 	url: string;
 	token: string;
 }) => {
-	const client = createClient(url, token);
+	const client = createClient({ url, token });
 
 	const def = createDefaultManagerContext();
 
@@ -182,4 +165,15 @@ function transformActor(a: InspectorActor): Actor {
 			: undefined,
 		features: a.features,
 	};
+}
+
+export function createClient({ url, token }: { url: string; token: string }) {
+	const newUrl = new URL(url);
+	if (!newUrl.pathname.endsWith("inspect")) {
+		newUrl.pathname = `${ensureTrailingSlash(newUrl.pathname)}inspect`;
+	}
+
+	return createManagerInspectorClient(newUrl.href, {
+		headers: { Authorization: `Bearer ${token}` },
+	});
 }

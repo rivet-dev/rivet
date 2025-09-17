@@ -21,8 +21,8 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 	const status = useActorWorkerStatus();
 	const managerQueries = useManager();
 	const actorQueries = useActor();
-	const { data: destroyedAt } = useQuery(
-		managerQueries.actorDestroyedAtQueryOptions(actorId),
+	const { data: { destroyedAt, sleepingAt } = {} } = useQuery(
+		managerQueries.actorWorkerQueryOptions(actorId),
 	);
 	const { isSuccess, isError, isLoading } = useQuery(
 		actorQueries.actorPingQueryOptions(actorId, {
@@ -31,7 +31,8 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 		}),
 	);
 
-	const isBlocked = status.type !== "ready" || !isSuccess || !!destroyedAt;
+	const isBlocked =
+		status.type !== "ready" || !isSuccess || !!destroyedAt || !!sleepingAt;
 
 	const combinedStatus = isError
 		? "error"

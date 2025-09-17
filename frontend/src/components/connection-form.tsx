@@ -34,7 +34,7 @@ export const ConnectionForm = (
 							<FormLabel>Endpoint</FormLabel>
 							<Input
 								type="url"
-								placeholder="http://localhost:8080"
+								placeholder="http://localhost:6420"
 								{...field}
 							/>
 							<FormMessage />

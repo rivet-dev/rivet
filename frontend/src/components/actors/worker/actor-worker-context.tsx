@@ -32,11 +32,20 @@ export const ActorWorkerContextProvider = ({
 	children,
 	actorId,
 }: ActorWorkerContextProviderProps) => {
-	const { data: { features, name, endpoint, destroyedAt, startedAt } = {} } =
-		useQuery(useManager().actorWorkerQueryOptions(actorId));
+	const {
+		data: {
+			features,
+			name,
+			endpoint,
+			destroyedAt,
+			startedAt,
+			sleepingAt,
+		} = {},
+	} = useQuery(useManager().actorWorkerQueryOptions(actorId));
 	const enabled =
 		(features?.includes(ActorFeature.Console) &&
 			!destroyedAt &&
+			!sleepingAt &&
 			!!startedAt) ??
 		false;
 

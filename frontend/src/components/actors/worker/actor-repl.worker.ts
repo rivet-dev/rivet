@@ -183,27 +183,6 @@ function respond(msg: Response) {
 async function callAction({ name, args }: { name: string; args: unknown[] }) {
 	if (!init) throw new Error("Actor not initialized");
 
-	if (__APP_TYPE__ === "inspector") {
-		const client = createClient(init.endpoint).getForId(init.name, init.id);
-		return await client.action({ name, args });
-	}
-
-	const opts =
-		createEngineActorContext().createActorInspectorFetchConfiguration(
-			init.id,
-		);
-
-	const response = await fetch(`${getConfig().apiUrl}/actions/${name}`, {
-		...opts,
-		headers: {
-			...opts.headers,
-			"Content-Type": "application/json",
-		},
-	});
-
-	if (!response.ok) {
-		throw response;
-	}
-
-	return await response.json();
+	const client = createClient(init.endpoint).getForId(init.name, init.id);
+	return await client.action({ name, args });
 }

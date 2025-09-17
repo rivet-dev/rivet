@@ -236,6 +236,7 @@ function Modals() {
 
 function InspectorContent({ content }: { content: ReactNode }) {
 	const search = Route.useSearch();
+	const navigate = Route.useNavigate();
 	const [credentials, setCredentials] = useState<null | {
 		url: string;
 		token: string;
@@ -269,11 +270,22 @@ function InspectorContent({ content }: { content: ReactNode }) {
 			formRef={formRef}
 			onSubmit={async (values, form) => {
 				try {
-					const client = createClient(values.username, values.token);
+					const client = createClient({
+						url: values.username,
+						token: values.token,
+					});
 					const resp = await client.ping.$get();
 					if (!resp.ok) {
 						throw resp;
 					}
+					navigate({
+						to: ".",
+						search: (old) => ({
+							...old,
+							u: values.username,
+							t: values.token,
+						}),
+					});
 					setCredentials({
 						url: values.username,
 						token: values.token,
@@ -364,7 +376,7 @@ function Connect({
 					<ConnectionForm
 						ref={formRef}
 						defaultValues={{
-							username: search.u || "http://localhost:8080",
+							username: search.u || "http://localhost:6420",
 							token: search.t || "",
 						}}
 						onSubmit={onSubmit}

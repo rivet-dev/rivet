@@ -1,21 +1,25 @@
 import { faPowerOff, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
-import { type ReactNode, useMemo } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useInspectorCredentials } from "@/app/credentials-context";
-import { createEngineActorContext } from "@/queries/actor-engine";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
 import {
 	type NamespaceNameId,
 	runnerByNameQueryOptions,
 } from "@/queries/manager-engine";
 import { DiscreteCopyButton } from "../copy-area";
+import { getConfig } from "../lib/config";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
 import { ActorProvider } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
 import { useManager } from "./manager-context";
 import type { ActorId } from "./queries";
+
+const InspectorGuardContext = createContext<ReactNode | null>(null);
+
+export const useInspectorGuard = () => useContext(InspectorGuardContext);
 
 interface GuardConnectableInspectorProps {
 	actorId: ActorId;
@@ -35,31 +39,56 @@ export function GuardConnectableInspector({
 	});
 
 	if (destroyedAt) {
-		return <Info>Unavailable for inactive Actors.</Info>;
+		return (
+			<InspectorGuardContext.Provider
+				value={<Info>Unavailable for inactive Actors.</Info>}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
+		);
 	}
 
 	if (sleepingAt) {
 		if (filters.wakeOnSelect?.value?.[0] === "1") {
 			return (
-				<Info>
-					<AutoWakeUpActor actorId={actorId} />
-				</Info>
+				<InspectorGuardContext.Provider
+					value={
+						<Info>
+							<AutoWakeUpActor actorId={actorId} />
+						</Info>
+					}
+				>
+					{children}
+				</InspectorGuardContext.Provider>
 			);
 		}
 		return (
-			<Info>
-				<p>Unavailable for sleeping Actors.</p>
-				<WakeUpActorButton actorId={actorId} />
-			</Info>
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						<p>Unavailable for sleeping Actors.</p>
+						<WakeUpActorButton actorId={actorId} />
+					</Info>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
 		);
 	}
 
 	if (pendingAllocationAt && !startedAt) {
 		return (
-			<Info>
-				Cannot start Actor, runners are out of capacity. Add more
-				runners to run the Actor or increase runner capacity.
-			</Info>
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						Cannot start Actor, runners are out of capacity. Add
+						more runners to run the Actor or increase runner
+						capacity.
+					</Info>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
 		);
 	}
 
@@ -81,14 +110,7 @@ function ActorContextProvider(props: {
 	);
 }
 
-function ActorInspectorProvider({
-	actorId,
-	children,
-}: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	const { data } = useSuspenseQuery(useManager().actorQueryOptions(actorId));
+function ActorInspectorProvider({ children }: { children: ReactNode }) {
 	const { credentials } = useInspectorCredentials();
 
 	if (!credentials?.url || !credentials?.token) {
@@ -98,9 +120,8 @@ function ActorInspectorProvider({
 	const actorContext = useMemo(() => {
 		return createInspectorActorContext({
 			...credentials,
-			name: data.name || "",
 		});
-	}, [credentials, data.name]);
+	}, [credentials]);
 
 	return <ActorProvider value={actorContext}>{children}</ActorProvider>;
 }
@@ -133,7 +154,8 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const { actor, runner } = useActorRunner({ actorId });
 
 	const actorContext = useMemo(() => {
-		return createEngineActorContext({
+		return createInspectorActorContext({
+			url: getConfig().apiUrl,
 			token: (runner?.metadata?.inspectorToken as string) || "",
 		});
 	}, [runner?.metadata?.inspectorToken]);
@@ -152,7 +174,15 @@ function ActorEngineProvider({
 
 	if (!runner || !actor.runner) {
 		return (
-			<NoRunnerInfo runner={runner?.name || actor.runner || "unknown"} />
+			<InspectorGuardContext.Provider
+				value={
+					<NoRunnerInfo
+						runner={runner?.name || actor.runner || "unknown"}
+					/>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
 		);
 	}
 

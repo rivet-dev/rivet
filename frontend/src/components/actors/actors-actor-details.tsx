@@ -22,7 +22,7 @@ import { ActorStopButton } from "./actor-stop-button";
 import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorConsole } from "./console/actor-console";
-import { GuardConnectableInspector } from "./guard-connectable-inspector";
+import { GuardConnectableInspector, useInspectorGuard } from "./guard-connectable-inspector";
 import { useManager } from "./manager-context";
 import { ActorFeature, type ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
@@ -48,6 +48,8 @@ export const ActorsActorDetails = memo(
 		const supportsConsole = features.includes(ActorFeature.Console);
 
 		return (
+
+		<GuardConnectableInspector actorId={actorId}>
 			<ActorDetailsSettingsProvider>
 				<div className="flex flex-col h-full flex-1">
 					<ActorTabs
@@ -55,22 +57,18 @@ export const ActorsActorDetails = memo(
 						actorId={actorId}
 						tab={tab}
 						onTabChange={onTabChange}
-						// onExportLogs={onExportLogs}
-						// isExportingLogs={isExportingLogs}
 					/>
 
 					{supportsConsole ? (
 						<ActorWorkerContextProvider
 							actorId={actorId}
-							// notifyOnReconnect={features?.includes(
-							// 	ActorFeature.InspectReconnectNotification,
-							// )}
 						>
 							<ActorConsole actorId={actorId} />
 						</ActorWorkerContextProvider>
 					) : null}
 				</div>
 			</ActorDetailsSettingsProvider>
+			</GuardConnectableInspector>
 		);
 	},
 );
@@ -120,6 +118,8 @@ export function ActorTabs({
 
 	const defaultTab = supportsState ? "state" : "logs";
 	const value = disabled ? undefined : tab || defaultTab;
+
+	const guardContent = useInspectorGuard();
 
 	return (
 		<Tabs
@@ -220,9 +220,7 @@ export function ActorTabs({
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<GuardConnectableInspector actorId={actorId}>
-									<ActorLogsTab actorId={actorId} />
-								</GuardConnectableInspector>
+								{guardContent || <ActorLogsTab actorId={actorId} />}
 							</Suspense>
 						</TabsContent>
 					) : null}
@@ -239,9 +237,7 @@ export function ActorTabs({
 							value="connections"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<GuardConnectableInspector actorId={actorId}>
-								<ActorConnectionsTab actorId={actorId} />
-							</GuardConnectableInspector>
+								{guardContent ||<ActorConnectionsTab actorId={actorId} />}
 						</TabsContent>
 					) : null}
 					{supportsEvents ? (
@@ -249,9 +245,7 @@ export function ActorTabs({
 							value="events"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<GuardConnectableInspector actorId={actorId}>
-								<ActorEventsTab actorId={actorId} />
-							</GuardConnectableInspector>
+								{guardContent || <ActorEventsTab actorId={actorId} />}
 						</TabsContent>
 					) : null}
 					{supportsDatabase ? (
@@ -259,9 +253,7 @@ export function ActorTabs({
 							value="database"
 							className="min-h-0 min-w-0 flex-1 mt-0 h-full"
 						>
-							<GuardConnectableInspector actorId={actorId}>
-								<ActorDatabaseTab actorId={actorId} />
-							</GuardConnectableInspector>
+								{guardContent || <ActorDatabaseTab actorId={actorId} />}
 						</TabsContent>
 					) : null}
 					{supportsState ? (
@@ -269,9 +261,7 @@ export function ActorTabs({
 							value="state"
 							className="min-h-0 flex-1 mt-0"
 						>
-							<GuardConnectableInspector actorId={actorId}>
-								<ActorStateTab actorId={actorId} />
-							</GuardConnectableInspector>
+								{guardContent || <ActorStateTab actorId={actorId} />}
 						</TabsContent>
 					) : null}
 					{supportsMetrics ? (
@@ -279,9 +269,7 @@ export function ActorTabs({
 							value="metrics"
 							className="min-h-0 flex-1 mt-0 h-full"
 						>
-							<GuardConnectableInspector actorId={actorId}>
-								<ActorMetricsTab actorId={actorId} />
-							</GuardConnectableInspector>
+								{guardContent || <ActorMetricsTab actorId={actorId} />}
 						</TabsContent>
 					) : null}
 				</>
