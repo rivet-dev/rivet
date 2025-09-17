@@ -191,6 +191,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: engine-full
           platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FRONTEND=true
           # secrets: |
           #   fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           # secret-files: |
@@ -205,6 +207,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: engine-slim
           platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FRONTEND=true
           # secrets: |
           #   fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           # secret-files: |

@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.4
 FROM rust:1.88.0 AS base
 
+ARG BUILD_FRONTEND=true
+ARG VITE_APP_API_URL
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     git-lfs \
@@ -11,8 +14,11 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     wget \
     xz-utils \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    corepack enable && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install osxcross
 RUN git config --global --add safe.directory '*' && \
@@ -24,6 +30,9 @@ RUN git config --global --add safe.directory '*' && \
 
 # Add osxcross to PATH
 ENV PATH="/root/osxcross/target/bin:$PATH"
+
+# Disable interactive prompt
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 # Tell Clang/bindgen to use the macOS SDK, and nudge Clang to prefer osxcross binutils.
 ENV OSXCROSS_SDK=MacOSX11.3.sdk \
@@ -60,6 +69,17 @@ ar = "x86_64-apple-darwin20.4-ar"\n\
 
 # Copy the source code
 COPY . .
+
+# Build frontend
+RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
+        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
+        (cd frontend && pnpm install && \
+        if [ -n "$VITE_APP_API_URL" ]; then \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+        else \
+            pnpm run build:engine; \
+        fi); \
+    fi
 
 # Build for x86_64 macOS
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

@@ -8,6 +8,7 @@ FROM --platform=linux/amd64 rust:1.88.0-bookworm AS builder
 ARG TARGETARCH
 
 ARG BUILD_FRONTEND=false
+ARG VITE_APP_API_URL
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
@@ -38,8 +39,6 @@ RUN apt-get update -y && \
 # Disable interactive prompt
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-ENV RIVET_SKIP_BUILD_TS_SDK=1
-
 # Pull via Git CLI to improve reliability in CI
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
@@ -50,7 +49,12 @@ COPY . .
 # Build frontend
 RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
         (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
-        (cd frontend && pnpm install && pnpm run build); \
+        (cd frontend && pnpm install && \
+        if [ -n "$VITE_APP_API_URL" ]; then \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+        else \
+            pnpm run build:engine; \
+        fi); \
     fi
 
 # Build and copy all binaries from target directory into an empty image (it is not

@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.4
 FROM rust:1.88.0 AS base
 
+ARG BUILD_FRONTEND=true
+ARG VITE_APP_API_URL
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     musl-tools \
@@ -14,11 +17,18 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     g++ \
     g++-multilib \
-    git-lfs && \
+    git-lfs \
+    curl && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    corepack enable && \
     rm -rf /var/lib/apt/lists/* && \
     wget -q https://github.com/cross-tools/musl-cross/releases/latest/download/x86_64-unknown-linux-musl.tar.xz && \
     tar -xf x86_64-unknown-linux-musl.tar.xz -C /opt/ && \
     rm x86_64-unknown-linux-musl.tar.xz
+
+# Disable interactive prompt
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 # Install musl targets
 RUN rustup target add x86_64-unknown-linux-musl
@@ -60,6 +70,17 @@ ENV OPENSSL_DIR=/musl \
 
 # Copy the source code
 COPY . .
+
+# Build frontend
+RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
+        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
+        (cd frontend && pnpm install && \
+        if [ -n "$VITE_APP_API_URL" ]; then \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+        else \
+            pnpm run build:engine; \
+        fi); \
+    fi
 
 # Build for Linux with musl (static binary) - x86_64
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

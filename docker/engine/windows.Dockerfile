@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.4
 FROM rust:1.88.0
 
+ARG BUILD_FRONTEND=true
+ARG VITE_APP_API_URL
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     llvm-14-dev \
@@ -12,11 +15,18 @@ RUN apt-get update && apt-get install -y \
     g++-mingw-w64-x86-64 \
     binutils-mingw-w64-x86-64 \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    curl && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    corepack enable && \
+    rm -rf /var/lib/apt/lists/*
 
 # Switch MinGW-w64 to the POSIX threading model toolchain
 RUN update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix && \
     update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+# Disable interactive prompt
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 # Install target
 RUN rustup target add x86_64-pc-windows-gnu
@@ -47,6 +57,17 @@ WORKDIR /build
 
 # Copy the source code
 COPY . .
+
+# Build frontend
+RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
+        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
+        (cd frontend && pnpm install && \
+        if [ -n "$VITE_APP_API_URL" ]; then \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+        else \
+            pnpm run build:engine; \
+        fi); \
+    fi
 
 # Build for Windows
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
