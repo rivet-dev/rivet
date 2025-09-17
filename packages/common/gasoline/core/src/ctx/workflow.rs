@@ -25,7 +25,7 @@ use crate::{
 	history::{
 		History,
 		cursor::{Cursor, HistoryResult},
-		event::{EventId, SleepState},
+		event::SleepState,
 		location::{Coordinate, Location},
 		removed::Removed,
 	},
@@ -281,7 +281,6 @@ impl WorkflowCtx {
 	async fn run_activity<A: Activity>(
 		&mut self,
 		input: &A::Input,
-		event_id: &EventId,
 		location: &Location,
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
@@ -328,7 +327,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						location,
 						self.version,
-						event_id,
+						A::NAME,
 						create_ts,
 						&input_val,
 						Ok(&output_val),
@@ -376,7 +375,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						location,
 						self.version,
-						event_id,
+						A::NAME,
 						create_ts,
 						&input_val,
 						Err(&err_str),
@@ -423,7 +422,7 @@ impl WorkflowCtx {
 						self.workflow_id,
 						location,
 						self.version,
-						event_id,
+						A::NAME,
 						create_ts,
 						&input_val,
 						Err(&err_str),
@@ -576,9 +575,9 @@ impl WorkflowCtx {
 	{
 		self.check_stop()?;
 
-		let event_id = EventId::new(I::Activity::NAME, &input);
-
-		let history_res = self.cursor.compare_activity(self.version, &event_id)?;
+		let history_res = self
+			.cursor
+			.compare_activity(self.version, I::Activity::NAME)?;
 		let location = self.cursor.current_location_for(&history_res);
 
 		// Activity was ran before
@@ -605,7 +604,7 @@ impl WorkflowCtx {
 				}
 
 				match self
-					.run_activity::<I::Activity>(&input, &event_id, &location, activity.create_ts)
+					.run_activity::<I::Activity>(&input, &location, activity.create_ts)
 					.await
 				{
 					Err(err) => {
@@ -647,13 +646,8 @@ impl WorkflowCtx {
 		}
 		// This is a new activity
 		else {
-			self.run_activity::<I::Activity>(
-				&input,
-				&event_id,
-				&location,
-				rivet_util::timestamp::now(),
-			)
-			.await?
+			self.run_activity::<I::Activity>(&input, &location, rivet_util::timestamp::now())
+				.await?
 		};
 
 		// Move to next event

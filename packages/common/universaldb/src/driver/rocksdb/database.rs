@@ -35,6 +35,7 @@ impl RocksDbDatabaseDriver {
 		opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MB
 
 		// Open the OptimisticTransactionDB
+		tracing::debug!(path=%db_path.display(), "opening rocksdb");
 		let db = OptimisticTransactionDB::open(&opts, db_path).context("failed to open rocksdb")?;
 
 		Ok(RocksDbDatabaseDriver {

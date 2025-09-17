@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 use super::{
 	History,
 	event::{
-		ActivityEvent, Event, EventData, EventId, EventType, LoopEvent, MessageSendEvent,
-		SignalEvent, SignalSendEvent, SleepEvent, SubWorkflowEvent,
+		ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, SignalEvent,
+		SignalSendEvent, SleepEvent, SubWorkflowEvent,
 	},
 	location::{Coordinate, Location},
 	removed::Removed,
@@ -187,7 +187,7 @@ impl Cursor {
 	pub fn compare_activity(
 		&self,
 		version: usize,
-		event_id: &EventId,
+		name: &str,
 	) -> WorkflowResult<HistoryResult<&ActivityEvent>> {
 		if let Some(event) = self.current_event() {
 			if version > event.version {
@@ -200,7 +200,7 @@ impl Cursor {
 					event.data,
 					event.version,
 					self.current_location(),
-					event_id.name,
+					name,
 					version,
 				)));
 			}
@@ -211,18 +211,16 @@ impl Cursor {
 					"expected {} at {}, found activity {:?}",
 					event.data,
 					self.current_location(),
-					event_id.name
+					name,
 				)));
 			};
 
-			if &activity.event_id != event_id {
+			if &activity.name != name {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected activity {:?}#{:x} at {}, found activity {:?}#{:x}",
-					activity.event_id.name,
-					activity.event_id.input_hash,
+					"expected activity {:?} at {}, found activity {:?}",
+					activity.name,
 					self.current_location(),
-					event_id.name,
-					event_id.input_hash,
+					name,
 				)));
 			}
 
@@ -536,7 +534,7 @@ impl Cursor {
 				match T::event_type() {
 					EventType::Activity => {
 						if let EventData::Activity(activity) = &event.data {
-							T::name().expect("bad impl") == activity.event_id.name
+							T::name().expect("bad impl") == activity.name
 						} else {
 							false
 						}

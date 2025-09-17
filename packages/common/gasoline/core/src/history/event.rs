@@ -1,10 +1,7 @@
-use std::{
-	hash::{DefaultHasher, Hash, Hasher},
-	ops::Deref,
-};
+use std::ops::Deref;
 
 use rivet_util::Id;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use strum::FromRepr;
 
 use super::location::Coordinate;
@@ -62,7 +59,7 @@ pub enum EventData {
 impl std::fmt::Display for EventData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &self {
-			EventData::Activity(activity) => write!(f, "activity {:?}", activity.event_id.name),
+			EventData::Activity(activity) => write!(f, "activity {:?}", activity.name),
 			EventData::Signal(signal) => write!(f, "signal {:?}", signal.name),
 			EventData::SignalSend(signal_send) => write!(f, "signal send {:?}", signal_send.name),
 			EventData::MessageSend(message_send) => {
@@ -120,7 +117,7 @@ impl std::fmt::Display for EventType {
 
 #[derive(Debug)]
 pub struct ActivityEvent {
-	pub event_id: EventId,
+	pub name: String,
 	pub create_ts: i64,
 
 	/// If the activity succeeds, this will be some.
@@ -210,46 +207,4 @@ impl std::fmt::Display for SleepState {
 pub struct RemovedEvent {
 	pub event_type: EventType,
 	pub name: Option<String>,
-}
-
-/// Based on the name of the event and the hash of the input (if it has one).
-#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
-pub struct EventId {
-	pub name: String,
-	pub input_hash: u64,
-}
-
-impl EventId {
-	pub fn new<I: Hash>(name: &str, input: I) -> Self {
-		let mut hasher = DefaultHasher::new();
-		input.hash(&mut hasher);
-		let input_hash = hasher.finish();
-
-		Self {
-			name: name.to_string(),
-			input_hash,
-		}
-	}
-
-	pub fn from_le_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
-		Ok(EventId {
-			name,
-			input_hash: u64::from_le_bytes(
-				input_hash
-					.try_into()
-					.map_err(|_| WorkflowError::IntegerConversion)?,
-			),
-		})
-	}
-
-	pub fn from_be_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
-		Ok(EventId {
-			name,
-			input_hash: u64::from_be_bytes(
-				input_hash
-					.try_into()
-					.map_err(|_| WorkflowError::IntegerConversion)?,
-			),
-		})
-	}
 }

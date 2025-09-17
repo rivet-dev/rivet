@@ -28,8 +28,8 @@ use crate::{
 	error::{WorkflowError, WorkflowResult},
 	history::{
 		event::{
-			ActivityEvent, Event, EventData, EventId, EventType, LoopEvent, MessageSendEvent,
-			RemovedEvent, SignalEvent, SignalSendEvent, SleepEvent, SleepState, SubWorkflowEvent,
+			ActivityEvent, Event, EventData, EventType, LoopEvent, MessageSendEvent, RemovedEvent,
+			SignalEvent, SignalSendEvent, SleepEvent, SleepState, SubWorkflowEvent,
 		},
 		location::Location,
 	},
@@ -1333,13 +1333,6 @@ impl Database for DatabaseKv {
 												entry.key(),
 											) {
 												current_event.output_chunks.push(entry);
-											} else if let Ok(key) =
-												self.subspace.unpack::<keys::history::InputHashKey>(
-													entry.key(),
-												) {
-												let input_hash = key.deserialize(entry.value())?;
-
-												current_event.input_hash = Some(input_hash);
 											} else if let Ok(_key) =
 												self.subspace
 													.unpack::<keys::history::ErrorKey>(entry.key())
@@ -2336,7 +2329,7 @@ impl Database for DatabaseKv {
 		from_workflow_id: Id,
 		location: &Location,
 		version: usize,
-		event_id: &EventId,
+		name: &str,
 		create_ts: i64,
 		input: &serde_json::value::RawValue,
 		res: Result<&serde_json::value::RawValue, &str>,
@@ -2353,8 +2346,7 @@ impl Database for DatabaseKv {
 					location,
 					version,
 					create_ts,
-					&event_id.name,
-					&event_id.input_hash.to_be_bytes(),
+					name,
 					input,
 					res,
 				)?;
@@ -2718,7 +2710,6 @@ struct WorkflowHistoryEventBuilder {
 	sub_workflow_id: Option<Id>,
 	input_chunks: Vec<Value>,
 	output_chunks: Vec<Value>,
-	input_hash: Option<Vec<u8>>,
 	error_count: usize,
 	iteration: Option<usize>,
 	deadline_ts: Option<i64>,
@@ -2738,7 +2729,6 @@ impl WorkflowHistoryEventBuilder {
 			sub_workflow_id: None,
 			input_chunks: Vec::new(),
 			output_chunks: Vec::new(),
-			input_hash: None,
 			error_count: 0,
 			iteration: None,
 			deadline_ts: None,
@@ -2786,12 +2776,7 @@ impl TryFrom<WorkflowHistoryEventBuilder> for ActivityEvent {
 
 	fn try_from(value: WorkflowHistoryEventBuilder) -> WorkflowResult<Self> {
 		Ok(ActivityEvent {
-			event_id: EventId::from_be_bytes(
-				value.name.ok_or(WorkflowError::MissingEventData("name"))?,
-				value
-					.input_hash
-					.ok_or(WorkflowError::MissingEventData("hash"))?,
-			)?,
+			name: value.name.ok_or(WorkflowError::MissingEventData("name"))?,
 			create_ts: value
 				.create_ts
 				.ok_or(WorkflowError::MissingEventData("create_ts"))?,

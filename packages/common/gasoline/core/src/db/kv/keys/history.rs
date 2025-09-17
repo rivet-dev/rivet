@@ -764,68 +764,6 @@ impl<'de> TupleUnpack<'de> for OutputChunkKey {
 }
 
 #[derive(Debug)]
-pub struct InputHashKey {
-	workflow_id: Id,
-	location: Location,
-	forgotten: bool,
-}
-
-impl InputHashKey {
-	pub fn new(workflow_id: Id, location: Location) -> Self {
-		InputHashKey {
-			workflow_id,
-			location,
-			forgotten: false,
-		}
-	}
-}
-
-impl FormalKey for InputHashKey {
-	type Value = Vec<u8>;
-
-	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		Ok(raw.to_vec())
-	}
-
-	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		Ok(value)
-	}
-}
-
-impl TuplePack for InputHashKey {
-	fn pack<W: std::io::Write>(
-		&self,
-		w: &mut W,
-		tuple_depth: TupleDepth,
-	) -> std::io::Result<VersionstampOffset> {
-		pack_history_key(
-			self.workflow_id,
-			&self.location,
-			w,
-			tuple_depth,
-			self.forgotten,
-			INPUT_HASH,
-		)
-	}
-}
-
-impl<'de> TupleUnpack<'de> for InputHashKey {
-	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (workflow_id, location, forgotten)) =
-			unpack_history_key(input, tuple_depth, INPUT_HASH, "INPUT_HASH")?;
-
-		Ok((
-			input,
-			InputHashKey {
-				workflow_id,
-				location,
-				forgotten,
-			},
-		))
-	}
-}
-
-#[derive(Debug)]
 pub struct ErrorKey {
 	workflow_id: Id,
 	location: Location,
@@ -1511,7 +1449,6 @@ pub mod insert {
 		version: usize,
 		create_ts: i64,
 		activity_name: &str,
-		input_hash: &[u8],
 		input: &serde_json::value::RawValue,
 		res: std::result::Result<&serde_json::value::RawValue, &str>,
 	) -> Result<()> {
@@ -1529,12 +1466,6 @@ pub mod insert {
 		tx.set(
 			&subspace.pack(&activity_name_key),
 			&activity_name_key.serialize(activity_name.to_string())?,
-		);
-
-		let input_hash_key = super::InputHashKey::new(workflow_id, location.clone());
-		tx.set(
-			&subspace.pack(&input_hash_key),
-			&input_hash_key.serialize(input_hash.to_vec())?,
 		);
 
 		let input_key = super::InputKey::new(workflow_id, location.clone());

@@ -13,7 +13,7 @@ use crate::{
 	ctx::WorkflowCtx,
 	error::WorkflowResult,
 	executable::{AsyncResult, Executable},
-	history::{event::EventId, removed::Removed},
+	history::removed::Removed,
 };
 
 // Must wrap all closures being used as executables in this function due to
@@ -52,10 +52,9 @@ where
 	}
 
 	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
-		let event_id = EventId::new(I::Activity::NAME, &self.inner);
 		let history_res = ctx
 			.cursor()
-			.compare_activity(self.version.unwrap_or(ctx.version()), &event_id)?;
+			.compare_activity(self.version.unwrap_or(ctx.version()), &I::Activity::NAME)?;
 		let location = ctx.cursor().current_location_for(&history_res);
 
 		ctx.cursor_mut().update(&location);

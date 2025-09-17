@@ -849,13 +849,6 @@ impl DatabaseDebug for DatabaseKv {
 									.unpack::<keys::history::OutputChunkKey>(entry.key())
 								{
 									current_event.output_chunks.push(entry);
-								} else if let Ok(key) = self
-									.subspace
-									.unpack::<keys::history::InputHashKey>(entry.key())
-								{
-									let input_hash = key.deserialize(entry.value())?;
-
-									current_event.input_hash = Some(input_hash);
 								} else if let Ok(key) =
 									self.subspace.unpack::<keys::history::ErrorKey>(entry.key())
 								{
@@ -1191,7 +1184,6 @@ struct WorkflowHistoryEventBuilder {
 	input_chunks: Vec<Value>,
 	output_chunks: Vec<Value>,
 	tags: Vec<(String, String)>,
-	input_hash: Option<Vec<u8>>,
 	errors: Vec<ActivityError>,
 	iteration: Option<usize>,
 	deadline_ts: Option<i64>,
@@ -1213,7 +1205,6 @@ impl WorkflowHistoryEventBuilder {
 			input_chunks: Vec::new(),
 			output_chunks: Vec::new(),
 			tags: Vec::new(),
-			input_hash: None,
 			errors: Vec::new(),
 			iteration: None,
 			deadline_ts: None,

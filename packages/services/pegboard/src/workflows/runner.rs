@@ -639,7 +639,7 @@ enum RunnerState {
 }
 
 #[activity(ClearDb)]
-async fn clear_Db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
+async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 	let state = ctx.state::<State>()?;
 	let namespace_id = state.namespace_id;
 	let create_ts = state.create_ts;

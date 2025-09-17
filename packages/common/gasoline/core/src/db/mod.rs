@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use crate::{
 	error::{WorkflowError, WorkflowResult},
 	history::{
-		event::{Event, EventId, EventType, SleepState},
+		event::{Event, EventType, SleepState},
 		location::Location,
 	},
 	workflow::Workflow,
@@ -205,7 +205,7 @@ pub trait Database: Send {
 		workflow_id: Id,
 		location: &Location,
 		version: usize,
-		event_id: &EventId,
+		name: &str,
 		create_ts: i64,
 		input: &serde_json::value::RawValue,
 		output: Result<&serde_json::value::RawValue, &str>,

@@ -46,6 +46,7 @@ pub struct State {
 	pub create_ts: i64,
 	pub create_complete_ts: Option<i64>,
 
+	#[serde(default)]
 	pub for_serverless: bool,
 
 	pub start_ts: Option<i64>,

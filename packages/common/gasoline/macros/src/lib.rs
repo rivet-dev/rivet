@@ -56,6 +56,16 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
+	if !fn_name
+		.chars()
+		.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+	{
+		return error(
+			item_fn.sig.ident.span(),
+			"invalid workflow name, must be [a-z0-9_]",
+		);
+	}
+
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
@@ -107,6 +117,16 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
+	if !fn_name
+		.chars()
+		.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+	{
+		return error(
+			item_fn.sig.ident.span(),
+			"invalid activity name, must be [a-z0-9_]",
+		);
+	}
+
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
@@ -146,6 +166,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 		.ident
 		.map(|x| x.to_string())
 		.unwrap_or_else(|| "Operation".to_string());
+
 	let item_fn = parse_macro_input!(item as ItemFn);
 
 	let config = match parse_config(&item_fn.attrs) {
@@ -166,6 +187,16 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
+	if !fn_name
+		.chars()
+		.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+	{
+		return error(
+			item_fn.sig.ident.span(),
+			"invalid operation name, must be [a-z0-9_]",
+		);
+	}
+
 	let generics = &item_fn.sig.generics;
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
