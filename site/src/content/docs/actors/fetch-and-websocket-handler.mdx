@@ -211,8 +211,9 @@ For more advanced use cases, you can forward requests to actor handlers from you
 ```typescript
 import { Hono } from "hono";
 import { registry } from "./registry";
+import { serve } from "@hono/node-server";
 
-const { client, serve } = registry.createServer();
+const { client } = registry.start();
 
 const app = new Hono();
 
@@ -241,9 +242,10 @@ serve(app);
 ```typescript
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/ws";
+import { serve } from "@hono/node-server";
 import { registry } from "./registry";
 
-const { client, serve } = registry.createServer();
+const { client } = registry.start();
 
 const app = new Hono();
 

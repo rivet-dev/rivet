@@ -56,16 +56,13 @@ import { registry } from "./registry";
 import express from "express";
 
 // Start Rivet
-const { client, handler } = registry.createServer();
+const { client } = registry.start();
 
 // Setup Express app
 const app = express();
 
 // Enable JSON parsing
 app.use(express.json());
-
-// Mount Rivet handler
-app.use("/registry", handler);
 
 // Add your API routes
 app.post("/increment/:name", async (req, res) => {

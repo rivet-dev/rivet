@@ -14,13 +14,11 @@ Configure CORS directly in your registry setup for applications that do not requ
 ```typescript {{"title":"server.ts"}}
 import { registry } from "./registry";
 
-const { client, serve } = registry.createServer({
+const { client } = registry.start({
 	cors: {
 		origin: "https://yourdomain.com",
 	}
 });
-
-serve();
 ```
 
 ### Configuration Options
@@ -116,9 +114,11 @@ For applications that need to expose their own routes, configure CORS at the rou
 import { registry } from "./registry";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { serve } from "@hono/node-server";
 import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
 
-const { serve } = registry.createServer();
+registry.start();
+
 const app = new Hono();
 
 app.use("*", cors({
@@ -139,7 +139,8 @@ import cors from "cors";
 import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
 import { registry } from "./registry";
 
-const { handler } = registry.createServer();
+registry.start();
+
 const app = express();
 
 app.use(cors({
@@ -173,7 +174,7 @@ const corsConfig = {
 };
 ```
 
-These are automatically configured if using `registry.runServer({ cors })`.
+These are automatically configured if using `registry.start({ cors })`.
 
 <Warning>
 Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.

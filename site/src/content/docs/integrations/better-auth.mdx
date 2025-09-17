@@ -133,8 +133,9 @@ import { auth } from "./auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ALLOWED_PUBLIC_HEADERS } from "rivetkit";
+import { serve } from "@hono/node-server";
 
-const { serve } = registry.createServer();
+registry.start();
 const app = new Hono();
 
 // Configure CORS for Better Auth + Rivet

@@ -33,28 +33,27 @@ Update your server code to support Cloudflare Workers:
 <Tab title="Hono">
 
 ```typescript {{"title":"server.ts"}}
-import { createServer } from "@rivetkit/cloudflare-workers";
+import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
 import { Hono } from "hono";
 import { registry } from "./registry";
 
-const { client, createHandler } = createServer(registry);
-
 // Setup router
-const app = new Hono();
+const app = new Hono<{ Bindings: { RIVET: Client<typeof registry> } }>();
 
-// Example API endpoint
+// Example HTTP endpoint
 app.post("/increment/:name", async (c) => {
-  const name = c.req.param("name");
+	console.log("env", c.env);
+	const client = c.env.RIVET;
 
-  // Get or create actor and call action
-  const counter = client.counter.getOrCreate(name);
-  const newCount = await counter.increment(1);
+	const name = c.req.param("name");
 
-  return c.json({ count: newCount });
+	const counter = client.counter.getOrCreate(name);
+	const newCount = await counter.increment(1);
+
+	return c.text(`New Count: ${newCount}`);
 });
 
-const { handler, ActorHandler } = createHandler(app);
-
+const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
 export { handler as default, ActorHandler };
 ```
 
@@ -63,10 +62,10 @@ export { handler as default, ActorHandler };
 <Tab title="No Router">
 
 ```typescript {{"title":"server.ts"}}
-import { createServerHandler } from "@rivetkit/cloudflare-workers";
+import { createHandler } from "@rivetkit/cloudflare-workers";
 import { registry } from "./registry";
 
-const { handler, ActorHandler } = createServerHandler(registry);
+const { handler, ActorHandler } = createHandler(registry);
 export { handler as default, ActorHandler };
 ```
 
@@ -141,6 +140,10 @@ Example using Cloudflare Workers with Hono web framework.
 Basic Cloudflare Workers setup and configuration example.
 </Card>
 </CardGroup>
+
+<Note>
+	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
+</Note>
 
 ## Advanced
 

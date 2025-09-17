@@ -56,6 +56,7 @@ import {
 	faLayerGroup,
 	faVercel,
     faSquareRootVariable,
+    faCloudflare,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -103,6 +104,11 @@ export const sitemap = [
 								title: "Next.js",
 								href: "/docs/actors/quickstart/next-js",
 								icon: nextjs,
+							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/actors/quickstart/cloudflare-workers",
+								icon: faCloudflare,
 							},
 						],
 					},
@@ -302,6 +308,10 @@ export const sitemap = [
 							{
 								title: "Next.js",
 								href: "/docs/integrations/next-js",
+							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/integrations/cloudflare-workers",
 							},
 						],
 					},

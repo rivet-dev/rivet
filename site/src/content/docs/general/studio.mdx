@@ -29,7 +29,7 @@ By default, Rivet Studio generates and stores a token automatically. You can con
 - **Environment variable**: Set `RIVETKIT_STUDIO_TOKEN`
 - **Code configuration**:
   ```typescript {{"title":"server.ts"}}
-  registry.runServer({
+  registry.start({
     studio: {
       token: () => "your-custom-token"
     }
@@ -44,7 +44,7 @@ Disable Studio using any of these methods:
 - Set `NODE_ENV=production`
 - Configure in code:
   ```typescript {{"title":"server.ts"}}
-  registry.runServer({
+  registry.start({
     studio: {
       enabled: false
     }
@@ -56,7 +56,7 @@ Disable Studio using any of these methods:
 Configure CORS for custom Studio deployments:
 
 ```typescript {{"title":"server.ts"}}
-registry.runServer({
+registry.start({
   studio: {
     cors: {
       origin: "https://my-studio-url.test"
@@ -72,7 +72,7 @@ See the [CORS documentation](/docs/general/cors/) for more details.
 On startup, RivetKit prints a URL for connecting to Studio. By default, Studio connects to `localhost:8080` if no endpoint is provided. Override with:
 
 ```typescript {{"title":"server.ts"}}
-registry.runServer({
+registry.start({
   studio: {
     defaultEndpoint: "http://my-app:3000"
   }

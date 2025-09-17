@@ -68,7 +68,7 @@ LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
 You can configure the log level programmatically when running your server:
 
 ```typescript
-registry.runServer({
+registry.start({
 	logging: {
 		logLevel: "debug"
 	}
@@ -89,7 +89,7 @@ const customLogger = pino({
   }
 });
 
-registry.runServer({
+registry.start({
 	logging: {
 		baseLogger: customLogger,  // Use your custom Pino logger
 	}
@@ -105,7 +105,7 @@ For more advanced Pino configuration options, see the [Pino API documentation](h
 You can disable the default RivetKit welcome message with:
 
 ```typescript
-registry.runServer({
+registry.start({
 	noWelcome: true
 })
 ```

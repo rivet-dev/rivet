@@ -3,7 +3,7 @@
 The Memory driver stores all actor state and communication in memory, making it ideal for testing, development, and prototyping scenarios where persistence is not required.
 
 <Info>
-The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, use the [Redis driver](/docs/drivers/redis).
+The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, see [self-hosting](/docs/self-hosting)
 </Info>
 
 ## Feature Support
@@ -38,7 +38,7 @@ import { createMemoryDriver } from "rivetkit";
 import { registry } from "./registry";
 
 const driver = createMemoryDriver();
-const { serve, client } = registry.runServer({ driver });
+const { client } = registry.start({ driver });
 
 // ...rest of your server...
 ```

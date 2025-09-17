@@ -10,8 +10,8 @@ Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) 
 
 Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
 
+- Write your own HTTP endpoints and use the client returned from `registry.start` (see below)
 - Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
-- Write your own HTTP endpoints and use the client returned from `registry.runServer` (see below)
 
 ## Client Setup
 
@@ -25,8 +25,10 @@ There are several ways to create a client for communicating with actors:
 
 		```typescript {{"title":"server.ts"}}
 		import { registry } from "./registry";
+		import { Hono } from "hono";
+		import { serve } from "@hono/node-server";
 
-		const { client, serve } = registry.createServer();
+		const { client } = registry.start();
 
 		const app = new Hono();
 

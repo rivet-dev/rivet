@@ -56,12 +56,10 @@ Mount Rivet into your Elysia application:
 import { registry } from "./registry";
 import { Elysia } from "elysia";
 
-const { client, handler } = registry.createServer();
+const { client } = registry.start();
 
 // Setup Elysia app
 const app = new Elysia()
-  // Mount Rivet handler
-  .mount("/registry", handler)
   // Add your API routes
   .post("/increment/:name", async ({ params }) => {
     const name = params.name;

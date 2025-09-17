@@ -47,15 +47,14 @@ export const registry = setup({
 </Step>
 
 <Step title="Integrate with Hono">
-Use Rivet's `serve()` method with your Hono app:
-
 ```typescript
 // server.ts
 import { registry } from "./registry";
 import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 
 // Start Rivet
-const { client, serve } = registry.createServer();
+const { client } = registry.start();
 
 // Setup Hono app
 const app = new Hono();
@@ -95,7 +94,7 @@ app.get("/count/:name", async (c) => {
   }
 });
 
-// Start server with Rivet integration
+// Start server
 serve(app);
 ```
 </Step>

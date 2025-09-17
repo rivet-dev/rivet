@@ -41,7 +41,7 @@ import { createFileSystemDriver } from "rivetkit";
 import { registry } from "./registry";
 
 const driver = createFileSystemDriver();
-const { serve, client } = registry.runServer({ driver });
+const { client } = registry.start({ driver });
 
 // ...rest of your server...
 ```
@@ -61,7 +61,7 @@ import { registry } from "./registry";
 const driver = createFileSystemDriver({
   path: "/custom/path/to/actors"
 });
-const { serve, client } = registry.runServer({ driver });
+const { client } = registry.start({ driver });
 
 // ...rest of your server...
 ```

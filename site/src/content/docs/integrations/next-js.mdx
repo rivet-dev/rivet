@@ -57,7 +57,7 @@ export const registry = setup({
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
-const server = registry.createServer({
+const server = registry.start({
 	// Use the same base path as the client
 	// This is important for Next.js to route the API calls correctly
 	basePath: "/api/registry",
@@ -94,7 +94,7 @@ const registry = setup({
 	use: { counter },
 });
 
-const server = registry.createServer();
+const server = registry.start();
 
 export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(server);
 ```
