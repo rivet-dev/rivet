@@ -14,3 +14,11 @@ release-nolatest VERSION:
 docker-build:
 	docker build -f docker/universal/Dockerfile --target engine-full -t rivetkit/engine:local --platform linux/x86_64 .
 
+[group('docker')]
+docker-build-frontend:
+	docker build -f docker/universal/Dockerfile --target engine-full -t rivetkit/engine:local --platform linux/x86_64 --build-arg BUILD_FRONTEND=1 .
+
+[group('docker')]
+docker-run:
+	docker run -p 6420:6420 rivetkit/engine:local
+
