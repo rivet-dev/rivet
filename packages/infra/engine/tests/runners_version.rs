@@ -14,7 +14,6 @@ fn runner_version_upgrade() {
 				namespace: namespace.clone(),
 				name: "actor1".to_string(),
 				key: None,
-				datacenter: None,
 				..Default::default()
 			},
 			ctx.leader_dc().guard_port(),
@@ -33,7 +32,6 @@ fn runner_version_upgrade() {
 				namespace: namespace.clone(),
 				name: "actor2".to_string(),
 				key: None,
-				datacenter: None,
 				..Default::default()
 			},
 			ctx.leader_dc().guard_port(),

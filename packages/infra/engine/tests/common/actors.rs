@@ -8,7 +8,6 @@ pub struct CreateActorOptions {
 	pub input: Option<String>,
 	pub runner_name_selector: Option<String>,
 	pub durable: bool,
-	pub datacenter: Option<String>,
 }
 
 impl Default for CreateActorOptions {
@@ -23,7 +22,6 @@ impl Default for CreateActorOptions {
 			)),
 			runner_name_selector: Some("test-runner".to_string()),
 			durable: false,
-			datacenter: None,
 		}
 	}
 }
@@ -47,14 +45,10 @@ pub async fn create_actor_with_options(options: CreateActorOptions, guard_port: 
 	if let Some(runner_name_selector) = options.runner_name_selector {
 		body["runner_name_selector"] = json!(runner_name_selector);
 	}
-	let mut url = format!(
+	let url = format!(
 		"http://127.0.0.1:{}/actors?namespace={}",
 		guard_port, options.namespace
 	);
-
-	if let Some(datacenter) = &options.datacenter {
-		url.push_str(&format!("&datacenter={}", datacenter));
-	}
 
 	let client = reqwest::Client::new();
 	let response = client
@@ -93,6 +87,7 @@ pub async fn create_actor(namespace_name: &str, guard_port: u16) -> String {
 	.await
 }
 
+
 /// Pings actor via Guard.
 pub async fn ping_actor_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
 	tracing::info!(?guard_port, ?actor_id, "sending request to actor via guard");
@@ -109,6 +104,37 @@ pub async fn ping_actor_via_guard(guard_port: u16, actor_id: &str) -> serde_json
 	if !response.status().is_success() {
 		let text = response.text().await.expect("Failed to read response text");
 		panic!("Failed to ping actor through guard: {}", text);
+	}
+
+	let response = response
+		.json()
+		.await
+		.expect("Failed to parse JSON response");
+
+	tracing::info!(?response, "received response from actor");
+
+	response
+}
+
+/// Pings actor directly on the runner's server.
+pub async fn ping_actor_via_runner(actor_id: &str, runner_port: u16) -> serde_json::Value {
+	tracing::info!(
+		?actor_id,
+		?runner_port,
+		"sending request to actor via runner"
+	);
+
+	let client = reqwest::Client::new();
+	let response = client
+		.get(format!("http://127.0.0.1:{}/ping", runner_port))
+		.header("X-Rivet-Actor", actor_id)
+		.send()
+		.await
+		.expect("Failed to send ping request");
+
+	if !response.status().is_success() {
+		let text = response.text().await.expect("Failed to read response text");
+		panic!("Failed to ping actor: {}", text);
 	}
 
 	let response = response
@@ -208,7 +234,6 @@ pub async fn get_or_create_actor(
 	name: &str,
 	key: Option<String>,
 	durable: bool,
-	datacenter: Option<&str>,
 	input: Option<String>,
 	guard_port: u16,
 ) -> reqwest::Response {
@@ -232,9 +257,6 @@ pub async fn get_or_create_actor(
 	if let Some(input) = input {
 		body["input"] = json!(input);
 	}
-	if let Some(datacenter) = datacenter {
-		body["datacenter"] = json!(datacenter);
-	}
 
 	tracing::info!(?url, ?body, "get or create actor");
 
@@ -250,7 +272,6 @@ pub async fn get_or_create_actor_by_id(
 	namespace: &str,
 	name: &str,
 	key: Option<String>,
-	datacenter: Option<&str>,
 	guard_port: u16,
 ) -> reqwest::Response {
 	let client = reqwest::Client::new();
@@ -264,10 +285,6 @@ pub async fn get_or_create_actor_by_id(
 		"key": key,
 		"runner_name_selector": "test-runner",
 	});
-
-	if let Some(datacenter) = datacenter {
-		body["datacenter"] = json!(datacenter);
-	}
 
 	tracing::info!(?url, ?body, "get or create actor by id");
 
@@ -355,7 +372,8 @@ pub async fn list_actor_names(
 pub fn assert_success_response(response: &reqwest::Response) {
 	assert!(
 		response.status().is_success(),
-		"Response not successful: {}",
+		"{} Response not successful: {}",
+		response.url(),
 		response.status()
 	);
 }
@@ -366,7 +384,8 @@ pub async fn assert_error_response(
 ) -> serde_json::Value {
 	assert!(
 		!response.status().is_success(),
-		"Expected error but got success: {}",
+		"{} Expected error but got success: {}",
+		response.url(),
 		response.status()
 	);
 
@@ -375,7 +394,7 @@ pub async fn assert_error_response(
 		.await
 		.expect("Failed to parse error response");
 
-	let error_code = body["error"]["code"]
+	let error_code = body["code"]
 		.as_str()
 		.expect("Missing error code in response");
 	assert_eq!(
@@ -412,137 +431,4 @@ pub async fn bulk_create_actors(
 		actor_ids.push(actor_id);
 	}
 	actor_ids
-}
-
-/// Tests WebSocket connection to actor via Guard using a simple ping pong.
-pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
-	use tokio_tungstenite::{
-		connect_async,
-		tungstenite::{Message, client::IntoClientRequest},
-	};
-
-	tracing::info!(
-		?guard_port,
-		?actor_id,
-		"testing websocket connection to actor via guard"
-	);
-
-	// Build WebSocket URL and request
-	let ws_url = format!("ws://127.0.0.1:{}/ws", guard_port);
-	let mut request = ws_url
-		.clone()
-		.into_client_request()
-		.expect("Failed to create WebSocket request");
-
-	// Add headers for routing through guard to actor
-	request
-		.headers_mut()
-		.insert("X-Rivet-Target", "actor".parse().unwrap());
-	request
-		.headers_mut()
-		.insert("X-Rivet-Actor", actor_id.parse().unwrap());
-
-	// Connect to WebSocket
-	let (ws_stream, response) = connect_async(request)
-		.await
-		.expect("Failed to connect to WebSocket");
-
-	// Verify connection was successful
-	assert_eq!(
-		response.status(),
-		101,
-		"Expected WebSocket upgrade status 101"
-	);
-
-	tracing::info!("websocket connected successfully");
-
-	use futures_util::{SinkExt, StreamExt};
-	let (mut write, mut read) = ws_stream.split();
-
-	// Send a ping message to verify the connection works
-	let ping_message = "ping";
-	tracing::info!(?ping_message, "sending ping message");
-	write
-		.send(Message::Text(ping_message.to_string().into()))
-		.await
-		.expect("Failed to send ping message");
-
-	// Wait for response with timeout
-	let response = tokio::time::timeout(tokio::time::Duration::from_secs(5), read.next())
-		.await
-		.expect("Timeout waiting for WebSocket response")
-		.expect("WebSocket stream ended unexpectedly");
-
-	// Verify response
-	let response_text = match response {
-		Ok(Message::Text(text)) => {
-			let text_str = text.to_string();
-			tracing::info!(?text_str, "received response from actor");
-			text_str
-		}
-		Ok(msg) => {
-			panic!("Unexpected message type: {:?}", msg);
-		}
-		Err(e) => {
-			panic!("Failed to receive message: {}", e);
-		}
-	};
-
-	// Verify the response matches expected echo pattern
-	let expected_response = "Echo: ping";
-	assert_eq!(
-		response_text, expected_response,
-		"Expected '{}' but got '{}'",
-		expected_response, response_text
-	);
-
-	// Send another message to test multiple round trips
-	let test_message = "hello world";
-	tracing::info!(?test_message, "sending test message");
-	write
-		.send(Message::Text(test_message.to_string().into()))
-		.await
-		.expect("Failed to send test message");
-
-	// Wait for second response
-	let response2 = tokio::time::timeout(tokio::time::Duration::from_secs(5), read.next())
-		.await
-		.expect("Timeout waiting for second WebSocket response")
-		.expect("WebSocket stream ended unexpectedly");
-
-	// Verify second response
-	let response2_text = match response2 {
-		Ok(Message::Text(text)) => {
-			let text_str = text.to_string();
-			tracing::info!(?text_str, "received second response from actor");
-			text_str
-		}
-		Ok(msg) => {
-			panic!("Unexpected message type for second response: {:?}", msg);
-		}
-		Err(e) => {
-			panic!("Failed to receive second message: {}", e);
-		}
-	};
-
-	let expected_response2 = format!("Echo: {}", test_message);
-	assert_eq!(
-		response2_text, expected_response2,
-		"Expected '{}' but got '{}'",
-		expected_response2, response2_text
-	);
-
-	// Close the connection gracefully
-	write
-		.send(Message::Close(None))
-		.await
-		.expect("Failed to send close message");
-
-	tracing::info!("websocket bidirectional test completed successfully");
-
-	// Return success response
-	json!({
-		"status": "ok",
-		"message": "WebSocket bidirectional messaging tested successfully"
-	})
 }
