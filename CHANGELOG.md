@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.7.0](https://github.com/rivet-dev/engine/compare/v25.6.1...v25.7.0) (2025-09-17)
+
+
+### Features
+
+* **fe:** handle runners unavailability ([#2875](https://github.com/rivet-dev/engine/issues/2875)) ([4d11ba5](https://github.com/rivet-dev/engine/commit/4d11ba5d761f639b1b3397d87f840cd4037a834e))
+* **inspector:** make inspector compatible with new architecture ([#2920](https://github.com/rivet-dev/engine/issues/2920)) ([4084384](https://github.com/rivet-dev/engine/commit/4084384a39bca0b022aabc82dffe9c373cfaa849))
+
+
+### Bug Fixes
+
+* **ci:** build frontend on release ci ([#2927](https://github.com/rivet-dev/engine/issues/2927)) ([b39aac5](https://github.com/rivet-dev/engine/commit/b39aac5efda556ec7bbcf00ad06f9696fe8d8a15))
+* **gas:** remove input hash check ([#2936](https://github.com/rivet-dev/engine/issues/2936)) ([b303d0f](https://github.com/rivet-dev/engine/commit/b303d0f1e626467f461069885b87dfb83002d00f))
+
+
+### Chores
+
+* add docker commands to justfile ([#2934](https://github.com/rivet-dev/engine/issues/2934)) ([01878eb](https://github.com/rivet-dev/engine/commit/01878ebab22c8111185e9ba6cefd0d06d708cf5c))
+* release 25.7.0 ([36d2aed](https://github.com/rivet-dev/engine/commit/36d2aedc583154879174a18200e9c79eb03ac876))
+* release 25.7.0 ([6251c02](https://github.com/rivet-dev/engine/commit/6251c025180fa197c690ca7b6521f5dacf6393fa))
+* release 25.7.0 ([c8fbaab](https://github.com/rivet-dev/engine/commit/c8fbaabb6ddc1f97377fedd9bc8709eade6347f8))
+* **release:** update version to 25.7.0 ([73b31c2](https://github.com/rivet-dev/engine/commit/73b31c25ca98be90bb33ec6947bc5fd189240d9b))
+* **release:** update version to 25.7.0 ([9d9a602](https://github.com/rivet-dev/engine/commit/9d9a602c0eaed4edb2d7a1e401e72f7943f6e99d))
+* **release:** update version to 25.7.0 ([36a3a6d](https://github.com/rivet-dev/engine/commit/36a3a6de58c728f664e4514e712769b293f9c797))
+* udpate docs for RivetKit 2.0.5 ([#2938](https://github.com/rivet-dev/engine/issues/2938)) ([03a5f00](https://github.com/rivet-dev/engine/commit/03a5f002bd22a66b4ef8c5aebae1aa0c5bbf8be9))
+* update docker templates ([#2926](https://github.com/rivet-dev/engine/issues/2926)) ([e52f17c](https://github.com/rivet-dev/engine/commit/e52f17c627b642810cefddeada661798b3dc2514))
+
 ## [25.6.1](https://github.com/rivet-dev/engine/compare/v25.6.0...v25.6.1) (2025-09-16)
 
 
