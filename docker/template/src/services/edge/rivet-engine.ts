@@ -37,12 +37,6 @@ export function generateDatacenterRivetEngine(
 				port: GUARD_PORT,
 				// https is optional and not configured for local development
 			},
-			// api_public config
-			api_public: {
-				lan_host: serviceHost,
-				host: "0.0.0.0",
-				port: 6421,
-			},
 			// api_peer config
 			api_peer: {
 				host: "0.0.0.0",

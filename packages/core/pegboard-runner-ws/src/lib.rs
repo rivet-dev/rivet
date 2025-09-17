@@ -153,7 +153,7 @@ async fn handle_connection(
 		let url_data = match parse_url(addr, uri) {
 			Ok(x) => x,
 			Err(err) => {
-				tracing::warn!(?addr, ?err, "parse url failed");
+				tracing::warn!(?addr, ?err, "could not parse runner connection url");
 
 				let close_frame = err_to_close_frame(WsError::InvalidUrl(err.to_string()).build());
 
@@ -806,7 +806,7 @@ fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> Result<UrlData> {
 		.find_map(|(n, v)| (n == "protocol_version").then_some(v))
 		.context("missing `protocol_version` query parameter")?
 		.parse::<u16>()
-		.context("invalid protocol version")?;
+		.context("invalid `protocol_version` query parameter")?;
 
 	// Read namespace from query parameters
 	let namespace = url
