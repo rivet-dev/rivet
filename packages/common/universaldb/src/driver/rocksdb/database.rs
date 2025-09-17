@@ -24,6 +24,8 @@ pub struct RocksDbDatabaseDriver {
 
 impl RocksDbDatabaseDriver {
 	pub async fn new(db_path: PathBuf) -> Result<Self> {
+		tracing::info!(?db_path, "starting file system driver");
+
 		// Create directory if it doesn't exist
 		std::fs::create_dir_all(&db_path).context("failed to create database directory")?;
 
