@@ -25,7 +25,7 @@ impl TestRunner {
 
 		let manifest_dir = env!("CARGO_MANIFEST_DIR");
 		let runner_script_path =
-			Path::new(manifest_dir).join("../../../sdks/typescript/test-runner/dist/main.js");
+			Path::new(manifest_dir).join("../../../sdks/typescript/test-runner/dist/index.js");
 
 		if !runner_script_path.exists() {
 			panic!(

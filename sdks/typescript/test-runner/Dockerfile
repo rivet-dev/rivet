@@ -24,4 +24,4 @@ RUN pnpm build -F @rivetkit/engine-test-runner
 EXPOSE 5050
 
 # Run the application
-CMD ["node", "sdks/typescript/test-runner/dist/main.js"]
+CMD ["node", "sdks/typescript/test-runner/dist/index.js"]

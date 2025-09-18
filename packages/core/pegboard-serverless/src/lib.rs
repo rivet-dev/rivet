@@ -92,6 +92,8 @@ async fn tick(
 		})
 		.await?;
 
+	tracing::debug!(?serverless_data, ?runner_configs);
+
 	for (ns_id, runner_name, desired_slots) in &serverless_data {
 		let runner_config = runner_configs
 			.iter()
@@ -160,6 +162,10 @@ async fn tick(
 			.iter()
 			.any(|(ns_id2, runner_name2, _)| ns_id == ns_id2 && runner_name == runner_name2)
 	});
+
+	tracing::debug!(
+		connection_counts=?outbound_connections.iter().map(|(k, v)| (k, v.len())).collect::<Vec<_>>(),
+	);
 
 	Ok(())
 }

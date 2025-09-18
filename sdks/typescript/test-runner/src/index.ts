@@ -10,6 +10,8 @@ const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	? Number(process.env.INTERNAL_SERVER_PORT)
 	: 5051;
 const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
+const RIVET_RUNNER_NAME =
+	process.env.RIVET_RUNNER_NAME ?? "test-runner";
 const RIVET_RUNNER_KEY =
 	process.env.RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
@@ -19,7 +21,8 @@ const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	? Number(process.env.RIVET_RUNNER_TOTAL_SLOTS)
 	: 100;
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://localhost:6420";
-const AUTOSTART = process.env.NO_AUTOSTART == undefined;
+const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER == undefined;
+const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER == undefined;
 
 let runnerStarted = Promise.withResolvers();
 let runnerStopped = Promise.withResolvers();
@@ -62,13 +65,15 @@ app.get("/start", async (c) => {
 	});
 });
 
-serve({
-	fetch: app.fetch,
-	port: INTERNAL_SERVER_PORT,
-});
-console.log(`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`);
+if (AUTOSTART_SERVER) {
+	serve({
+		fetch: app.fetch,
+		port: INTERNAL_SERVER_PORT,
+	});
+	console.log(`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`);
+}
 
-if (AUTOSTART) runner = await startRunner();
+if (AUTOSTART_RUNNER) runner = await startRunner();
 
 async function startRunner(): Promise<Runner> {
 	console.log("Starting runner");
@@ -78,14 +83,14 @@ async function startRunner(): Promise<Runner> {
 		version: RIVET_RUNNER_VERSION,
 		endpoint: RIVET_ENDPOINT,
 		namespace: RIVET_NAMESPACE,
-		runnerName: "test-runner",
+		runnerName: RIVET_RUNNER_NAME,
 		runnerKey: RIVET_RUNNER_KEY,
 		totalSlots: RIVET_RUNNER_TOTAL_SLOTS,
 		prepopulateActorNames: {},
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => {},
+		onDisconnected: () => { },
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -164,3 +169,5 @@ async function startRunner(): Promise<Runner> {
 
 	return runner;
 }
+
+export default app;

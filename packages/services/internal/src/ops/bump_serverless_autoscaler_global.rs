@@ -22,7 +22,7 @@ pub async fn bump_serverless_autoscaler_global(ctx: &OperationCtx, input: &Input
 					.await
 			} else {
 				// Remote datacenter - HTTP request
-				request_remote_datacenter(
+				request_remote_datacenter::<BumpServerlessAutoscalerResponse>(
 					ctx.config(),
 					dc.datacenter_label,
 					"/bump-serverless-autoscaler",
@@ -32,6 +32,7 @@ pub async fn bump_serverless_autoscaler_global(ctx: &OperationCtx, input: &Input
 					Option::<&()>::None,
 				)
 				.await
+				.map(|_| ())
 			}
 		}
 	}))
@@ -58,3 +59,7 @@ pub async fn bump_serverless_autoscaler_global(ctx: &OperationCtx, input: &Input
 
 	Ok(())
 }
+
+// TODO: This is cloned from api-peer because of a cyclical dependency
+#[derive(Deserialize)]
+pub struct BumpServerlessAutoscalerResponse {}

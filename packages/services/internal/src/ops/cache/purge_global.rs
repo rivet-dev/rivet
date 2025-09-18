@@ -30,7 +30,7 @@ pub async fn cache_purge_global(ctx: &OperationCtx, input: &Input) -> Result<()>
 					.await
 			} else {
 				// Remote datacenter - HTTP request
-				request_remote_datacenter(
+				request_remote_datacenter::<CachePurgeResponse>(
 					ctx.config(),
 					dc.datacenter_label,
 					"/cache/purge",
@@ -43,6 +43,7 @@ pub async fn cache_purge_global(ctx: &OperationCtx, input: &Input) -> Result<()>
 					}),
 				)
 				.await
+				.map(|_| ())
 			}
 		}
 	}))
@@ -76,3 +77,6 @@ pub struct CachePurgeRequest {
 	pub base_key: String,
 	pub keys: Vec<rivet_cache::RawCacheKey>,
 }
+
+#[derive(Deserialize)]
+pub struct CachePurgeResponse {}

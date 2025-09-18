@@ -3,8 +3,8 @@
 	"version": "25.7.0",
 	"type": "module",
 	"scripts": {
-		"start": "tsx src/main.ts",
-		"build": "tsup src/main.ts",
+		"start": "tsx src/index.ts",
+		"build": "tsup src/index.ts",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {

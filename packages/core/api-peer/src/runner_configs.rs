@@ -21,9 +21,7 @@ pub struct ListQuery {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ListPath {
-	pub namespace_id: Id,
-}
+pub struct ListPath {}
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -33,7 +31,7 @@ pub struct ListResponse {
 	pub pagination: Pagination,
 }
 
-pub async fn list(ctx: ApiCtx, path: ListPath, query: ListQuery) -> Result<ListResponse> {
+pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<ListResponse> {
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
 			name: query.namespace.clone(),

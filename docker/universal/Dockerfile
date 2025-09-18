@@ -115,7 +115,7 @@ CMD ["/usr/bin/rivet-engine", "start"]
 # MARK: Engine (Slim)
 FROM --platform=linux/amd64 debian:12.9-slim AS engine-slim
 
-LABEL org.opencontainers.image.source https://github.com/rivet-gg/rivet
+LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH

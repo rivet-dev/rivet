@@ -38,6 +38,15 @@ pub async fn namespace_runner_config_get_global(
 						let client = client.clone();
 
 						async move {
+							let namespaces = ctx
+								.op(crate::ops::get_global::Input {
+									namespace_ids: runners
+										.iter()
+										.map(|(ns_id, _)| *ns_id)
+										.collect(),
+								})
+								.await?;
+
 							let mut runner_names_by_namespace_id =
 								HashMap::with_capacity(runners.len());
 
@@ -50,11 +59,14 @@ pub async fn namespace_runner_config_get_global(
 
 							// TODO: Parallelize
 							for (namespace_id, runner_names) in runner_names_by_namespace_id {
-								let url = leader_dc
-									.api_peer_url
-									.join(&format!("/namespaces/{namespace_id}/runner-configs"))?;
+								let namespace = namespaces
+									.iter()
+									.find(|n| n.namespace_id == namespace_id)
+									.context("namespace not found")?;
+								let url = leader_dc.api_peer_url.join("/runner-configs")?;
 								let res = client
 									.get(url)
+									.query(&[("namespace", &namespace.name)])
 									.query(
 										&runner_names
 											.iter()
