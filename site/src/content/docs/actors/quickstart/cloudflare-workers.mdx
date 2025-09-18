@@ -111,7 +111,7 @@ Configure your `wrangler.json` for Cloudflare Workers:
   "name": "my-rivetkit-app",
   "main": "src/index.ts",
   "compatibility_date": "2025-01-20",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "migrations": [
     {
       "tag": "v1",
@@ -134,6 +134,10 @@ Configure your `wrangler.json` for Cloudflare Workers:
   ]
 }
 ```
+
+<Note>
+	`enable_request_signal` compatibility flags is required if using SSE. Without it, SSE connections will never abort.
+</Note>
 
 Start the development server:
 
