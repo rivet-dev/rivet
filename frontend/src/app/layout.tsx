@@ -34,6 +34,7 @@ import {
 	cn,
 	DocsSheet,
 	type ImperativePanelHandle,
+	Ping,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
@@ -44,6 +45,7 @@ import { useInspectorDataProvider } from "@/components/actors";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
+import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { useInspectorCredentials } from "./credentials-context";
 import { NamespaceSelect } from "./namespace-select";
@@ -185,6 +187,26 @@ const Sidebar = ({
 								__APP_TYPE__ !== "cloud" ? "pb-4" : "",
 							)}
 						>
+							<Changelog>
+								<Button
+									className="text-muted-foreground justify-start py-1 h-auto"
+									variant="ghost"
+									size="xs"
+									asChild
+								>
+									<a
+										href="https://rivet.gg/changelog"
+										target="_blank"
+										rel="noopener"
+									>
+										Whats new?
+										<Ping
+											className="relative -right-1"
+											data-changelog-ping
+										/>
+									</a>
+								</Button>
+							</Changelog>
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"
