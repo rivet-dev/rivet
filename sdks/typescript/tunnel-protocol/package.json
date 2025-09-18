@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-tunnel-protocol",
-	"version": "25.7.0",
+	"version": "25.7.1",
 	"license": "Apache-2.0",
 	"type": "module",
 	"exports": {

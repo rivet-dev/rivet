@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/engine-runner",
-	"version": "25.7.0",
+	"version": "25.7.1",
 	"type": "module",
 	"exports": {
 		"import": {
