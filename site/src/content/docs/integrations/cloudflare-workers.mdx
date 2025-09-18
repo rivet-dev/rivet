@@ -83,7 +83,7 @@ Update your `wrangler.json` configuration to support `ACTOR_DO` and `ACTOR_KV` b
   "name": "my-rivetkit-app",
   "main": "src/index.ts",
   "compatibility_date": "2025-01-20",
-  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "compatibility_flags": ["nodejs_compat"],
   "migrations": [
     {
       "tag": "v1",
@@ -106,10 +106,6 @@ Update your `wrangler.json` configuration to support `ACTOR_DO` and `ACTOR_KV` b
   ]
 }
 ```
-
-<Note>
-	`enable_request_signal` compatibility flags is required if using SSE. Without it, SSE connections will never abort.
-</Note>
 
 **Configuration Requirements:**
 
