@@ -2,7 +2,7 @@
 FROM rust:1.88.0
 
 ARG BUILD_FRONTEND=true
-ARG VITE_APP_API_URL
+ARG VITE_APP_API_URL=__SAME__
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \

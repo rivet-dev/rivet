@@ -8,7 +8,8 @@ FROM --platform=linux/amd64 rust:1.88.0-bookworm AS builder
 ARG TARGETARCH
 
 ARG BUILD_FRONTEND=false
-ARG VITE_APP_API_URL
+ARG CARGO_BUILD_MODE=debug
+ARG VITE_APP_API_URL=__SAME__
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
@@ -65,10 +66,14 @@ RUN \
     --mount=type=cache,target=/usr/local/cargo/registry,id=univseral-cargo-registry \
     --mount=type=cache,target=/app/target,id=univseral-target \
     --mount=type=cache,target=/root/.cache,id=universal-user-cache \
-    RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-engine && \
+    if [ "$CARGO_BUILD_MODE" = "release" ]; then \
+        RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-engine --release; \
+    else \
+        RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-engine; \
+    fi && \
     # cargo install --locked tokio-console && \
     mkdir /app/dist/ && \
-    cp target/debug/rivet-engine /app/dist/
+    cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
 FROM --platform=linux/amd64 debian:12.9-slim AS engine-full-base
@@ -78,23 +83,13 @@ ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive
 # - Install curl for health checks
-# - Install go-migrate for running migrations
-# - Install database clients to be able to run `rivet db shell ...` (Redis, Postgres, ClickHouse)
 RUN apt-get update -y && \
     apt-get install -y \
     ca-certificates \
     openssl \
     curl \
-    # redis-tools \
-    # postgresql-client \
     gpg \
     dirmngr && \
-    # curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
-    # echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
-    # apt-get update -y && \
-    # apt-get install -y clickhouse-client && \
-    # (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz) && \
-    # mv migrate /usr/local/bin/migrate && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     if [ "$TARGETARCH" = "arm64" ]; then \
@@ -106,7 +101,7 @@ RUN apt-get update -y && \
 # MARK: Engine (Full)
 FROM --platform=linux/amd64 engine-full-base AS engine-full
 
-LABEL org.opencontainers.image.source https://github.com/rivet-gg/rivet
+LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
 COPY --from=builder /app/dist/rivet-engine /usr/bin/rivet-engine
 
