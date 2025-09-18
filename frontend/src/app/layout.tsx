@@ -48,6 +48,7 @@ import { ActorBuildsList } from "./actor-builds-list";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { useInspectorCredentials } from "./credentials-context";
+import { HelpDropdown } from "./help-dropdown";
 import { NamespaceSelect } from "./namespace-select";
 import { UserDropdown } from "./user-dropdown";
 
@@ -207,6 +208,15 @@ const Sidebar = ({
 									</a>
 								</Button>
 							</Changelog>
+							<HelpDropdown>
+								<Button
+									className="text-muted-foreground justify-start py-1 h-auto aria-expanded:text-foreground aria-expanded:bg-accent"
+									variant="ghost"
+									size="xs"
+								>
+									Support
+								</Button>
+							</HelpDropdown>
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"

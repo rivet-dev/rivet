@@ -52,6 +52,12 @@ export const Route = createRootRouteWithContext<RootRouteContext>()({
 								email: context.clerk.user?.primaryEmailAddress
 									?.emailAddress,
 							});
+
+							Plain.setCustomerDetails({
+								clerkId: context.clerk.user?.id,
+								email: context.clerk.user?.primaryEmailAddress
+									?.emailAddress,
+							});
 							return resolve(true);
 						}
 					});
