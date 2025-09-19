@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.7.1](https://github.com/rivet-dev/engine/compare/v25.7.0...v25.7.1) (2025-09-19)
+
+
+### Bug Fixes
+
+* get test runner working on vercel ([#2928](https://github.com/rivet-dev/engine/issues/2928)) ([51b7712](https://github.com/rivet-dev/engine/commit/51b771206c744f1aabd480dcd155bea4449872fe))
+* increase release ci runner size ([#2941](https://github.com/rivet-dev/engine/issues/2941)) ([ed56475](https://github.com/rivet-dev/engine/commit/ed564752902b9a884520ded0f14825ea5e32eedb))
+
+
+### Documentation
+
+* add required abort signal feature ([3058b0b](https://github.com/rivet-dev/engine/commit/3058b0b7bd76ab0fab18983c764a764b8d655a31))
+
+
+### Chores
+
+* disable status page in prep for cloud v2 ([33c238d](https://github.com/rivet-dev/engine/commit/33c238d11d45110d6d9b03b25fddfceb66dfb585))
+* release 25.7.1 ([a509d46](https://github.com/rivet-dev/engine/commit/a509d465440cba88e1210bc9563e6b041040a1db))
+* release 25.7.1 ([4341f0f](https://github.com/rivet-dev/engine/commit/4341f0f5da49d65aa98bf464a43b51c45f2242ff))
+* **release:** release npm packages ([ef5d71b](https://github.com/rivet-dev/engine/commit/ef5d71b83153e9fc7e432e3619628c08be7f4445))
+* **release:** update version to 25.7.1 ([58fe088](https://github.com/rivet-dev/engine/commit/58fe0887415761c0adc155e1ca3e1c9d1bcdd563))
+* **release:** update version to 25.7.1 ([55f114f](https://github.com/rivet-dev/engine/commit/55f114f35b6611ab9aef624e029ea9623615f82a))
+
 ## [25.7.0](https://github.com/rivet-dev/engine/compare/v25.6.1...v25.7.0) (2025-09-17)
 
 
