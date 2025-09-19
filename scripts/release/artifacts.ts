@@ -1,4 +1,4 @@
-import type { ReleaseOpts } from "./main.ts";
+import type { ReleaseOpts } from "./main";
 import { $ } from "execa";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";

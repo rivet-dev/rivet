@@ -5,12 +5,12 @@ import * as fs from "node:fs";
 import * as url from "node:url";
 import minimist from "minimist";
 import { $ } from "execa";
-import { publishSdk } from "./sdk.ts";
-import { updateVersion } from "./update_version.ts";
-import { configureReleasePlease } from "./release_please.ts";
-import { validateGit } from "./git.ts";
-import { tagDocker } from "./docker.ts";
-import { updateArtifacts } from "./artifacts.ts";
+import { publishSdk } from "./sdk";
+import { updateVersion } from "./update_version";
+import { configureReleasePlease } from "./release_please";
+import { validateGit } from "./git";
+import { tagDocker } from "./docker";
+import { updateArtifacts } from "./artifacts";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -68,7 +68,6 @@ async function main() {
 			"setupCi",  // Publishes packages (has access to NPM creds)
 			"completeCi",  // Tags binaries & Docker as latest (has access to Docker & S3 creds)
 		],
-		negatable: ["latest"],
 		string: ["version", "commit"],
 		default: {
 			latest: true,
@@ -149,11 +148,10 @@ async function main() {
 		}
 	}
 
-	// TODO: Currently using pkg.pr.new
-	// if (args.publishSdk || args.setupCi) {
-	// 	console.log("==> Publishing SDKs");
-	// 	await publishSdk(opts);
-	// }
+	if (args.publishSdk || args.setupCi) {
+		console.log("==> Publishing SDKs");
+		await publishSdk(opts);
+	}
 
 	if (args.tagDocker || args.completeCi) {
 		console.log("==> Tagging Docker");

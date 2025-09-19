@@ -1,4 +1,4 @@
-import type { ReleaseOpts } from "./main.ts";
+import type { ReleaseOpts } from "./main";
 import { $ } from "execa";
 
 export async function configureReleasePlease(opts: ReleaseOpts) {
