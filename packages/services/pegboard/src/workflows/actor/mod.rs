@@ -1,6 +1,6 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rivet_runner_protocol::protocol;
+use rivet_runner_protocol as protocol;
 use rivet_types::actors::CrashPolicy;
 
 use crate::{errors, workflows::runner::AllocatePendingActorsInput};
@@ -270,13 +270,16 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					match sig {
 						Main::Event(sig) => {
 							// Ignore state updates for previous generations
-							if sig.generation() != state.generation {
+							if crate::utils::event_generation(&sig.inner) != state.generation {
 								return Ok(Loop::Continue);
 							}
 
-							match sig {
-								protocol::Event::ActorIntent { intent, .. } => match intent {
-									protocol::ActorIntent::Sleep => {
+							match sig.inner {
+								protocol::Event::EventActorIntent(protocol::EventActorIntent {
+									intent,
+									..
+								}) => match intent {
+									protocol::ActorIntent::ActorIntentSleep => {
 										state.gc_timeout_ts =
 											Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
 										state.sleeping = true;
@@ -295,7 +298,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										)
 										.await?;
 									}
-									protocol::ActorIntent::Stop => {
+									protocol::ActorIntent::ActorIntentStop => {
 										state.gc_timeout_ts =
 											Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
 
@@ -313,10 +316,12 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										.await?;
 									}
 								},
-								protocol::Event::ActorStateUpdate {
-									state: actor_state, ..
-								} => match actor_state {
-									protocol::ActorState::Running => {
+								protocol::Event::EventActorStateUpdate(
+									protocol::EventActorStateUpdate {
+										state: actor_state, ..
+									},
+								) => match actor_state {
+									protocol::ActorState::ActorStateRunning => {
 										state.gc_timeout_ts = None;
 
 										ctx.activity(runtime::SetStartedInput {
@@ -331,7 +336,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										.send()
 										.await?;
 									}
-									protocol::ActorState::Stopped { code, .. } => {
+									protocol::ActorState::ActorStateStopped(
+										protocol::ActorStateStopped { code, .. },
+									) => {
 										if let Some(res) =
 											handle_stopped(ctx, &input, state, Some(code), false)
 												.await?
@@ -340,7 +347,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										}
 									}
 								},
-								protocol::Event::ActorSetAlarm { alarm_ts, .. } => {
+								protocol::Event::EventActorSetAlarm(
+									protocol::EventActorSetAlarm { alarm_ts, .. },
+								) => {
 									state.alarm_ts = alarm_ts;
 								}
 							}
@@ -546,6 +555,11 @@ pub struct Allocate {
 	pub runner_workflow_id: Id,
 }
 
+#[signal("pegboard_actor_event")]
+pub struct Event {
+	pub inner: protocol::Event,
+}
+
 #[signal("pegboard_actor_wake")]
 pub struct Wake {}
 
@@ -570,7 +584,7 @@ join_signal!(PendingAllocation {
 });
 
 join_signal!(Main {
-	Event(protocol::Event),
+	Event(Event),
 	Wake,
 	Lost,
 	Destroy,

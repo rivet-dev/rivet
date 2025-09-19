@@ -1,10 +1,10 @@
-import WebSocket from "ws";
-import * as tunnel from "@rivetkit/engine-tunnel-protocol";
+import * as protocol from "@rivetkit/engine-runner-protocol";
+import type { RequestId, MessageId } from "@rivetkit/engine-runner-protocol";
 import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
-import { calculateBackoff } from "./utils";
 import type { Runner, ActorInstance } from "./mod";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "./log";
+import { unreachable } from "./utils";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
@@ -16,25 +16,13 @@ interface PendingRequest {
 	actorId?: string;
 }
 
-interface TunnelCallbacks {
-	onConnected(): void;
-	onDisconnected(): void;
-}
-
 interface PendingMessage {
 	sentAt: number;
 	requestIdStr: string;
 }
 
 export class Tunnel {
-	#pegboardTunnelUrl: string;
-
 	#runner: Runner;
-
-	#tunnelWs?: WebSocket;
-	#shutdown = false;
-	#reconnectTimeout?: NodeJS.Timeout;
-	#reconnectAttempt = 0;
 
 	#actorPendingRequests: Map<string, PendingRequest> = new Map();
 	#actorWebSockets: Map<string, WebSocketTunnelAdapter> = new Map();
@@ -42,43 +30,18 @@ export class Tunnel {
 	#pendingMessages: Map<string, PendingMessage> = new Map();
 	#gcInterval?: NodeJS.Timeout;
 
-	#callbacks: TunnelCallbacks;
-
-	constructor(
-		runner: Runner,
-		pegboardTunnelUrl: string,
-		callbacks: TunnelCallbacks,
-	) {
-		this.#pegboardTunnelUrl = pegboardTunnelUrl;
+	constructor(runner: Runner) {
 		this.#runner = runner;
-		this.#callbacks = callbacks;
 	}
 
 	start(): void {
-		if (this.#tunnelWs?.readyState === WebSocket.OPEN) {
-			return;
-		}
-
-		this.#connect();
 		this.#startGarbageCollector();
 	}
 
 	shutdown() {
-		this.#shutdown = true;
-
-		if (this.#reconnectTimeout) {
-			clearTimeout(this.#reconnectTimeout);
-			this.#reconnectTimeout = undefined;
-		}
-
 		if (this.#gcInterval) {
 			clearInterval(this.#gcInterval);
 			this.#gcInterval = undefined;
-		}
-
-		if (this.#tunnelWs) {
-			this.#tunnelWs.close();
-			this.#tunnelWs = undefined;
 		}
 
 		// TODO: Should we use unregisterActor instead
@@ -96,8 +59,12 @@ export class Tunnel {
 		this.#actorWebSockets.clear();
 	}
 
-	#sendMessage(requestId: tunnel.RequestId, messageKind: tunnel.MessageKind) {
-		if (!this.#tunnelWs || this.#tunnelWs.readyState !== WebSocket.OPEN) {
+	#sendMessage(
+		requestId: RequestId,
+		messageKind: protocol.ToServerTunnelMessageKind,
+	) {
+		// TODO: Switch this with runner WS
+		if (!this.#runner.__webSocketReady()) {
 			console.warn("Cannot send tunnel message, WebSocket not connected");
 			return;
 		}
@@ -112,29 +79,32 @@ export class Tunnel {
 		});
 
 		// Send message
-		const message: tunnel.RunnerMessage = {
-			requestId,
-			messageId,
-			messageKind,
+		const message: protocol.ToServer = {
+			tag: "ToServerTunnelMessage",
+			val: {
+				requestId,
+				messageId,
+				messageKind,
+			},
 		};
-
-		const encoded = tunnel.encodeRunnerMessage(message);
-		this.#tunnelWs.send(encoded);
+		this.#runner.__sendToServer(message);
 	}
 
-	#sendAck(requestId: tunnel.RequestId, messageId: tunnel.MessageId) {
-		if (!this.#tunnelWs || this.#tunnelWs.readyState !== WebSocket.OPEN) {
+	#sendAck(requestId: RequestId, messageId: MessageId) {
+		if (!this.#runner.__webSocketReady()) {
 			return;
 		}
 
-		const message: tunnel.RunnerMessage = {
-			requestId,
-			messageId,
-			messageKind: { tag: "Ack", val: null },
+		const message: protocol.ToServer = {
+			tag: "ToServerTunnelMessage",
+			val: {
+				requestId,
+				messageId,
+				messageKind: { tag: "TunnelAck", val: null },
+			},
 		};
 
-		const encoded = tunnel.encodeRunnerMessage(message);
-		this.#tunnelWs.send(encoded);
+		this.#runner.__sendToServer(message);
 	}
 
 	#startGarbageCollector() {
@@ -240,80 +210,8 @@ export class Tunnel {
 		return fetchHandler;
 	}
 
-	#connect() {
-		if (this.#shutdown) return;
-
-		try {
-			this.#tunnelWs = new WebSocket(this.#pegboardTunnelUrl, {
-				headers: {
-					"x-rivet-target": "tunnel",
-				},
-			});
-
-			this.#tunnelWs.binaryType = "arraybuffer";
-
-			this.#tunnelWs.addEventListener("open", () => {
-				this.#reconnectAttempt = 0;
-
-				if (this.#reconnectTimeout) {
-					clearTimeout(this.#reconnectTimeout);
-					this.#reconnectTimeout = undefined;
-				}
-
-				this.#callbacks.onConnected();
-			});
-
-			this.#tunnelWs.addEventListener("message", async (event) => {
-				try {
-					await this.#handleMessage(event.data as ArrayBuffer);
-				} catch (error) {
-					logger()?.error({
-						msg: "error handling tunnel message",
-						error,
-					});
-				}
-			});
-
-			this.#tunnelWs.addEventListener("error", (event) => {
-				logger()?.error({ msg: "tunnel websocket error", event });
-			});
-
-			this.#tunnelWs.addEventListener("close", () => {
-				this.#callbacks.onDisconnected();
-
-				if (!this.#shutdown) {
-					this.#scheduleReconnect();
-				}
-			});
-		} catch (error) {
-			logger()?.error({ msg: "failed to connect tunnel", error });
-			if (!this.#shutdown) {
-				this.#scheduleReconnect();
-			}
-		}
-	}
-
-	#scheduleReconnect() {
-		if (this.#shutdown) return;
-
-		const delay = calculateBackoff(this.#reconnectAttempt, {
-			initialDelay: 1000,
-			maxDelay: 30000,
-			multiplier: 2,
-			jitter: true,
-		});
-
-		this.#reconnectAttempt++;
-
-		this.#reconnectTimeout = setTimeout(() => {
-			this.#connect();
-		}, delay);
-	}
-
-	async #handleMessage(data: ArrayBuffer) {
-		const message = tunnel.decodeRunnerMessage(new Uint8Array(data));
-
-		if (message.messageKind.tag === "Ack") {
+	async handleTunnelMessage(message: protocol.ToClientTunnelMessage) {
+		if (message.messageKind.tag === "TunnelAck") {
 			// Mark pending message as acknowledged and remove it
 			const msgIdStr = bufferToString(message.messageId);
 			const pending = this.#pendingMessages.get(msgIdStr);
@@ -323,79 +221,48 @@ export class Tunnel {
 		} else {
 			this.#sendAck(message.requestId, message.messageId);
 			switch (message.messageKind.tag) {
-				case "ToServerRequestStart":
+				case "ToClientRequestStart":
 					await this.#handleRequestStart(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
-				case "ToServerRequestChunk":
+				case "ToClientRequestChunk":
 					await this.#handleRequestChunk(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
-				case "ToServerRequestAbort":
+				case "ToClientRequestAbort":
 					await this.#handleRequestAbort(message.requestId);
 					break;
-				case "ToServerWebSocketOpen":
+				case "ToClientWebSocketOpen":
 					await this.#handleWebSocketOpen(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
-				case "ToServerWebSocketMessage":
+				case "ToClientWebSocketMessage":
 					await this.#handleWebSocketMessage(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
-				case "ToServerWebSocketClose":
+				case "ToClientWebSocketClose":
 					await this.#handleWebSocketClose(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
-				case "ToClientResponseStart":
-					this.#handleResponseStart(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientResponseChunk":
-					this.#handleResponseChunk(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientResponseAbort":
-					this.#handleResponseAbort(message.requestId);
-					break;
-				case "ToClientWebSocketOpen":
-					this.#handleWebSocketOpenResponse(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientWebSocketMessage":
-					this.#handleWebSocketMessageResponse(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
-				case "ToClientWebSocketClose":
-					this.#handleWebSocketCloseResponse(
-						message.requestId,
-						message.messageKind.val,
-					);
-					break;
+				default:
+					unreachable(message.messageKind);
 			}
 		}
 	}
 
 	async #handleRequestStart(
 		requestId: ArrayBuffer,
-		req: tunnel.ToServerRequestStart,
+		req: protocol.ToClientRequestStart,
 	) {
 		// Track this request for the actor
 		const requestIdStr = bufferToString(requestId);
@@ -471,7 +338,7 @@ export class Tunnel {
 
 	async #handleRequestChunk(
 		requestId: ArrayBuffer,
-		chunk: tunnel.ToServerRequestChunk,
+		chunk: protocol.ToClientRequestChunk,
 	) {
 		const requestIdStr = bufferToString(requestId);
 		const pending = this.#actorPendingRequests.get(requestIdStr);
@@ -516,9 +383,9 @@ export class Tunnel {
 
 		// Send as non-streaming response
 		this.#sendMessage(requestId, {
-			tag: "ToClientResponseStart",
+			tag: "ToServerResponseStart",
 			val: {
-				status: response.status as tunnel.u16,
+				status: response.status as protocol.u16,
 				headers,
 				body: body || null,
 				stream: false,
@@ -535,9 +402,9 @@ export class Tunnel {
 		headers.set("content-type", "text/plain");
 
 		this.#sendMessage(requestId, {
-			tag: "ToClientResponseStart",
+			tag: "ToServerResponseStart",
 			val: {
-				status: status as tunnel.u16,
+				status: status as protocol.u16,
 				headers,
 				body: new TextEncoder().encode(message).buffer as ArrayBuffer,
 				stream: false,
@@ -547,7 +414,7 @@ export class Tunnel {
 
 	async #handleWebSocketOpen(
 		requestId: ArrayBuffer,
-		open: tunnel.ToServerWebSocketOpen,
+		open: protocol.ToClientWebSocketOpen,
 	) {
 		const webSocketId = bufferToString(requestId);
 		// Validate actor exists
@@ -559,7 +426,7 @@ export class Tunnel {
 			});
 			// Send close immediately
 			this.#sendMessage(requestId, {
-				tag: "ToClientWebSocketClose",
+				tag: "ToServerWebSocketClose",
 				val: {
 					code: 1011,
 					reason: "Actor not found",
@@ -577,7 +444,7 @@ export class Tunnel {
 			});
 			// Send close immediately
 			this.#sendMessage(requestId, {
-				tag: "ToClientWebSocketClose",
+				tag: "ToServerWebSocketClose",
 				val: {
 					code: 1011,
 					reason: "Not Implemented",
@@ -604,7 +471,7 @@ export class Tunnel {
 							: data;
 
 					this.#sendMessage(requestId, {
-						tag: "ToClientWebSocketMessage",
+						tag: "ToServerWebSocketMessage",
 						val: {
 							data: dataBuffer,
 							binary: isBinary,
@@ -614,7 +481,7 @@ export class Tunnel {
 				(code?: number, reason?: string) => {
 					// Send close through tunnel
 					this.#sendMessage(requestId, {
-						tag: "ToClientWebSocketClose",
+						tag: "ToServerWebSocketClose",
 						val: {
 							code: code || null,
 							reason: reason || null,
@@ -636,7 +503,7 @@ export class Tunnel {
 
 			// Send open confirmation
 			this.#sendMessage(requestId, {
-				tag: "ToClientWebSocketOpen",
+				tag: "ToServerWebSocketOpen",
 				val: null,
 			});
 
@@ -669,7 +536,7 @@ export class Tunnel {
 			logger()?.error({ msg: "error handling websocket open", error });
 			// Send close on error
 			this.#sendMessage(requestId, {
-				tag: "ToClientWebSocketClose",
+				tag: "ToServerWebSocketClose",
 				val: {
 					code: 1011,
 					reason: "Server Error",
@@ -687,7 +554,7 @@ export class Tunnel {
 
 	async #handleWebSocketMessage(
 		requestId: ArrayBuffer,
-		msg: tunnel.ToServerWebSocketMessage,
+		msg: protocol.ToServerWebSocketMessage,
 	) {
 		const webSocketId = bufferToString(requestId);
 		const adapter = this.#actorWebSockets.get(webSocketId);
@@ -702,119 +569,7 @@ export class Tunnel {
 
 	async #handleWebSocketClose(
 		requestId: ArrayBuffer,
-		close: tunnel.ToServerWebSocketClose,
-	) {
-		const webSocketId = bufferToString(requestId);
-		const adapter = this.#actorWebSockets.get(webSocketId);
-		if (adapter) {
-			adapter._handleClose(
-				close.code || undefined,
-				close.reason || undefined,
-			);
-			this.#actorWebSockets.delete(webSocketId);
-		}
-	}
-
-	#handleResponseStart(
-		requestId: ArrayBuffer,
-		resp: tunnel.ToClientResponseStart,
-	) {
-		const requestIdStr = bufferToString(requestId);
-		const pending = this.#actorPendingRequests.get(requestIdStr);
-		if (!pending) {
-			logger()?.warn({
-				msg: "received response for unknown request",
-				requestId: requestIdStr,
-			});
-			return;
-		}
-
-		// Convert headers map to Headers object
-		const headers = new Headers();
-		for (const [key, value] of resp.headers) {
-			headers.append(key, value);
-		}
-
-		if (resp.stream) {
-			// Create streaming response
-			const stream = new ReadableStream<Uint8Array>({
-				start: (controller) => {
-					pending.streamController = controller;
-				},
-			});
-
-			const response = new Response(stream, {
-				status: resp.status,
-				headers,
-			});
-
-			pending.resolve(response);
-		} else {
-			// Non-streaming response
-			const body = resp.body ? new Uint8Array(resp.body) : null;
-			const response = new Response(body, {
-				status: resp.status,
-				headers,
-			});
-
-			pending.resolve(response);
-			this.#actorPendingRequests.delete(requestIdStr);
-		}
-	}
-
-	#handleResponseChunk(
-		requestId: ArrayBuffer,
-		chunk: tunnel.ToClientResponseChunk,
-	) {
-		const requestIdStr = bufferToString(requestId);
-		const pending = this.#actorPendingRequests.get(requestIdStr);
-		if (pending?.streamController) {
-			pending.streamController.enqueue(new Uint8Array(chunk.body));
-			if (chunk.finish) {
-				pending.streamController.close();
-				this.#actorPendingRequests.delete(requestIdStr);
-			}
-		}
-	}
-
-	#handleResponseAbort(requestId: ArrayBuffer) {
-		const requestIdStr = bufferToString(requestId);
-		const pending = this.#actorPendingRequests.get(requestIdStr);
-		if (pending?.streamController) {
-			pending.streamController.error(new Error("Response aborted"));
-		}
-		this.#actorPendingRequests.delete(requestIdStr);
-	}
-
-	#handleWebSocketOpenResponse(
-		requestId: ArrayBuffer,
-		open: tunnel.ToClientWebSocketOpen,
-	) {
-		const webSocketId = bufferToString(requestId);
-		const adapter = this.#actorWebSockets.get(webSocketId);
-		if (adapter) {
-			adapter._handleOpen();
-		}
-	}
-
-	#handleWebSocketMessageResponse(
-		requestId: ArrayBuffer,
-		msg: tunnel.ToClientWebSocketMessage,
-	) {
-		const webSocketId = bufferToString(requestId);
-		const adapter = this.#actorWebSockets.get(webSocketId);
-		if (adapter) {
-			const data = msg.binary
-				? new Uint8Array(msg.data)
-				: new TextDecoder().decode(new Uint8Array(msg.data));
-
-			adapter._handleMessage(data, msg.binary);
-		}
-	}
-
-	#handleWebSocketCloseResponse(
-		requestId: ArrayBuffer,
-		close: tunnel.ToClientWebSocketClose,
+		close: protocol.ToServerWebSocketClose,
 	) {
 		const webSocketId = bufferToString(requestId);
 		const adapter = this.#actorWebSockets.get(webSocketId);

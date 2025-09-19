@@ -3259,6 +3259,7 @@ name = "pegboard"
 version = "25.7.1"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "epoxy",
  "gasoline",
  "lazy_static",
@@ -3277,6 +3278,7 @@ dependencies = [
  "strum",
  "tracing",
  "universaldb",
+ "universalpubsub",
  "utoipa",
  "versioned-data-util",
 ]
@@ -3315,7 +3317,7 @@ dependencies = [
  "rand 0.8.5",
  "rivet-error",
  "rivet-guard-core",
- "rivet-tunnel-protocol",
+ "rivet-runner-protocol",
  "rivet-util",
  "thiserror 1.0.69",
  "tokio",
@@ -3349,8 +3351,10 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "serde_json",
+ "tokio",
  "tokio-tungstenite",
  "tracing",
+ "universalpubsub",
  "url",
  "versioned-data-util",
 ]
@@ -3370,41 +3374,6 @@ dependencies = [
  "rivet-types",
  "tracing",
  "universaldb",
-]
-
-[[package]]
-name = "pegboard-tunnel"
-version = "25.7.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "futures",
- "gasoline",
- "http-body-util",
- "hyper 1.6.0",
- "hyper-tungstenite",
- "namespace",
- "pegboard",
- "rand 0.8.5",
- "rivet-cache",
- "rivet-config",
- "rivet-error",
- "rivet-guard-core",
- "rivet-metrics",
- "rivet-pools",
- "rivet-runtime",
- "rivet-tunnel-protocol",
- "rivet-util",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "universalpubsub",
- "url",
- "uuid",
- "versioned-data-util",
 ]
 
 [[package]]
@@ -4420,7 +4389,6 @@ dependencies = [
  "pegboard",
  "pegboard-gateway",
  "pegboard-runner",
- "pegboard-tunnel",
  "regex",
  "rivet-api-public",
  "rivet-cache",
@@ -4667,23 +4635,6 @@ dependencies = [
  "tokio-postgres",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "rivet-tunnel-protocol"
-version = "25.7.1"
-dependencies = [
- "anyhow",
- "bare_gen",
- "base64 0.22.1",
- "indoc",
- "prettyplease",
- "rivet-util",
- "serde",
- "serde_bare",
- "serde_json",
- "syn 2.0.104",
- "versioned-data-util",
 ]
 
 [[package]]

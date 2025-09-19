@@ -9,7 +9,6 @@ ENV CI=true
 # Copy and build SDK
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsup.base.ts tsconfig.base.json turbo.json .
 COPY sdks/typescript/runner-protocol ./sdks/typescript/runner-protocol/
-COPY sdks/typescript/tunnel-protocol ./sdks/typescript/tunnel-protocol/
 COPY sdks/typescript/runner ./sdks/typescript/runner/
 
 # Install dependencies

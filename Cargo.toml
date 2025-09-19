@@ -1,7 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["packages/common/api-builder","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner","packages/core/pegboard-serverless","packages/core/pegboard-tunnel","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/internal","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/bare_gen","sdks/rust/data","sdks/rust/epoxy-protocol","sdks/rust/runner-protocol","sdks/rust/tunnel-protocol","sdks/rust/ups-protocol"]
+members = ["packages/common/api-builder","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/common/versioned-data-util","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner","packages/core/pegboard-serverless","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/internal","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/bare_gen","sdks/rust/data","sdks/rust/epoxy-protocol","sdks/rust/runner-protocol","sdks/rust/ups-protocol"]
 
 [workspace.package]
 version = "25.7.1"
@@ -365,9 +365,6 @@ path = "packages/core/pegboard-runner"
 [workspace.dependencies.pegboard-serverless]
 path = "packages/core/pegboard-serverless"
 
-[workspace.dependencies.pegboard-tunnel]
-path = "packages/core/pegboard-tunnel"
-
 [workspace.dependencies.rivet-workflow-worker]
 path = "packages/core/workflow-worker"
 
@@ -400,9 +397,6 @@ path = "sdks/rust/epoxy-protocol"
 
 [workspace.dependencies.rivet-runner-protocol]
 path = "sdks/rust/runner-protocol"
-
-[workspace.dependencies.rivet-tunnel-protocol]
-path = "sdks/rust/tunnel-protocol"
 
 [workspace.dependencies.rivet-ups-protocol]
 path = "sdks/rust/ups-protocol"

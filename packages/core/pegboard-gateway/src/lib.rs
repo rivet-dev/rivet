@@ -1,14 +1,4 @@
-use std::result::Result::Ok as ResultOk;
-use std::{
-	collections::HashMap,
-	sync::{
-		Arc,
-		atomic::{AtomicU64, Ordering},
-	},
-	time::Duration,
-};
-
-use anyhow::*;
+use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -21,11 +11,9 @@ use rivet_guard_core::{
 	proxy_service::{ResponseBody, X_RIVET_ERROR},
 	request_context::RequestContext,
 };
-use rivet_tunnel_protocol::{
-	MessageKind, ToServerRequestStart, ToServerWebSocketClose, ToServerWebSocketMessage,
-	ToServerWebSocketOpen,
-};
+use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
+use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::shared_state::{SharedState, TunnelMessageData};
@@ -37,27 +25,16 @@ const UPS_REQ_TIMEOUT: Duration = Duration::from_secs(2);
 pub struct PegboardGateway {
 	ctx: StandaloneCtx,
 	shared_state: SharedState,
-	namespace_id: Id,
-	runner_name: String,
-	runner_key: String,
+	runner_id: Id,
 	actor_id: Id,
 }
 
 impl PegboardGateway {
-	pub fn new(
-		ctx: StandaloneCtx,
-		shared_state: SharedState,
-		namespace_id: Id,
-		runner_name: String,
-		runner_key: String,
-		actor_id: Id,
-	) -> Self {
+	pub fn new(ctx: StandaloneCtx, shared_state: SharedState, runner_id: Id, actor_id: Id) -> Self {
 		Self {
 			ctx,
 			shared_state,
-			namespace_id,
-			runner_name,
-			runner_key,
+			runner_id,
 			actor_id,
 		}
 	}
@@ -151,12 +128,8 @@ impl PegboardGateway {
 			.to_bytes();
 
 		// Build subject to publish to
-		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
-			self.namespace_id,
-			&self.runner_name,
-			&self.runner_key,
-		)
-		.to_string();
+		let tunnel_subject =
+			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
 
 		// Start listening for request responses
 		let (request_id, mut msg_rx) = self
@@ -165,18 +138,20 @@ impl PegboardGateway {
 			.await;
 
 		// Start request
-		let message = MessageKind::ToServerRequestStart(ToServerRequestStart {
-			actor_id: actor_id.clone(),
-			method,
-			path,
-			headers,
-			body: if body_bytes.is_empty() {
-				None
-			} else {
-				Some(body_bytes.to_vec())
+		let message = protocol::ToClientTunnelMessageKind::ToClientRequestStart(
+			protocol::ToClientRequestStart {
+				actor_id: actor_id.clone(),
+				method,
+				path,
+				headers,
+				body: if body_bytes.is_empty() {
+					None
+				} else {
+					Some(body_bytes.to_vec())
+				},
+				stream: false,
 			},
-			stream: false,
-		});
+		);
 		self.shared_state.send_message(request_id, message).await?;
 
 		// Wait for response
@@ -189,7 +164,7 @@ impl PegboardGateway {
 
 			match msg {
 				TunnelMessageData::Message(msg) => match msg {
-					MessageKind::ToClientResponseStart(response_start) => {
+					protocol::ToServerTunnelMessageKind::ToServerResponseStart(response_start) => {
 						break response_start;
 					}
 					_ => {
@@ -246,12 +221,8 @@ impl PegboardGateway {
 		}
 
 		// Build subject to publish to
-		let tunnel_subject = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
-			self.namespace_id,
-			&self.runner_name,
-			&self.runner_key,
-		)
-		.to_string();
+		let tunnel_subject =
+			pegboard::pubsub_subjects::RunnerReceiverSubject::new(self.runner_id).to_string();
 
 		// Start listening for WebSocket messages
 		let (request_id, mut msg_rx) = self
@@ -260,11 +231,13 @@ impl PegboardGateway {
 			.await;
 
 		// Send WebSocket open message
-		let open_message = MessageKind::ToServerWebSocketOpen(ToServerWebSocketOpen {
-			actor_id: actor_id.clone(),
-			path: path.to_string(),
-			headers: request_headers,
-		});
+		let open_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(
+			protocol::ToClientWebSocketOpen {
+				actor_id: actor_id.clone(),
+				path: path.to_string(),
+				headers: request_headers,
+			},
+		);
 
 		if let Err(err) = self
 			.shared_state
@@ -282,10 +255,14 @@ impl PegboardGateway {
 			};
 
 			match msg {
-				TunnelMessageData::Message(MessageKind::ToClientWebSocketOpen) => {
+				TunnelMessageData::Message(
+					protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen,
+				) => {
 					break true;
 				}
-				TunnelMessageData::Message(MessageKind::ToClientWebSocketClose(close)) => {
+				TunnelMessageData::Message(
+					protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
+				) => {
 					tracing::info!(?close, "websocket closed before opening");
 					return Err((client_ws, RequestError::ServiceUnavailable.into()));
 				}
@@ -319,7 +296,9 @@ impl PegboardGateway {
 		tokio::spawn(async move {
 			while let Some(msg) = msg_rx_for_task.recv().await {
 				match msg {
-					TunnelMessageData::Message(MessageKind::ToClientWebSocketMessage(ws_msg)) => {
+					TunnelMessageData::Message(
+						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
+					) => {
 						let msg = if ws_msg.binary {
 							Message::Binary(ws_msg.data.into())
 						} else {
@@ -330,7 +309,9 @@ impl PegboardGateway {
 							break;
 						}
 					}
-					TunnelMessageData::Message(MessageKind::ToClientWebSocketClose(close)) => {
+					TunnelMessageData::Message(
+						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
+					) => {
 						tracing::info!(?close, "server closed websocket");
 						break;
 					}
@@ -348,11 +329,12 @@ impl PegboardGateway {
 		while let Some(msg) = ws_stream.next().await {
 			match msg {
 				Result::Ok(Message::Binary(data)) => {
-					let ws_message =
-						MessageKind::ToServerWebSocketMessage(ToServerWebSocketMessage {
+					let ws_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+						protocol::ToClientWebSocketMessage {
 							data: data.into(),
 							binary: true,
-						});
+						},
+					);
 					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
 						if is_tunnel_service_unavailable(&err) {
 							tracing::warn!("tunnel closed sending binary message");
@@ -364,11 +346,12 @@ impl PegboardGateway {
 					}
 				}
 				Result::Ok(Message::Text(text)) => {
-					let ws_message =
-						MessageKind::ToServerWebSocketMessage(ToServerWebSocketMessage {
+					let ws_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+						protocol::ToClientWebSocketMessage {
 							data: text.as_bytes().to_vec(),
 							binary: false,
-						});
+						},
+					);
 					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
 						if is_tunnel_service_unavailable(&err) {
 							tracing::warn!("tunnel closed sending text message");
@@ -385,10 +368,12 @@ impl PegboardGateway {
 		}
 
 		// Send WebSocket close message
-		let close_message = MessageKind::ToServerWebSocketClose(ToServerWebSocketClose {
-			code: None,
-			reason: close_reason,
-		});
+		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
+			protocol::ToClientWebSocketClose {
+				code: None,
+				reason: close_reason,
+			},
+		);
 
 		if let Err(err) = self
 			.shared_state

@@ -1,6 +1,6 @@
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
-use rivet_runner_protocol::protocol;
+use rivet_runner_protocol as protocol;
 use universaldb::options::MutationType;
 use universaldb::utils::IsolationLevel::*;
 
@@ -254,9 +254,11 @@ pub(crate) async fn kill(
 	generation: u32,
 	runner_workflow_id: Id,
 ) -> Result<()> {
-	ctx.signal(protocol::Command::StopActor {
-		actor_id,
-		generation,
+	ctx.signal(crate::workflows::runner::Command {
+		inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+			actor_id: actor_id.to_string(),
+			generation,
+		}),
 	})
 	.to_workflow_id(runner_workflow_id)
 	.send()

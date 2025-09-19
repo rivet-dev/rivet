@@ -1,43 +1,33 @@
 use gas::prelude::*;
 
-pub struct TunnelRunnerReceiverSubject<'a> {
-	namespace_id: Id,
-	runner_name: &'a str,
-	runner_key: &'a str,
+pub struct RunnerReceiverSubject {
+	runner_id: Id,
 }
 
-impl<'a> TunnelRunnerReceiverSubject<'a> {
-	pub fn new(namespace_id: Id, runner_name: &'a str, runner_key: &'a str) -> Self {
-		Self {
-			namespace_id,
-			runner_name,
-			runner_key,
-		}
+impl RunnerReceiverSubject {
+	pub fn new(runner_id: Id) -> Self {
+		Self { runner_id }
 	}
 }
 
-impl std::fmt::Display for TunnelRunnerReceiverSubject<'_> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"pegboard.tunnel.runner_receiver.{}.{}.{}",
-			self.namespace_id, self.runner_name, self.runner_key
-		)
+impl std::fmt::Display for RunnerReceiverSubject {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "pegboard.runner.{}", self.runner_id)
 	}
 }
 
-pub struct TunnelGatewayReceiverSubject {
+pub struct GatewayReceiverSubject {
 	gateway_id: Uuid,
 }
 
-impl<'a> TunnelGatewayReceiverSubject {
+impl GatewayReceiverSubject {
 	pub fn new(gateway_id: Uuid) -> Self {
 		Self { gateway_id }
 	}
 }
 
-impl std::fmt::Display for TunnelGatewayReceiverSubject {
+impl std::fmt::Display for GatewayReceiverSubject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "pegboard.gateway.receiver.{}", self.gateway_id)
+		write!(f, "pegboard.gateway.{}", self.gateway_id)
 	}
 }

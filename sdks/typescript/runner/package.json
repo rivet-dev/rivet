@@ -21,7 +21,6 @@
 	},
 	"dependencies": {
 		"@rivetkit/engine-runner-protocol": "workspace:*",
-		"@rivetkit/engine-tunnel-protocol": "workspace:*",
 		"uuid": "^12.0.0",
 		"pino": "^9.9.5",
 		"ws": "^8.18.3"

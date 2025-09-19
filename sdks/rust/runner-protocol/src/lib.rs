@@ -1,5 +1,4 @@
 pub mod generated;
-pub mod protocol;
 pub mod versioned;
 
 // Re-export latest

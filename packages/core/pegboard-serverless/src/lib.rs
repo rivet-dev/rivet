@@ -12,7 +12,7 @@ use gas::prelude::*;
 use namespace::types::RunnerConfig;
 use pegboard::keys;
 use reqwest_eventsource as sse;
-use rivet_runner_protocol::protocol;
+use rivet_runner_protocol as protocol;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
@@ -278,7 +278,9 @@ async fn outbound_handler(
 
 async fn stop_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
-		.signal(protocol::ToServer::Stopping)
+		.signal(pegboard::workflows::runner::Forward {
+			inner: protocol::ToServer::ToServerStopping,
+		})
 		.to_workflow::<pegboard::workflows::runner::Workflow>()
 		.tag("runner_id", runner_id)
 		.send()
