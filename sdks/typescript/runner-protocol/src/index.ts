@@ -26,6 +26,9 @@ export function writeJson(bc: bare.ByteCursor, x: Json): void {
     bare.writeString(bc, x)
 }
 
+/**
+ * Basic types
+ */
 export type KvKey = ArrayBuffer
 
 export function readKvKey(bc: bare.ByteCursor): KvKey {
@@ -63,6 +66,9 @@ export function writeKvMetadata(bc: bare.ByteCursor, x: KvMetadata): void {
     bare.writeI64(bc, x.createTs)
 }
 
+/**
+ * Query types
+ */
 export type KvListAllQuery = null
 
 export type KvListRangeQuery = {
@@ -140,20 +146,344 @@ export function writeKvListQuery(bc: bare.ByteCursor, x: KvListQuery): void {
     }
 }
 
-export type ActorName = {
-    readonly metadata: Json
+function read0(bc: bare.ByteCursor): readonly KvKey[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readKvKey(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readKvKey(bc)
+    }
+    return result
 }
 
-export function readActorName(bc: bare.ByteCursor): ActorName {
-    return {
-        metadata: readJson(bc),
+function write0(bc: bare.ByteCursor, x: readonly KvKey[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeKvKey(bc, x[i])
     }
 }
 
-export function writeActorName(bc: bare.ByteCursor, x: ActorName): void {
-    writeJson(bc, x.metadata)
+/**
+ * Request types
+ */
+export type KvGetRequest = {
+    readonly keys: readonly KvKey[]
 }
 
+export function readKvGetRequest(bc: bare.ByteCursor): KvGetRequest {
+    return {
+        keys: read0(bc),
+    }
+}
+
+export function writeKvGetRequest(bc: bare.ByteCursor, x: KvGetRequest): void {
+    write0(bc, x.keys)
+}
+
+function read1(bc: bare.ByteCursor): boolean | null {
+    return bare.readBool(bc) ? bare.readBool(bc) : null
+}
+
+function write1(bc: bare.ByteCursor, x: boolean | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeBool(bc, x)
+    }
+}
+
+function read2(bc: bare.ByteCursor): u64 | null {
+    return bare.readBool(bc) ? bare.readU64(bc) : null
+}
+
+function write2(bc: bare.ByteCursor, x: u64 | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeU64(bc, x)
+    }
+}
+
+export type KvListRequest = {
+    readonly query: KvListQuery
+    readonly reverse: boolean | null
+    readonly limit: u64 | null
+}
+
+export function readKvListRequest(bc: bare.ByteCursor): KvListRequest {
+    return {
+        query: readKvListQuery(bc),
+        reverse: read1(bc),
+        limit: read2(bc),
+    }
+}
+
+export function writeKvListRequest(bc: bare.ByteCursor, x: KvListRequest): void {
+    writeKvListQuery(bc, x.query)
+    write1(bc, x.reverse)
+    write2(bc, x.limit)
+}
+
+function read3(bc: bare.ByteCursor): readonly KvValue[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readKvValue(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readKvValue(bc)
+    }
+    return result
+}
+
+function write3(bc: bare.ByteCursor, x: readonly KvValue[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeKvValue(bc, x[i])
+    }
+}
+
+export type KvPutRequest = {
+    readonly keys: readonly KvKey[]
+    readonly values: readonly KvValue[]
+}
+
+export function readKvPutRequest(bc: bare.ByteCursor): KvPutRequest {
+    return {
+        keys: read0(bc),
+        values: read3(bc),
+    }
+}
+
+export function writeKvPutRequest(bc: bare.ByteCursor, x: KvPutRequest): void {
+    write0(bc, x.keys)
+    write3(bc, x.values)
+}
+
+export type KvDeleteRequest = {
+    readonly keys: readonly KvKey[]
+}
+
+export function readKvDeleteRequest(bc: bare.ByteCursor): KvDeleteRequest {
+    return {
+        keys: read0(bc),
+    }
+}
+
+export function writeKvDeleteRequest(bc: bare.ByteCursor, x: KvDeleteRequest): void {
+    write0(bc, x.keys)
+}
+
+export type KvDropRequest = null
+
+/**
+ * Response types
+ */
+export type KvErrorResponse = {
+    readonly message: string
+}
+
+export function readKvErrorResponse(bc: bare.ByteCursor): KvErrorResponse {
+    return {
+        message: bare.readString(bc),
+    }
+}
+
+export function writeKvErrorResponse(bc: bare.ByteCursor, x: KvErrorResponse): void {
+    bare.writeString(bc, x.message)
+}
+
+function read4(bc: bare.ByteCursor): readonly KvMetadata[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [readKvMetadata(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = readKvMetadata(bc)
+    }
+    return result
+}
+
+function write4(bc: bare.ByteCursor, x: readonly KvMetadata[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        writeKvMetadata(bc, x[i])
+    }
+}
+
+export type KvGetResponse = {
+    readonly keys: readonly KvKey[]
+    readonly values: readonly KvValue[]
+    readonly metadata: readonly KvMetadata[]
+}
+
+export function readKvGetResponse(bc: bare.ByteCursor): KvGetResponse {
+    return {
+        keys: read0(bc),
+        values: read3(bc),
+        metadata: read4(bc),
+    }
+}
+
+export function writeKvGetResponse(bc: bare.ByteCursor, x: KvGetResponse): void {
+    write0(bc, x.keys)
+    write3(bc, x.values)
+    write4(bc, x.metadata)
+}
+
+export type KvListResponse = {
+    readonly keys: readonly KvKey[]
+    readonly values: readonly KvValue[]
+    readonly metadata: readonly KvMetadata[]
+}
+
+export function readKvListResponse(bc: bare.ByteCursor): KvListResponse {
+    return {
+        keys: read0(bc),
+        values: read3(bc),
+        metadata: read4(bc),
+    }
+}
+
+export function writeKvListResponse(bc: bare.ByteCursor, x: KvListResponse): void {
+    write0(bc, x.keys)
+    write3(bc, x.values)
+    write4(bc, x.metadata)
+}
+
+export type KvPutResponse = null
+
+export type KvDeleteResponse = null
+
+export type KvDropResponse = null
+
+/**
+ * Request/Response unions
+ */
+export type KvRequestData =
+    | { readonly tag: "KvGetRequest"; readonly val: KvGetRequest }
+    | { readonly tag: "KvListRequest"; readonly val: KvListRequest }
+    | { readonly tag: "KvPutRequest"; readonly val: KvPutRequest }
+    | { readonly tag: "KvDeleteRequest"; readonly val: KvDeleteRequest }
+    | { readonly tag: "KvDropRequest"; readonly val: KvDropRequest }
+
+export function readKvRequestData(bc: bare.ByteCursor): KvRequestData {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "KvGetRequest", val: readKvGetRequest(bc) }
+        case 1:
+            return { tag: "KvListRequest", val: readKvListRequest(bc) }
+        case 2:
+            return { tag: "KvPutRequest", val: readKvPutRequest(bc) }
+        case 3:
+            return { tag: "KvDeleteRequest", val: readKvDeleteRequest(bc) }
+        case 4:
+            return { tag: "KvDropRequest", val: null }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeKvRequestData(bc: bare.ByteCursor, x: KvRequestData): void {
+    switch (x.tag) {
+        case "KvGetRequest": {
+            bare.writeU8(bc, 0)
+            writeKvGetRequest(bc, x.val)
+            break
+        }
+        case "KvListRequest": {
+            bare.writeU8(bc, 1)
+            writeKvListRequest(bc, x.val)
+            break
+        }
+        case "KvPutRequest": {
+            bare.writeU8(bc, 2)
+            writeKvPutRequest(bc, x.val)
+            break
+        }
+        case "KvDeleteRequest": {
+            bare.writeU8(bc, 3)
+            writeKvDeleteRequest(bc, x.val)
+            break
+        }
+        case "KvDropRequest": {
+            bare.writeU8(bc, 4)
+            break
+        }
+    }
+}
+
+export type KvResponseData =
+    | { readonly tag: "KvErrorResponse"; readonly val: KvErrorResponse }
+    | { readonly tag: "KvGetResponse"; readonly val: KvGetResponse }
+    | { readonly tag: "KvListResponse"; readonly val: KvListResponse }
+    | { readonly tag: "KvPutResponse"; readonly val: KvPutResponse }
+    | { readonly tag: "KvDeleteResponse"; readonly val: KvDeleteResponse }
+    | { readonly tag: "KvDropResponse"; readonly val: KvDropResponse }
+
+export function readKvResponseData(bc: bare.ByteCursor): KvResponseData {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "KvErrorResponse", val: readKvErrorResponse(bc) }
+        case 1:
+            return { tag: "KvGetResponse", val: readKvGetResponse(bc) }
+        case 2:
+            return { tag: "KvListResponse", val: readKvListResponse(bc) }
+        case 3:
+            return { tag: "KvPutResponse", val: null }
+        case 4:
+            return { tag: "KvDeleteResponse", val: null }
+        case 5:
+            return { tag: "KvDropResponse", val: null }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeKvResponseData(bc: bare.ByteCursor, x: KvResponseData): void {
+    switch (x.tag) {
+        case "KvErrorResponse": {
+            bare.writeU8(bc, 0)
+            writeKvErrorResponse(bc, x.val)
+            break
+        }
+        case "KvGetResponse": {
+            bare.writeU8(bc, 1)
+            writeKvGetResponse(bc, x.val)
+            break
+        }
+        case "KvListResponse": {
+            bare.writeU8(bc, 2)
+            writeKvListResponse(bc, x.val)
+            break
+        }
+        case "KvPutResponse": {
+            bare.writeU8(bc, 3)
+            break
+        }
+        case "KvDeleteResponse": {
+            bare.writeU8(bc, 4)
+            break
+        }
+        case "KvDropResponse": {
+            bare.writeU8(bc, 5)
+            break
+        }
+    }
+}
+
+/**
+ * Core
+ */
 export enum StopCode {
     Ok = "Ok",
     Error = "Error",
@@ -187,6 +517,68 @@ export function writeStopCode(bc: bare.ByteCursor, x: StopCode): void {
     }
 }
 
+export type ActorName = {
+    readonly metadata: Json
+}
+
+export function readActorName(bc: bare.ByteCursor): ActorName {
+    return {
+        metadata: readJson(bc),
+    }
+}
+
+export function writeActorName(bc: bare.ByteCursor, x: ActorName): void {
+    writeJson(bc, x.metadata)
+}
+
+function read5(bc: bare.ByteCursor): string | null {
+    return bare.readBool(bc) ? bare.readString(bc) : null
+}
+
+function write5(bc: bare.ByteCursor, x: string | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeString(bc, x)
+    }
+}
+
+function read6(bc: bare.ByteCursor): ArrayBuffer | null {
+    return bare.readBool(bc) ? bare.readData(bc) : null
+}
+
+function write6(bc: bare.ByteCursor, x: ArrayBuffer | null): void {
+    bare.writeBool(bc, x != null)
+    if (x != null) {
+        bare.writeData(bc, x)
+    }
+}
+
+export type ActorConfig = {
+    readonly name: string
+    readonly key: string | null
+    readonly createTs: i64
+    readonly input: ArrayBuffer | null
+}
+
+export function readActorConfig(bc: bare.ByteCursor): ActorConfig {
+    return {
+        name: bare.readString(bc),
+        key: read5(bc),
+        createTs: bare.readI64(bc),
+        input: read6(bc),
+    }
+}
+
+export function writeActorConfig(bc: bare.ByteCursor, x: ActorConfig): void {
+    bare.writeString(bc, x.name)
+    write5(bc, x.key)
+    bare.writeI64(bc, x.createTs)
+    write6(bc, x.input)
+}
+
+/**
+ * Intent
+ */
 export type ActorIntentSleep = null
 
 export type ActorIntentStop = null
@@ -223,18 +615,10 @@ export function writeActorIntent(bc: bare.ByteCursor, x: ActorIntent): void {
     }
 }
 
+/**
+ * State
+ */
 export type ActorStateRunning = null
-
-function read0(bc: bare.ByteCursor): string | null {
-    return bare.readBool(bc) ? bare.readString(bc) : null
-}
-
-function write0(bc: bare.ByteCursor, x: string | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeString(bc, x)
-    }
-}
 
 export type ActorStateStopped = {
     readonly code: StopCode
@@ -244,13 +628,13 @@ export type ActorStateStopped = {
 export function readActorStateStopped(bc: bare.ByteCursor): ActorStateStopped {
     return {
         code: readStopCode(bc),
-        message: read0(bc),
+        message: read5(bc),
     }
 }
 
 export function writeActorStateStopped(bc: bare.ByteCursor, x: ActorStateStopped): void {
     writeStopCode(bc, x.code)
-    write0(bc, x.message)
+    write5(bc, x.message)
 }
 
 export type ActorState =
@@ -286,6 +670,9 @@ export function writeActorState(bc: bare.ByteCursor, x: ActorState): void {
     }
 }
 
+/**
+ * MARK: Events
+ */
 export type EventActorIntent = {
     readonly actorId: Id
     readonly generation: u32
@@ -326,11 +713,11 @@ export function writeEventActorStateUpdate(bc: bare.ByteCursor, x: EventActorSta
     writeActorState(bc, x.state)
 }
 
-function read1(bc: bare.ByteCursor): i64 | null {
+function read7(bc: bare.ByteCursor): i64 | null {
     return bare.readBool(bc) ? bare.readI64(bc) : null
 }
 
-function write1(bc: bare.ByteCursor, x: i64 | null): void {
+function write7(bc: bare.ByteCursor, x: i64 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeI64(bc, x)
@@ -347,14 +734,14 @@ export function readEventActorSetAlarm(bc: bare.ByteCursor): EventActorSetAlarm 
     return {
         actorId: readId(bc),
         generation: bare.readU32(bc),
-        alarmTs: read1(bc),
+        alarmTs: read7(bc),
     }
 }
 
 export function writeEventActorSetAlarm(bc: bare.ByteCursor, x: EventActorSetAlarm): void {
     writeId(bc, x.actorId)
     bare.writeU32(bc, x.generation)
-    write1(bc, x.alarmTs)
+    write7(bc, x.alarmTs)
 }
 
 export type Event =
@@ -416,40 +803,9 @@ export function writeEventWrapper(bc: bare.ByteCursor, x: EventWrapper): void {
     writeEvent(bc, x.inner)
 }
 
-function read2(bc: bare.ByteCursor): ArrayBuffer | null {
-    return bare.readBool(bc) ? bare.readData(bc) : null
-}
-
-function write2(bc: bare.ByteCursor, x: ArrayBuffer | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeData(bc, x)
-    }
-}
-
-export type ActorConfig = {
-    readonly name: string
-    readonly key: string | null
-    readonly createTs: i64
-    readonly input: ArrayBuffer | null
-}
-
-export function readActorConfig(bc: bare.ByteCursor): ActorConfig {
-    return {
-        name: bare.readString(bc),
-        key: read0(bc),
-        createTs: bare.readI64(bc),
-        input: read2(bc),
-    }
-}
-
-export function writeActorConfig(bc: bare.ByteCursor, x: ActorConfig): void {
-    bare.writeString(bc, x.name)
-    write0(bc, x.key)
-    bare.writeI64(bc, x.createTs)
-    write2(bc, x.input)
-}
-
+/**
+ * MARK: Commands
+ */
 export type CommandStartActor = {
     readonly actorId: Id
     readonly generation: u32
@@ -538,7 +894,7 @@ export function writeCommandWrapper(bc: bare.ByteCursor, x: CommandWrapper): voi
     writeCommand(bc, x.inner)
 }
 
-function read3(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read8(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -553,7 +909,7 @@ function read3(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write3(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write8(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -561,22 +917,22 @@ function write3(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read4(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read3(bc) : null
+function read9(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read8(bc) : null
 }
 
-function write4(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write9(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write3(bc, x)
+        write8(bc, x)
     }
 }
 
-function read5(bc: bare.ByteCursor): Json | null {
+function read10(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write5(bc: bare.ByteCursor, x: Json | null): void {
+function write10(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -597,9 +953,9 @@ export function readToServerInit(bc: bare.ByteCursor): ToServerInit {
         name: bare.readString(bc),
         version: bare.readU32(bc),
         totalSlots: bare.readU32(bc),
-        lastCommandIdx: read1(bc),
-        prepopulateActorNames: read4(bc),
-        metadata: read5(bc),
+        lastCommandIdx: read7(bc),
+        prepopulateActorNames: read9(bc),
+        metadata: read10(bc),
     }
 }
 
@@ -607,9 +963,9 @@ export function writeToServerInit(bc: bare.ByteCursor, x: ToServerInit): void {
     bare.writeString(bc, x.name)
     bare.writeU32(bc, x.version)
     bare.writeU32(bc, x.totalSlots)
-    write1(bc, x.lastCommandIdx)
-    write4(bc, x.prepopulateActorNames)
-    write5(bc, x.metadata)
+    write7(bc, x.lastCommandIdx)
+    write9(bc, x.prepopulateActorNames)
+    write10(bc, x.metadata)
 }
 
 export type ToServerEvents = readonly EventWrapper[]
@@ -661,190 +1017,6 @@ export function readToServerPing(bc: bare.ByteCursor): ToServerPing {
 
 export function writeToServerPing(bc: bare.ByteCursor, x: ToServerPing): void {
     bare.writeI64(bc, x.ts)
-}
-
-function read6(bc: bare.ByteCursor): readonly KvKey[] {
-    const len = bare.readUintSafe(bc)
-    if (len === 0) {
-        return []
-    }
-    const result = [readKvKey(bc)]
-    for (let i = 1; i < len; i++) {
-        result[i] = readKvKey(bc)
-    }
-    return result
-}
-
-function write6(bc: bare.ByteCursor, x: readonly KvKey[]): void {
-    bare.writeUintSafe(bc, x.length)
-    for (let i = 0; i < x.length; i++) {
-        writeKvKey(bc, x[i])
-    }
-}
-
-export type KvGetRequest = {
-    readonly keys: readonly KvKey[]
-}
-
-export function readKvGetRequest(bc: bare.ByteCursor): KvGetRequest {
-    return {
-        keys: read6(bc),
-    }
-}
-
-export function writeKvGetRequest(bc: bare.ByteCursor, x: KvGetRequest): void {
-    write6(bc, x.keys)
-}
-
-function read7(bc: bare.ByteCursor): boolean | null {
-    return bare.readBool(bc) ? bare.readBool(bc) : null
-}
-
-function write7(bc: bare.ByteCursor, x: boolean | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeBool(bc, x)
-    }
-}
-
-function read8(bc: bare.ByteCursor): u64 | null {
-    return bare.readBool(bc) ? bare.readU64(bc) : null
-}
-
-function write8(bc: bare.ByteCursor, x: u64 | null): void {
-    bare.writeBool(bc, x != null)
-    if (x != null) {
-        bare.writeU64(bc, x)
-    }
-}
-
-export type KvListRequest = {
-    readonly query: KvListQuery
-    readonly reverse: boolean | null
-    readonly limit: u64 | null
-}
-
-export function readKvListRequest(bc: bare.ByteCursor): KvListRequest {
-    return {
-        query: readKvListQuery(bc),
-        reverse: read7(bc),
-        limit: read8(bc),
-    }
-}
-
-export function writeKvListRequest(bc: bare.ByteCursor, x: KvListRequest): void {
-    writeKvListQuery(bc, x.query)
-    write7(bc, x.reverse)
-    write8(bc, x.limit)
-}
-
-function read9(bc: bare.ByteCursor): readonly KvValue[] {
-    const len = bare.readUintSafe(bc)
-    if (len === 0) {
-        return []
-    }
-    const result = [readKvValue(bc)]
-    for (let i = 1; i < len; i++) {
-        result[i] = readKvValue(bc)
-    }
-    return result
-}
-
-function write9(bc: bare.ByteCursor, x: readonly KvValue[]): void {
-    bare.writeUintSafe(bc, x.length)
-    for (let i = 0; i < x.length; i++) {
-        writeKvValue(bc, x[i])
-    }
-}
-
-export type KvPutRequest = {
-    readonly keys: readonly KvKey[]
-    readonly values: readonly KvValue[]
-}
-
-export function readKvPutRequest(bc: bare.ByteCursor): KvPutRequest {
-    return {
-        keys: read6(bc),
-        values: read9(bc),
-    }
-}
-
-export function writeKvPutRequest(bc: bare.ByteCursor, x: KvPutRequest): void {
-    write6(bc, x.keys)
-    write9(bc, x.values)
-}
-
-export type KvDeleteRequest = {
-    readonly keys: readonly KvKey[]
-}
-
-export function readKvDeleteRequest(bc: bare.ByteCursor): KvDeleteRequest {
-    return {
-        keys: read6(bc),
-    }
-}
-
-export function writeKvDeleteRequest(bc: bare.ByteCursor, x: KvDeleteRequest): void {
-    write6(bc, x.keys)
-}
-
-export type KvDropRequest = null
-
-export type KvRequestData =
-    | { readonly tag: "KvGetRequest"; readonly val: KvGetRequest }
-    | { readonly tag: "KvListRequest"; readonly val: KvListRequest }
-    | { readonly tag: "KvPutRequest"; readonly val: KvPutRequest }
-    | { readonly tag: "KvDeleteRequest"; readonly val: KvDeleteRequest }
-    | { readonly tag: "KvDropRequest"; readonly val: KvDropRequest }
-
-export function readKvRequestData(bc: bare.ByteCursor): KvRequestData {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return { tag: "KvGetRequest", val: readKvGetRequest(bc) }
-        case 1:
-            return { tag: "KvListRequest", val: readKvListRequest(bc) }
-        case 2:
-            return { tag: "KvPutRequest", val: readKvPutRequest(bc) }
-        case 3:
-            return { tag: "KvDeleteRequest", val: readKvDeleteRequest(bc) }
-        case 4:
-            return { tag: "KvDropRequest", val: null }
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeKvRequestData(bc: bare.ByteCursor, x: KvRequestData): void {
-    switch (x.tag) {
-        case "KvGetRequest": {
-            bare.writeU8(bc, 0)
-            writeKvGetRequest(bc, x.val)
-            break
-        }
-        case "KvListRequest": {
-            bare.writeU8(bc, 1)
-            writeKvListRequest(bc, x.val)
-            break
-        }
-        case "KvPutRequest": {
-            bare.writeU8(bc, 2)
-            writeKvPutRequest(bc, x.val)
-            break
-        }
-        case "KvDeleteRequest": {
-            bare.writeU8(bc, 3)
-            writeKvDeleteRequest(bc, x.val)
-            break
-        }
-        case "KvDropRequest": {
-            bare.writeU8(bc, 4)
-            break
-        }
-    }
 }
 
 export type ToServerKvRequest = {
@@ -951,6 +1123,9 @@ export function decodeToServer(bytes: Uint8Array): ToServer {
     return result
 }
 
+/**
+ * MARK: To Client
+ */
 export type ProtocolMetadata = {
     readonly runnerLostThreshold: i64
 }
@@ -1018,148 +1193,6 @@ export function readToClientAckEvents(bc: bare.ByteCursor): ToClientAckEvents {
 
 export function writeToClientAckEvents(bc: bare.ByteCursor, x: ToClientAckEvents): void {
     bare.writeI64(bc, x.lastEventIdx)
-}
-
-export type KvErrorResponse = {
-    readonly message: string
-}
-
-export function readKvErrorResponse(bc: bare.ByteCursor): KvErrorResponse {
-    return {
-        message: bare.readString(bc),
-    }
-}
-
-export function writeKvErrorResponse(bc: bare.ByteCursor, x: KvErrorResponse): void {
-    bare.writeString(bc, x.message)
-}
-
-function read10(bc: bare.ByteCursor): readonly KvMetadata[] {
-    const len = bare.readUintSafe(bc)
-    if (len === 0) {
-        return []
-    }
-    const result = [readKvMetadata(bc)]
-    for (let i = 1; i < len; i++) {
-        result[i] = readKvMetadata(bc)
-    }
-    return result
-}
-
-function write10(bc: bare.ByteCursor, x: readonly KvMetadata[]): void {
-    bare.writeUintSafe(bc, x.length)
-    for (let i = 0; i < x.length; i++) {
-        writeKvMetadata(bc, x[i])
-    }
-}
-
-export type KvGetResponse = {
-    readonly keys: readonly KvKey[]
-    readonly values: readonly KvValue[]
-    readonly metadata: readonly KvMetadata[]
-}
-
-export function readKvGetResponse(bc: bare.ByteCursor): KvGetResponse {
-    return {
-        keys: read6(bc),
-        values: read9(bc),
-        metadata: read10(bc),
-    }
-}
-
-export function writeKvGetResponse(bc: bare.ByteCursor, x: KvGetResponse): void {
-    write6(bc, x.keys)
-    write9(bc, x.values)
-    write10(bc, x.metadata)
-}
-
-export type KvListResponse = {
-    readonly keys: readonly KvKey[]
-    readonly values: readonly KvValue[]
-    readonly metadata: readonly KvMetadata[]
-}
-
-export function readKvListResponse(bc: bare.ByteCursor): KvListResponse {
-    return {
-        keys: read6(bc),
-        values: read9(bc),
-        metadata: read10(bc),
-    }
-}
-
-export function writeKvListResponse(bc: bare.ByteCursor, x: KvListResponse): void {
-    write6(bc, x.keys)
-    write9(bc, x.values)
-    write10(bc, x.metadata)
-}
-
-export type KvPutResponse = null
-
-export type KvDeleteResponse = null
-
-export type KvDropResponse = null
-
-export type KvResponseData =
-    | { readonly tag: "KvErrorResponse"; readonly val: KvErrorResponse }
-    | { readonly tag: "KvGetResponse"; readonly val: KvGetResponse }
-    | { readonly tag: "KvListResponse"; readonly val: KvListResponse }
-    | { readonly tag: "KvPutResponse"; readonly val: KvPutResponse }
-    | { readonly tag: "KvDeleteResponse"; readonly val: KvDeleteResponse }
-    | { readonly tag: "KvDropResponse"; readonly val: KvDropResponse }
-
-export function readKvResponseData(bc: bare.ByteCursor): KvResponseData {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return { tag: "KvErrorResponse", val: readKvErrorResponse(bc) }
-        case 1:
-            return { tag: "KvGetResponse", val: readKvGetResponse(bc) }
-        case 2:
-            return { tag: "KvListResponse", val: readKvListResponse(bc) }
-        case 3:
-            return { tag: "KvPutResponse", val: null }
-        case 4:
-            return { tag: "KvDeleteResponse", val: null }
-        case 5:
-            return { tag: "KvDropResponse", val: null }
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeKvResponseData(bc: bare.ByteCursor, x: KvResponseData): void {
-    switch (x.tag) {
-        case "KvErrorResponse": {
-            bare.writeU8(bc, 0)
-            writeKvErrorResponse(bc, x.val)
-            break
-        }
-        case "KvGetResponse": {
-            bare.writeU8(bc, 1)
-            writeKvGetResponse(bc, x.val)
-            break
-        }
-        case "KvListResponse": {
-            bare.writeU8(bc, 2)
-            writeKvListResponse(bc, x.val)
-            break
-        }
-        case "KvPutResponse": {
-            bare.writeU8(bc, 3)
-            break
-        }
-        case "KvDeleteResponse": {
-            bare.writeU8(bc, 4)
-            break
-        }
-        case "KvDropResponse": {
-            bare.writeU8(bc, 5)
-            break
-        }
-    }
 }
 
 export type ToClientKvResponse = {

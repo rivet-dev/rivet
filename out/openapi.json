@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "25.7.0"
+    "version": "25.7.1"
   },
   "paths": {
     "/actors": {

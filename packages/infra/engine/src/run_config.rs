@@ -10,11 +10,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			Box::pin(rivet_guard::start(config, pools))
 		}),
 		Service::new(
-			"pegboard_runner_ws",
-			ServiceKind::ApiPublic,
-			|config, pools| Box::pin(pegboard_runner_ws::start(config, pools)),
-		),
-		Service::new(
 			"workflow_worker",
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(rivet_workflow_worker::start(config, pools)),
