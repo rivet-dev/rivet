@@ -58,7 +58,7 @@ When the `x-rivet-target` header is present, routes to specific service types:
   - `x-rivet-addr: <address>` - Direct address override for actor location
 - **Behavior**: Routes to the specific actor instance, with cross-datacenter routing if the actor resides in a different DC
 
-**Runner WebSocket** (`x-rivet-target: runner-ws`):
+**Runner** (`x-rivet-target: runner`):
 - **Purpose**: Routes WebSocket connections to the Pegboard runner service
 - **Target**: Routes to the configured Pegboard service (`pegboard.lan_host:pegboard.port`)
 - **Use case**: WebSocket connections between runners and the orchestration system

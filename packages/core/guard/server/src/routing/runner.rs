@@ -11,10 +11,10 @@ pub async fn route_request(
 	_host: &str,
 	path: &str,
 ) -> Result<Option<RoutingOutput>> {
-	if target != "runner-ws" {
+	if target != "runner" {
 		return Ok(None);
 	}
 
-	let tunnel = pegboard_runner_ws::PegboardRunnerWsCustomServe::new(ctx.clone());
+	let tunnel = pegboard_runner::PegboardRunnerWsCustomServe::new(ctx.clone());
 	Ok(Some(RoutingOutput::CustomServe(Arc::new(tunnel))))
 }

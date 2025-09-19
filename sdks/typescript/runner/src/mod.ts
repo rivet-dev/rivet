@@ -448,7 +448,7 @@ export class Runner {
 		const WS = await importWebSocket();
 		const ws = new WS(this.pegboardUrl, {
 			headers: {
-				"x-rivet-target": "runner-ws",
+				"x-rivet-target": "runner",
 			},
 		}) as any as WebSocket;
 		this.#pegboardWebSocket = ws;

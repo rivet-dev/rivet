@@ -1,5 +1,5 @@
 [package]
-name = "pegboard-runner-ws"
+name = "pegboard-runner"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
