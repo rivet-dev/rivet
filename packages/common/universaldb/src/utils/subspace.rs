@@ -36,6 +36,12 @@ impl Subspace {
 		}
 	}
 
+	pub fn join(&self, s: &Subspace) -> Self {
+		Self {
+			inner: tuple::Subspace::from_bytes([self.inner.bytes(), s.bytes()].concat()),
+		}
+	}
+
 	/// Returns the key encoding the specified Tuple with the prefix of this Subspace
 	/// prepended.
 	pub fn pack<T: TuplePack>(&self, t: &T) -> Vec<u8> {

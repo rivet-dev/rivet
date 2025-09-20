@@ -122,4 +122,7 @@ define_keys! {
 	(94, SERVERLESS, "serverless"),
 	(95, DESIRED_SLOTS, "desired_slots"),
 	(96, BY_VARIANT, "by_variant"),
+	(97, ACL, "acl"),
+	(98, TOKEN, "token"),
+	(99, SECRET, "secret"),
 }
