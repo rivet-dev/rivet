@@ -42,12 +42,6 @@ export function generateDatacenterRivetEngine(
 				host: "0.0.0.0",
 				port: API_PEER_PORT,
 			},
-			// pegboard config
-			pegboard: {
-				lan_host: serviceHost,
-				host: "0.0.0.0",
-				port: 6423,
-			},
 			// logs config
 			logs: {
 				// redirect_logs_dir is optional
