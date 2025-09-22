@@ -608,7 +608,7 @@ async fn verify_kv_replication(
 		// Verify the value matches
 		assert_eq!(
 			actual_value,
-			Some(expected_value.clone()),
+			Some(expected_value.clone().into()),
 			"KV value mismatch for key {} on replica {}",
 			String::from_utf8_lossy(&key),
 			replica_id

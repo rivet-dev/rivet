@@ -1,4 +1,5 @@
 use gas::prelude::*;
+use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PropertiesTestInput {}

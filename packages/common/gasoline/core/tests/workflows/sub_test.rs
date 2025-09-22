@@ -1,5 +1,6 @@
 use super::basic::BasicWorkflowInput;
 use gas::prelude::*;
+use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubWorkflowInput {

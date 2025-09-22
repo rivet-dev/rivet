@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gas::prelude::*;
-use gas::test;
+use gasoline as gas;
 
 mod workflows;
 use workflows::properties_test::*;
@@ -12,7 +12,7 @@ use workflows::tags_test::*;
 async fn test_activity_state() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<StateTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(StateTestInput { initial_value: 42 })
@@ -35,7 +35,7 @@ async fn test_activity_state() {
 async fn test_activity_update_tags() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<TagsTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(TagsTestInput {
@@ -61,7 +61,7 @@ async fn test_activity_update_tags() {
 async fn test_activity_ctx_properties() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<PropertiesTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(PropertiesTestInput {})

@@ -1,10 +1,7 @@
 use anyhow::{self, Context};
 use epoxy::types;
 use epoxy_protocol::protocol::ReplicaId;
-use gas::{
-	prelude::*,
-	test::{self, WorkflowTestCtx},
-};
+use gas::prelude::{TestCtx as WorkflowTestCtx, *};
 // Note: workflows module no longer exposed in tests
 use rivet_util::Id;
 use serde_json::json;
@@ -53,7 +50,7 @@ impl TestCtx {
 	}
 
 	pub async fn new_with(replica_ids: &[ReplicaId]) -> anyhow::Result<Self> {
-		gas::test::setup_logging();
+		gas::ctx::test::setup_logging();
 
 		let leader_id = replica_ids[0];
 
@@ -162,7 +159,7 @@ impl TestCtx {
 
 		// Create test context
 		let reg = epoxy::registry()?;
-		let test_ctx = test::WorkflowTestCtx::new(reg, test_deps).await?;
+		let test_ctx = WorkflowTestCtx::new_with_deps(reg, test_deps).await?;
 
 		// Start the API server
 		let api_handle = api::setup_api_server(

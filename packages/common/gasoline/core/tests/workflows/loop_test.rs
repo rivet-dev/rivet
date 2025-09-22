@@ -1,5 +1,6 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
+use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoopWorkflowInput {

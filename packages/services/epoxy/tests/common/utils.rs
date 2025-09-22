@@ -4,7 +4,7 @@ use epoxy_protocol::protocol;
 
 /// Helper function to execute a command through the ops API
 pub async fn execute_command(
-	ctx: &gas::test::WorkflowTestCtx,
+	ctx: &gas::prelude::TestCtx,
 	command: protocol::CommandKind,
 	_wait_for_propagation: bool,
 ) -> Result<ProposalResult> {
