@@ -56,7 +56,8 @@ Create a RivetKit client to connect to your actor:
 import { createClient, createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-const client = createClient<typeof registry>(`${window.location.href}api`, {
+const client = createClient<typeof registry>({
+	endpoint: `${window.location.origin}/api/rivet`,
 	transport: "sse",
 });
 
@@ -70,22 +71,12 @@ export const { useActor } = createRivetKit(client);
 
 <Step title="Setup Registry API routes">
 
-```ts {{"title":"src/app/api/registry/[...all]/route.ts"}}
+```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}}
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
-const server = registry.start({
-	// Use the same base path as the client
-	// This is important for Next.js to route the API calls correctly
-	basePath: "/api/registry",
-	studio: {
-		// Tell RivetKit Studio where to find RivetKit Registry
-		defaultEndpoint: "http://localhost:3000/api/registry",
-	},
-});
-
 // Export the Next.js handler for the API routes
-export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(server);
+export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(registry);
 ```
 
 </Step>
