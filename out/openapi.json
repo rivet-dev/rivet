@@ -11,7 +11,7 @@
       "name": "Apache-2.0",
       "identifier": "Apache-2.0"
     },
-    "version": "25.6.1"
+    "version": "25.7.0"
   },
   "paths": {
     "/actors": {
@@ -1470,7 +1470,58 @@
         "additionalProperties": false
       },
       "RunnerConfigsUpsertRequest": {
-        "$ref": "#/components/schemas/RunnerConfig"
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "serverless"
+            ],
+            "properties": {
+              "serverless": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "request_lifespan",
+                  "slots_per_runner",
+                  "min_runners",
+                  "max_runners",
+                  "runners_margin"
+                ],
+                "properties": {
+                  "max_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "min_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "request_lifespan": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "runners_margin": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "slots_per_runner": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "RunnerConfigsUpsertResponse": {
         "type": "object"

@@ -114,7 +114,7 @@ pub struct UpsertPath {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsUpsertRequest)]
-pub struct UpsertRequest(namespace::types::RunnerConfig);
+pub struct UpsertRequest(#[schema(inline)] namespace::types::RunnerConfig);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsUpsertResponse)]

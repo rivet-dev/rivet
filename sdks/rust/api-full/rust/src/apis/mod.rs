@@ -121,7 +121,7 @@ pub mod actors_list_api;
 pub mod actors_list_names_api;
 pub mod datacenters_api;
 pub mod namespaces_api;
-pub mod namespaces_runner_configs_api;
+pub mod runner_configs_api;
 pub mod runners_api;
 
 pub mod configuration;

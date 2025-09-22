@@ -552,137 +552,6 @@ func (n *NamespacesListResponse) String() string {
 	return fmt.Sprintf("%#v", n)
 }
 
-type NamespacesRunnerConfig struct {
-	Serverless *NamespacesRunnerConfigServerless `json:"serverless,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesRunnerConfig) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesRunnerConfig
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesRunnerConfig(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesRunnerConfig) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesRunnerConfigServerless struct {
-	MaxRunners int `json:"max_runners"`
-	MinRunners int `json:"min_runners"`
-	// Seconds.
-	RequestLifespan int    `json:"request_lifespan"`
-	RunnersMargin   int    `json:"runners_margin"`
-	SlotsPerRunner  int    `json:"slots_per_runner"`
-	Url             string `json:"url"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesRunnerConfigServerless) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesRunnerConfigServerless
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesRunnerConfigServerless(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesRunnerConfigServerless) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesRunnerConfigVariant = string
-
-type NamespacesRunnerConfigsDeleteResponse = map[string]interface{}
-
-type NamespacesRunnerConfigsGetResponse struct {
-	RunnerConfig *NamespacesRunnerConfig `json:"runner_config,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesRunnerConfigsGetResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesRunnerConfigsGetResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesRunnerConfigsGetResponse(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesRunnerConfigsGetResponse) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesRunnerConfigsListResponse struct {
-	Pagination    *Pagination                        `json:"pagination,omitempty"`
-	RunnerConfigs map[string]*NamespacesRunnerConfig `json:"runner_configs,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesRunnerConfigsListResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesRunnerConfigsListResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesRunnerConfigsListResponse(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesRunnerConfigsListResponse) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesRunnerConfigsUpsertRequest = *NamespacesRunnerConfig
-
-type NamespacesRunnerConfigsUpsertResponse = map[string]interface{}
-
 type Pagination struct {
 	Cursor *string `json:"cursor,omitempty"`
 
@@ -756,6 +625,106 @@ func (r *Runner) String() string {
 	}
 	return fmt.Sprintf("%#v", r)
 }
+
+type RunnerConfig struct {
+	Serverless *RunnerConfigServerless `json:"serverless,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfig
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfig(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfig) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigServerless struct {
+	MaxRunners int `json:"max_runners"`
+	MinRunners int `json:"min_runners"`
+	// Seconds.
+	RequestLifespan int    `json:"request_lifespan"`
+	RunnersMargin   int    `json:"runners_margin"`
+	SlotsPerRunner  int    `json:"slots_per_runner"`
+	Url             string `json:"url"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigServerless) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigServerless
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigServerless(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigServerless) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigVariant = string
+
+type RunnerConfigsDeleteResponse = map[string]interface{}
+
+type RunnerConfigsListResponse struct {
+	Pagination    *Pagination              `json:"pagination,omitempty"`
+	RunnerConfigs map[string]*RunnerConfig `json:"runner_configs,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsListResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsListResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsListResponse(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsListResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsUpsertResponse = map[string]interface{}
 
 type RunnersGetResponse struct {
 	Runner *Runner `json:"runner,omitempty"`

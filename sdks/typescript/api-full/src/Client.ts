@@ -9,7 +9,7 @@ import * as serializers from "./serialization/index";
 import * as errors from "./errors/index";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
 import { Namespaces } from "./api/resources/namespaces/client/Client";
-import { NamespacesRunnerConfigs } from "./api/resources/namespacesRunnerConfigs/client/Client";
+import { RunnerConfigs } from "./api/resources/runnerConfigs/client/Client";
 import { Runners } from "./api/resources/runners/client/Client";
 
 export declare namespace RivetClient {
@@ -35,7 +35,7 @@ export declare namespace RivetClient {
 export class RivetClient {
     protected _datacenters: Datacenters | undefined;
     protected _namespaces: Namespaces | undefined;
-    protected _namespacesRunnerConfigs: NamespacesRunnerConfigs | undefined;
+    protected _runnerConfigs: RunnerConfigs | undefined;
     protected _runners: Runners | undefined;
 
     constructor(protected readonly _options: RivetClient.Options) {}
@@ -48,8 +48,8 @@ export class RivetClient {
         return (this._namespaces ??= new Namespaces(this._options));
     }
 
-    public get namespacesRunnerConfigs(): NamespacesRunnerConfigs {
-        return (this._namespacesRunnerConfigs ??= new NamespacesRunnerConfigs(this._options));
+    public get runnerConfigs(): RunnerConfigs {
+        return (this._runnerConfigs ??= new RunnerConfigs(this._options));
     }
 
     public get runners(): Runners {

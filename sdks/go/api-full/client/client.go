@@ -11,7 +11,7 @@ import (
 	core "sdk/core"
 	datacenters "sdk/datacenters"
 	namespaces "sdk/namespaces"
-	namespacesrunnerconfigs "sdk/namespacesrunnerconfigs"
+	runnerconfigs "sdk/runnerconfigs"
 	runners "sdk/runners"
 )
 
@@ -20,10 +20,10 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Datacenters             *datacenters.Client
-	Namespaces              *namespaces.Client
-	NamespacesRunnerConfigs *namespacesrunnerconfigs.Client
-	Runners                 *runners.Client
+	Datacenters   *datacenters.Client
+	Namespaces    *namespaces.Client
+	RunnerConfigs *runnerconfigs.Client
+	Runners       *runners.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -32,13 +32,13 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL:                 options.BaseURL,
-		caller:                  core.NewCaller(options.HTTPClient),
-		header:                  options.ToHeader(),
-		Datacenters:             datacenters.NewClient(opts...),
-		Namespaces:              namespaces.NewClient(opts...),
-		NamespacesRunnerConfigs: namespacesrunnerconfigs.NewClient(opts...),
-		Runners:                 runners.NewClient(opts...),
+		baseURL:       options.BaseURL,
+		caller:        core.NewCaller(options.HTTPClient),
+		header:        options.ToHeader(),
+		Datacenters:   datacenters.NewClient(opts...),
+		Namespaces:    namespaces.NewClient(opts...),
+		RunnerConfigs: runnerconfigs.NewClient(opts...),
+		Runners:       runners.NewClient(opts...),
 	}
 }
 
