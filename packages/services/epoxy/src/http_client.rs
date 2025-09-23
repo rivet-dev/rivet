@@ -7,7 +7,7 @@ use epoxy_protocol::{
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use rivet_api_builder::ApiCtx;
 use std::future::Future;
-use versioned_data_util::OwnedVersionedData;
+use vbare::OwnedVersionedData;
 
 use crate::utils;
 

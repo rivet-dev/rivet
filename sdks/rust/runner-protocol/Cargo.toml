@@ -13,11 +13,7 @@ rivet-util.workspace = true
 serde_bare.workspace = true
 serde.workspace = true
 utoipa.workspace = true
-versioned-data-util.workspace = true
+vbare.workspace = true
 
 [build-dependencies]
-bare_gen.workspace = true
-indoc.workspace = true
-prettyplease.workspace = true
-serde_json.workspace = true
-syn.workspace = true
+vbare-compiler.workspace = true

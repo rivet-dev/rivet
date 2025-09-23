@@ -5,7 +5,7 @@ use gas::prelude::*;
 use serde::Serialize;
 use universaldb::prelude::*;
 use utoipa::ToSchema;
-use versioned_data_util::OwnedVersionedData;
+use vbare::OwnedVersionedData;
 
 pub fn subspace() -> universaldb::utils::Subspace {
 	universaldb::utils::Subspace::new(&(RIVET, NAMESPACE))

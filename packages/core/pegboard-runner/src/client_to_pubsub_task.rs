@@ -9,7 +9,7 @@ use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use universalpubsub::PublishOpts;
-use versioned_data_util::OwnedVersionedData as _;
+use vbare::OwnedVersionedData as _;
 
 use crate::{
 	conn::Conn,

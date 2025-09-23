@@ -34,7 +34,7 @@ tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
 uuid.workspace = true
-versioned-data-util.workspace = true
+vbare.workspace = true
 
 [dev-dependencies]
 gas.workspace = true

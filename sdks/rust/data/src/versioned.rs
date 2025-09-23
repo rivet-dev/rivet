@@ -1,5 +1,5 @@
 use anyhow::{Ok, Result, bail};
-use versioned_data_util::OwnedVersionedData;
+use vbare::OwnedVersionedData;
 
 use crate::generated::*;
 

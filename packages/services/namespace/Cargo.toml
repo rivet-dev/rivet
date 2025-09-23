@@ -22,4 +22,4 @@ tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
 utoipa.workspace = true
-versioned-data-util.workspace = true
+vbare.workspace = true

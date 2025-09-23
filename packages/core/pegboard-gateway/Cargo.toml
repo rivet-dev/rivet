@@ -24,4 +24,4 @@ thiserror.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
 universalpubsub.workspace = true
-versioned-data-util.workspace = true
+vbare.workspace = true

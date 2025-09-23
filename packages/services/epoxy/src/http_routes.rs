@@ -2,7 +2,7 @@ use anyhow::*;
 use axum::body::Bytes;
 use epoxy_protocol::{protocol, versioned};
 use rivet_api_builder::prelude::*;
-use versioned_data_util::OwnedVersionedData;
+use vbare::OwnedVersionedData;
 
 #[derive(Deserialize)]
 pub struct VersionedPath {

@@ -1,66 +1,45 @@
 use std::{
-	env, fs,
+	fs,
 	path::{Path, PathBuf},
 	process::Command,
 };
 
-use indoc::formatdoc;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+	let workspace_root = Path::new(&manifest_dir)
+		.parent()
+		.and_then(|p| p.parent())
+		.and_then(|p| p.parent())
+		.ok_or("Failed to find workspace root")?;
 
-mod rust {
-	use super::*;
+	let schema_dir = workspace_root
+		.join("sdks")
+		.join("schemas")
+		.join("runner-protocol");
 
-	pub fn generate_sdk(schema_dir: &Path) {
-		let out_dir = env::var("OUT_DIR").unwrap();
-		let out_path = Path::new(&out_dir);
-		let mut all_names = Vec::new();
+	// Rust SDK generation
+	let cfg = vbare_compiler::Config::with_hashable_map();
+	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
-		for entry in fs::read_dir(schema_dir).unwrap().flatten() {
-			let path = entry.path();
-
-			if path.is_dir() {
-				continue;
-			}
-
-			let bare_name = path
-				.file_name()
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.rsplit_once('.')
-				.unwrap()
-				.0;
-
-			let content =
-				prettyplease::unparse(&syn::parse2(bare_gen::bare_schema(&path)).unwrap());
-			fs::write(out_path.join(format!("{bare_name}_generated.rs")), content).unwrap();
-
-			all_names.push(bare_name.to_string());
-		}
-
-		let mut mod_content = String::new();
-		mod_content.push_str("// Auto-generated module file for BARE schemas\n\n");
-
-		// Generate module declarations for each version
-		for name in all_names {
-			mod_content.push_str(&formatdoc!(
-				r#"
-				pub mod {name} {{
-					include!(concat!(env!("OUT_DIR"), "/{name}_generated.rs"));
-				}}
-				"#,
-			));
-		}
-
-		let mod_file_path = out_path.join("combined_imports.rs");
-		fs::write(&mod_file_path, mod_content).expect("Failed to write combined_imports.rs");
+	// TypeScript SDK generation
+	let cli_js_path = workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js");
+	if cli_js_path.exists() {
+		typescript::generate_sdk(&schema_dir);
+	} else {
+		println!(
+			"cargo:warning=TypeScript SDK generation skipped: cli.js not found at {}. Run `pnpm install` to install.",
+			cli_js_path.display()
+		);
 	}
+
+	Ok(())
 }
 
 mod typescript {
 	use super::*;
 
 	pub fn generate_sdk(schema_dir: &Path) {
-		let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+		let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 		let workspace_root = Path::new(&manifest_dir)
 			.parent()
 			.and_then(|p| p.parent())
@@ -126,33 +105,4 @@ fn find_highest_version(schema_dir: &Path) -> PathBuf {
 	}
 
 	highest_version_path
-}
-
-fn main() {
-	let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-	let workspace_root = Path::new(&manifest_dir)
-		.parent()
-		.and_then(|p| p.parent())
-		.and_then(|p| p.parent())
-		.expect("Failed to find workspace root");
-
-	let schema_dir = workspace_root
-		.join("sdks")
-		.join("schemas")
-		.join("runner-protocol");
-
-	println!("cargo:rerun-if-changed={}", schema_dir.display());
-
-	rust::generate_sdk(&schema_dir);
-
-	// Check if cli.js exists before attempting TypeScript generation
-	let cli_js_path = workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js");
-	if cli_js_path.exists() {
-		typescript::generate_sdk(&schema_dir);
-	} else {
-		println!(
-			"cargo:warning=TypeScript SDK generation skipped: cli.js not found at {}. Run `pnpm install` to install.",
-			cli_js_path.display()
-		);
-	}
 }

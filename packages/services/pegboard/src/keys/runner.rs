@@ -3,7 +3,7 @@ use std::result::Result::Ok;
 use anyhow::*;
 use gas::prelude::*;
 use universaldb::prelude::*;
-use versioned_data_util::OwnedVersionedData;
+use vbare::OwnedVersionedData;
 
 #[derive(Debug)]
 pub struct CreateTsKey {
