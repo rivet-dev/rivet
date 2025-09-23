@@ -1,13 +1,14 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode};
-use hyper_tungstenite::HyperWebsocket;
 use rivet_guard_core::{
+	WebSocketHandle,
 	custom_serve::CustomServeTrait,
+	errors::WebSocketServiceUnavailable,
 	proxy_service::{ResponseBody, X_RIVET_ERROR},
 	request_context::RequestContext,
 };
@@ -66,24 +67,21 @@ impl CustomServeTrait for PegboardGateway {
 
 	async fn handle_websocket(
 		&self,
-		client_ws: HyperWebsocket,
+		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
 		path: &str,
 		_request_context: &mut RequestContext,
-	) -> std::result::Result<(), (HyperWebsocket, anyhow::Error)> {
-		match self
+	) -> Result<()> {
+		let res = self
 			.handle_websocket_inner(client_ws, headers, path, _request_context)
-			.await
-		{
-			Result::Ok(()) => std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(()),
-			Result::Err((client_ws, err)) => {
+			.await;
+		match res {
+			Result::Ok(x) => Ok(x),
+			Err(err) => {
 				if is_tunnel_service_unavailable(&err) {
-					Err((
-						client_ws,
-						rivet_guard_core::errors::WebSocketServiceUnavailable.build(),
-					))
+					Err(WebSocketServiceUnavailable.build())
 				} else {
-					Err((client_ws, err))
+					Err(err)
 				}
 			}
 		}
@@ -197,20 +195,17 @@ impl PegboardGateway {
 
 	async fn handle_websocket_inner(
 		&self,
-		client_ws: HyperWebsocket,
+		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
 		path: &str,
 		_request_context: &mut RequestContext,
-	) -> std::result::Result<(), (HyperWebsocket, anyhow::Error)> {
+	) -> Result<()> {
 		// Extract actor ID for the message
-		let actor_id = match headers
+		let actor_id = headers
 			.get("x-rivet-actor")
-			.context("missing x-rivet-actor header")
-			.and_then(|v| v.to_str().context("invalid x-rivet-actor header"))
-		{
-			Result::Ok(v) => v.to_string(),
-			Err(err) => return Err((client_ws, err)),
-		};
+			.context("missing x-rivet-actor")?
+			.to_str()?
+			.to_string();
 
 		// Extract headers
 		let mut request_headers = HashableMap::new();
@@ -239,19 +234,14 @@ impl PegboardGateway {
 			},
 		);
 
-		if let Err(err) = self
-			.shared_state
+		self.shared_state
 			.send_message(request_id, open_message)
-			.await
-		{
-			return Err((client_ws, err));
-		}
+			.await?;
 
 		// Wait for WebSocket open acknowledgment
 		let open_ack_received = loop {
 			let Some(msg) = msg_rx.recv().await else {
-				tracing::warn!("received no websocket open response");
-				return Err((client_ws, RequestError::ServiceUnavailable.into()));
+				bail!("received no websocket open response");
 			};
 
 			match msg {
@@ -263,12 +253,10 @@ impl PegboardGateway {
 				TunnelMessageData::Message(
 					protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
 				) => {
-					tracing::info!(?close, "websocket closed before opening");
-					return Err((client_ws, RequestError::ServiceUnavailable.into()));
+					bail!("websocket closed before opening: {close:?}");
 				}
 				TunnelMessageData::Timeout => {
-					tracing::warn!("websocket open timeout");
-					return Err((client_ws, RequestError::ServiceUnavailable.into()));
+					bail!("websocket open timeout");
 				}
 				_ => {
 					tracing::warn!("received unexpected message while waiting for websocket open");
@@ -277,19 +265,11 @@ impl PegboardGateway {
 		};
 
 		if !open_ack_received {
-			return Err((client_ws, anyhow!("failed to open websocket")));
+			bail!("failed to open websocket");
 		}
 
 		// Accept the WebSocket
-		let ws_stream = match client_ws.await {
-			Result::Ok(ws) => ws,
-			Err(e) => {
-				// Handshake already in progress; cannot retry safely here
-				tracing::debug!(error = ?e, "client websocket await failed");
-				return std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(());
-			}
-		};
-		let (mut ws_sink, mut ws_stream) = ws_stream.split();
+		let mut ws_rx = client_ws.accept().await?;
 
 		// Spawn task to forward messages from server to client
 		let mut msg_rx_for_task = msg_rx;
@@ -304,7 +284,7 @@ impl PegboardGateway {
 						} else {
 							Message::Text(String::from_utf8_lossy(&ws_msg.data).into_owned().into())
 						};
-						if let Err(e) = ws_sink.send(msg).await {
+						if let Err(e) = client_ws.send(msg).await {
 							tracing::warn!(?e, "failed to send websocket message to client");
 							break;
 						}
@@ -326,7 +306,7 @@ impl PegboardGateway {
 
 		// Forward messages from client to server
 		let mut close_reason = None;
-		while let Some(msg) = ws_stream.next().await {
+		while let Some(msg) = ws_rx.next().await {
 			match msg {
 				Result::Ok(Message::Binary(data)) => {
 					let ws_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
@@ -387,7 +367,7 @@ impl PegboardGateway {
 			}
 		}
 
-		std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(())
+		Ok(())
 	}
 }
 

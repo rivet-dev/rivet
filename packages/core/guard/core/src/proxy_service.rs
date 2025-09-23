@@ -1,11 +1,3 @@
-use std::{
-	borrow::Cow,
-	collections::HashMap as StdHashMap,
-	net::SocketAddr,
-	sync::Arc,
-	time::{Duration, Instant},
-};
-
 use anyhow::*;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -16,17 +8,30 @@ use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
 use rand;
 use rivet_api_builder::{ErrorResponse, RawErrorResponse};
-use rivet_error::RivetError;
+use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_metrics::KeyValue;
 use rivet_util::Id;
 use serde_json;
+use std::{
+	borrow::Cow,
+	collections::HashMap as StdHashMap,
+	net::SocketAddr,
+	sync::Arc,
+	time::{Duration, Instant},
+};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{
+	client::IntoClientRequest,
+	protocol::{CloseFrame, frame::coding::CloseCode},
+};
 use tracing::Instrument;
 use url::Url;
 
-use crate::{custom_serve::CustomServeTrait, errors, metrics, request_context::RequestContext};
+use crate::{
+	WebSocketHandle, custom_serve::CustomServeTrait, errors, metrics,
+	request_context::RequestContext,
+};
 
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
@@ -1432,9 +1437,9 @@ impl ProxyService {
 
 									// Close the WebSocket connection with the response message
 									let _ = client_ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
-								code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-								reason: response.message.as_ref().into(),
-							})).await;
+										code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+										reason: response.message.as_ref().into(),
+									})).await;
 									return;
 								}
 								Result::Ok(ResolveRouteOutput::CustomServe(_)) => {
@@ -1813,31 +1818,42 @@ impl ProxyService {
 						let mut attempts = 0u32;
 						let mut client_ws = client_websocket;
 
+						let ws_handle = WebSocketHandle::new(client_ws);
+
 						loop {
 							match handlers
 								.handle_websocket(
-									client_ws,
+									ws_handle.clone(),
 									&req_headers,
 									&req_path,
 									&mut request_context,
 								)
 								.await
 							{
-								Result::Ok(()) => break,
-								Result::Err((returned_client_ws, err)) => {
+								Result::Ok(()) => {
+									tracing::debug!("websocket closed");
+
+									// Send graceful close
+									ws_handle.send(hyper_tungstenite::tungstenite::Message::Close(Some(
+										hyper_tungstenite::tungstenite::protocol::CloseFrame {
+											code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+											reason: format!("Closed").into(),
+										},
+									)));
+
+									break;
+								}
+								Result::Err(err) => {
 									attempts += 1;
 									if attempts > max_attempts || !is_retryable_ws_error(&err) {
-										// Accept and close the client websocket with an error reason
-										if let Result::Ok(mut ws) = returned_client_ws.await {
-											let _ = ws
-													.send(hyper_tungstenite::tungstenite::Message::Close(Some(
-														hyper_tungstenite::tungstenite::protocol::CloseFrame {
-															code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-															reason: format!("{}", err).into(),
-													},
-												)))
-												.await;
-										}
+										// Close WebSocket with error
+										ws_handle
+											.accept_and_send(
+												hyper_tungstenite::tungstenite::Message::Close(
+													Some(err_to_close_frame(err)),
+												),
+											)
+											.await?;
 
 										break;
 									} else {
@@ -1861,49 +1877,38 @@ impl ProxyService {
 												new_handlers,
 											)) => {
 												handlers = new_handlers;
-												client_ws = returned_client_ws;
 												continue;
 											}
 											Result::Ok(ResolveRouteOutput::Response(response)) => {
-												if let Result::Ok(mut ws) = returned_client_ws.await
-												{
-													let _ = ws
-															.send(hyper_tungstenite::tungstenite::Message::Close(Some(
-																hyper_tungstenite::tungstenite::protocol::CloseFrame {
-																code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-																reason: response.message.as_ref().into(),
-															},
-															)))
-															.await;
-												}
-												break;
+												ws_handle
+													.accept_and_send(hyper_tungstenite::tungstenite::Message::Close(Some(
+														hyper_tungstenite::tungstenite::protocol::CloseFrame {
+															code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+															reason: response.message.as_ref().into(),
+														},
+													)))
+													.await;
 											}
 											Result::Ok(ResolveRouteOutput::Target(_)) => {
-												if let Result::Ok(mut ws) = returned_client_ws.await
-												{
-													let _ = ws
-															.send(hyper_tungstenite::tungstenite::Message::Close(Some(
-																hyper_tungstenite::tungstenite::protocol::CloseFrame {
-																code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-																reason: "Cannot retry WebSocket with non-custom serve route".into(),
-															},
-															)))
-															.await;
-												}
+												ws_handle
+													.accept_and_send(hyper_tungstenite::tungstenite::Message::Close(Some(
+														hyper_tungstenite::tungstenite::protocol::CloseFrame {
+															code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+															reason: "Cannot retry WebSocket with non-custom serve route".into(),
+														},
+													)))
+													.await;
 												break;
 											}
 											Err(res_err) => {
-												if let Result::Ok(mut ws) = returned_client_ws.await
-												{
-													let _ = ws
-															.send(hyper_tungstenite::tungstenite::Message::Close(Some(
-																hyper_tungstenite::tungstenite::protocol::CloseFrame {
-																code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
-																reason: format!("Routing error: {}", res_err).into(),
-															},
-															)))
-															.await;
-												}
+												ws_handle
+													.accept_and_send(hyper_tungstenite::tungstenite::Message::Close(Some(
+														hyper_tungstenite::tungstenite::protocol::CloseFrame {
+															code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+															reason: format!("Routing error: {}", res_err).into(),
+														},
+													)))
+													.await;
 												break;
 											}
 										}
@@ -2241,4 +2246,27 @@ fn is_retryable_ws_error(err: &anyhow::Error) -> bool {
 	} else {
 		false
 	}
+}
+
+pub fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {
+	let rivet_err = err
+		.chain()
+		.find_map(|x| x.downcast_ref::<RivetError>())
+		.cloned()
+		.unwrap_or_else(|| RivetError::from(&INTERNAL_ERROR));
+
+	let code = match (rivet_err.group(), rivet_err.code()) {
+		("ws", "connection_closed") => CloseCode::Normal,
+		_ => CloseCode::Error,
+	};
+
+	// NOTE: reason cannot be more than 123 bytes as per the WS protocol
+	let reason = rivet_util::safe_slice(
+		&format!("{}.{}", rivet_err.group(), rivet_err.code()),
+		0,
+		123,
+	)
+	.into();
+
+	CloseFrame { code, reason }
 }
