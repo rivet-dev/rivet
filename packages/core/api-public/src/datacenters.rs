@@ -16,6 +16,7 @@ use crate::ctx::ApiCtx;
     responses(
         (status = 200, body = ListResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn list(Extension(ctx): Extension<ApiCtx>) -> Response {
 	match list_inner(ctx).await {

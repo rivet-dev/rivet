@@ -19,6 +19,7 @@ use crate::ctx::ApiCtx;
     responses(
         (status = 200, body = ListResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
@@ -59,6 +60,7 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
     responses(
         (status = 200, body = CreateResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn create(
 	Extension(ctx): Extension<ApiCtx>,
