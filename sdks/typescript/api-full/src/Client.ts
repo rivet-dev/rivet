@@ -17,6 +17,7 @@ export declare namespace RivetClient {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
         baseUrl?: core.Supplier<string>;
+        token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
 
@@ -62,7 +63,7 @@ export class RivetClient {
      * 2 round trips:
      *
      * - namespace::ops::resolve_for_name_global
-     * - GET /actors/{} (multiple DCs based on actor IDs)
+     * - GET /actors (multiple DCs based on actor IDs)
      *
      *   This path is optimized because we can read the actor IDs fro the key directly from Epoxy with
      *   stale consistency to determine which datacenter the actor lives in. Under most circumstances,
@@ -79,9 +80,6 @@ export class RivetClient {
      * - GET /actors (fanout)
      *
      * ## Optimized Alternative Routes
-     *
-     * For minimal round trips to check if an actor exists for a key, use `GET /actors/by-id`. This
-     * does not require fetching the actor's state, so it returns immediately.
      *
      * @param {Rivet.ActorsListRequest} request
      * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
@@ -130,6 +128,7 @@ export class RivetClient {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -222,6 +221,7 @@ export class RivetClient {
             ),
             method: "POST",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -294,9 +294,6 @@ export class RivetClient {
      *
      * ## Optimized Alternative Routes
      *
-     * For minimal round trips to get or create an actor, use `PUT /actors/by-id`. This doesn't
-     * require fetching the actor's state from the other datacenter.
-     *
      * @param {Rivet.ActorsGetOrCreateRequest} request
      * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -328,6 +325,7 @@ export class RivetClient {
             ),
             method: "PUT",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -374,182 +372,6 @@ export class RivetClient {
     }
 
     /**
-     * 1 round trip:
-     *
-     * - namespace::ops::resolve_for_name_global
-     *
-     * This does not require another round trip since we use stale consistency for the get_id_for_key.
-     *
-     * @param {Rivet.ActorsGetByIdRequest} request
-     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.actorsGetById({
-     *         namespace: "namespace",
-     *         name: "name",
-     *         key: "key"
-     *     })
-     */
-    public async actorsGetById(
-        request: Rivet.ActorsGetByIdRequest,
-        requestOptions?: RivetClient.RequestOptions,
-    ): Promise<Rivet.ActorsGetByIdResponse> {
-        const { namespace, name, key } = request;
-        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
-        _queryParams["namespace"] = namespace;
-        _queryParams["name"] = name;
-        _queryParams["key"] = key;
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                "actors/by-id",
-            ),
-            method: "GET",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            queryParameters: _queryParams,
-            requestType: "json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.ActorsGetByIdResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/by-id.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
-    }
-
-    /**
-     * **If actor exists**
-     *
-     * 1 round trip:
-     *
-     * - namespace::ops::resolve_for_name_global
-     *
-     * **If actor does not exist and is created in the current datacenter:**
-     *
-     * 2 round trips:
-     *
-     * - namespace::ops::resolve_for_name_global
-     * - [pegboard::workflows::actors::keys::allocate_key] Reserve Epoxy key
-     *
-     * **If actor does not exist and is created in a different datacenter:**
-     *
-     * 3 round trips:
-     *
-     * - namespace::ops::resolve_for_name_global
-     * - namespace::ops::get (to get namespace name for remote call)
-     * - POST /actors to remote datacenter
-     *
-     * @param {Rivet.ActorsGetOrCreateByIdRequest} request
-     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.actorsGetOrCreateById({
-     *         namespace: "namespace",
-     *         crashPolicy: "restart",
-     *         key: "key",
-     *         name: "name",
-     *         runnerNameSelector: "runner_name_selector"
-     *     })
-     */
-    public async actorsGetOrCreateById(
-        request: Rivet.ActorsGetOrCreateByIdRequest,
-        requestOptions?: RivetClient.RequestOptions,
-    ): Promise<Rivet.ActorsGetOrCreateByIdResponse> {
-        const { namespace, datacenter, ..._body } = request;
-        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
-        _queryParams["namespace"] = namespace;
-        if (datacenter != null) {
-            _queryParams["datacenter"] = datacenter;
-        }
-
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                "actors/by-id",
-            ),
-            method: "PUT",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            queryParameters: _queryParams,
-            requestType: "json",
-            body: serializers.ActorsGetOrCreateByIdRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.ActorsGetOrCreateByIdResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling PUT /actors/by-id.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
-    }
-
-    /**
      * 2 round trips:
      *
      * - GET /actors/names (fanout)
@@ -586,6 +408,7 @@ export class RivetClient {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -633,82 +456,6 @@ export class RivetClient {
     /**
      * 2 round trip:
      *
-     * - GET /actors/{}
-     * - [api-peer] namespace::ops::resolve_for_name_global
-     *
-     * @param {Rivet.RivetId} actorId
-     * @param {Rivet.ActorsGetRequest} request
-     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.actorsGet("actor_id")
-     */
-    public async actorsGet(
-        actorId: Rivet.RivetId,
-        request: Rivet.ActorsGetRequest = {},
-        requestOptions?: RivetClient.RequestOptions,
-    ): Promise<Rivet.ActorsGetResponse> {
-        const { namespace } = request;
-        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
-        if (namespace != null) {
-            _queryParams["namespace"] = namespace;
-        }
-
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                `actors/${encodeURIComponent(serializers.RivetId.jsonOrThrow(actorId))}`,
-            ),
-            method: "GET",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            queryParameters: _queryParams,
-            requestType: "json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.ActorsGetResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/{actor_id}.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
-    }
-
-    /**
-     * 2 round trip:
-     *
      * - DELETE /actors/{}
      * - [api-peer] namespace::ops::resolve_for_name_global
      *
@@ -738,6 +485,7 @@ export class RivetClient {
             ),
             method: "DELETE",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -780,5 +528,9 @@ export class RivetClient {
                     message: _response.error.errorMessage,
                 });
         }
+    }
+
+    protected async _getAuthorizationHeader(): Promise<string> {
+        return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

@@ -13,6 +13,7 @@ export declare namespace Datacenters {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
         baseUrl?: core.Supplier<string>;
+        token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
 
@@ -46,6 +47,7 @@ export class Datacenters {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -87,5 +89,9 @@ export class Datacenters {
                     message: _response.error.errorMessage,
                 });
         }
+    }
+
+    protected async _getAuthorizationHeader(): Promise<string> {
+        return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

@@ -2,13 +2,10 @@
 
 package api
 
-type RunnersGetRequest struct {
-	Namespace *string `json:"-"`
-}
-
 type RunnersListRequest struct {
 	Namespace      string  `json:"-"`
 	Name           *string `json:"-"`
+	RunnerIds      *string `json:"-"`
 	IncludeStopped *bool   `json:"-"`
 	Limit          *int    `json:"-"`
 	Cursor         *string `json:"-"`

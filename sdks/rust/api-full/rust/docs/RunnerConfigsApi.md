@@ -29,7 +29,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 
@@ -41,7 +41,7 @@ No authorization required
 
 ## runner_configs_list
 
-> models::RunnerConfigsListResponse runner_configs_list(namespace, limit, cursor, variant, runner_name)
+> models::RunnerConfigsListResponse runner_configs_list(namespace, limit, cursor, variant, runner_names)
 
 
 ### Parameters
@@ -53,7 +53,7 @@ Name | Type | Description  | Required | Notes
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |
 **variant** | Option<[**RunnerConfigVariant**](.md)> |  |  |
-**runner_name** | Option<[**Vec<String>**](String.md)> |  |  |
+**runner_names** | Option<**String**> |  |  |
 
 ### Return type
 
@@ -61,7 +61,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 
@@ -91,7 +91,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 

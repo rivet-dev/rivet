@@ -41,6 +41,9 @@ func (c *Client) List(ctx context.Context, request *sdk.RunnersListRequest) (*sd
 	if request.Name != nil {
 		queryParams.Add("name", fmt.Sprintf("%v", *request.Name))
 	}
+	if request.RunnerIds != nil {
+		queryParams.Add("runner_ids", fmt.Sprintf("%v", *request.RunnerIds))
+	}
 	if request.IncludeStopped != nil {
 		queryParams.Add("include_stopped", fmt.Sprintf("%v", *request.IncludeStopped))
 	}
@@ -93,36 +96,6 @@ func (c *Client) ListNames(ctx context.Context, request *sdk.RunnersListNamesReq
 	}
 
 	var response *sdk.RunnersListNamesResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:      endpointURL,
-			Method:   http.MethodGet,
-			Headers:  c.header,
-			Response: &response,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-func (c *Client) Get(ctx context.Context, runnerId sdk.RivetId, request *sdk.RunnersGetRequest) (*sdk.RunnersGetResponse, error) {
-	baseURL := ""
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"runners/%v", runnerId)
-
-	queryParams := make(url.Values)
-	if request.Namespace != nil {
-		queryParams.Add("namespace", fmt.Sprintf("%v", *request.Namespace))
-	}
-	if len(queryParams) > 0 {
-		endpointURL += "?" + queryParams.Encode()
-	}
-
-	var response *sdk.RunnersGetResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

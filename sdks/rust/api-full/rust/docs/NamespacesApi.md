@@ -5,7 +5,6 @@ All URIs are relative to *http://localhost*
 Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**namespaces_create**](NamespacesApi.md#namespaces_create) | **POST** /namespaces | 
-[**namespaces_get**](NamespacesApi.md#namespaces_get) | **GET** /namespaces/{namespace_id} | 
 [**namespaces_list**](NamespacesApi.md#namespaces_list) | **GET** /namespaces | 
 
 
@@ -28,7 +27,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 
@@ -38,37 +37,9 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## namespaces_get
-
-> models::NamespacesGetResponse namespaces_get(namespace_id)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**namespace_id** | **String** |  | [required] |
-
-### Return type
-
-[**models::NamespacesGetResponse**](NamespacesGetResponse.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
 ## namespaces_list
 
-> models::NamespacesListResponse namespaces_list(limit, cursor, name, namespace_id)
+> models::NamespaceListResponse namespaces_list(limit, cursor, name, namespace_ids)
 
 
 ### Parameters
@@ -79,15 +50,15 @@ Name | Type | Description  | Required | Notes
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |
 **name** | Option<**String**> |  |  |
-**namespace_id** | Option<[**Vec<String>**](String.md)> |  |  |
+**namespace_ids** | Option<**String**> |  |  |
 
 ### Return type
 
-[**models::NamespacesListResponse**](NamespacesListResponse.md)
+[**models::NamespaceListResponse**](NamespaceListResponse.md)
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 

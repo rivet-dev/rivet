@@ -29,7 +29,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 

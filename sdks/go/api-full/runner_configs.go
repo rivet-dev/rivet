@@ -13,16 +13,17 @@ type RunnerConfigsDeleteRequest struct {
 }
 
 type RunnerConfigsListRequest struct {
-	Namespace  string               `json:"-"`
-	Limit      *int                 `json:"-"`
-	Cursor     *string              `json:"-"`
-	Variant    *RunnerConfigVariant `json:"-"`
-	RunnerName []*string            `json:"-"`
+	Namespace   string               `json:"-"`
+	Limit       *int                 `json:"-"`
+	Cursor      *string              `json:"-"`
+	Variant     *RunnerConfigVariant `json:"-"`
+	RunnerNames *string              `json:"-"`
 }
 
 type RunnerConfigsUpsertRequestServerless struct {
-	MaxRunners int `json:"max_runners"`
-	MinRunners int `json:"min_runners"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	MaxRunners int               `json:"max_runners"`
+	MinRunners int               `json:"min_runners"`
 	// Seconds.
 	RequestLifespan int    `json:"request_lifespan"`
 	RunnersMargin   int    `json:"runners_margin"`

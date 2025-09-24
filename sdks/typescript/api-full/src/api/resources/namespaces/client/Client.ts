@@ -4,8 +4,8 @@
 
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
-import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
+import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 
 export declare namespace Namespaces {
@@ -13,6 +13,7 @@ export declare namespace Namespaces {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
         baseUrl?: core.Supplier<string>;
+        token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
 
@@ -41,8 +42,8 @@ export class Namespaces {
     public async list(
         request: Rivet.NamespacesListRequest = {},
         requestOptions?: Namespaces.RequestOptions,
-    ): Promise<Rivet.NamespacesListResponse> {
-        const { limit, cursor, name, namespaceId } = request;
+    ): Promise<Rivet.NamespaceListResponse> {
+        const { limit, cursor, name, namespaceIds } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         if (limit != null) {
             _queryParams["limit"] = limit.toString();
@@ -56,14 +57,8 @@ export class Namespaces {
             _queryParams["name"] = name;
         }
 
-        if (namespaceId != null) {
-            if (Array.isArray(namespaceId)) {
-                _queryParams["namespace_id"] = namespaceId.map((item) =>
-                    serializers.RivetId.jsonOrThrow(item, { unrecognizedObjectKeys: "strip" }),
-                );
-            } else {
-                _queryParams["namespace_id"] = namespaceId;
-            }
+        if (namespaceIds != null) {
+            _queryParams["namespace_ids"] = namespaceIds;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
@@ -74,6 +69,7 @@ export class Namespaces {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -87,7 +83,7 @@ export class Namespaces {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return serializers.NamespacesListResponse.parseOrThrow(_response.body, {
+            return serializers.NamespaceListResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -140,6 +136,7 @@ export class Namespaces {
             ),
             method: "POST",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -184,65 +181,7 @@ export class Namespaces {
         }
     }
 
-    /**
-     * @param {Rivet.RivetId} namespaceId
-     * @param {Namespaces.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.namespaces.get("namespace_id")
-     */
-    public async get(
-        namespaceId: Rivet.RivetId,
-        requestOptions?: Namespaces.RequestOptions,
-    ): Promise<Rivet.NamespacesGetResponse> {
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                `namespaces/${encodeURIComponent(serializers.RivetId.jsonOrThrow(namespaceId))}`,
-            ),
-            method: "GET",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            requestType: "json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.NamespacesGetResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /namespaces/{namespace_id}.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
+    protected async _getAuthorizationHeader(): Promise<string> {
+        return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

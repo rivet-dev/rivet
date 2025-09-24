@@ -22,27 +22,7 @@ type ActorsDeleteRequest struct {
 	Namespace *string `json:"-"`
 }
 
-type ActorsGetRequest struct {
-	Namespace *string `json:"-"`
-}
-
-type ActorsGetByIdRequest struct {
-	Namespace string `json:"-"`
-	Name      string `json:"-"`
-	Key       string `json:"-"`
-}
-
 type ActorsGetOrCreateRequest struct {
-	Namespace          string      `json:"-"`
-	Datacenter         *string     `json:"-"`
-	CrashPolicy        CrashPolicy `json:"crash_policy,omitempty"`
-	Input              *string     `json:"input,omitempty"`
-	Key                string      `json:"key"`
-	Name               string      `json:"name"`
-	RunnerNameSelector string      `json:"runner_name_selector"`
-}
-
-type ActorsGetOrCreateByIdRequest struct {
 	Namespace          string      `json:"-"`
 	Datacenter         *string     `json:"-"`
 	CrashPolicy        CrashPolicy `json:"crash_policy,omitempty"`
@@ -169,65 +149,6 @@ func (a *ActorsCreateResponse) String() string {
 
 type ActorsDeleteResponse = map[string]interface{}
 
-type ActorsGetByIdResponse struct {
-	ActorId *RivetId `json:"actor_id,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (a *ActorsGetByIdResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler ActorsGetByIdResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*a = ActorsGetByIdResponse(value)
-	a._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (a *ActorsGetByIdResponse) String() string {
-	if len(a._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(a); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", a)
-}
-
-type ActorsGetOrCreateByIdResponse struct {
-	ActorId RivetId `json:"actor_id"`
-	Created bool    `json:"created"`
-
-	_rawJSON json.RawMessage
-}
-
-func (a *ActorsGetOrCreateByIdResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler ActorsGetOrCreateByIdResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*a = ActorsGetOrCreateByIdResponse(value)
-	a._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (a *ActorsGetOrCreateByIdResponse) String() string {
-	if len(a._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(a); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", a)
-}
-
 type ActorsGetOrCreateResponse struct {
 	Actor   *Actor `json:"actor,omitempty"`
 	Created bool   `json:"created"`
@@ -247,35 +168,6 @@ func (a *ActorsGetOrCreateResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (a *ActorsGetOrCreateResponse) String() string {
-	if len(a._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(a); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", a)
-}
-
-type ActorsGetResponse struct {
-	Actor *Actor `json:"actor,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (a *ActorsGetResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler ActorsGetResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*a = ActorsGetResponse(value)
-	a._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (a *ActorsGetResponse) String() string {
 	if len(a._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
 			return value
@@ -464,6 +356,36 @@ func (n *Namespace) String() string {
 	return fmt.Sprintf("%#v", n)
 }
 
+type NamespaceListResponse struct {
+	Namespaces []*Namespace `json:"namespaces,omitempty"`
+	Pagination *Pagination  `json:"pagination,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (n *NamespaceListResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler NamespaceListResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*n = NamespaceListResponse(value)
+	n._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (n *NamespaceListResponse) String() string {
+	if len(n._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(n); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", n)
+}
+
 type NamespacesCreateResponse struct {
 	Namespace *Namespace `json:"namespace,omitempty"`
 
@@ -482,65 +404,6 @@ func (n *NamespacesCreateResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (n *NamespacesCreateResponse) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesGetResponse struct {
-	Namespace *Namespace `json:"namespace,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesGetResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesGetResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesGetResponse(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesGetResponse) String() string {
-	if len(n._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(n); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", n)
-}
-
-type NamespacesListResponse struct {
-	Namespaces []*Namespace `json:"namespaces,omitempty"`
-	Pagination *Pagination  `json:"pagination,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (n *NamespacesListResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler NamespacesListResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*n = NamespacesListResponse(value)
-	n._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (n *NamespacesListResponse) String() string {
 	if len(n._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(n._rawJSON); err == nil {
 			return value
@@ -656,8 +519,9 @@ func (r *RunnerConfig) String() string {
 }
 
 type RunnerConfigServerless struct {
-	MaxRunners int `json:"max_runners"`
-	MinRunners int `json:"min_runners"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	MaxRunners int               `json:"max_runners"`
+	MinRunners int               `json:"min_runners"`
 	// Seconds.
 	RequestLifespan int    `json:"request_lifespan"`
 	RunnersMargin   int    `json:"runners_margin"`
@@ -725,35 +589,6 @@ func (r *RunnerConfigsListResponse) String() string {
 }
 
 type RunnerConfigsUpsertResponse = map[string]interface{}
-
-type RunnersGetResponse struct {
-	Runner *Runner `json:"runner,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnersGetResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnersGetResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnersGetResponse(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnersGetResponse) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
 
 type RunnersListNamesResponse struct {
 	Names      []string    `json:"names,omitempty"`
