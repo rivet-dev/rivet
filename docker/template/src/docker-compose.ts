@@ -265,7 +265,6 @@ export function generateDockerCompose(context: TemplateContext) {
             },
             platform: "linux/amd64",
             restart: "unless-stopped",
-            command: "/usr/bin/rivet-engine start",
             environment: [
                "RUST_LOG_ANSI_COLOR=1",
                "RIVET_OTEL_ENABLED=1",
