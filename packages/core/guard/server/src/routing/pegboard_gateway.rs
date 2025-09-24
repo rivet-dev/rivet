@@ -10,6 +10,8 @@ use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
+const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocket-protocol");
+const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 /// Route requests to actor services based on hostname and path
 #[tracing::instrument(skip_all)]
@@ -20,20 +22,47 @@ pub async fn route_request(
 	_host: &str,
 	path: &str,
 	headers: &hyper::HeaderMap,
+	is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "actor" {
 		return Ok(None);
 	}
 
+	// Extract actor ID from WebSocket protocol or HTTP header
+	let actor_id_str = if is_websocket {
+		// For WebSocket, parse the sec-websocket-protocol header
+		headers
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.and_then(|protocols| protocols.to_str().ok())
+			.and_then(|protocols| {
+				// Parse protocols to find actor.{id}
+				protocols
+					.split(',')
+					.map(|p| p.trim())
+					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
+			})
+			.ok_or_else(|| {
+				crate::errors::MissingHeader {
+					header: "actor protocol in sec-websocket-protocol".to_string(),
+				}
+				.build()
+			})?
+	} else {
+		// For HTTP, use the x-rivet-actor header
+		headers
+			.get(X_RIVET_ACTOR)
+			.and_then(|x| x.to_str().ok())
+			.ok_or_else(|| {
+				crate::errors::MissingHeader {
+					header: X_RIVET_ACTOR.to_string(),
+				}
+				.build()
+			})?
+	};
+
 	// Find actor to route to
-	let actor_id_str = headers.get(X_RIVET_ACTOR).ok_or_else(|| {
-		crate::errors::MissingHeader {
-			header: X_RIVET_ACTOR.to_string(),
-		}
-		.build()
-	})?;
-	let actor_id = Id::parse(actor_id_str.to_str()?)?;
+	let actor_id = Id::parse(actor_id_str)?;
 
 	// Route to peer dc where the actor lives
 	if actor_id.label() != ctx.config().dc_label() {

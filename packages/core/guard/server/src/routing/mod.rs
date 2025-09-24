@@ -12,6 +12,9 @@ pub mod pegboard_gateway;
 mod runner;
 
 pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
+pub(crate) const SEC_WEBSOCKET_PROTOCOL: HeaderName =
+	HeaderName::from_static("sec-websocket-protocol");
+pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
 
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]
@@ -31,9 +34,33 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 
 					tracing::debug!("Routing request for hostname: {host}, path: {path}");
 
+					// Check if this is a WebSocket upgrade request
+					let is_websocket = headers
+						.get("upgrade")
+						.and_then(|v| v.to_str().ok())
+						.map(|v| v.eq_ignore_ascii_case("websocket"))
+						.unwrap_or(false);
+
+					// Extract target from WebSocket protocol or HTTP header
+					let target = if is_websocket {
+						// For WebSocket, parse the sec-websocket-protocol header
+						headers
+							.get(SEC_WEBSOCKET_PROTOCOL)
+							.and_then(|protocols| protocols.to_str().ok())
+							.and_then(|protocols| {
+								// Parse protocols to find target.{value}
+								protocols
+									.split(',')
+									.map(|p| p.trim())
+									.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
+							})
+					} else {
+						// For HTTP, use the x-rivet-target header
+						headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
+					};
+
 					// Read target
-					if let Some(target) = headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
-					{
+					if let Some(target) = target {
 						if let Some(routing_output) =
 							runner::route_request(&ctx, target, host, path).await?
 						{
@@ -47,6 +74,7 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 							host,
 							path,
 							headers,
+							is_websocket,
 						)
 						.await?
 						{

@@ -60,12 +60,8 @@ function testWebSocket(actorId: string): Promise<void> {
 
 		console.log(`Connecting WebSocket to: ${wsUrl}`);
 
-		const ws = new WebSocket(wsUrl, {
-			headers: {
-				"X-Rivet-Target": "actor",
-				"X-Rivet-Actor": actorId,
-			},
-		});
+		const protocols = ["rivet", "rivet_target.actor", `rivet_actor.${actorId}`];
+		const ws = new WebSocket(wsUrl, protocols);
 
 		let pingReceived = false;
 		let echoReceived = false;

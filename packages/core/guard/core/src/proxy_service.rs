@@ -1169,7 +1169,6 @@ impl ProxyService {
 		}
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
-		// First, upgrade the client connection
 		tracing::debug!("Upgrading client connection to WebSocket");
 		let (client_response, client_websocket) = match hyper_tungstenite::upgrade(req, None) {
 			Result::Ok(x) => {
@@ -1928,7 +1927,15 @@ impl ProxyService {
 		// structure but convert it to our expected return type without modifying its content
 		tracing::debug!("Returning WebSocket upgrade response to client");
 		// Extract the parts from the response but preserve all headers and status
-		let (parts, _) = client_response.into_parts();
+		let (mut parts, _) = client_response.into_parts();
+
+		// Add Sec-WebSocket-Protocol header to the response
+		// Many WebSocket clients (e.g. node-ws & Cloudflare) require a protocol in the response
+		parts.headers.insert(
+			"sec-websocket-protocol",
+			hyper::header::HeaderValue::from_static("rivet"),
+		);
+
 		// Create a new response with an empty body - WebSocket upgrades don't need a body
 		Ok(Response::from_parts(
 			parts,

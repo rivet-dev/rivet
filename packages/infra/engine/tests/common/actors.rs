@@ -427,20 +427,20 @@ pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> 
 		"testing websocket connection to actor via guard"
 	);
 
-	// Build WebSocket URL and request
+	// Build WebSocket URL and request with protocols for routing
 	let ws_url = format!("ws://127.0.0.1:{}/ws", guard_port);
 	let mut request = ws_url
 		.clone()
 		.into_client_request()
 		.expect("Failed to create WebSocket request");
 
-	// Add headers for routing through guard to actor
-	request
-		.headers_mut()
-		.insert("X-Rivet-Target", "actor".parse().unwrap());
-	request
-		.headers_mut()
-		.insert("X-Rivet-Actor", actor_id.parse().unwrap());
+	// Add protocols for routing through guard to actor
+	request.headers_mut().insert(
+		"Sec-WebSocket-Protocol",
+		format!("rivet, rivet_target.actor, rivet_actor.{}", actor_id)
+			.parse()
+			.unwrap(),
+	);
 
 	// Connect to WebSocket
 	let (ws_stream, response) = connect_async(request)
