@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  rivetkit: https://pkg.pr.new/rivet-dev/rivetkit@1296
+
 importers:
 
   .:
@@ -153,12 +156,6 @@ importers:
       '@rivet-gg/icons':
         specifier: file:./vendor/rivet-icons.tgz
         version: file:frontend/vendor/rivet-icons.tgz(@fortawesome/fontawesome-svg-core@6.7.2)(@fortawesome/free-brands-svg-icons@6.7.2)(@fortawesome/free-solid-svg-icons@6.7.2)(@fortawesome/react-fontawesome@0.2.3(@fortawesome/fontawesome-svg-core@6.7.2)(react@19.1.1))(@types/node@20.19.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(terser@5.43.1)
-      '@rivetkit/actor':
-        specifier: file:./vendor/rivetkit-actor.tgz
-        version: file:frontend/vendor/rivetkit-actor.tgz(@rivetkit/core@file:frontend/vendor/rivetkit-core.tgz(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3))
-      '@rivetkit/core':
-        specifier: file:./vendor/rivetkit-core.tgz
-        version: file:frontend/vendor/rivetkit-core.tgz(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3)
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../sdks/typescript/api-full
@@ -318,6 +315,9 @@ importers:
       recharts:
         specifier: ^2.12.7
         version: 2.15.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      rivetkit:
+        specifier: https://pkg.pr.new/rivet-dev/rivetkit@1296
+        version: https://pkg.pr.new/rivet-dev/rivetkit@1296(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3)
       shiki:
         specifier: ^3.8.1
         version: 3.9.2
@@ -1174,6 +1174,10 @@ packages:
     resolution: {integrity: sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ==}
     engines: {node: '>=6.9.0'}
 
+  '@bare-ts/lib@0.3.0':
+    resolution: {integrity: sha512-0JlIu0R26CTMdEnmmKIuFvAS9Cd554MvH4BjI6iL+74TDYBCHhaCWIDJXU6+VuYPu0+/JDLV/KXQstK9Sxn+9A==}
+    engines: {node: '>= 12'}
+
   '@bare-ts/lib@0.4.0':
     resolution: {integrity: sha512-uTb12lcDkvwwwGb/4atNy/+2Xuksx88tlxKuwnDuxmsOFVo4R/WsE+fmAf2nWtzHDi7m6NDw8Ke9j+XlNBLoJg==}
     engines: {node: ^14.18.0 || >=16.0.0}
@@ -1813,8 +1817,8 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@hono/standard-validator@0.1.4':
-    resolution: {integrity: sha512-NPxSO9/Z1FFaJ34/0WJA0JoFRrVrJOG5P/i+PBJu7jCw9v0u8WmGiJu0zv+bTk1pjplBjjczAd59x2X50spRmQ==}
+  '@hono/standard-validator@0.1.5':
+    resolution: {integrity: sha512-EIyZPPwkyLn6XKwFj5NBEWHXhXbgmnVh2ceIFo5GO7gKI9WmzTjPDKnppQB0KrqKeAkq3kpoW4SIbu5X1dgx3w==}
     peerDependencies:
       '@standard-schema/spec': 1.0.0
       hono: '>=3.9.0'
@@ -1826,8 +1830,8 @@ packages:
       hono: '>=4.3.6'
       zod: '>=3.0.0'
 
-  '@hono/zod-validator@0.7.2':
-    resolution: {integrity: sha512-ub5eL/NeZ4eLZawu78JpW/J+dugDAYhwqUIdp9KYScI6PZECij4Hx4UsrthlEUutqDDhPwRI0MscUfNkvn/mqQ==}
+  '@hono/zod-validator@0.7.3':
+    resolution: {integrity: sha512-uYGdgVib3RlGD698WR5dVM0zB3UuPY5vHKXffGUbUh7r4xY+mFIhF3/v4AcQVLrU5CQdBso8BJr4wuVoCrjTuQ==}
     peerDependencies:
       hono: '>=3.9.0'
       zod: ^3.25.0 || ^4.0.0
@@ -2906,30 +2910,20 @@ packages:
       react: ^19
       react-dom: ^19
 
-  '@rivetkit/actor@file:frontend/vendor/rivetkit-actor.tgz':
-    resolution: {integrity: sha512-Ued5r1IQcR4zfUmVhy5uDMXQ4NqsGLHMZ5VJjXrFGY1DqT3XfpmYH33MrQBnUVnde8Jv8kvIyQwczDPm1myUog==, tarball: file:frontend/vendor/rivetkit-actor.tgz}
-    version: 0.9.1
-    peerDependencies:
-      '@rivetkit/core': '*'
+  '@rivetkit/engine-runner-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839}
+    version: 25.6.1
 
-  '@rivetkit/core@file:frontend/vendor/rivetkit-core.tgz':
-    resolution: {integrity: sha512-elE/lA7Og0yXfx5DFO2xshtzKD6UXhju91sK6orvYb1iV7lSRlhH5XLRjeNlHEjfq2rGA/EyI11rug5n9OVl6Q==, tarball: file:frontend/vendor/rivetkit-core.tgz}
-    version: 0.9.3
-    engines: {node: '>=22.0.0'}
-    peerDependencies:
-      '@hono/node-server': ^1.14.0
-      '@hono/node-ws': ^1.1.1
-      eventsource: ^3.0.5
-      ws: ^8.0.0
-    peerDependenciesMeta:
-      '@hono/node-server':
-        optional: true
-      '@hono/node-ws':
-        optional: true
-      eventsource:
-        optional: true
-      ws:
-        optional: true
+  '@rivetkit/engine-runner@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner@b72b232':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner@b72b232}
+    version: 25.6.1
+
+  '@rivetkit/engine-tunnel-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-tunnel-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-tunnel-protocol@b72b2324c50c5449ed1844a060928d80d1151839}
+    version: 25.6.1
+
+  '@rivetkit/fast-json-patch@3.1.2':
+    resolution: {integrity: sha512-CtA50xgsSSzICQduF/NDShPRzvucnNvsW/lQO0WgMTT1XAj9Lfae4pm7r3llFwilgG+9iq76Hv1LUqNy72v6yw==}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -6565,6 +6559,25 @@ packages:
     deprecated: Rimraf versions prior to v4 are no longer supported
     hasBin: true
 
+  rivetkit@https://pkg.pr.new/rivet-dev/rivetkit@1296:
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/rivetkit@1296}
+    version: 2.0.6
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@hono/node-server': ^1.14.0
+      '@hono/node-ws': ^1.1.1
+      eventsource: ^4.0.0
+      ws: ^8.0.0
+    peerDependenciesMeta:
+      '@hono/node-server':
+        optional: true
+      '@hono/node-ws':
+        optional: true
+      eventsource:
+        optional: true
+      ws:
+        optional: true
+
   rollup@4.46.2:
     resolution: {integrity: sha512-WMmLFI+Boh6xbop+OAGo9cQ3OgX9MIg7xOQjn+pTCwOkk+FNDAeAemXkJ3HzDJrVXleLOFVa1ipuc1AmEx1Dwg==}
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
@@ -7797,6 +7810,8 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
+  '@bare-ts/lib@0.3.0': {}
+
   '@bare-ts/lib@0.4.0': {}
 
   '@bare-ts/tools@0.15.0(@bare-ts/lib@0.4.0)':
@@ -8241,7 +8256,7 @@ snapshots:
     dependencies:
       hono: 4.8.12
 
-  '@hono/standard-validator@0.1.4(@standard-schema/spec@1.0.0)(hono@4.8.12)':
+  '@hono/standard-validator@0.1.5(@standard-schema/spec@1.0.0)(hono@4.8.12)':
     dependencies:
       '@standard-schema/spec': 1.0.0
       hono: 4.8.12
@@ -8249,12 +8264,12 @@ snapshots:
   '@hono/zod-openapi@0.19.10(hono@4.8.12)(zod@3.25.76)':
     dependencies:
       '@asteasolutions/zod-to-openapi': 7.3.4(zod@3.25.76)
-      '@hono/zod-validator': 0.7.2(hono@4.8.12)(zod@3.25.76)
+      '@hono/zod-validator': 0.7.3(hono@4.8.12)(zod@3.25.76)
       hono: 4.8.12
       openapi3-ts: 4.5.0
       zod: 3.25.76
 
-  '@hono/zod-validator@0.7.2(hono@4.8.12)(zod@3.25.76)':
+  '@hono/zod-validator@0.7.3(hono@4.8.12)(zod@3.25.76)':
     dependencies:
       hono: 4.8.12
       zod: 3.25.76
@@ -9450,27 +9465,26 @@ snapshots:
       - sugarss
       - terser
 
-  '@rivetkit/actor@file:frontend/vendor/rivetkit-actor.tgz(@rivetkit/core@file:frontend/vendor/rivetkit-core.tgz(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3))':
+  '@rivetkit/engine-runner-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
     dependencies:
-      '@rivetkit/core': file:frontend/vendor/rivetkit-core.tgz(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3)
+      '@bare-ts/lib': 0.4.0
 
-  '@rivetkit/core@file:frontend/vendor/rivetkit-core.tgz(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3)':
+  '@rivetkit/engine-runner@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner@b72b232':
     dependencies:
-      '@hono/standard-validator': 0.1.4(@standard-schema/spec@1.0.0)(hono@4.8.12)
-      '@hono/zod-openapi': 0.19.10(hono@4.8.12)(zod@3.25.76)
-      cbor-x: 1.6.0
-      fast-json-patch: 3.1.1
-      hono: 4.8.12
-      invariant: 2.2.4
-      nanoevents: 9.1.0
-      on-change: 5.0.1
-      p-retry: 6.2.1
-      zod: 3.25.76
-    optionalDependencies:
-      '@hono/node-server': 1.18.2(hono@4.8.12)
+      '@rivetkit/engine-runner-protocol': https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839
+      '@rivetkit/engine-tunnel-protocol': https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-tunnel-protocol@b72b2324c50c5449ed1844a060928d80d1151839
+      pino: 9.9.5
+      uuid: 12.0.0
       ws: 8.18.3
     transitivePeerDependencies:
-      - '@standard-schema/spec'
+      - bufferutil
+      - utf-8-validate
+
+  '@rivetkit/engine-tunnel-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-tunnel-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
+    dependencies:
+      '@bare-ts/lib': 0.4.0
+
+  '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
@@ -13854,6 +13868,29 @@ snapshots:
   rimraf@3.0.2:
     dependencies:
       glob: 7.2.3
+
+  rivetkit@https://pkg.pr.new/rivet-dev/rivetkit@1296(@hono/node-server@1.18.2(hono@4.8.12))(@standard-schema/spec@1.0.0)(ws@8.18.3):
+    dependencies:
+      '@bare-ts/lib': 0.3.0
+      '@hono/standard-validator': 0.1.5(@standard-schema/spec@1.0.0)(hono@4.8.12)
+      '@hono/zod-openapi': 0.19.10(hono@4.8.12)(zod@3.25.76)
+      '@rivetkit/engine-runner': https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner@b72b232
+      '@rivetkit/fast-json-patch': 3.1.2
+      cbor-x: 1.6.0
+      hono: 4.8.12
+      invariant: 2.2.4
+      nanoevents: 9.1.0
+      on-change: 5.0.1
+      p-retry: 6.2.1
+      pino: 9.9.5
+      zod: 3.25.76
+    optionalDependencies:
+      '@hono/node-server': 1.18.2(hono@4.8.12)
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - bufferutil
+      - utf-8-validate
 
   rollup@4.46.2:
     dependencies:

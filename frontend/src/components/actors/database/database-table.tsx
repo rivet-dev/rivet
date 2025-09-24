@@ -5,7 +5,6 @@ import {
 	faLink,
 	Icon,
 } from "@rivet-gg/icons";
-import type { Column, Columns, ForeignKeys } from "@rivetkit/core/inspector";
 import {
 	createColumnHelper,
 	// SortingState,
@@ -19,6 +18,7 @@ import {
 	useReactTable as useTable,
 } from "@tanstack/react-table";
 import { Fragment, useMemo, useState } from "react";
+import type { Column, Columns, ForeignKeys } from "rivetkit/inspector";
 import {
 	Badge,
 	Button,

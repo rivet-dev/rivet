@@ -6,10 +6,10 @@ import {
 	faUnlink,
 	Icon,
 } from "@rivet-gg/icons";
-import type { RecordedRealtimeEvent } from "@rivetkit/core/inspector";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { type PropsWithChildren, useEffect, useRef } from "react";
+import type { RecordedRealtimeEvent } from "rivetkit/inspector";
 import { Badge } from "../ui/badge";
 import { useActor } from "./actor-queries-context";
 import { ActorObjectInspector } from "./console/actor-inspector";

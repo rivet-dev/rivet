@@ -1,10 +1,9 @@
-import type { Actor as InspectorActor } from "@rivetkit/core/inspector";
-import type { NamespaceNameId } from "@/queries/manager-engine";
+import type { Actor as InspectorActor } from "rivetkit/inspector";
 
-export type { ActorLogEntry } from "@rivetkit/core/inspector";
-export { ActorFeature } from "@rivetkit/core/inspector";
+export type { ActorLogEntry } from "rivetkit/inspector";
+export { ActorFeature } from "rivetkit/inspector";
 
-import type { ActorId } from "@rivetkit/core/inspector";
+import type { ActorId } from "rivetkit/inspector";
 
 export type { ActorId };
 

@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
+import { set } from "lodash";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -22,6 +23,26 @@ export const ls = {
 	},
 	clear: () => {
 		localStorage.clear();
+	},
+	engineCredentials: {
+		set: (url: string, token: string) => {
+			ls.set(
+				btoa(`engine-credentials-${JSON.stringify(url)}`),
+				JSON.stringify({ token }),
+			);
+		},
+		get: (url: string) => {
+			try {
+				const value = JSON.parse(
+					ls.get(btoa(`engine-credentials-${JSON.stringify(url)}`)),
+				);
+				if (value && typeof value === "object" && "token" in value) {
+					return (value as { token: string }).token;
+				}
+			} catch {
+				return null;
+			}
+		},
 	},
 	actorsList: {
 		set: (width: number, folded: boolean) => {

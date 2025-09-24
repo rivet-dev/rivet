@@ -22,6 +22,14 @@ declare module "@tanstack/react-router" {
 	}
 }
 
+declare module "@tanstack/react-query" {
+	interface Register {
+		queryMeta: {
+			mightRequireAuth?: boolean;
+		};
+	}
+}
+
 export const router = createRouter({
 	basepath: import.meta.env.BASE_URL,
 	routeTree,

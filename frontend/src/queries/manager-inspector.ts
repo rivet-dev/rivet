@@ -1,8 +1,8 @@
+import { infiniteQueryOptions } from "@tanstack/react-query";
 import {
 	createManagerInspectorClient,
 	type Actor as InspectorActor,
-} from "@rivetkit/core/inspector";
-import { infiniteQueryOptions } from "@tanstack/react-query";
+} from "rivetkit/inspector";
 import type { Actor, ActorId, ManagerContext } from "@/components/actors";
 import { createDefaultManagerContext } from "@/components/actors/manager-context";
 import { ensureTrailingSlash } from "@/lib/utils";

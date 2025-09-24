@@ -1,9 +1,14 @@
-import { createDialogHook, useDialog } from "@/components/actors";
+import {
+	useDialog as baseUseDialog,
+	createDialogHook,
+} from "@/components/actors";
 
-const d = useDialog as typeof useDialog &
-	Record<string, ReturnType<typeof createDialogHook>>;
-d.CreateNamespace = createDialogHook(
-	import("@/app/dialogs/create-namespace-dialog"),
-);
-
-export { d as useDialog };
+export const useDialog = {
+	...baseUseDialog,
+	CreateNamespace: createDialogHook(
+		import("@/app/dialogs/create-namespace-dialog"),
+	),
+	ProvideEngineCredentials: createDialogHook(
+		import("@/app/dialogs/provide-engine-credentials-dialog"),
+	),
+};

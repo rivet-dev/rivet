@@ -10,6 +10,7 @@ import {
 } from "@/queries/manager-engine";
 import { DiscreteCopyButton } from "../copy-area";
 import { getConfig } from "../lib/config";
+import { ls } from "../lib/utils";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
 import { ActorProvider } from "./actor-queries-context";
@@ -157,6 +158,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 		return createInspectorActorContext({
 			url: getConfig().apiUrl,
 			token: (runner?.metadata?.inspectorToken as string) || "",
+			engineToken: ls.engineCredentials.get(getConfig().apiUrl) || "",
 		});
 	}, [runner?.metadata?.inspectorToken]);
 

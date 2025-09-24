@@ -30,12 +30,11 @@ import {
 	H1,
 	type ImperativePanelHandle,
 } from "@/components";
-import { ActorProvider, ManagerProvider } from "@/components/actors";
+import { ManagerProvider } from "@/components/actors";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
 import { ConnectionForm } from "@/components/connection-form";
+import { ModalRenderer } from "@/components/modal-renderer";
 import { docsLinks } from "@/content/data";
-import { createEngineActorContext } from "@/queries/actor-engine";
-import { createInspectorActorContext } from "@/queries/actor-inspector";
 import {
 	createEngineManagerContext,
 	type NamespaceNameId,
@@ -76,6 +75,7 @@ function RouteComponent() {
 
 	const content = (
 		<>
+			<ModalRenderer />
 			<Suspense>
 				<Modals />
 			</Suspense>

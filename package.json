@@ -17,5 +17,8 @@
 		"tsup": "^8.5.0",
 		"turbo": "^2.0.1",
 		"typescript": "^5.0.0"
+	},
+	"resolutions": {
+		"rivetkit": "https://pkg.pr.new/rivet-dev/rivetkit@1296"
 	}
 }

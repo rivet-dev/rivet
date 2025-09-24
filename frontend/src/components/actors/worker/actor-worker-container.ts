@@ -44,6 +44,7 @@ export class ActorWorkerContainer {
 		rpcs: string[];
 		endpoint?: string;
 		name?: string;
+		engineToken?: string;
 	} | null = null;
 
 	#listeners: (() => void)[] = [];
@@ -56,16 +57,18 @@ export class ActorWorkerContainer {
 		rpcs = [],
 		endpoint,
 		name,
+		engineToken,
 	}: {
 		actorId: string;
 		signal: AbortSignal;
 		rpcs?: string[];
 		endpoint?: string;
 		name?: string;
+		engineToken?: string;
 	}) {
 		this.terminate();
 
-		this.#meta = { actorId, rpcs, endpoint, name };
+		this.#meta = { actorId, rpcs, endpoint, name, engineToken };
 		this.#state.status = { type: "pending" };
 		this.#update();
 		try {
@@ -142,6 +145,7 @@ export class ActorWorkerContainer {
 			id: this.#meta?.actorId ?? "",
 			endpoint: this.#meta?.endpoint ?? "",
 			name: this.#meta?.name ?? "",
+			engineToken: this.#meta?.engineToken ?? "",
 		} satisfies InitMessage);
 	}
 

@@ -1,12 +1,12 @@
-import { ActorFeature } from "@rivetkit/core/inspector";
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
 import {
 	infiniteQueryOptions,
 	queryOptions,
 	skipToken,
 } from "@tanstack/react-query";
+import { ActorFeature } from "rivetkit/inspector";
 import z from "zod";
-import { getConfig } from "@/components";
+import { getConfig, ls } from "@/components";
 import type {
 	Actor,
 	ActorId,
@@ -18,10 +18,17 @@ import {
 	ActorQueryOptionsSchema,
 	createDefaultManagerContext,
 } from "@/components/actors/manager-context";
+import { shouldRetryAllExpect403, throwAllExpect403 } from "./utils";
 
-const client = new RivetClient({
-	baseUrl: () => getConfig().apiUrl,
-	environment: "",
+export const createClient = (opts: { token: (() => string) | string }) =>
+	new RivetClient({
+		baseUrl: () => getConfig().apiUrl,
+		environment: "",
+		...opts,
+	});
+
+const client = createClient({
+	token: () => ls.engineCredentials.get(getConfig().apiUrl) || "",
 });
 
 export { client as managerClient };
@@ -45,6 +52,11 @@ export const createEngineManagerContext = ({
 				queryFn: async () => {
 					return true;
 				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 			});
 		},
 		regionsQueryOptions() {
@@ -60,6 +72,11 @@ export const createEngineManagerContext = ({
 						})),
 						pagination: data.pagination,
 					};
+				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
 				},
 			});
 		},
@@ -82,6 +99,11 @@ export const createEngineManagerContext = ({
 
 					throw new Error(`Region not found: ${regionId}`);
 				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 			});
 		},
 		actorQueryOptions(actorId) {
@@ -90,13 +112,21 @@ export const createEngineManagerContext = ({
 				queryKey: [namespace, "actor", actorId],
 				enabled: true,
 				queryFn: async ({ signal: abortSignal }) => {
-					const data = await client.actorsGet(
-						actorId,
-						{ namespace },
+					const data = await client.actorsList(
+						{ actorIds: actorId as string, namespace },
 						{ abortSignal },
 					);
 
-					return transformActor(data.actor);
+					if (!data.actors[0]) {
+						throw new Error("Actor not found");
+					}
+
+					return transformActor(data.actors[0]);
+				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
 				},
 			});
 		},
@@ -168,6 +198,11 @@ export const createEngineManagerContext = ({
 					}
 					return lastPage.pagination.cursor;
 				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 			});
 		},
 		buildsQueryOptions() {
@@ -201,6 +236,11 @@ export const createEngineManagerContext = ({
 					}
 					return lastPage.pagination.cursor;
 				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: throwAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 			});
 		},
 		createActorMutationOptions() {
@@ -220,11 +260,21 @@ export const createEngineManagerContext = ({
 					return response.actor.actorId;
 				},
 				onSuccess: () => {},
+				throwOnError: throwAllExpect403,
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 			};
 		},
 		actorDestroyMutationOptions(actorId) {
 			return {
 				...def.actorDestroyMutationOptions(actorId),
+				throwOnError: throwAllExpect403,
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
 				mutationFn: async () => {
 					await client.actorsDelete(actorId);
 				},
@@ -258,6 +308,11 @@ export const runnersQueryOptions = (opts: { namespace: NamespaceNameId }) => {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.runners),
+		retry: shouldRetryAllExpect403,
+		throwOnError: throwAllExpect403,
+		meta: {
+			mightRequireAuth: true,
+		},
 	});
 };
 
@@ -277,6 +332,11 @@ export const runnerQueryOptions = (opts: {
 				},
 			);
 			return data.runner;
+		},
+		throwOnError: throwAllExpect403,
+		retry: shouldRetryAllExpect403,
+		meta: {
+			mightRequireAuth: true,
 		},
 	});
 };
@@ -299,6 +359,11 @@ export const runnerByNameQueryOptions = (opts: {
 				throw new Error("Runner not found");
 			}
 			return data.runners[0];
+		},
+		throwOnError: throwAllExpect403,
+		retry: shouldRetryAllExpect403,
+		meta: {
+			mightRequireAuth: true,
 		},
 	});
 };
@@ -329,6 +394,11 @@ export const runnerNamesQueryOptions = (opts: {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.names),
+		throwOnError: throwAllExpect403,
+		retry: shouldRetryAllExpect403,
+		meta: {
+			mightRequireAuth: true,
+		},
 	});
 };
 
@@ -347,12 +417,17 @@ export const namespacesQueryOptions = () => {
 			return data;
 		},
 		getNextPageParam: (lastPage) => {
-			if (lastPage.namespaces.length < ACTORS_PER_PAGE) {
+			if (lastPage?.namespaces?.length < ACTORS_PER_PAGE) {
 				return undefined;
 			}
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.namespaces),
+		throwOnError: throwAllExpect403,
+		retry: shouldRetryAllExpect403,
+		meta: {
+			mightRequireAuth: true,
+		},
 	});
 };
 
@@ -370,6 +445,12 @@ export const namespaceQueryOptions = (
 					return data.namespace;
 				}
 			: skipToken,
+
+		retry: shouldRetryAllExpect403,
+		throwOnError: throwAllExpect403,
+		meta: {
+			mightRequireAuth: true,
+		},
 	});
 };
 
