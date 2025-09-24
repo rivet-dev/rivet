@@ -174,26 +174,38 @@ async fn find_actor(
 	tracing::debug!(?actor_id, ?runner_id, "actor ready");
 
 	// TODO: Remove round trip, return key from get_runner op above
-	// Get runner key from runner_id
-	let runner_key = ctx
+	// Get runner key, namespace_id, and runner_name from runner_id
+	let (runner_key, namespace_id, runner_name) = ctx
 		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(pegboard::keys::subspace());
-			tx.read_opt(
-				&pegboard::keys::runner::KeyKey::new(runner_id),
-				Serializable,
-			)
-			.await
+
+			let runner_key_key = pegboard::keys::runner::KeyKey::new(runner_id);
+			let namespace_id_key = pegboard::keys::runner::NamespaceIdKey::new(runner_id);
+			let runner_name_key = pegboard::keys::runner::NameKey::new(runner_id);
+
+			let (runner_key, namespace_id, runner_name) = tokio::try_join!(
+				tx.read_opt(&runner_key_key, Serializable),
+				tx.read_opt(&namespace_id_key, Serializable),
+				tx.read_opt(&runner_name_key, Serializable),
+			)?;
+
+			let runner_key = runner_key.context("runner key not found")?;
+			let namespace_id = namespace_id.context("runner namespace_id not found")?;
+			let runner_name = runner_name.context("runner name not found")?;
+
+			Ok((runner_key, namespace_id, runner_name))
 		})
-		.await?
-		.context("runner key not found")?;
+		.await?;
 
 	// Return pegboard-gateway instance
 	let gateway = pegboard_gateway::PegboardGateway::new(
 		ctx.clone(),
 		shared_state.pegboard_gateway.clone(),
-		actor_id,
+		namespace_id,
+		runner_name,
 		runner_key,
+		actor_id,
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
 		gateway,

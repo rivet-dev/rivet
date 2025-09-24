@@ -3376,6 +3376,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.6.0",
  "hyper-tungstenite",
+ "namespace",
  "pegboard",
  "rand 0.8.5",
  "rivet-cache",

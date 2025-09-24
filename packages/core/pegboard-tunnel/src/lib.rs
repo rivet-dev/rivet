@@ -64,6 +64,50 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 			Err(e) => return Err((client_ws, e.into())),
 		};
 
+		// Extract namespace name from query parameters (required) and resolve to namespace_id
+		let namespace_name = match url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "namespace").then_some(v))
+		{
+			Some(name) => name.to_string(),
+			None => {
+				return Err((client_ws, anyhow!("namespace query parameter is required")));
+			}
+		};
+
+		// Resolve namespace name to namespace_id
+		let namespace = match self
+			.ctx
+			.op(namespace::ops::resolve_for_name_global::Input {
+				name: namespace_name.clone(),
+			})
+			.await
+		{
+			Result::Ok(Some(ns)) => ns,
+			Result::Ok(None) => {
+				return Err((
+					client_ws,
+					anyhow!("namespace '{}' not found", namespace_name),
+				));
+			}
+			Err(e) => return Err((client_ws, e)),
+		};
+		let namespace_id = namespace.namespace_id;
+
+		// Extract runner_name from query parameters (required)
+		let runner_name = match url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "runner_name").then_some(v))
+		{
+			Some(name) => name.to_string(),
+			None => {
+				return Err((
+					client_ws,
+					anyhow!("runner_name query parameter is required"),
+				));
+			}
+		};
+
 		// Extract runner_key from query parameters (required)
 		let runner_key = match url
 			.query_pairs()
@@ -92,6 +136,8 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 		};
 
 		tracing::info!(
+			?namespace_id,
+			?runner_name,
 			?runner_key,
 			?protocol_version,
 			?path,
@@ -100,8 +146,12 @@ impl CustomServeTrait for PegboardTunnelCustomServe {
 
 		// Subscribe to pubsub topic for this runner before accepting the client websocket so
 		// that failures can be retried by the proxy.
-		let topic =
-			pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(&runner_key).to_string();
+		let topic = pegboard::pubsub_subjects::TunnelRunnerReceiverSubject::new(
+			namespace_id,
+			&runner_name,
+			&runner_key,
+		)
+		.to_string();
 		tracing::info!(%topic, ?runner_key, "subscribing to runner receiver topic");
 		let mut sub = match ups.subscribe(&topic).await {
 			Result::Ok(s) => s,

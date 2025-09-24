@@ -405,7 +405,7 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${this.#config.runnerKey}`;
+		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_name=${encodeURIComponent(this.#config.runnerName)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
 	async #openTunnelAndWait(): Promise<void> {

@@ -14,6 +14,7 @@ gas.workspace = true
 http-body-util = "0.1"
 hyper = "1.6"
 hyper-tungstenite.workspace = true
+namespace = { path = "../../services/namespace" }
 pegboard = { path = "../../services/pegboard" }
 rivet-cache.workspace = true
 rivet-config.workspace = true
