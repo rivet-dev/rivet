@@ -120,6 +120,7 @@ export default function SignInPage() {
 												type="email"
 												required
 												asChild
+												placeholder="you@company.com"
 											>
 												<Input />
 											</Clerk.Input>

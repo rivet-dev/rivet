@@ -10,7 +10,7 @@ import z from "zod";
 import { createGlobalContext as createGlobalCloudContext } from "@/app/data-providers/cloud-data-provider";
 import { createGlobalContext as createGlobalEngineContext } from "@/app/data-providers/engine-data-provider";
 import { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
-import { useDialog } from "@/components";
+import { getConfig, ls, useDialog } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
 
 const searchSchema = z
@@ -40,7 +40,10 @@ export const Route = createFileRoute("/_context")({
 	context: ({ location: { search }, context }) => {
 		return match(__APP_TYPE__)
 			.with("engine", () => ({
-				dataProvider: createGlobalEngineContext(),
+				dataProvider: createGlobalEngineContext({
+					engineToken:
+						ls.engineCredentials.get(getConfig().apiUrl) || "",
+				}),
 				__type: "engine" as const,
 			}))
 			.with("cloud", () => ({

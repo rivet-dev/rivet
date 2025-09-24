@@ -24,6 +24,12 @@ import { VisibilitySensor } from "@/components/visibility-sensor";
 export function ContextSwitcher() {
 	const [isOpen, setIsOpen] = useState(false);
 
+	const match = useContextSwitchMatch();
+
+	if (!match) {
+		return null;
+	}
+
 	return (
 		<>
 			<Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -47,31 +53,23 @@ export function ContextSwitcher() {
 	);
 }
 
-function Breadcrumbs() {
+const useContextSwitchMatch = ():
+	| {
+			project: string;
+			namespace: string;
+			organization: string;
+	  }
+	| { organization: string; project: string }
+	| false => {
 	const match = useMatchRoute();
 
 	const matchNamespace = match({
 		to: "/orgs/$organization/projects/$project/ns/$namespace",
 		fuzzy: true,
 	});
+
 	if (matchNamespace) {
-		return (
-			<div className="flex flex-col items-center min-w-0 w-full">
-				<div className="text-left text-xs text-muted-foreground min-w-0 flex w-full">
-					<ProjectBreadcrumb
-						project={matchNamespace.project}
-						className="truncate min-w-0 max-w-full block h-4"
-					/>
-				</div>
-				<div className="min-w-0 w-full">
-					<NamespaceBreadcrumb
-						className="text-left truncate block"
-						namespace={matchNamespace.namespace}
-						project={matchNamespace.project}
-					/>
-				</div>
-			</div>
-		);
+		return matchNamespace;
 	}
 
 	const matchProject = match({
@@ -80,12 +78,44 @@ function Breadcrumbs() {
 	});
 
 	if (matchProject) {
+		return matchProject;
+	}
+
+	return false;
+};
+
+function Breadcrumbs() {
+	const match = useContextSwitchMatch();
+
+	if (match && "project" in match && "namespace" in match) {
+		return (
+			<div className="flex flex-col items-center min-w-0 w-full">
+				<div className="text-left text-xs text-muted-foreground min-w-0 flex w-full">
+					<ProjectBreadcrumb
+						project={match.project}
+						className="truncate min-w-0 max-w-full block h-4"
+					/>
+				</div>
+				<div className="min-w-0 w-full">
+					<NamespaceBreadcrumb
+						className="text-left truncate block"
+						namespace={match.namespace}
+						project={match.project}
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	if (match && "project" in match) {
 		return (
 			<>
-				<ProjectBreadcrumb project={matchProject.project} />
+				<ProjectBreadcrumb project={match.project} />
 			</>
 		);
 	}
+
+	return null;
 }
 
 function ProjectBreadcrumb({
@@ -102,7 +132,7 @@ function ProjectBreadcrumb({
 		return <Skeleton className={cn("h-5 w-32", className)} />;
 	}
 
-	return <span className={className}>{data?.name}</span>;
+	return <span className={className}>{data?.displayName}</span>;
 }
 
 function NamespaceBreadcrumb({
@@ -124,7 +154,7 @@ function NamespaceBreadcrumb({
 		return <Skeleton className="h-5 w-32" />;
 	}
 
-	return <span className={className}>{data?.name}</span>;
+	return <span className={className}>{data?.displayName}</span>;
 }
 
 function Content({ onClose }: { onClose?: () => void }) {

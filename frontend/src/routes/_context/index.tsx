@@ -26,6 +26,7 @@ export const Route = createFileRoute("/_context/")({
 				});
 			})
 			.with({ __type: "engine" }, async (ctx) => {
+				console.log("????");
 				const result = await ctx.queryClient.fetchInfiniteQuery(
 					ctx.dataProvider.namespacesQueryOptions(),
 				);

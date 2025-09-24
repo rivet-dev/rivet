@@ -1,7 +1,7 @@
 import { useClerk, useOrganizationList } from "@clerk/clerk-react";
 import { faChevronDown, faPlus, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import {
 	Avatar,
 	AvatarFallback,
@@ -29,6 +29,12 @@ export function UserDropdown() {
 
 	const clerk = useClerk();
 	const navigate = useNavigate();
+	const match = useMatchRoute();
+
+	const isMatchingProjectRoute = match({
+		to: "/orgs/$organization/projects/$project",
+	});
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild={!params.organization}>
@@ -60,20 +66,18 @@ export function UserDropdown() {
 				>
 					Members
 				</DropdownMenuItem>
-				<DropdownMenuItem
-					onSelect={() => {
-						console.log(params);
-						if (!params.organization || !params.project) {
-							return;
-						}
-						navigate({
-							to: ".",
-							search: (old) => ({ ...old, modal: "billing" }),
-						});
-					}}
-				>
-					Billing
-				</DropdownMenuItem>
+				{isMatchingProjectRoute ? (
+					<DropdownMenuItem
+						onSelect={() => {
+							navigate({
+								to: ".",
+								search: (old) => ({ ...old, modal: "billing" }),
+							});
+						}}
+					>
+						Billing
+					</DropdownMenuItem>
+				) : null}
 				<DropdownMenuSeparator />
 				<DropdownMenuSub>
 					<DropdownMenuSubTrigger>
@@ -198,7 +202,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			))}
 			<DropdownMenuItem
 				onSelect={() => {
-					clerk.openCreateOrganization();
+					clerk.openCreateOrganization({ hideSlug: true });
 				}}
 				indicator={<Icon icon={faPlus} className="size-4" />}
 			>

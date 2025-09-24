@@ -1,4 +1,3 @@
-import { faChevronLeft, Icon } from "@rivet-gg/icons";
 import {
 	createFileRoute,
 	Link,
@@ -7,8 +6,8 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
-import { Logo } from "@/app/logo";
-import { Card } from "@/components";
+import { RouteLayout } from "@/app/route-layout";
+import { Button, Card, H1, H2, Skeleton } from "@/components";
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	beforeLoad: async ({ context, params }) => {
@@ -41,25 +40,46 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	},
 
 	component: RouteComponent,
+	errorComponent: ({ error }) => (
+		<RouteLayout>
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex flex-col items-center justify-center h-full">
+					<H2 className="mb-2">
+						{"statusCode" in error && error.statusCode === 404
+							? "Organization not found"
+							: error.message}
+					</H2>
+					<p>
+						{"statusCode" in error && error.statusCode === 404
+							? "The organization you are looking for does not exist or you do not have access to it."
+							: "An unexpected error occurred. Please try again later."}
+					</p>
+					<div className="mt-4" />
+					<Button asChild variant="secondary">
+						{"statusCode" in error && error.statusCode === 404 ? (
+							<Link to="/orgs">Go to organizations</Link>
+						) : (
+							<Link to="." reloadDocument>
+								Retry
+							</Link>
+						)}
+					</Button>
+				</div>
+			</div>
+		</RouteLayout>
+	),
 });
 
 function RouteComponent() {
 	return (
-		<div className="flex flex-col gap-6 px-4 w-full mx-auto h-screen min-h-0 max-h-screen items-center justify-safe-center overflow-auto py-8">
-			<div className="flex flex-col items-center gap-6">
-				<div>
-					<Link
-						className="text-xs text-muted-foreground mb-4 block"
-						from={Route.to}
-						to="/orgs/$organization/projects"
-					>
-						<Icon icon={faChevronLeft} /> Organizations
-					</Link>
-					<Card className="w-full sm:w-96">
+		<RouteLayout>
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex flex-col items-center justify-center h-full">
+					<Card className="min-w-96">
 						<CreateProjectFrameContent />
 					</Card>
 				</div>
 			</div>
-		</div>
+		</RouteLayout>
 	);
 }

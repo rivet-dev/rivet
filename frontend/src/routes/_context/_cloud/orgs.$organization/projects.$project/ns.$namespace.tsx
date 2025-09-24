@@ -10,7 +10,6 @@ export const Route = createFileRoute(
 		if (context.__type !== "cloud") {
 			throw new Error("Invalid context type for this route");
 		}
-
 		const ns = await context.queryClient.fetchQuery(
 			context.dataProvider.currentProjectNamespaceQueryOptions({
 				namespace: params.namespace,

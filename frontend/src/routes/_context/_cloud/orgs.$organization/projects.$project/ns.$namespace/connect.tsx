@@ -113,7 +113,6 @@ function RouteComponent() {
 }
 
 function Providers() {
-	console.log(useEngineCompatDataProvider().runnerConfigsQueryOptions());
 	const { data } = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
 		refetchInterval: 5000,

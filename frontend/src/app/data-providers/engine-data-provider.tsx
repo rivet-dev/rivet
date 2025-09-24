@@ -8,13 +8,13 @@ import {
 } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
+import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
 	ActorQueryOptionsSchema,
 	createDefaultGlobalContext,
 	type DefaultDataProvider,
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
-import { noThrow, shouldRetryAllExpect403 } from "./utils";
 
 export type CreateNamespace = {
 	displayName: string;

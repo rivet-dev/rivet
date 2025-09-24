@@ -39,10 +39,9 @@ export default function CreateProjectFrameContent() {
 			onSubmit={async (values) => {
 				await mutateAsync({
 					displayName: values.name,
-					nameId: values.slug || convertStringToId(values.name),
 				});
 			}}
-			defaultValues={{ name: "", slug: "" }}
+			defaultValues={{ name: "" }}
 		>
 			<Frame.Header>
 				<Frame.Title>Create Project</Frame.Title>
@@ -50,7 +49,6 @@ export default function CreateProjectFrameContent() {
 			<Frame.Content>
 				<Flex gap="4" direction="col">
 					<CreateProjectForm.Name />
-					<CreateProjectForm.Slug />
 				</Flex>
 			</Frame.Content>
 			<Frame.Footer>

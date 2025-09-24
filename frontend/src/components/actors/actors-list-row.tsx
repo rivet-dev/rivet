@@ -64,7 +64,7 @@ export const ActorsListRow = memo(
 									/>
 								}
 							/>
-							<div>
+							<div className="min-w-0">
 								<Id actorId={actorId} />
 								<Tags actorId={actorId} />
 							</div>
@@ -113,7 +113,11 @@ function Id({ actorId }: { actorId: ActorId }) {
 function Tags({ actorId }: { actorId: ActorId }) {
 	const { data } = useQuery(useDataProvider().actorKeysQueryOptions(actorId));
 
-	return <SmallText className="text-foreground">{data || "-"}</SmallText>;
+	return (
+		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-block">
+			{data || "-"}
+		</SmallText>
+	);
 }
 
 function Timestamp({ actorId }: { actorId: ActorId }) {
