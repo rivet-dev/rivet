@@ -2,6 +2,7 @@ pre-commit:
   parallel: true
   commands:
     fmt:
-      run: cargo fmt --all -- --check
-      fail_text: "Code is not formatted. Run 'cargo fmt' and commit again."
+      run: cargo fmt --all
+      tags: formatting
+      stage_fixed: true
 
