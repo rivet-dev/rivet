@@ -21,7 +21,7 @@ fn get_existing_actor_with_namespace() {
 }
 
 #[test]
-fn get_existing_actor_without_namespace() {
+fn get_existing_actor_without_namespace_should_fail() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
@@ -29,13 +29,13 @@ fn get_existing_actor_without_namespace() {
 		// Create actor
 		let actor_id = common::create_actor(&namespace, ctx.leader_dc().guard_port()).await;
 
-		// Get actor without namespace
+		// Get actor without namespace should fail
 		let response = common::get_actor(&actor_id, None, ctx.leader_dc().guard_port()).await;
-		common::assert_success_response(&response);
-
-		let body: serde_json::Value = response.json().await.expect("Failed to parse response");
-		assert_eq!(body["actor"]["actor_id"], actor_id);
-		assert_eq!(body["actor"]["name"], "test-actor");
+		assert_eq!(
+			response.status(),
+			400,
+			"Should return 400 for missing namespace parameter"
+		);
 	});
 }
 
@@ -58,6 +58,64 @@ fn get_actor_current_datacenter() {
 			.as_str()
 			.expect("Missing actor_id in actor");
 		common::assert_actor_in_dc(&actor_id_str, 1).await;
+	});
+}
+
+// MARK: Namespace validation
+#[test]
+fn get_actor_non_existent_namespace() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let non_existent_ns = "non-existent-namespace";
+		let api_port = ctx.leader_dc().guard_port();
+
+		// GET /actors/{id}
+		let response = common::get_actor(
+			"00000000-0000-0000-0000-000000000000",
+			Some(non_existent_ns),
+			api_port,
+		)
+		.await;
+		assert!(
+			!response.status().is_success(),
+			"GET /actors/{{id}} should fail with non-existent namespace"
+		);
+	});
+}
+
+#[test]
+fn get_actor_invalid_id_format() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+		let api_port = ctx.leader_dc().guard_port();
+
+		// Test various invalid actor ID formats
+		let invalid_ids = vec![
+			"not-a-uuid",
+			"12345",
+			"00000000-0000-0000-0000",               // Incomplete UUID
+			"00000000-0000-0000-0000-000000000000g", // Invalid character
+			"00000000_0000_0000_0000_000000000000",  // Wrong separator
+		];
+
+		for invalid_id in invalid_ids {
+			// GET /actors/{id}
+			let response = common::get_actor(invalid_id, Some(&namespace), api_port).await;
+			assert_eq!(
+				response.status(),
+				400,
+				"GET should return 400 for invalid actor ID: {}",
+				invalid_id
+			);
+		}
+
+		// Special case: empty actor ID results in different route
+		let response = common::get_actor("", Some(&namespace), api_port).await;
+		assert_eq!(
+			response.status(),
+			404,
+			"GET should return 404 for empty actor ID (route not found)"
+		);
 	});
 }
 
@@ -89,9 +147,9 @@ fn get_non_existent_actor() {
 #[test]
 fn get_actor_wrong_namespace() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace1, _, runner1) =
+		let (namespace1, _, _runner1) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-		let (namespace2, _, runner2) =
+		let (namespace2, _, _runner2) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
 		// Create actor in namespace1
@@ -134,28 +192,6 @@ fn get_with_non_existent_namespace() {
 	});
 }
 
-#[test]
-fn get_invalid_actor_id_format() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-
-		// Try to get with invalid actor ID format
-		let response = common::get_actor(
-			"invalid-uuid",
-			Some(&namespace),
-			ctx.leader_dc().guard_port(),
-		)
-		.await;
-
-		// Should fail with bad request
-		assert_eq!(
-			response.status(),
-			400,
-			"Should return 400 for invalid actor ID format"
-		);
-	});
-}
 
 // Cross-datacenter tests
 
@@ -169,7 +205,6 @@ fn get_remote_actor_verify_routing() {
 		let actor_id = common::create_actor_with_options(
 			common::CreateActorOptions {
 				namespace: namespace.clone(),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
 			ctx.get_dc(2).guard_port(),

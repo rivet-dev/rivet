@@ -37,6 +37,7 @@ impl TestRunner {
 		let handle = Command::new("node")
 			.arg(runner_script_path)
 			.env("INTERNAL_SERVER_PORT", internal_server_port.to_string())
+			.env("HTTP_SERVER_PORT", http_server_port.to_string())
 			.env("RIVET_NAMESPACE", namespace_name)
 			.env("RIVET_RUNNER_KEY", key.to_string())
 			.env("RIVET_RUNNER_VERSION", version.to_string())

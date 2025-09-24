@@ -44,7 +44,11 @@ fn list_all_actor_names_in_namespace() {
 		common::assert_success_response(&response);
 
 		let body: serde_json::Value = response.json().await.expect("Failed to parse response");
-		let returned_names = body["names"].as_array().expect("Expected names array");
+		let returned_names = body["names"]
+			.as_object()
+			.expect("Expected names object to exit")
+			.keys()
+			.collect::<Vec<_>>();
 
 		// Should return unique names only
 		assert_eq!(returned_names.len(), 3, "Should return 3 unique names");
@@ -52,7 +56,7 @@ fn list_all_actor_names_in_namespace() {
 		// Verify all names are present
 		let name_set: HashSet<String> = returned_names
 			.iter()
-			.map(|n| n.as_str().unwrap().to_string())
+			.map(|n| n.as_str().to_string())
 			.collect();
 		for name in &names {
 			assert!(
@@ -216,7 +220,6 @@ fn list_names_fanout_to_all_datacenters() {
 			common::CreateActorOptions {
 				namespace: namespace.clone(),
 				name: "dc2-actor".to_string(),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
 			ctx.get_dc(2).guard_port(),
@@ -275,7 +278,6 @@ fn list_names_deduplication_across_datacenters() {
 				namespace: namespace.clone(),
 				name: shared_name.to_string(),
 				key: Some("dc2-key".to_string()),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
 			ctx.get_dc(2).guard_port(),

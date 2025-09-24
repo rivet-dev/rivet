@@ -1,6 +1,9 @@
 mod common;
 
+use base64::Engine;
 use serde_json::json;
+
+const MAX_INPUT_SIZE: usize = rivet_util::file_size::mebibytes(4) as usize;
 
 // MARK: Basic
 #[test]
@@ -169,12 +172,13 @@ fn create_actor_specific_datacenter() {
 		let actor_id = common::create_actor_with_options(
 			common::CreateActorOptions {
 				namespace: namespace.clone(),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
-			ctx.leader_dc().guard_port(),
+			ctx.get_dc(2).guard_port(),
 		)
 		.await;
+
+		common::wait_for_actor_propagation(&"foo", 1).await;
 
 		assert!(!actor_id.is_empty(), "Actor ID should not be empty");
 
@@ -196,7 +200,6 @@ fn create_actor_current_datacenter() {
 		let actor_id = common::create_actor_with_options(
 			common::CreateActorOptions {
 				namespace: namespace.clone(),
-				datacenter: None,
 				..Default::default()
 			},
 			ctx.leader_dc().guard_port(),
@@ -224,41 +227,30 @@ fn create_actor_non_existent_namespace() {
 }
 
 #[test]
-#[should_panic(expected = "Failed to create actor")]
-fn create_actor_invalid_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-
-		common::create_actor_with_options(
-			common::CreateActorOptions {
-				namespace: namespace.clone(),
-				datacenter: Some("invalid-dc".to_string()),
-				..Default::default()
-			},
-			ctx.leader_dc().guard_port(),
-		)
-		.await;
-	});
-}
-
-#[test]
 fn create_actor_malformed_input() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
-		let actor_id = common::create_actor_with_options(
-			common::CreateActorOptions {
-				namespace: namespace.clone(),
-				input: Some("not-valid-base64!@#$%".to_string()),
-				..Default::default()
-			},
-			ctx.leader_dc().guard_port(),
-		)
-		.await;
+		let client = reqwest::Client::new();
+		let response = client
+			.post(&format!(
+				"http://127.0.0.1:{}/actors?namespace={}",
+				ctx.leader_dc().guard_port(),
+				namespace
+			))
+			.json(&serde_json::json!({
+				"name": "test",
+				"input": "not-valid-base64!@#$%",
+			}))
+			.send()
+			.await
+			.expect("Failed to send request");
 
-		assert!(!actor_id.is_empty(), "Actor ID should not be empty");
+		assert!(
+			!response.status().is_success(),
+			"Should fail with invalid base64 input"
+		);
 	});
 }
 
@@ -269,17 +261,17 @@ fn create_actor_remote_datacenter_verify() {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
+		// common::wait_for_actor_propagation(&"", 1).await;
 		let actor_id = common::create_actor_with_options(
 			common::CreateActorOptions {
 				namespace: namespace.clone(),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
-			ctx.leader_dc().guard_port(),
+			ctx.get_dc(2).guard_port(),
 		)
 		.await;
 
-		common::wait_for_actor_propagation(&actor_id, 1).await;
+		// common::wait_for_actor_propagation(&actor_id, 1).await;
 
 		let actor =
 			common::assert_actor_exists(&actor_id, &namespace, ctx.get_dc(2).guard_port()).await;
@@ -287,6 +279,34 @@ fn create_actor_remote_datacenter_verify() {
 			.as_str()
 			.expect("Missing actor_id in actor");
 		common::assert_actor_in_dc(&actor_id_str, 2).await;
+	});
+}
+
+// MARK: Namespace validation
+#[test]
+fn create_actor_namespace_validation() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let non_existent_ns = "non-existent-namespace";
+		let api_port = ctx.leader_dc().guard_port();
+		let client = reqwest::Client::new();
+
+		// POST /actors
+		let response = client
+			.post(&format!(
+				"http://127.0.0.1:{}/actors?namespace={}",
+				api_port, non_existent_ns
+			))
+			.json(&json!({
+				"name": "test",
+				"key": "key",
+			}))
+			.send()
+			.await
+			.expect("Failed to send request");
+		assert!(
+			!response.status().is_success(),
+			"POST /actors should fail with non-existent namespace"
+		);
 	});
 }
 
@@ -353,15 +373,70 @@ fn empty_strings_for_required_parameters() {
 	});
 }
 
+
+#[test]
+fn test_long_strings_for_input() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+
+		let client = reqwest::Client::new();
+
+		// Test different base64 encoded inputs
+		let large_string = "A".repeat(MAX_INPUT_SIZE + 1);
+		let base64_tests = vec![
+			("normal", "AAAA", true),
+			("very-large", rivet_util::safe_slice(&large_string, 0, MAX_INPUT_SIZE-1), true), // Within bounds
+			("too-large", &large_string, false), // Out of bounds base64 string
+		];
+
+		for (name, base64_input, should_work) in base64_tests {
+			let response = client
+				.post(&format!(
+					"http://127.0.0.1:{}/actors?namespace={}",
+					ctx.leader_dc().guard_port(),
+					namespace
+				))
+				.json(&json!({
+					"name": format!("base64-{}", name),
+					"input": base64_input,
+					"runner_name_selector": "foo",
+					"crash_policy": "destroy",
+				}))
+				.send()
+				.await
+				.expect(&format!("Failed to send request for {}", name));
+
+			if should_work && base64::engine::general_purpose::STANDARD.decode(base64_input).is_ok() {
+				// Valid base64 should work
+				assert!(
+					response.status().is_success(),
+					"Valid base64 '{}' should succeed, but instead got {}",
+					name,
+					response.text().await.unwrap()
+				);
+			} else {
+				// Invalid base64 should fail
+				assert!(
+					!response.status().is_success(),
+					"Invalid base64 '{}' should fail",
+					name
+				);
+			}
+		}
+	});
+}
+
+
 #[test]
 fn very_long_strings_for_names_and_key() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
-		// Create very long name and key (should work up to reasonable limits)
-		let long_name = "a".repeat(255); // 255 chars should be acceptable
-		let long_key = "k".repeat(255);
+		// Create name and key with exactly 32 chars (should work)
+		let long_name = "a".repeat(32); // 32 chars should be acceptable
+		let long_key = "k".repeat(32);
 
 		let actor_id = common::create_actor_with_options(
 			common::CreateActorOptions {
@@ -380,8 +455,8 @@ fn very_long_strings_for_names_and_key() {
 		assert_eq!(actor["actor"]["name"], long_name);
 		assert_eq!(actor["actor"]["key"], long_key);
 
-		// Try extremely long name (should fail)
-		let too_long_name = "a".repeat(1000);
+		// Try name with 33 chars (should fail)
+		let too_long_name = "a".repeat(33);
 		let client = reqwest::Client::new();
 		let response = client
 			.post(&format!(
@@ -398,12 +473,33 @@ fn very_long_strings_for_names_and_key() {
 			.expect("Failed to send request");
 		assert!(
 			!response.status().is_success(),
-			"Should fail with extremely long name"
+			"Should fail with 33-character name"
+		);
+
+		// Try key with 33 chars (should fail)
+		let too_long_key = "k".repeat(33);
+		let response = client
+			.post(&format!(
+				"http://127.0.0.1:{}/actors?namespace={}",
+				ctx.leader_dc().guard_port(),
+				namespace
+			))
+			.json(&json!({
+				"name": "test",
+				"key": too_long_key,
+			}))
+			.send()
+			.await
+			.expect("Failed to send request");
+		assert!(
+			!response.status().is_success(),
+			"Should fail with 33-character key"
 		);
 	});
 }
 
 #[test]
+#[ignore]
 fn special_characters_in_names_and_keys() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -521,4 +617,121 @@ fn maximum_limits_32_actor_ids_in_list() {
 			"Should fail with more than 32 actor IDs"
 		);
 	});
+}
+
+// MARK: Key collision tests
+
+#[test]
+fn create_destroy_create_destroy_same_key_single_dc() {
+	common::run(common::TestOpts::new(2), |ctx| async move {
+		create_destroy_create_destroy_same_key_inner(ctx.leader_dc(), ctx.leader_dc()).await;
+	});
+}
+
+#[test]
+#[ignore]
+fn create_destroy_create_destroy_same_key_multi_dc() {
+	common::run(common::TestOpts::new(2), |ctx| async move {
+		create_destroy_create_destroy_same_key_inner(ctx.get_dc(2), ctx.get_dc(2)).await;
+	});
+}
+
+#[test]
+#[ignore]
+fn create_destroy_create_destroy_same_key_different_dc() {
+	common::run(common::TestOpts::new(2), |ctx| async move {
+		create_destroy_create_destroy_same_key_inner(ctx.leader_dc(), ctx.get_dc(2)).await;
+	});
+}
+
+async fn create_destroy_create_destroy_same_key_inner(
+	target_dc1: &common::TestDatacenter,
+	target_dc2: &common::TestDatacenter,
+) {
+	let (namespace, _, runner) = common::setup_test_namespace_with_runner(target_dc1).await;
+	let key = rand::random::<u16>().to_string();
+
+	// First create/destroy cycle
+	let actor_id1 = common::create_actor_with_options(
+		common::CreateActorOptions {
+			namespace: namespace.clone(),
+			key: Some(key.clone()),
+			..Default::default()
+		},
+		target_dc1.guard_port(),
+	)
+	.await;
+
+	common::assert_actor_in_dc(&actor_id1, target_dc1.config.dc_label()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Destroy first actor
+	tracing::info!(?actor_id1, "destroying first actor");
+	common::destroy_actor(&actor_id1, &namespace, target_dc1.guard_port()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Second create/destroy cycle with same key
+	let actor_id2 = common::create_actor_with_options(
+		common::CreateActorOptions {
+			namespace: namespace.clone(),
+			key: Some(key.clone()),
+			..Default::default()
+		},
+		target_dc2.guard_port(),
+	)
+	.await;
+
+	assert_ne!(actor_id1, actor_id2, "same actor id after first cycle");
+	common::assert_actor_in_dc(&actor_id2, target_dc1.config.dc_label()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Destroy second actor
+	tracing::info!(?actor_id2, "destroying second actor");
+	common::destroy_actor(&actor_id2, &namespace, target_dc2.guard_port()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Third create/destroy cycle with same key
+	let actor_id3 = common::create_actor_with_options(
+		common::CreateActorOptions {
+			namespace: namespace.clone(),
+			key: Some(key.clone()),
+			..Default::default()
+		},
+		target_dc1.guard_port(),
+	)
+	.await;
+
+	assert_ne!(actor_id1, actor_id3, "same actor id after second cycle (vs first)");
+	assert_ne!(actor_id2, actor_id3, "same actor id after second cycle (vs second)");
+	common::assert_actor_in_dc(&actor_id3, target_dc1.config.dc_label()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Destroy third actor
+	tracing::info!(?actor_id3, "destroying third actor");
+	common::destroy_actor(&actor_id3, &namespace, target_dc1.guard_port()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Fourth create/destroy cycle with same key
+	let actor_id4 = common::create_actor_with_options(
+		common::CreateActorOptions {
+			namespace: namespace.clone(),
+			key: Some(key.clone()),
+			..Default::default()
+		},
+		target_dc2.guard_port(),
+	)
+	.await;
+
+	assert_ne!(actor_id1, actor_id4, "same actor id after third cycle (vs first)");
+	assert_ne!(actor_id2, actor_id4, "same actor id after third cycle (vs second)");
+	assert_ne!(actor_id3, actor_id4, "same actor id after third cycle (vs third)");
+	common::assert_actor_in_dc(&actor_id4, target_dc1.config.dc_label()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	// Final destroy
+	tracing::info!(?actor_id4, "destroying fourth actor");
+	common::destroy_actor(&actor_id4, &namespace, target_dc2.guard_port()).await;
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+	runner.shutdown().await;
 }

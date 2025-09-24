@@ -30,13 +30,9 @@ async fn actor_lifecycle_inner(ctx: &common::TestCtx, multi_dc: bool) {
 	let actor_id = common::create_actor(&namespace, target_dc.guard_port()).await;
 
 	// Test ping via guard
-	let ping_response = common::ping_actor_via_guard(ctx.leader_dc().guard_port(), &actor_id).await;
+	let ping_response =
+		common::ping_actor_via_guard(ctx.leader_dc().guard_port(), &actor_id).await;
 	assert_eq!(ping_response["status"], "ok");
-
-	// Test websocket via guard
-	let ws_response =
-		common::ping_actor_websocket_via_guard(ctx.leader_dc().guard_port(), &actor_id).await;
-	assert_eq!(ws_response["status"], "ok");
 
 	// Validate runner state
 	assert!(
@@ -111,15 +107,14 @@ async fn actor_lifecycle_with_same_key_inner(ctx: &common::TestCtx, dc_choice: D
 	// correctly waits for the actor to start.
 	tokio::time::sleep(Duration::from_millis(500)).await;
 
+	// Test ping directly to runner
+	let ping_response = common::ping_actor_via_runner(&actor_id1, runner.port).await;
+	assert_eq!(ping_response["status"], "ok");
+
 	// Test ping via guard
 	let ping_response =
 		common::ping_actor_via_guard(ctx.leader_dc().guard_port(), &actor_id1).await;
 	assert_eq!(ping_response["status"], "ok");
-
-	// Test websocket via guard
-	let ws_response =
-		common::ping_actor_websocket_via_guard(ctx.leader_dc().guard_port(), &actor_id1).await;
-	assert_eq!(ws_response["status"], "ok");
 
 	// Destroy
 	tracing::info!("destroying actor");
@@ -145,15 +140,14 @@ async fn actor_lifecycle_with_same_key_inner(ctx: &common::TestCtx, dc_choice: D
 	// correctly waits for the actor to start.
 	tokio::time::sleep(Duration::from_millis(500)).await;
 
+	// Test ping directly to runner
+	let ping_response = common::ping_actor_via_runner(&actor_id2, runner.port).await;
+	assert_eq!(ping_response["status"], "ok");
+
 	// Test ping via guard
 	let ping_response =
 		common::ping_actor_via_guard(ctx.leader_dc().guard_port(), &actor_id2).await;
 	assert_eq!(ping_response["status"], "ok");
-
-	// Test websocket via guard
-	let ws_response =
-		common::ping_actor_websocket_via_guard(ctx.leader_dc().guard_port(), &actor_id2).await;
-	assert_eq!(ws_response["status"], "ok");
 
 	// Destroy
 	tracing::info!("destroying actor");

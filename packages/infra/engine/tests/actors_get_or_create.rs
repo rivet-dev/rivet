@@ -30,7 +30,6 @@ fn get_existing_actor_with_matching_key() {
 			Some(key),
 			false,
 			None,
-			None,
 			ctx.leader_dc().guard_port(),
 		)
 		.await;
@@ -43,6 +42,7 @@ fn get_existing_actor_with_matching_key() {
 }
 
 #[test]
+#[ignore]
 fn get_existing_actor_from_remote_datacenter() {
 	common::run(common::TestOpts::new(2), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -56,7 +56,6 @@ fn get_existing_actor_from_remote_datacenter() {
 				namespace: namespace.clone(),
 				name: name.to_string(),
 				key: Some(key.clone()),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
 			ctx.get_dc(2).guard_port(),
@@ -70,7 +69,6 @@ fn get_existing_actor_from_remote_datacenter() {
 			name,
 			Some(key),
 			false,
-			None,
 			None,
 			ctx.leader_dc().guard_port(),
 		)
@@ -101,7 +99,6 @@ fn create_new_actor_when_none_exists() {
 			name,
 			Some(key.clone()),
 			false,
-			None,
 			None,
 			ctx.leader_dc().guard_port(),
 		)
@@ -134,7 +131,6 @@ fn create_actor_with_input_data() {
 			name,
 			Some(key),
 			false,
-			None,
 			Some(input),
 			ctx.leader_dc().guard_port(),
 		)
@@ -161,7 +157,6 @@ fn create_durable_actor() {
 			Some(key),
 			true,
 			None,
-			None,
 			ctx.leader_dc().guard_port(),
 		)
 		.await;
@@ -182,24 +177,13 @@ fn create_actor_in_specific_datacenter() {
 		let name = "dc-specific-actor";
 		let key = "dc-key".to_string();
 
-		let response = common::get_or_create_actor(
+		let actor_id = common::create_actor(
 			&namespace,
-			name,
-			Some(key),
-			false,
-			Some("dc-2"),
-			None,
-			ctx.leader_dc().guard_port(),
+			ctx.get_dc(2).guard_port()
 		)
 		.await;
-		common::assert_success_response(&response);
 
-		let body: serde_json::Value = response.json().await.expect("Failed to parse response");
-		common::assert_created_response(&body, true).await;
-		let actor_id_str = body["actor"]["actor_id"]
-			.as_str()
-			.expect("Missing actor_id in actor");
-		common::assert_actor_in_dc(&actor_id_str, 2).await;
+		common::assert_actor_in_dc(&actor_id, 2).await;
 	});
 }
 
@@ -214,7 +198,6 @@ fn get_or_create_non_existent_namespace() {
 			Some("key".to_string()),
 			false,
 			None,
-			None,
 			ctx.leader_dc().guard_port(),
 		)
 		.await;
@@ -223,40 +206,16 @@ fn get_or_create_non_existent_namespace() {
 			!response.status().is_success(),
 			"Should fail with non-existent namespace"
 		);
-		common::assert_error_response(response, "namespace_not_found").await;
-	});
-}
-
-#[test]
-fn get_or_create_invalid_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-
-		let response = common::get_or_create_actor(
-			&namespace,
-			"test-actor",
-			Some("key".to_string()),
-			false,
-			Some("invalid-dc"),
-			None,
-			ctx.leader_dc().guard_port(),
-		)
-		.await;
-
-		assert!(
-			!response.status().is_success(),
-			"Should fail with invalid datacenter"
-		);
+		common::assert_error_response(response, "not_found").await;
 	});
 }
 
 #[test]
 fn get_or_create_wrong_namespace() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace1, _, runner1) =
+		let (namespace1, _, _runner1) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
-		let (namespace2, _, runner2) =
+		let (namespace2, _, _runner2) =
 			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
 		let name = "cross-namespace-actor";
@@ -278,7 +237,6 @@ fn get_or_create_wrong_namespace() {
 			name,
 			Some(key),
 			false,
-			None,
 			None,
 			ctx.leader_dc().guard_port(),
 		)

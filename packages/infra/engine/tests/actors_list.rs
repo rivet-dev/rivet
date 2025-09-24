@@ -2,6 +2,8 @@ mod common;
 
 use std::collections::HashSet;
 
+use reqwest::Client;
+
 // MARK: List by Name
 
 #[test]
@@ -28,7 +30,7 @@ fn list_actors_by_namespace_and_name() {
 			actor_ids.push(actor_id);
 		}
 
-		// List actors by name
+		// List actlist_actorsors by name
 		let response = common::list_actors(
 			&namespace,
 			Some(name),
@@ -85,8 +87,9 @@ fn list_with_pagination() {
 			actor_ids.push(actor_id);
 		}
 
-		// Wait for actors to be fully created and available
-		tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+		for actor_id in &actor_ids {
+			common::wait_for_actor_propagation(&actor_id, 1).await;
+		}
 
 		// First page - limit 2
 		let response1 = common::list_actors(
@@ -505,10 +508,9 @@ fn list_actors_from_multiple_datacenters() {
 				namespace: namespace.clone(),
 				name: "multi-dc-actor".to_string(),
 				key: Some("dc2-key".to_string()),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
-			ctx.leader_dc().guard_port(),
+			ctx.get_dc(2).guard_port(),
 		)
 		.await;
 
@@ -558,7 +560,7 @@ fn list_with_non_existent_namespace() {
 			!response.status().is_success(),
 			"Should fail with non-existent namespace"
 		);
-		common::assert_error_response(response, "namespace_not_found").await;
+		common::assert_error_response(response, "not_found").await;
 	});
 }
 
@@ -616,37 +618,7 @@ fn list_with_key_but_no_name() {
 		);
 	});
 }
-#[test]
-fn list_with_more_than_32_actor_ids() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
 
-		// Try to list with more than 32 actor IDs
-		let actor_ids: Vec<String> = (0..33)
-			.map(|i| format!("00000000-0000-0000-0000-{:012x}", i))
-			.collect();
-
-		let response = common::list_actors(
-			&namespace,
-			None,
-			None,
-			Some(actor_ids),
-			None,
-			None,
-			None,
-			ctx.leader_dc().guard_port(),
-		)
-		.await;
-
-		// Should fail with validation error
-		assert_eq!(
-			response.status(),
-			400,
-			"Should return 400 for too many actor IDs"
-		);
-	});
-}
 #[test]
 fn list_without_name_when_not_using_actor_ids() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
@@ -757,7 +729,6 @@ fn list_aggregates_results_from_all_datacenters() {
 				namespace: namespace.clone(),
 				name: name.to_string(),
 				key: Some("dc2-key".to_string()),
-				datacenter: Some("dc-2".to_string()),
 				..Default::default()
 			},
 			ctx.get_dc(2).guard_port(),
@@ -792,5 +763,56 @@ fn list_aggregates_results_from_all_datacenters() {
 			.collect();
 		assert!(returned_ids.contains(&actor_id_dc1));
 		assert!(returned_ids.contains(&actor_id_dc2));
+	});
+}
+
+// MARK: Limit values
+#[test]
+fn test_list_limit_variation() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+
+		let client = Client::new();
+
+		// Test limit parameter validation
+		let test_cases = vec![
+			("0", true),      // Should work - gives 0 values
+			("1", true),      // Should work - minimum valid limit
+			("100", true),    // Should work - normal limit
+			("1001", false),  // Should fail - exceeds maximum limit
+			("-1", false),    // Should fail - negative limit
+			("abc", false),   // Should fail - non-numeric limit
+		];
+
+		for (limit_value, should_succeed) in test_cases {
+			let response = client
+				.get(&format!(
+					"http://127.0.0.1:{}/actors",
+					ctx.leader_dc().guard_port()
+				))
+				.query(&[
+					("namespace", namespace.as_str()),
+					("name", "test-actor"),
+					("limit", limit_value),
+				])
+				.send()
+				.await
+				.expect("Failed to send request");
+
+			if should_succeed {
+				assert!(
+					response.status().is_success() || response.status() == 200,
+					"Limit {} should be accepted",
+					limit_value
+				);
+			} else {
+				assert!(
+					!response.status().is_success(),
+					"Limit {} should be rejected",
+					limit_value
+				);
+			}
+		}
 	});
 }
