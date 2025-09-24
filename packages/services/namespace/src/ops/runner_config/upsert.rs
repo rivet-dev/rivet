@@ -1,8 +1,9 @@
 use gas::prelude::*;
 use rivet_cache::CacheKey;
+use rivet_types::namespaces::RunnerConfig;
 use universaldb::options::MutationType;
 
-use crate::{errors, keys, types::RunnerConfig};
+use crate::{errors, keys, utils::runner_config_variant};
 
 #[derive(Debug)]
 pub struct Input {
@@ -31,7 +32,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 			tx.write(
 				&keys::RunnerConfigByVariantKey::new(
 					input.namespace_id,
-					input.config.variant(),
+					runner_config_variant(&input.config),
 					input.name.clone(),
 				),
 				input.config.clone(),
@@ -77,7 +78,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 		.map_err(|err| err.build())?;
 
 	// Purge cache in all dcs
-	let variant_str = serde_json::to_string(&input.config.variant())?;
+	let variant_str = serde_json::to_string(&runner_config_variant(&input.config))?;
 	ctx.op(internal::ops::cache::purge_global::Input {
 		base_key: format!("namespace.runner_config.{variant_str}.get_global"),
 		keys: vec![(input.namespace_id, input.name.as_str()).cache_key().into()],

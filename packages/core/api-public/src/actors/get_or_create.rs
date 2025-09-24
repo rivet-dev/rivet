@@ -63,9 +63,6 @@ pub struct GetOrCreateResponse {
 /// actor::get will always be in the same datacenter.
 ///
 /// ## Optimized Alternative Routes
-///
-/// For minimal round trips to get or create an actor, use `PUT /actors/by-id`. This doesn't
-/// require fetching the actor's state from the other datacenter.
 #[utoipa::path(
     put,
 	operation_id = "actors_get_or_create",
@@ -162,7 +159,7 @@ async fn get_or_create_inner(
 					&ctx,
 					headers.clone(),
 					existing_actor_id,
-					Some(query.namespace.clone()),
+					query.namespace.clone(),
 				)
 				.await?;
 				return Ok(GetOrCreateResponse {

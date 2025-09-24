@@ -2782,6 +2782,7 @@ dependencies = [
  "gasoline",
  "internal",
  "rivet-api-builder",
+ "rivet-api-types",
  "rivet-api-util",
  "rivet-data",
  "rivet-error",

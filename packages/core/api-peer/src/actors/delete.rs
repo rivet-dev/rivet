@@ -23,7 +23,7 @@ pub struct DeletePath {
 
 #[utoipa::path(
     delete,
-	operation_id = "runners_delete",
+	operation_id = "actors_delete",
     path = "/actors/{actor_id}",
     params(
         ("actor_id" = Id, Path),

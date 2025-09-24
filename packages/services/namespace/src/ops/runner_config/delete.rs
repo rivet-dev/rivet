@@ -2,7 +2,7 @@ use gas::prelude::*;
 use rivet_cache::CacheKey;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys};
+use crate::{errors, keys, utils::runner_config_variant};
 
 #[derive(Debug)]
 pub struct Input {
@@ -30,7 +30,7 @@ pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -
 				// Clear secondary idx
 				tx.delete(&keys::RunnerConfigByVariantKey::new(
 					input.namespace_id,
-					config.variant(),
+					runner_config_variant(&config),
 					input.name.clone(),
 				));
 			}

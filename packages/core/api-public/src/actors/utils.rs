@@ -13,31 +13,43 @@ pub async fn fetch_actor_by_id(
 	ctx: &ApiCtx,
 	headers: HeaderMap,
 	actor_id: Id,
-	namespace: Option<String>,
+	namespace: String,
 ) -> Result<Actor> {
+	let list_query = rivet_api_types::actors::list::ListQuery {
+		namespace,
+		actor_ids: Some(actor_id.to_string()),
+		..Default::default()
+	};
+
 	if actor_id.label() == ctx.config().dc_label() {
 		// Local datacenter - use peer API directly
-		let res = rivet_api_peer::actors::get::get(
-			ctx.clone(),
-			rivet_api_peer::actors::get::GetPath { actor_id },
-			rivet_api_types::actors::get::GetQuery { namespace },
-		)
-		.await?;
+		let res = rivet_api_peer::actors::list::list(ctx.clone(), (), list_query).await?;
+		let actor = res
+			.actors
+			.into_iter()
+			.next()
+			.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
 
-		Ok(res.actor)
+		Ok(actor)
 	} else {
 		// Remote datacenter - make HTTP request
-		let res = request_remote_datacenter::<rivet_api_types::actors::get::GetResponse>(
+		let res = request_remote_datacenter::<rivet_api_types::actors::list::ListResponse>(
 			ctx.config(),
 			actor_id.label(),
-			&format!("/actors/{}", actor_id),
+			"/actors",
 			Method::GET,
 			headers,
-			Some(&rivet_api_types::actors::get::GetQuery { namespace }),
+			Some(&list_query),
 			Option::<&()>::None,
 		)
 		.await?;
-		Ok(res.actor)
+		let actor = res
+			.actors
+			.into_iter()
+			.next()
+			.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
+
+		Ok(actor)
 	}
 }
 

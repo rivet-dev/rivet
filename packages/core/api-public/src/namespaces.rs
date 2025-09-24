@@ -5,10 +5,9 @@ use axum::{
 	response::{IntoResponse, Json, Response},
 };
 use rivet_api_builder::{ApiCtx, ApiError};
-use rivet_util::Id;
-
 use rivet_api_peer::namespaces::*;
-use rivet_api_util::{request_remote_datacenter, request_remote_datacenter_raw};
+use rivet_api_types::namespaces::list::*;
+use rivet_api_util::request_remote_datacenter;
 
 #[utoipa::path(
     get,
@@ -39,54 +38,6 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			ctx.config(),
 			leader_dc.datacenter_label,
 			"/namespaces",
-			axum::http::Method::GET,
-			headers,
-			Some(&query),
-			Option::<&()>::None,
-		)
-		.await
-	}
-}
-
-#[utoipa::path(
-	get,
-	operation_id = "namespaces_get",
-	path = "/namespaces/{namespace_id}",
-	params(
-		("namespace_id" = Id, Path),
-		GetQuery,
-	),
-	responses(
-		(status = 200, body = GetResponse),
-	),
-)]
-pub async fn get(
-	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
-	Path(path): Path<GetPath>,
-	Query(query): Query<GetQuery>,
-) -> Response {
-	match get_inner(ctx, headers, path, query).await {
-		Ok(response) => response,
-		Err(err) => ApiError::from(err).into_response(),
-	}
-}
-
-async fn get_inner(
-	ctx: ApiCtx,
-	headers: HeaderMap,
-	path: GetPath,
-	query: GetQuery,
-) -> Result<Response> {
-	if ctx.config().is_leader() {
-		let res = rivet_api_peer::namespaces::get(ctx, path, query).await?;
-		Ok(Json(res).into_response())
-	} else {
-		let leader_dc = ctx.config().leader_dc()?;
-		request_remote_datacenter_raw(
-			&ctx,
-			leader_dc.datacenter_label,
-			&format!("/namespaces/{}", path.namespace_id),
 			axum::http::Method::GET,
 			headers,
 			Some(&query),

@@ -3,7 +3,7 @@ use gas::prelude::*;
 pub mod errors;
 pub mod keys;
 pub mod ops;
-pub mod types;
+pub mod utils;
 pub mod workflows;
 
 pub fn registry() -> WorkflowResult<Registry> {

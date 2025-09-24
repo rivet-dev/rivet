@@ -13,11 +13,6 @@ pub async fn router(
 			// MARK: Namespaces
 			.route("/namespaces", get(namespaces::list))
 			.route("/namespaces", post(namespaces::create))
-			.route("/namespaces/{namespace_id}", get(namespaces::get))
-			.route(
-				"/namespaces/resolve/{name}",
-				get(namespaces::resolve_for_name),
-			)
 			// MARK: Runner configs
 			.route("/runner-configs", get(runner_configs::list))
 			.route("/runner-configs/{runner_name}", put(runner_configs::upsert))
@@ -28,12 +23,10 @@ pub async fn router(
 			// MARK: Actors
 			.route("/actors", get(actors::list::list))
 			.route("/actors", post(actors::create::create))
-			.route("/actors/{actor_id}", get(actors::get::get))
 			.route("/actors/{actor_id}", delete(actors::delete::delete))
 			.route("/actors/names", get(actors::list_names::list_names))
 			// MARK: Runners
 			.route("/runners", get(runners::list))
-			.route("/runners/{runner_id}", get(runners::get))
 			.route("/runners/names", get(runners::list_names))
 			// MARK: Internal
 			.route("/cache/purge", post(internal::cache_purge))
