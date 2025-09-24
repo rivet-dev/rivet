@@ -149,7 +149,7 @@ impl SharedState {
 
 	async fn receiver(&self, mut sub: Subscriber) {
 		while let Ok(NextOutput::Message(msg)) = sub.next().await {
-			tracing::info!(
+			tracing::trace!(
 				payload_len = msg.payload.len(),
 				"received message from pubsub"
 			);

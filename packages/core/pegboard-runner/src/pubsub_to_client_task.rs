@@ -23,7 +23,7 @@ pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, sub: Subscriber) {
 
 async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 	while let Result::Ok(NextOutput::Message(ups_msg)) = sub.next().await {
-		tracing::info!(
+		tracing::debug!(
 			payload_len = ups_msg.payload.len(),
 			"received message from pubsub, forwarding to WebSocket"
 		);
