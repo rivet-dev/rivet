@@ -1114,6 +1114,7 @@
                 "type": "object",
                 "required": [
                   "url",
+                  "headers",
                   "request_lifespan",
                   "slots_per_runner",
                   "min_runners",
@@ -1121,6 +1122,15 @@
                   "runners_margin"
                 ],
                 "properties": {
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
                   "max_runners": {
                     "type": "integer",
                     "format": "int32",
@@ -1199,6 +1209,7 @@
                 "type": "object",
                 "required": [
                   "url",
+                  "headers",
                   "request_lifespan",
                   "slots_per_runner",
                   "min_runners",
@@ -1206,6 +1217,15 @@
                   "runners_margin"
                 ],
                 "properties": {
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
                   "max_runners": {
                     "type": "integer",
                     "format": "int32",

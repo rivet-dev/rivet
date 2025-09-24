@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 
 pub mod api_peer;
 pub mod api_public;
+pub mod auth;
 pub mod cache;
 pub mod clickhouse;
 pub mod db;
@@ -17,6 +18,7 @@ pub mod vector;
 
 pub use api_peer::*;
 pub use api_public::*;
+pub use auth::*;
 pub use cache::*;
 pub use clickhouse::*;
 pub use db::Database;
@@ -59,6 +61,9 @@ pub use vector::*;
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Root {
 	#[serde(default)]
+	pub auth: Option<Auth>,
+
+	#[serde(default)]
 	pub guard: Option<Guard>,
 
 	#[serde(default)]
@@ -95,6 +100,7 @@ pub struct Root {
 impl Default for Root {
 	fn default() -> Self {
 		Root {
+			auth: None,
 			guard: None,
 			api_public: None,
 			api_peer: None,

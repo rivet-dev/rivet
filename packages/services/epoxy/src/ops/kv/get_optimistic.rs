@@ -36,7 +36,7 @@ pub struct Output {
 ///
 /// We cannot use quorum reads for the fanout read because of the constraints of Epaxos.
 #[operation]
-pub async fn epoxy_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	// Try to read locally
 	let kv_key = keys::keys::KvValueKey::new(input.key.clone());
 	let cache_key = keys::keys::KvOptimisticCacheKey::new(input.key.clone());

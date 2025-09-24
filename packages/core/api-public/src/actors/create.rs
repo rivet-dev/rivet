@@ -4,12 +4,13 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_types::actors::create::{CreateRequest, CreateResponse};
 use rivet_api_util::request_remote_datacenter;
-use rivet_types::actors::CrashPolicy;
 use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
+
+use crate::ctx::ApiCtx;
 
 #[derive(Debug, Serialize, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
@@ -63,6 +64,8 @@ async fn create_inner(
 	query: CreateQuery,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
+	ctx.skip_auth();
+
 	// Determine which datacenter to create the actor in
 	let target_dc_label = if let Some(dc_name) = &query.datacenter {
 		ctx.config()
@@ -78,7 +81,7 @@ async fn create_inner(
 	};
 
 	if target_dc_label == ctx.config().dc_label() {
-		rivet_api_peer::actors::create::create(ctx, (), query, body).await
+		rivet_api_peer::actors::create::create(ctx.into(), (), query, body).await
 	} else {
 		request_remote_datacenter::<CreateResponse>(
 			ctx.config(),

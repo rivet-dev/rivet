@@ -4,11 +4,12 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
-use rivet_util::Id;
+use rivet_api_builder::ApiError;
 
 use rivet_api_peer::runner_configs::*;
 use rivet_api_util::request_remote_datacenter;
+
+use crate::ctx::ApiCtx;
 
 #[utoipa::path(
 	get,
@@ -39,8 +40,10 @@ async fn list_inner(
 	path: ListPath,
 	query: ListQuery,
 ) -> Result<ListResponse> {
+	ctx.auth().await?;
+
 	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::list(ctx, path, query).await
+		rivet_api_peer::runner_configs::list(ctx.into(), path, query).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<ListResponse>(
@@ -89,8 +92,10 @@ async fn upsert_inner(
 	query: UpsertQuery,
 	body: UpsertRequest,
 ) -> Result<UpsertResponse> {
+	ctx.auth().await?;
+
 	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::upsert(ctx, path, query, body).await
+		rivet_api_peer::runner_configs::upsert(ctx.into(), path, query, body).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<UpsertResponse>(
@@ -136,8 +141,10 @@ async fn delete_inner(
 	path: DeletePath,
 	query: DeleteQuery,
 ) -> Result<DeleteResponse> {
+	ctx.auth().await?;
+
 	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::delete(ctx, path, query).await
+		rivet_api_peer::runner_configs::delete(ctx.into(), path, query).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<DeleteResponse>(

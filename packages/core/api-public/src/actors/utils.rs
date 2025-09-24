@@ -23,7 +23,7 @@ pub async fn fetch_actor_by_id(
 
 	if actor_id.label() == ctx.config().dc_label() {
 		// Local datacenter - use peer API directly
-		let res = rivet_api_peer::actors::list::list(ctx.clone(), (), list_query).await?;
+		let res = rivet_api_peer::actors::list::list(ctx.clone().into(), (), list_query).await?;
 		let actor = res
 			.actors
 			.into_iter()
@@ -105,7 +105,7 @@ pub async fn fetch_actors_by_ids(
 
 			if dc_label == ctx.config().dc_label() {
 				// Local datacenter - use peer API directly
-				let res = rivet_api_peer::actors::list::list(ctx, (), peer_query).await?;
+				let res = rivet_api_peer::actors::list::list(ctx.into(), (), peer_query).await?;
 				Ok::<Vec<Actor>, anyhow::Error>(res.actors)
 			} else {
 				// Remote datacenter - make HTTP request
