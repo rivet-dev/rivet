@@ -1,10 +1,16 @@
 import type { ReleaseOpts } from "./main.ts";
 import { $ } from "execa";
-import { transformPackageJsonToDenoJson } from "./transform_pkg_to_deno.ts";
 
-function assertStringIncludes(actual: string, expected: string, message?: string): void {
+function assertStringIncludes(
+	actual: string,
+	expected: string,
+	message?: string,
+): void {
 	if (!actual.includes(expected)) {
-		throw new Error(message || `String does not include expected substring: ${expected}`);
+		throw new Error(
+			message ||
+				`String does not include expected substring: ${expected}`,
+		);
 	}
 }
 
@@ -12,9 +18,14 @@ async function npmVersionExists(
 	packageName: string,
 	version: string,
 ): Promise<boolean> {
-	console.log(`==> Checking if NPM version exists: ${packageName}@${version}`);
+	console.log(
+		`==> Checking if NPM version exists: ${packageName}@${version}`,
+	);
 	try {
-		await $({ stdout: 'ignore', stderr: 'pipe' })`npm view ${packageName}@${version} version`;
+		await $({
+			stdout: "ignore",
+			stderr: "pipe",
+		})`npm view ${packageName}@${version} version`;
 		return true;
 	} catch (error: any) {
 		if (error.stderr) {
@@ -28,28 +39,13 @@ async function npmVersionExists(
 	}
 }
 
-async function jsrVersionExists(
-	packageName: string,
-	version: string,
-): Promise<boolean> {
-	console.log(`==> Checking if JSR version exists: ${packageName}@${version}`);
-	try {
-		await $({ stdout: 'ignore', stderr: 'pipe' })`deno info jsr:${packageName}@${version}`;
-		return true;
-	} catch (error: any) {
-		if (error.stderr) {
-			assertStringIncludes(
-				error.stderr,
-				`Could not find version of '${packageName}' that matches specified version constraint '${version}'`,
-				"unexpected output",
-			);
-		}
-		return false;
-	}
-}
-
 export async function publishSdk(opts: ReleaseOpts) {
-	const packages: { path: string, name: string, npm: boolean, jsr?: boolean, turbo?: boolean }[] = [
+	const packages: {
+		path: string;
+		name: string;
+		npm: boolean;
+		turbo?: boolean;
+	}[] = [
 		{
 			path: `${opts.root}/sdks/typescript/api-full`,
 			name: "@rivet-gg/api-full",
@@ -81,7 +77,9 @@ export async function publishSdk(opts: ReleaseOpts) {
 		if (pkg.npm) {
 			console.log(`==> Publishing to NPM: ${pkg.name}@${opts.version}`);
 			await $({ cwd: pkg.path })`pnpm install`;
-			await $({ cwd: pkg.path })`pnpm npm publish --access public --tolerate-republish`;
+			await $({
+				cwd: pkg.path,
+			})`pnpm npm publish --access public --tolerate-republish`;
 		}
 
 		if (pkg.jsr) {
@@ -99,7 +97,10 @@ export async function publishSdk(opts: ReleaseOpts) {
 			// --allow-slow-types = we use zod which doesn't support this
 			// --allow-dirty = we change the version on the fly
 			// --set-version = validate the correct version is used
-			await $({ cwd: pkg.path, env: { DENO_NO_PACKAGE_JSON: '1' } })`deno publish --allow-slow-types --allow-dirty`;
+			await $({
+				cwd: pkg.path,
+				env: { DENO_NO_PACKAGE_JSON: "1" },
+			})`deno publish --allow-slow-types --allow-dirty`;
 		}
 	}
 }
