@@ -37,7 +37,6 @@ async function npmVersionExists(
 
 export async function publishSdk(opts: ReleaseOpts) {
 	const packagePaths = [
-		`${opts.root}/sdks/typescript/tunnel-protocol`,
 		`${opts.root}/sdks/typescript/runner`,
 		`${opts.root}/sdks/typescript/runner-protocol`,
 		`${opts.root}/sdks/typescript/api-full`,

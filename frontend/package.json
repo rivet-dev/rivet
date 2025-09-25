@@ -8,6 +8,7 @@
 		"dev:inspector": "vite --config vite.inspector.config.ts",
 		"dev:engine": "vite --config vite.engine.config.ts",
 		"ts-check": "tsc --noEmit",
+		"build": "echo 'Please use build:engine or build:inspector' && exit 1",
 		"build:inspector": "vite build --mode=production --config vite.inspector.config.ts",
 		"build:engine": "vite build --mode=production --config vite.engine.config.ts",
 		"preview:inspector": "vite preview --config vite.inspector.config.ts",

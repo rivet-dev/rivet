@@ -1,9 +1,13 @@
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
-use rivet_runner_protocol::protocol;
-use universaldb::options::{ConflictRangeType, StreamingMode};
-use universaldb::utils::{FormalChunkedKey, IsolationLevel::*};
+use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use universaldb::{
+	options::{ConflictRangeType, StreamingMode},
+	utils::{FormalChunkedKey, IsolationLevel::*},
+};
+use universalpubsub::PublishOpts;
+use versioned_data_util::OwnedVersionedData as _;
 
 use crate::{keys, workflows::actor::Allocate};
 
@@ -67,10 +71,12 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 
 	// Evict other workflow if there was a key conflict
 	if let Some(evict_workflow_id) = init_res.evict_workflow_id {
-		ctx.signal(protocol::ToServer::Stopping)
-			.to_workflow_id(evict_workflow_id)
-			.send()
-			.await?;
+		ctx.signal(Forward {
+			inner: protocol::ToServer::ToServerStopping,
+		})
+		.to_workflow_id(evict_workflow_id)
+		.send()
+		.await?;
 	}
 
 	ctx.loope(LifecycleState::new(), |ctx, state| {
@@ -82,13 +88,13 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 				.await?
 			{
 				Some(Main::Forward(sig)) => {
-					match sig {
-						protocol::ToServer::Init {
+					match sig.inner {
+						protocol::ToServer::ToServerInit(protocol::ToServerInit {
 							last_command_idx,
 							prepopulate_actor_names,
 							metadata,
 							..
-						} => {
+						}) => {
 							let init_data = ctx
 								.activity(ProcessInitInput {
 									runner_id: input.runner_id,
@@ -100,26 +106,26 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								.await?;
 
 							// Send init packet
-							ctx.msg(ToWs {
+							ctx.activity(SendMessageToRunnerInput {
 								runner_id: input.runner_id,
-								inner: protocol::ToClient::Init {
-									runner_id: input.runner_id,
+								message: protocol::ToClient::ToClientInit(protocol::ToClientInit {
+									runner_id: input.runner_id.to_string(),
 									last_event_idx: init_data.last_event_idx,
 									metadata: protocol::ProtocolMetadata {
 										runner_lost_threshold: RUNNER_LOST_THRESHOLD_MS,
 									},
-								},
+								}),
 							})
-							.send()
 							.await?;
 
 							// Send missed commands
 							if !init_data.missed_commands.is_empty() {
-								ctx.msg(ToWs {
+								ctx.activity(SendMessageToRunnerInput {
 									runner_id: input.runner_id,
-									inner: protocol::ToClient::Commands(init_data.missed_commands),
+									message: protocol::ToClient::ToClientCommands(
+										init_data.missed_commands,
+									),
 								})
-								.send()
 								.await?;
 							}
 
@@ -152,17 +158,18 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									.await?;
 							}
 						}
-						protocol::ToServer::Events(events) => {
+						protocol::ToServer::ToServerEvents(events) => {
 							let last_event_idx = events.last().map(|event| event.index);
 
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
 							for event in events {
-								let actor_id = event.inner.actor_id();
+								let actor_id =
+									crate::utils::event_actor_id(&event.inner).to_string();
 								let res = ctx
-									.signal(event.inner)
+									.signal(crate::workflows::actor::Event { inner: event.inner })
 									.to_workflow::<crate::workflows::actor::Workflow>()
-									.tag("actor_id", actor_id)
+									.tag("actor_id", &actor_id)
 									.send()
 									.await;
 
@@ -184,21 +191,24 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								if last_event_idx > state.last_event_ack_idx.saturating_add(500) {
 									state.last_event_ack_idx = last_event_idx;
 
-									ctx.msg(ToWs {
+									ctx.activity(SendMessageToRunnerInput {
 										runner_id: input.runner_id,
-										inner: protocol::ToClient::AckEvents {
-											last_event_idx: state.last_event_ack_idx,
-										},
+										message: protocol::ToClient::ToClientAckEvents(
+											protocol::ToClientAckEvents {
+												last_event_idx: state.last_event_ack_idx,
+											},
+										),
 									})
-									.send()
 									.await?;
 								}
 							}
 						}
-						protocol::ToServer::AckCommands { last_command_idx } => {
+						protocol::ToServer::ToServerAckCommands(
+							protocol::ToServerAckCommands { last_command_idx },
+						) => {
 							ctx.activity(AckCommandsInput { last_command_idx }).await?;
 						}
-						protocol::ToServer::Stopping => {
+						protocol::ToServer::ToServerStopping => {
 							// The workflow will enter a draining state where it can still process signals if
 							// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
 							state.draining = true;
@@ -234,9 +244,13 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 
 								let commands = actors
 									.into_iter()
-									.map(|(actor_id, generation)| protocol::Command::StopActor {
-										actor_id,
-										generation,
+									.map(|(actor_id, generation)| {
+										protocol::Command::CommandStopActor(
+											protocol::CommandStopActor {
+												actor_id: actor_id.to_string(),
+												generation,
+											},
+										)
 									})
 									.collect::<Vec<_>>();
 
@@ -246,9 +260,9 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									})
 									.await?;
 
-								ctx.msg(ToWs {
+								ctx.activity(SendMessageToRunnerInput {
 									runner_id: input.runner_id,
-									inner: protocol::ToClient::Commands(
+									message: protocol::ToClient::ToClientCommands(
 										commands
 											.into_iter()
 											.enumerate()
@@ -259,22 +273,29 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 											.collect(),
 									),
 								})
-								.send()
 								.await?;
 							}
+						}
+						protocol::ToServer::ToServerPing(_)
+						| protocol::ToServer::ToServerKvRequest(_)
+						| protocol::ToServer::ToServerTunnelMessage(_) => {
+							bail!(
+								"received message that should not be sent to runner workflow: {:?}",
+								sig.inner
+							)
 						}
 					}
 				}
 				Some(Main::Command(command)) => {
 					// If draining, ignore start actor command and inform the actor wf that it is lost
 					if let (
-						protocol::Command::StartActor {
+						protocol::Command::CommandStartActor(protocol::CommandStartActor {
 							actor_id,
 							generation,
 							..
-						},
+						}),
 						true,
-					) = (&command, state.draining)
+					) = (&command.inner, state.draining)
 					{
 						tracing::warn!(?actor_id, "attempt to schedule actor to draining runner");
 
@@ -302,19 +323,20 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 					} else {
 						let index = ctx
 							.activity(InsertCommandsInput {
-								commands: vec![command.clone()],
+								commands: vec![command.inner.clone()],
 							})
 							.await?;
 
 						// Forward
-						ctx.msg(ToWs {
+						ctx.activity(SendMessageToRunnerInput {
 							runner_id: input.runner_id,
-							inner: protocol::ToClient::Commands(vec![protocol::CommandWrapper {
-								index,
-								inner: command,
-							}]),
+							message: protocol::ToClient::ToClientCommands(vec![
+								protocol::CommandWrapper {
+									index,
+									inner: command.inner,
+								},
+							]),
 						})
-						.send()
 						.await?;
 					}
 				}
@@ -393,10 +415,10 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	}
 
 	// Close websocket connection (its unlikely to be open)
-	ctx.msg(CloseWs {
+	ctx.activity(SendMessageToRunnerInput {
 		runner_id: input.runner_id,
+		message: protocol::ToClient::ToClientClose,
 	})
-	.send()
 	.await?;
 
 	Ok(())
@@ -1093,23 +1115,43 @@ pub(crate) async fn allocate_pending_actors(
 	Ok(AllocatePendingActorsOutput { allocations: res })
 }
 
-#[message("pegboard_runner_to_ws")]
-pub struct ToWs {
-	pub runner_id: Id,
-	pub inner: protocol::ToClient,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SendMessageToRunnerInput {
+	runner_id: Id,
+	message: protocol::ToClient,
+}
+
+#[activity(SendMessageToRunner)]
+async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerInput) -> Result<()> {
+	let receiver_subject =
+		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+
+	let message_serialized = versioned::ToClient::latest(input.message.clone())
+		.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+
+	ctx.ups()?
+		.publish(&receiver_subject, &message_serialized, PublishOpts::one())
+		.await?;
+
+	Ok(())
 }
 
 #[signal("pegboard_runner_check_queue")]
 pub struct CheckQueue {}
 
-#[message("pegboard_runner_close_ws")]
-pub struct CloseWs {
-	pub runner_id: Id,
+#[signal("pegboard_runner_command")]
+pub struct Command {
+	pub inner: protocol::Command,
+}
+
+#[signal("pegboard_runner_forward")]
+pub struct Forward {
+	pub inner: protocol::ToServer,
 }
 
 join_signal!(Main {
-	Command(protocol::Command),
+	Command(Command),
 	// Forwarded from the ws to this workflow
-	Forward(protocol::ToServer),
+	Forward(Forward),
 	CheckQueue,
 });

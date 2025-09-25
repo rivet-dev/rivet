@@ -1,8 +1,6 @@
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
-use rivet_tunnel_protocol::{
-	MessageId, MessageKind, PROTOCOL_VERSION, PubSubMessage, RequestId, versioned,
-};
+use rivet_runner_protocol::{self as protocol, MessageId, PROTOCOL_VERSION, RequestId, versioned};
 use std::{
 	collections::HashMap,
 	ops::Deref,
@@ -31,7 +29,7 @@ struct PendingMessage {
 }
 
 pub enum TunnelMessageData {
-	Message(MessageKind),
+	Message(protocol::ToServerTunnelMessageKind),
 	Timeout,
 }
 
@@ -49,7 +47,7 @@ impl SharedState {
 	pub fn new(ups: PubSub) -> Self {
 		let gateway_id = Uuid::new_v4();
 		let receiver_subject =
-			pegboard::pubsub_subjects::TunnelGatewayReceiverSubject::new(gateway_id).to_string();
+			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
 
 		Self(Arc::new(SharedStateInner {
 			ups,
@@ -74,7 +72,7 @@ impl SharedState {
 	pub async fn send_message(
 		&self,
 		request_id: RequestId,
-		message_kind: MessageKind,
+		message_kind: protocol::ToClientTunnelMessageKind,
 	) -> Result<()> {
 		let message_id = Uuid::new_v4().as_bytes().clone();
 
@@ -107,19 +105,19 @@ impl SharedState {
 		}
 
 		// Send message
-		let message = PubSubMessage {
+		let message = protocol::ToClient::ToClientTunnelMessage(protocol::ToClientTunnelMessage {
 			request_id,
 			message_id,
 			// Only send reply to subject on the first message for this request. This reduces
 			// overhead of subsequent messages.
-			reply_to: if include_reply_to {
+			gateway_reply_to: if include_reply_to {
 				Some(self.receiver_subject.clone())
 			} else {
 				None
 			},
 			message_kind,
-		};
-		let message_serialized = versioned::PubSubMessage::latest(message)
+		});
+		let message_serialized = versioned::ToClient::latest(message)
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 		self.ups
 			.publish(
@@ -150,20 +148,20 @@ impl SharedState {
 	}
 
 	async fn receiver(&self, mut sub: Subscriber) {
-		while let Result::Ok(NextOutput::Message(msg)) = sub.next().await {
+		while let Ok(NextOutput::Message(msg)) = sub.next().await {
 			tracing::info!(
 				payload_len = msg.payload.len(),
 				"received message from pubsub"
 			);
 
-			match versioned::PubSubMessage::deserialize_with_embedded_version(&msg.payload) {
-				Result::Ok(msg) => {
+			match versioned::ToGateway::deserialize_with_embedded_version(&msg.payload) {
+				Ok(protocol::ToGateway { message: msg }) => {
 					tracing::debug!(
 						?msg.request_id,
 						?msg.message_id,
 						"successfully deserialized message"
 					);
-					if let MessageKind::Ack = &msg.message_kind {
+					if let protocol::ToServerTunnelMessageKind::TunnelAck = &msg.message_kind {
 						// Handle ack message
 
 						let mut pending_messages = self.pending_messages.lock().await;
@@ -173,9 +171,7 @@ impl SharedState {
 							);
 						}
 					} else {
-						// Forward message to receiver
-
-						// Send message to sender using request_id directly
+						// Send message to the request handler to emulate the real network action
 						let requests_in_flight = self.requests_in_flight.lock().await;
 						let Some(in_flight) = requests_in_flight.get(&msg.request_id) else {
 							tracing::debug!(
@@ -193,27 +189,28 @@ impl SharedState {
 							.send(TunnelMessageData::Message(msg.message_kind))
 							.await;
 
-						// Send ack
+						// Send ack back to runner
 						let ups_clone = self.ups.clone();
 						let receiver_subject = in_flight.receiver_subject.clone();
-						let ack_message = PubSubMessage {
-							request_id: msg.request_id,
-							message_id: Uuid::new_v4().into_bytes(),
-							reply_to: None,
-							message_kind: MessageKind::Ack,
+						let ack_message = protocol::ToClient::ToClientTunnelMessage(
+							protocol::ToClientTunnelMessage {
+								request_id: msg.request_id,
+								message_id: Uuid::new_v4().into_bytes(),
+								gateway_reply_to: None,
+								message_kind: protocol::ToClientTunnelMessageKind::TunnelAck,
+							},
+						);
+						let ack_message_serialized = match versioned::ToClient::latest(ack_message)
+							.serialize_with_embedded_version(PROTOCOL_VERSION)
+						{
+							Ok(x) => x,
+							Err(err) => {
+								tracing::error!(?err, "failed to serialize ack");
+								continue;
+							}
 						};
-						let ack_message_serialized =
-							match versioned::PubSubMessage::latest(ack_message)
-								.serialize_with_embedded_version(PROTOCOL_VERSION)
-							{
-								Result::Ok(x) => x,
-								Err(err) => {
-									tracing::error!(?err, "failed to serialize ack");
-									continue;
-								}
-							};
 						tokio::spawn(async move {
-							if let Result::Err(err) = ups_clone
+							if let Err(err) = ups_clone
 								.publish(
 									&receiver_subject,
 									&ack_message_serialized,
@@ -226,7 +223,7 @@ impl SharedState {
 						});
 					}
 				}
-				Result::Err(err) => {
+				Err(err) => {
 					tracing::error!(?err, "failed to parse message");
 				}
 			}

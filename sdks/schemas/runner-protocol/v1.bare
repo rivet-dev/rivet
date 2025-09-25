@@ -167,6 +167,7 @@ type EventWrapper struct {
 }
 
 # MARK: Commands
+#
 type CommandStartActor struct {
 	actorId: Id
 	generation: u32
@@ -188,8 +189,125 @@ type CommandWrapper struct {
 	inner: Command
 }
 
-# MARK: To Server
+# MARK: Tunnel
 
+type RequestId data[16]  # UUIDv4
+type MessageId data[16]  # UUIDv4
+
+
+# Ack
+type TunnelAck void
+
+# HTTP
+type ToClientRequestStart struct {
+	actorId: Id
+	method: str
+	path: str
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToClientRequestChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToClientRequestAbort void
+
+type ToServerResponseStart struct {
+	status: u16
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToServerResponseChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToServerResponseAbort void
+
+# WebSocket
+type ToClientWebSocketOpen struct {
+	actorId: Id
+	path: str
+	headers: map<str><str>
+}
+
+type ToClientWebSocketMessage struct {
+	data: data
+	binary: bool
+}
+
+type ToClientWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+}
+
+type ToServerWebSocketOpen void
+
+type ToServerWebSocketMessage struct {
+	data: data
+	binary: bool
+}
+
+type ToServerWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+}
+
+# To Server
+type ToServerTunnelMessageKind union {
+	TunnelAck |
+
+	# HTTP
+	ToServerResponseStart |
+	ToServerResponseChunk |
+	ToServerResponseAbort |
+	
+	# WebSocket
+	ToServerWebSocketOpen |
+	ToServerWebSocketMessage |
+	ToServerWebSocketClose
+}
+
+type ToServerTunnelMessage struct {
+	requestId: RequestId
+	messageId: MessageId
+	messageKind: ToServerTunnelMessageKind
+}
+
+# To Client
+type ToClientTunnelMessageKind union {
+	TunnelAck |
+
+	# HTTP
+	ToClientRequestStart |
+	ToClientRequestChunk |
+	ToClientRequestAbort |
+	
+	# WebSocket
+	ToClientWebSocketOpen |
+	ToClientWebSocketMessage |
+	ToClientWebSocketClose
+}
+
+type ToClientTunnelMessage struct {
+	requestId: RequestId
+	messageId: MessageId
+	messageKind: ToClientTunnelMessageKind
+
+	# Subject to send replies to.
+	#
+	# Only sent when opening a new request from gateway -> pegboard-runner-ws.
+	#
+	# Should be stripped before sending to the runner.
+	gatewayReplyTo: optional<str>
+}
+
+# MARK: To Server
 type ToServerInit struct {
 	name: str
 	version: u32
@@ -223,7 +341,8 @@ type ToServer union {
 	ToServerAckCommands |
 	ToServerStopping |
 	ToServerPing |
-	ToServerKvRequest
+	ToServerKvRequest |
+	ToServerTunnelMessage
 }
 
 # MARK: To Client
@@ -248,10 +367,19 @@ type ToClientKvResponse struct {
 	data: KvResponseData
 }
 
+type ToClientClose void
+
 type ToClient union {
 	ToClientInit |
+	ToClientClose |
 	ToClientCommands |
 	ToClientAckEvents |
-	ToClientKvResponse
+	ToClientKvResponse |
+	ToClientTunnelMessage
+}
+
+# MARK: To Gateway
+type ToGateway struct {
+	message: ToServerTunnelMessage
 }
 

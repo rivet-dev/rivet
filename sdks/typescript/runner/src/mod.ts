@@ -1,9 +1,9 @@
-import WebSocket from "ws";
+import type WebSocket from "ws";
 import { importWebSocket } from "./websocket.js";
 import * as protocol from "@rivetkit/engine-runner-protocol";
 import { unreachable, calculateBackoff } from "./utils";
 import { Tunnel } from "./tunnel";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 import type { Logger } from "pino";
 import { setLogger, logger } from "./log.js";
 
@@ -102,11 +102,13 @@ export class Runner {
 	#kvCleanupInterval?: NodeJS.Timeout;
 
 	// Tunnel for HTTP/WebSocket forwarding
-	#tunnel?: Tunnel;
+	#tunnel: Tunnel;
 
 	constructor(config: RunnerConfig) {
 		this.#config = config;
 		if (this.#config.logger) setLogger(this.#config.logger);
+
+		this.#tunnel = new Tunnel(this);
 
 		// TODO(RVT-4986): Prune when server acks events
 		// Start pruning old events every minute
@@ -137,9 +139,7 @@ export class Runner {
 		if (!actor) return;
 
 		// Unregister actor from tunnel
-		if (this.#tunnel) {
-			this.#tunnel.unregisterActor(actor);
-		}
+		this.#tunnel.unregisterActor(actor);
 
 		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
 		try {
@@ -244,10 +244,9 @@ export class Runner {
 
 		logger()?.info("starting runner");
 
+		this.#tunnel.start();
+
 		try {
-			// Connect tunnel first and wait for it to be ready before connecting runner WebSocket
-			// This prevents a race condition where the runner appears ready but can't accept network requests
-			await this.#openTunnelAndWait();
 			await this.#openPegboardWebSocket();
 		} catch (error) {
 			this.#started = false;
@@ -312,7 +311,7 @@ export class Runner {
 		// Close WebSocket
 		if (
 			this.#pegboardWebSocket &&
-			this.#pegboardWebSocket.readyState === WebSocket.OPEN
+			this.#pegboardWebSocket.readyState === 1
 		) {
 			const pegboardWebSocket = this.#pegboardWebSocket;
 			if (immediate) {
@@ -334,7 +333,7 @@ export class Runner {
 					});
 					if (
 						this.#pegboardWebSocket &&
-						this.#pegboardWebSocket.readyState === WebSocket.OPEN
+						this.#pegboardWebSocket.readyState === 1
 					) {
 						this.#pegboardWebSocket.send(encoded);
 					} else {
@@ -408,41 +407,6 @@ export class Runner {
 		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_name=${encodeURIComponent(this.#config.runnerName)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
-	async #openTunnelAndWait(): Promise<void> {
-		return new Promise((resolve, reject) => {
-			const url = this.pegboardTunnelUrl;
-			logger()?.info({ msg: "opening tunnel to:", url });
-			logger()?.info({
-				msg: "current runner id:",
-				runnerId: this.runnerId || "none",
-			});
-			logger()?.info({
-				msg: "active actors count:",
-				actors: this.#actors.size,
-			});
-
-			let connected = false;
-
-			this.#tunnel = new Tunnel(this, url, {
-				onConnected: () => {
-					if (!connected) {
-						connected = true;
-						logger()?.info("tunnel connected");
-						resolve();
-					}
-				},
-				onDisconnected: () => {
-					if (!connected) {
-						// First connection attempt failed
-						reject(new Error("Tunnel connection failed"));
-					}
-					// If already connected, tunnel will handle reconnection automatically
-				},
-			});
-			this.#tunnel.start();
-		});
-	}
-
 	// MARK: Runner protocol
 	async #openPegboardWebSocket() {
 		const WS = await importWebSocket();
@@ -491,7 +455,7 @@ export class Runner {
 				metadata: JSON.stringify(this.#config.metadata),
 			};
 
-			this.#sendToServer({
+			this.__sendToServer({
 				tag: "ToServerInit",
 				val: init,
 			});
@@ -502,8 +466,8 @@ export class Runner {
 			// Start ping interval
 			const pingInterval = 1000;
 			const pingLoop = setInterval(() => {
-				if (ws.readyState === WebSocket.OPEN) {
-					this.#sendToServer({
+				if (ws.readyState === 1) {
+					this.__sendToServer({
 						tag: "ToServerPing",
 						val: {
 							ts: BigInt(Date.now()),
@@ -519,7 +483,7 @@ export class Runner {
 			// Start command acknowledgment interval (5 minutes)
 			const ackInterval = 5 * 60 * 1000; // 5 minutes in milliseconds
 			const ackLoop = setInterval(() => {
-				if (ws.readyState === WebSocket.OPEN) {
+				if (ws.readyState === 1) {
 					this.#sendCommandAcknowledgment();
 				} else {
 					clearInterval(ackLoop);
@@ -530,13 +494,13 @@ export class Runner {
 		});
 
 		ws.addEventListener("message", async (ev) => {
-			let buf;
+			let buf: Uint8Array;
 			if (ev.data instanceof Blob) {
 				buf = new Uint8Array(await ev.data.arrayBuffer());
 			} else if (Buffer.isBuffer(ev.data)) {
 				buf = new Uint8Array(ev.data);
 			} else {
-				throw new Error("expected binary data, got " + typeof ev.data);
+				throw new Error(`expected binary data, got ${typeof ev.data}`);
 			}
 
 			// Parse message
@@ -545,7 +509,6 @@ export class Runner {
 			// Handle message
 			if (message.tag === "ToClientInit") {
 				const init = message.val;
-				const hadRunnerId = !!this.runnerId;
 				this.runnerId = init.runnerId;
 
 				// Store the runner lost threshold from metadata
@@ -572,6 +535,12 @@ export class Runner {
 			} else if (message.tag === "ToClientKvResponse") {
 				const kvResponse = message.val;
 				this.#handleKvResponse(kvResponse);
+			} else if (message.tag === "ToClientTunnelMessage") {
+				this.#tunnel?.handleTunnelMessage(message.val);
+			} else if (message.tag === "ToClientClose") {
+				// TODO: Close ws
+			} else {
+				unreachable(message);
 			}
 		});
 
@@ -633,6 +602,8 @@ export class Runner {
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
 				this.#handleCommandStopActor(commandWrapper);
+			} else {
+				unreachable(commandWrapper.inner);
 			}
 
 			this.#lastCommandIdx = Number(commandWrapper.index);
@@ -743,7 +714,7 @@ export class Runner {
 			val: eventWrapper.inner.val,
 		});
 
-		this.#sendToServer({
+		this.__sendToServer({
 			tag: "ToServerEvents",
 			val: [eventWrapper],
 		});
@@ -804,7 +775,7 @@ export class Runner {
 			val: eventWrapper.inner.val,
 		});
 
-		this.#sendToServer({
+		this.__sendToServer({
 			tag: "ToServerEvents",
 			val: [eventWrapper],
 		});
@@ -825,7 +796,7 @@ export class Runner {
 
 		//logger()?.log("Sending command acknowledgment", this.#lastCommandIdx);
 
-		this.#sendToServer({
+		this.__sendToServer({
 			tag: "ToServerAckCommands",
 			val: {
 				lastCommandIdx: BigInt(this.#lastCommandIdx),
@@ -1154,7 +1125,7 @@ export class Runner {
 			timestamp: Date.now(),
 		});
 
-		this.#sendToServer({
+		this.__sendToServer({
 			tag: "ToServerEvents",
 			val: [eventWrapper],
 		});
@@ -1177,7 +1148,7 @@ export class Runner {
 			const requestId = this.#nextRequestId++;
 			const isConnected =
 				this.#pegboardWebSocket &&
-				this.#pegboardWebSocket.readyState === WebSocket.OPEN;
+				this.#pegboardWebSocket.readyState === 1;
 
 			// Store the request
 			const requestEntry = {
@@ -1209,7 +1180,7 @@ export class Runner {
 				data: request.data,
 			};
 
-			this.#sendToServer({
+			this.__sendToServer({
 				tag: "ToServerKvRequest",
 				val: kvRequest,
 			});
@@ -1226,7 +1197,7 @@ export class Runner {
 	#processUnsentKvRequests() {
 		if (
 			!this.#pegboardWebSocket ||
-			this.#pegboardWebSocket.readyState !== WebSocket.OPEN
+			this.#pegboardWebSocket.readyState !== 1
 		) {
 			return;
 		}
@@ -1244,7 +1215,13 @@ export class Runner {
 		}
 	}
 
-	#sendToServer(message: protocol.ToServer) {
+	__webSocketReady(): boolean {
+		return this.#pegboardWebSocket
+			? this.#pegboardWebSocket.readyState === 1
+			: false;
+	}
+
+	__sendToServer(message: protocol.ToServer) {
 		if (this.#shutdown) {
 			logger()?.warn(
 				"Runner is shut down, cannot send message to server",
@@ -1255,7 +1232,7 @@ export class Runner {
 		const encoded = protocol.encodeToServer(message);
 		if (
 			this.#pegboardWebSocket &&
-			this.#pegboardWebSocket.readyState === WebSocket.OPEN
+			this.#pegboardWebSocket.readyState === 1
 		) {
 			this.#pegboardWebSocket.send(encoded);
 		} else {
@@ -1306,7 +1283,7 @@ export class Runner {
 
 		// Resend events in batches
 		const events = eventsToResend.map((item) => item.event);
-		this.#sendToServer({
+		this.__sendToServer({
 			tag: "ToServerEvents",
 			val: events,
 		});

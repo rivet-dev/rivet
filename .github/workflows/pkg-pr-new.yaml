@@ -16,5 +16,5 @@ jobs:
         with:
           cache: "pnpm"
       - run: pnpm install
-      - run: pnpm build -F @rivetkit/engine-runner-protocol -F @rivetkit/engine-tunnel-protocol -F @rivetkit/engine-runner
-      - run: pnpm dlx pkg-pr-new publish 'sdks/typescript/runner/' 'sdks/typescript/runner-protocol/' 'sdks/typescript/tunnel-protocol/'
+      - run: pnpm build -F @rivetkit/engine-runner-protocol -F @rivetkit/engine-runner
+      - run: pnpm dlx pkg-pr-new publish 'sdks/typescript/runner/' 'sdks/typescript/runner-protocol/'

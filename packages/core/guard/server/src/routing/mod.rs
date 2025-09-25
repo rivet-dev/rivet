@@ -9,7 +9,6 @@ use crate::{errors, shared_state::SharedState};
 
 mod api_public;
 pub mod pegboard_gateway;
-mod pegboard_tunnel;
 mod runner;
 
 pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
@@ -50,12 +49,6 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 							headers,
 						)
 						.await?
-						{
-							return Ok(routing_output);
-						}
-
-						if let Some(routing_output) =
-							pegboard_tunnel::route_request(&ctx, target, host, path).await?
 						{
 							return Ok(routing_output);
 						}

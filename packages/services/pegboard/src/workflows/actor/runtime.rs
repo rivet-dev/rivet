@@ -1,10 +1,11 @@
-use std::time::Instant;
-
+use base64::Engine as _;
+use base64::prelude::BASE64_STANDARD;
 use futures_util::StreamExt;
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
-use rivet_runner_protocol::protocol;
+use rivet_runner_protocol as protocol;
+use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
@@ -457,16 +458,22 @@ pub async fn spawn_actor(
 		}
 	};
 
-	ctx.signal(protocol::Command::StartActor {
-		actor_id: input.actor_id,
-		generation,
-		config: Box::new(protocol::ActorConfig {
-			name: input.name.clone(),
-			key: input.key.clone(),
-			// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
-			// changes (like activity inputs) so this is fine for now.
-			create_ts: util::timestamp::now(),
-			input: input.input.clone(),
+	ctx.signal(crate::workflows::runner::Command {
+		inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
+			actor_id: input.actor_id.to_string(),
+			generation,
+			config: protocol::ActorConfig {
+				name: input.name.clone(),
+				key: input.key.clone(),
+				// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
+				// changes (like activity inputs) so this is fine for now.
+				create_ts: util::timestamp::now(),
+				input: input
+					.input
+					.as_ref()
+					.map(|x| BASE64_STANDARD.decode(x))
+					.transpose()?,
+			},
 		}),
 	})
 	.to_workflow_id(allocate_res.runner_workflow_id)

@@ -7,7 +7,6 @@ packages:
   - sdks/typescript/runner
   - sdks/typescript/runner-protocol
   - sdks/typescript/test-runner
-  - sdks/typescript/tunnel-protocol
   - site
   - frontend/packages/components/
   - frontend/packages/icons/

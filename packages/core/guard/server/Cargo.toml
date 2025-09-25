@@ -24,7 +24,6 @@ hyper = "1.6.0"
 indoc.workspace = true
 once_cell.workspace = true
 pegboard-gateway.workspace = true
-pegboard-tunnel.workspace = true
 pegboard.workspace = true
 pegboard-runner.workspace = true
 regex.workspace = true
