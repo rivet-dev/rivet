@@ -20,7 +20,7 @@
           "actors::list"
         ],
         "summary": " ## Datacenter Round Trips",
-        "description": " **If key is some & `include_destroyed` is false**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors/{} (multiple DCs based on actor IDs)\n\n\tThis path is optimized because we can read the actor IDs fro the key directly from Epoxy with\n\tstale consistency to determine which datacenter the actor lives in. Under most circumstances,\n\tthis means we don't need to fan out to all datacenters (like normal list does).\n\n\tThe reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If\n\t`include_destroyed` is true, we show all previous iterations of actors with the same key.\n\n **Otherwise**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (fanout)\n\n ## Optimized Alternative Routes\n\n For minimal round trips to check if an actor exists for a key, use `GET /actors/by-id`. This\n does not require fetching the actor's state, so it returns immediately.",
+        "description": " **If key is some & `include_destroyed` is false**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (multiple DCs based on actor IDs)\n\n\tThis path is optimized because we can read the actor IDs fro the key directly from Epoxy with\n\tstale consistency to determine which datacenter the actor lives in. Under most circumstances,\n\tthis means we don't need to fan out to all datacenters (like normal list does).\n\n\tThe reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If\n\t`include_destroyed` is true, we show all previous iterations of actors with the same key.\n\n **Otherwise**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (fanout)\n\n ## Optimized Alternative Routes",
         "operationId": "actors_list",
         "parameters": [
           {
@@ -99,7 +99,7 @@
           "actors::get_or_create"
         ],
         "summary": "## Datacenter Round Trips",
-        "description": "**If actor exists**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- GET /actors/{}\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.\n\n## Optimized Alternative Routes\n\nFor minimal round trips to get or create an actor, use `PUT /actors/by-id`. This doesn't\nrequire fetching the actor's state from the other datacenter.",
+        "description": "**If actor exists**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- GET /actors/{}\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.\n\n## Optimized Alternative Routes",
         "operationId": "actors_get_or_create",
         "parameters": [
           {
@@ -191,102 +191,6 @@
         }
       }
     },
-    "/actors/by-id": {
-      "get": {
-        "tags": [
-          "actors::get_by_id"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "1 round trip:\n- namespace::ops::resolve_for_name_global\n\nThis does not require another round trip since we use stale consistency for the get_id_for_key.",
-        "operationId": "actors_get_by_id",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "key",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsGetByIdResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "actors::get_or_create_by_id"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "**If actor exists**\n\n1 round trip:\n- namespace::ops::resolve_for_name_global\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actors::keys::allocate_key] Reserve Epoxy key\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- namespace::ops::get (to get namespace name for remote call)\n- POST /actors to remote datacenter",
-        "operationId": "actors_get_or_create_by_id",
-        "parameters": [
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "datacenter",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActorsGetOrCreateByIdRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsGetOrCreateByIdResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/actors/names": {
       "get": {
         "tags": [
@@ -337,44 +241,6 @@
       }
     },
     "/actors/{actor_id}": {
-      "get": {
-        "tags": [
-          "actors::get"
-        ],
-        "summary": "## Datacenter Round Trips",
-        "description": "2 round trip:\n- GET /actors/{}\n- [api-peer] namespace::ops::resolve_for_name_global",
-        "operationId": "actors_get",
-        "parameters": [
-          {
-            "name": "actor_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActorsGetResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "delete": {
         "tags": [
           "actors::delete"
@@ -467,14 +333,11 @@
             }
           },
           {
-            "name": "namespace_id",
+            "name": "namespace_ids",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/RivetId"
-              }
+              "type": "string"
             }
           }
         ],
@@ -484,7 +347,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespacesListResponse"
+                  "$ref": "#/components/schemas/ActorsListResponse"
                 }
               }
             }
@@ -513,36 +376,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NamespacesCreateResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/namespaces/{namespace_id}": {
-      "get": {
-        "tags": [
-          "namespaces"
-        ],
-        "operationId": "namespaces_get",
-        "parameters": [
-          {
-            "name": "namespace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NamespacesGetResponse"
                 }
               }
             }
@@ -591,14 +424,11 @@
             }
           },
           {
-            "name": "runner_name",
+            "name": "runner_names",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "string"
             }
           }
         ],
@@ -724,6 +554,14 @@
             }
           },
           {
+            "name": "runner_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "include_stopped",
             "in": "query",
             "required": false,
@@ -805,44 +643,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunnersListNamesResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runners/{runner_id}": {
-      "get": {
-        "tags": [
-          "runners"
-        ],
-        "operationId": "runners_get",
-        "parameters": [
-          {
-            "name": "runner_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/RivetId"
-            }
-          },
-          {
-            "name": "namespace",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunnersGetResponse"
                 }
               }
             }
@@ -992,66 +792,6 @@
       "ActorsDeleteResponse": {
         "type": "object"
       },
-      "ActorsGetByIdResponse": {
-        "type": "object",
-        "properties": {
-          "actor_id": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RivetId"
-              }
-            ]
-          }
-        }
-      },
-      "ActorsGetOrCreateByIdRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "key",
-          "runner_name_selector",
-          "crash_policy"
-        ],
-        "properties": {
-          "crash_policy": {
-            "$ref": "#/components/schemas/CrashPolicy"
-          },
-          "input": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "runner_name_selector": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ActorsGetOrCreateByIdResponse": {
-        "type": "object",
-        "required": [
-          "actor_id",
-          "created"
-        ],
-        "properties": {
-          "actor_id": {
-            "$ref": "#/components/schemas/RivetId"
-          },
-          "created": {
-            "type": "boolean"
-          }
-        }
-      },
       "ActorsGetOrCreateRequest": {
         "type": "object",
         "required": [
@@ -1097,17 +837,6 @@
           }
         }
       },
-      "ActorsGetResponse": {
-        "type": "object",
-        "required": [
-          "actor"
-        ],
-        "properties": {
-          "actor": {
-            "$ref": "#/components/schemas/Actor"
-          }
-        }
-      },
       "ActorsListNamesResponse": {
         "type": "object",
         "required": [
@@ -1133,14 +862,14 @@
       "ActorsListResponse": {
         "type": "object",
         "required": [
-          "actors",
+          "namespaces",
           "pagination"
         ],
         "properties": {
-          "actors": {
+          "namespaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Actor"
+              "$ref": "#/components/schemas/Namespace"
             }
           },
           "pagination": {
@@ -1242,36 +971,6 @@
         "properties": {
           "namespace": {
             "$ref": "#/components/schemas/Namespace"
-          }
-        },
-        "additionalProperties": false
-      },
-      "NamespacesGetResponse": {
-        "type": "object",
-        "required": [
-          "namespace"
-        ],
-        "properties": {
-          "namespace": {
-            "$ref": "#/components/schemas/Namespace"
-          }
-        }
-      },
-      "NamespacesListResponse": {
-        "type": "object",
-        "required": [
-          "namespaces",
-          "pagination"
-        ],
-        "properties": {
-          "namespaces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Namespace"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/Pagination"
           }
         },
         "additionalProperties": false
@@ -1525,18 +1224,6 @@
       },
       "RunnerConfigsUpsertResponse": {
         "type": "object"
-      },
-      "RunnersGetResponse": {
-        "type": "object",
-        "required": [
-          "runner"
-        ],
-        "properties": {
-          "runner": {
-            "$ref": "#/components/schemas/Runner"
-          }
-        },
-        "additionalProperties": false
       },
       "RunnersListNamesResponse": {
         "type": "object",

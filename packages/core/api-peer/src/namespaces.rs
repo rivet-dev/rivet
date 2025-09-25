@@ -1,91 +1,18 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::pagination::Pagination;
+use rivet_api_types::{namespaces::list::*, pagination::Pagination};
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
-
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct GetQuery {}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = NamespacesGetResponse)]
-pub struct GetResponse {
-	pub namespace: namespace::types::Namespace,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GetPath {
-	pub namespace_id: Id,
-}
-
-pub async fn get(ctx: ApiCtx, path: GetPath, _query: GetQuery) -> Result<GetResponse> {
-	let namespace = ctx
-		.op(namespace::ops::get_local::Input {
-			namespace_ids: vec![path.namespace_id],
-		})
-		.await?
-		.into_iter()
-		.next()
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
-	Ok(GetResponse { namespace })
-}
-
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ResolveForNameQuery {}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = NamespacesResolveForNameResponse)]
-pub struct ResolveForNameResponse {
-	pub namespace: namespace::types::Namespace,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ResolveForNamePath {
-	pub name: String,
-}
-
-pub async fn resolve_for_name(
-	ctx: ApiCtx,
-	path: ResolveForNamePath,
-	_query: ResolveForNameQuery,
-) -> Result<ResolveForNameResponse> {
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_local::Input { name: path.name })
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
-	Ok(ResolveForNameResponse { namespace })
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ListQuery {
-	pub limit: Option<usize>,
-	pub cursor: Option<String>,
-	pub name: Option<String>,
-	#[serde(default)]
-	pub namespace_id: Vec<Id>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = NamespacesListResponse)]
-pub struct ListResponse {
-	pub namespaces: Vec<namespace::types::Namespace>,
-	pub pagination: Pagination,
-}
+use utoipa::ToSchema;
 
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
+	let namespace_ids = query.namespace_ids.as_ref().map(|x| {
+		x.split(',')
+			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+			.collect::<Vec<_>>()
+	});
+
 	// If name filter is provided, resolve and return only that namespace
 	if let Some(name) = query.name {
 		let namespace = ctx
@@ -102,11 +29,9 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 			namespaces,
 			pagination: Pagination { cursor: None },
 		})
-	} else if !query.namespace_id.is_empty() {
+	} else if let Some(namespace_ids) = namespace_ids {
 		let namespaces = ctx
-			.op(namespace::ops::get_global::Input {
-				namespace_ids: query.namespace_id,
-			})
+			.op(namespace::ops::get_global::Input { namespace_ids })
 			.await?;
 
 		Ok(ListResponse {
@@ -144,7 +69,7 @@ pub struct CreateRequest {
 #[serde(deny_unknown_fields)]
 #[schema(as = NamespacesCreateResponse)]
 pub struct CreateResponse {
-	pub namespace: namespace::types::Namespace,
+	pub namespace: rivet_types::namespaces::Namespace,
 }
 
 pub async fn create(

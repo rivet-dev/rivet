@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use gas::prelude::*;
-
-use crate::types::RunnerConfig;
+use rivet_types::namespaces::RunnerConfig;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Input {

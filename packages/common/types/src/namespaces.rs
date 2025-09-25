@@ -1,8 +1,6 @@
 use gas::prelude::*;
 use utoipa::ToSchema;
 
-use crate::keys;
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Namespace {
 	pub namespace_id: Id,
@@ -23,14 +21,6 @@ pub enum RunnerConfig {
 		max_runners: u32,
 		runners_margin: u32,
 	},
-}
-
-impl RunnerConfig {
-	pub fn variant(&self) -> keys::RunnerConfigVariant {
-		match self {
-			RunnerConfig::Serverless { .. } => keys::RunnerConfigVariant::Serverless,
-		}
-	}
 }
 
 impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::Data {

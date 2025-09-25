@@ -39,7 +39,7 @@ pub struct ListResponse {
 ///
 /// 2 round trips:
 /// - namespace::ops::resolve_for_name_global
-/// - GET /actors/{} (multiple DCs based on actor IDs)
+/// - GET /actors (multiple DCs based on actor IDs)
 ///
 ///	This path is optimized because we can read the actor IDs fro the key directly from Epoxy with
 ///	stale consistency to determine which datacenter the actor lives in. Under most circumstances,
@@ -55,9 +55,6 @@ pub struct ListResponse {
 /// - GET /actors (fanout)
 ///
 /// ## Optimized Alternative Routes
-///
-/// For minimal round trips to check if an actor exists for a key, use `GET /actors/by-id`. This
-/// does not require fetching the actor's state, so it returns immediately.
 #[utoipa::path(
     get,
 	operation_id = "actors_list",

@@ -1,65 +1,14 @@
 use anyhow::Result;
 use axum::{
-	extract::{Extension, Path, Query},
+	extract::{Extension, Query},
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
 use rivet_api_builder::{ApiCtx, ApiError};
-use rivet_api_types::{
-	pagination::Pagination,
-	runners::{get::*, list::*},
-};
-use rivet_api_util::{fanout_to_datacenters, request_remote_datacenter_raw};
-use rivet_util::Id;
+use rivet_api_types::{pagination::Pagination, runners::list::*};
+use rivet_api_util::fanout_to_datacenters;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
-
-#[utoipa::path(
-    get,
-	operation_id = "runners_get",
-    path = "/runners/{runner_id}",
-    params(
-        ("runner_id" = Id, Path),
-        GetQuery,
-    ),
-    responses(
-        (status = 200, body = GetResponse),
-    ),
-)]
-pub async fn get(
-	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
-	Path(path): Path<rivet_api_peer::runners::GetPath>,
-	Query(query): Query<GetQuery>,
-) -> Response {
-	match get_inner(ctx, headers, path, query).await {
-		Ok(response) => response,
-		Err(err) => ApiError::from(err).into_response(),
-	}
-}
-
-async fn get_inner(
-	ctx: ApiCtx,
-	headers: HeaderMap,
-	path: rivet_api_peer::runners::GetPath,
-	query: GetQuery,
-) -> Result<Response> {
-	if path.runner_id.label() == ctx.config().dc_label() {
-		let res = rivet_api_peer::runners::get(ctx, path, query).await?;
-		Ok(Json(res).into_response())
-	} else {
-		request_remote_datacenter_raw(
-			&ctx,
-			path.runner_id.label(),
-			&format!("/runners/{}", path.runner_id),
-			axum::http::Method::GET,
-			headers,
-			Some(&query),
-			Option::<&()>::None,
-		)
-		.await
-	}
-}
 
 #[utoipa::path(
     get,

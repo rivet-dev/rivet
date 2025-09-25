@@ -1,7 +1,8 @@
 use gas::prelude::*;
+use rivet_types::namespaces::Namespace;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys, ops::get_local::get_inner, types::Namespace};
+use crate::{errors, keys, ops::get_local::get_inner};
 
 #[derive(Debug)]
 pub struct Input {

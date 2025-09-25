@@ -9,10 +9,10 @@ use std::{
 use anyhow::Result;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use namespace::types::RunnerConfig;
 use pegboard::keys;
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
+use rivet_types::namespaces::RunnerConfig;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;

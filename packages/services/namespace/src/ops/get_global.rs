@@ -1,6 +1,5 @@
 use gas::prelude::*;
-
-use crate::types::Namespace;
+use rivet_types::namespaces::Namespace;
 
 #[derive(Debug)]
 pub struct Input {
@@ -40,8 +39,10 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 							.send()
 							.await?;
 
-						let res =
-							rivet_api_util::parse_response::<NamespaceListResponse>(res).await?;
+						let res = rivet_api_util::parse_response::<
+							rivet_api_types::namespaces::list::ListResponse,
+						>(res)
+						.await?;
 
 						for ns in res.namespaces {
 							let namespace_id = ns.namespace_id;
@@ -54,10 +55,4 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 			})
 			.await
 	}
-}
-
-// TODO: Cyclical dependency with api_peer
-#[derive(Deserialize)]
-struct NamespaceListResponse {
-	namespaces: Vec<Namespace>,
 }

@@ -1,9 +1,10 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
+use rivet_types::namespaces::RunnerConfig;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys, types::RunnerConfig};
+use crate::{errors, keys};
 
 #[derive(Debug)]
 pub struct Input {

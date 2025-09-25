@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use namespace::utils::runner_config_variant;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::pagination::Pagination;
 use rivet_util::Id;
@@ -16,7 +17,7 @@ pub struct ListQuery {
 	pub cursor: Option<String>,
 	pub variant: Option<namespace::keys::RunnerConfigVariant>,
 	#[serde(default)]
-	pub runner_name: Vec<String>,
+	pub runner_names: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -27,7 +28,7 @@ pub struct ListPath {}
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsListResponse)]
 pub struct ListResponse {
-	pub runner_configs: HashMap<String, namespace::types::RunnerConfig>,
+	pub runner_configs: HashMap<String, rivet_types::namespaces::RunnerConfig>,
 	pub pagination: Pagination,
 }
 
@@ -39,13 +40,12 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	if !query.runner_name.is_empty() {
+	if let Some(runner_names) = query.runner_names {
 		let runner_configs = ctx
 			.op(namespace::ops::runner_config::get_local::Input {
-				runners: query
-					.runner_name
-					.iter()
-					.map(|name| (namespace.namespace_id, name.clone()))
+				runners: runner_names
+					.split(',')
+					.map(|name| (namespace.namespace_id, name.to_string()))
 					.collect(),
 			})
 			.await?;
@@ -88,7 +88,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 
 		let cursor = runner_configs
 			.last()
-			.map(|(name, config)| format!("{}:{}", config.variant(), name));
+			.map(|(name, config)| format!("{}:{}", runner_config_variant(&config), name));
 
 		Ok(ListResponse {
 			// TODO: Implement ComposeSchema for FakeMap so we don't have to reallocate
@@ -114,7 +114,7 @@ pub struct UpsertPath {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsUpsertRequest)]
-pub struct UpsertRequest(#[schema(inline)] namespace::types::RunnerConfig);
+pub struct UpsertRequest(#[schema(inline)] rivet_types::namespaces::RunnerConfig);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsUpsertResponse)]
@@ -159,7 +159,7 @@ pub struct DeletePath {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsDeleteRequest)]
-pub struct DeleteRequest(namespace::types::RunnerConfig);
+pub struct DeleteRequest(rivet_types::namespaces::RunnerConfig);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsDeleteResponse)]

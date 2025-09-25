@@ -14,7 +14,7 @@ pub struct Input {
 pub struct RunnerConfig {
 	pub namespace_id: Id,
 	pub name: String,
-	pub config: crate::types::RunnerConfig,
+	pub config: rivet_types::namespaces::RunnerConfig,
 }
 
 #[operation]

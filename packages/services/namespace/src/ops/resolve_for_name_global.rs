@@ -1,6 +1,5 @@
 use gas::prelude::*;
-
-use crate::types::Namespace;
+use rivet_types::namespaces::Namespace;
 
 #[derive(Debug)]
 pub struct Input {
@@ -31,33 +30,17 @@ pub async fn namespace_resolve_for_name_global(
 					let leader_dc = leader_dc.clone();
 					let client = client.clone();
 					async move {
-						let url = leader_dc
-							.api_peer_url
-							.join(&format!("/namespaces/resolve/{}", input.name))?;
-						let res = client.get(url).send().await?;
+						let url = leader_dc.api_peer_url.join(&format!("/namespaces"))?;
+						let res = client.get(url).query(&("name", &input.name)).send().await?;
 
-						let res =
-							rivet_api_util::parse_response::<ResolveForNameResponse>(res).await;
+						let res = rivet_api_util::parse_response::<
+							rivet_api_types::namespaces::list::ListResponse,
+						>(res)
+						.await?;
 
-						let res = match res {
-							Ok(res) => Ok(Some(res.namespace)),
-							Err(err) => {
-								// Explicitly handle namespace not found error
-								if let Some(error) = err.chain().find_map(|x| {
-									x.downcast_ref::<rivet_api_builder::RawErrorResponse>()
-								}) {
-									if error.1.group == "namespace" && error.1.code == "not_found" {
-										Ok(None)
-									} else {
-										Err(err)
-									}
-								} else {
-									Err(err)
-								}
-							}
-						};
+						let ns = res.namespaces.into_iter().next();
 
-						cache.resolve(&key, res?);
+						cache.resolve(&key, ns);
 
 						Ok(cache)
 					}
@@ -66,10 +49,4 @@ pub async fn namespace_resolve_for_name_global(
 			.await
 			.map(|x| x.flatten())
 	}
-}
-
-// TODO: Cyclical dependency with api_peer
-#[derive(Deserialize)]
-struct ResolveForNameResponse {
-	namespace: Namespace,
 }

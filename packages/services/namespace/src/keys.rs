@@ -232,7 +232,7 @@ impl RunnerConfigKey {
 }
 
 impl FormalKey for RunnerConfigKey {
-	type Value = crate::types::RunnerConfig;
+	type Value = rivet_types::namespaces::RunnerConfig;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		Ok(
@@ -325,7 +325,7 @@ impl RunnerConfigByVariantKey {
 }
 
 impl FormalKey for RunnerConfigByVariantKey {
-	type Value = crate::types::RunnerConfig;
+	type Value = rivet_types::namespaces::RunnerConfig;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		Ok(

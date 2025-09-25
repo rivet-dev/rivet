@@ -1,8 +1,9 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
+use rivet_types::namespaces::Namespace;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys, types::Namespace};
+use crate::{errors, keys};
 
 #[derive(Debug)]
 pub struct Input {

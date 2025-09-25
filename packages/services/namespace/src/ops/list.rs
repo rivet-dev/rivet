@@ -1,10 +1,11 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
+use rivet_types::namespaces::Namespace;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys, types::Namespace};
+use crate::{errors, keys};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Input {

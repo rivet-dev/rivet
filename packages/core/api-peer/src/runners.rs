@@ -1,48 +1,8 @@
 use anyhow::Result;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::{
-	pagination::Pagination,
-	runners::{get::*, list::*},
-};
-use rivet_util::Id;
+use rivet_api_types::{pagination::Pagination, runners::list::*};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GetPath {
-	pub runner_id: Id,
-}
-
-pub async fn get(ctx: ApiCtx, path: GetPath, query: GetQuery) -> Result<GetResponse> {
-	let runners_res = ctx
-		.op(pegboard::ops::runner::get::Input {
-			runner_ids: vec![path.runner_id],
-		})
-		.await?;
-
-	let runner = runners_res
-		.runners
-		.into_iter()
-		.next()
-		.ok_or_else(|| pegboard::errors::Runner::NotFound.build())?;
-
-	// If namespace is provided, verify the runner has actors from that namespace
-	if let Some(namespace_name) = query.namespace {
-		let namespace = ctx
-			.op(namespace::ops::resolve_for_name_global::Input {
-				name: namespace_name,
-			})
-			.await?
-			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
-		if runner.namespace_id != namespace.namespace_id {
-			return Err(pegboard::errors::Runner::NotFound.build());
-		}
-	}
-
-	Ok(GetResponse { runner })
-}
 
 #[utoipa::path(
     get,
@@ -61,26 +21,42 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	let list_res = ctx
-		.op(pegboard::ops::runner::list_for_ns::Input {
-			namespace_id: namespace.namespace_id,
-			name: query.name,
-			include_stopped: query.include_stopped.unwrap_or(false),
-			created_before: query
-				.cursor
-				.as_deref()
-				.map(|c| c.parse::<i64>())
-				.transpose()?,
-			limit: query.limit.unwrap_or(100),
+	if let Some(runner_ids) = query.runner_ids {
+		let runner_ids = runner_ids
+			.split(',')
+			.filter_map(|s| s.trim().parse::<rivet_util::Id>().ok())
+			.collect::<Vec<_>>();
+		let runners = ctx
+			.op(pegboard::ops::runner::get::Input { runner_ids })
+			.await?
+			.runners;
+
+		Ok(ListResponse {
+			runners,
+			pagination: Pagination { cursor: None },
 		})
-		.await?;
+	} else {
+		let list_res = ctx
+			.op(pegboard::ops::runner::list_for_ns::Input {
+				namespace_id: namespace.namespace_id,
+				name: query.name,
+				include_stopped: query.include_stopped.unwrap_or(false),
+				created_before: query
+					.cursor
+					.as_deref()
+					.map(|c| c.parse::<i64>())
+					.transpose()?,
+				limit: query.limit.unwrap_or(100),
+			})
+			.await?;
 
-	let cursor = list_res.runners.last().map(|x| x.create_ts.to_string());
+		let cursor = list_res.runners.last().map(|x| x.create_ts.to_string());
 
-	Ok(ListResponse {
-		runners: list_res.runners,
-		pagination: Pagination { cursor },
-	})
+		Ok(ListResponse {
+			runners: list_res.runners,
+			pagination: Pagination { cursor },
+		})
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
