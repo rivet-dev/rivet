@@ -84,10 +84,20 @@ async fn handle_message(
 ) -> Result<()> {
 	match msg {
 		protocol::ToServer::ToServerPing(ping) => {
-			let rtt = util::timestamp::now()
-				.saturating_sub(ping.ts)
-				.try_into()
-				.context("failed to calculate RTT from ping timestamp")?;
+			let now = util::timestamp::now();
+			let rtt = if ping.ts <= now {
+				// Calculate RTT, clamping to u32::MAX if too large
+				let rtt_ms = now.saturating_sub(ping.ts);
+				rtt_ms.min(u32::MAX as i64) as u32
+			} else {
+				// If ping timestamp is in the future (clock skew), default to 0
+				tracing::warn!(
+					ping_ts = ping.ts,
+					now_ts = now,
+					"ping timestamp is in the future, possibly due to clock skew"
+				);
+				0
+			};
 
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
 		}
