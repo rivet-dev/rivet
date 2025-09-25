@@ -1820,15 +1820,16 @@ impl ProxyService {
 						let ws_handle = WebSocketHandle::new(client_ws);
 
 						loop {
-							match handlers
-								.handle_websocket(
-									ws_handle.clone(),
-									&req_headers,
-									&req_path,
-									&mut request_context,
-								)
-								.await
-							{
+							match dbg!(
+								handlers
+									.handle_websocket(
+										ws_handle.clone(),
+										&req_headers,
+										&req_path,
+										&mut request_context,
+									)
+									.await
+							) {
 								Result::Ok(()) => {
 									tracing::debug!("websocket closed");
 
@@ -1838,7 +1839,7 @@ impl ProxyService {
 											code: hyper_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
 											reason: format!("Closed").into(),
 										},
-									)));
+									))).await?;
 
 									break;
 								}
