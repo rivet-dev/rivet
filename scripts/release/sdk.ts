@@ -62,9 +62,13 @@ export async function publishSdk(opts: ReleaseOpts) {
 
 		// Publish
 		console.log(`==> Publishing to NPM: ${name}@${opts.version}`);
-		await $({ cwd: path })`pnpm install`;
+
+		// Add --tag flag for release candidates
+		const isReleaseCandidate = opts.version.includes("-rc.");
+		const tag = isReleaseCandidate ? "rc" : "latest";
+
 		await $({
-			cwd: path,
-		})`pnpm npm publish --access public --tolerate-republish`;
+			stdio: "inherit",
+		})`pnpm --filter ${name} publish --access public --tag ${tag}`;
 	}
 }
