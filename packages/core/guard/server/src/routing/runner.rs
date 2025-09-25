@@ -4,7 +4,7 @@ use rivet_guard_core::proxy_service::RoutingOutput;
 use std::sync::Arc;
 
 use super::{SEC_WEBSOCKET_PROTOCOL, X_RIVET_TOKEN};
-pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_target.";
+pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
 /// Route requests to the API service
 #[tracing::instrument(skip_all)]
