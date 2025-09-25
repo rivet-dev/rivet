@@ -57,7 +57,7 @@ pub async fn route_request(
 		};
 
 		// Validate token
-		if token != auth.admin_token {
+		if token != auth.admin_token.read() {
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
 	}
