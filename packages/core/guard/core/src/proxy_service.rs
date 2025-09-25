@@ -1820,16 +1820,15 @@ impl ProxyService {
 						let ws_handle = WebSocketHandle::new(client_ws);
 
 						loop {
-							match dbg!(
-								handlers
-									.handle_websocket(
-										ws_handle.clone(),
-										&req_headers,
-										&req_path,
-										&mut request_context,
-									)
-									.await
-							) {
+							match handlers
+								.handle_websocket(
+									ws_handle.clone(),
+									&req_headers,
+									&req_path,
+									&mut request_context,
+								)
+								.await
+							{
 								Result::Ok(()) => {
 									tracing::debug!("websocket closed");
 
