@@ -34,40 +34,10 @@ interface RivetConfig {
     };
   };
 
-  // Public API service configuration
-  api_public?: {
-    host?: string;                    // Default: "::" (IPv6 unspecified)
-    lan_host?: string;                // Default: "::1"
-    port?: number;                    // Default: 6421
-    verbose_errors?: boolean;         // Default: true
-    respect_forwarded_for?: boolean;  // Default: false
-  };
-
   // Private API service configuration
   api_peer?: {
     host?: string;      // Default: "::" (IPv6 unspecified)
-    port?: number;      // Default: 6422
-  };
-
-  // Runner WebSocket connection management
-  pegboard?: {
-    host?: string;      // Default: "::" (IPv6 unspecified)
-    lan_host?: string;  // Default: "::1"
-    port?: number;      // Default: 6423
-  };
-
-  // WebSocket proxy gateway service
-  pegboard_gateway?: {
-    host?: string;      // Default: "::" (IPv6 unspecified)
-    lan_host?: string;  // Default: "::1"
-    port?: number;      // Default: 6424
-  };
-
-  // Tunnel protocol message forwarding
-  pegboard_tunnel?: {
-    host?: string;      // Default: "::" (IPv6 unspecified)
-    lan_host?: string;  // Default: "::1"
-    port?: number;      // Default: 6425
+    port?: number;      // Default: 6421
   };
 
   // Logging configuration
@@ -82,7 +52,7 @@ interface RivetConfig {
       name: string;               // Default: "local"
       datacenter_label: number;   // Default: 1
       is_leader: boolean;         // Default: true
-      api_peer_url: string;       // Default: "http://127.0.0.1:6422"
+      api_peer_url: string;       // Default: "http://127.0.0.1:6421"
       guard_url: string;          // Default: "http://127.0.0.1:6420"
     }>;
   };

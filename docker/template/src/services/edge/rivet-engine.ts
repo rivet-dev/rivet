@@ -1,7 +1,7 @@
 import { TemplateContext } from "../../context";
 import { Datacenter } from "../../config";
 
-const API_PEER_PORT = 6422;
+const API_PEER_PORT = 6421;
 const GUARD_PORT = 6420;
 
 export function generateDatacenterRivetEngine(

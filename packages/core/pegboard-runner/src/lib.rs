@@ -133,7 +133,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.status(StatusCode::OK)
 			.header("Content-Type", "text/plain")
 			.body(ResponseBody::Full(Full::new(Bytes::from(
-				"pegboard-runner-ws WebSocket endpoint",
+				"pegboard-runner WebSocket endpoint",
 			))))?;
 
 		Ok(response)

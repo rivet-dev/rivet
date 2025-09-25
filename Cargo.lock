@@ -3325,7 +3325,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pegboard-runner-ws"
+name = "pegboard-runner"
 version = "25.7.1"
 dependencies = [
  "anyhow",
@@ -4329,7 +4329,7 @@ dependencies = [
  "lz4_flex",
  "namespace",
  "pegboard",
- "pegboard-runner-ws",
+ "pegboard-runner",
  "pegboard-serverless",
  "portpicker",
  "rand 0.8.5",
@@ -4419,7 +4419,7 @@ dependencies = [
  "once_cell",
  "pegboard",
  "pegboard-gateway",
- "pegboard-runner-ws",
+ "pegboard-runner",
  "pegboard-tunnel",
  "regex",
  "rivet-api-public",

@@ -10,8 +10,6 @@ pub mod clickhouse;
 pub mod db;
 pub mod guard;
 pub mod logs;
-pub mod pegboard_gateway;
-pub mod pegboard_tunnel;
 pub mod pubsub;
 pub mod telemetry;
 pub mod topology;
@@ -24,8 +22,6 @@ pub use clickhouse::*;
 pub use db::Database;
 pub use guard::*;
 pub use logs::*;
-pub use pegboard_gateway::*;
-pub use pegboard_tunnel::*;
 pub use pubsub::PubSub;
 pub use telemetry::*;
 pub use topology::*;
@@ -72,12 +68,6 @@ pub struct Root {
 	pub api_peer: Option<ApiPeer>,
 
 	#[serde(default)]
-	pub pegboard_gateway: Option<PegboardGateway>,
-
-	#[serde(default)]
-	pub pegboard_tunnel: Option<PegboardTunnel>,
-
-	#[serde(default)]
 	pub logs: Option<Logs>,
 
 	#[serde(default)]
@@ -108,8 +98,6 @@ impl Default for Root {
 			guard: None,
 			api_public: None,
 			api_peer: None,
-			pegboard_gateway: None,
-			pegboard_tunnel: None,
 			logs: None,
 			topology: None,
 			database: None,
@@ -136,16 +124,6 @@ impl Root {
 	pub fn api_peer(&self) -> &ApiPeer {
 		static DEFAULT: LazyLock<ApiPeer> = LazyLock::new(ApiPeer::default);
 		self.api_peer.as_ref().unwrap_or(&DEFAULT)
-	}
-
-	pub fn pegboard_gateway(&self) -> &PegboardGateway {
-		static DEFAULT: LazyLock<PegboardGateway> = LazyLock::new(PegboardGateway::default);
-		self.pegboard_gateway.as_ref().unwrap_or(&DEFAULT)
-	}
-
-	pub fn pegboard_tunnel(&self) -> &PegboardTunnel {
-		static DEFAULT: LazyLock<PegboardTunnel> = LazyLock::new(PegboardTunnel::default);
-		self.pegboard_tunnel.as_ref().unwrap_or(&DEFAULT)
 	}
 
 	pub fn logs(&self) -> &Logs {
