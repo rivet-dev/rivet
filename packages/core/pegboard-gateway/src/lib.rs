@@ -155,7 +155,7 @@ impl PegboardGateway {
 		self.shared_state.send_message(request_id, message).await?;
 
 		// Wait for response
-		tracing::info!("starting response handler task");
+		tracing::debug!("starting response handler task");
 		let response_start = loop {
 			let Some(msg) = msg_rx.recv().await else {
 				tracing::warn!("received no message response");
@@ -177,7 +177,7 @@ impl PegboardGateway {
 				}
 			}
 		};
-		tracing::info!("response handler task ended");
+		tracing::debug!("response handler task ended");
 
 		// Build HTTP response
 		let mut response_builder =
@@ -300,8 +300,7 @@ impl PegboardGateway {
 					TunnelMessageData::Message(
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
 					) => {
-						tracing::info!(?close, "server closed websocket");
-						// Exit the task - websocket will be closed when handle_websocket_inner exits
+						tracing::debug!(?close, "server closed websocket");
 						break;
 					}
 					TunnelMessageData::Timeout => {

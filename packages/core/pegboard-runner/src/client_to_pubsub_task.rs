@@ -30,11 +30,11 @@ async fn task_inner(
 	conn: Arc<Conn>,
 	mut ws_rx: WebSocketReceiver,
 ) -> Result<()> {
-	tracing::info!("starting WebSocket to pubsub forwarding task");
+	tracing::debug!("starting WebSocket to pubsub forwarding task");
 	while let Some(msg) = ws_rx.next().await {
 		match msg {
 			Result::Ok(WsMessage::Binary(data)) => {
-				tracing::info!(
+				tracing::trace!(
 					data_len = data.len(),
 					"received binary message from WebSocket"
 				);
@@ -60,7 +60,7 @@ async fn task_inner(
 					.context("failed to handle WebSocket message")?;
 			}
 			Result::Ok(WsMessage::Close(_)) => {
-				tracing::info!(?conn.runner_id, "WebSocket closed");
+				tracing::debug!(?conn.runner_id, "WebSocket closed");
 				break;
 			}
 			Result::Ok(_) => {
@@ -72,7 +72,7 @@ async fn task_inner(
 			}
 		}
 	}
-	tracing::info!("WebSocket to pubsub forwarding task ended");
+	tracing::debug!("WebSocket to pubsub forwarding task ended");
 
 	Ok(())
 }

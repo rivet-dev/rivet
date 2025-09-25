@@ -69,7 +69,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let url_data =
 			utils::UrlData::parse_url(url).context("failed to extract URL parameters")?;
 
-		tracing::info!(?path, "tunnel ws connection established");
+		tracing::debug!(?path, "tunnel ws connection established");
 
 		// Accept WS
 		let mut ws_rx = ws_handle
@@ -86,7 +86,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		// that failures can be retried by the proxy.
 		let topic =
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(conn.runner_id).to_string();
-		tracing::info!(%topic, "subscribing to runner receiver topic");
+		tracing::debug!(%topic, "subscribing to runner receiver topic");
 		let sub = ups
 			.subscribe(&topic)
 			.await
@@ -112,13 +112,13 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		// Wait for either task to complete
 		tokio::select! {
 			_ = &mut pubsub_to_client => {
-				tracing::info!("pubsub to WebSocket task completed");
+				tracing::debug!("pubsub to WebSocket task completed");
 			}
 			_ = &mut client_to_pubsub => {
-				tracing::info!("WebSocket to pubsub task completed");
+				tracing::debug!("WebSocket to pubsub task completed");
 			}
 			_ = &mut ping => {
-				tracing::info!("ping task completed");
+				tracing::debug!("ping task completed");
 			}
 		}
 
@@ -148,7 +148,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.ok();
 
 		// Clean up
-		tracing::info!(?conn.runner_id, "connection closed");
+		tracing::debug!(?conn.runner_id, "connection closed");
 
 		Ok(())
 	}
