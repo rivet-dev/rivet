@@ -27,32 +27,36 @@ pub async fn route_request(
 
 	// Check auth (if enabled)
 	if let Some(auth) = &ctx.config().auth {
-		let token = headers
-			.get(X_RIVET_TOKEN)
-			.and_then(|x| x.to_str().ok())
-			// Fallback to checking websocket protocol if rivet token is not set
-			.or_else(|| {
-				if is_websocket {
-					headers
-						.get(SEC_WEBSOCKET_PROTOCOL)
-						.and_then(|protocols| protocols.to_str().ok())
-						.and_then(|protocols| {
-							protocols
-								.split(',')
-								.map(|p| p.trim())
-								.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
-						})
-				} else {
-					None
-				}
-			})
-			.ok_or_else(|| {
-				crate::errors::MissingHeader {
-					header: X_RIVET_TOKEN.to_string(),
-				}
-				.build()
-			})?;
+		// Extract token
+		let token = if is_websocket {
+			headers
+				.get(SEC_WEBSOCKET_PROTOCOL)
+				.and_then(|protocols| protocols.to_str().ok())
+				.and_then(|protocols| {
+					protocols
+						.split(',')
+						.map(|p| p.trim())
+						.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
+				})
+				.ok_or_else(|| {
+					crate::errors::MissingHeader {
+						header: SEC_WEBSOCKET_PROTOCOL.to_string(),
+					}
+					.build()
+				})?
+		} else {
+			headers
+				.get(X_RIVET_TOKEN)
+				.and_then(|x| x.to_str().ok())
+				.ok_or_else(|| {
+					crate::errors::MissingHeader {
+						header: X_RIVET_TOKEN.to_string(),
+					}
+					.build()
+				})?
+		};
 
+		// Validate token
 		if token != auth.admin_token {
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
