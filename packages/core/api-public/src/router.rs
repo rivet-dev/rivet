@@ -3,7 +3,7 @@ use axum::{
 	middleware::{self, Next},
 	response::{Redirect, Response},
 };
-use reqwest::header::{HeaderMap, AUTHORIZATION};
+use reqwest::header::{AUTHORIZATION, HeaderMap};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;

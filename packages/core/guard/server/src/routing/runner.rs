@@ -40,7 +40,7 @@ pub async fn route_request(
 				})
 				.ok_or_else(|| {
 					crate::errors::MissingHeader {
-						header: SEC_WEBSOCKET_PROTOCOL.to_string(),
+						header: "`rivet_token.*` protocol in sec-websocket-protocol".to_string(),
 					}
 					.build()
 				})?

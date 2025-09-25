@@ -7,7 +7,7 @@ use serde::Serialize;
 	"guard",
 	"missing_header",
 	"Missing header required for routing.",
-	"Missing {header} header required for routing."
+	"Missing {header} header."
 )]
 pub struct MissingHeader {
 	pub header: String,
