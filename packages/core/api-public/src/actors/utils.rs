@@ -149,7 +149,6 @@ pub fn extract_duplicate_key_error(err: &anyhow::Error) -> Option<Id> {
 	// Try to downcast to RivetError first (local calls)
 	let rivet_err = err.chain().find_map(|x| x.downcast_ref::<RivetError>());
 	if let Some(rivet_err) = rivet_err {
-		tracing::info!(group = ?rivet_err.group(), code = ?rivet_err.code(), "normal rivet error");
 		if rivet_err.group() == "actor" && rivet_err.code() == "duplicate_key" {
 			// Extract existing_actor_id from metadata
 			if let Some(metadata) = rivet_err.metadata() {
@@ -169,7 +168,6 @@ pub fn extract_duplicate_key_error(err: &anyhow::Error) -> Option<Id> {
 		.chain()
 		.find_map(|x| x.downcast_ref::<rivet_api_builder::error_response::RawErrorResponse>());
 	if let Some(raw_err) = raw_err {
-		tracing::info!(group = ?raw_err.1.group, code = ?raw_err.1.code, "raw rivet error");
 		if raw_err.1.group == "actor" && raw_err.1.code == "duplicate_key" {
 			// Extract existing_actor_id from metadata (now available in ErrorResponse)
 			if let Some(metadata) = &raw_err.1.metadata {
