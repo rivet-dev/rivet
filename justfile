@@ -16,7 +16,7 @@ docker-build:
 
 [group('docker')]
 docker-build-frontend:
-	docker build -f docker/universal/Dockerfile --target engine-full -t rivetkit/engine:local --platform linux/x86_64 --build-arg BUILD_FRONTEND=1 .
+	docker build -f docker/universal/Dockerfile --target engine-full -t rivetkit/engine:local --platform linux/x86_64 --build-arg BUILD_FRONTEND=true .
 
 [group('docker')]
 docker-run:
