@@ -1,9 +1,6 @@
 use anyhow::Result;
-use axum::{
-	extract::Extension,
-	response::{IntoResponse, Json, Response},
-};
-use rivet_api_builder::ApiError;
+use axum::response::{IntoResponse, Json, Response};
+use rivet_api_builder::{ApiError, extract::Extension};
 use rivet_api_types::{datacenters::list::*, pagination::Pagination};
 use rivet_types::datacenters::Datacenter;
 

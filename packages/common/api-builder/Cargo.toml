@@ -11,6 +11,7 @@ axum.workspace = true
 axum-extra.workspace = true
 gas.workspace = true
 chrono.workspace = true
+http.workspace = true
 hyper = { workspace = true, features = ["full"] }
 lazy_static.workspace = true
 opentelemetry.workspace = true

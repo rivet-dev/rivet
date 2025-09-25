@@ -1,4 +1,5 @@
 use rivet_error::*;
+use serde::Serialize;
 
 #[derive(RivetError)]
 #[error("api", "not_found", "The requested resource was not found")]
@@ -19,3 +20,14 @@ pub struct ApiForbidden;
 #[derive(RivetError)]
 #[error("api", "internal_error", "An internal server error occurred")]
 pub struct ApiInternalError;
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"api",
+	"bad_request",
+	"Request is invalid",
+	"Request is invalid: {reason}"
+)]
+pub struct ApiBadRequest {
+	pub reason: String,
+}
