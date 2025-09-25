@@ -281,9 +281,8 @@ impl PegboardGateway {
 		let mut ws_rx = client_ws.accept().await?;
 
 		// Spawn task to forward messages from server to client
-		let mut msg_rx_for_task = msg_rx;
-		tokio::spawn(async move {
-			while let Some(msg) = msg_rx_for_task.recv().await {
+		let mut server_to_client = tokio::spawn(async move {
+			while let Some(msg) = msg_rx.recv().await {
 				match msg {
 					TunnelMessageData::Message(
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
@@ -302,6 +301,7 @@ impl PegboardGateway {
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
 					) => {
 						tracing::info!(?close, "server closed websocket");
+						// Exit the task - websocket will be closed when handle_websocket_inner exits
 						break;
 					}
 					TunnelMessageData::Timeout => {
@@ -313,48 +313,76 @@ impl PegboardGateway {
 			}
 		});
 
-		// Forward messages from client to server
-		let mut close_reason = None;
-		while let Some(msg) = ws_rx.next().await {
-			match msg {
-				Result::Ok(Message::Binary(data)) => {
-					let ws_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-						protocol::ToClientWebSocketMessage {
-							data: data.into(),
-							binary: true,
-						},
-					);
-					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
-						if is_tunnel_service_unavailable(&err) {
-							tracing::warn!("tunnel closed sending binary message");
-							close_reason = Some("Tunnel closed".to_string());
-							break;
-						} else {
-							tracing::error!(?err, "error sending binary message");
+		// Spawn task to forward messages from client to server
+		let shared_state_clone = self.shared_state.clone();
+		let mut client_to_server = tokio::spawn(async move {
+			let mut close_reason = None;
+			while let Some(msg) = ws_rx.next().await {
+				match msg {
+					Result::Ok(Message::Binary(data)) => {
+						let ws_message =
+							protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+								protocol::ToClientWebSocketMessage {
+									data: data.into(),
+									binary: true,
+								},
+							);
+						if let Err(err) = shared_state_clone
+							.send_message(request_id, ws_message)
+							.await
+						{
+							if is_tunnel_service_unavailable(&err) {
+								tracing::warn!("tunnel closed sending binary message");
+								close_reason = Some("Tunnel closed".to_string());
+								break;
+							} else {
+								tracing::error!(?err, "error sending binary message");
+							}
 						}
 					}
-				}
-				Result::Ok(Message::Text(text)) => {
-					let ws_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-						protocol::ToClientWebSocketMessage {
-							data: text.as_bytes().to_vec(),
-							binary: false,
-						},
-					);
-					if let Err(err) = self.shared_state.send_message(request_id, ws_message).await {
-						if is_tunnel_service_unavailable(&err) {
-							tracing::warn!("tunnel closed sending text message");
-							close_reason = Some("Tunnel closed".to_string());
-							break;
-						} else {
-							tracing::error!(?err, "error sending text message");
+					Result::Ok(Message::Text(text)) => {
+						let ws_message =
+							protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+								protocol::ToClientWebSocketMessage {
+									data: text.as_bytes().to_vec(),
+									binary: false,
+								},
+							);
+						if let Err(err) = shared_state_clone
+							.send_message(request_id, ws_message)
+							.await
+						{
+							if is_tunnel_service_unavailable(&err) {
+								tracing::warn!("tunnel closed sending text message");
+								close_reason = Some("Tunnel closed".to_string());
+								break;
+							} else {
+								tracing::error!(?err, "error sending text message");
+							}
 						}
 					}
+					Result::Ok(Message::Close(_)) | Err(_) => break,
+					_ => {}
 				}
-				Result::Ok(Message::Close(_)) | Err(_) => break,
-				_ => {}
 			}
-		}
+			close_reason
+		});
+
+		// Wait for either task to complete
+		let close_reason = tokio::select! {
+			_ = &mut server_to_client => {
+				tracing::info!("server to client task completed");
+				None
+			}
+			res = &mut client_to_server => {
+				tracing::info!("client to server task completed");
+				res.unwrap_or(None)
+			}
+		};
+
+		// Abort remaining tasks
+		server_to_client.abort();
+		client_to_server.abort();
 
 		// Send WebSocket close message
 		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
