@@ -76,6 +76,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: engine-full
+      args:
+        BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
     command: sleep infinity
@@ -144,6 +146,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: engine-full
+      args:
+        BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -182,6 +186,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: engine-full
+      args:
+        BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -218,6 +224,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: engine-full
+      args:
+        BUILD_FRONTEND: 'true'
     platform: linux/amd64
     restart: unless-stopped
     environment:

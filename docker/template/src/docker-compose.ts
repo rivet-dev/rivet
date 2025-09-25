@@ -174,6 +174,9 @@ export function generateDockerCompose(context: TemplateContext) {
             context: "../..",
             dockerfile: "docker/universal/Dockerfile",
             target: "engine-full",
+            args: {
+               BUILD_FRONTEND: "true"
+            }
          },
          platform: "linux/amd64",
          restart: "unless-stopped",
@@ -262,6 +265,9 @@ export function generateDockerCompose(context: TemplateContext) {
                context: "../..",
                dockerfile: "docker/universal/Dockerfile",
                target: "engine-full",
+               args: {
+                  BUILD_FRONTEND: "true"
+               }
             },
             platform: "linux/amd64",
             restart: "unless-stopped",

@@ -44,7 +44,7 @@ pub async fn route_request(
 			})
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
-					header: "actor protocol in sec-websocket-protocol".to_string(),
+					header: "`rivet_actor.*` protocol in sec-websocket-protocol".to_string(),
 				}
 				.build()
 			})?
