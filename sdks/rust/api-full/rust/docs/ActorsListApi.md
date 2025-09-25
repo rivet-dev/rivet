@@ -13,7 +13,7 @@ Method | HTTP request | Description
 > models::ActorsListResponse actors_list(namespace, name, key, actor_ids, include_destroyed, limit, cursor)
  ## Datacenter Round Trips
 
- **If key is some & `include_destroyed` is false**   2 round trips:  - namespace::ops::resolve_for_name_global  - GET /actors/{} (multiple DCs based on actor IDs)   This path is optimized because we can read the actor IDs fro the key directly from Epoxy with  stale consistency to determine which datacenter the actor lives in. Under most circumstances,  this means we don't need to fan out to all datacenters (like normal list does).   The reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If  `include_destroyed` is true, we show all previous iterations of actors with the same key.   **Otherwise**   2 round trips:  - namespace::ops::resolve_for_name_global  - GET /actors (fanout)   ## Optimized Alternative Routes   For minimal round trips to check if an actor exists for a key, use `GET /actors/by-id`. This  does not require fetching the actor's state, so it returns immediately.
+ **If key is some & `include_destroyed` is false**   2 round trips:  - namespace::ops::resolve_for_name_global  - GET /actors (multiple DCs based on actor IDs)   This path is optimized because we can read the actor IDs fro the key directly from Epoxy with  stale consistency to determine which datacenter the actor lives in. Under most circumstances,  this means we don't need to fan out to all datacenters (like normal list does).   The reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If  `include_destroyed` is true, we show all previous iterations of actors with the same key.   **Otherwise**   2 round trips:  - namespace::ops::resolve_for_name_global  - GET /actors (fanout)   ## Optimized Alternative Routes
 
 ### Parameters
 
@@ -34,7 +34,7 @@ Name | Type | Description  | Required | Notes
 
 ### Authorization
 
-No authorization required
+[bearer_auth](../README.md#bearer_auth)
 
 ### HTTP request headers
 

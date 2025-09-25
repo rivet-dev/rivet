@@ -47,8 +47,8 @@ func (c *Client) List(ctx context.Context, request *sdk.RunnerConfigsListRequest
 	if request.Variant != nil {
 		queryParams.Add("variant", fmt.Sprintf("%v", *request.Variant))
 	}
-	for _, value := range request.RunnerName {
-		queryParams.Add("runner_name", fmt.Sprintf("%v", *value))
+	if request.RunnerNames != nil {
+		queryParams.Add("runner_names", fmt.Sprintf("%v", *request.RunnerNames))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

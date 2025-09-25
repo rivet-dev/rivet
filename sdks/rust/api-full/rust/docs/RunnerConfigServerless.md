@@ -4,6 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**headers** | **std::collections::HashMap<String, String>** |  | 
 **max_runners** | **i32** |  | 
 **min_runners** | **i32** |  | 
 **request_lifespan** | **i32** | Seconds. | 

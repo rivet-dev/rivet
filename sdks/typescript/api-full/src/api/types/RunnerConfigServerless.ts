@@ -3,6 +3,7 @@
  */
 
 export interface RunnerConfigServerless {
+    headers: Record<string, string>;
     maxRunners: number;
     minRunners: number;
     /** Seconds. */

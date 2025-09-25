@@ -29,7 +29,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-func (c *Client) List(ctx context.Context, request *sdk.NamespacesListRequest) (*sdk.NamespacesListResponse, error) {
+func (c *Client) List(ctx context.Context, request *sdk.NamespacesListRequest) (*sdk.NamespaceListResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -46,14 +46,14 @@ func (c *Client) List(ctx context.Context, request *sdk.NamespacesListRequest) (
 	if request.Name != nil {
 		queryParams.Add("name", fmt.Sprintf("%v", *request.Name))
 	}
-	for _, value := range request.NamespaceId {
-		queryParams.Add("namespace_id", fmt.Sprintf("%v", *value))
+	if request.NamespaceIds != nil {
+		queryParams.Add("namespace_ids", fmt.Sprintf("%v", *request.NamespaceIds))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}
 
-	var response *sdk.NamespacesListResponse
+	var response *sdk.NamespaceListResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -83,28 +83,6 @@ func (c *Client) Create(ctx context.Context, request *sdk.NamespacesCreateReques
 			Method:   http.MethodPost,
 			Headers:  c.header,
 			Request:  request,
-			Response: &response,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-func (c *Client) Get(ctx context.Context, namespaceId sdk.RivetId) (*sdk.NamespacesGetResponse, error) {
-	baseURL := ""
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"namespaces/%v", namespaceId)
-
-	var response *sdk.NamespacesGetResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:      endpointURL,
-			Method:   http.MethodGet,
-			Headers:  c.header,
 			Response: &response,
 		},
 	); err != nil {

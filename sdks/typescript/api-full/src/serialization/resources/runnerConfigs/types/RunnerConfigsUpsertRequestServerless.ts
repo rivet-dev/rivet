@@ -10,6 +10,7 @@ export const RunnerConfigsUpsertRequestServerless: core.serialization.ObjectSche
     serializers.RunnerConfigsUpsertRequestServerless.Raw,
     Rivet.RunnerConfigsUpsertRequestServerless
 > = core.serialization.object({
+    headers: core.serialization.record(core.serialization.string(), core.serialization.string()),
     maxRunners: core.serialization.property("max_runners", core.serialization.number()),
     minRunners: core.serialization.property("min_runners", core.serialization.number()),
     requestLifespan: core.serialization.property("request_lifespan", core.serialization.number()),
@@ -20,6 +21,7 @@ export const RunnerConfigsUpsertRequestServerless: core.serialization.ObjectSche
 
 export declare namespace RunnerConfigsUpsertRequestServerless {
     export interface Raw {
+        headers: Record<string, string>;
         max_runners: number;
         min_runners: number;
         request_lifespan: number;

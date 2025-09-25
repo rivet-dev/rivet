@@ -9,6 +9,9 @@ import * as Rivet from "../../../../index";
  *     {
  *         namespace: "namespace",
  *         serverless: {
+ *             headers: {
+ *                 "key": "value"
+ *             },
  *             maxRunners: 1,
  *             minRunners: 1,
  *             requestLifespan: 1,

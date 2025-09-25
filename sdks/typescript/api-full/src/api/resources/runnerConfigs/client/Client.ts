@@ -13,6 +13,7 @@ export declare namespace RunnerConfigs {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
         baseUrl?: core.Supplier<string>;
+        token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
 
@@ -44,7 +45,7 @@ export class RunnerConfigs {
         request: Rivet.RunnerConfigsListRequest,
         requestOptions?: RunnerConfigs.RequestOptions,
     ): Promise<Rivet.RunnerConfigsListResponse> {
-        const { namespace, limit, cursor, variant, runnerName } = request;
+        const { namespace, limit, cursor, variant, runnerNames } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         if (limit != null) {
@@ -61,12 +62,8 @@ export class RunnerConfigs {
             });
         }
 
-        if (runnerName != null) {
-            if (Array.isArray(runnerName)) {
-                _queryParams["runner_name"] = runnerName.map((item) => item);
-            } else {
-                _queryParams["runner_name"] = runnerName;
-            }
+        if (runnerNames != null) {
+            _queryParams["runner_names"] = runnerNames;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
@@ -77,6 +74,7 @@ export class RunnerConfigs {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -130,6 +128,9 @@ export class RunnerConfigs {
      *     await client.runnerConfigs.upsert("runner_name", {
      *         namespace: "namespace",
      *         serverless: {
+     *             headers: {
+     *                 "key": "value"
+     *             },
      *             maxRunners: 1,
      *             minRunners: 1,
      *             requestLifespan: 1,
@@ -155,6 +156,7 @@ export class RunnerConfigs {
             ),
             method: "PUT",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -226,6 +228,7 @@ export class RunnerConfigs {
             ),
             method: "DELETE",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -270,5 +273,9 @@ export class RunnerConfigs {
                     message: _response.error.errorMessage,
                 });
         }
+    }
+
+    protected async _getAuthorizationHeader(): Promise<string> {
+        return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

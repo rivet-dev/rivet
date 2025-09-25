@@ -8,15 +8,15 @@ import * as core from "../../core";
 import { Namespace } from "./Namespace";
 import { Pagination } from "./Pagination";
 
-export const NamespacesListResponse: core.serialization.ObjectSchema<
-    serializers.NamespacesListResponse.Raw,
-    Rivet.NamespacesListResponse
+export const NamespaceListResponse: core.serialization.ObjectSchema<
+    serializers.NamespaceListResponse.Raw,
+    Rivet.NamespaceListResponse
 > = core.serialization.object({
     namespaces: core.serialization.list(Namespace),
     pagination: Pagination,
 });
 
-export declare namespace NamespacesListResponse {
+export declare namespace NamespaceListResponse {
     export interface Raw {
         namespaces: Namespace.Raw[];
         pagination: Pagination.Raw;

@@ -13,6 +13,7 @@ export declare namespace Runners {
         environment: core.Supplier<string>;
         /** Specify a custom URL to connect the client to. */
         baseUrl?: core.Supplier<string>;
+        token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
 
@@ -44,11 +45,15 @@ export class Runners {
         request: Rivet.RunnersListRequest,
         requestOptions?: Runners.RequestOptions,
     ): Promise<Rivet.RunnersListResponse> {
-        const { namespace, name, includeStopped, limit, cursor } = request;
+        const { namespace, name, runnerIds, includeStopped, limit, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         if (name != null) {
             _queryParams["name"] = name;
+        }
+
+        if (runnerIds != null) {
+            _queryParams["runner_ids"] = runnerIds;
         }
 
         if (includeStopped != null) {
@@ -71,6 +76,7 @@ export class Runners {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -152,6 +158,7 @@ export class Runners {
             ),
             method: "GET",
             headers: {
+                Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
@@ -196,74 +203,7 @@ export class Runners {
         }
     }
 
-    /**
-     * @param {Rivet.RivetId} runnerId
-     * @param {Rivet.RunnersGetRequest} request
-     * @param {Runners.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @example
-     *     await client.runners.get("runner_id")
-     */
-    public async get(
-        runnerId: Rivet.RivetId,
-        request: Rivet.RunnersGetRequest = {},
-        requestOptions?: Runners.RequestOptions,
-    ): Promise<Rivet.RunnersGetResponse> {
-        const { namespace } = request;
-        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
-        if (namespace != null) {
-            _queryParams["namespace"] = namespace;
-        }
-
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.baseUrl)) ??
-                    (await core.Supplier.get(this._options.environment)),
-                `runners/${encodeURIComponent(serializers.RivetId.jsonOrThrow(runnerId))}`,
-            ),
-            method: "GET",
-            headers: {
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-                ...requestOptions?.headers,
-            },
-            contentType: "application/json",
-            queryParameters: _queryParams,
-            requestType: "json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return serializers.RunnersGetResponse.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                skipValidation: true,
-                breadcrumbsPrefix: ["response"],
-            });
-        }
-
-        if (_response.error.reason === "status-code") {
-            throw new errors.RivetError({
-                statusCode: _response.error.statusCode,
-                body: _response.error.body,
-            });
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /runners/{runner_id}.");
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
+    protected async _getAuthorizationHeader(): Promise<string> {
+        return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

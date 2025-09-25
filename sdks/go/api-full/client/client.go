@@ -47,7 +47,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 // 2 round trips:
 //
 // - namespace::ops::resolve_for_name_global
-// - GET /actors/{} (multiple DCs based on actor IDs)
+// - GET /actors (multiple DCs based on actor IDs)
 //
 //	This path is optimized because we can read the actor IDs fro the key directly from Epoxy with
 //	stale consistency to determine which datacenter the actor lives in. Under most circumstances,
@@ -64,9 +64,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 // - GET /actors (fanout)
 //
 // ## Optimized Alternative Routes
-//
-// For minimal round trips to check if an actor exists for a key, use `GET /actors/by-id`. This
-// does not require fetching the actor's state, so it returns immediately.
 func (c *Client) ActorsList(ctx context.Context, request *sdk.ActorsListRequest) (*sdk.ActorsListResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
@@ -186,9 +183,6 @@ func (c *Client) ActorsCreate(ctx context.Context, request *sdk.ActorsCreateRequ
 // actor::get will always be in the same datacenter.
 //
 // ## Optimized Alternative Routes
-//
-// For minimal round trips to get or create an actor, use `PUT /actors/by-id`. This doesn't
-// require fetching the actor's state from the other datacenter.
 func (c *Client) ActorsGetOrCreate(ctx context.Context, request *sdk.ActorsGetOrCreateRequest) (*sdk.ActorsGetOrCreateResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
@@ -206,93 +200,6 @@ func (c *Client) ActorsGetOrCreate(ctx context.Context, request *sdk.ActorsGetOr
 	}
 
 	var response *sdk.ActorsGetOrCreateResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:      endpointURL,
-			Method:   http.MethodPut,
-			Headers:  c.header,
-			Request:  request,
-			Response: &response,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-// 1 round trip:
-//
-// - namespace::ops::resolve_for_name_global
-//
-// This does not require another round trip since we use stale consistency for the get_id_for_key.
-func (c *Client) ActorsGetById(ctx context.Context, request *sdk.ActorsGetByIdRequest) (*sdk.ActorsGetByIdResponse, error) {
-	baseURL := ""
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := baseURL + "/" + "actors/by-id"
-
-	queryParams := make(url.Values)
-	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
-	queryParams.Add("name", fmt.Sprintf("%v", request.Name))
-	queryParams.Add("key", fmt.Sprintf("%v", request.Key))
-	if len(queryParams) > 0 {
-		endpointURL += "?" + queryParams.Encode()
-	}
-
-	var response *sdk.ActorsGetByIdResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:      endpointURL,
-			Method:   http.MethodGet,
-			Headers:  c.header,
-			Response: &response,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-// **If actor exists**
-//
-// 1 round trip:
-//
-// - namespace::ops::resolve_for_name_global
-//
-// **If actor does not exist and is created in the current datacenter:**
-//
-// 2 round trips:
-//
-// - namespace::ops::resolve_for_name_global
-// - [pegboard::workflows::actors::keys::allocate_key] Reserve Epoxy key
-//
-// **If actor does not exist and is created in a different datacenter:**
-//
-// 3 round trips:
-//
-// - namespace::ops::resolve_for_name_global
-// - namespace::ops::get (to get namespace name for remote call)
-// - POST /actors to remote datacenter
-func (c *Client) ActorsGetOrCreateById(ctx context.Context, request *sdk.ActorsGetOrCreateByIdRequest) (*sdk.ActorsGetOrCreateByIdResponse, error) {
-	baseURL := ""
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := baseURL + "/" + "actors/by-id"
-
-	queryParams := make(url.Values)
-	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
-	if request.Datacenter != nil {
-		queryParams.Add("datacenter", fmt.Sprintf("%v", *request.Datacenter))
-	}
-	if len(queryParams) > 0 {
-		endpointURL += "?" + queryParams.Encode()
-	}
-
-	var response *sdk.ActorsGetOrCreateByIdResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -332,40 +239,6 @@ func (c *Client) ActorsListNames(ctx context.Context, request *sdk.ActorsListNam
 	}
 
 	var response *sdk.ActorsListNamesResponse
-	if err := c.caller.Call(
-		ctx,
-		&core.CallParams{
-			URL:      endpointURL,
-			Method:   http.MethodGet,
-			Headers:  c.header,
-			Response: &response,
-		},
-	); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-// 2 round trip:
-//
-// - GET /actors/{}
-// - [api-peer] namespace::ops::resolve_for_name_global
-func (c *Client) ActorsGet(ctx context.Context, actorId sdk.RivetId, request *sdk.ActorsGetRequest) (*sdk.ActorsGetResponse, error) {
-	baseURL := ""
-	if c.baseURL != "" {
-		baseURL = c.baseURL
-	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
-
-	queryParams := make(url.Values)
-	if request.Namespace != nil {
-		queryParams.Add("namespace", fmt.Sprintf("%v", *request.Namespace))
-	}
-	if len(queryParams) > 0 {
-		endpointURL += "?" + queryParams.Encode()
-	}
-
-	var response *sdk.ActorsGetResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
