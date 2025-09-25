@@ -4,7 +4,7 @@ use axum::{
 	response::{Redirect, Response},
 };
 use reqwest::header::{AUTHORIZATION, HeaderMap};
-use rivet_api_builder::create_router;
+use rivet_api_builder::{create_router, extract::FailedExtraction};
 use utoipa::OpenApi;
 
 use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
@@ -116,7 +116,12 @@ async fn auth_middleware(
 	let res = next.run(req).await;
 
 	// Verify auth was handled
-	if !ctx.is_auth_handled() {
+	if res.extensions().get::<FailedExtraction>().is_none()
+		&& path != "/"
+		&& path != "/ui"
+		&& !path.starts_with("/ui/")
+		&& !ctx.is_auth_handled()
+	{
 		return Err(format!(
 			"developer error: must explicitly handle auth in all endpoints (path: {path})"
 		));

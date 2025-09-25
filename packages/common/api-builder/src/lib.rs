@@ -1,6 +1,7 @@
 pub mod context;
 pub mod error_response;
 pub mod errors;
+pub mod extract;
 pub mod global_context;
 pub mod metrics;
 pub mod middleware;

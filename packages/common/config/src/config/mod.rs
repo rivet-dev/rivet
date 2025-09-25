@@ -100,7 +100,7 @@ pub struct Root {
 impl Default for Root {
 	fn default() -> Self {
 		Root {
-			auth: None,
+			auth: Some(Auth::default()),
 			guard: None,
 			api_public: None,
 			api_peer: None,

@@ -1,0 +1,5 @@
+{
+  "code": "bad_request",
+  "group": "api",
+  "message": "Request is invalid"
+}
