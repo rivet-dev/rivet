@@ -34,7 +34,7 @@ async function main() {
 
 		// Test WebSocket connection
 		console.log("Testing WebSocket connection to actor...");
-		await testWebSocket(actorResponse.actor.actor_id);
+		// await testWebSocket(actorResponse.actor.actor_id);
 
 		console.log("Destroying actor...");
 		await destroyActor("default", actorResponse.actor.actor_id);

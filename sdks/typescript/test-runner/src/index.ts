@@ -21,6 +21,7 @@ const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	? Number(process.env.RIVET_RUNNER_TOTAL_SLOTS)
 	: 100;
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://localhost:6420";
+const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
 const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER == undefined;
 const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER == undefined;
 
@@ -82,6 +83,7 @@ async function startRunner(): Promise<Runner> {
 		logger: pino(),
 		version: RIVET_RUNNER_VERSION,
 		endpoint: RIVET_ENDPOINT,
+		token: RIVET_TOKEN,
 		namespace: RIVET_NAMESPACE,
 		runnerName: RIVET_RUNNER_NAME,
 		runnerKey: RIVET_RUNNER_KEY,
