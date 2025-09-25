@@ -4,10 +4,12 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_types::{actors::list_names::*, pagination::Pagination};
 use rivet_api_util::fanout_to_datacenters;
 use rivet_types::actors::ActorName;
+
+use crate::ctx::ApiCtx;
 
 /// ## Datacenter Round Trips
 ///
@@ -39,6 +41,8 @@ async fn list_names_inner(
 	headers: HeaderMap,
 	query: ListNamesQuery,
 ) -> Result<ListNamesResponse> {
+	ctx.auth().await?;
+
 	// Prepare peer query for local handler
 	let peer_query = ListNamesQuery {
 		namespace: query.namespace.clone(),
@@ -49,7 +53,7 @@ async fn list_names_inner(
 	// Fanout to all datacenters
 	let mut all_names =
 		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<(String, ActorName)>>(
-			ctx,
+			ctx.into(),
 			headers,
 			"/actors/names",
 			peer_query,

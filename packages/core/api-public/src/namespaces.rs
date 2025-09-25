@@ -1,13 +1,15 @@
 use anyhow::Result;
 use axum::{
-	extract::{Extension, Path, Query},
+	extract::{Extension, Query},
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_peer::namespaces::*;
 use rivet_api_types::namespaces::list::*;
 use rivet_api_util::request_remote_datacenter;
+
+use crate::ctx::ApiCtx;
 
 #[utoipa::path(
     get,
@@ -30,8 +32,10 @@ pub async fn list(
 }
 
 async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+	ctx.auth().await?;
+
 	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::list(ctx, (), query).await
+		rivet_api_peer::namespaces::list(ctx.into(), (), query).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<ListResponse>(
@@ -72,8 +76,10 @@ async fn create_inner(
 	headers: HeaderMap,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
+	ctx.auth().await?;
+
 	if ctx.config().is_leader() {
-		rivet_api_peer::namespaces::create(ctx, (), (), body).await
+		rivet_api_peer::namespaces::create(ctx.into(), (), (), body).await
 	} else {
 		let leader_dc = ctx.config().leader_dc()?;
 		request_remote_datacenter::<CreateResponse>(

@@ -4,13 +4,13 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_types::pagination::Pagination;
 use rivet_api_util::fanout_to_datacenters;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::{actors::utils::fetch_actors_by_ids, errors};
+use crate::{actors::utils::fetch_actors_by_ids, ctx::ApiCtx, errors};
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
 #[serde(deny_unknown_fields)]
@@ -76,6 +76,8 @@ pub async fn list(
 }
 
 async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+	ctx.skip_auth();
+
 	// Parse query
 	let actor_ids = query.actor_ids.as_ref().map(|x| {
 		x.split(',')
@@ -221,7 +223,7 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			_,
 			Vec<rivet_types::actors::Actor>,
 		>(
-			ctx,
+			ctx.into(),
 			headers,
 			"/actors",
 			peer_query,

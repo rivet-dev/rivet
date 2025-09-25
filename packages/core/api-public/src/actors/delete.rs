@@ -4,11 +4,13 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
+
+use crate::ctx::ApiCtx;
 
 #[derive(Debug, Deserialize, Serialize, IntoParams)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +64,8 @@ async fn delete_inner(
 	path: DeletePath,
 	query: DeleteQuery,
 ) -> Result<Response> {
+	ctx.auth().await?;
+
 	if path.actor_id.label() == ctx.config().dc_label() {
 		let peer_path = rivet_api_peer::actors::delete::DeletePath {
 			actor_id: path.actor_id,
@@ -69,7 +73,7 @@ async fn delete_inner(
 		let peer_query = rivet_api_peer::actors::delete::DeleteQuery {
 			namespace: query.namespace,
 		};
-		let res = rivet_api_peer::actors::delete::delete(ctx, peer_path, peer_query).await?;
+		let res = rivet_api_peer::actors::delete::delete(ctx.into(), peer_path, peer_query).await?;
 
 		Ok(Json(res).into_response())
 	} else {

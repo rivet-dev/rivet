@@ -1,8 +1,13 @@
-use axum::response::Redirect;
-use rivet_api_builder::{create_router, wrappers::get};
+use axum::{
+	extract::Request,
+	middleware::{self, Next},
+	response::{Redirect, Response},
+};
+use reqwest::header::{AUTHORIZATION, HeaderMap};
+use rivet_api_builder::create_router;
 use utoipa::OpenApi;
 
-use crate::{actors, datacenters, namespaces, runner_configs, runners, ui};
+use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
 
 #[derive(OpenApi)]
 #[openapi(paths(
@@ -66,11 +71,50 @@ pub async fn router(
 			.route("/runners", axum::routing::get(runners::list))
 			.route("/runners/names", axum::routing::get(runners::list_names))
 			// MARK: Datacenters
-			.route("/datacenters", get(datacenters::list))
+			.route("/datacenters", axum::routing::get(datacenters::list))
 			// MARK: UI
 			.route("/ui", axum::routing::get(ui::serve_index))
 			.route("/ui/", axum::routing::get(ui::serve_index))
 			.route("/ui/{*path}", axum::routing::get(ui::serve_ui))
+			// MARK: Middleware (must go after all routes)
+			.layer(middleware::from_fn(auth_middleware))
 	})
 	.await
+}
+
+/// Middleware to wrap ApiCtx with auth handling capabilities and to throw an error if auth was not explicitly
+// handled in an endpoint
+async fn auth_middleware(
+	headers: HeaderMap,
+	mut req: Request,
+	next: Next,
+) -> std::result::Result<Response, String> {
+	let ctx = req
+		.extensions()
+		.get::<rivet_api_builder::ApiCtx>()
+		.ok_or_else(|| "ctx should exist".to_string())?;
+
+	// Extract token
+	let token = headers
+		.get(AUTHORIZATION)
+		.and_then(|x| x.to_str().ok().and_then(|x| x.strip_prefix("Bearer ")))
+		.map(|x| x.to_string());
+
+	// Insert the new ApiCtx into request extensions
+	let ctx = ctx::ApiCtx::new(ctx.clone(), token);
+	req.extensions_mut().insert(ctx.clone());
+
+	let path = req.uri().path().to_string();
+
+	// Run endpoint
+	let res = next.run(req).await;
+
+	// Verify auth was handled
+	if !ctx.is_auth_handled() {
+		return Err(format!(
+			"developer error: must explicitly handle auth in all endpoints (path: {path})"
+		));
+	}
+
+	Ok(res)
 }

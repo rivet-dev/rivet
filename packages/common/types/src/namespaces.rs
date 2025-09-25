@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use gas::prelude::*;
 use utoipa::ToSchema;
 
@@ -9,11 +11,12 @@ pub struct Namespace {
 	pub create_ts: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerConfig {
 	Serverless {
 		url: String,
+		headers: HashMap<String, String>,
 		/// Seconds.
 		request_lifespan: u32,
 		slots_per_runner: u32,
@@ -28,6 +31,7 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::D
 		match value {
 			RunnerConfig::Serverless {
 				url,
+				headers,
 				request_lifespan,
 				slots_per_runner,
 				min_runners,
@@ -36,6 +40,7 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::D
 			} => rivet_data::generated::namespace_runner_config_v1::Data::Serverless(
 				rivet_data::generated::namespace_runner_config_v1::Serverless {
 					url,
+					headers: headers.into(),
 					request_lifespan,
 					slots_per_runner,
 					min_runners,
@@ -53,6 +58,7 @@ impl From<rivet_data::generated::namespace_runner_config_v1::Data> for RunnerCon
 			rivet_data::generated::namespace_runner_config_v1::Data::Serverless(o) => {
 				RunnerConfig::Serverless {
 					url: o.url,
+					headers: o.headers.into(),
 					request_lifespan: o.request_lifespan,
 					slots_per_runner: o.slots_per_runner,
 					min_runners: o.min_runners,

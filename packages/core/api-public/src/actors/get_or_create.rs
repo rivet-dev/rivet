@@ -4,13 +4,14 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_types::actors::CrashPolicy;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::actors::utils;
+use crate::ctx::ApiCtx;
 use crate::errors;
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -91,6 +92,8 @@ async fn get_or_create_inner(
 	query: GetOrCreateQuery,
 	body: GetOrCreateRequest,
 ) -> Result<GetOrCreateResponse> {
+	ctx.skip_auth();
+
 	// Resolve namespace
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {

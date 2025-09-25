@@ -10,6 +10,7 @@ use anyhow::Result;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use pegboard::keys;
+use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
 use rivet_types::namespaces::RunnerConfig;
@@ -102,6 +103,7 @@ async fn tick(
 
 		let RunnerConfig::Serverless {
 			url,
+			headers,
 			request_lifespan,
 			slots_per_runner,
 			min_runners,
@@ -148,7 +150,8 @@ async fn tick(
 		let starting_connections = std::iter::repeat_with(|| {
 			spawn_connection(
 				ctx.clone(),
-				url.to_string(),
+				url.clone(),
+				headers.clone(),
 				Duration::from_secs(*request_lifespan as u64),
 			)
 		})
@@ -173,6 +176,7 @@ async fn tick(
 fn spawn_connection(
 	ctx: StandaloneCtx,
 	url: String,
+	headers: HashMap<String, String>,
 	request_lifespan: Duration,
 ) -> OutboundConnection {
 	let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -181,7 +185,7 @@ fn spawn_connection(
 	let draining2 = draining.clone();
 	let handle = tokio::spawn(async move {
 		if let Err(err) =
-			outbound_handler(&ctx, url, request_lifespan, shutdown_rx, draining2).await
+			outbound_handler(&ctx, url, headers, request_lifespan, shutdown_rx, draining2).await
 		{
 			tracing::error!(?err, "outbound req failed");
 
@@ -206,12 +210,23 @@ fn spawn_connection(
 async fn outbound_handler(
 	ctx: &StandaloneCtx,
 	url: String,
+	headers: HashMap<String, String>,
 	request_lifespan: Duration,
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
-	let mut es = sse::EventSource::new(client.get(url))?;
+	let headers = headers
+		.into_iter()
+		.flat_map(|(k, v)| {
+			// NOTE: This will filter out invalid headers without warning
+			Some((
+				k.parse::<HeaderName>().ok()?,
+				v.parse::<HeaderValue>().ok()?,
+			))
+		})
+		.collect();
+	let mut es = sse::EventSource::new(client.get(url).headers(headers))?;
 	let mut runner_id = None;
 
 	let stream_handler = async {

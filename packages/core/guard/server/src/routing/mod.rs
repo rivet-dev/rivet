@@ -12,6 +12,7 @@ pub mod pegboard_gateway;
 mod runner;
 
 pub(crate) const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
+pub(crate) const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 pub(crate) const SEC_WEBSOCKET_PROTOCOL: HeaderName =
 	HeaderName::from_static("sec-websocket-protocol");
 pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
@@ -62,7 +63,7 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 					// Read target
 					if let Some(target) = target {
 						if let Some(routing_output) =
-							runner::route_request(&ctx, target, host, path).await?
+							runner::route_request(&ctx, target, host, path, headers).await?
 						{
 							return Ok(routing_output);
 						}

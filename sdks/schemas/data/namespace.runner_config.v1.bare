@@ -1,5 +1,6 @@
 type Serverless struct {
 	url: str
+	headers: map<str><str>
 	request_lifespan: u32
 	slots_per_runner: u32
 	min_runners: u32

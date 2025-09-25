@@ -1,7 +1,13 @@
 use anyhow::Result;
-use rivet_api_builder::ApiCtx;
+use axum::{
+	extract::Extension,
+	response::{IntoResponse, Json, Response},
+};
+use rivet_api_builder::ApiError;
 use rivet_api_types::{datacenters::list::*, pagination::Pagination};
 use rivet_types::datacenters::Datacenter;
+
+use crate::ctx::ApiCtx;
 
 #[utoipa::path(
     get,
@@ -11,7 +17,16 @@ use rivet_types::datacenters::Datacenter;
         (status = 200, body = ListResponse),
     ),
 )]
-pub async fn list(ctx: ApiCtx, _path: (), _query: ()) -> Result<ListResponse> {
+pub async fn list(Extension(ctx): Extension<ApiCtx>) -> Response {
+	match list_inner(ctx).await {
+		Ok(response) => Json(response).into_response(),
+		Err(err) => ApiError::from(err).into_response(),
+	}
+}
+
+async fn list_inner(ctx: ApiCtx) -> Result<ListResponse> {
+	ctx.auth().await?;
+
 	Ok(ListResponse {
 		datacenters: ctx
 			.config()

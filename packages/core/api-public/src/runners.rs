@@ -4,11 +4,13 @@ use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Json, Response},
 };
-use rivet_api_builder::{ApiCtx, ApiError};
+use rivet_api_builder::ApiError;
 use rivet_api_types::{pagination::Pagination, runners::list::*};
 use rivet_api_util::fanout_to_datacenters;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
+
+use crate::ctx::ApiCtx;
 
 #[utoipa::path(
     get,
@@ -31,10 +33,12 @@ pub async fn list(
 }
 
 async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+	ctx.auth().await?;
+
 	// Fanout to all datacenters
 	let mut runners =
 		fanout_to_datacenters::<ListResponse, _, _, _, _, Vec<rivet_types::runners::Runner>>(
-			ctx,
+			ctx.into(),
 			headers,
 			"/runners",
 			query.clone(),
@@ -105,6 +109,8 @@ async fn list_names_inner(
 	headers: HeaderMap,
 	query: ListNamesQuery,
 ) -> Result<ListNamesResponse> {
+	ctx.auth().await?;
+
 	// Prepare peer query for local handler
 	let peer_query = rivet_api_peer::runners::ListNamesQuery {
 		namespace: query.namespace.clone(),
@@ -121,7 +127,7 @@ async fn list_names_inner(
 		_,
 		Vec<String>,
 	>(
-		ctx,
+		ctx.into(),
 		headers,
 		"/runners/names",
 		peer_query,

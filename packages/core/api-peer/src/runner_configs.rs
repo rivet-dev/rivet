@@ -4,7 +4,6 @@ use anyhow::Result;
 use namespace::utils::runner_config_variant;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::pagination::Pagination;
-use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 

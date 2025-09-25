@@ -27,6 +27,7 @@ pegboard-gateway.workspace = true
 pegboard.workspace = true
 pegboard-runner.workspace = true
 regex.workspace = true
+rivet-api-builder.workspace = true
 rivet-api-public.workspace = true
 rivet-cache.workspace = true
 rivet-config.workspace = true
