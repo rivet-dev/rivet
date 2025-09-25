@@ -6,11 +6,11 @@ use hyper::header::HeaderName;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
 use universaldb::utils::IsolationLevel::*;
 
+use super::SEC_WEBSOCKET_PROTOCOL;
 use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
-const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocket-protocol");
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 /// Route requests to actor services based on hostname and path

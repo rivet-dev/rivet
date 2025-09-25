@@ -28,6 +28,7 @@ export interface RunnerConfig {
 	logger?: Logger;
 	version: number;
 	endpoint: string;
+	token?: string;
 	pegboardEndpoint?: string;
 	pegboardRelayEndpoint?: string;
 	namespace: string;
@@ -409,8 +410,10 @@ export class Runner {
 
 	// MARK: Runner protocol
 	async #openPegboardWebSocket() {
-		const WS = await importWebSocket();
 		const protocols = ["rivet", `rivet_target.runner`];
+		if (this.config.token) protocols.push(`rivet_token.${this.config.token}`);
+
+		const WS = await importWebSocket();
 		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
 		this.#pegboardWebSocket = ws;
 
