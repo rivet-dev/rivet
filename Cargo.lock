@@ -448,19 +448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bare_gen"
-version = "25.7.1"
-dependencies = [
- "heck 0.5.0",
- "pest",
- "pest_derive",
- "proc-macro2",
- "quote",
- "serde",
- "syn 2.0.104",
-]
-
-[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1416,7 +1403,7 @@ dependencies = [
  "universaldb",
  "url",
  "uuid",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -1424,15 +1411,11 @@ name = "epoxy-protocol"
 version = "25.7.1"
 dependencies = [
  "anyhow",
- "bare_gen",
- "indoc",
- "prettyplease",
  "rivet-util",
  "serde",
  "serde_bare",
- "serde_json",
- "syn 2.0.104",
- "versioned-data-util",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -2794,7 +2777,7 @@ dependencies = [
  "universaldb",
  "url",
  "utoipa",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -3281,7 +3264,7 @@ dependencies = [
  "universaldb",
  "universalpubsub",
  "utoipa",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -3324,7 +3307,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "universalpubsub",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -3357,7 +3340,7 @@ dependencies = [
  "tracing",
  "universalpubsub",
  "url",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -4259,17 +4242,13 @@ name = "rivet-data"
 version = "25.7.1"
 dependencies = [
  "anyhow",
- "bare_gen",
  "gasoline",
- "indoc",
- "prettyplease",
  "rivet-runner-protocol",
  "rivet-util",
  "serde",
  "serde_bare",
- "serde_json",
- "syn 2.0.104",
- "versioned-data-util",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -4336,7 +4315,7 @@ dependencies = [
  "universaldb",
  "url",
  "uuid",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -4528,18 +4507,14 @@ name = "rivet-runner-protocol"
 version = "25.7.1"
 dependencies = [
  "anyhow",
- "bare_gen",
  "base64 0.22.1",
  "gasoline",
- "indoc",
- "prettyplease",
  "rivet-util",
  "serde",
  "serde_bare",
- "serde_json",
- "syn 2.0.104",
  "utoipa",
- "versioned-data-util",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -4651,7 +4626,7 @@ dependencies = [
  "serde",
  "universaldb",
  "utoipa",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -4659,16 +4634,12 @@ name = "rivet-ups-protocol"
 version = "25.7.1"
 dependencies = [
  "anyhow",
- "bare_gen",
  "base64 0.22.1",
- "indoc",
- "prettyplease",
  "rivet-util",
  "serde",
  "serde_bare",
- "serde_json",
- "syn 2.0.104",
- "versioned-data-util",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -6382,7 +6353,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "versioned-data-util",
+ "vbare",
 ]
 
 [[package]]
@@ -6485,6 +6456,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
+name = "vbare"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acf4d898b11572484cc064900e2a63dc88f72c621c2c52fd032b14537668702e"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "vbare-compiler"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a9b0bf0c86821fe75c989d1548183085e274d1f04797498d30854dc85fa11ad"
+dependencies = [
+ "indoc",
+ "prettyplease",
+ "syn 2.0.104",
+ "vbare-gen",
+]
+
+[[package]]
+name = "vbare-gen"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f045599483ef9d44f6965143afbfa82e103e4e9810f5f07d1fc023a2547f28fe"
+dependencies = [
+ "heck 0.5.0",
+ "pest",
+ "pest_derive",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6518,15 +6525,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "versioned-data-util"
-version = "25.7.1"
-dependencies = [
- "anyhow",
- "serde",
- "serde_bare",
-]
 
 [[package]]
 name = "vte"

@@ -347,7 +347,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ActorsListResponse"
+                  "$ref": "#/components/schemas/NamespaceListResponse"
                 }
               }
             }
@@ -862,14 +862,14 @@
       "ActorsListResponse": {
         "type": "object",
         "required": [
-          "namespaces",
+          "actors",
           "pagination"
         ],
         "properties": {
-          "namespaces": {
+          "actors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Namespace"
+              "$ref": "#/components/schemas/Actor"
             }
           },
           "pagination": {
@@ -946,6 +946,25 @@
             "$ref": "#/components/schemas/RivetId"
           }
         }
+      },
+      "NamespaceListResponse": {
+        "type": "object",
+        "required": [
+          "namespaces",
+          "pagination"
+        ],
+        "properties": {
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Namespace"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
       },
       "NamespacesCreateRequest": {
         "type": "object",

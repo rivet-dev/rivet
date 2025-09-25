@@ -66,4 +66,4 @@ rivet-util.workspace = true
 rstest.workspace = true
 tokio-tungstenite.workspace = true
 tracing-subscriber.workspace = true
-versioned-data-util.workspace = true
+vbare.workspace = true
