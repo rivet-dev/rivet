@@ -27,6 +27,7 @@ rivet-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
 
