@@ -1,7 +1,19 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components";
+import { modal } from "@/utils/modal-utils";
 
-const queryCache = new QueryCache();
+const queryCache = new QueryCache({
+	onError(error, query) {
+		if (
+			query.meta?.mightRequireAuth &&
+			"statusCode" in error &&
+			error.statusCode === 403
+		) {
+			modal.open("ProvideEngineCredentials");
+			return;
+		}
+	},
+});
 
 const mutationCache = new MutationCache({
 	onError(error, variables, context, mutation) {

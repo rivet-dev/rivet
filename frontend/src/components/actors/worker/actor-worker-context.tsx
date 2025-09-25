@@ -8,7 +8,8 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { assertNonNullable } from "../../lib/utils";
+import { getConfig } from "@/components/lib/config";
+import { assertNonNullable, ls } from "../../lib/utils";
 import { useActor } from "../actor-queries-context";
 import { useManager } from "../manager-context";
 import { ActorFeature, type ActorId } from "../queries";
@@ -69,6 +70,7 @@ export const ActorWorkerContextProvider = ({
 				name,
 				signal: ctrl.signal,
 				rpcs,
+				engineToken: ls.engineCredentials.get(getConfig().apiUrl) || "",
 			});
 		}
 

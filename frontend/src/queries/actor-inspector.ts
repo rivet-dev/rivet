@@ -6,10 +6,12 @@ import { ensureTrailingSlash } from "@/lib/utils";
 
 export const createInspectorActorContext = ({
 	url,
-	token,
+	token: inspectorToken,
+	engineToken,
 }: {
 	url: string;
 	token: string;
+	engineToken?: string;
 }) => {
 	const def = createDefaultActorContext();
 	const newUrl = new URL(url);
@@ -23,7 +25,10 @@ export const createInspectorActorContext = ({
 				headers: {
 					"x-rivet-actor": actorId,
 					"x-rivet-target": "actor",
-					...(token ? { authorization: `Bearer ${token}` } : {}),
+					...(engineToken ? { "x-rivet-token": engineToken } : {}),
+					...(inspectorToken
+						? { authorization: `Bearer ${inspectorToken}` }
+						: {}),
 				},
 			};
 		},

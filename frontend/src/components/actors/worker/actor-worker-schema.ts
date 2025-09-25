@@ -10,6 +10,7 @@ const CodeMessageSchema = z.object({
 const InitMessageSchema = z.object({
 	type: z.literal("init"),
 	rpcs: z.array(z.string()).optional(),
+	engineToken: z.string().optional(),
 	endpoint: z.string(),
 	name: z.string(),
 	id: z.string(),

@@ -6,6 +6,7 @@ import {
 	type FieldPath,
 	type FieldValues,
 	type PathValue,
+	type UseFormProps,
 	type UseFormReturn,
 	useForm,
 	useFormContext,
@@ -18,6 +19,7 @@ interface FormProps<FormValues extends FieldValues>
 	extends Omit<ComponentProps<"form">, "onSubmit"> {
 	onSubmit: SubmitHandler<FormValues>;
 	defaultValues: DefaultValues<FormValues>;
+	errors?: UseFormProps<FormValues>["errors"];
 	values?: FormValues;
 	children: ReactNode;
 }
@@ -36,6 +38,7 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 			values,
 			children,
 			onSubmit,
+			errors,
 			...props
 		}: FormProps<z.TypeOf<Schema>>) => {
 			const form = useForm<z.TypeOf<Schema>>({
@@ -43,6 +46,7 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 				resolver: zodResolver(schema),
 				defaultValues,
 				values,
+				errors,
 			});
 			return (
 				<Form {...form}>

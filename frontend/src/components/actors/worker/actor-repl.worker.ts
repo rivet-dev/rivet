@@ -1,13 +1,11 @@
-import { createClient } from "@rivetkit/actor/client";
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
+import { createClient } from "rivetkit/client";
 import {
 	createHighlighterCore,
 	createOnigurumaEngine,
 	type HighlighterCore,
 } from "shiki";
-import { getConfig } from "@/components";
-import { createEngineActorContext } from "@/queries/actor-engine";
 import {
 	type InitMessage,
 	MessageSchema,
@@ -183,6 +181,9 @@ function respond(msg: Response) {
 async function callAction({ name, args }: { name: string; args: unknown[] }) {
 	if (!init) throw new Error("Actor not initialized");
 
-	const client = createClient(init.endpoint).getForId(init.name, init.id);
+	const client = createClient({
+		endpoint: init.endpoint,
+		token: init.engineToken,
+	}).getForId(init.name, init.id);
 	return await client.action({ name, args });
 }

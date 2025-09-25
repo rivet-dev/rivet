@@ -1,12 +1,8 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
-import type {
-	ActorId,
-	Patch,
-	RecordedRealtimeEvent,
-} from "@rivetkit/core/inspector";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { applyPatch, compare } from "fast-json-patch";
 import { useCallback, useEffect, useMemo } from "react";
+import type { ActorId, Patch, RecordedRealtimeEvent } from "rivetkit/inspector";
 import { useActor } from "../actor-queries-context";
 
 export const useActorClearEventsMutation = (

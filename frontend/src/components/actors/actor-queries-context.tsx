@@ -1,6 +1,6 @@
-import { createActorInspectorClient } from "@rivetkit/core/inspector";
 import { queryOptions } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
+import { createActorInspectorClient } from "rivetkit/inspector";
 import type { ActorId } from "./queries";
 
 type RequestOptions = Parameters<typeof createActorInspectorClient>[1];

@@ -1,4 +1,3 @@
-import type { CreateActor as InspectorCreateActor } from "@rivetkit/core/inspector";
 import {
 	infiniteQueryOptions,
 	type MutationOptions,
@@ -6,6 +5,7 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
+import type { CreateActor as InspectorCreateActor } from "rivetkit/inspector";
 import { z } from "zod";
 import { queryClient } from "@/queries/global";
 import {
