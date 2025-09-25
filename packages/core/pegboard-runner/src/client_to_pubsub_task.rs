@@ -1,9 +1,11 @@
+use anyhow::Context;
 use futures_util::{SinkExt, StreamExt};
 use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard_actor_kv as kv;
+use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
 use universalpubsub::PublishOpts;
@@ -11,7 +13,7 @@ use versioned_data_util::OwnedVersionedData as _;
 
 use crate::{
 	conn::Conn,
-	utils::{self, WebSocketReceiver},
+	utils::{self},
 };
 
 pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, ws_rx: WebSocketReceiver) {
@@ -44,12 +46,18 @@ async fn task_inner(
 					{
 						Result::Ok(x) => x,
 						Err(err) => {
-							tracing::error!(?err, "failed to deserialize message");
+							tracing::warn!(
+								?err,
+								data_len = data.len(),
+								"failed to deserialize message"
+							);
 							continue;
 						}
 					};
 
-				handle_message(&ctx, &conn, msg).await?;
+				handle_message(&ctx, &conn, msg)
+					.await
+					.context("failed to handle WebSocket message")?;
 			}
 			Result::Ok(WsMessage::Close(_)) => {
 				tracing::info!(?conn.runner_id, "WebSocket closed");
@@ -76,7 +84,10 @@ async fn handle_message(
 ) -> Result<()> {
 	match msg {
 		protocol::ToServer::ToServerPing(ping) => {
-			let rtt = util::timestamp::now().saturating_sub(ping.ts).try_into()?;
+			let rtt = util::timestamp::now()
+				.saturating_sub(ping.ts)
+				.try_into()
+				.context("failed to calculate RTT from ping timestamp")?;
 
 			conn.last_rtt.store(rtt, Ordering::Relaxed);
 		}
@@ -96,12 +107,13 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV error response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV error response to client")?;
 
 					return Ok(());
 				}
@@ -111,7 +123,8 @@ async fn handle_message(
 				.op(pegboard::ops::actor::get_runner::Input {
 					actor_ids: vec![actor_id],
 				})
-				.await?;
+				.await
+				.with_context(|| format!("failed to get runner for actor: {}", actor_id))?;
 			let actor_belongs = actors_res
 				.actors
 				.first()
@@ -131,12 +144,13 @@ async fn handle_message(
 					},
 				));
 
-				let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-				conn.ws_tx
-					.lock()
-					.await
+				let res_msg_serialized = res_msg
+					.serialize(conn.protocol_version)
+					.context("failed to serialize KV actor validation error")?;
+				conn.ws_handle
 					.send(Message::Binary(res_msg_serialized.into()))
-					.await?;
+					.await
+					.context("failed to send KV actor validation error to client")?;
 
 				return Ok(());
 			}
@@ -170,12 +184,13 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV get response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV get response to client")?;
 				}
 				protocol::KvRequestData::KvListRequest(body) => {
 					let res = kv::list(
@@ -183,7 +198,10 @@ async fn handle_message(
 						actor_id,
 						body.query,
 						body.reverse.unwrap_or_default(),
-						body.limit.map(TryInto::try_into).transpose()?,
+						body.limit
+							.map(TryInto::try_into)
+							.transpose()
+							.context("KV list limit value overflow")?,
 					)
 					.await;
 
@@ -210,12 +228,13 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV list response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV list response to client")?;
 				}
 				protocol::KvRequestData::KvPutRequest(body) => {
 					let res = kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
@@ -237,12 +256,13 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV put response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV put response to client")?;
 				}
 				protocol::KvRequestData::KvDeleteRequest(body) => {
 					let res = kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
@@ -262,12 +282,13 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV delete response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV delete response to client")?;
 				}
 				protocol::KvRequestData::KvDropRequest => {
 					let res = kv::delete_all(&*ctx.udb()?, actor_id).await;
@@ -287,17 +308,20 @@ async fn handle_message(
 						}),
 					);
 
-					let res_msg_serialized = res_msg.serialize(conn.protocol_version)?;
-					conn.ws_tx
-						.lock()
-						.await
+					let res_msg_serialized = res_msg
+						.serialize(conn.protocol_version)
+						.context("failed to serialize KV drop response")?;
+					conn.ws_handle
 						.send(Message::Binary(res_msg_serialized.into()))
-						.await?;
+						.await
+						.context("failed to send KV drop response to client")?;
 				}
 			}
 		}
 		protocol::ToServer::ToServerTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(&ctx, &conn, tunnel_msg).await?;
+			handle_tunnel_message(&ctx, &conn, tunnel_msg)
+				.await
+				.context("failed to handle tunnel message")?;
 		}
 		// Forward to runner wf
 		protocol::ToServer::ToServerInit(_)
@@ -305,11 +329,15 @@ async fn handle_message(
 		| protocol::ToServer::ToServerAckCommands(_)
 		| protocol::ToServer::ToServerStopping => {
 			ctx.signal(pegboard::workflows::runner::Forward {
-				inner: protocol::ToServer::try_from(msg)?,
+				inner: protocol::ToServer::try_from(msg)
+					.context("failed to convert message for workflow forwarding")?,
 			})
 			.to_workflow_id(conn.workflow_id)
 			.send()
-			.await?;
+			.await
+			.with_context(|| {
+				format!("failed to forward signal to workflow: {}", conn.workflow_id)
+			})?;
 		}
 	}
 
@@ -341,10 +369,18 @@ async fn handle_tunnel_message(
 
 	// Publish message to UPS
 	let msg_serialized = versioned::ToGateway::latest(protocol::ToGateway { message: msg })
-		.serialize_with_embedded_version(PROTOCOL_VERSION)?;
-	ctx.ups()?
+		.serialize_with_embedded_version(PROTOCOL_VERSION)
+		.context("failed to serialize tunnel message for gateway")?;
+	ctx.ups()
+		.context("failed to get UPS instance for tunnel message")?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
-		.await?;
+		.await
+		.with_context(|| {
+			format!(
+				"failed to publish tunnel message to gateway reply topic: {}",
+				gateway_reply_to
+			)
+		})?;
 
 	Ok(())
 }

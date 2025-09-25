@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming as BodyIncoming;
 use hyper::{Request, Response};
 use hyper_tungstenite::HyperWebsocket;
+use rivet_guard_core::WebSocketHandle;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingOutput};
 use rivet_guard_core::{CustomServeTrait, request_context::RequestContext};
 use tower::Service;
@@ -47,15 +47,12 @@ impl CustomServeTrait for ApiPublicService {
 
 	async fn handle_websocket(
 		&self,
-		client_ws: HyperWebsocket,
+		_client_ws: WebSocketHandle,
 		_headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-	) -> std::result::Result<(), (HyperWebsocket, anyhow::Error)> {
-		Err((
-			client_ws,
-			anyhow::anyhow!("api-public does not support WebSocket connections"),
-		))
+	) -> Result<()> {
+		bail!("api-public does not support WebSocket connections")
 	}
 }
 

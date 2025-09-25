@@ -7,12 +7,14 @@ pub mod proxy_service;
 pub mod request_context;
 mod server;
 pub mod types;
+pub mod websocket_handle;
 
 pub use cert_resolver::CertResolverFn;
 pub use custom_serve::CustomServeTrait;
 pub use proxy_service::{
 	CacheKeyFn, MiddlewareFn, ProxyService, ProxyState, RouteTarget, RoutingFn, RoutingOutput,
 };
+pub use websocket_handle::WebSocketHandle;
 
 // Re-export hyper StatusCode for use in other crates
 pub mod status {

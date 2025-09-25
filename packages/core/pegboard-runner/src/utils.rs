@@ -9,11 +9,6 @@ use tokio_tungstenite::{
 	tungstenite::protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
-pub type WebSocketReceiver = futures_util::stream::SplitStream<WebSocketStream<TokioIo<Upgraded>>>;
-
-pub type WebSocketSender =
-	futures_util::stream::SplitSink<WebSocketStream<TokioIo<Upgraded>>, WsMessage>;
-
 #[derive(Clone)]
 pub struct UrlData {
 	pub protocol_version: u16,
@@ -51,29 +46,6 @@ impl UrlData {
 			runner_key,
 		})
 	}
-}
-
-pub fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {
-	let rivet_err = err
-		.chain()
-		.find_map(|x| x.downcast_ref::<RivetError>())
-		.cloned()
-		.unwrap_or_else(|| RivetError::from(&INTERNAL_ERROR));
-
-	let code = match (rivet_err.group(), rivet_err.code()) {
-		("ws", "connection_closed") => CloseCode::Normal,
-		_ => CloseCode::Error,
-	};
-
-	// NOTE: reason cannot be more than 123 bytes as per the WS protocol
-	let reason = util::safe_slice(
-		&format!("{}.{}", rivet_err.group(), rivet_err.code()),
-		0,
-		123,
-	)
-	.into();
-
-	CloseFrame { code, reason }
 }
 
 /// Determines if a given message kind will terminate the request.

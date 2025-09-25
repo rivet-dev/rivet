@@ -53,7 +53,7 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) ->
 				}
 			};
 		let ws_msg = WsMessage::Binary(serialized_msg.into());
-		if let Err(e) = conn.ws_tx.lock().await.send(ws_msg).await {
+		if let Err(e) = conn.ws_handle.send(ws_msg).await {
 			tracing::error!(?e, "failed to send message to WebSocket");
 			break;
 		}
