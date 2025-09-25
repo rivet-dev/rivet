@@ -82,9 +82,11 @@ export function GuardConnectableInspector({
 			<InspectorGuardContext.Provider
 				value={
 					<Info>
-						Cannot start Actor, runners are out of capacity. Add
-						more runners to run the Actor or increase runner
-						capacity.
+						<p>Cannot start Actor, runners are out of capacity.</p>
+						<p>
+							Add more runners to run the Actor or increase runner
+							capacity.
+						</p>
 					</Info>
 				}
 			>

@@ -15,16 +15,9 @@ export const shouldRetryAllExpect403 = (failureCount: number, error: Error) => {
 	return true;
 };
 
-export const throwAllExpect403 = <T extends Query<any, any, any, any>>(
+export const noThrow = <T extends Query<any, any, any, any>>(
 	error: Error,
-	_query: T,
+	query: T,
 ) => {
-	if (error && "statusCode" in error) {
-		if (error.statusCode === 403) {
-			// Don't throw on auth errors
-			return false;
-		}
-	}
-
-	return true;
+	return false;
 };

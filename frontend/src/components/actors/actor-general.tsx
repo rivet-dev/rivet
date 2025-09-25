@@ -39,7 +39,11 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					</Dd>
 					<Dt>ID</Dt>
 					<Dd className="text-mono">
-						<DiscreteCopyButton size="xs" value={actorId}>
+						<DiscreteCopyButton
+							size="xs"
+							value={actorId}
+							className="-mx-2"
+						>
 							{actorId}
 						</DiscreteCopyButton>
 					</Dd>
@@ -64,6 +68,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						<DiscreteCopyButton
 							size="xs"
 							value={createdAt ? formatISO(createdAt) : "n/a"}
+							className="-mx-2"
 						>
 							{createdAt ? formatISO(createdAt) : "n/a"}
 						</DiscreteCopyButton>
@@ -81,6 +86,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 									? formatISO(pendingAllocationAt)
 									: "n/a"
 							}
+							className="-mx-2"
 						>
 							{pendingAllocationAt
 								? formatISO(pendingAllocationAt)
@@ -95,6 +101,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					>
 						<DiscreteCopyButton
 							size="xs"
+							className="-mx-2"
 							value={
 								connectableAt ? formatISO(connectableAt) : "n/a"
 							}
@@ -108,6 +115,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					>
 						<DiscreteCopyButton
 							size="xs"
+							className="-mx-2"
 							value={sleepingAt ? formatISO(sleepingAt) : "n/a"}
 						>
 							{sleepingAt ? formatISO(sleepingAt) : "n/a"}
@@ -121,6 +129,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					>
 						<DiscreteCopyButton
 							size="xs"
+							className="-mx-2"
 							value={destroyedAt ? formatISO(destroyedAt) : "n/a"}
 						>
 							{destroyedAt ? formatISO(destroyedAt) : "n/a"}
