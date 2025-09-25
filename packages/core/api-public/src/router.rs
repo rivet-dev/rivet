@@ -3,8 +3,9 @@ use axum::{
 	middleware::{self, Next},
 	response::{Redirect, Response},
 };
-use reqwest::header::{AUTHORIZATION, HeaderMap};
+use reqwest::header::{HeaderMap, AUTHORIZATION};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
 use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
@@ -83,6 +84,14 @@ pub async fn router(
 			.route("/ui/", axum::routing::get(ui::serve_index))
 			.route("/ui/{*path}", axum::routing::get(ui::serve_ui))
 			// MARK: Middleware (must go after all routes)
+			// Add CORS layer that mirrors the request origin
+			.layer(
+				CorsLayer::new()
+					.allow_origin(tower_http::cors::AllowOrigin::mirror_request())
+					.allow_methods(tower_http::cors::AllowMethods::mirror_request())
+					.allow_headers(tower_http::cors::AllowHeaders::mirror_request())
+					.allow_credentials(true),
+			)
 			.layer(middleware::from_fn(auth_middleware))
 	})
 	.await
@@ -110,6 +119,7 @@ async fn auth_middleware(
 	let ctx = ctx::ApiCtx::new(ctx.clone(), token);
 	req.extensions_mut().insert(ctx.clone());
 
+	let method = req.method().clone();
 	let path = req.uri().path().to_string();
 
 	// Run endpoint
@@ -117,6 +127,7 @@ async fn auth_middleware(
 
 	// Verify auth was handled
 	if res.extensions().get::<FailedExtraction>().is_none()
+		&& method != reqwest::Method::OPTIONS
 		&& path != "/"
 		&& path != "/ui"
 		&& !path.starts_with("/ui/")
