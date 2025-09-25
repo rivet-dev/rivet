@@ -45,6 +45,7 @@ pub struct DeleteResponse {}
     responses(
         (status = 200, body = DeleteResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn delete(
 	Extension(ctx): Extension<ApiCtx>,

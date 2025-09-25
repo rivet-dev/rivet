@@ -21,6 +21,7 @@ use crate::ctx::ApiCtx;
 	responses(
 		(status = 200, body = ListResponse),
 	),
+	security(("bearer_auth" = [])),
 )]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
@@ -71,6 +72,7 @@ async fn list_inner(
 	responses(
 		(status = 200, body = UpsertResponse),
 	),
+	security(("bearer_auth" = [])),
 )]
 pub async fn upsert(
 	Extension(ctx): Extension<ApiCtx>,
@@ -122,6 +124,7 @@ async fn upsert_inner(
 	responses(
 		(status = 200, body = DeleteResponse),
 	),
+	security(("bearer_auth" = [])),
 )]
 pub async fn delete(
 	Extension(ctx): Extension<ApiCtx>,

@@ -24,6 +24,7 @@ use crate::ctx::ApiCtx;
     responses(
         (status = 200, body = ListNamesResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn list_names(
 	Extension(ctx): Extension<ApiCtx>,

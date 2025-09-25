@@ -20,6 +20,7 @@ use crate::ctx::ApiCtx;
     responses(
         (status = 200, body = ListResponse),
     ),
+	security(("bearer_auth" = [])),
 )]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
@@ -85,14 +86,15 @@ pub struct ListNamesResponse {
 /// - GET /runners/names (fanout)
 /// - [api-peer] namespace::ops::resolve_for_name_global
 #[utoipa::path(
-		get,
-		operation_id = "runners_list_names",
-		path = "/runners/names",
-		params(ListNamesQuery),
-		responses(
-			(status = 200, body = ListNamesResponse),
-		),
-	)]
+	get,
+	operation_id = "runners_list_names",
+	path = "/runners/names",
+	params(ListNamesQuery),
+	responses(
+		(status = 200, body = ListNamesResponse),
+	),
+	security(("bearer_auth" = [])),
+)]
 pub async fn list_names(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,

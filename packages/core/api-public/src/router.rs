@@ -10,22 +10,28 @@ use utoipa::OpenApi;
 use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
 
 #[derive(OpenApi)]
-#[openapi(paths(
-	actors::list::list,
-	actors::create::create,
-	actors::delete::delete,
-	actors::list_names::list_names,
-	actors::get_or_create::get_or_create,
-	runners::list,
-	runners::list_names,
-	namespaces::list,
-	namespaces::create,
-	runner_configs::list,
-	runner_configs::upsert,
-	runner_configs::delete,
-	datacenters::list,
-))]
-#[openapi(components(schemas(namespace::keys::RunnerConfigVariant)))]
+#[openapi(
+	paths(
+		actors::list::list,
+		actors::create::create,
+		actors::delete::delete,
+		actors::list_names::list_names,
+		actors::get_or_create::get_or_create,
+		runners::list,
+		runners::list_names,
+		namespaces::list,
+		namespaces::create,
+		runner_configs::list,
+		runner_configs::upsert,
+		runner_configs::delete,
+		datacenters::list,
+	),
+	components(
+		schemas(namespace::keys::RunnerConfigVariant)
+	),
+	security( ("bearer_auth" = []) ),
+    modifiers(&SecurityAddon),
+)]
 pub struct ApiDoc;
 
 pub async fn router(
@@ -117,4 +123,20 @@ async fn auth_middleware(
 	}
 
 	Ok(res)
+}
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+	fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+		openapi.components.as_mut().unwrap().add_security_scheme(
+			"bearer_auth",
+			utoipa::openapi::security::SecurityScheme::Http(
+				utoipa::openapi::security::HttpBuilder::new()
+					.scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+					// .bearer_format("Rivet")
+					.build(),
+			),
+		);
+	}
 }
