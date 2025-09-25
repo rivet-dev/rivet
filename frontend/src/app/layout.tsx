@@ -1,10 +1,8 @@
 import {
 	faArrowUpRight,
-	faCheck,
 	faLink,
 	faServer,
 	faSpinnerThird,
-	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -197,7 +195,13 @@ const Sidebar = ({
 									/>
 								}
 							>
-								<a href="http://rivet.gg/discord">Discord</a>
+								<a
+									href="http://rivet.gg/discord"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Discord
+								</a>
 							</Button>
 							<Button
 								variant="ghost"
@@ -210,7 +214,11 @@ const Sidebar = ({
 									/>
 								}
 							>
-								<a href="http://github.com/rivet-gg/rivet">
+								<a
+									href="http://github.com/rivet-gg/rivet"
+									target="_blank"
+									rel="noopener noreferrer"
+								>
 									GitHub
 								</a>
 							</Button>
