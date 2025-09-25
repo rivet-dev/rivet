@@ -6,11 +6,6 @@
 		"host": "0.0.0.0",
 		"port": 6421
 	},
-	"pegboard": {
-		"lan_host": "rivet-engine-dc-b",
-		"host": "0.0.0.0",
-		"port": 6423
-	},
 	"logs": {},
 	"topology": {
 		"datacenter_label": 2,
