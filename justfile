@@ -20,5 +20,5 @@ docker-build-frontend:
 
 [group('docker')]
 docker-run:
-	docker run -p 6420:6420 rivetkit/engine:local
+	docker run -p 6420:6420 -e RIVET__AUTH__ADMIN_TOKEN=dev -e RUST_LOG=debug rivetkit/engine:local
 
