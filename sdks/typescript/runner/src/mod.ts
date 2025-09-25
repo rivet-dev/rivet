@@ -410,11 +410,8 @@ export class Runner {
 	// MARK: Runner protocol
 	async #openPegboardWebSocket() {
 		const WS = await importWebSocket();
-		const ws = new WS(this.pegboardUrl, {
-			headers: {
-				"x-rivet-target": "runner",
-			},
-		}) as any as WebSocket;
+		const protocols = ["rivet", `rivet_target.runner`];
+		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
 		this.#pegboardWebSocket = ws;
 
 		ws.addEventListener("open", () => {
@@ -545,7 +542,7 @@ export class Runner {
 		});
 
 		ws.addEventListener("error", (ev) => {
-			logger()?.error("WebSocket error:", ev.error);
+			logger()?.error(`WebSocket error: ${ev.error}`);
 		});
 
 		ws.addEventListener("close", (ev) => {

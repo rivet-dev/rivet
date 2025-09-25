@@ -4,7 +4,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, header::HeaderName};
 use rivet_guard_core::{
 	WebSocketHandle,
 	custom_serve::CustomServeTrait,
@@ -22,6 +22,8 @@ use crate::shared_state::{SharedState, TunnelMessageData};
 pub mod shared_state;
 
 const UPS_REQ_TIMEOUT: Duration = Duration::from_secs(2);
+const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocket-protocol");
+const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 pub struct PegboardGateway {
 	ctx: StandaloneCtx,
@@ -94,7 +96,7 @@ impl PegboardGateway {
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
-		// Extract actor ID for the message
+		// Extract actor ID for the message (HTTP requests use x-rivet-actor header)
 		let actor_id = req
 			.headers()
 			.get("x-rivet-actor")
@@ -200,11 +202,18 @@ impl PegboardGateway {
 		path: &str,
 		_request_context: &mut RequestContext,
 	) -> Result<()> {
-		// Extract actor ID for the message
+		// Extract actor ID from WebSocket protocol
 		let actor_id = headers
-			.get("x-rivet-actor")
-			.context("missing x-rivet-actor")?
-			.to_str()?
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.and_then(|protocols| protocols.to_str().ok())
+			.and_then(|protocols| {
+				// Parse protocols to find actor.{id}
+				protocols
+					.split(',')
+					.map(|p| p.trim())
+					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
+			})
+			.context("missing actor protocol in sec-websocket-protocol")?
 			.to_string();
 
 		// Extract headers
