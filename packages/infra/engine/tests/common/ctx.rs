@@ -85,11 +85,6 @@ impl TestCtx {
 						Box::pin(rivet_guard::start(config, pools))
 					}),
 					Service::new(
-						"pegboard-runner-ws",
-						ServiceKind::ApiPublic,
-						|config, pools| Box::pin(pegboard_runner_ws::start(config, pools)),
-					),
-					Service::new(
 						"workflow-worker",
 						ServiceKind::Standalone,
 						|config, pools| Box::pin(rivet_workflow_worker::start(config, pools)),
@@ -108,7 +103,6 @@ impl TestCtx {
 		tokio::join!(
 			wait_for_port("api-peer", test_deps.api_peer_port()),
 			wait_for_port("guard", test_deps.guard_port()),
-			wait_for_port("pegboard", test_deps.pegboard_port()),
 		);
 
 		// Create workflow context for assertions

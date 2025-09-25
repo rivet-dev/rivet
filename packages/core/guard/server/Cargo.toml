@@ -26,6 +26,7 @@ once_cell.workspace = true
 pegboard-gateway.workspace = true
 pegboard-tunnel.workspace = true
 pegboard.workspace = true
+pegboard-runner-ws.workspace = true
 regex.workspace = true
 rivet-api-public.workspace = true
 rivet-cache.workspace = true

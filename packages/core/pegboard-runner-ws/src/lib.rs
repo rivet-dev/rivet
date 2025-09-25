@@ -1,35 +1,38 @@
-use std::{
-	collections::HashMap,
-	net::SocketAddr,
-	sync::{
-		Arc,
-		atomic::{AtomicU32, Ordering},
-	},
-	time::Duration,
-};
-
+use async_trait::async_trait;
+use bytes::Bytes;
 use futures_util::{
 	SinkExt, StreamExt,
 	stream::{SplitSink, SplitStream},
 };
 use gas::prelude::Id;
 use gas::prelude::*;
+use http_body_util::Full;
+use hyper::upgrade::Upgraded;
+use hyper::{Response, StatusCode};
+use hyper_tungstenite::{HyperWebsocket, tungstenite::Message};
+use hyper_util::rt::TokioIo;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use pegboard_actor_kv as kv;
 use rivet_error::*;
+use rivet_guard_core::{
+	custom_serve::CustomServeTrait, proxy_service::ResponseBody, request_context::RequestContext,
+};
 use rivet_runner_protocol::*;
 use serde_json::json;
-use tokio::{
-	net::{TcpListener, TcpStream},
-	sync::{Mutex, RwLock},
+use std::{
+	collections::HashMap,
+	sync::{
+		Arc,
+		atomic::{AtomicU32, Ordering},
+	},
+	time::Duration,
 };
+use tokio::sync::{Mutex, RwLock};
 use tokio_tungstenite::{
 	WebSocketStream,
-	tungstenite::protocol::{
-		Message,
-		frame::{CloseFrame, coding::CloseCode},
-	},
+	tungstenite::protocol::frame::{CloseFrame, coding::CloseCode},
 };
+type HyperWebSocketStream = WebSocketStream<TokioIo<Upgraded>>;
 use versioned_data_util::OwnedVersionedData;
 
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
@@ -73,200 +76,193 @@ enum WsError {
 struct Connection {
 	workflow_id: Id,
 	protocol_version: u16,
-	tx: Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>,
+	tx: Arc<
+		Mutex<
+			Box<
+				dyn futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error>
+					+ Send
+					+ Unpin,
+			>,
+		>,
+	>,
 	last_rtt: AtomicU32,
 }
 
 type Connections = HashMap<Id, Arc<Connection>>;
 
-#[tracing::instrument(skip_all)]
-pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
-	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
-	let ctx = StandaloneCtx::new(
-		db::DatabaseKv::from_pools(pools.clone()).await?,
-		config.clone(),
-		pools,
-		cache,
-		"pegboard-runner-ws",
-		Id::new_v1(config.dc_label()),
-		Id::new_v1(config.dc_label()),
-	)?;
-
-	let conns: Arc<RwLock<Connections>> = Arc::new(RwLock::new(HashMap::new()));
-
-	let host = ctx.config().pegboard().host();
-	let port = ctx.config().pegboard().port();
-	let addr = SocketAddr::from((host, port));
-
-	let listener = TcpListener::bind(addr).await?;
-	tracing::info!(?host, ?port, "runner ws server listening");
-
-	// None of these should ever exit
-	//
-	// If these do exit, then the `handle_connection` task will run indefinitely and never
-	// send/receive anything to runners. Runner workflows will then expire because of their ping,
-	// their workflow will complete, and runners will be unusable unless they reconnect.
-	tokio::join!(
-		socket_thread(&ctx, conns.clone(), listener),
-		msg_thread(&ctx, conns.clone()),
-		update_ping_thread(&ctx, conns.clone()),
-	);
-
-	Ok(())
+pub struct PegboardRunnerWsCustomServe {
+	ctx: StandaloneCtx,
+	conns: Arc<RwLock<Connections>>,
 }
 
-#[tracing::instrument(skip_all)]
-async fn socket_thread(
-	ctx: &StandaloneCtx,
-	conns: Arc<RwLock<Connections>>,
-	listener: TcpListener,
-) {
-	loop {
-		match listener.accept().await {
-			Ok((stream, addr)) => handle_connection(ctx, conns.clone(), stream, addr).await,
-			Err(err) => tracing::error!(?err, "failed to connect websocket"),
-		}
+impl PegboardRunnerWsCustomServe {
+	pub fn new(ctx: StandaloneCtx) -> Self {
+		let conns = Arc::new(RwLock::new(HashMap::new()));
+		let service = Self {
+			ctx: ctx.clone(),
+			conns: conns.clone(),
+		};
+
+		// Start background threads
+		let msg_ctx = ctx.clone();
+		let msg_conns = conns.clone();
+		tokio::spawn(async move {
+			msg_thread(&msg_ctx, msg_conns).await;
+		});
+
+		let ping_ctx = ctx.clone();
+		let ping_conns = conns.clone();
+		tokio::spawn(async move {
+			update_ping_thread(&ping_ctx, ping_conns).await;
+		});
+
+		service
 	}
 }
 
-#[tracing::instrument(skip_all)]
-async fn handle_connection(
-	ctx: &StandaloneCtx,
-	conns: Arc<RwLock<Connections>>,
-	raw_stream: TcpStream,
-	addr: SocketAddr,
-) {
-	tracing::debug!(?addr, "new connection");
+#[async_trait]
+impl CustomServeTrait for PegboardRunnerWsCustomServe {
+	async fn handle_request(
+		&self,
+		_req: hyper::Request<http_body_util::Full<hyper::body::Bytes>>,
+		_request_context: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		// Pegboard runner ws doesn't handle regular HTTP requests
+		// Return a simple status response
+		let response = Response::builder()
+			.status(StatusCode::OK)
+			.header("Content-Type", "text/plain")
+			.body(ResponseBody::Full(Full::new(Bytes::from(
+				"pegboard-runner-ws WebSocket endpoint",
+			))))?;
 
-	let ctx = ctx.clone();
+		Ok(response)
+	}
 
-	tokio::spawn(async move {
-		let (ws_stream, uri) = match setup_stream(raw_stream, addr).await {
-			Ok(x) => x,
-			Err(err) => {
-				tracing::warn!(?addr, ?err, "setup stream failed");
-				return;
-			}
-		};
-		let (mut tx, mut rx) = ws_stream.split();
-
-		let url_data = match parse_url(addr, uri) {
-			Ok(x) => x,
-			Err(err) => {
-				tracing::warn!(?addr, ?err, "could not parse runner connection url");
-
-				let close_frame = err_to_close_frame(WsError::InvalidUrl(err.to_string()).build());
-
-				if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
-					tracing::error!(?addr, ?err, "failed closing socket");
-				}
-
-				return;
-			}
+	async fn handle_websocket(
+		&self,
+		client_ws: HyperWebsocket,
+		_headers: &hyper::HeaderMap,
+		path: &str,
+		_request_context: &mut RequestContext,
+	) -> std::result::Result<(), (HyperWebsocket, anyhow::Error)> {
+		// Parse URL to extract parameters
+		let url = match url::Url::parse(&format!("ws://placeholder{path}")) {
+			Result::Ok(u) => u,
+			Result::Err(e) => return Err((client_ws, e.into())),
 		};
 
-		let mut tx = Some(tx);
-
-		let (runner_id, conn) = match build_connection(&ctx, &mut tx, &mut rx, url_data).await {
-			Ok(res) => res,
-			Err(err) => {
-				tracing::warn!(?addr, ?err, "failed to build connection");
-
-				if let Some(mut tx) = tx {
-					let close_frame = err_to_close_frame(err);
-
-					if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
-						tracing::error!(?addr, ?err, "failed closing socket");
-					}
-				}
-
-				return;
+		let url_data = match UrlData::parse_url(url) {
+			Result::Ok(x) => x,
+			Result::Err(err) => {
+				tracing::warn!(?err, "could not parse runner connection url");
+				return Err((client_ws, err));
 			}
 		};
 
-		// Store connection
-		{
-			let mut conns = conns.write().await;
-			if let Some(old_conn) = conns.insert(runner_id, conn.clone()) {
-				tracing::warn!(
-					?runner_id,
-					"runner already connected, closing old connection"
-				);
-
-				let close_frame = err_to_close_frame(WsError::NewRunnerConnected.build());
-				let mut tx = old_conn.tx.lock().await;
-
-				if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
-					tracing::error!(?runner_id, ?err, "failed closing old connection");
-				}
+		// Accept WS
+		let ws_stream = match client_ws.await {
+			Result::Ok(ws) => ws,
+			Err(e) => {
+				// Handshake already in progress; cannot retry safely here
+				tracing::error!(error=?e, "client websocket await failed");
+				return std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(());
 			}
-		}
-
-		let err = if let Err(err) = handle_messages(&ctx, &mut rx, runner_id, &conn).await {
-			tracing::warn!(?runner_id, ?err, "failed processing runner messages");
-
-			err
-		} else {
-			tracing::info!(?runner_id, "runner connection closed");
-
-			WsError::ConnectionClosed.build()
 		};
 
-		// Clean up
-		{
-			conns.write().await.remove(&runner_id);
-		}
+		self.handle_connection(ws_stream, url_data).await;
 
-		// Make runner immediately ineligible when it disconnects
-		if let Err(err) = ctx
-			.op(pegboard::ops::runner::update_alloc_idx::Input {
-				runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
-					runner_id,
-					action: Action::ClearIdx,
-				}],
-			})
-			.await
-		{
-			tracing::error!(?runner_id, ?err, "failed evicting runner from alloc idx");
-		}
-
-		let close_frame = err_to_close_frame(err);
-		let mut tx = conn.tx.lock().await;
-		if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
-			tracing::error!(?runner_id, ?err, "failed closing socket");
-		}
-	});
+		std::result::Result::<(), (HyperWebsocket, anyhow::Error)>::Ok(())
+	}
 }
 
-#[tracing::instrument(skip_all)]
-async fn setup_stream(
-	raw_stream: TcpStream,
-	addr: SocketAddr,
-) -> Result<(WebSocketStream<TcpStream>, hyper::Uri)> {
-	let mut uri = None;
-	let ws_stream = tokio_tungstenite::accept_hdr_async(
-		raw_stream,
-		|req: &tokio_tungstenite::tungstenite::handshake::server::Request, res| {
-			// Bootleg way of reading the uri
-			uri = Some(req.uri().clone());
+impl PegboardRunnerWsCustomServe {
+	#[tracing::instrument(skip_all)]
+	async fn handle_connection(&self, ws_stream: HyperWebSocketStream, url_data: UrlData) {
+		let ctx = self.ctx.clone();
+		let conns = self.conns.clone();
 
-			tracing::debug!(?addr, ?uri, "handshake");
+		tokio::spawn(async move {
+			let (tx, mut rx) = ws_stream.split();
+			let mut tx = Some(tx);
 
-			Ok(res)
-		},
-	)
-	.await?;
+			let (runner_id, conn) = match build_connection(&ctx, &mut tx, &mut rx, url_data).await {
+				Ok(res) => res,
+				Err(err) => {
+					tracing::warn!(?err, "failed to build connection");
 
-	let uri = uri.context("socket has no associated request")?;
+					if let Some(mut tx) = tx {
+						let close_frame = err_to_close_frame(err);
 
-	Ok((ws_stream, uri))
+						if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
+							tracing::error!(?err, "failed closing socket");
+						}
+					}
+
+					return;
+				}
+			};
+
+			// Store connection
+			{
+				let mut conns = conns.write().await;
+				if let Some(old_conn) = conns.insert(runner_id, conn.clone()) {
+					tracing::warn!(
+						?runner_id,
+						"runner already connected, closing old connection"
+					);
+
+					let close_frame = err_to_close_frame(WsError::NewRunnerConnected.build());
+					let mut tx = old_conn.tx.lock().await;
+
+					if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
+						tracing::error!(?runner_id, ?err, "failed closing old connection");
+					}
+				}
+			}
+
+			let err = if let Err(err) = handle_messages(&ctx, &mut rx, runner_id, &conn).await {
+				tracing::warn!(?runner_id, ?err, "failed processing runner messages");
+
+				err
+			} else {
+				tracing::info!(?runner_id, "runner connection closed");
+
+				WsError::ConnectionClosed.build()
+			};
+
+			// Clean up
+			{
+				conns.write().await.remove(&runner_id);
+			}
+
+			// Make runner immediately ineligible when it disconnects
+			if let Err(err) = ctx
+				.op(pegboard::ops::runner::update_alloc_idx::Input {
+					runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
+						runner_id,
+						action: Action::ClearIdx,
+					}],
+				})
+				.await
+			{
+				tracing::error!(?runner_id, ?err, "failed evicting runner from alloc idx");
+			}
+
+			let close_frame = err_to_close_frame(err);
+			let mut tx = conn.tx.lock().await;
+			if let Err(err) = tx.send(Message::Close(Some(close_frame))).await {
+				tracing::error!(?runner_id, ?err, "failed closing socket");
+			}
+		});
+	}
 }
 
 #[tracing::instrument(skip_all)]
 async fn build_connection(
 	ctx: &StandaloneCtx,
-	tx: &mut Option<SplitSink<WebSocketStream<TcpStream>, Message>>,
-	rx: &mut SplitStream<WebSocketStream<TcpStream>>,
+	tx: &mut Option<futures_util::stream::SplitSink<HyperWebSocketStream, Message>>,
+	rx: &mut futures_util::stream::SplitStream<HyperWebSocketStream>,
 	UrlData {
 		protocol_version,
 		namespace,
@@ -387,7 +383,12 @@ async fn build_connection(
 		Arc::new(Connection {
 			workflow_id,
 			protocol_version,
-			tx: Mutex::new(tx),
+			tx: Arc::new(Mutex::new(Box::new(tx)
+				as Box<
+					dyn futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error>
+						+ Send
+						+ Unpin,
+				>)),
 			last_rtt: AtomicU32::new(0),
 		}),
 	))
@@ -395,7 +396,7 @@ async fn build_connection(
 
 async fn handle_messages(
 	ctx: &StandaloneCtx,
-	rx: &mut SplitStream<WebSocketStream<TcpStream>>,
+	rx: &mut futures_util::stream::SplitStream<HyperWebSocketStream>,
 	runner_id: Id,
 	conn: &Connection,
 ) -> Result<()> {
@@ -797,36 +798,36 @@ struct UrlData {
 	runner_key: String,
 }
 
-fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> Result<UrlData> {
-	let url = url::Url::parse(&format!("ws://{addr}{uri}"))?;
+impl UrlData {
+	fn parse_url(url: url::Url) -> Result<Self> {
+		// Read protocol version from query parameters (required)
+		let protocol_version = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "protocol_version").then_some(v))
+			.context("missing `protocol_version` query parameter")?
+			.parse::<u16>()
+			.context("invalid `protocol_version` query parameter")?;
 
-	// Read protocol version from query parameters (required)
-	let protocol_version = url
-		.query_pairs()
-		.find_map(|(n, v)| (n == "protocol_version").then_some(v))
-		.context("missing `protocol_version` query parameter")?
-		.parse::<u16>()
-		.context("invalid `protocol_version` query parameter")?;
+		// Read namespace from query parameters
+		let namespace = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "namespace").then_some(v))
+			.context("missing `namespace` query parameter")?
+			.to_string();
 
-	// Read namespace from query parameters
-	let namespace = url
-		.query_pairs()
-		.find_map(|(n, v)| (n == "namespace").then_some(v))
-		.context("missing `namespace` query parameter")?
-		.to_string();
+		// Read runner key from query parameters (required)
+		let runner_key = url
+			.query_pairs()
+			.find_map(|(n, v)| (n == "runner_key").then_some(v))
+			.context("missing `runner_key` query parameter")?
+			.to_string();
 
-	// Read runner key from query parameters (required)
-	let runner_key = url
-		.query_pairs()
-		.find_map(|(n, v)| (n == "runner_key").then_some(v))
-		.context("missing `runner_key` query parameter")?
-		.to_string();
-
-	Ok(UrlData {
-		protocol_version,
-		namespace,
-		runner_key,
-	})
+		Ok(UrlData {
+			protocol_version,
+			namespace,
+			runner_key,
+		})
+	}
 }
 
 fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {

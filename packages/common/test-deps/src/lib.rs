@@ -13,7 +13,6 @@ pub struct TestDeps {
 	pub config: rivet_config::Config,
 	container_names: Vec<String>,
 	api_peer_port: u16,
-	pegboard_port: u16,
 	guard_port: u16,
 	stop_docker_containers_on_drop: bool,
 }
@@ -85,10 +84,6 @@ impl TestDeps {
 
 	pub fn api_peer_port(&self) -> u16 {
 		self.api_peer_port
-	}
-
-	pub fn pegboard_port(&self) -> u16 {
-		self.pegboard_port
 	}
 
 	pub fn guard_port(&self) -> u16 {

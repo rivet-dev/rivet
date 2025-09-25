@@ -60,13 +60,10 @@ pub async fn setup_single_datacenter(
 		dc = dc.datacenter_label,
 		"containers started, waiting for services to be ready"
 	);
-	// Pick ports for other services
-	let pegboard_port = portpicker::pick_unused_port().context("pegboard_port")?;
 
 	tracing::info!(
 		dc = dc.datacenter_label,
 		api_peer_port,
-		pegboard_port,
 		guard_port,
 		"using ports for test services"
 	);
@@ -78,10 +75,6 @@ pub async fn setup_single_datacenter(
 	root.api_public = Some(Default::default());
 	root.api_peer = Some(rivet_config::config::ApiPeer {
 		port: Some(api_peer_port),
-		..Default::default()
-	});
-	root.pegboard = Some(rivet_config::config::Pegboard {
-		port: Some(pegboard_port),
 		..Default::default()
 	});
 
@@ -111,7 +104,6 @@ pub async fn setup_single_datacenter(
 		container_names,
 		api_peer_port,
 		guard_port,
-		pegboard_port,
 		stop_docker_containers_on_drop: true,
 	})
 }
