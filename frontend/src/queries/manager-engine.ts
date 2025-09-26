@@ -18,7 +18,7 @@ import {
 	ActorQueryOptionsSchema,
 	createDefaultManagerContext,
 } from "@/components/actors/manager-context";
-import { shouldRetryAllExpect403, throwAllExpect403 } from "./utils";
+import { noThrow, shouldRetryAllExpect403 } from "./utils";
 
 export const createClient = (opts: { token: (() => string) | string }) =>
 	new RivetClient({
@@ -53,7 +53,7 @@ export const createEngineManagerContext = ({
 					return true;
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -74,7 +74,7 @@ export const createEngineManagerContext = ({
 					};
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -100,7 +100,7 @@ export const createEngineManagerContext = ({
 					throw new Error(`Region not found: ${regionId}`);
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -124,7 +124,7 @@ export const createEngineManagerContext = ({
 					return transformActor(data.actors[0]);
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -199,7 +199,7 @@ export const createEngineManagerContext = ({
 					return lastPage.pagination.cursor;
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -237,7 +237,7 @@ export const createEngineManagerContext = ({
 					return lastPage.pagination.cursor;
 				},
 				retry: shouldRetryAllExpect403,
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth: true,
 				},
@@ -260,7 +260,7 @@ export const createEngineManagerContext = ({
 					return response.actor.actorId;
 				},
 				onSuccess: () => {},
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth: true,
@@ -270,7 +270,7 @@ export const createEngineManagerContext = ({
 		actorDestroyMutationOptions(actorId) {
 			return {
 				...def.actorDestroyMutationOptions(actorId),
-				throwOnError: throwAllExpect403,
+				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth: true,
@@ -309,7 +309,7 @@ export const runnersQueryOptions = (opts: { namespace: NamespaceNameId }) => {
 		},
 		select: (data) => data.pages.flatMap((page) => page.runners),
 		retry: shouldRetryAllExpect403,
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		meta: {
 			mightRequireAuth: true,
 		},
@@ -333,7 +333,7 @@ export const runnerQueryOptions = (opts: {
 			);
 			return data.runner;
 		},
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		retry: shouldRetryAllExpect403,
 		meta: {
 			mightRequireAuth: true,
@@ -360,7 +360,7 @@ export const runnerByNameQueryOptions = (opts: {
 			}
 			return data.runners[0];
 		},
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		retry: shouldRetryAllExpect403,
 		meta: {
 			mightRequireAuth: true,
@@ -394,7 +394,7 @@ export const runnerNamesQueryOptions = (opts: {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.names),
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		retry: shouldRetryAllExpect403,
 		meta: {
 			mightRequireAuth: true,
@@ -423,7 +423,7 @@ export const namespacesQueryOptions = () => {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.namespaces),
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		retry: shouldRetryAllExpect403,
 		meta: {
 			mightRequireAuth: true,
@@ -447,7 +447,7 @@ export const namespaceQueryOptions = (
 			: skipToken,
 
 		retry: shouldRetryAllExpect403,
-		throwOnError: throwAllExpect403,
+		throwOnError: noThrow,
 		meta: {
 			mightRequireAuth: true,
 		},

@@ -58,7 +58,7 @@ export function ActorStateTab({ actorId }: ActorStateTabProps) {
 
 export function Info({ children }: PropsWithChildren) {
 	return (
-		<div className="flex-1 flex flex-col gap-2 items-center justify-center h-full text-center max-w-md mx-auto">
+		<div className="flex-1 flex flex-col gap-2 items-center justify-center h-full text-center max-w-lg mx-auto">
 			{children}
 		</div>
 	);
