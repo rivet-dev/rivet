@@ -56,11 +56,10 @@ pub struct NoRouteTargets;
 	"guard",
 	"retry_attempts_exceeded",
 	"Retry attempts exceeded.",
-	"All {attempts} retry attempts failed (max: {max_attempts})."
+	"All {attempts} retry attempts failed."
 )]
 pub struct RetryAttemptsExceeded {
 	pub attempts: u32,
-	pub max_attempts: u32,
 }
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -74,7 +73,14 @@ pub struct ConnectionError {
 #[error(
 	"guard",
 	"websocket_service_unavailable",
-	"WebSocket service unavailable.",
 	"WebSocket service unavailable."
 )]
 pub struct WebSocketServiceUnavailable;
+
+#[derive(RivetError, Serialize, Deserialize)]
+#[error(
+	"guard",
+	"target_changed",
+	"WebSocket target changed, retry not possible."
+)]
+pub struct WebSocketTargetChanged;
