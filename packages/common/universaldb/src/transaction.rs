@@ -232,7 +232,7 @@ impl Transaction {
 		self.driver.clear_range(begin, end)
 	}
 
-	pub fn clear_subspace_range(&self, subspace: &Subspace) {
+	pub fn clear_subspace_range(&self, subspace: &tuple::Subspace) {
 		let (begin, end) = subspace.range();
 		self.driver.clear_range(&begin, &end);
 	}
@@ -320,10 +320,6 @@ impl<'t> InformalTransaction<'t> {
 		let (begin, end) = subspace.range();
 		self.inner.driver.clear_range(&begin, &end);
 	}
-
-	// pub fn commit(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-	// 	self.inner.driver.commit()
-	// }
 
 	pub fn cancel(&self) {
 		self.inner.driver.cancel()

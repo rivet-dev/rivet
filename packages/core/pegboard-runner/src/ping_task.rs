@@ -19,7 +19,6 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>) -> Result<()> {
 	loop {
 		tokio::time::sleep(UPDATE_PING_INTERVAL).await;
 
-		// Check that workflow is not dead
 		let Some(wf) = ctx
 			.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)
 			.get()

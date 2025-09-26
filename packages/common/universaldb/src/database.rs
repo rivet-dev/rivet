@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use futures_util::FutureExt;
 
 use crate::{
@@ -37,6 +37,7 @@ impl Database {
 					.map(|x| *x)
 					.map_err(|_| anyhow!("failed to downcast `run` return type"))
 			})
+			.context("transaction failed")
 	}
 
 	/// Creates a new txn instance.

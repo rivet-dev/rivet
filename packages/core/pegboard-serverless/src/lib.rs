@@ -232,8 +232,8 @@ async fn outbound_handler(
 	let mut req = client.get(url).headers(headers);
 
 	// Add admin token if configured
-	if let Some(auth) = ctx.config().auth {
-		req = req.header(X_RIVET_TOKEN, &auth.admin_token);
+	if let Some(auth) = &ctx.config().auth {
+		req = req.header(X_RIVET_TOKEN, auth.admin_token.read());
 	}
 
 	let mut source = sse::EventSource::new(req)?;

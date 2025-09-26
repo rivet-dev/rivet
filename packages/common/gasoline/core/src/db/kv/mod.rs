@@ -2305,8 +2305,12 @@ impl Database for DatabaseKv {
 			.run(|tx| {
 				async move {
 					let state_key = keys::workflow::StateKey::new(workflow_id);
+					let state_subspace = self.subspace.subspace(&state_key);
 
-					// Write state
+					// Clear old state
+					tx.clear_subspace_range(&state_subspace);
+
+					// Write new state
 					for (i, chunk) in state_key.split_ref(&state)?.into_iter().enumerate() {
 						let chunk_key = state_key.chunk(i);
 

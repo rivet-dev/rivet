@@ -577,7 +577,7 @@ impl FormalChunkedKey for InputKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `InputKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
@@ -693,7 +693,7 @@ impl FormalChunkedKey for OutputKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `OutputKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
@@ -1621,8 +1621,12 @@ pub mod insert {
 		);
 
 		let state_key = super::InputKey::new(workflow_id, location.clone());
+		let state_subspace = subspace.subspace(&state_key);
 
-		// Write state
+		// Clear old state
+		tx.clear_subspace_range(&state_subspace);
+
+		// Write new state
 		for (i, chunk) in state_key.split_ref(&state)?.into_iter().enumerate() {
 			let chunk_key = state_key.chunk(i);
 
