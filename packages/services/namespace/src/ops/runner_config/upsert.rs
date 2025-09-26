@@ -41,6 +41,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 			match &input.config {
 				RunnerConfig::Serverless {
 					url,
+					headers,
 					slots_per_runner,
 					..
 				} => {
@@ -49,6 +50,35 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 						return Ok(Err(errors::RunnerConfig::Invalid {
 							reason: format!("invalid serverless url: {err}"),
 						}));
+					}
+
+					if headers.len() > 16 {
+						return Ok(Err(errors::RunnerConfig::Invalid {
+							reason: "too many headers (max 16)".to_string(),
+						}));
+					}
+
+					for (n, v) in headers {
+						if n.len() > 128 {
+							return Ok(Err(errors::RunnerConfig::Invalid {
+								reason: format!("invalid header name: too long (max 128)"),
+							}));
+						}
+						if let Err(err) = n.parse::<reqwest::header::HeaderName>() {
+							return Ok(Err(errors::RunnerConfig::Invalid {
+								reason: format!("invalid header name: {err}"),
+							}));
+						}
+						if v.len() > 4096 {
+							return Ok(Err(errors::RunnerConfig::Invalid {
+								reason: format!("invalid header value: too long (max 4096)"),
+							}));
+						}
+						if let Err(err) = v.parse::<reqwest::header::HeaderValue>() {
+							return Ok(Err(errors::RunnerConfig::Invalid {
+								reason: format!("invalid header value: {err}"),
+							}));
+						}
 					}
 
 					// Validate slots per runner
