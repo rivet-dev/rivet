@@ -31,7 +31,7 @@ impl ApiCtx {
 
 		self.authentication_handled.store(true, Ordering::Relaxed);
 
-		if self.token.as_ref() == Some(&auth.admin_token) {
+		if self.token.as_ref() == Some(auth.admin_token.read()) {
 			Ok(())
 		} else {
 			Err(rivet_api_builder::ApiForbidden.build())
