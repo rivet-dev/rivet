@@ -17,17 +17,13 @@ DOCKERFILE=${DOCKERFILE:-docker/universal/Dockerfile}
 TARGET=${TARGET:-engine-full}
 CONTEXT=${CONTEXT:-.}
 
-echo "Building frontend..."
-pnpm install
-VITE_APP_API_URL=${VITE_APP_API_URL:-/} pnpm turbo build:engine -F @rivetkit/engine-frontend --force
-
 echo "Building ${IMAGE_REPO} with tags: ${TAGS[*]} ..."
 BUILD_TAG_ARGS=()
 for tag in "${TAGS[@]}"; do
   BUILD_TAG_ARGS+=("-t" "${IMAGE_REPO}:${tag}")
 done
 
-docker build -f "${DOCKERFILE}" --target "${TARGET}" "${BUILD_TAG_ARGS[@]}" "${CONTEXT}"
+docker build -f "${DOCKERFILE}" --target "${TARGET}" --platform linux/x86_64 --build-arg BUILD_FRONTEND=true "${BUILD_TAG_ARGS[@]}" "${CONTEXT}"
 
 echo "Pushing images..."
 for tag in "${TAGS[@]}"; do
