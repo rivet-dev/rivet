@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.7.2](https://github.com/rivet-dev/engine/compare/v25.7.1...v25.7.2) (2025-09-27)
+
+
+### Features
+
+* basic auth, headers in serverless config ([#2973](https://github.com/rivet-dev/engine/issues/2973)) ([10b65bd](https://github.com/rivet-dev/engine/commit/10b65bd8980c24fa59b17004ac77d9ec843357ff))
+* **engine:** ask for token when unauth ([#2972](https://github.com/rivet-dev/engine/issues/2972)) ([7d334e7](https://github.com/rivet-dev/engine/commit/7d334e717c35921830c46154e4b3748e69a6f773))
+* **sdk:** regenerate sdks ([#2980](https://github.com/rivet-dev/engine/issues/2980)) ([c5e3c36](https://github.com/rivet-dev/engine/commit/c5e3c36c7ab2a33478a56b6d6fa96324c36f0a22))
+
+
+### Bug Fixes
+
+* allow token through ws protocols ([#2976](https://github.com/rivet-dev/engine/issues/2976)) ([5382902](https://github.com/rivet-dev/engine/commit/53829028fb1ae73b3915bf733fb6f41d883a3593))
+* **api-public:** read token secret ([#3002](https://github.com/rivet-dev/engine/issues/3002)) ([99d9295](https://github.com/rivet-dev/engine/commit/99d929545de9dffc749737405371cb091c4a3741))
+* **api:** fix openapi security ([#2975](https://github.com/rivet-dev/engine/issues/2975)) ([d5b977e](https://github.com/rivet-dev/engine/commit/d5b977e293a525ed2bf26fa9059e4f6b4274d823))
+* **api:** fix unhandled auth handling, extractor errors ([#2983](https://github.com/rivet-dev/engine/issues/2983)) ([1726fcc](https://github.com/rivet-dev/engine/commit/1726fccbccb949b69cb399da2a1f944b44ceeade))
+* circumvent fern bug with utoipa config ([#2943](https://github.com/rivet-dev/engine/issues/2943)) ([43b7d56](https://github.com/rivet-dev/engine/commit/43b7d56560aa1ab1171d7af98dddb3d736643a41))
+* **docker:** fix start command in docker compose ([#2954](https://github.com/rivet-dev/engine/issues/2954)) ([a672f0e](https://github.com/rivet-dev/engine/commit/a672f0eb40a094ecd2a5773ed6a92b3e3cf0fe57))
+* **fe:** broken actor details ([#2958](https://github.com/rivet-dev/engine/issues/2958)) ([bbdf1c1](https://github.com/rivet-dev/engine/commit/bbdf1c1c49e307ba252186aa4d75a9452d74fca7))
+* **fe:** broken ui when no runner under name is available ([#2995](https://github.com/rivet-dev/engine/issues/2995)) ([f404037](https://github.com/rivet-dev/engine/commit/f404037924b70f48b83c0f9a903f800f2f0fd3d4))
+* **fe:** links in new window ([#2992](https://github.com/rivet-dev/engine/issues/2992)) ([e9d0a98](https://github.com/rivet-dev/engine/commit/e9d0a988fd4ea686b049905263e947f11b2e1525))
+* **pegboard-gateway:** fix reading rivet token from ws ([#2984](https://github.com/rivet-dev/engine/issues/2984)) ([c2f95f8](https://github.com/rivet-dev/engine/commit/c2f95f82f311f60aa7e35b9d0c8290df5f5b9f5b))
+* **pegboard-gateway:** fix server -&gt; client websocket close not working ([#2981](https://github.com/rivet-dev/engine/issues/2981)) ([bd9721b](https://github.com/rivet-dev/engine/commit/bd9721bb46819a7da9f735ab28af8258555b4bc4))
+* **pegboard-runner:** handle overflow for ping ts diff ([#2989](https://github.com/rivet-dev/engine/issues/2989)) ([93b84ab](https://github.com/rivet-dev/engine/commit/93b84ab0090a22b347e15a13db8af7ad91fe348f))
+* **pegboard:** include namespace & runner name in tunnel pubsub subject ([#2929](https://github.com/rivet-dev/engine/issues/2929)) ([8a7257b](https://github.com/rivet-dev/engine/commit/8a7257b160ba94a646736d86ad55a49af07e33c0))
+* **release:** fix releasing npm packages with workspace deps ([#2962](https://github.com/rivet-dev/engine/issues/2962)) ([9dd5c6a](https://github.com/rivet-dev/engine/commit/9dd5c6a72c88c3ba1ac58a09af0ed22ee5b53e70))
+
+
+### Chores
+
+* add vbare blog ([b80fb41](https://github.com/rivet-dev/engine/commit/b80fb418ef82f9f17a109d08837e451bad83c6a1))
+* **api-public:** add cors ([#2990](https://github.com/rivet-dev/engine/issues/2990)) ([db64e7e](https://github.com/rivet-dev/engine/commit/db64e7e45caa5b78752da8df18f6c66626f158ef))
+* **api-public:** fix auth when no token configured ([#2986](https://github.com/rivet-dev/engine/issues/2986)) ([379ce0b](https://github.com/rivet-dev/engine/commit/379ce0b0eb36c86343ae8ac56acf79be891e5380))
+* auto-fmt code on commit ([#2968](https://github.com/rivet-dev/engine/issues/2968)) ([09cae98](https://github.com/rivet-dev/engine/commit/09cae980843ba2261439870faf52f03da280c6a8))
+* changelog for 21st 2025 ([#3000](https://github.com/rivet-dev/engine/issues/3000)) ([121dfe4](https://github.com/rivet-dev/engine/commit/121dfe42d04daf8fae1476da2c11b38590dcbed5))
+* **config:** make admin_token a secret ([#2987](https://github.com/rivet-dev/engine/issues/2987)) ([3f6a10b](https://github.com/rivet-dev/engine/commit/3f6a10bf7dc8f06b323096edc047062125866c24))
+* **core:** remove dbg ([#2988](https://github.com/rivet-dev/engine/issues/2988)) ([7d5699e](https://github.com/rivet-dev/engine/commit/7d5699e20ac63c3d6641d111f0f7f0526716cae4))
+* **core:** standardize api schema ([#2967](https://github.com/rivet-dev/engine/issues/2967)) ([3bd3c68](https://github.com/rivet-dev/engine/commit/3bd3c689143fa2848cbad3b4536eb6d3514bda6f))
+* **docker:** add default token to dev docker ([#2977](https://github.com/rivet-dev/engine/issues/2977)) ([a7afc33](https://github.com/rivet-dev/engine/commit/a7afc33fda76dfb6e8c1b936b3e51cdefe69ab36))
+* **docker:** fix docker entrypoint ([#2925](https://github.com/rivet-dev/engine/issues/2925)) ([ed00a8f](https://github.com/rivet-dev/engine/commit/ed00a8f6aab45191fe22d1894af35f86d5a3738e))
+* **docker:** remove unused config properties ([#2957](https://github.com/rivet-dev/engine/issues/2957)) ([038b75b](https://github.com/rivet-dev/engine/commit/038b75bd9264c977e705953d41a04a369a61604c))
+* fix docker composefrontend build args, ws header error msgs ([#2996](https://github.com/rivet-dev/engine/issues/2996)) ([486addb](https://github.com/rivet-dev/engine/commit/486addbe066d210d175509a6b29390ec0243be60))
+* **guard:** route target via websocket protocols ([#2969](https://github.com/rivet-dev/engine/issues/2969)) ([692a54a](https://github.com/rivet-dev/engine/commit/692a54a78fda2d89d719bdf5568cbc70c2341c03))
+* **guard:** simplify error handling for websockets ([#2966](https://github.com/rivet-dev/engine/issues/2966)) ([144e6b8](https://github.com/rivet-dev/engine/commit/144e6b8f434189cb7aeed0394060a7359e9848db))
+* **justfile:** add token to default docker run script ([#2991](https://github.com/rivet-dev/engine/issues/2991)) ([324312d](https://github.com/rivet-dev/engine/commit/324312daf078f08711a0724df7297f7880939d0c))
+* **justfile:** fix build with frontend ([#2985](https://github.com/rivet-dev/engine/issues/2985)) ([3aeb28c](https://github.com/rivet-dev/engine/commit/3aeb28cc83d55a70ce4f5bf24027020b4da07554))
+* merge tunnel in to runner ([#2952](https://github.com/rivet-dev/engine/issues/2952)) ([2d80d59](https://github.com/rivet-dev/engine/commit/2d80d595bee0125e057a45a3fb4eba2ef99b1b3b))
+* **pegboard-runner:** remove excess info logs in gateway ([#2974](https://github.com/rivet-dev/engine/issues/2974)) ([11f583f](https://github.com/rivet-dev/engine/commit/11f583f996a0b01ca33a69d8083a83d69efceed8))
+* **pegboard:** migrate pegboard-ws to custom serve ([#2951](https://github.com/rivet-dev/engine/issues/2951)) ([9c9f715](https://github.com/rivet-dev/engine/commit/9c9f715a9b0ed6cad889faf4f58c89af6bb7e25b))
+* release 25.7.2 ([20adec5](https://github.com/rivet-dev/engine/commit/20adec58d08ccc4833ca9d8fa30304883647e4b7))
+* release 25.7.2 ([a555ba9](https://github.com/rivet-dev/engine/commit/a555ba93a20952a3b56ebd10466d063f3837e7ff))
+* **release:** update version to 25.7.2 ([a900956](https://github.com/rivet-dev/engine/commit/a9009566eeea25b85f9d4bab0a30df072146249a))
+* **release:** update version to 25.7.2 ([501a460](https://github.com/rivet-dev/engine/commit/501a4606be0e886dd70f1845d5ddb98cd8ca1153))
+* remove unused port configs in favor of custom serve & move api-peer from 6422-&gt;6421 ([#2953](https://github.com/rivet-dev/engine/issues/2953)) ([a940930](https://github.com/rivet-dev/engine/commit/a940930ab826ef2b4b60522a3741e96d39b7f3a1))
+* **runner-protocol:** reorder protocol types ([#2949](https://github.com/rivet-dev/engine/issues/2949)) ([f355720](https://github.com/rivet-dev/engine/commit/f3557206b547690e4dacb6c2319e69906f3168b3))
+* **scripts:** update build-push script ([#3005](https://github.com/rivet-dev/engine/issues/3005)) ([b33f46f](https://github.com/rivet-dev/engine/commit/b33f46f93a7ce05d9426176e6b4d73f91548a2e7))
+* switch to vbare external lib ([#2963](https://github.com/rivet-dev/engine/issues/2963)) ([ced8f3c](https://github.com/rivet-dev/engine/commit/ced8f3c0f359881c361aa331071737417e8b32bb))
+* tweak vbare post ([1bac69b](https://github.com/rivet-dev/engine/commit/1bac69ba3b6d211100a5287146de9ef570fc041b))
+* **udb:** log fs driver path ([#2955](https://github.com/rivet-dev/engine/issues/2955)) ([f6fa143](https://github.com/rivet-dev/engine/commit/f6fa1430f5aac0525b968b41090cc2fa46ba5a36))
+* update nextjs docs ([#2950](https://github.com/rivet-dev/engine/issues/2950)) ([7aef286](https://github.com/rivet-dev/engine/commit/7aef28676b3f7ba4a65a75c5aaedb3dcb1700f19))
+* Weekly Changelog 2025.37 ([f2d0a51](https://github.com/rivet-dev/engine/commit/f2d0a514d05010d8b9a4494f43a5ac13db1ffef1))
+* Weekly Changelog 2025.37 ([#2947](https://github.com/rivet-dev/engine/issues/2947)) ([f2d0a51](https://github.com/rivet-dev/engine/commit/f2d0a514d05010d8b9a4494f43a5ac13db1ffef1))
+
 ## [25.7.1](https://github.com/rivet-dev/engine/compare/v25.7.0...v25.7.1) (2025-09-19)
 
 
