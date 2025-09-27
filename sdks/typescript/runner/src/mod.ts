@@ -546,6 +546,26 @@ export class Runner {
 
 		ws.addEventListener("error", (ev) => {
 			logger()?.error(`WebSocket error: ${ev.error}`);
+
+			if (!this.#shutdown) {
+				// Start runner lost timeout if we have a threshold and are not shutting down
+				if (
+					!this.#runnerLostTimeout &&
+					this.#runnerLostThreshold &&
+					this.#runnerLostThreshold > 0
+				) {
+					logger()?.info({
+						msg: "starting runner lost timeout",
+						seconds: this.#runnerLostThreshold / 1000,
+					});
+					this.#runnerLostTimeout = setTimeout(() => {
+						this.#stopAllActors();
+					}, this.#runnerLostThreshold);
+				}
+
+				// Attempt to reconnect if not stopped
+				this.#scheduleReconnect();
+			}
 		});
 
 		ws.addEventListener("close", (ev) => {
@@ -572,6 +592,7 @@ export class Runner {
 			if (!this.#shutdown) {
 				// Start runner lost timeout if we have a threshold and are not shutting down
 				if (
+					!this.#runnerLostTimeout &&
 					this.#runnerLostThreshold &&
 					this.#runnerLostThreshold > 0
 				) {
@@ -1244,7 +1265,7 @@ export class Runner {
 
 	#scheduleReconnect() {
 		if (this.#shutdown) {
-			//logger()?.log("Runner is shut down, not attempting reconnect");
+			logger()?.debug("Runner is shut down, not attempting reconnect");
 			return;
 		}
 
@@ -1255,16 +1276,16 @@ export class Runner {
 			jitter: true,
 		});
 
-		//logger()?.log(
-		//	`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
-		//);
+		logger()?.debug(
+			`Scheduling reconnect attempt ${this.#reconnectAttempt + 1} in ${delay}ms`,
+		);
 
 		this.#reconnectTimeout = setTimeout(async () => {
 			if (!this.#shutdown) {
 				this.#reconnectAttempt++;
-				//logger()?.log(
-				//	`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
-				//);
+				logger()?.debug(
+					`Attempting to reconnect (attempt ${this.#reconnectAttempt})...`,
+				);
 				await this.#openPegboardWebSocket();
 			}
 		}, delay);
