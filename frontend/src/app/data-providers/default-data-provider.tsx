@@ -239,6 +239,12 @@ const defaultContext = {
 			select: (data) => data.key,
 		});
 	},
+	actorDatacenterQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			...this.actorQueryOptions(actorId),
+			select: (data) => data.datacenter ?? null,
+		});
+	},
 	actorDestroyMutationOptions(actorId: ActorId) {
 		return {
 			mutationKey: ["actor", actorId, "destroy"],
