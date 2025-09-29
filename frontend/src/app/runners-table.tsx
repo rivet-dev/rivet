@@ -1,7 +1,9 @@
+import { faHourglassClock, Icon } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	Button,
 	DiscreteCopyButton,
+	Ping,
 	Skeleton,
 	Table,
 	TableBody,
@@ -21,11 +23,18 @@ interface RunnersTableProps {
 	runners: Rivet.Runner[];
 }
 
-export function RunnersTable({isLoading, isError, hasNextPage, fetchNextPage, runners}: RunnersTableProps) {
+export function RunnersTable({
+	isLoading,
+	isError,
+	hasNextPage,
+	fetchNextPage,
+	runners,
+}: RunnersTableProps) {
 	return (
 		<Table>
 			<TableHeader>
 				<TableRow>
+					<TableHead />
 					<TableHead>ID</TableHead>
 					<TableHead>Name</TableHead>
 					<TableHead>Slots</TableHead>
@@ -36,7 +45,7 @@ export function RunnersTable({isLoading, isError, hasNextPage, fetchNextPage, ru
 			<TableBody>
 				{!isLoading && runners?.length === 0 ? (
 					<TableRow>
-						<TableCell colSpan={8}>
+						<TableCell colSpan={9}>
 							<Text className="text-center">
 								There's no runners matching criteria.
 							</Text>
@@ -45,7 +54,7 @@ export function RunnersTable({isLoading, isError, hasNextPage, fetchNextPage, ru
 				) : null}
 				{isError ? (
 					<TableRow>
-						<TableCell colSpan={8}>
+						<TableCell colSpan={9}>
 							<Text className="text-center">
 								An error occurred while fetching runners.
 							</Text>
@@ -91,6 +100,9 @@ function RowSkeleton() {
 	return (
 		<TableRow>
 			<TableCell>
+				<Skeleton className="w-full size-4" />
+			</TableCell>
+			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
 			<TableCell>
@@ -112,6 +124,9 @@ function RowSkeleton() {
 function Row(runner: Rivet.Runner) {
 	return (
 		<TableRow key={runner.runnerId}>
+			<TableCell>
+				<RunnerStatusBadge {...runner} />
+			</TableCell>
 			<TableCell>
 				<WithTooltip
 					content={runner.runnerId}
@@ -139,4 +154,29 @@ function Row(runner: Rivet.Runner) {
 			<TableCell>{new Date(runner.createTs).toLocaleString()}</TableCell>
 		</TableRow>
 	);
+}
+
+function RunnerStatusBadge(runner: Rivet.Runner) {
+	if (runner.drainTs) {
+		return (
+			<WithTooltip
+				content="Draining"
+				trigger={
+					<Icon icon={faHourglassClock} className="text-warning" />
+				}
+			/>
+		);
+	}
+	if (runner.stopTs) {
+		return (
+			<WithTooltip
+				content="Stopped"
+				trigger={
+					<span className={"size-2 rounded-full, bg-foreground/10"} />
+				}
+			/>
+		);
+	}
+
+	return <Ping variant="success" className="relative right-auto" />;
 }
