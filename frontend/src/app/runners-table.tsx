@@ -37,6 +37,7 @@ export function RunnersTable({
 					<TableHead />
 					<TableHead>ID</TableHead>
 					<TableHead>Name</TableHead>
+					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
 					<TableHead>Last ping</TableHead>
 					<TableHead>Created</TableHead>
@@ -117,6 +118,9 @@ function RowSkeleton() {
 			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
 		</TableRow>
 	);
 }
@@ -142,6 +146,7 @@ function Row(runner: Rivet.Runner) {
 					{runner.name}
 				</DiscreteCopyButton>
 			</TableCell>
+			<TableCell>{runner.datacenter}</TableCell>
 
 			<TableCell>
 				{runner.remainingSlots}/{runner.totalSlots}
