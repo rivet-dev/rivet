@@ -22,6 +22,7 @@ use universaldb::utils::IsolationLevel::*;
 use vbare::OwnedVersionedData;
 
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
+const X_RIVETKIT_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivetkit-total-slots");
 
 struct OutboundConnection {
 	handle: JoinHandle<()>,
@@ -158,6 +159,7 @@ async fn tick(
 				url.clone(),
 				headers.clone(),
 				Duration::from_secs(*request_lifespan as u64),
+				*slots_per_runner,
 			)
 		})
 		.take(start_count);
@@ -183,14 +185,23 @@ fn spawn_connection(
 	url: String,
 	headers: HashMap<String, String>,
 	request_lifespan: Duration,
+	slots_per_runner: u32,
 ) -> OutboundConnection {
 	let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 	let draining = Arc::new(AtomicBool::new(false));
 
 	let draining2 = draining.clone();
 	let handle = tokio::spawn(async move {
-		if let Err(err) =
-			outbound_handler(&ctx, url, headers, request_lifespan, shutdown_rx, draining2).await
+		if let Err(err) = outbound_handler(
+			&ctx,
+			url,
+			headers,
+			request_lifespan,
+			slots_per_runner,
+			shutdown_rx,
+			draining2,
+		)
+		.await
 		{
 			tracing::error!(?err, "outbound req failed");
 
@@ -217,6 +228,7 @@ async fn outbound_handler(
 	url: String,
 	headers: HashMap<String, String>,
 	request_lifespan: Duration,
+	slots_per_runner: u32,
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -232,7 +244,10 @@ async fn outbound_handler(
 		})
 		.collect();
 
-	let mut req = client.get(url).headers(headers);
+	let mut req = client
+		.get(url)
+		.headers(headers)
+		.header(X_RIVETKIT_TOTAL_SLOTS, slots_per_runner.to_string());
 
 	// Add admin token if configured
 	if let Some(auth) = &ctx.config().auth {
