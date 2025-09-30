@@ -2,9 +2,7 @@
 pub use crate::{ApiCtx, ApiError, GlobalApiCtx};
 
 // Error types
-pub use crate::errors::{
-	ApiForbidden, ApiInternalError, ApiInvalidToken, ApiNotFound, ApiUnauthorized,
-};
+pub use crate::errors::{ApiForbidden, ApiInternalError, ApiNotFound, ApiUnauthorized};
 
 // HTTP method handlers
 pub use crate::router::ApiRouter;

@@ -23,7 +23,7 @@ impl IntoResponse for ApiError {
 			if let Some(rivet_err) = self.0.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
 				let status = match (rivet_err.group(), rivet_err.code()) {
 					("api", "not_found") => StatusCode::NOT_FOUND,
-					("api", "invalid_token") | ("api", "unauthorized") => StatusCode::UNAUTHORIZED,
+					("api", "unauthorized") => StatusCode::UNAUTHORIZED,
 					("api", "forbidden") => StatusCode::FORBIDDEN,
 					_ => StatusCode::BAD_REQUEST,
 				};

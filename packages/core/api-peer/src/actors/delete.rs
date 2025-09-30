@@ -1,4 +1,5 @@
 use anyhow::Result;
+use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use rivet_util::Id;
 use serde::{Deserialize, Serialize};
@@ -61,11 +62,25 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		}
 	}
 
-	ctx.signal(pegboard::workflows::actor::Destroy {})
+	let res = ctx
+		.signal(pegboard::workflows::actor::Destroy {})
 		.to_workflow::<pegboard::workflows::actor::Workflow>()
 		.tag("actor_id", path.actor_id)
 		.send()
-		.await?;
+		.await;
+
+	if let Some(WorkflowError::WorkflowNotFound) = res
+		.as_ref()
+		.err()
+		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+	{
+		tracing::warn!(
+			actor_id=?path.actor_id,
+			"actor workflow not found, likely already stopped"
+		);
+	} else {
+		res?;
+	}
 
 	Ok(DeleteResponse {})
 }

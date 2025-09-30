@@ -159,15 +159,15 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							}
 						}
 						protocol::ToServer::ToServerEvents(events) => {
-							let last_event_idx = events.last().map(|event| event.index);
-
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
-							for event in events {
+							for event in &events {
 								let actor_id =
 									crate::utils::event_actor_id(&event.inner).to_string();
 								let res = ctx
-									.signal(crate::workflows::actor::Event { inner: event.inner })
+									.signal(crate::workflows::actor::Event {
+										inner: event.inner.clone(),
+									})
 									.to_workflow::<crate::workflows::actor::Workflow>()
 									.tag("actor_id", &actor_id)
 									.send()
@@ -186,20 +186,29 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								}
 							}
 
-							// Ack every 500 events
-							if let Some(last_event_idx) = last_event_idx {
-								if last_event_idx > state.last_event_ack_idx.saturating_add(500) {
-									state.last_event_ack_idx = last_event_idx;
+							if !events.is_empty() {
+								ctx.activity(InsertEventsInput {
+									events: events.clone(),
+								})
+								.await?;
 
-									ctx.activity(SendMessageToRunnerInput {
-										runner_id: input.runner_id,
-										message: protocol::ToClient::ToClientAckEvents(
-											protocol::ToClientAckEvents {
-												last_event_idx: state.last_event_ack_idx,
-											},
-										),
-									})
-									.await?;
+								// Ack every 500 events
+								let last_event_idx = events.last().map(|event| event.index);
+								if let Some(last_event_idx) = last_event_idx {
+									if last_event_idx > state.last_event_ack_idx.saturating_add(500)
+									{
+										state.last_event_ack_idx = last_event_idx;
+
+										ctx.activity(SendMessageToRunnerInput {
+											runner_id: input.runner_id,
+											message: protocol::ToClient::ToClientAckEvents(
+												protocol::ToClientAckEvents {
+													last_event_idx: state.last_event_ack_idx,
+												},
+											),
+										})
+										.await?;
+									}
 								}
 							}
 						}
@@ -822,7 +831,6 @@ async fn ack_commands(ctx: &ActivityCtx, input: &AckCommandsInput) -> Result<()>
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct InsertEventsInput {
-	runner_id: Id,
 	events: Vec<protocol::EventWrapper>,
 }
 

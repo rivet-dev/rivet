@@ -6,10 +6,6 @@ use serde::Serialize;
 pub struct ApiNotFound;
 
 #[derive(RivetError)]
-#[error("api", "invalid_token", "The provided authentication token is invalid")]
-pub struct ApiInvalidToken;
-
-#[derive(RivetError)]
 #[error("api", "unauthorized", "Authentication required")]
 pub struct ApiUnauthorized;
 
