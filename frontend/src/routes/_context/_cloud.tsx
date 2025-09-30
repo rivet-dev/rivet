@@ -7,12 +7,15 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { useDialog } from "@/app/use-dialog";
+import { waitForClerk } from "@/lib/waitForClerk";
 
 export const Route = createFileRoute("/_context/_cloud")({
 	component: RouteComponent,
 	beforeLoad: ({ context }) => {
 		return match(context)
-			.with({ __type: "cloud" }, async () => {})
+			.with({ __type: "cloud" }, async () => {
+				return await waitForClerk(context.clerk);
+			})
 			.otherwise(() => {
 				throw notFound();
 			});

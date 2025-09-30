@@ -1,6 +1,7 @@
 import {
 	createFileRoute,
 	Outlet,
+	redirect,
 	useNavigate,
 	useParams,
 } from "@tanstack/react-router";
@@ -12,6 +13,7 @@ import { createGlobalContext as createGlobalEngineContext } from "@/app/data-pro
 import { createGlobalContext as createGlobalInspectorContext } from "@/app/data-providers/inspector-data-provider";
 import { getConfig, ls, useDialog } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
+import { waitForClerk } from "@/lib/waitForClerk";
 
 const searchSchema = z
 	.object({
@@ -60,6 +62,19 @@ export const Route = createFileRoute("/_context")({
 				__type: "inspector" as const,
 			}))
 			.exhaustive();
+	},
+	beforeLoad: async (route) => {
+		return await match(route.context)
+			.with({ __type: "cloud" }, () => async () => {
+				await waitForClerk(route.context.clerk);
+				if (!route.context.clerk.user) {
+					throw redirect({
+						to: "/login",
+						search: { from: location.pathname },
+					});
+				}
+			})
+			.otherwise(() => () => {})();
 	},
 	loaderDeps: (route) => ({ token: route.search.t, url: route.search.u }),
 });

@@ -1,10 +1,11 @@
 "use client";
+import { useClerk } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as ClerkSignUp from "@clerk/elements/sign-up";
 import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { cn } from "@/components";
+import { Badge, cn, Skeleton } from "@/components";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function SignUp() {
+	const clerk = useClerk();
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4 sm:justify-center"
@@ -25,7 +27,50 @@ export function SignUp() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<ClerkSignUp.Root routing="virtual">
+			<ClerkSignUp.Root
+				routing="virtual"
+				path="/"
+				fallback={
+					<Card className="w-full sm:w-96">
+						<CardHeader>
+							<CardTitle>Welcome!</CardTitle>
+							<CardDescription>
+								Enter your email below to login to your account.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="grid gap-y-4">
+							<div className="grid grid-cols-2 gap-4">
+								<Skeleton className="h-10 w-full" />
+								<Skeleton className="h-10 w-full" />
+							</div>
+							<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+								or
+							</p>
+							<div className="space-y-2">
+								<Label>Email address</Label>
+								<Input disabled placeholder="you@company.com" />
+							</div>
+							<div className="space-y-2">
+								<Label>Password</Label>
+								<Input disabled placeholder="Your password" />
+							</div>
+						</CardContent>
+						<CardFooter>
+							<div className="grid w-full gap-y-4">
+								<Skeleton className="h-10 w-full" />
+								<Button
+									variant="link"
+									size="sm"
+									disabled
+									className="text-primary-foreground"
+								>
+									Already have an account? Sign in
+								</Button>
+							</div>
+						</CardFooter>
+					</Card>
+				}
+			>
 				<Clerk.Loading>
 					{(isGlobalLoading) => (
 						<>
@@ -71,6 +116,13 @@ export function SignUp() {
 															)
 														}
 													</Clerk.Loading>
+													{clerk.client
+														.lastAuthenticationStrategy ===
+													"oauth_github" ? (
+														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
+															Last used
+														</Badge>
+													) : null}
 												</Button>
 											</Clerk.Connection>
 											<Clerk.Connection
@@ -104,6 +156,14 @@ export function SignUp() {
 															)
 														}
 													</Clerk.Loading>
+
+													{clerk.client
+														.lastAuthenticationStrategy ===
+													"oauth_google" ? (
+														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
+															Last used
+														</Badge>
+													) : null}
 												</Button>
 											</Clerk.Connection>
 										</div>
@@ -174,7 +234,7 @@ export function SignUp() {
 												asChild
 												className="text-primary-foreground"
 											>
-												<Link to="/">
+												<Link to="/login">
 													Already have an account?
 													Sign in
 												</Link>

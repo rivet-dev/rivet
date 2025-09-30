@@ -40,7 +40,16 @@ export function UserDropdown() {
 			<DropdownMenuTrigger asChild={!params.organization}>
 				{params.organization ? (
 					<Preview org={params.organization} />
-				) : null}
+				) : (
+					<Button
+						variant="ghost"
+						size="xs"
+						className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
+						endIcon={<Icon icon={faChevronDown} />}
+					>
+						{clerk.user?.primaryEmailAddress?.emailAddress}
+					</Button>
+				)}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				<DropdownMenuItem
@@ -50,22 +59,27 @@ export function UserDropdown() {
 				>
 					Profile
 				</DropdownMenuItem>
-				<DropdownMenuItem
-					onSelect={() => {
-						clerk.openOrganizationProfile();
-					}}
-				>
-					Settings
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					onSelect={() => {
-						clerk.openOrganizationProfile({
-							__experimental_startPath: "/organization-members",
-						});
-					}}
-				>
-					Members
-				</DropdownMenuItem>
+				{clerk.organization ? (
+					<DropdownMenuItem
+						onSelect={() => {
+							clerk.openOrganizationProfile();
+						}}
+					>
+						Settings
+					</DropdownMenuItem>
+				) : null}
+				{clerk.organization ? (
+					<DropdownMenuItem
+						onSelect={() => {
+							clerk.openOrganizationProfile({
+								__experimental_startPath:
+									"/organization-members",
+							});
+						}}
+					>
+						Members
+					</DropdownMenuItem>
+				) : null}
 				{isMatchingProjectRoute ? (
 					<DropdownMenuItem
 						onSelect={() => {
@@ -79,16 +93,20 @@ export function UserDropdown() {
 					</DropdownMenuItem>
 				) : null}
 				<DropdownMenuSeparator />
-				<DropdownMenuSub>
-					<DropdownMenuSubTrigger>
-						Switch Organization
-					</DropdownMenuSubTrigger>
-					<DropdownMenuPortal>
-						<DropdownMenuSubContent>
-							<OrganizationSwitcher value={params.organization} />
-						</DropdownMenuSubContent>
-					</DropdownMenuPortal>
-				</DropdownMenuSub>
+				{clerk.organization ? (
+					<DropdownMenuSub>
+						<DropdownMenuSubTrigger>
+							Switch Organization
+						</DropdownMenuSubTrigger>
+						<DropdownMenuPortal>
+							<DropdownMenuSubContent>
+								<OrganizationSwitcher
+									value={params.organization}
+								/>
+							</DropdownMenuSubContent>
+						</DropdownMenuPortal>
+					</DropdownMenuSub>
+				) : null}
 				<DropdownMenuItem
 					onSelect={() => {
 						clerk.signOut();
