@@ -1800,3 +1800,65 @@ export function decodeToGateway(bytes: Uint8Array): ToGateway {
     }
     return result
 }
+
+/**
+ * MARK: Serverless
+ */
+export type ToServerlessServerInit = {
+    readonly runnerId: Id
+}
+
+export function readToServerlessServerInit(bc: bare.ByteCursor): ToServerlessServerInit {
+    return {
+        runnerId: readId(bc),
+    }
+}
+
+export function writeToServerlessServerInit(bc: bare.ByteCursor, x: ToServerlessServerInit): void {
+    writeId(bc, x.runnerId)
+}
+
+export type ToServerlessServer =
+    | { readonly tag: "ToServerlessServerInit"; readonly val: ToServerlessServerInit }
+
+export function readToServerlessServer(bc: bare.ByteCursor): ToServerlessServer {
+    const offset = bc.offset
+    const tag = bare.readU8(bc)
+    switch (tag) {
+        case 0:
+            return { tag: "ToServerlessServerInit", val: readToServerlessServerInit(bc) }
+        default: {
+            bc.offset = offset
+            throw new bare.BareError(offset, "invalid tag")
+        }
+    }
+}
+
+export function writeToServerlessServer(bc: bare.ByteCursor, x: ToServerlessServer): void {
+    switch (x.tag) {
+        case "ToServerlessServerInit": {
+            bare.writeU8(bc, 0)
+            writeToServerlessServerInit(bc, x.val)
+            break
+        }
+    }
+}
+
+export function encodeToServerlessServer(x: ToServerlessServer, config?: Partial<bare.Config>): Uint8Array {
+    const fullConfig = config != null ? bare.Config(config) : DEFAULT_CONFIG
+    const bc = new bare.ByteCursor(
+        new Uint8Array(fullConfig.initialBufferLength),
+        fullConfig,
+    )
+    writeToServerlessServer(bc, x)
+    return new Uint8Array(bc.view.buffer, bc.view.byteOffset, bc.offset)
+}
+
+export function decodeToServerlessServer(bytes: Uint8Array): ToServerlessServer {
+    const bc = new bare.ByteCursor(bytes, DEFAULT_CONFIG)
+    const result = readToServerlessServer(bc)
+    if (bc.offset < bc.view.byteLength) {
+        throw new bare.BareError(bc.offset, "remaining bytes")
+    }
+    return result
+}

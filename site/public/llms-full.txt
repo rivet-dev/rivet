@@ -44,12 +44,14 @@ Learn more about [communicating with actors from the frontend](/docs/actors/comm
 const registry = setup(
 });
 
-const  = registry.runServer();
+const  = registry.start();
 
-// Use the client to call actions
-const counter = await client.counter.getOrCreate();
-const result = await counter.increment(42);
-console.log(result);
+const app = new Hono();
+
+// Use the client to call actions on a request
+app.get("/foo", () => );
+
+serve(app);
 ```
 
 Learn more about [communicating with actors from the backend](/docs/actors/communicating-between-actors).
@@ -417,8 +419,8 @@ Rivet also supports [React](/docs/clients/react) and [Rust](/docs/clients/rust) 
 
 Using the RivetKit client is completely optional. If you prefer to write your own networking logic, you can either:
 
+- Write your own HTTP endpoints and use the client returned from `registry.start` (see below)
 - Make HTTP requests directly to the registry (see [OpenAPI spec](/docs/clients/openapi))
-- Write your own HTTP endpoints and use the client returned from `registry.runServer` (see below)
 
 ## Client Setup
 
@@ -427,7 +429,7 @@ There are several ways to create a client for communicating with actors:
 		From your backend server that hosts the registry:
 
 		```typescript }
-		const  = registry.createServer();
+		const  = registry.start();
 
 		const app = new Hono();
 
@@ -1599,7 +1601,7 @@ ws.send(JSON.stringify());
 For more advanced use cases, you can forward requests to actor handlers from your server:
 
 ```typescript
-const  = registry.createServer();
+const  = registry.start();
 
 const app = new Hono();
 
@@ -1619,7 +1621,7 @@ serve(app);
 ```
 
 ```typescript
-const  = registry.createServer();
+const  = registry.start();
 
 const app = new Hono();
 
@@ -2771,7 +2773,7 @@ Choose your preferred web framework:
 
 ```ts }
 // Start Rivet with file system driver (for development)
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Hono app
 const app = new Hono();
@@ -2786,14 +2788,11 @@ serve(app);
 
 ```ts }
 // Start Rivet
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Express app
 const app = express();
 app.use(express.json());
-
-// Mount Rivet handler
-app.use("/registry", handler);
 
 // Example API endpoints
 app.post("/increment/:name", async (req, res) =>  = req.params;
@@ -2809,7 +2808,7 @@ app.listen(8080, () => );
 
 ```ts }
 // Start Rivet
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Elysia app
 const app = new Elysia()
@@ -2922,6 +2921,171 @@ async fn main() -> Result> ", count);
 ```
 
 See the [Rust client documentation](/clients/rust) for more information.
+## Cloudflare Workers Quickstart
+
+# Cloudflare Workers Quickstart
+
+Get started with Rivet Actors on Cloudflare Workers with Durable Objects
+
+```sh
+npm install rivetkit @rivetkit/cloudflare-workers
+```
+
+Create a simple counter actor:
+
+```ts }
+const counter = actor(,
+	actions: ,
+		getCount: (c) => c.state.count,
+	},
+});
+
+const registry = setup(,
+});
+```
+
+Choose your preferred web framework:
+
+```ts }
+const app = new Hono } }>();
+
+app.post("/increment/:name", async (c) => );
+});
+
+const  = createHandler(registry, );
+;
+```
+
+```ts }
+const  = createHandler(registry, ), ,
+			});
+		}
+
+		return new Response("Not Found", );
+	}
+});
+
+;
+```
+
+The `/registry` endpoint is automatically mounted by Rivet and is required for client communication. The Cloudflare Workers driver handles this automatically.
+
+Configure your `wrangler.json` for Cloudflare Workers:
+
+```json }
+
+  ],
+  "durable_objects": 
+    ]
+  },
+  "kv_namespaces": [
+    
+  ]
+}
+```
+
+Start the development server:
+
+```sh
+wrangler dev
+```
+
+Your server is now running at `http://localhost:8787`
+
+Test your counter actor using HTTP requests:
+
+```ts }
+// Increment counter
+const response = await fetch("http://localhost:8787/increment/my-counter", );
+
+const result = await response.json();
+console.log("Count:", result.count); // 1
+```
+
+```sh curl
+# Increment counter
+curl -X POST http://localhost:8787/increment/my-counter
+```
+
+Deploy to Cloudflare's global edge network:
+
+```bash
+wrangler deploy
+```
+
+Your actors will now run on Cloudflare's edge with persistent state backed by Durable Objects.
+
+## Configuration Options
+
+### Connect Frontend To The Rivet Actor
+
+Create a type-safe client to connect from your frontend:
+
+```ts }
+// Create typed client (use your deployed URL)
+const client = createClient("https://your-app.workers.dev/rivet");
+
+// Use the counter actor directly
+const counter = client.counter.getOrCreate(["my-counter"]);
+
+// Call actions
+const count = await counter.increment(3);
+console.log("New count:", count);
+
+// Get current state
+const currentCount = await counter.getCount();
+console.log("Current count:", currentCount);
+
+// Listen to real-time events
+const connection = counter.connect();
+connection.on("countChanged", (newCount) => );
+
+// Increment through connection
+await connection.increment(1);
+```
+
+See the [JavaScript client documentation](/clients/javascript) for more information.
+
+```tsx }
+const client = createClient("https://your-app.workers.dev/rivet");
+const  = createRivetKit(client);
+
+function Counter() );
+
+	counter.useEvent("countChanged", (newCount: number) => );
+
+	const increment = async () => ;
+
+	return (
+		
+			Count: 
+			Increment
+		
+	);
+}
+```
+
+See the [React documentation](/clients/react) for more information.
+
+```rust }
+use rivetkit_client::;
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result> ", count);
+    }).await;
+
+    // Call increment action
+    let result = counter.action("increment", vec![json!(1)]).await?;
+    println!("New count: ", result);
+
+    Ok(())
+}
+```
+
+See the [Rust client documentation](/clients/rust) for more information.
+
+	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
 ## Quickstart
 
 # Quickstart
@@ -2957,7 +3121,9 @@ Create a RivetKit client to connect to your actor:
 
 ```ts }
 "use client";
-const client = createClient(`$api`, );
+const client = createClient(/api/rivet`,
+	transport: "sse",
+});
 
 const  = createRivetKit(client);
 
@@ -2966,11 +3132,8 @@ const  = createRivetKit(client);
 It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.
 
 ```ts }
-const server = registry.createServer(,
-});
-
 // Export the Next.js handler for the API routes
-const  = toNextHandler(server);
+const  = toNextHandler(registry);
 ```
 
 ```tsx }
@@ -3021,8 +3184,8 @@ const registry = setup(,
 Start a server to run your actors:
 
 ```ts }
-// Run server with default configuration (port 8080)
-registry.runServer();
+// Run server with default configuration
+registry.start();
 ```
 
 Set up your React application:
@@ -3575,7 +3738,9 @@ Create a RivetKit client to connect to your actor:
 
 ```ts }
 "use client";
-const client = createClient(`$api`, );
+const client = createClient(/api/rivet`,
+	transport: "sse",
+});
 
 const  = createRivetKit(client);
 
@@ -3918,7 +4083,7 @@ Use the default configuration with automatic path based on your current working 
 
 ```typescript }
 const driver = createFileSystemDriver();
-const  = registry.runServer();
+const  = registry.start();
 
 // ...rest of your server...
 ```
@@ -3929,7 +4094,7 @@ Specify a custom path for actor storage:
 
 ```typescript }
 const driver = createFileSystemDriver();
-const  = registry.runServer();
+const  = registry.start();
 
 // ...rest of your server...
 ```
@@ -3953,7 +4118,7 @@ Basic File System driver setup and configuration example.
 
 The Memory driver stores all actor state and communication in memory, making it ideal for testing, development, and prototyping scenarios where persistence is not required.
 
-The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, use the [Redis driver](/docs/drivers/redis).
+The Memory driver does not persist data between server restarts. For production applications that need to scale horizontally across multiple machines, see [self-hosting](/docs/self-hosting)
 
 ## Feature Support
 
@@ -3977,124 +4142,12 @@ Create and use the Memory driver:
 
 ```typescript }
 const driver = createMemoryDriver();
-const  = registry.runServer();
+const  = registry.start();
 
 // ...rest of your server...
 ```
 
 The Memory driver requires no configuration options.
-## Redis
-
-# Redis
-
-The Redis driver enables deploying scalable Rivet Actors using Redis as the backend for state management and inter-actor communication.
-
-The Redis driver is currently in preview. We do not recommend shipping production applications with the Redis driver yet.
-
-If you want to take Redis to production, [contact us](/support) so we can help validate your setup is production ready and help resolve issues promptly.
-
-## Feature Support
-
-| Feature | Supported |
-| --- | --- |
-| Horizontal scaling | Yes |
-| WebSockets | Yes |
-| SSE | Yes |
-| Edge | No |
-| Scheduling | [Not yet](https://github.com/rivet-gg/rivetkit/issues/1095) |
-
-## Setup
-
-Install the required packages:
-
-```bash
-npm install @rivetkit/redis ioredis@5
-```
-
-Configure your application using environment variables:
-
-```bash
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=your-password
-REDIS_KEY_PREFIX=myproject
-```
-
-**Available Environment Variables:**
-
-- `REDIS_HOST` - Redis server hostname (default: `localhost`)
-- `REDIS_PORT` - Redis server port (default: `6379`)
-- `REDIS_PASSWORD` - Redis password (optional)
-- `REDIS_KEY_PREFIX` - Key prefix for isolation when running multiple projects (optional)
-
-Then start your server:
-
-```typescript }
-const driver = createRedisDriver();
-const  = registry.runServer();
-
-// ...rest of your server...
-```
-
-For advanced configuration, pass your own Redis instance:
-
-```typescript }
-const redis = new Redis();
-
-const driver = createRedisDriver();
-const  = registry.runServer();
-
-// ...rest of your server...
-```
-
-**Configuration Options:**
-
-When passing a custom Redis instance, you have full control over the connection options. Common options include:
-
-- `host` - Redis server hostname
-- `port` - Redis server port
-- `password` - Redis password
-
-See the [ioredis documentation](https://github.com/luin/ioredis) for all available options.
-
-To prevent data loss, ensure AOF (Append Only File) persistence is enabled on your Redis server. See the [Redis Persistence Documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/#append-only-file) for setup instructions.
-
-## Deploy
-
-Deploy your Redis-powered actors on these hosting providers:
-
-Deploy on Railway with automatic scaling and managed infrastructure.
-
-## Examples
-
-Example using Redis driver with Hono web framework.
-
-Basic Redis driver setup and configuration example.
-
-## Advanced
-
-### Driver Context
-
-The Redis driver provides access to the underlying Redis connection through the driver context in `createVars`.
-
-```typescript
-const myActor = actor(,
-  
-  // Save the Redis driver context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
-  
-  actions: ,
-  }
-});
-```
-
-The Redis driver context type is exported as `DriverContext` from `@rivetkit/redis`:
-
-```typescript
-interface DriverContext 
-```
-
-While you have access to the Redis client, be cautious when directly modifying keys under the `keyPrefix`, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
 ## Architecture
 
 # Architecture
@@ -4155,10 +4208,8 @@ You'll need to configure CORS when:
 Configure CORS directly in your registry setup for applications that do not require configuring CORS on their own endpoints.
 
 ```typescript }
-const  = registry.createServer(
+const  = registry.start(
 });
-
-serve();
 ```
 
 ### Configuration Options
@@ -4245,7 +4296,8 @@ exposeHeaders: ["Content-Length", "X-Request-Id"]
 For applications that need to expose their own routes, configure CORS at the router level:
 
 ```typescript }
-const  = registry.createServer();
+registry.start();
+
 const app = new Hono();
 
 app.use("*", cors());
@@ -4254,7 +4306,8 @@ serve(app);
 ```
 
 ```typescript }
-const  = registry.createServer();
+registry.start();
+
 const app = express();
 
 app.use(cors());
@@ -4271,7 +4324,7 @@ Rivet requires specific headers for communication. Always include `ALLOWED_PUBLI
 const corsConfig = ;
 ```
 
-These are automatically configured if using `registry.runServer()`.
+These are automatically configured if using `registry.start()`.
 
 Without `ALLOWED_PUBLIC_HEADERS`, Rivet clients won't be able to communicate with your actors from the browser.
 
@@ -4449,7 +4502,7 @@ LOG_LEVEL=debug LOG_TARGET=1 LOG_TIMESTAMP=1 node server.js
 You can configure the log level programmatically when running your server:
 
 ```typescript
-registry.runServer(
+registry.start(
 })
 ```
 
@@ -4461,7 +4514,7 @@ You can also provide a custom Pino base logger for more advanced logging configu
 const customLogger = pino(
 });
 
-registry.runServer(
+registry.start(
 })
 ```
 
@@ -4474,215 +4527,7 @@ For more advanced Pino configuration options, see the [Pino API documentation](h
 You can disable the default RivetKit welcome message with:
 
 ```typescript
-registry.runServer()
-```
-## Registry
-
-# Registry
-
-Configure and manage your actor registry
-
-The registry is the central configuration hub for your Rivet application. It defines which actors are available and how your application runs.
-
-## Basic Setup
-
-Create a registry by importing your actors and using the `setup` function:
-
-```typescript
-const registry = setup(,
-});
-```
-
-## Creating Servers
-
-### Development Server
-
-For development, create and run a server directly:
-
-```typescript
-// Start a development server
-registry.runServer(,
-    manager: ,
-  },
-});
-```
-
-### Production Setup
-
-For production, get the handler and integrate with your framework:
-
-```typescript
-// Create server components
-const  = registry.createServer(,
-    manager: ,
-  },
-});
-
-// Use with Hono
-const app = new Hono();
-app.route("/registry", hono);
-
-// Or use the handler directly
-app.all("/registry/*", handler);
-
-// Start the server
-serve(app);
-```
-
-## Configuration Options
-
-### Driver Configuration
-
-The driver configuration determines how actors are stored and managed:
-
-```typescript
-const  = registry.createServer(,
-    
-    // Manager coordination
-    manager: ,
-  },
-});
-```
-
-### Topology Options
-
-- **`standalone`**: Single process, good for development
-- **`partition`**: Distributed actors, good for production scaling
-- **`coordinate`**: Peer-to-peer coordination, good for high availability
-
-### Storage Drivers
-
-- **`memory`**: In-memory storage, data lost on restart
-- **`file-system`**: Persistent file-based storage
-- **`redis`**: Redis-backed persistence and coordination
-- **`rivet`**: Rivet platform integration
-
-### CORS Configuration
-
-Configure CORS for browser clients:
-
-```typescript
-registry.runServer(,
-});
-```
-
-### Request Limits
-
-Configure request size limits:
-
-```typescript
-registry.runServer();
-```
-
-## Worker Mode
-
-For distributed topologies, you can create worker instances:
-
-```typescript
-// Manager instance (handles routing)
-const  = registry.createServer(,
-});
-
-// Worker instance (runs actors)
-const  = registry.createWorker(,
-});
-```
-
-## Type Safety
-
-The registry provides full type safety for your client:
-
-```typescript
-// TypeScript knows about your actors
-const counter = client.counter.getOrCreate(["my-counter"]);
-const chatRoom = client.chatRoom.getOrCreate(["general"]);
-
-// Action calls are type-checked
-const count: number = await counter.increment(5);
-```
-
-## Testing Configuration
-
-Use memory drivers for testing:
-
-```typescript
-// test-registry.ts
-const testRegistry = setup(,
-});
-
-// In your tests
-const  = testRegistry.createServer(,
-    manager: ,
-  },
-});
-```
-
-## Environment-Specific Configuration
-
-Use environment variables to configure different environments:
-
-```typescript
-const isProd = process.env.NODE_ENV === "production";
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
-
-const registry = setup(,
-});
-
-// Environment-specific server creation
-function createAppServer() ,
-          manager: ,
-        }
-      : ,
-          manager: ,
-        },
-    cors: ,
-  });
-}
-```
-
-## Best Practices
-
-### Registry Organization
-
-Keep your registry clean and organized:
-
-```typescript
-// actors/index.ts - Export all actors
- from "./counter";
- from "./chat-room";
- from "./game";
-
-// registry.ts - Import and configure
-const registry = setup();
-```
-
-### Actor Naming
-
-Use consistent naming conventions:
-
-```typescript
-const registry = setup(,
-});
-```
-
-### Configuration Management
-
-Separate configuration from registry definition:
-
-```typescript
-// config.ts
-const appConfig = ,
-  cors: ,
-};
-
-// server.ts
-const  = registry.createServer(,
-    manager: ,
-  },
-  cors: appConfig.cors,
-});
-
-serve();
+registry.start()
 ```
 ## Self-Hosting
 
@@ -4740,7 +4585,7 @@ By default, Rivet Studio generates and stores a token automatically. You can con
 - **Environment variable**: Set `RIVETKIT_STUDIO_TOKEN`
 - **Code configuration**:
   ```typescript }
-  registry.runServer(
+  registry.start(
   })
   ```
 
@@ -4752,7 +4597,7 @@ Disable Studio using any of these methods:
 - Set `NODE_ENV=production`
 - Configure in code:
   ```typescript }
-  registry.runServer(
+  registry.start(
   })
   ```
 
@@ -4761,7 +4606,7 @@ Disable Studio using any of these methods:
 Configure CORS for custom Studio deployments:
 
 ```typescript }
-registry.runServer(
+registry.start(
   }
 })
 ```
@@ -4773,7 +4618,7 @@ See the [CORS documentation](/docs/general/cors/) for more details.
 On startup, RivetKit prints a URL for connecting to Studio. By default, Studio connects to `localhost:8080` if no endpoint is provided. Override with:
 
 ```typescript }
-registry.runServer(
+registry.start(
 })
 ```
 ## System Architecture
@@ -4792,156 +4637,6 @@ registry.runServer(
 # Webhooks
 
 TODO
-## Cloudflare Workers
-
-# Cloudflare Workers
-
-Deploy Rivet Actors to Cloudflare Workers with Durable Objects for global edge computing with persistent state.
-
-## Feature Support
-
-| Feature | Supported |
-| --- | --- |
-| Horizontal scaling | Yes |
-| WebSockets | Yes |
-| SSE | Yes |
-| Edge | Yes |
-| Scheduling | Yes |
-
-## Setup
-
-Install the Cloudflare Workers driver:
-
-```bash
-npm install @rivetkit/cloudflare-workers
-```
-
-Update your server code to support Cloudflare Workers:
-
-```typescript }
-const  = createServer(registry);
-
-// Setup router
-const app = new Hono();
-
-// Example API endpoint
-app.post("/increment/:name", async (c) => );
-});
-
-const  = createHandler(app);
-
-;
-```
-
-```typescript }
-const  = createServerHandler(registry);
-;
-```
-
-Update your `wrangler.json` configuration to support `ACTOR_DO` and `ACTOR_KV` bindings:
-
-```json }
-
-  ],
-  "durable_objects": 
-    ]
-  },
-  "kv_namespaces": [
-    
-  ]
-}
-```
-
-**Configuration Requirements:**
-
-- `ACTOR_DO` - Durable Object binding for actor persistence
-- `ACTOR_KV` - KV namespace binding for metadata storage
-- `nodejs_compat` - Required compatibility flag
-- Migration with `ActorHandler` class definition
-
-Deploy your application to Cloudflare Workers:
-
-```bash
-wrangler deploy
-```
-
-Your actors will now run on Cloudflare's global edge network with persistent state backed by Durable Objects.
-
-## Examples
-
-Example using Cloudflare Workers with Hono web framework.
-
-Basic Cloudflare Workers setup and configuration example.
-
-## Advanced
-
-### Accessing Environment Bindings
-
-You can access Cloudflare Workers environment bindings directly using the importable `env`:
-
-```typescript
-// Access environment variables and secrets in top-level scope
-const API_KEY = env.API_KEY;
-const LOG_LEVEL = env.LOG_LEVEL || "info";
-
-// Use bindings in your actor
-const myActor = actor(,
-  
-  actions: 
-    }
-  }
-});
-```
-
-### Driver Context
-
-The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
-
-```typescript
-const myActor = actor(,
-  
-  // Save the Cloudflare driver context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
-  
-  actions: ,
-  }
-});
-```
-
-The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
-
-```typescript
-interface DriverContext 
-```
-
-While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
-## Railway
-
-# Railway
-
-_Coming Soon_
-## Rivet Cloud (Enterprise)
-
-# Rivet Cloud (Enterprise)
-
-Rivet Cloud enables you to run Rivet applications at scale with the high performance, edge support, and monitoring. Rivet projects can be deployed to the Rivet Cloud or be self-hosted on-premise.
-
-To try Rivet Cloud, get in touch:
-
-- [Talk to an engineer](https://www.rivet.gg/talk-to-an-engineer)
-- [Talk to sales](https://www.rivet.gg/sales)
-
-Rivet Engine — the core of Rivet Cloud — is [open-source on GitHub](https://github.com/rivet-gg/rivet).
-
-## Feature Support
-
-| Feature | Supported |
-| --- | --- |
-| Horizontal scaling | Yes |
-| WebSockets | Yes |
-| SSE | Yes |
-| Edge | Yes |
-| Scheduling | Yes |
 ## Better Auth
 
 # Better Auth
@@ -5022,7 +4717,7 @@ Configure your server to handle Better Auth routes and Rivet:
 
 ```typescript
 // server.ts
-const  = registry.createServer();
+registry.start();
 const app = new Hono();
 
 // Configure CORS for Better Auth + Rivet
@@ -5175,6 +4870,128 @@ BETTER_AUTH_URL=https://api.myapp.com
 Read more about [configuring Postgres with Better Auth](https://www.better-auth.com/docs/adapters/postgresql).
 
 	Don't forget to re-generate & re-apply your database migrations if you change the database in your Better Auth config.
+## Cloudflare Workers
+
+# Cloudflare Workers
+
+Deploy Rivet Actors to Cloudflare Workers with Durable Objects for global edge computing with persistent state.
+
+## Feature Support
+
+| Feature | Supported |
+| --- | --- |
+| Horizontal scaling | Yes |
+| WebSockets | Yes |
+| SSE | Yes |
+| Edge | Yes |
+| Scheduling | Yes |
+
+## Setup
+
+Install the Cloudflare Workers driver:
+
+```bash
+npm install @rivetkit/cloudflare-workers
+```
+
+Update your server code to support Cloudflare Workers:
+
+```typescript }
+// Setup router
+const app = new Hono } }>();
+
+// Example HTTP endpoint
+app.post("/increment/:name", async (c) => `);
+});
+
+const  = createHandler(registry, );
+;
+```
+
+```typescript }
+const  = createHandler(registry);
+;
+```
+
+Update your `wrangler.json` configuration to support `ACTOR_DO` and `ACTOR_KV` bindings:
+
+```json }
+
+  ],
+  "durable_objects": 
+    ]
+  },
+  "kv_namespaces": [
+    
+  ]
+}
+```
+
+**Configuration Requirements:**
+
+- `ACTOR_DO` - Durable Object binding for actor persistence
+- `ACTOR_KV` - KV namespace binding for metadata storage
+- `nodejs_compat` - Required compatibility flag
+- Migration with `ActorHandler` class definition
+
+Deploy your application to Cloudflare Workers:
+
+```bash
+wrangler deploy
+```
+
+Your actors will now run on Cloudflare's global edge network with persistent state backed by Durable Objects.
+
+## Examples
+
+Example using Cloudflare Workers with Hono web framework.
+
+Basic Cloudflare Workers setup and configuration example.
+
+	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
+
+## Advanced
+
+### Accessing Environment Bindings
+
+You can access Cloudflare Workers environment bindings directly using the importable `env`:
+
+```typescript
+// Access environment variables and secrets in top-level scope
+const API_KEY = env.API_KEY;
+const LOG_LEVEL = env.LOG_LEVEL || "info";
+
+// Use bindings in your actor
+const myActor = actor(,
+  
+  actions: 
+    }
+  }
+});
+```
+
+### Driver Context
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
+
+```typescript
+const myActor = actor(,
+  
+  // Save the Cloudflare driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  
+  actions: ,
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
+
+```typescript
+interface DriverContext 
+```
+
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
 ## Elysia
 
 # Elysia
@@ -5215,12 +5032,10 @@ Mount Rivet into your Elysia application:
 
 ```typescript
 // server.ts
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Elysia app
 const app = new Elysia()
-  // Mount Rivet handler
-  .mount("/registry", handler)
   // Add your API routes
   .post("/increment/:name", async () => `;
   })
@@ -5270,16 +5085,13 @@ Mount Rivet into your Express application:
 ```typescript
 // server.ts
 // Start Rivet
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Express app
 const app = express();
 
 // Enable JSON parsing
 app.use(express.json());
-
-// Mount Rivet handler
-app.use("/registry", handler);
 
 // Add your API routes
 app.post("/increment/:name", async (req, res) =>  = req.body;
@@ -5330,12 +5142,10 @@ const registry = setup(,
 });
 ```
 
-Use Rivet's `serve()` method with your Hono app:
-
 ```typescript
 // server.ts
 // Start Rivet
-const  = registry.createServer();
+const  = registry.start();
 
 // Setup Hono app
 const app = new Hono();
@@ -5354,7 +5164,7 @@ app.get("/count/:name", async (c) => );
   }
 });
 
-// Start server with Rivet integration
+// Start server
 serve(app);
 ```
 ## Integrations
@@ -5416,11 +5226,8 @@ const registry = setup(,
 ```
 
 ```ts }
-const server = registry.createServer(,
-});
-
 // Export the Next.js handler for the API routes
-const  = toNextHandler(server);
+const  = toNextHandler(registry);
 ```
 
 ## API Reference
@@ -5436,9 +5243,7 @@ const counter = actor(,
 const registry = setup(,
 });
 
-const server = registry.createServer();
-
-const  = toNextHandler(server);
+const  = toNextHandler(registry);
 ```
 
 #### Parameters
@@ -5499,7 +5304,7 @@ Create your tRPC router that uses Rivet:
 ```typescript
 // server.ts
 // Start Rivet
-const  = registry.createServer();
+const  = registry.start();
 
 // Initialize tRPC
 const t = initTRPC.create();
@@ -5588,20 +5393,8 @@ interface RivetConfig ;
     };
   };
 
-  // Public API service configuration
-  api_public?: ;
-
   // Private API service configuration
   api_peer?: ;
-
-  // Runner WebSocket connection management
-  pegboard?: ;
-
-  // WebSocket proxy gateway service
-  pegboard_gateway?: ;
-
-  // Tunnel protocol message forwarding
-  pegboard_tunnel?: ;
 
   // Logging configuration
   logs?: ;

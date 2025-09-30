@@ -1263,6 +1263,19 @@ export class Runner {
 		}
 	}
 
+	getServerlessInitPacket(): string | undefined {
+		if (!this.runnerId) return undefined;
+
+		let data = protocol.encodeToServerlessServer({
+			tag: "ToServerlessServerInit",
+			val: {
+				runnerId: this.runnerId,
+			}
+		});
+
+		return Buffer.from(data).toString('base64');
+	}
+
 	#scheduleReconnect() {
 		if (this.#shutdown) {
 			logger()?.debug("Runner is shut down, not attempting reconnect");

@@ -7,6 +7,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
 epoxy.workspace = true
 gas.workspace = true
 reqwest-eventsource.workspace = true
@@ -16,6 +17,7 @@ rivet-runner-protocol.workspace = true
 rivet-types.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
+vbare.workspace = true
 
 namespace.workspace = true
 pegboard.workspace = true

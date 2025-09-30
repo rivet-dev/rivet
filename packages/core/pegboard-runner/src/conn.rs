@@ -13,7 +13,7 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::Mutex;
-use vbare::OwnedVersionedData as _;
+use vbare::OwnedVersionedData;
 
 use crate::{errors::WsError, utils::UrlData};
 

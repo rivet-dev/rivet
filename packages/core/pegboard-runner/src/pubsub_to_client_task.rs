@@ -5,7 +5,7 @@ use hyper_tungstenite::tungstenite::Message as WsMessage;
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::Arc;
 use universalpubsub::{NextOutput, Subscriber};
-use vbare::OwnedVersionedData as _;
+use vbare::OwnedVersionedData;
 
 use crate::{
 	conn::{Conn, TunnelActiveRequest},

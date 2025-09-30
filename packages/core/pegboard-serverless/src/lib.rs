@@ -7,6 +7,8 @@ use std::{
 };
 
 use anyhow::Result;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use pegboard::keys;
@@ -17,6 +19,7 @@ use rivet_types::namespaces::RunnerConfig;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
+use vbare::OwnedVersionedData;
 
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 
@@ -247,7 +250,17 @@ async fn outbound_handler(
 					tracing::debug!(%msg.data, "received outbound req message");
 
 					if runner_id.is_none() {
-						runner_id = Some(Id::parse(&msg.data)?);
+						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
+						let payload =
+							protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(&data)
+								.context("invalid payload")?;
+
+						match payload {
+							protocol::ToServerlessServer::ToServerlessServerInit(init) => {
+								runner_id =
+									Some(Id::parse(&init.runner_id).context("invalid runner id")?);
+							}
+						}
 					}
 				}
 				Err(sse::Error::StreamEnded) => {
