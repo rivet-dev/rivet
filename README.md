@@ -13,9 +13,9 @@ Generated from: site/scripts/generateReadme.mjs
   </a>
   <br/>
   <br/>
-  <p><b>The open-source alternative to Durable Objects</b></p>
+  <p><b>Scale and orchestrate RivetKit workloads</b></p>
   <p>
-    Rivet Actors provide long-lived processes with durable state, realtime, and scalability.
+    Built to provide production grade scale and orchestration for the most intensive workloads.
   </p>
   <p>
     <a href="https://rivet.gg/docs/actors/quickstart">Quickstart</a> •
@@ -38,16 +38,17 @@ Generated from: site/scripts/generateReadme.mjs
 
 Public-facing projects:
 
-- **Rivet Engine** (you are here): Engine that powers Rivet Actors at scale
+- **Rivet Engine** (you are here): Engine that powers RivetKit at scale
 - **[RivetKit](https://github.com/rivet-gg/rivetkit)**: Lightweight TypeScript library for building Rivet Actors — works with Redis or Rivet Engine
-- **[Rivet Hub](/frontend/)**: UI for Rivet Engine
+- **[Rivet Inspector](/frontend/apps/studio)**: Like Postman, but for Rivet Actors
+- **[Rivet Hub](/frontend/apps/hub)**: UI for Rivet Engine
 - **[Rivet Documentation](/site/src/content/docs)**
 
 Projects powering Rivet Engine:
 
 - **[Pegboard](packages/services/pegboard/)**: Actor orchestrator
 - **[Guard](packages/core/guard/)**: Proxy for routing traffic to Rivet Actors
-- **[Gasoline](packages/common/gasoline/)**: Core durable execution engine that powers Rivet
+- **[Chirp](packages/common/chirp-workflow/)**: Core workflow engine that powers Rivet
 
 ## Get Started
 
@@ -59,7 +60,7 @@ Get started with Rivet by following a quickstart guide:
 
 ## Features
 
-Rivet Actors provide everything you need to build fast, scalable, and real-time applications without the complexity.
+Rivet Actors, a primitive of RivetKit, provide everything you need to build fast, scalable, and real-time applications without the complexity. Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale.
 
 - **Long-Lived, Stateful Compute**: Like AWS Lambda but with memory and no timeouts
 - **Blazing-Fast Reads & Writes**: State stored on same machine as compute  
@@ -67,6 +68,13 @@ Rivet Actors provide everything you need to build fast, scalable, and real-time 
 - **Store Data Near Your Users**: Deploy to the edge for low-latency access
 - **Infinitely Scalable**: Auto-scale from zero to millions without configuration
 - **Fault Tolerant**: Automatic error handling and recovery built-in
+
+## BYO DB (Bring Your Own Database)
+The Rivet Engine supports:
+
+- **PostgreSQL**: For production deployments
+- **FoundationDB**: For enterprise-scale distributed systems
+- **Filesystem**: For single-node deployments
 
 ## Examples
 

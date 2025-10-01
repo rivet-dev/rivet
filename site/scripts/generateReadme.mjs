@@ -18,14 +18,21 @@ const RIVET_QUICKSTART = `Get started with Rivet by following a quickstart guide
 // Content chunks
 const RIVET_FEATURES_CONTENT = `## Features
 
-Rivet Actors provide everything you need to build fast, scalable, and real-time applications without the complexity.
+Rivet Actors are a primitive of RivetKit provide everything you need to build fast, scalable, and real-time applications without the complexity. Rivet Engine is the core of self-hosting and is used for orchestrating actors at scale.
 
 - **Long-Lived, Stateful Compute**: Like AWS Lambda but with memory and no timeouts
 - **Blazing-Fast Reads & Writes**: State stored on same machine as compute  
 - **Realtime, Made Simple**: Built-in WebSockets and SSE support
 - **Store Data Near Your Users**: Deploy to the edge for low-latency access
 - **Infinitely Scalable**: Auto-scale from zero to millions without configuration
-- **Fault Tolerant**: Automatic error handling and recovery built-in`;
+- **Fault Tolerant**: Automatic error handling and recovery built-in
+
+## BYO DB (Bring Your Own Database)
+The Rivet Engine supports:
+
+- **PostgreSQL**: For production deployments
+- **FoundationDB**: For enterprise-scale distributed systems
+- **Filesystem**: For single-node deployments`;
 
 const RIVETKIT_FEATURES_CONTENT = `## Features
 

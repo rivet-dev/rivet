@@ -7,9 +7,9 @@
   </a>
   <br/>
   <br/>
-  <p><b>The open-source alternative to Durable Objects</b></p>
+  <p><b>Scale and orchestrate <a href="https://github.com/rivet-gg/rivetkit">RivetKit</a> workloads</b></p>
   <p>
-    Rivet Actors provide long-lived processes with durable state, realtime, and scalability.
+    Built to provide production grade scale and orchestration for the most intensive workloads.
   </p>
   <p>
     <a href="https://rivet.gg/docs/actors/quickstart">Quickstart</a> •
@@ -32,17 +32,17 @@
 
 Public-facing projects:
 
-- **Rivet Engine** (you are here): Engine that powers Rivet Actors at scale
+- **Rivet Engine** (you are here): Engine that powers RivetKit at scale
 - **[RivetKit](https://github.com/rivet-gg/rivetkit)**: Lightweight TypeScript library for building Rivet Actors — works with Redis or Rivet Engine
-- **[Rivet Studio](/frontend/apps/studio)**: Like Postman, but for Rivet Actors
+- **[Rivet Inspector](/frontend/apps/studio)**: Like Postman, but for Rivet Actors
 - **[Rivet Hub](/frontend/apps/hub)**: UI for Rivet Engine
 - **[Rivet Documentation](/site/src/content/docs)**
 
 Projects powering Rivet Engine:
 
-- **[Pegboard](packages/edge/services/pegboard/)**: Actor orchestrator
-- **[Guard](packages/edge/infra/guard/)**: Proxy for routing traffic to Rivet Actors
-- **[Chirp](packages/common/chirp-workflow/)**: Core workflow engine that powers Rivet
+- **[Pegboard](packages/services/pegboard/)**: Actor orchestrator
+- **[Guard](packages/core/guard/)**: Proxy for routing traffic to Rivet Actors
+- **[Gasoline](packages/common/gasoline/)**: Core durable execution engine that powers Rivet
 
 ## Get Started
 
