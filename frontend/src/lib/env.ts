@@ -1,7 +1,7 @@
 import z from "zod";
 
 export const commonEnvSchema = z.object({
-	VITE_APP_API_URL: z.string().url(),
+	VITE_APP_API_URL: z.string(),
 	VITE_APP_ASSETS_URL: z.string().url(),
 	VITE_APP_POSTHOG_API_KEY: z.string().optional(),
 	VITE_APP_POSTHOG_API_HOST: z.string().url().optional(),
