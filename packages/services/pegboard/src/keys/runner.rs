@@ -760,7 +760,8 @@ impl FormalChunkedKey for MetadataKey {
 				.map(|x| x.value().iter().map(|x| *x))
 				.flatten()
 				.collect::<Vec<_>>(),
-		)?
+		)
+		.context("failed to combine `MetadataKey`")?
 		.try_into()
 	}
 

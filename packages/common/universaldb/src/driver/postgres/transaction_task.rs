@@ -394,9 +394,7 @@ impl TransactionTask {
 				} => {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
-						tracing::error!("cannot set in read only txn");
-						let _ =
-							response.send(Err(anyhow!("postgres transaction connection failed")));
+						let _ = response.send(Err(anyhow!("cannot set in read only txn")));
 						continue;
 					};
 
@@ -418,9 +416,7 @@ impl TransactionTask {
 				TransactionCommand::Clear { key, response } => {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
-						tracing::error!("cannot set in read only txn");
-						let _ =
-							response.send(Err(anyhow!("postgres transaction connection failed")));
+						let _ = response.send(Err(anyhow!("cannot set in read only txn")));
 						continue;
 					};
 
@@ -443,9 +439,7 @@ impl TransactionTask {
 				} => {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
-						tracing::error!("cannot clear range in read only txn");
-						let _ =
-							response.send(Err(anyhow!("postgres transaction connection failed")));
+						let _ = response.send(Err(anyhow!("cannot clear range in read only txn")));
 						continue;
 					};
 
@@ -478,9 +472,8 @@ impl TransactionTask {
 				} => {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
-						tracing::error!("cannot apply atomic op in read only txn");
 						let _ =
-							response.send(Err(anyhow!("postgres transaction connection failed")));
+							response.send(Err(anyhow!("cannot apply atomic op in read only txn")));
 						continue;
 					};
 
@@ -539,9 +532,9 @@ impl TransactionTask {
 						if let TransactionIsolationLevel::RepeatableReadReadOnly =
 							self.isolation_level
 						{
-							tracing::error!("cannot release conflict ranges in read only txn");
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
+							let _ = response.send(Err(anyhow!(
+								"cannot release conflict ranges in read only txn"
+							)));
 							continue;
 						};
 
@@ -567,9 +560,8 @@ impl TransactionTask {
 				} => {
 					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
 					{
-						tracing::error!("cannot add conflict range in read only txn");
-						let _ =
-							response.send(Err(anyhow!("postgres transaction connection failed")));
+						let _ = response
+							.send(Err(anyhow!("cannot add conflict range in read only txn")));
 						continue;
 					};
 

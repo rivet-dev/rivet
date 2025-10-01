@@ -42,7 +42,7 @@ impl FormalChunkedKey for BodyKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `BodyKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {

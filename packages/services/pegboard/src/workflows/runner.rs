@@ -772,6 +772,9 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 
 				let metadata_key = keys::runner::MetadataKey::new(input.runner_id);
 
+				// Clear old metadata
+				tx.delete_key_subspace(&metadata_key);
+
 				// Write metadata
 				for (i, chunk) in metadata_key.split(metadata)?.into_iter().enumerate() {
 					let chunk_key = metadata_key.chunk(i);
@@ -782,7 +785,7 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 
 			Ok(())
 		})
-		.custom_instrument(tracing::info_span!("runner_populate_actor_names_tx"))
+		.custom_instrument(tracing::info_span!("runner_process_init_tx"))
 		.await?;
 
 	Ok(ProcessInitOutput {

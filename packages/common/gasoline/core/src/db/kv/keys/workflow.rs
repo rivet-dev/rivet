@@ -184,7 +184,7 @@ impl FormalChunkedKey for InputKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `InputKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
@@ -271,7 +271,7 @@ impl FormalChunkedKey for OutputKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `OutputKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
@@ -358,7 +358,7 @@ impl FormalChunkedKey for StateKey {
 				.flatten()
 				.collect(),
 		)?)
-		.map_err(Into::into)
+		.context("failed to combine `StateKey`")
 	}
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
