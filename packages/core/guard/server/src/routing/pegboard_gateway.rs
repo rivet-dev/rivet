@@ -180,7 +180,7 @@ async fn find_actor(
 	let runner_id = if let Some(actor) = actor {
 		actor.runner_id
 	} else {
-		tracing::info!(?actor_id, "waiting for actor to become ready");
+		tracing::debug!(?actor_id, "waiting for actor to become ready");
 
 		// Wait for ready, fail, or destroy
 		tokio::select! {

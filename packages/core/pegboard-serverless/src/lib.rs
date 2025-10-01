@@ -236,7 +236,7 @@ async fn outbound_handler(
 		req = req.header(X_RIVET_TOKEN, auth.admin_token.read());
 	}
 
-	let mut source = sse::EventSource::new(req)?;
+	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
 
 	let stream_handler = async {

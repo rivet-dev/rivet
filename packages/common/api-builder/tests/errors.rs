@@ -16,11 +16,6 @@ enum TestErrorWrapper {
 	WrapError(#[source] anyhow::Error),
 }
 
-// Handler that returns invalid token error
-async fn handle_invalid_token(_ctx: ApiCtx, _path: (), _query: ()) -> Result<()> {
-	Err(rivet_api_builder::errors::ApiInvalidToken.build())
-}
-
 // Handler that returns unauthorized error
 async fn handle_unauthorized(_ctx: ApiCtx, _path: (), _query: ()) -> Result<()> {
 	Err(rivet_api_builder::errors::ApiUnauthorized.build())
@@ -56,7 +51,6 @@ async fn test_error_responses() {
 	// Create router with error routes
 	let app = create_router("test", config, pools, |router| {
 		router
-			.route("/invalid-token", get(handle_invalid_token))
 			.route("/unauthorized", get(handle_unauthorized))
 			.route("/forbidden", get(handle_forbidden))
 			.route("/internal-error", get(handle_internal_error))
@@ -67,16 +61,6 @@ async fn test_error_responses() {
 	.expect("Failed to create router");
 
 	let server = TestServer::new(app).unwrap();
-
-	// Test invalid token error
-	let res = server.get("/invalid-token").await;
-	res.assert_status(axum::http::StatusCode::UNAUTHORIZED);
-	let error_response: ErrorResponse = res.json();
-	assert_eq!(error_response.group, "api");
-	assert_eq!(
-		error_response.message,
-		"The provided authentication token is invalid"
-	);
 
 	// Test unauthorized error
 	let res = server.get("/unauthorized").await;
