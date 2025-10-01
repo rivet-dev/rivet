@@ -3,7 +3,7 @@ import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { commonEnvSchema } from "./src/lib/env";
 
@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			tsconfigPaths(),
 			react(),
+			liveChatPlugin(),
 			env.SENTRY_AUTH_TOKEN
 				? sentryVitePlugin({
 						org: "rivet-gaming",
@@ -72,3 +73,12 @@ export default defineConfig(({ mode }) => {
 		},
 	};
 });
+
+export function liveChatPlugin(source: string = ""): Plugin {
+	return {
+		name: "live-chat-plugin",
+		transformIndexHtml(html) {
+			return html.replace(/{{live_chat}}/, source);
+		},
+	};
+}

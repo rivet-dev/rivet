@@ -1,4 +1,4 @@
-import { faRailway, faVercel, Icon } from "@rivet-gg/icons";
+import { faQuestionCircle, faRailway, faVercel, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
@@ -6,6 +6,7 @@ import {
 	Link as RouterLink,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
+import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnersTable } from "@/app/runners-table";
 import { Button, DocsSheet, H1, H3, Link, Skeleton } from "@/components";
 import {
@@ -34,6 +35,16 @@ function RouteComponent() {
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">
 			<div className="max-w-5xl  mt-2 flex justify-between items-center px-6 py-4">
 				<H1>Connect</H1>
+				<div>
+					<HelpDropdown>
+						<Button
+							variant="outline"
+							startIcon={<Icon icon={faQuestionCircle} />}
+						>
+							Need help?
+						</Button>
+					</HelpDropdown>
+				</div>
 			</div>
 			<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 				Connect your RivetKit application to Rivet Cloud. Use your cloud
@@ -51,9 +62,9 @@ function RouteComponent() {
 					<div className="p-4 px-6 max-w-5xl ">
 						<Skeleton className="h-8 w-48 mb-4" />
 						<div className="flex flex-wrap gap-2 my-4">
-							<Skeleton className="h-10 w-32 rounded-md" />
-							<Skeleton className="h-10 w-32 rounded-md" />
-							<Skeleton className="h-10 w-32 rounded-md" />
+							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 						</div>
 					</div>
 				</>
@@ -64,7 +75,7 @@ function RouteComponent() {
 						<Button
 							size="lg"
 							variant="outline"
-							className="min-w-32"
+							className="min-w-48 h-auto min-h-28 text-xl"
 							startIcon={<Icon icon={faRailway} />}
 							asChild
 						>
@@ -78,7 +89,7 @@ function RouteComponent() {
 						<Button
 							size="lg"
 							variant="outline"
-							className="min-w-32"
+							className="min-w-48 h-auto min-h-28 text-xl"
 							startIcon={<Icon icon={faVercel} />}
 							asChild
 						>

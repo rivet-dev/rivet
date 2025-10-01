@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, mergeConfig } from "vite";
 import { cloudEnvSchema } from "./src/lib/env";
-import engineConfig from "./vite.engine.config";
+import engineConfig, { liveChatPlugin } from "./vite.engine.config";
 
 // https://vitejs.dev/config/
 export default defineConfig((config) => {
@@ -10,6 +10,25 @@ export default defineConfig((config) => {
 		engineConfig(config),
 		defineConfig({
 			base: "/",
+			plugins: [
+				{
+					...liveChatPlugin(`<script>
+(function(d, script) {
+  script = d.createElement('script');
+  script.async = false;
+  script.onload = function(){
+    Plain.init({
+      appId: 'liveChatApp_01K5D3WHR3CGKA56RPRMBB7FX0',
+	  hideLauncher: true,
+    });
+  };
+  script.src = 'https://chat.cdn-plain.com/index.js';
+  d.getElementsByTagName('head')[0].appendChild(script);
+}(document));
+</script>`),
+					enforce: "pre",
+				},
+			],
 			define: {
 				__APP_TYPE__: JSON.stringify("cloud"),
 			},
@@ -20,5 +39,6 @@ export default defineConfig((config) => {
 				port: 43710,
 			},
 		}),
+		true,
 	);
 });
