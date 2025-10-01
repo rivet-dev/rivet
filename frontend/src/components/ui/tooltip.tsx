@@ -30,14 +30,20 @@ TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 interface WithTooltipProps extends TooltipPrimitive.TooltipProps {
 	trigger: React.ReactNode;
 	content: React.ReactNode;
+	contentProps?: React.ComponentPropsWithoutRef<typeof TooltipContent>;
 }
 
-const WithTooltip = ({ trigger, content, ...rest }: WithTooltipProps) => {
+const WithTooltip = ({
+	trigger,
+	content,
+	contentProps,
+	...rest
+}: WithTooltipProps) => {
 	return (
 		<Tooltip {...rest}>
 			<TooltipTrigger asChild>{trigger}</TooltipTrigger>
 			<TooltipPrimitive.TooltipPortal>
-				<TooltipContent>{content}</TooltipContent>
+				<TooltipContent {...contentProps}>{content}</TooltipContent>
 			</TooltipPrimitive.TooltipPortal>
 		</Tooltip>
 	);
