@@ -179,7 +179,12 @@ const Sidebar = ({
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
-						<div className="px-1 py-1 flex flex-col gap-[1px] text-sm">
+						<div
+							className={cn(
+								"px-1 py-1 flex flex-col gap-[1px] text-sm ",
+								__APP_TYPE__ !== "cloud" ? "pb-4" : "",
+							)}
+						>
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"
@@ -377,7 +382,7 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 		<HeaderButton
 			asChild
 			variant="ghost"
-			className="font-medium px-1 text-foreground"
+			className="font-medium px-1 text-foreground data-active:bg-accent"
 			{...props}
 			startIcon={
 				icon ? (
@@ -412,7 +417,7 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 
 function ConnectionStatus(): ReactNode {
 	const endpoint = useSearch({
-		from: "/_context/_inspector",
+		from: "/_context",
 		select: (s) => s.u,
 	});
 	const data = useInspectorDataProvider();
@@ -491,6 +496,7 @@ function CloudSidebarContent() {
 
 	const matchNamespace = match({
 		to: "/orgs/$organization/projects/$project/ns/$namespace",
+		fuzzy: true,
 	});
 
 	if (matchNamespace) {

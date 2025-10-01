@@ -30,9 +30,13 @@ export function UserDropdown() {
 
 	const clerk = useClerk();
 
+	const { data: url } = useQuery(
+		useCloudDataProvider().billingCustomerPortalSessionQueryOptions(),
+	);
+
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild={!!org}>
+			<DropdownMenuTrigger asChild={!org}>
 				{org ? <Preview org={org} /> : null}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
@@ -51,6 +55,13 @@ export function UserDropdown() {
 					}}
 				>
 					Members
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={() => {
+						window.open(url, "_blank");
+					}}
+				>
+					Billing
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuSub>
@@ -79,9 +90,6 @@ function Preview({ org }: { org: string }) {
 	const { isLoading, data } = useQuery(
 		useCloudDataProvider().organizationQueryOptions({ org }),
 	);
-	if (isLoading) {
-		return <Skeleton className="h-8 w-full" />;
-	}
 
 	return (
 		<Button
@@ -90,11 +98,22 @@ function Preview({ org }: { org: string }) {
 			className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
 			endIcon={<Icon icon={faChevronDown} />}
 		>
-			<div className="flex gap-2 items-center">
+			<div className="flex gap-2 items-center w-full">
 				<Avatar className="size-5">
 					<AvatarImage src={data?.imageUrl} />
+					<AvatarFallback>
+						{isLoading ? (
+							<Skeleton className="h-5 w-5" />
+						) : (
+							data?.name[0].toUpperCase()
+						)}
+					</AvatarFallback>
 				</Avatar>
-				{data?.name}
+				{isLoading ? (
+					<Skeleton className="w-full h-4 flex-1" />
+				) : (
+					data?.name
+				)}
 			</div>
 		</Button>
 	);

@@ -18,6 +18,9 @@
 		"turbo": "^2.5.6",
 		"typescript": "^5.9.2"
 	},
+	"dependencies": {
+		"@sentry/vite-plugin": "^2.23.1"
+	},
 	"resolutions": {
 		"rivetkit": "https://pkg.pr.new/rivet-dev/rivetkit@1296"
 	}

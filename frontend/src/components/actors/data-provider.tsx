@@ -6,19 +6,33 @@ import {
 import { match } from "ts-pattern";
 
 export const useDataProvider = () =>
-	useRouteContext({
-		from: match(__APP_TYPE__)
-			.with("cloud", () => {
-				return "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace" as const;
-			})
-			.with("engine", () => {
-				return "/_context/_engine/ns/$namespace" as const;
-			})
-			.with("inspector", () => {
-				return "/_context/_inspector" as const;
-			})
-			.exhaustive(),
-	}).dataProvider;
+	match(__APP_TYPE__)
+		.with("cloud", () => {
+			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
+			return useRouteContext({
+				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+			}).dataProvider;
+		})
+		.with("engine", () => {
+			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
+			return useRouteContext({
+				from: "/_context/_engine/ns/$namespace",
+			}).dataProvider;
+		})
+		.with("inspector", () => {
+			// we need to narrow down the context for inspector, because inspector does not have a unique route prefix
+			return match(
+				// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
+				useRouteContext({
+					from: "/_context",
+				}),
+			)
+				.with({ __type: "inspector" }, (ctx) => ctx.dataProvider)
+				.otherwise(() => {
+					throw new Error("Not in an inspector-like context");
+				});
+		})
+		.exhaustive();
 
 export const useEngineDataProvider = () => {
 	return useRouteContext({
@@ -27,14 +41,20 @@ export const useEngineDataProvider = () => {
 };
 
 export const useInspectorDataProvider = () => {
-	return useRouteContext({
-		from: "/_context/_inspector",
-	}).dataProvider;
+	const context = useRouteContext({
+		from: "/_context",
+	});
+
+	return match(context)
+		.with({ __type: "inspector" }, (c) => c.dataProvider)
+		.otherwise(() => {
+			throw new Error("Not in an inspector-like context");
+		});
 };
 
 type OnlyCloudRouteIds = Extract<
 	RouteIds<RegisteredRouter["routeTree"]>,
-	`/_context/_cloud/${string}`
+	`/_context/_cloud/orgs/${string}`
 >;
 
 export const useCloudDataProvider = ({

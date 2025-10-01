@@ -21,13 +21,31 @@ function createClient({ clerk }: { clerk: Clerk }) {
 }
 
 export const createGlobalContext = ({ clerk }: { clerk: Clerk }) => {
+	const client = createClient({ clerk });
 	return {
-		client: createClient({ clerk }),
+		client,
 		organizationQueryOptions(opts: { org: string }) {
 			return queryOptions({
 				queryKey: ["organization", opts.org],
 				queryFn: async () => {
 					return clerk.getOrganization(opts.org);
+				},
+			});
+		},
+		billingCustomerPortalSessionQueryOptions() {
+			return queryOptions({
+				staleTime: 5 * 60 * 1000, // 5 minutes
+				gcTime: 5 * 60 * 1000, // 5 minutes
+				queryKey: ["billing-customer-portal-session"],
+				queryFn: async () => {
+					const session =
+						await client.billing.createCustomerPortalSession();
+					if (!session.url) {
+						throw new Error(
+							"No URL returned for customer portal session",
+						);
+					}
+					return session.url;
 				},
 			});
 		},
@@ -116,10 +134,31 @@ export const createOrganizationContext = ({
 					},
 					{ abortSignal },
 				);
-				return data;
+				return data.project;
 			},
 			enabled: !!opts.project,
 		});
+
+	const namespaceQueryOptions = (opts: {
+		namespace: string;
+		organization: string;
+		project: string;
+	}) => {
+		return queryOptions({
+			queryKey: [opts, "namespace"],
+			queryFn: async ({ signal: abortSignal }) => {
+				const data = await client.namespaces.get(
+					opts.project,
+					opts.namespace,
+					{
+						org: opts.organization,
+					},
+					{ abortSignal },
+				);
+				return data.namespace;
+			},
+		});
+	};
 
 	return {
 		orgProjectNamespacesQueryOptions,
@@ -142,20 +181,10 @@ export const createOrganizationContext = ({
 			project: string;
 			namespace: string;
 		}) {
-			return queryOptions({
-				queryKey: [opts, "namespace"],
-				queryFn: async ({ signal: abortSignal }) => {
-					const data = await client.namespaces.get(
-						opts.project,
-						opts.namespace,
-						{
-							org: organization,
-						},
-						{ abortSignal },
-					);
-					return data;
-				},
-				enabled: !!opts.namespace,
+			return namespaceQueryOptions({
+				organization,
+				project: opts.project,
+				namespace: opts.namespace,
 			});
 		},
 		currentOrgCreateProjectMutationOptions({
@@ -172,7 +201,7 @@ export const createOrganizationContext = ({
 					const response = await client.projects.create({
 						displayName: data.displayName,
 						name: data.nameId,
-						organizationId: organization,
+						org: organization,
 					});
 
 					return response;
@@ -207,7 +236,7 @@ export const createProjectContext = ({
 						displayName: data.displayName,
 						org: organization,
 					});
-					return response;
+					return response.namespace;
 				},
 			};
 		},
@@ -223,20 +252,36 @@ export const createProjectContext = ({
 				project,
 			});
 		},
+		currentProjectNamespaceQueryOptions(opts: { namespace: string }) {
+			return parent.currentOrgProjectNamespaceQueryOptions({
+				project,
+				namespace: opts.namespace,
+			});
+		},
 	};
 };
 
 export const createNamespaceContext = ({
 	namespace,
+	engineNamespaceName,
+	engineNamespaceId,
 	...parent
-}: { namespace: string } & ReturnType<typeof createProjectContext> &
+}: {
+	namespace: string;
+	engineNamespaceName: string;
+	engineNamespaceId: string;
+} & ReturnType<typeof createProjectContext> &
 	ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
 	return {
 		...createEngineNamespaceContext({
-			namespace,
 			...parent,
+			namespace: engineNamespaceName,
+			namespaceId: engineNamespaceId,
 			client: createEngineClient(),
 		}),
+		namespaceQueryOptions() {
+			return parent.currentProjectNamespaceQueryOptions({ namespace });
+		},
 	};
 };

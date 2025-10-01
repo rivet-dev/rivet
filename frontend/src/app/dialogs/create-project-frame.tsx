@@ -15,16 +15,19 @@ export default function CreateProjectFrameContent() {
 	const { mutateAsync } = useMutation(
 		provider.currentOrgCreateProjectMutationOptions({
 			onSuccess: async (values) => {
-				if (params.organization) {
-					await queryClient.invalidateQueries(
-						provider.currentOrgProjectsQueryOptions(),
-					);
+				if (!params.organization) {
+					return;
 				}
-				navigate({
+
+				await queryClient.invalidateQueries(
+					provider.currentOrgProjectsQueryOptions(),
+				);
+
+				await navigate({
 					to: "/orgs/$organization/projects/$project",
 					params: {
-						organization: values.organizationId,
-						project: values.name,
+						organization: params.organization,
+						project: values.project.name,
 					},
 				});
 			},
@@ -42,7 +45,7 @@ export default function CreateProjectFrameContent() {
 			defaultValues={{ name: "", slug: "" }}
 		>
 			<Frame.Header>
-				<Frame.Title>Create New Project</Frame.Title>
+				<Frame.Title>Create Project</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
 				<Flex gap="4" direction="col">

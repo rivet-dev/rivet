@@ -101,8 +101,11 @@ export const createGlobalContext = (opts: {
 
 export const createNamespaceContext = ({
 	namespace,
+	namespaceId,
 	client,
-}: { namespace: string } & ReturnType<typeof createGlobalContext>) => {
+}: { namespace: string; namespaceId: string } & ReturnType<
+	typeof createGlobalContext
+>) => {
 	const def = createDefaultGlobalContext();
 	const dataProvider = {
 		...def,
@@ -454,6 +457,67 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth: true,
+				},
+			});
+		},
+		createRunnerConfigMutationOptions(
+			opts: {
+				onSuccess?: (
+					data: Rivet.NamespacesRunnerConfigsUpsertResponse,
+				) => void;
+			} = {},
+		) {
+			return {
+				...opts,
+				mutationKey: ["runner-config"],
+				mutationFn: async ({
+					name,
+					config,
+				}: {
+					name: string;
+					config: Rivet.NamespacesRunnerConfig;
+				}) => {
+					const response =
+						await client.namespacesRunnerConfigs.upsert(
+							namespaceId,
+							name,
+							config,
+						);
+					return response;
+				},
+			};
+		},
+		runnerConfigsQueryOptions() {
+			return infiniteQueryOptions({
+				queryKey: [{ namespace }, "runners", "configs"],
+				initialPageParam: undefined as string | undefined,
+				queryFn: async ({ signal: abortSignal, pageParam }) => {
+					const response = await client.namespacesRunnerConfigs.list(
+						namespaceId,
+						{
+							cursor: pageParam ?? undefined,
+							limit: RECORDS_PER_PAGE,
+						},
+						{ abortSignal },
+					);
+
+					console.log(response);
+
+					return response;
+				},
+
+				select: (data) =>
+					data.pages.flatMap((page) =>
+						Object.entries(page.runnerConfigs),
+					),
+				getNextPageParam: (lastPage) => {
+					if (
+						Object.values(lastPage.runnerConfigs).length <
+						RECORDS_PER_PAGE
+					) {
+						return undefined;
+					}
+					return lastPage.pagination.cursor;
 				},
 			});
 		},

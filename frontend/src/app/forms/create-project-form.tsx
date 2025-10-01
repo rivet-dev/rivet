@@ -14,11 +14,11 @@ import { convertStringToId } from "@/lib/utils";
 export const formSchema = z.object({
 	name: z
 		.string()
-		.max(25)
+		.max(16)
 		.refine((value) => value.trim() !== "" && value.trim() === value, {
 			message: "Name cannot be empty or contain whitespaces",
 		}),
-	slug: z.string().max(25).optional(),
+	slug: z.string().max(16).optional(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;

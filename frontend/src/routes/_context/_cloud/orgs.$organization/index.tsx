@@ -1,12 +1,13 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
+import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
-	beforeLoad: ({ context, params }) => {
-		return match(__APP_TYPE__)
-			.with("cloud", async () => {
+	beforeLoad: async ({ context, params }) => {
+		return match(context)
+			.with({ __type: "cloud" }, async () => {
 				if (!context.clerk?.organization) {
 					throw notFound();
 				}
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 					throw redirect({
 						to: "/orgs/$organization/projects/$project",
 						replace: true,
-						reloadDocument: true,
+
 						params: {
 							organization: params.organization,
 							project: firstProject.name,
@@ -38,10 +39,13 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 
 function RouteComponent() {
 	return (
-		<div className="flex flex-col gap-6 w-full mx-auto h-screen items-center justify-center overflow-auto">
-			<Card className="w-full max-w-md">
-				<CreateProjectFrameContent />
-			</Card>
+		<div className="flex flex-col gap-6 px-4 w-full mx-auto h-screen items-center justify-center overflow-auto">
+			<div className="flex flex-col items-center gap-6">
+				<Logo className="h-10 mb-4" />
+				<Card className="w-full sm:w-96">
+					<CreateProjectFrameContent />
+				</Card>
+			</div>
 		</div>
 	);
 }

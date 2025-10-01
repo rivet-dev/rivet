@@ -1,7 +1,6 @@
-import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, Navigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
-import { useDataProvider } from "@/components/actors";
+import { BuildPrefiller } from "@/app/build-prefiller";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
@@ -18,20 +17,4 @@ export function RouteComponent() {
 			{!n ? <BuildPrefiller /> : null}
 		</>
 	);
-}
-
-function BuildPrefiller() {
-	const { data } = useSuspenseInfiniteQuery(
-		useDataProvider().buildsQueryOptions(),
-	);
-
-	if (data[0]) {
-		return (
-			<Navigate
-				to="."
-				search={(search) => ({ ...search, n: [data[0].name] })}
-			/>
-		);
-	}
-	return null;
 }

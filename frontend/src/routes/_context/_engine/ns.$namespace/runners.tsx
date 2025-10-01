@@ -1,20 +1,10 @@
 import { faRefresh, Icon } from "@rivet-gg/icons";
-import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { RunnersTable } from "@/app/runners-table";
 import {
 	Button,
-	DiscreteCopyButton,
 	H1,
-	Skeleton,
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-	Text,
 	WithTooltip,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -67,126 +57,16 @@ function RouteComponent() {
 			<div className="p-4">
 				<div className="max-w-5xl mx-auto p-2">
 					<div className="border rounded-md">
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>ID</TableHead>
-									<TableHead>Name</TableHead>
-									<TableHead>Slots</TableHead>
-									<TableHead>Last ping</TableHead>
-									<TableHead>Created</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{!isLoading && runners?.length === 0 ? (
-									<TableRow>
-										<TableCell colSpan={8}>
-											<Text className="text-center">
-												There's no runners matching
-												criteria.
-											</Text>
-										</TableCell>
-									</TableRow>
-								) : null}
-								{isError ? (
-									<TableRow>
-										<TableCell colSpan={8}>
-											<Text className="text-center">
-												An error occurred while fetching
-												runners.
-											</Text>
-										</TableCell>
-									</TableRow>
-								) : null}
-								{isLoading ? (
-									<>
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-										<RowSkeleton />
-									</>
-								) : null}
-								{runners?.map((runner) => (
-									<Row {...runner} key={runner.runnerId} />
-								))}
-
-								{!isLoading && hasNextPage ? (
-									<TableRow>
-										<TableCell colSpan={6}>
-											<Button
-												variant="outline"
-												isLoading={isLoading}
-												onClick={() => fetchNextPage()}
-												disabled={!hasNextPage}
-											>
-												Load more
-											</Button>
-										</TableCell>
-									</TableRow>
-								) : null}
-							</TableBody>
-						</Table>
+						<RunnersTable
+							isLoading={isLoading}
+							isError={isError}
+							runners={runners || []}
+							fetchNextPage={fetchNextPage}
+							hasNextPage={hasNextPage}
+						/>
 					</div>
 				</div>
 			</div>
 		</div>
-	);
-}
-
-function RowSkeleton() {
-	return (
-		<TableRow>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
-		</TableRow>
-	);
-}
-
-function Row(runner: Rivet.Runner) {
-	return (
-		<TableRow key={runner.runnerId}>
-			<TableCell>
-				<WithTooltip
-					content={runner.runnerId}
-					trigger={
-						<DiscreteCopyButton value={runner.name}>
-							{runner.name}
-						</DiscreteCopyButton>
-					}
-				/>
-			</TableCell>
-			<TableCell>
-				<DiscreteCopyButton value={runner.name}>
-					{runner.name}
-				</DiscreteCopyButton>
-			</TableCell>
-
-			<TableCell>
-				{runner.remainingSlots}/{runner.totalSlots}
-			</TableCell>
-
-			<TableCell>
-				{new Date(runner.lastPingTs).toLocaleString()}
-			</TableCell>
-
-			<TableCell>{new Date(runner.createTs).toLocaleString()}</TableCell>
-		</TableRow>
 	);
 }

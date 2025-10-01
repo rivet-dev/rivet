@@ -52,7 +52,7 @@ export function DocsSheet({
 								rel="noopener noreferrer"
 								href={
 									path.startsWith("http")
-										? path
+										? `${path}?utm_source=engine&embed=true`
 										: `https://rivet.gg/${path}?utm_source=engine&embed=true#${hash}`
 								}
 							>
@@ -67,7 +67,7 @@ export function DocsSheet({
 								className="w-full h-screen border-t"
 								src={
 									path.startsWith("http")
-										? path
+										? `${path}?utm_source=engine&embed=true`
 										: `https://rivet.gg/${path}?embed=true#${hash}`
 								}
 								title={title}

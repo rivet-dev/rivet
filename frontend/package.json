@@ -19,7 +19,9 @@
 	},
 	"dependencies": {
 		"@clerk/clerk-js": "^5.92.1",
-		"@clerk/clerk-react": "^5.46.2",
+		"@clerk/clerk-react": "^5.47.0",
+		"@clerk/elements": "^0.23.63",
+		"@clerk/shared": "3.25.0",
 		"@clerk/themes": "^2.4.18",
 		"@codemirror/autocomplete": "^6.18.7",
 		"@codemirror/commands": "^6.8.1",

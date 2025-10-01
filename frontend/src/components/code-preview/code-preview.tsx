@@ -11,9 +11,10 @@ import theme from "./theme.json";
 interface CodePreviewProps {
 	code: string;
 	language: "typescript";
+	className?: string;
 }
 
-export function CodePreview({ code, language }: CodePreviewProps) {
+export function CodePreview({ className, code, language }: CodePreviewProps) {
 	const [isLoading, setIsLoading] = useState(true);
 	const highlighter = useRef<HighlighterCore | null>(null);
 
@@ -31,6 +32,10 @@ export function CodePreview({ code, language }: CodePreviewProps) {
 		createHighlighter().then(() => {
 			setIsLoading(false);
 		});
+
+		return () => {
+			highlighter.current?.dispose();
+		};
 	}, []);
 
 	const result = useMemo(
@@ -50,6 +55,7 @@ export function CodePreview({ code, language }: CodePreviewProps) {
 
 	return (
 		<div
+			className={className}
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: its safe
 			dangerouslySetInnerHTML={{ __html: result }}
 		/>

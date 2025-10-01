@@ -1,6 +1,7 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
+import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 
 export const Route = createFileRoute(
@@ -22,7 +23,7 @@ export const Route = createFileRoute(
 					throw redirect({
 						to: "/orgs/$organization/projects/$project/ns/$namespace",
 						replace: true,
-						reloadDocument: true,
+
 						params: {
 							organization: params.organization,
 							project: params.project,
@@ -40,10 +41,13 @@ export const Route = createFileRoute(
 
 function RouteComponent() {
 	return (
-		<div className="flex flex-col gap-6 w-full mx-auto h-screen items-center justify-center overflow-auto">
-			<Card className="w-full max-w-md">
-				<CreateNamespacesFrameContent />
-			</Card>
+		<div className="flex flex-col gap-6 px-4 w-full mx-auto h-screen items-center justify-center overflow-auto">
+			<div className="flex flex-col items-center gap-6">
+				<Logo className="h-10 mb-4" />
+				<Card className="w-full sm:w-96">
+					<CreateNamespacesFrameContent />
+				</Card>
+			</div>
 		</div>
 	);
 }
