@@ -17,6 +17,7 @@ futures-util.workspace = true
 futures.workspace = true
 http-body-util.workspace = true
 http-body.workspace = true
+http.workspace = true
 # TODO: Make this use workspace version
 hyper = { version = "1.6.0", features = ["full", "http1", "http2"] }
 hyper-tungstenite.workspace = true

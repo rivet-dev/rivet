@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::*;
 use gas::prelude::*;
 use hyper::header::HeaderName;
+use hyper::{Request, body::Incoming as BodyIncoming};
 use rivet_guard_core::RoutingFn;
 
 use crate::{errors, shared_state::SharedState};
