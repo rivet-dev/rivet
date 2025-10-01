@@ -43,6 +43,7 @@ tf/.terraform.lock.hcl
 frontend/.env.*
 frontend/dist/
 frontend/node_modules/
+frontend/.tanstack
 
 # Site
 site/.next/

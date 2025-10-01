@@ -1,6 +1,19 @@
+import {
+	SignedIn,
+	SignedOut,
+	SignInButton,
+	useOrganization,
+} from "@clerk/clerk-react";
 import { faNodeJs, faReact, Icon } from "@rivet-gg/icons";
-import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Navigate,
+	Outlet,
+	useMatch,
+	useNavigate,
+} from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
+import { C } from "node_modules/@clerk/clerk-react/dist/useAuth-BVxIa9U7.mjs";
 import { usePostHog } from "posthog-js/react";
 import {
 	type ComponentProps,
@@ -12,6 +25,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { match } from "ts-pattern";
 import z from "zod";
 import {
 	type InspectorCredentials,
@@ -61,7 +75,9 @@ const searchSchema = z
 
 export const Route = createFileRoute("/_layout")({
 	validateSearch: zodValidator(searchSchema),
-	component: RouteComponent,
+	component: match(__APP_TYPE__)
+		.with("cloud", () => CloudRouteComponent)
+		.otherwise(() => RouteComponent),
 });
 
 function RouteComponent() {
@@ -384,5 +400,62 @@ function Connect({
 				</CardContent>
 			</Card>
 		</div>
+	);
+}
+
+function CloudRouteComponent() {
+	return (
+		<>
+			<SignedOut>
+				<SignInButton />
+			</SignedOut>
+			<SignedIn>
+				<NavigateToLatestOrganization />
+				<RouteComponent />
+			</SignedIn>
+			<CloudModals />
+		</>
+	);
+}
+
+function NavigateToLatestOrganization() {
+	const { isLoaded, organization } = useOrganization();
+
+	if (!isLoaded || !organization) {
+		return null;
+	}
+
+	return (
+		<Navigate
+			to="/orgs/$organization"
+			params={{ organization: organization.id }}
+		/>
+	);
+}
+
+function CloudModals() {
+	const navigate = useNavigate();
+	const search = Route.useSearch();
+
+	const CreateProjectDialog = useDialog.CreateProject.Dialog;
+	return (
+		<>
+			<CreateProjectDialog
+				dialogProps={{
+					open: search.modal === "create-project",
+					onOpenChange: (value) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+		</>
 	);
 }

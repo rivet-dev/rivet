@@ -1,3 +1,4 @@
+import { OrganizationSwitcher, useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faLink,
@@ -6,7 +7,12 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
+import {
+	Link,
+	useMatch,
+	useMatchRoute,
+	useNavigate,
+} from "@tanstack/react-router";
 import {
 	type ComponentProps,
 	createContext,
@@ -20,8 +26,10 @@ import {
 	useState,
 } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import { match } from "ts-pattern";
 import {
 	Button,
+	type ButtonProps,
 	cn,
 	DocsSheet,
 	type ImperativePanelHandle,
@@ -146,13 +154,25 @@ const Sidebar = ({
 						/>
 					</Link>
 					<div className="flex flex-1 flex-col gap-4 px-2 min-h-0">
-						{__APP_TYPE__ === "inspector" ? (
-							<ConnectionStatus />
-						) : null}
-						{__APP_TYPE__ === "engine" ? <Breadcrumbs /> : null}
-						<ScrollArea>
-							<Subnav />
-						</ScrollArea>
+						{match(__APP_TYPE__)
+							.with("engine", () => (
+								<>
+									<ConnectionStatus />
+									<ScrollArea>
+										<Subnav />
+									</ScrollArea>
+								</>
+							))
+							.with("inspector", () => (
+								<>
+									<Breadcrumbs />
+									<ScrollArea>
+										<Subnav />
+									</ScrollArea>
+								</>
+							))
+							.with("cloud", () => <CloudSidebar />)
+							.exhaustive()}
 					</div>
 					<div>
 						<div className="border-t p-2 flex flex-col gap-[1px] text-sm">
@@ -241,7 +261,7 @@ const Footer = () => {
 
 export { Root, Main, Header, Footer, VisibleInFull, Sidebar };
 
-const Breadcrumbs = () => {
+const Breadcrumbs = (): ReactNode => {
 	const matchRoute = useMatchRoute();
 	const nsMatch = matchRoute({
 		to: "/ns/$namespace",
@@ -341,14 +361,10 @@ const Subnav = () => {
 
 function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 	return (
-		<Button
+		<HeaderButton
 			asChild
 			variant="ghost"
 			{...props}
-			className={cn(
-				"text-muted-foreground px-2 aria-current-page:text-foreground relative h-auto py-1 justify-start",
-				className,
-			)}
 			startIcon={
 				icon ? (
 					<Icon className={cn("size-5 opacity-80")} icon={icon} />
@@ -356,11 +372,26 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 			}
 		>
 			<Link to={props.to}>{children}</Link>
+		</HeaderButton>
+	);
+}
+
+function HeaderButton({ children, className, ...props }: ButtonProps) {
+	return (
+		<Button
+			variant="ghost"
+			{...props}
+			className={cn(
+				"text-muted-foreground px-2 aria-current-page:text-foreground relative h-auto py-1 justify-start",
+				className,
+			)}
+		>
+			{children}
 		</Button>
 	);
 }
 
-function ConnectionStatus() {
+function ConnectionStatus(): ReactNode {
 	const { endpoint, ...queries } = useManager();
 	const { setCredentials } = useInspectorCredentials();
 	const { isLoading, isError, isSuccess } = useQuery(
@@ -414,4 +445,48 @@ function ConnectionStatus() {
 			</div>
 		);
 	}
+
+	return null;
+}
+
+function CloudSidebar(): ReactNode {
+	const match = useMatch({
+		from: "/_layout/orgs/$organization/",
+		shouldThrow: false,
+	});
+
+	const clerk = useClerk();
+	return (
+		<>
+			<OrganizationSwitcher />
+
+			<ScrollArea>
+				<div className="flex gap-1.5 flex-col">
+					<HeaderLink
+						to="/orgs/$organization"
+						className="font-normal"
+						params={match?.params}
+					>
+						Projects
+					</HeaderLink>
+					<HeaderButton
+						onClick={() => {
+							clerk.openUserProfile({
+								__experimental_startPath: "/billing",
+							});
+						}}
+					>
+						Billing
+					</HeaderButton>
+					<HeaderButton
+						onClick={() => {
+							clerk.openUserProfile();
+						}}
+					>
+						Settings
+					</HeaderButton>
+				</div>
+			</ScrollArea>
+		</>
+	);
 }
