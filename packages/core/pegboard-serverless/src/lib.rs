@@ -18,6 +18,8 @@ use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
+const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
+
 struct OutboundConnection {
 	handle: JoinHandle<()>,
 	shutdown_tx: oneshot::Sender<()>,
@@ -226,11 +228,19 @@ async fn outbound_handler(
 			))
 		})
 		.collect();
-	let mut es = sse::EventSource::new(client.get(url).headers(headers))?;
+
+	let mut req = client.get(url).headers(headers);
+
+	// Add admin token if configured
+	if let Some(auth) = ctx.config().auth {
+		req = req.header(X_RIVET_TOKEN, &auth.admin_token);
+	}
+
+	let mut source = sse::EventSource::new(req)?;
 	let mut runner_id = None;
 
 	let stream_handler = async {
-		while let Some(event) = es.next().await {
+		while let Some(event) = source.next().await {
 			match event {
 				Ok(sse::Event::Open) => {}
 				Ok(sse::Event::Message(msg)) => {
@@ -269,7 +279,7 @@ async fn outbound_handler(
 	}
 
 	// Continue waiting on req while draining
-	while let Some(event) = es.next().await {
+	while let Some(event) = source.next().await {
 		match event {
 			Ok(sse::Event::Open) => {}
 			Ok(sse::Event::Message(msg)) => {
