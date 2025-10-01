@@ -9,7 +9,7 @@ use std::{
 };
 use tokio::sync::{Mutex, mpsc};
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
-use vbare::OwnedVersionedData as _;
+use vbare::OwnedVersionedData;
 
 const GC_INTERVAL: Duration = Duration::from_secs(60);
 const MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(5);

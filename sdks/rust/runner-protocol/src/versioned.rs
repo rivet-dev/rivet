@@ -37,12 +37,6 @@ impl OwnedVersionedData for ToClient {
 	}
 }
 
-impl ToClient {
-	pub fn deserialize(buf: &[u8]) -> Result<v1::ToClient> {
-		<Self as OwnedVersionedData>::deserialize(buf, PROTOCOL_VERSION)
-	}
-}
-
 pub enum ToServer {
 	V1(v1::ToServer),
 }
@@ -74,12 +68,6 @@ impl OwnedVersionedData for ToServer {
 		match self {
 			ToServer::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
-	}
-}
-
-impl ToServer {
-	pub fn serialize(self) -> Result<Vec<u8>> {
-		<Self as OwnedVersionedData>::serialize(self, PROTOCOL_VERSION)
 	}
 }
 
@@ -120,5 +108,39 @@ impl OwnedVersionedData for ToGateway {
 impl ToGateway {
 	pub fn serialize(self) -> Result<Vec<u8>> {
 		<Self as OwnedVersionedData>::serialize(self, PROTOCOL_VERSION)
+	}
+}
+
+pub enum ToServerlessServer {
+	V1(v1::ToServerlessServer),
+}
+
+impl OwnedVersionedData for ToServerlessServer {
+	type Latest = v1::ToServerlessServer;
+
+	fn latest(latest: v1::ToServerlessServer) -> Self {
+		ToServerlessServer::V1(latest)
+	}
+
+	fn into_latest(self) -> Result<Self::Latest> {
+		#[allow(irrefutable_let_patterns)]
+		if let ToServerlessServer::V1(data) = self {
+			Ok(data)
+		} else {
+			bail!("version not latest");
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(ToServerlessServer::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			ToServerlessServer::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
 	}
 }

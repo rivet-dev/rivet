@@ -383,3 +383,11 @@ type ToGateway struct {
 	message: ToServerTunnelMessage
 }
 
+# MARK: Serverless
+type ToServerlessServerInit struct {
+	runnerId: Id
+}
+
+type ToServerlessServer union {
+	ToServerlessServerInit
+}

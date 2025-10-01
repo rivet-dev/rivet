@@ -1,4 +1,4 @@
-use base64::Engine as _;
+use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use futures_util::StreamExt;
 use futures_util::{FutureExt, TryStreamExt};

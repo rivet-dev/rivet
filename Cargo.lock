@@ -3349,6 +3349,7 @@ name = "pegboard-serverless"
 version = "25.7.2"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "epoxy",
  "gasoline",
  "namespace",
@@ -3360,6 +3361,7 @@ dependencies = [
  "rivet-types",
  "tracing",
  "universaldb",
+ "vbare",
 ]
 
 [[package]]

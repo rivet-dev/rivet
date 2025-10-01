@@ -7,7 +7,7 @@ use universaldb::{
 	utils::{FormalChunkedKey, IsolationLevel::*},
 };
 use universalpubsub::PublishOpts;
-use vbare::OwnedVersionedData as _;
+use vbare::OwnedVersionedData;
 
 use crate::{keys, workflows::actor::Allocate};
 
