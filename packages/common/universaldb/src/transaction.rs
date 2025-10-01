@@ -105,6 +105,11 @@ impl Transaction {
 		self.driver.clear(&self.subspace.pack(key));
 	}
 
+	pub fn delete_subspace(&self, subspace: &Subspace) {
+		self.informal()
+			.clear_subspace_range(&self.subspace.join(&subspace));
+	}
+
 	pub fn delete_key_subspace<T: TuplePack>(&self, key: &T) {
 		self.informal()
 			.clear_subspace_range(&self.subspace.subspace(&self.subspace.pack(key)));
@@ -176,15 +181,15 @@ impl Transaction {
 		self.driver.get_ranges_keyvalues(opt, isolation_level)
 	}
 
-	pub fn read_entries<'a, T: FormalKey + for<'de> TupleUnpack<'de>>(
-		&'a self,
-		opt: RangeOption<'a>,
-		isolation_level: IsolationLevel,
-	) -> impl futures_util::Stream<Item = Result<(T, T::Value)>> {
-		self.driver
-			.get_ranges_keyvalues(opt, isolation_level)
-			.map(|res| self.read_entry(&res?))
-	}
+	// TODO: Fix types
+	// pub fn read_entries<'a, T: FormalKey + for<'de> TupleUnpack<'de>>(
+	// 	&'a self,
+	// 	opt: RangeOption<'a>,
+	// 	isolation_level: IsolationLevel,
+	// ) -> impl futures_util::Stream<Item = Result<(T, T::Value)>> {
+	// 	self.read_range(opt, isolation_level)
+	// 		.map(|res| self.read_entry(&res?))
+	// }
 
 	// ==== TODO: Remove. all of these should only be used via `tx.informal()` ====
 	pub fn get<'a>(
@@ -316,7 +321,7 @@ impl<'t> InformalTransaction<'t> {
 	}
 
 	/// Clear all keys in a subspace range
-	pub fn clear_subspace_range(&self, subspace: &Subspace) {
+	pub fn clear_subspace_range(&self, subspace: &tuple::Subspace) {
 		let (begin, end) = subspace.range();
 		self.inner.driver.clear_range(&begin, &end);
 	}
