@@ -14,11 +14,10 @@ import { convertStringToId } from "@/lib/utils";
 export const formSchema = z.object({
 	name: z
 		.string()
-		.max(16)
+		.max(16, "Name must be at most 16 characters long")
 		.refine((value) => value.trim() !== "" && value.trim() === value, {
 			message: "Name cannot be empty or contain whitespaces",
 		}),
-	slug: z.string().max(16).optional(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -48,42 +47,6 @@ export const Name = ({ className }: { className?: string }) => {
 						/>
 					</FormControl>
 					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
-export const Slug = ({ className }: { className?: string }) => {
-	const { control, watch } = useFormContext<FormValues>();
-
-	const name = watch("name");
-
-	return (
-		<FormField
-			control={control}
-			name="slug"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-2">Slug</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							placeholder={
-								name
-									? convertStringToId(name)
-									: "Enter a slug..."
-							}
-							maxLength={25}
-							{...field}
-							onChange={(event) => {
-								const value = convertStringToId(
-									event.target.value,
-								);
-								field.onChange({ target: { value } });
-							}}
-						/>
-					</FormControl>
-					<FormMessage className="col-span-2" />
 				</FormItem>
 			)}
 		/>

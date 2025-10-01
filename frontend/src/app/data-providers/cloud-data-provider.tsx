@@ -1,5 +1,6 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
+import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -16,6 +17,14 @@ function createClient({ clerk }: { clerk: Clerk }) {
 		environment: "",
 		token: async () => {
 			return (await clerk.session?.getToken()) || "";
+		},
+		fetcher: async (args) => {
+			if (args.headers) {
+				delete args.headers["X-Fern-Language"];
+				delete args.headers["X-Fern-Runtime"];
+				delete args.headers["X-Fern-Runtime-Version"];
+			}
+			return await fetcher(args);
 		},
 	});
 }

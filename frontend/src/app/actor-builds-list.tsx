@@ -1,8 +1,4 @@
-import {
-	// @ts-expect-error
-	faActorsBorderless,
-	Icon,
-} from "@rivet-gg/icons";
+import { faActorsBorderless, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Fragment } from "react";
@@ -22,8 +18,8 @@ export function ActorBuildsList() {
 		<div className="h-full">
 			<div className="flex flex-col gap-[1px]">
 				{data?.length === 0 ? (
-					<p className="text-xs text-muted-foreground ms-1">
-						No instances found.
+					<p className="text-xs text-muted-foreground ms-1 px-1">
+						Connect RivetKit to see instances.
 					</p>
 				) : null}
 				{data?.map((build) => (
@@ -81,6 +77,22 @@ export function ActorBuildsList() {
 					: null}
 			</div>
 			{hasNextPage ? <VisibilitySensor onChange={fetchNextPage} /> : null}
+		</div>
+	);
+}
+
+export function ActorBuildsListSkeleton() {
+	return (
+		<div className="h-full">
+			<div className="flex flex-col gap-[1px]">
+				{Array(RECORDS_PER_PAGE)
+					.fill(null)
+					.map((_, i) => (
+						<Fragment key={i}>
+							<Skeleton className="w-full h-6 my-1" />
+						</Fragment>
+					))}
+			</div>
 		</div>
 	);
 }

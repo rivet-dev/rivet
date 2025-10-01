@@ -79,7 +79,7 @@ function CloudApp() {
 					colorModalBackdrop: "rgb(0 0 0 / 0.8)",
 				},
 			}}
-			publishableKey={cloudEnv().VITE_CLERK_PUBLISHABLE_KEY}
+			publishableKey={cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY}
 		>
 			<RouterProvider router={router} />
 		</ClerkProvider>

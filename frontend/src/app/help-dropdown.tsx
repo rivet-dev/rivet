@@ -3,8 +3,10 @@ import {
 	faComments,
 	faDiscord,
 	faGithub,
+	faMessageSmile,
 	Icon,
 } from "@rivet-gg/icons";
+import { useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
 	DropdownMenu,
@@ -14,6 +16,7 @@ import {
 } from "@/components";
 
 export const HelpDropdown = ({ children }: { children: ReactNode }) => {
+	const navigate = useNavigate();
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
@@ -44,6 +47,17 @@ export const HelpDropdown = ({ children }: { children: ReactNode }) => {
 					}}
 				>
 					Documentation
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					indicator={<Icon icon={faMessageSmile} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: (old) => ({ ...old, modal: "feedback" }),
+						});
+					}}
+				>
+					Feedback
 				</DropdownMenuItem>
 				{__APP_TYPE__ === "cloud" ? (
 					<DropdownMenuItem

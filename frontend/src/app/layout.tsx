@@ -208,15 +208,37 @@ const Sidebar = ({
 									</a>
 								</Button>
 							</Changelog>
-							<HelpDropdown>
-								<Button
-									className="text-muted-foreground justify-start py-1 h-auto aria-expanded:text-foreground aria-expanded:bg-accent"
-									variant="ghost"
-									size="xs"
-								>
-									Support
-								</Button>
-							</HelpDropdown>
+							{match(__APP_TYPE__)
+								.with("cloud", () => (
+									<Button
+										className="text-muted-foreground justify-start py-1 h-auto"
+										variant="ghost"
+										size="xs"
+										onClick={() => {
+											Plain.open();
+										}}
+									>
+										Feedback & Support
+									</Button>
+								))
+								.otherwise(() => (
+									<Button
+										className="text-muted-foreground justify-start py-1 h-auto"
+										variant="ghost"
+										size="xs"
+										asChild
+									>
+										<Link
+											to="."
+											search={(old) => ({
+												...old,
+												modal: "feedback",
+											})}
+										>
+											Feedback
+										</Link>
+									</Button>
+								))}
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"
@@ -229,22 +251,6 @@ const Sidebar = ({
 									Documentation
 								</Button>
 							</DocsSheet>
-							<Button
-								className="text-muted-foreground justify-start py-1 h-auto"
-								variant="ghost"
-								size="xs"
-								asChild
-							>
-								<Link
-									to="."
-									search={(old) => ({
-										...old,
-										modal: "feedback",
-									})}
-								>
-									Feedback
-								</Link>
-							</Button>
 							<Button
 								variant="ghost"
 								className="text-muted-foreground justify-start py-1 h-auto"
@@ -524,8 +530,6 @@ function CloudSidebar(): ReactNode {
 function CloudSidebarContent() {
 	const match = useMatchRoute();
 
-	const clerk = useClerk();
-
 	const matchNamespace = match({
 		to: "/orgs/$organization/projects/$project/ns/$namespace",
 		fuzzy: true,
@@ -552,35 +556,7 @@ function CloudSidebarContent() {
 		);
 	}
 
-	const matchOrganization = match({
-		to: "/orgs/$organization",
-	});
-
-	if (matchOrganization) {
-		return (
-			<div className="flex gap-1.5 flex-col">
-				<HeaderLink to="/orgs/$organization" params={matchOrganization}>
-					Projects
-				</HeaderLink>
-				<HeaderButton
-					onClick={() => {
-						clerk.openOrganizationProfile({
-							__experimental_startPath: "/organization-billing",
-						});
-					}}
-				>
-					Billing
-				</HeaderButton>
-				<HeaderButton
-					onClick={() => {
-						clerk.openOrganizationProfile();
-					}}
-				>
-					Settings
-				</HeaderButton>
-			</div>
-		);
-	}
+	return null;
 }
 
 function CloudSidebarFooter() {

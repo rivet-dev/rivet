@@ -1,7 +1,6 @@
 import { useClerk, useOrganizationList } from "@clerk/clerk-react";
 import { faChevronRight, faPlus, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Logo } from "@/app/logo";
 import {
 	Avatar,

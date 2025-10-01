@@ -120,6 +120,7 @@ export function SignUp() {
 											<Clerk.Input
 												type="email"
 												required
+												placeholder="you@company.com"
 												asChild
 											>
 												<Input />
@@ -136,6 +137,7 @@ export function SignUp() {
 											<Clerk.Input
 												type="password"
 												required
+												placeholder="Your password"
 												asChild
 											>
 												<Input />

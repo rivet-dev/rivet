@@ -1,7 +1,4 @@
-import {
-	useDialog as baseUseDialog,
-	createDialogHook,
-} from "@/components/actors";
+import { useDialog as baseUseDialog, createDialogHook } from "@/components";
 
 export const useDialog = {
 	...baseUseDialog,

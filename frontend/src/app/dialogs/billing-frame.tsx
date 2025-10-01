@@ -1,3 +1,4 @@
+import { Rivet } from "@rivet-gg/cloud";
 import {
 	useMutation,
 	useQuery,
@@ -101,59 +102,133 @@ export default function BillingFrameContent() {
 					</BillingDetailsButton>
 				</div>
 				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
-					<CommunityPlan
-						current={
-							billing?.activePlan === "free" ||
-							!billing?.activePlan
-						}
+					{[
+						[Rivet.BillingPlan.Free, CommunityPlan],
+						[Rivet.BillingPlan.Pro, ProPlan],
+						[Rivet.BillingPlan.Team, TeamPlan],
+					].map(([plan, PlanComponent]) => {
+						const config = getConfig(plan, billing);
+						return (
+							<PlanComponent
+								key={plan}
+								{...config}
+								buttonProps={{
+									...config.buttonProps,
+									disabled:
+										config.buttonProps.disabled ||
+										isPending,
+									isLoading:
+										variables?.__from === plan && isPending,
+									onClick: () => {
+										if (billing.futurePlan === plan) {
+											return mutate({
+												plan: Rivet.BillingPlan.Free,
+												__from: plan,
+											});
+										}
+										mutate({ plan, __from: plan });
+									},
+								}}
+							/>
+						);
+					})}
+					<EnterprisePlan
 						buttonProps={{
-							isLoading: isPending,
-							onClick: () => mutate({ plan: "community" }),
-							disabled:
-								billing?.activePlan === "free" ||
-								!billing?.activePlan ||
-								!billing?.canChangePlan,
-						}}
-					/>
-					<ProPlan
-						current={billing?.activePlan === "pro"}
-						buttonProps={{
-							isLoading: isPending,
 							onClick: () => {
-								if (billing?.activePlan === "pro") {
-									return mutate({ plan: "free" });
-								}
-								return mutate({ plan: "pro" });
+								window.open(
+									"https://www.rivet.dev/sales",
+									"_blank",
+								);
 							},
-							disabled: !billing?.canChangePlan,
-							...(billing?.activePlan === "pro" &&
-							billing?.futurePlan !== "free"
-								? { children: "Cancel" }
-								: {}),
 						}}
 					/>
-					<TeamPlan
-						current={billing?.activePlan === "team"}
-						buttonProps={{
-							isLoading: isPending,
-							onClick: () => {
-								if (billing?.activePlan === "team") {
-									return mutate({ plan: "free" });
-								}
-								return mutate({ plan: "team" });
-							},
-							disabled: !billing?.canChangePlan,
-							...(billing?.activePlan === "team" &&
-							billing?.futurePlan !== "free"
-								? { children: "Cancel" }
-								: {}),
-						}}
-					/>
-					<EnterprisePlan />
 				</div>
 			</Frame.Content>
 		</>
 	);
+}
+
+function isCurrent(
+	plan: Rivet.BillingPlan,
+	data: Rivet.BillingDetailsResponse.Billing,
+) {
+	return (
+		plan === data.activePlan ||
+		(plan === Rivet.BillingPlan.Free && !data.activePlan)
+	);
+}
+
+function getConfig(
+	plan: Rivet.BillingPlan,
+	billing: Rivet.BillingDetailsResponse.Billing | undefined,
+) {
+	return {
+		current: isCurrent(plan, billing),
+		buttonProps: {
+			children: buttonText(plan, billing),
+			variant: buttonVariant(plan, billing),
+			disabled: !billing?.canChangePlan || buttonDisabled(plan, billing),
+		},
+	};
+}
+
+function buttonVariant(
+	plan: Rivet.BillingPlan,
+	data: Rivet.BillingDetailsResponse.Billing,
+) {
+	if (plan === data.activePlan && data.futurePlan !== data.activePlan)
+		return "default";
+	if (plan === data.futurePlan && data.futurePlan !== data.activePlan)
+		return "secondary";
+
+	if (comparePlans(plan, data.futurePlan) > 0) return "default";
+	return "secondary";
+}
+
+function buttonDisabled(
+	plan: Rivet.BillingPlan,
+	data: Rivet.BillingDetailsResponse.Billing,
+) {
+	return plan === data.futurePlan && data.futurePlan !== data.activePlan;
+}
+
+function buttonText(
+	plan: Rivet.BillingPlan,
+	data: Rivet.BillingDetailsResponse.Billing,
+) {
+	if (plan === data.activePlan && data.futurePlan !== data.activePlan)
+		return <>Resubscribe</>;
+	if (plan === data.futurePlan && data.futurePlan !== data.activePlan)
+		return (
+			<>
+				Downgrades on{" "}
+				{new Date(data.currentPeriodEnd).toLocaleDateString(undefined, {
+					month: "short",
+					day: "numeric",
+				})}
+			</>
+		);
+	if (plan === data.activePlan) return "Cancel";
+	return comparePlans(plan, data.futurePlan) > 0 ? "Upgrade" : "Downgrade";
+}
+
+export function comparePlans(
+	a: Rivet.BillingPlan,
+	b: Rivet.BillingPlan,
+): number {
+	const plans = [
+		Rivet.BillingPlan.Free,
+		Rivet.BillingPlan.Pro,
+		Rivet.BillingPlan.Team,
+		Rivet.BillingPlan.Enterprise,
+	];
+
+	const tierA = plans.indexOf(a);
+	const tierB = plans.indexOf(b);
+
+	if (tierA > tierB) return 1;
+	if (tierA < tierB) return -1;
+	return 0;
 }
 
 function CurrentPlan({ plan }: { plan?: string }) {

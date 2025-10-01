@@ -6,6 +6,7 @@ settings:
 
 overrides:
   rivetkit: https://pkg.pr.new/rivet-dev/rivetkit@1296
+  '@clerk/shared': 3.26.1
 
 importers:
 
@@ -65,8 +66,8 @@ importers:
         specifier: ^0.23.63
         version: 0.23.63(@types/react-dom@18.3.7(@types/react@18.3.24))(@types/react@18.3.24)(next@15.5.2(@babel/core@7.28.4)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@clerk/shared':
-        specifier: 3.25.0
-        version: 3.25.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: 3.26.1
+        version: 3.26.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@clerk/themes':
         specifier: ^2.4.18
         version: 2.4.21
@@ -1352,18 +1353,6 @@ packages:
   '@clerk/localizations@3.25.3':
     resolution: {integrity: sha512-9/R3PzktThQTmcimUGeag1TGSCwAVf1ZtEsJcpSbzQYe/RpWjSg13CiHsvw+jegFkSEuDcI0nH73k+KgYlMDHw==}
     engines: {node: '>=18.17.0'}
-
-  '@clerk/shared@3.25.0':
-    resolution: {integrity: sha512-2Vb6NQqBA+1g7kfGct/OlSFmzU54/s4BQp3qeHwDqW1FgaU4MuXbqfBClI6AatxOC8Ux8W16Rvf705ViwFSxlw==}
-    engines: {node: '>=18.17.0'}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0 || ^19.0.0-0
-      react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-0
-    peerDependenciesMeta:
-      react:
-        optional: true
-      react-dom:
-        optional: true
 
   '@clerk/shared@3.26.1':
     resolution: {integrity: sha512-84dAJutr7JAwKwRI0fRj6mFy3D521okNIiCkJ+ffMp0lniQr5IXQSFqkCEd+cQ3bImr1YHKCGVMLkahZI6s9Ng==}
@@ -3196,7 +3185,7 @@ packages:
     resolution: {integrity: sha512-aGJVImxsmz8fLLzeZHUlFRJ/7Y/xBrke9bOvMpooVaJpHor/XmiP19QeEtB2hmQUOPlgS3dz5o8UtCZ5+LcQGg==}
 
   '@rivet-gg/cloud@file:frontend/vendor/rivet-cloud.tgz':
-    resolution: {integrity: sha512-kfR9nz6QqN0Mp0U28C8gGm5cX5o1lc4KciDjRXnnxsAwIYRxBe6SKvhsa1eSbnSZKSG1MmCAs8ISp81CjCvQRA==, tarball: file:frontend/vendor/rivet-cloud.tgz}
+    resolution: {integrity: sha512-80sLz4sqI1x+nsaPwIgk+OnpFEx+ybJp17QsAz+WO0JQBzbECxo4dUZaCoTNorA+8T6cM8qfN2/fIeqpsAHs7A==, tarball: file:frontend/vendor/rivet-cloud.tgz}
     version: 0.0.0
 
   '@rivetkit/engine-runner-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
@@ -8630,7 +8619,7 @@ snapshots:
 
   '@clerk/clerk-react@5.47.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
-      '@clerk/shared': 3.25.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@clerk/shared': 3.26.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@clerk/types': 4.86.0
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
@@ -8647,7 +8636,7 @@ snapshots:
   '@clerk/elements@0.23.63(@types/react-dom@18.3.7(@types/react@18.3.24))(@types/react@18.3.24)(next@15.5.2(@babel/core@7.28.4)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
       '@clerk/clerk-react': 5.47.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      '@clerk/shared': 3.25.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@clerk/shared': 3.26.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@clerk/types': 4.86.0
       '@radix-ui/primitive': 1.1.3
       '@radix-ui/react-form': 0.1.8(@types/react-dom@18.3.7(@types/react@18.3.24))(@types/react@18.3.24)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -8668,18 +8657,6 @@ snapshots:
   '@clerk/localizations@3.25.3':
     dependencies:
       '@clerk/types': 4.88.0
-
-  '@clerk/shared@3.25.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
-    dependencies:
-      '@clerk/types': 4.86.0
-      dequal: 2.0.3
-      glob-to-regexp: 0.4.1
-      js-cookie: 3.0.5
-      std-env: 3.9.0
-      swr: 2.3.4(react@19.1.1)
-    optionalDependencies:
-      react: 19.1.1
-      react-dom: 19.1.1(react@19.1.1)
 
   '@clerk/shared@3.26.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
