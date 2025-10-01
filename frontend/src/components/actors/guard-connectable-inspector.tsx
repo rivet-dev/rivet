@@ -135,10 +135,14 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 	);
 
 	const match = useMatch({
-		from: "/_layout/ns/$namespace",
+		from:
+			__APP_TYPE__ === "engine"
+				? "/_layout/ns/$namespace"
+				: "/_layout/orgs/$organization/projects/$project/ns/$namespace/",
+		shouldThrow: false,
 	});
 
-	if (!match.params.namespace || !actor.runner) {
+	if (!match?.params.namespace || !actor.runner) {
 		throw new Error("Actor is missing required fields");
 	}
 

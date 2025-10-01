@@ -1,7 +1,7 @@
 import { SelectGroup } from "@radix-ui/react-select";
 import { faCirclePlus, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { type ComponentProps, useCallback, useEffect, useRef } from "react";
+import { type ComponentProps, useCallback } from "react";
 import {
 	Flex,
 	Select,
@@ -12,8 +12,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components";
+import { useManager } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import { namespacesQueryOptions } from "@/queries/manager-engine";
 
 interface NamespaceSelectProps extends ComponentProps<typeof Select> {
 	showCreate?: boolean;
@@ -31,7 +31,7 @@ export function NamespaceSelect({
 	...props
 }: NamespaceSelectProps) {
 	const { data, hasNextPage, fetchNextPage, isFetchingNextPage } =
-		useInfiniteQuery(namespacesQueryOptions());
+		useInfiniteQuery(useManager().namespacesQueryOptions());
 
 	const handleValueChange = useCallback(
 		(value: string) => {
@@ -53,10 +53,7 @@ export function NamespaceSelect({
 				<SelectGroup>
 					<SelectLabel>Namespaces</SelectLabel>
 					{data?.map((namespace) => (
-						<SelectItem
-							key={namespace.namespaceId}
-							value={namespace.name}
-						>
+						<SelectItem key={namespace.id} value={namespace.name}>
 							{namespace.displayName}
 						</SelectItem>
 					))}

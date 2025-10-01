@@ -184,9 +184,6 @@ export const createEngineManagerContext = ({
 
 					return {
 						...data,
-						pagination: {
-							cursor: data.pagination.cursor || null,
-						},
 						actors: data.actors.map((actor) =>
 							transformActor(actor),
 						),
@@ -277,6 +274,59 @@ export const createEngineManagerContext = ({
 				},
 				mutationFn: async () => {
 					await client.actorsDelete(actorId);
+				},
+			};
+		},
+		namespacesQueryOptions() {
+			return infiniteQueryOptions({
+				queryKey: ["namespaces"],
+				initialPageParam: undefined as string | undefined,
+				queryFn: async ({ pageParam, signal: abortSignal }) => {
+					const data = await client.namespaces.list(
+						{
+							limit: ACTORS_PER_PAGE,
+							cursor: pageParam ?? undefined,
+						},
+						{ abortSignal },
+					);
+					return {
+						...data,
+						namespaces: data.namespaces.map((ns) => ({
+							id: ns.namespaceId,
+							displayName: ns.displayName,
+							name: ns.name,
+							createdAt: new Date(ns.createTs).toISOString(),
+						})),
+					};
+				},
+				getNextPageParam: (lastPage) => {
+					if (lastPage.namespaces.length < ACTORS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination.cursor;
+				},
+				select: (data) => data.pages.flatMap((page) => page.namespaces),
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth: true,
+				},
+			});
+		},
+		createNamespaceMutationOptions(opts) {
+			return {
+				...opts,
+				mutationKey: ["namespaces"],
+				mutationFn: async (data) => {
+					const response = await client.namespaces.create(data);
+
+					return {
+						id: response.namespace.namespaceId,
+						name: response.namespace.name,
+						displayName: response.namespace.displayName,
+						createdAt: new Date(
+							response.namespace.createTs,
+						).toISOString(),
+					};
 				},
 			};
 		},
@@ -394,35 +444,6 @@ export const runnerNamesQueryOptions = (opts: {
 			return lastPage.pagination.cursor;
 		},
 		select: (data) => data.pages.flatMap((page) => page.names),
-		throwOnError: noThrow,
-		retry: shouldRetryAllExpect403,
-		meta: {
-			mightRequireAuth: true,
-		},
-	});
-};
-
-export const namespacesQueryOptions = () => {
-	return infiniteQueryOptions({
-		queryKey: ["namespaces"],
-		initialPageParam: undefined as string | undefined,
-		queryFn: async ({ pageParam, signal: abortSignal }) => {
-			const data = await client.namespaces.list(
-				{
-					limit: ACTORS_PER_PAGE,
-					cursor: pageParam ?? undefined,
-				},
-				{ abortSignal },
-			);
-			return data;
-		},
-		getNextPageParam: (lastPage) => {
-			if (lastPage?.namespaces?.length < ACTORS_PER_PAGE) {
-				return undefined;
-			}
-			return lastPage.pagination.cursor;
-		},
-		select: (data) => data.pages.flatMap((page) => page.namespaces),
 		throwOnError: noThrow,
 		retry: shouldRetryAllExpect403,
 		meta: {

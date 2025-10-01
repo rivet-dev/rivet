@@ -16,6 +16,7 @@ import {
 	type Build,
 	type CrashPolicy,
 	getActorStatus,
+	type Namespace,
 	type Region,
 } from "./queries";
 
@@ -51,12 +52,13 @@ export type ActorQueryOptions = z.infer<typeof ActorQueryOptionsSchema>;
 export const ACTORS_PER_PAGE = 10;
 
 type PaginatedResponse<T, Field extends string> = {
-	pagination: { cursor?: string | null };
+	pagination: { cursor?: string };
 } & Record<Field, T[]>;
 
 type PaginatedActorResponse = PaginatedResponse<Actor, "actors">;
 type PaginatedBuildsResponse = PaginatedResponse<Build, "builds">;
 type PaginatedRegionsResponse = PaginatedResponse<Region, "regions">;
+type PaginatedNamespacesResponse = PaginatedResponse<Namespace, "namespaces">;
 
 type CreateActor = Omit<InspectorCreateActor, "keys" | "key"> & {
 	runnerNameSelector: string;
@@ -112,6 +114,30 @@ const defaultContext = {
 			select: (data) => {
 				return data.pages.flatMap((page) => page.builds);
 			},
+		});
+	},
+
+	namespacesQueryOptions() {
+		return infiniteQueryOptions({
+			queryKey: ["namespaces"],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async () => {
+				return {} as PaginatedNamespacesResponse;
+			},
+			getNextPageParam: () => undefined,
+			select: (data) => data.pages.flatMap((page) => page.namespaces),
+		});
+	},
+
+	projectNamespacesQueryOptions(projectId: string) {
+		return infiniteQueryOptions({
+			queryKey: ["namespaces", projectId],
+			initialPageParam: undefined as string | undefined,
+			queryFn: async () => {
+				return {} as PaginatedNamespacesResponse;
+			},
+			getNextPageParam: () => undefined,
+			select: (data) => data.pages.flatMap((page) => page.namespaces),
 		});
 	},
 
@@ -278,10 +304,9 @@ const defaultContext = {
 	actorRuntimeQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
-			select: ({ runtime, lifecycle, resources, tags }) => ({
+			select: ({ runtime, lifecycle, tags }) => ({
 				runtime,
 				lifecycle,
-				resources,
 				tags,
 			}),
 		});
@@ -350,6 +375,28 @@ const defaultContext = {
 				});
 			},
 		};
+	},
+	createNamespaceMutationOptions(
+		opts: Pick<
+			MutationOptions<
+				Namespace,
+				Error,
+				{ name: string; displayName: string }
+			>,
+			"onSuccess"
+		>,
+	) {
+		return {
+			...opts,
+			mutationKey: ["createNamespace"],
+			mutationFn: async (_) => {
+				return {} as Namespace;
+			},
+		} satisfies MutationOptions<
+			Namespace,
+			Error,
+			{ name: string; displayName: string }
+		>;
 	},
 };
 

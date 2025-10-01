@@ -3,19 +3,21 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components";
-import { namespacesQueryOptions } from "@/queries/manager-engine";
+import { useManager } from "@/components/actors";
 import { RouteComponent as NamespaceRouteComponent } from "./ns.$namespace/index";
 
 export const Route = createFileRoute("/_layout/")({
 	component: match(__APP_TYPE__)
 		.with("engine", () => RouteComponent)
 		.with("inspector", () => NamespaceRouteComponent)
-		.with("cloud", () => () => CloudRouteComponent)
+		.with("cloud", () => CloudRouteComponent)
 		.exhaustive(),
 });
 
 function RouteComponent() {
-	const { data: namespaces } = useInfiniteQuery(namespacesQueryOptions());
+	const { data: namespaces } = useInfiniteQuery(
+		useManager().namespacesQueryOptions(),
+	);
 
 	if (namespaces && namespaces?.length > 0) {
 		return (
@@ -53,6 +55,7 @@ function CloudRouteComponent() {
 		<Navigate
 			to="/orgs/$organization"
 			params={{ organization: organization.id }}
+			replace
 		/>
 	);
 }

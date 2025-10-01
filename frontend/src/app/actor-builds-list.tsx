@@ -4,8 +4,13 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import {
+	Link,
+	type LinkComponentProps,
+	useNavigate,
+} from "@tanstack/react-router";
 import { Fragment } from "react";
+import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
 import { ACTORS_PER_PAGE, useManager } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
@@ -14,7 +19,7 @@ export function ActorBuildsList() {
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(useManager().buildsQueryOptions());
 
-	const navigate = useNavigate({ from: "/" });
+	const navigate = useNavigate();
 
 	return (
 		<div className="h-full">
@@ -41,10 +46,15 @@ export function ActorBuildsList() {
 						size="sm"
 						onClick={() => {
 							navigate({
-								to:
-									__APP_TYPE__ === "engine"
-										? "/ns/$namespace"
-										: "/",
+								to: match(__APP_TYPE__)
+									.with("engine", () => "/ns/$namespace")
+									.with(
+										"cloud",
+										() =>
+											"/orgs/$organization/projects/$project/ns/$namespace",
+									)
+									.otherwise(() => "/"),
+
 								search: (old) => ({
 									...old,
 									n: [build.name],

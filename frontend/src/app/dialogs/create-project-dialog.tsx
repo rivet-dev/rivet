@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { DialogFooter, DialogHeader, DialogTitle, Flex } from "@/components";
 import { convertStringToId } from "@/lib/utils";
@@ -7,21 +7,22 @@ import {
 	createProjectMutationOptions,
 	projectsQueryOptions,
 } from "@/queries/manager-cloud";
-import {
-	managerClient,
-	namespacesQueryOptions,
-} from "@/queries/manager-engine";
 
 export default function CreateProjectDialogContent() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const params = useParams({ strict: false });
 
 	const { mutateAsync } = useMutation(
 		createProjectMutationOptions({
 			onSuccess: async (values) => {
-				await queryClient.invalidateQueries({
-					...projectsQueryOptions(),
-				});
+				if (params.organization) {
+					await queryClient.invalidateQueries({
+						...projectsQueryOptions({
+							organization: params.organization,
+						}),
+					});
+				}
 				navigate({
 					to: "/orgs/$organization/projects/$project",
 					params: {

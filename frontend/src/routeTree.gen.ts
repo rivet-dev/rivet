@@ -17,6 +17,8 @@ import { Route as LayoutOrgsOrganizationIndexRouteImport } from './routes/_layou
 import { Route as LayoutNsNamespaceIndexRouteImport } from './routes/_layout/ns.$namespace/index'
 import { Route as LayoutNsNamespaceRunnersRouteImport } from './routes/_layout/ns.$namespace/runners'
 import { Route as LayoutOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_layout/orgs.$organization/projects.$project/index'
+import { Route as LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from './routes/_layout/orgs.$organization/projects.$project/ns.$namespace/index'
+import { Route as LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_layout/orgs.$organization/projects.$project/ns.$namespace/connect'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -60,6 +62,18 @@ const LayoutOrgsOrganizationProjectsProjectIndexRoute =
     path: '/orgs/$organization/projects/$project/',
     getParentRoute: () => LayoutRoute,
   } as any)
+const LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute =
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport.update({
+    id: '/orgs/$organization/projects/$project/ns/$namespace/',
+    path: '/orgs/$organization/projects/$project/ns/$namespace/',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport.update({
+    id: '/orgs/$organization/projects/$project/ns/$namespace/connect',
+    path: '/orgs/$organization/projects/$project/ns/$namespace/connect',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/namespaces': typeof LayoutNamespacesRoute
@@ -69,6 +83,8 @@ export interface FileRoutesByFullPath {
   '/ns/$namespace/': typeof LayoutNsNamespaceIndexRoute
   '/orgs/$organization': typeof LayoutOrgsOrganizationIndexRoute
   '/orgs/$organization/projects/$project': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesByTo {
   '/namespaces': typeof LayoutNamespacesRoute
@@ -77,6 +93,8 @@ export interface FileRoutesByTo {
   '/ns/$namespace': typeof LayoutNsNamespaceIndexRoute
   '/orgs/$organization': typeof LayoutOrgsOrganizationIndexRoute
   '/orgs/$organization/projects/$project': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
+  '/orgs/$organization/projects/$project/ns/$namespace/connect': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/orgs/$organization/projects/$project/ns/$namespace': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -88,6 +106,8 @@ export interface FileRoutesById {
   '/_layout/ns/$namespace/': typeof LayoutNsNamespaceIndexRoute
   '/_layout/orgs/$organization/': typeof LayoutOrgsOrganizationIndexRoute
   '/_layout/orgs/$organization/projects/$project/': typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
+  '/_layout/orgs/$organization/projects/$project/ns/$namespace/connect': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  '/_layout/orgs/$organization/projects/$project/ns/$namespace/': typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -99,6 +119,8 @@ export interface FileRouteTypes {
     | '/ns/$namespace/'
     | '/orgs/$organization'
     | '/orgs/$organization/projects/$project'
+    | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/namespaces'
@@ -107,6 +129,8 @@ export interface FileRouteTypes {
     | '/ns/$namespace'
     | '/orgs/$organization'
     | '/orgs/$organization/projects/$project'
+    | '/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/orgs/$organization/projects/$project/ns/$namespace'
   id:
     | '__root__'
     | '/_layout'
@@ -117,6 +141,8 @@ export interface FileRouteTypes {
     | '/_layout/ns/$namespace/'
     | '/_layout/orgs/$organization/'
     | '/_layout/orgs/$organization/projects/$project/'
+    | '/_layout/orgs/$organization/projects/$project/ns/$namespace/connect'
+    | '/_layout/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -181,6 +207,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutOrgsOrganizationProjectsProjectIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/orgs/$organization/projects/$project/ns/$namespace/': {
+      id: '/_layout/orgs/$organization/projects/$project/ns/$namespace/'
+      path: '/orgs/$organization/projects/$project/ns/$namespace'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace'
+      preLoaderRoute: typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/orgs/$organization/projects/$project/ns/$namespace/connect': {
+      id: '/_layout/orgs/$organization/projects/$project/ns/$namespace/connect'
+      path: '/orgs/$organization/projects/$project/ns/$namespace/connect'
+      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/connect'
+      preLoaderRoute: typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
@@ -203,6 +243,8 @@ interface LayoutRouteChildren {
   LayoutNsNamespaceRoute: typeof LayoutNsNamespaceRouteWithChildren
   LayoutOrgsOrganizationIndexRoute: typeof LayoutOrgsOrganizationIndexRoute
   LayoutOrgsOrganizationProjectsProjectIndexRoute: typeof LayoutOrgsOrganizationProjectsProjectIndexRoute
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute: typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -212,6 +254,10 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutOrgsOrganizationIndexRoute: LayoutOrgsOrganizationIndexRoute,
   LayoutOrgsOrganizationProjectsProjectIndexRoute:
     LayoutOrgsOrganizationProjectsProjectIndexRoute,
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute:
+    LayoutOrgsOrganizationProjectsProjectNsNamespaceConnectRoute,
+  LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
+    LayoutOrgsOrganizationProjectsProjectNsNamespaceIndexRoute,
 }
 
 const LayoutRouteWithChildren =

@@ -1,9 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import { NamespacesPage } from "@/app/namespaces-page";
 
 export const Route = createFileRoute(
-	"/_layout/orgs/$organization/projects/$project/",
+	"/_layout/orgs/$organization/projects/$project/ns/$namespace/connect",
 )({
 	component: match(__APP_TYPE__)
 		.with("cloud", () => RouteComponent)
@@ -13,5 +12,10 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	return <NamespacesPage from="/orgs/$organization/projects/$project" />;
+	return (
+		<div>
+			Hello
+			"/_layout/orgs/$organization/projects/$project/ns/$namespace/connect"!
+		</div>
+	);
 }
