@@ -26,7 +26,7 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		operators: [FilterOp.EQUAL],
 		excludes: ["id"],
 	},
-	...(__APP_TYPE__ === "engine"
+	...(__APP_TYPE__ === "engine" || __APP_TYPE__ === "cloud"
 		? {
 				showDestroyed: {
 					type: "boolean",
@@ -38,6 +38,12 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 	showIds: {
 		type: "boolean",
 		label: "Show IDs",
+		category: "display",
+		ephemeral: true,
+	},
+	showDatacenter: {
+		type: "boolean",
+		label: "Show Actors Datacenter",
 		category: "display",
 		ephemeral: true,
 	},

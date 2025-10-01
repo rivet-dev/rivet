@@ -62,6 +62,7 @@ export type Actor = Omit<InspectorActor, "id" | "key"> & {
 	sleepingAt?: string | null;
 	connectableAt?: string | null;
 	pendingAllocationAt?: string | null;
+	datacenter?: string | null;
 } & { id: ActorId };
 
 export enum CrashPolicy {

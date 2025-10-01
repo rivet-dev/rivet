@@ -66,6 +66,7 @@ export const ActorsListRow = memo(
 							/>
 							<div className="min-w-0">
 								<Id actorId={actorId} />
+								<Datacenter actorId={actorId} />
 								<Tags actorId={actorId} />
 							</div>
 
@@ -107,6 +108,31 @@ function Id({ actorId }: { actorId: ActorId }) {
 					: actorId.substring(0, 8)}
 			</DiscreteCopyButton>
 		</SmallText>
+	);
+}
+
+function Datacenter({ actorId }: { actorId: ActorId }) {
+	const { pick } = useActorsFilters();
+	const { data: datacenter } = useQuery(
+		useDataProvider().actorDatacenterQueryOptions(actorId),
+	);
+
+	const showDatacenter = useSearch({
+		strict: false,
+		select: (search) =>
+			(pick(search).showDatacenter as FilterValue)?.value?.includes("1"),
+	});
+
+	if (!showDatacenter) {
+		return <div />;
+	}
+
+	if (!datacenter) {
+		return <SmallText className="text-foreground">-</SmallText>;
+	}
+
+	return (
+		<SmallText className="text-muted-foreground">{datacenter}</SmallText>
 	);
 }
 
