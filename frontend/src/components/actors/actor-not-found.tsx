@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { FilterOp } from "../ui/filters";
 import { ActorTabs } from "./actors-actor-details";
 import { useActorsView } from "./actors-view-context-provider";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorFeature, ActorId } from "./queries";
 
 export function ActorNotFound({
@@ -24,7 +24,7 @@ export function ActorNotFound({
 
 	const { isLoading } = useQuery({
 		// biome-ignore lint/style/noNonNullAssertion: enabled guarantees actorId is defined
-		...useManager().actorQueryOptions(actorId!),
+		...useDataProvider().actorQueryOptions(actorId!),
 		enabled: !!actorId,
 	});
 

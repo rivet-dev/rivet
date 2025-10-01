@@ -1,6 +1,5 @@
 "use client";
 import {
-	faCheck,
 	faFilterList,
 	faSliders,
 	faTimes as faX,
@@ -1331,7 +1330,7 @@ export function createFiltersSchema(definitions: FilterDefinitions) {
 }
 
 export function createFiltersPicker(definitions: FilterDefinitions) {
-	return (object: Record<string, unknown>, opts: PickFiltersOptions = {}) => {
+	return (object: Record<string, unknown>, opts: PickFiltersOptions = {}): Record<string, FilterValue> => {
 		const defs =
 			(opts.includeEphemeral ?? true)
 				? definitions
@@ -1357,7 +1356,7 @@ export function createFiltersPicker(definitions: FilterDefinitions) {
 		// add missing default values to the object
 		object = { ...filtersWithDefaultValues, ...object };
 
-		return _.pick(object, keys);
+		return _.pick(object, keys) as Record<string, FilterValue>;
 	};
 }
 
@@ -1416,7 +1415,9 @@ export function FiltersDisplay({
 								id={key}
 								definition={def}
 								value={filters[key]?.value ?? []}
-								operator={filters[key]?.operator}
+								operator={
+									filters[key]?.operator || FilterOp.EQUAL
+								}
 								onChange={onChange}
 							/>
 						</div>

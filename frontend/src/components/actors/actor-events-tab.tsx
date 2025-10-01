@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ActorEvents } from "./actor-events";
 import { useActor } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 export type EventsTypeFilter = "action" | "subscription" | "broadcast" | "send";
@@ -13,7 +13,7 @@ interface ActorEventsTabProps {
 
 export function ActorEventsTab({ actorId }: ActorEventsTabProps) {
 	const { data: destroyedAt } = useQuery(
-		useManager().actorDestroyedAtQueryOptions(actorId),
+		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
 	const { isError, isLoading } = useQuery(

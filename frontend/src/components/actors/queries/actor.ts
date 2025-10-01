@@ -30,7 +30,6 @@ export const useActorStatePatchMutation = (
 	const queryClient = useQueryClient();
 	const queries = useActor();
 	return useMutation({
-		// biome-ignore lint/suspicious/noExplicitAny: its really any
 		mutationFn: async (data: any) => {
 			const client = queries.createActorInspector(actorId);
 
@@ -45,7 +44,6 @@ export const useActorStatePatchMutation = (
 			if (!oldState || !isPatchable(data)) {
 				response = await client.state.$patch({
 					// its okay, we know the type
-					// @ts-expect-error
 					json: { replace: data },
 				});
 			} else {
@@ -65,7 +63,7 @@ export const useActorStatePatchMutation = (
 		onSuccess: (data) => {
 			queryClient.setQueryData(
 				queries.actorStateQueryOptions(actorId).queryKey,
-				data,
+				() => ({ enabled: true, state: data }),
 			);
 		},
 		...options,

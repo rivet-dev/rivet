@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-query";
 import { Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { Suspense, useCallback } from "react";
+import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
 	DocsSheet,
@@ -32,7 +33,7 @@ import { useActorsLayout } from "./actors-layout-context";
 import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
-import { ACTORS_PER_PAGE, useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import { useRootLayout } from "./root-layout-context";
 
 export function ActorsList() {
@@ -71,7 +72,11 @@ function TopBar() {
 				/>
 			) : null}
 			<div className="justify-between flex flex-1 flex-wrap gap-2 w-full">
-				{__APP_TYPE__ === "hub" ? <Filters /> : <div />}
+				{["engine", "cloud"].includes(__APP_TYPE__) ? (
+					<Filters />
+				) : (
+					<div />
+				)}
 				<div className="flex gap-1">
 					<CreateActorButton />
 					<Display />
@@ -98,12 +103,12 @@ function TopBar() {
 
 function LoadingIndicator() {
 	const n = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => state.n,
 	});
 	const filters = useFiltersValue({ includeEphemeral: false });
 	const { isLoading } = useInfiniteQuery(
-		useManager().actorsListQueryOptions({ n, filters }),
+		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
 	if (isLoading) {
 		return <ShimmerLine className="bottom-0" />;
@@ -114,10 +119,10 @@ function LoadingIndicator() {
 function List() {
 	const filters = useFiltersValue({ includeEphemeral: false });
 	const { actorId, n } = useSearch({
-		from: "/_layout",
+		from: "/_context",
 	});
 	const { data: actorIds = [] } = useInfiniteQuery(
-		useManager().actorsListQueryOptions({ n, filters }),
+		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
 
 	return (
@@ -135,7 +140,7 @@ function List() {
 
 function ActorIdPrefiller() {
 	const { n, actorId } = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => ({
 			n: state.n,
 			actorId: state.actorId,
@@ -143,7 +148,7 @@ function ActorIdPrefiller() {
 	});
 	const filters = useFiltersValue({ includeEphemeral: false });
 	const { data } = useSuspenseInfiniteQuery(
-		useManager().actorsListQueryOptions({
+		useDataProvider().actorsListQueryOptions({
 			n,
 			filters,
 		}),
@@ -164,13 +169,13 @@ function ActorIdPrefiller() {
 
 function Pagination() {
 	const n = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => state.n,
 	});
 	const filters = useFiltersValue({ includeEphemeral: false });
 	const { hasNextPage, isFetchingNextPage, fetchNextPage, data } =
 		useSuspenseInfiniteQuery(
-			useManager().actorsListPaginationQueryOptions({
+			useDataProvider().actorsListPaginationQueryOptions({
 				n,
 				filters,
 			}),
@@ -190,7 +195,7 @@ function Pagination() {
 export function ListSkeleton() {
 	return (
 		<div className="grid grid-cols-subgrid col-span-full">
-			{Array(ACTORS_PER_PAGE)
+			{Array(RECORDS_PER_PAGE)
 				.fill(null)
 				.map((_, i) => (
 					<ActorsListRowSkeleton key={i} />
@@ -202,18 +207,18 @@ export function ListSkeleton() {
 function EmptyState({ count }: { count: number }) {
 	const navigate = useNavigate();
 	const names = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => state.n,
 	});
 	const { copy, links } = useActorsView();
 	const { remove, pick } = useActorsFilters();
 
 	const { data: availableNamesCount = 0 } = useInfiniteQuery(
-		useManager().buildsCountQueryOptions(),
+		useDataProvider().buildsCountQueryOptions(),
 	);
 
 	const filtersCount = useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) =>
 			Object.values(pick(state, { includeEphemeral: false })).length,
 	});

@@ -1,15 +1,12 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Combobox } from "@/components";
-import {
-	type NamespaceNameId,
-	runnerNamesQueryOptions,
-} from "@/queries/manager-engine";
+import { useEngineCompatDataProvider } from "./data-provider";
 
 interface RunnerSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
-	namespace: NamespaceNameId;
+	namespace: string;
 }
 
 export function RunnerSelect({
@@ -23,7 +20,9 @@ export function RunnerSelect({
 		fetchNextPage,
 		isLoading,
 		isFetchingNextPage,
-	} = useInfiniteQuery(runnerNamesQueryOptions({ namespace }));
+	} = useInfiniteQuery(
+		useEngineCompatDataProvider().runnerNamesQueryOptions({ namespace }),
+	);
 
 	const [newRunner, setNewRunner] = useState<string | null>(null);
 

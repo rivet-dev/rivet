@@ -11,5 +11,16 @@ packages:
   - frontend/packages/components/
   - frontend/packages/icons/
 
+ignoredBuiltDependencies:
+  - '@clerk/shared'
+  - '@parcel/watcher'
+  - '@sentry/cli'
+  - browser-tabs-lock
+  - cbor-extract
+  - core-js
+  - lefthook
+  - sharp
+
 onlyBuiltDependencies:
+  - '@rivet-gg/icons'
   - esbuild

@@ -434,7 +434,7 @@ function ObjectValue({
 										{key}:
 									</span>{" "}
 									<Value
-										value={value[key]}
+										value={value[key as keyof typeof value]}
 										path={`${path}.${key}`}
 										editable={false}
 										object={() => (

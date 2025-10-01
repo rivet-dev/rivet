@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ActorDatabase } from "./actor-database";
 import { useActor } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 interface ActorDatabaseTabProps {
@@ -11,7 +11,7 @@ interface ActorDatabaseTabProps {
 
 export function ActorDatabaseTab({ actorId }: ActorDatabaseTabProps) {
 	const { data: destroyedAt } = useQuery(
-		useManager().actorDestroyedAtQueryOptions(actorId),
+		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
 	const actorQueries = useActor();

@@ -4,20 +4,17 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import {
-	Link,
-	type LinkComponentProps,
-	useNavigate,
-} from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Fragment } from "react";
 import { match } from "ts-pattern";
 import { Button, cn, Skeleton } from "@/components";
-import { ACTORS_PER_PAGE, useManager } from "@/components/actors";
+import { useDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { RECORDS_PER_PAGE } from "./data-providers/default-data-provider";
 
 export function ActorBuildsList() {
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
-		useInfiniteQuery(useManager().buildsQueryOptions());
+		useInfiniteQuery(useDataProvider().buildsQueryOptions());
 
 	const navigate = useNavigate();
 
@@ -33,13 +30,13 @@ export function ActorBuildsList() {
 					<Button
 						key={build.name}
 						className={cn(
-							"text-muted-foreground justify-start",
+							"text-muted-foreground justify-start font-medium px-1",
 							"data-active:text-foreground data-active:bg-accent",
 						)}
 						startIcon={
 							<Icon
 								icon={faActorsBorderless}
-								className="opacity-80"
+								className="opacity-80 group-hover:opacity-100 group-data-active:opacity-100 "
 							/>
 						}
 						variant={"ghost"}
@@ -74,7 +71,7 @@ export function ActorBuildsList() {
 					</Button>
 				))}
 				{isFetchingNextPage || isLoading
-					? Array(ACTORS_PER_PAGE)
+					? Array(RECORDS_PER_PAGE)
 							.fill(null)
 							.map((_, i) => (
 								<Fragment key={i}>

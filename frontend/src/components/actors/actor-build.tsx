@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { formatISO } from "date-fns";
 import { Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@/components";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 interface ActorBuildProps {
@@ -9,7 +8,9 @@ interface ActorBuildProps {
 }
 
 export function ActorBuild({ actorId }: ActorBuildProps) {
-	const { data } = useQuery(useManager().actorBuildQueryOptions(actorId));
+	const { data } = useQuery(
+		useDataProvider().actorBuildQueryOptions(actorId),
+	);
 
 	if (!data) {
 		return null;
@@ -31,31 +32,6 @@ export function ActorBuild({ actorId }: ActorBuildProps) {
 						>
 							{data.id}
 						</DiscreteCopyButton>
-					</Dd>
-					<Dt>Created</Dt>
-					<Dd>
-						<DiscreteCopyButton
-							className="truncate"
-							size="xs"
-							value={formatISO(data.createdAt)}
-						>
-							{formatISO(data.createdAt)}
-						</DiscreteCopyButton>
-					</Dd>
-					<Dt>Tags</Dt>
-					<Dd>
-						<Flex
-							direction="col"
-							gap="2"
-							className="flex-1 min-w-0"
-							w="full"
-						>
-							<ActorTags
-								className="justify-start text-foreground"
-								truncate={false}
-								tags={data.tags}
-							/>
-						</Flex>
 					</Dd>
 				</Dl>
 			</Flex>

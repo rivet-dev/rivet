@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
 
 export const ACTOR_STATUS_LABEL_MAP = {
@@ -17,7 +17,7 @@ export const ActorStatusLabel = ({ status }: { status?: ActorStatus }) => {
 
 export const QueriedActorStatusLabel = ({ actorId }: { actorId: ActorId }) => {
 	const { data: status, isError } = useQuery(
-		useManager().actorStatusQueryOptions(actorId),
+		useDataProvider().actorStatusQueryOptions(actorId),
 	);
 	return <ActorStatusLabel status={isError ? "unknown" : status} />;
 };

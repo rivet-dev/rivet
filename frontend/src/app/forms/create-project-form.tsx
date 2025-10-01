@@ -43,6 +43,7 @@ export const Name = ({ className }: { className?: string }) => {
 						<Input
 							placeholder="Enter a project name..."
 							maxLength={25}
+							autoFocus
 							{...field}
 						/>
 					</FormControl>

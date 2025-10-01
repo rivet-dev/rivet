@@ -1,6 +1,5 @@
 import { startTransition, useState } from "react";
 import { LogsView, ToggleGroup, ToggleGroupItem } from "@/components";
-import type { ActorAtom } from "./actor-context";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorDownloadLogsButton } from "./actor-download-logs-button";
 import { ActorLogs, type LogsTypeFilter } from "./actor-logs";

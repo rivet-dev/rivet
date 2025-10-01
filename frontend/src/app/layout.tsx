@@ -1,13 +1,19 @@
 import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
+	faBolt,
 	faLink,
 	faServer,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
+import {
+	Link,
+	useMatchRoute,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import {
 	type ComponentProps,
 	createContext,
@@ -23,8 +29,6 @@ import {
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { match } from "ts-pattern";
 import {
-	Avatar,
-	AvatarImage,
 	Button,
 	type ButtonProps,
 	cn,
@@ -36,14 +40,14 @@ import {
 	ScrollArea,
 	Skeleton,
 } from "@/components";
-import { useManager } from "@/components/actors";
+import { useInspectorDataProvider } from "@/components/actors";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
-import type { NamespaceNameId } from "@/queries/manager-engine";
 import { ActorBuildsList } from "./actor-builds-list";
 import { ContextSwitcher } from "./context-switcher";
 import { useInspectorCredentials } from "./credentials-context";
 import { NamespaceSelect } from "./namespace-select";
+import { UserDropdown } from "./user-dropdown";
 
 interface RootProps {
 	children: ReactNode;
@@ -110,6 +114,7 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 	}, []);
 
 	return (
+		// biome-ignore lint/correctness/useUniqueElementIds: id its not html element id
 		<ResizablePanelGroup
 			ref={groupRef}
 			direction="horizontal"
@@ -153,7 +158,7 @@ const Sidebar = ({
 					</Link>
 					<div className="flex flex-1 flex-col gap-4 px-2 min-h-0">
 						{match(__APP_TYPE__)
-							.with("engine", () => (
+							.with("inspector", () => (
 								<>
 									<ConnectionStatus />
 									<ScrollArea>
@@ -161,7 +166,7 @@ const Sidebar = ({
 									</ScrollArea>
 								</>
 							))
-							.with("inspector", () => (
+							.with("engine", () => (
 								<>
 									<Breadcrumbs />
 									<ScrollArea>
@@ -173,10 +178,8 @@ const Sidebar = ({
 							.exhaustive()}
 					</div>
 					<div>
-						<div className="border-t p-2 flex flex-col gap-[1px] text-sm">
-							{match(__APP_TYPE__)
-								.with("cloud", () => <CloudSidebarFooter />)
-								.otherwise(() => null)}
+						<div className="border-t my-0.5 mx-2.5" />
+						<div className="px-1 py-1 flex flex-col gap-[1px] text-sm">
 							<DocsSheet
 								path={"https://rivet.gg/docs"}
 								title="Documentation"
@@ -244,6 +247,17 @@ const Sidebar = ({
 								</a>
 							</Button>
 						</div>
+						{match(__APP_TYPE__)
+							.with("cloud", () => (
+								<>
+									<div className="border-t my-0.5 mx-2.5" />
+
+									<div className=" px-1 pt-2 pb-4 flex flex-col">
+										<CloudSidebarFooter />
+									</div>
+								</>
+							))
+							.otherwise(() => null)}
 					</div>
 				</div>
 			</ResizablePanel>
@@ -281,9 +295,7 @@ const Breadcrumbs = (): ReactNode => {
 				</div>
 			}
 		>
-			<NamespaceBreadcrumbs
-				namespaceNameId={nsMatch?.namespace as NamespaceNameId}
-			/>
+			<NamespaceBreadcrumbs namespaceNameId={nsMatch.namespace} />
 		</Suspense>
 	);
 };
@@ -291,7 +303,7 @@ const Breadcrumbs = (): ReactNode => {
 const NamespaceBreadcrumbs = ({
 	namespaceNameId,
 }: {
-	namespaceNameId: NamespaceNameId;
+	namespaceNameId: string;
 }) => {
 	const navigate = useNavigate();
 
@@ -351,7 +363,7 @@ const Subnav = () => {
 				</HeaderLink>
 			) : null}
 			<div className="w-full">
-				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors">
+				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 					Instances
 				</span>
 				<ActorBuildsList />
@@ -365,10 +377,16 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 		<HeaderButton
 			asChild
 			variant="ghost"
+			className="font-medium px-1 text-foreground"
 			{...props}
 			startIcon={
 				icon ? (
-					<Icon className={cn("size-5 opacity-80")} icon={icon} />
+					<Icon
+						className={cn(
+							"size-5 opacity-80 group-hover:opacity-100 transition-opacity",
+						)}
+						icon={icon}
+					/>
 				) : undefined
 			}
 		>
@@ -393,10 +411,14 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 }
 
 function ConnectionStatus(): ReactNode {
-	const { endpoint, ...queries } = useManager();
+	const endpoint = useSearch({
+		from: "/_context/_inspector",
+		select: (s) => s.u,
+	});
+	const data = useInspectorDataProvider();
 	const { setCredentials } = useInspectorCredentials();
 	const { isLoading, isError, isSuccess } = useQuery(
-		queries.managerStatusQueryOptions(),
+		data.statusQueryOptions(),
 	);
 
 	if (isLoading) {
@@ -478,11 +500,12 @@ function CloudSidebarContent() {
 					to="/orgs/$organization/projects/$project/ns/$namespace/connect"
 					className="font-normal"
 					params={matchNamespace}
+					icon={faBolt}
 				>
 					Connect
 				</HeaderLink>
-				<div className="w-full">
-					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors">
+				<div className="w-full pt-1.5">
+					<span className="block text-muted-foreground text-xs px-1 py-1 transition-colors mb-0.5">
 						Instances
 					</span>
 					<ActorBuildsList />
@@ -498,11 +521,7 @@ function CloudSidebarContent() {
 	if (matchOrganization) {
 		return (
 			<div className="flex gap-1.5 flex-col">
-				<HeaderLink
-					to="/orgs/$organization"
-					className="font-normal"
-					params={matchOrganization}
-				>
+				<HeaderLink to="/orgs/$organization" params={matchOrganization}>
 					Projects
 				</HeaderLink>
 				<HeaderButton
@@ -527,21 +546,5 @@ function CloudSidebarContent() {
 }
 
 function CloudSidebarFooter() {
-	const clerk = useClerk();
-
-	return (
-		<Button
-			variant="ghost"
-			size="xs"
-			className="text-muted-foreground justify-start py-1 h-auto gap-2"
-			onClick={() => {
-				clerk.openUserProfile();
-			}}
-		>
-			<Avatar className="size-5">
-				<AvatarImage src={clerk.user?.imageUrl} />
-			</Avatar>
-			{clerk.user?.fullName}
-		</Button>
-	);
+	return <UserDropdown />;
 }

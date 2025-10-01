@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
-import { motion } from "framer-motion";
 import { memo, useState } from "react";
 import {
 	Button,
 	cn,
 	DiscreteCopyButton,
+	type FilterValue,
 	RelativeTime,
 	Skeleton,
 	SmallText,
@@ -18,7 +18,7 @@ import {
 	QueriedActorStatusIndicator,
 } from "./actor-status-indicator";
 import { QueriedActorStatusLabel } from "./actor-status-label";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 interface ActorsListRowProps {
@@ -88,7 +88,8 @@ function Id({ actorId }: { actorId: ActorId }) {
 	const { pick } = useActorsFilters();
 	const showIds = useSearch({
 		strict: false,
-		select: (search) => pick(search).showIds?.value?.includes("1"),
+		select: (search) =>
+			(pick(search).showIds as FilterValue)?.value?.includes("1"),
 	});
 
 	if (!showIds) {
@@ -110,14 +111,14 @@ function Id({ actorId }: { actorId: ActorId }) {
 }
 
 function Tags({ actorId }: { actorId: ActorId }) {
-	const { data } = useQuery(useManager().actorKeysQueryOptions(actorId));
+	const { data } = useQuery(useDataProvider().actorKeysQueryOptions(actorId));
 
 	return <SmallText className="text-foreground">{data || "-"}</SmallText>;
 }
 
 function Timestamp({ actorId }: { actorId: ActorId }) {
 	const { data: { createdAt, destroyedAt } = {} } = useQuery(
-		useManager().actorQueryOptions(actorId),
+		useDataProvider().actorQueryOptions(actorId),
 	);
 
 	const ts = destroyedAt || createdAt;

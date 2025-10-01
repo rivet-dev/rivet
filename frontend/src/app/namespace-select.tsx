@@ -12,7 +12,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components";
-import { useManager } from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
 interface NamespaceSelectProps extends ComponentProps<typeof Select> {
@@ -31,7 +31,9 @@ export function NamespaceSelect({
 	...props
 }: NamespaceSelectProps) {
 	const { data, hasNextPage, fetchNextPage, isFetchingNextPage } =
-		useInfiniteQuery(useManager().namespacesQueryOptions());
+		useInfiniteQuery(
+			useEngineCompatDataProvider().namespacesQueryOptions(),
+		);
 
 	const handleValueChange = useCallback(
 		(value: string) => {

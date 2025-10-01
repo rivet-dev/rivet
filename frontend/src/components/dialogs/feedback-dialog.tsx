@@ -3,7 +3,7 @@ import { faDiscord, Icon } from "@rivet-gg/icons";
 import { usePostHog } from "posthog-js/react";
 import { useState } from "react";
 import * as FeedbackForm from "../forms/feedback-form";
-import type { DialogContentProps } from "../hooks/use-dialog";
+import type { DialogContentProps } from "../hooks";
 import { FEEDBACK_FORM_ID } from "../lib/constants";
 import { Button } from "../ui/button";
 import { DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";

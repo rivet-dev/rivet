@@ -3,19 +3,19 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Button, type ButtonProps, WithTooltip } from "@/components";
 import { useActorsView } from "./actors-view-context-provider";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 
 export function CreateActorButton(props: ButtonProps) {
 	const navigate = useNavigate();
 
-	const manager = useManager();
-	const { data } = useInfiniteQuery(useManager().buildsQueryOptions());
+	const provider = useDataProvider();
+	const { data } = useInfiniteQuery(useDataProvider().buildsQueryOptions());
 
 	const { copy } = useActorsView();
 
 	const canCreate = data && data.length > 0;
 
-	if (!manager.features.canCreateActors) {
+	if (!provider.features.canCreateActors) {
 		return null;
 	}
 

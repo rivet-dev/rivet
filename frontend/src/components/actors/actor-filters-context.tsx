@@ -7,6 +7,7 @@ import {
 	createFiltersSchema,
 	type FilterDefinitions,
 	FilterOp,
+	type FilterValue,
 	type PickFiltersOptions,
 } from "../ui/filters";
 
@@ -47,65 +48,6 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		ephemeral: true,
 		defaultValue: ["1"],
 	},
-	// tags: {
-	// 	type: "select",
-	// 	label: "Tags",
-	// 	icon: faTag,
-	// 	options: TagsOptions,
-	// 	operators: {
-	// 		[FilterOp.EQUAL]: "is one of",
-	// 		[FilterOp.NOT_EQUAL]: "is not one of",
-	// 	},
-	// },
-	// createdAt: {
-	// 	type: "date",
-	// 	label: "Created",
-	// 	icon: faCalendarCirclePlus,
-	// },
-	// destroyedAt: {
-	// 	type: "date",
-	// 	label: "Destroyed",
-	// 	icon: faCalendarCircleMinus,
-	// },
-	// status: {
-	// 	type: "select",
-	// 	label: "Status",
-	// 	icon: faSignalBars,
-	// 	options: StatusOptions,
-	// 	display: ({ value }) => {
-	// 		if (value.length > 1) {
-	// 			return <span>{value.length} statuses</span>;
-	// 		}
-	// 		return (
-	// 			<ActorStatus
-	// 				className="border-0 p-0"
-	// 				status={value[0] as ActorStatusType}
-	// 			/>
-	// 		);
-	// 	},
-	// },
-	// region: {
-	// 	type: "select",
-	// 	label: "Region",
-	// 	icon: faGlobe,
-	// 	options: RegionOptions,
-	// 	display: ({ value }) => {
-	// 		if (value.length > 1) {
-	// 			return <span>{value.length} regions</span>;
-	// 		}
-
-	// 		return <ActorRegion regionId={value[0]} showLabel />;
-	// 	},
-	// 	operators: {
-	// 		[FilterOp.EQUAL]: "is one of",
-	// 		[FilterOp.NOT_EQUAL]: "is not one of",
-	// 	},
-	// },
-	// destroyed: {
-	// 	type: "boolean",
-	// 	label: "Show destroyed actors",
-	// 	icon: faEye,
-	// },
 } satisfies FilterDefinitions;
 
 const defaultActorFiltersContextValue = {
@@ -140,13 +82,13 @@ export const useFilters = (
 	return useSearch({
 		strict: false,
 		select: (state) => fn(pick(state)),
-	});
+	}) as Record<string, FilterValue | undefined>;
 };
 
 export function useFiltersValue(opts: PickFiltersOptions = {}) {
 	const { pick } = useActorsFilters();
 	return useSearch({
-		from: "/_layout",
+		from: "/_context",
 		select: (state) => pick(state, opts),
-	});
+	}) as Record<string, FilterValue | undefined>;
 }

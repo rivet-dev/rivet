@@ -2,7 +2,7 @@ import { faXmark, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button, WithTooltip } from "@/components";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 interface ActorStopButtonProps {
@@ -11,14 +11,14 @@ interface ActorStopButtonProps {
 
 export function ActorStopButton({ actorId }: ActorStopButtonProps) {
 	const { data: destroyedAt } = useQuery(
-		useManager().actorDestroyedAtQueryOptions(actorId),
+		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
 	const { mutate, isPending } = useMutation(
-		useManager().actorDestroyMutationOptions(actorId),
+		useDataProvider().actorDestroyMutationOptions(actorId),
 	);
 
-	const { canDeleteActors } = useManager().features;
+	const { canDeleteActors } = useDataProvider().features;
 	const [isConfirming, setIsConfirming] = useState(false);
 
 	useEffect(() => {

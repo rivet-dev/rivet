@@ -37,7 +37,7 @@ export const JsonCode = forwardRef<ReactCodeMirrorRef, JsonCodeProps>(
 							const value = state.doc.toString();
 
 							if (value.trim() === "") return [];
-							return diagnostics;
+							return [...diagnostics];
 						},
 					}),
 					...extensions,

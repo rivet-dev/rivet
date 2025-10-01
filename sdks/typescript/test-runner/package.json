@@ -8,7 +8,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.1",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
 		"hono": "^4.0.0",
@@ -16,12 +16,12 @@
 		"ws": "^8.18.3"
 	},
 	"devDependencies": {
-		"@types/node": "^22.13.9",
+		"@types/node": "^22.18.1",
 		"@types/ws": "^8.18.1",
-		"tinybench": "^5.0.0",
+		"tinybench": "^5.0.1",
 		"tsup": "^8.5.0",
-		"tsx": "^4.19.3",
-		"typescript": "^5.3.3",
-		"vitest": "^1.6.0"
+		"tsx": "^4.20.5",
+		"typescript": "^5.9.2",
+		"vitest": "^1.6.1"
 	}
 }

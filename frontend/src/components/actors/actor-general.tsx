@@ -3,7 +3,7 @@ import { formatISO } from "date-fns";
 import { cn, Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@/components";
 import { ActorRegion } from "./actor-region";
 import { ActorObjectInspector } from "./console/actor-inspector";
-import { useManager } from "./manager-context";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 export interface ActorGeneralProps {
@@ -22,7 +22,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 			sleepingAt,
 			crashPolicy,
 		} = {},
-	} = useQuery(useManager().actorGeneralQueryOptions(actorId));
+	} = useQuery(useDataProvider().actorGeneralQueryOptions(actorId));
 
 	return (
 		<div className="px-4 mt-4 mb-8">

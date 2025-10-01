@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Button, cn } from "@/components";
 import { useActor } from "../actor-queries-context";
-import { useManager } from "../manager-context";
+import { useDataProvider } from "../data-provider";
 import type { ActorId } from "../queries";
 import { useActorWorkerStatus } from "../worker/actor-worker-context";
 import { ActorWorkerStatus } from "../worker/actor-worker-status";
@@ -19,7 +19,7 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 	const [isOpen, setOpen] = useState(false);
 
 	const status = useActorWorkerStatus();
-	const managerQueries = useManager();
+	const managerQueries = useDataProvider();
 	const actorQueries = useActor();
 	const { data: { destroyedAt, sleepingAt } = {} } = useQuery(
 		managerQueries.actorWorkerQueryOptions(actorId),

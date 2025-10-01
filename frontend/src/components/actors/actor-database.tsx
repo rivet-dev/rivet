@@ -27,10 +27,10 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		actorQueries.actorDatabaseQueryOptions(actorId),
 	);
 	const [table, setTable] = useState<string | undefined>(
-		() => data?.db[0]?.table.name,
+		() => data?.db?.[0]?.table.name,
 	);
 
-	const selectedTable = table || data?.db[0]?.table.name;
+	const selectedTable = table || data?.db?.[0]?.table.name;
 
 	const {
 		data: rows,
@@ -42,7 +42,9 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		}),
 	);
 
-	const currentTable = data?.db.find((db) => db.table.name === selectedTable);
+	const currentTable = data?.db?.find(
+		(db) => db.table.name === selectedTable,
+	);
 
 	return (
 		<>

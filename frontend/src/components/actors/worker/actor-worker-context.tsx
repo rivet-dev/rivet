@@ -11,7 +11,7 @@ import {
 import { getConfig } from "@/components/lib/config";
 import { assertNonNullable, ls } from "../../lib/utils";
 import { useActor } from "../actor-queries-context";
-import { useManager } from "../manager-context";
+import { useDataProvider } from "../data-provider";
 import { ActorFeature, type ActorId } from "../queries";
 import { ActorWorkerContainer } from "./actor-worker-container";
 
@@ -42,7 +42,7 @@ export const ActorWorkerContextProvider = ({
 			startedAt,
 			sleepingAt,
 		} = {},
-	} = useQuery(useManager().actorWorkerQueryOptions(actorId));
+	} = useQuery(useDataProvider().actorWorkerQueryOptions(actorId));
 	const enabled =
 		(features?.includes(ActorFeature.Console) &&
 			!destroyedAt &&
