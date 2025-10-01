@@ -52,6 +52,13 @@ impl PostgresDatabaseDriver {
 			.await
 			.context("failed to create btree_gist extension")?;
 
+		conn.execute(
+			"CREATE SEQUENCE global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
+			&[],
+		)
+		.await
+		.context("failed to create global version sequence")?;
+
 		// Create the KV table if it doesn't exist
 		conn.execute(
 			"CREATE TABLE IF NOT EXISTS kv (
@@ -96,14 +103,19 @@ impl PostgresDatabaseDriver {
 			"CREATE UNLOGGED TABLE IF NOT EXISTS conflict_ranges (
 				range_data BYTEARANGE NOT NULL,
 				conflict_type range_type NOT NULL,
-				txn_id BIGINT NOT NULL DEFAULT txid_current(),
-				
-				-- This constraint prevents read-write conflicts ONLY between different transactions
-				-- Same transaction can have any combination of read/write overlaps
+				start_version BIGINT NOT NULL,
+				commit_version BIGINT NOT NULL,
+				ts timestamp NOT NULL DEFAULT now(),
+
 				EXCLUDE USING gist (
-					range_data WITH &&, 
+					-- Conflict if byte range overlaps...
+					range_data WITH &&,
+					-- And f conflict types are different...
 					conflict_type WITH <>,
-					txn_id WITH <>
+					-- And f the txn versions overlap...
+					int8range(start_version, commit_version, '[]') WITH &&,
+					-- But not if the start_version is the same (from the same txn)
+					start_version WITH <>
 				)
 			)",
 			&[],

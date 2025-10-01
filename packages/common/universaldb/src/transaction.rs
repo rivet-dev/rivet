@@ -1,7 +1,6 @@
 use std::{future::Future, ops::Deref, pin::Pin, sync::Arc};
 
 use anyhow::{Context, Result};
-use futures_util::StreamExt;
 
 use crate::{
 	driver::TransactionDriver,

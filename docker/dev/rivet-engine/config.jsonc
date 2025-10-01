@@ -24,6 +24,9 @@
 	"postgres": {
 		"url": "postgresql://postgres:postgres@postgres:5432/rivet_engine"
 	},
+	"memory": {
+		"channel": "default"
+	},
 	"cache": {
 		"driver": "in_memory"
 	},

@@ -10,8 +10,9 @@ use crate::{
 	atomic::apply_atomic_op,
 	error::DatabaseError,
 	key_selector::KeySelector,
-	tx_ops::{Operation, TransactionOperations},
+	tx_ops::Operation,
 	value::{KeyValue, Slice, Values},
+	versionstamp::substitute_versionstamp_if_incomplete,
 };
 
 pub enum TransactionCommand {
@@ -38,7 +39,7 @@ pub enum TransactionCommand {
 		response: oneshot::Sender<Result<Values>>,
 	},
 	Commit {
-		operations: TransactionOperations,
+		operations: Vec<Operation>,
 		response: oneshot::Sender<Result<()>>,
 	},
 	GetEstimatedRangeSize {
@@ -52,20 +53,14 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	db: Arc<OptimisticTransactionDB>,
 	receiver: mpsc::Receiver<TransactionCommand>,
-	_exclusive: bool,
 }
 
 impl TransactionTask {
 	pub fn new(
 		db: Arc<OptimisticTransactionDB>,
 		receiver: mpsc::Receiver<TransactionCommand>,
-		exclusive: bool,
 	) -> Self {
-		TransactionTask {
-			db,
-			receiver,
-			_exclusive: exclusive,
-		}
+		TransactionTask { db, receiver }
 	}
 
 	pub async fn run(mut self) {
@@ -302,21 +297,18 @@ impl TransactionTask {
 		}
 	}
 
-	async fn handle_commit(&mut self, operations: TransactionOperations) -> Result<()> {
+	async fn handle_commit(&mut self, operations: Vec<Operation>) -> Result<()> {
 		// Create a new transaction for this commit
 		let txn = self.create_transaction();
 
 		// Apply all operations to the transaction
-		for op in operations.operations() {
+		for op in operations {
 			match op {
 				Operation::Set { key, value } => {
 					// Substitute versionstamp if incomplete
 					// For now, just use the simple substitution - we can improve this later
 					// to ensure all versionstamps in a transaction have the same base timestamp
-					let value = crate::versionstamp::substitute_versionstamp_if_incomplete(
-						value.clone(),
-						0,
-					);
+					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
 
 					txn.put(key, &value)
 						.context("failed to set key in rocksdb")?;
@@ -329,7 +321,7 @@ impl TransactionTask {
 					// RocksDB doesn't have a native clear_range, so we need to iterate and delete
 					let read_opts = ReadOptions::default();
 					let iter = txn.iterator_opt(
-						rocksdb::IteratorMode::From(begin, rocksdb::Direction::Forward),
+						rocksdb::IteratorMode::From(&begin, rocksdb::Direction::Forward),
 						read_opts,
 					);
 
@@ -350,12 +342,12 @@ impl TransactionTask {
 					// Get the current value from the database
 					let read_opts = ReadOptions::default();
 					let current_value = txn
-						.get_opt(key, &read_opts)
+						.get_opt(&key, &read_opts)
 						.context("failed to get current value for atomic operation")?;
 
 					// Apply the atomic operation
 					let current_slice = current_value.as_deref();
-					let new_value = apply_atomic_op(current_slice, param, *op_type);
+					let new_value = apply_atomic_op(current_slice, &param, op_type);
 
 					// Store the result
 					if let Some(new_value) = &new_value {
@@ -377,12 +369,14 @@ impl TransactionTask {
 		match txn.commit() {
 			Ok(_) => Ok(()),
 			Err(e) => {
+				let err_str = e.to_string();
+
 				// Check if this is a conflict error
-				if e.to_string().contains("conflict") {
+				if err_str.contains("conflict") {
 					// Return retryable error
 					Err(DatabaseError::NotCommitted.into())
 				} else {
-					Err(e.into())
+					Err(e).context("rocksdb commit error")
 				}
 			}
 		}

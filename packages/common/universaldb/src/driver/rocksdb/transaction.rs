@@ -1,21 +1,23 @@
 use std::{
 	future::Future,
 	pin::Pin,
-	sync::{Arc, Mutex},
+	sync::{
+		Arc,
+		atomic::{AtomicBool, Ordering},
+	},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use rocksdb::OptimisticTransactionDB;
 use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::{
 	driver::TransactionDriver,
-	error::DatabaseError,
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
 	tx_ops::TransactionOperations,
-	utils::IsolationLevel,
+	utils::{IsolationLevel, end_of_key_range},
 	value::{Slice, Value, Values},
 };
 
@@ -24,25 +26,11 @@ use super::{
 	transaction_task::{TransactionCommand, TransactionTask},
 };
 
-struct TransactionState {
-	operations: TransactionOperations,
-	committed: bool,
-}
-
-impl Default for TransactionState {
-	fn default() -> Self {
-		Self {
-			operations: TransactionOperations::default(),
-			committed: false,
-		}
-	}
-}
-
 pub struct RocksDbTransactionDriver {
 	db: Arc<OptimisticTransactionDB>,
-	state: Arc<Mutex<TransactionState>>,
-	tx_sender: Arc<OnceCell<mpsc::Sender<TransactionCommand>>>,
-	snapshot_tx_sender: Arc<OnceCell<mpsc::Sender<TransactionCommand>>>,
+	operations: TransactionOperations,
+	committed: AtomicBool,
+	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
 	conflict_tracker: ConflictRangeTracker,
 	tx_id: TransactionId,
 }
@@ -58,9 +46,9 @@ impl RocksDbTransactionDriver {
 	pub fn new(db: Arc<OptimisticTransactionDB>, conflict_tracker: ConflictRangeTracker) -> Self {
 		RocksDbTransactionDriver {
 			db,
-			state: Arc::new(Mutex::new(TransactionState::default())),
-			tx_sender: Arc::new(OnceCell::new()),
-			snapshot_tx_sender: Arc::new(OnceCell::new()),
+			operations: TransactionOperations::default(),
+			committed: AtomicBool::new(false),
+			tx_sender: OnceCell::new(),
 			conflict_tracker,
 			tx_id: TransactionId::new(),
 		}
@@ -73,31 +61,7 @@ impl RocksDbTransactionDriver {
 				let (sender, receiver) = mpsc::channel(100);
 
 				// Spawn the transaction task
-				let task = TransactionTask::new(
-					self.db.clone(),
-					receiver,
-					true, // exclusive = true for non-snapshot reads
-				);
-				tokio::spawn(task.run());
-
-				anyhow::Ok(sender)
-			})
-			.await
-			.context("failed to initialize transaction task")
-	}
-
-	/// Get or create the transaction task for snapshot operations
-	async fn ensure_snapshot_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
-		self.snapshot_tx_sender
-			.get_or_try_init(|| async {
-				let (sender, receiver) = mpsc::channel(100);
-
-				// Spawn the transaction task
-				let task = TransactionTask::new(
-					self.db.clone(),
-					receiver,
-					false, // exclusive = false for snapshot reads
-				);
+				let task = TransactionTask::new(self.db.clone(), receiver);
 				tokio::spawn(task.run());
 
 				anyhow::Ok(sender)
@@ -109,16 +73,7 @@ impl RocksDbTransactionDriver {
 
 impl TransactionDriver for RocksDbTransactionDriver {
 	fn atomic_op(&self, key: &[u8], param: &[u8], op_type: MutationType) {
-		// Add write conflict range for this key
-		let _ = self.conflict_tracker.add_range(
-			self.tx_id,
-			key,
-			&[key, &[0u8]].concat(), // Key range is [key, key+\0)
-			true,                    // is_write = true for atomic operations
-		);
-
-		let mut state = self.state.lock().unwrap();
-		state.operations.atomic_op(key, param, op_type);
+		self.operations.atomic_op(key, param, op_type);
 	}
 
 	fn get<'a>(
@@ -128,42 +83,16 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	) -> Pin<Box<dyn Future<Output = Result<Option<Slice>>> + Send + 'a>> {
 		let key = key.to_vec();
 		Box::pin(async move {
-			// Both snapshot and non-snapshot reads check local operations first
-			// Transactions always see their own writes
-			let ops = {
-				let state = self.state.lock().unwrap();
-				state.operations.clone()
-			};
-
-			ops.get_with_callback(&key, || async {
-				if let IsolationLevel::Snapshot = isolation_level {
-					// For snapshot reads, don't add conflict ranges
-					let tx_sender = self.ensure_snapshot_transaction().await?;
-
-					// Send query command
-					let (response_tx, response_rx) = oneshot::channel();
-					tx_sender
-						.send(TransactionCommand::Get {
-							key: key.clone(),
-							response: response_tx,
-						})
-						.await
-						.context("failed to send transaction command")?;
-
-					// Wait for response
-					let value = response_rx
-						.await
-						.context("failed to receive transaction response")??;
-
-					Ok(value)
-				} else {
-					// Add read conflict range for this key
-					self.conflict_tracker.add_range(
-						self.tx_id,
-						&key,
-						&[&key[..], &[0u8]].concat(), // Key range is [key, key+\0)
-						false,                        // is_write = false for reads
-					)?;
+			self.operations
+				.get_with_callback(&key, isolation_level, || async {
+					if let IsolationLevel::Serializable = isolation_level {
+						self.conflict_tracker.add_range(
+							self.tx_id,
+							&key,
+							&end_of_key_range(&key),
+							false, // is_write = false for reads
+						)?;
+					}
 
 					let tx_sender = self.ensure_transaction().await?;
 
@@ -171,7 +100,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					let (response_tx, response_rx) = oneshot::channel();
 					tx_sender
 						.send(TransactionCommand::Get {
-							key: key.clone(),
+							key: key.to_vec(),
 							response: response_tx,
 						})
 						.await
@@ -183,9 +112,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 						.context("failed to receive transaction response")??;
 
 					Ok(value)
-				}
-			})
-			.await
+				})
+				.await
 		})
 	}
 
@@ -201,41 +129,40 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			let offset = selector.offset();
 			let or_equal = selector.or_equal();
 
-			// Both snapshot and non-snapshot reads check local operations first
-			// Transactions always see their own writes
-			let ops = {
-				let state = self.state.lock().unwrap();
-				state.operations.clone()
-			};
+			self.operations
+				.get_key(&selector, isolation_level, || async {
+					if let IsolationLevel::Serializable = isolation_level {
+						self.conflict_tracker.add_range(
+							self.tx_id,
+							&key,
+							&end_of_key_range(&key),
+							false, // is_write = false for reads
+						)?;
+					}
 
-			ops.get_key(&selector, || async {
-				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
-					self.ensure_snapshot_transaction().await?
-				} else {
-					self.ensure_transaction().await?
-				};
+					let tx_sender = self.ensure_transaction().await?;
 
-				// Send query command
-				let (response_tx, response_rx) = oneshot::channel();
-				tx_sender
-					.send(TransactionCommand::GetKey {
-						key: key.clone(),
-						or_equal,
-						offset,
-						response: response_tx,
-					})
-					.await
-					.context("failed to send commit command")?;
+					// Send query command
+					let (response_tx, response_rx) = oneshot::channel();
+					tx_sender
+						.send(TransactionCommand::GetKey {
+							key: key.clone(),
+							or_equal,
+							offset,
+							response: response_tx,
+						})
+						.await
+						.context("failed to send commit command")?;
 
-				// Wait for response
-				let result_key = response_rx
-					.await
-					.context("failed to receive key selector response")??;
+					// Wait for response
+					let result_key = response_rx
+						.await
+						.context("failed to receive key selector response")??;
 
-				// Return the key if found, or empty vector if not
-				Ok(result_key.unwrap_or_else(Slice::new))
-			})
-			.await
+					// Return the key if found, or empty vector if not
+					Ok(result_key.unwrap_or_else(Slice::new))
+				})
+				.await
 		})
 	}
 
@@ -253,50 +180,17 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		let reverse = opt.reverse;
 
 		Box::pin(async move {
-			// Both snapshot and non-snapshot reads check local operations first
-			// Transactions always see their own writes
-			let ops = {
-				let state = self.state.lock().unwrap();
-				state.operations.clone()
-			};
-
-			ops.get_range(&opt, || async {
-				if let IsolationLevel::Snapshot = isolation_level {
-					// For snapshot reads, don't add conflict ranges
-					let tx_sender = self.ensure_snapshot_transaction().await?;
-
-					// Send query command with selector info
-					let (response_tx, response_rx) = oneshot::channel();
-					tx_sender
-						.send(TransactionCommand::GetRange {
-							begin_key: begin_selector.key().to_vec(),
-							begin_or_equal: begin_selector.or_equal(),
-							begin_offset: begin_selector.offset(),
-							end_key: end_selector.key().to_vec(),
-							end_or_equal: end_selector.or_equal(),
-							end_offset: end_selector.offset(),
-							limit,
-							reverse,
-							iteration,
-							response: response_tx,
-						})
-						.await
-						.context("failed to send transaction command")?;
-
-					// Wait for response
-					let values = response_rx
-						.await
-						.context("failed to receive range response")??;
-
-					Ok(values)
-				} else {
-					// Add read conflict range for this range (using raw keys, conservative)
-					self.conflict_tracker.add_range(
-						self.tx_id,
-						begin_selector.key(),
-						end_selector.key(),
-						false, // is_write = false for reads
-					)?;
+			self.operations
+				.get_range(&opt, isolation_level, || async {
+					if let IsolationLevel::Serializable = isolation_level {
+						// Add read conflict range for this range (using raw keys, conservative)
+						self.conflict_tracker.add_range(
+							self.tx_id,
+							begin_selector.key(),
+							end_selector.key(),
+							false, // is_write = false for reads
+						)?;
+					}
 
 					let tx_sender = self.ensure_transaction().await?;
 
@@ -324,9 +218,8 @@ impl TransactionDriver for RocksDbTransactionDriver {
 						.context("failed to receive range response")??;
 
 					Ok(values)
-				}
-			})
-			.await
+				})
+				.await
 		})
 	}
 
@@ -335,94 +228,44 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		opt: RangeOption<'a>,
 		isolation_level: IsolationLevel,
 	) -> crate::value::Stream<'a, Value> {
-		use futures_util::StreamExt;
+		use futures_util::{StreamExt, stream};
 
-		// Extract the selectors from RangeOption, same as get_range does
-		let begin_selector = opt.begin.clone();
-		let end_selector = opt.end.clone();
-		let limit = opt.limit;
-		let reverse = opt.reverse;
+		// Convert the range result into a stream
+		let fut = async move {
+			match self.get_range(&opt, 1, isolation_level).await {
+				Ok(values) => values
+					.into_iter()
+					.map(|kv| Ok(Value::from_keyvalue(kv)))
+					.collect::<Vec<_>>(),
+				Err(e) => vec![Err(e)],
+			}
+		};
 
-		Box::pin(
-			futures_util::stream::once(async move {
-				// Get the transaction sender based on snapshot mode
-				let tx_sender = if let IsolationLevel::Snapshot = isolation_level {
-					match self.ensure_snapshot_transaction().await {
-						Ok(sender) => sender,
-						Err(e) => return futures_util::stream::iter(vec![Err(e)]),
-					}
-				} else {
-					match self.ensure_transaction().await {
-						Ok(sender) => sender,
-						Err(e) => return futures_util::stream::iter(vec![Err(e)]),
-					}
-				};
-
-				let (response_tx, response_rx) = oneshot::channel();
-				if let Err(_) = tx_sender
-					.send(TransactionCommand::GetRange {
-						begin_key: begin_selector.key().to_vec(),
-						begin_or_equal: begin_selector.or_equal(),
-						begin_offset: begin_selector.offset(),
-						end_key: end_selector.key().to_vec(),
-						end_or_equal: end_selector.or_equal(),
-						end_offset: end_selector.offset(),
-						limit,
-						reverse,
-						iteration: 1,
-						response: response_tx,
-					})
-					.await
-				{
-					return futures_util::stream::iter(vec![Err(anyhow!(
-						"failed to send stream command"
-					))]);
-				}
-
-				match response_rx.await {
-					Ok(Ok(result)) => {
-						// Convert to Values for the stream
-						let values: Vec<_> = result
-							.iter()
-							.map(|kv| Ok(Value::new(kv.key().to_vec(), kv.value().to_vec())))
-							.collect();
-
-						futures_util::stream::iter(values)
-					}
-					Ok(Err(e)) => futures_util::stream::iter(vec![Err(e)]),
-					Err(_) => futures_util::stream::iter(vec![Err(anyhow!(
-						"failed to receive stream response"
-					))]),
-				}
-			})
-			.flatten(),
-		)
+		Box::pin(stream::once(fut).flat_map(stream::iter))
 	}
 
 	fn set(&self, key: &[u8], value: &[u8]) {
-		// Add write conflict range for this key
+		// Add write conflict range for this range
 		let _ = self.conflict_tracker.add_range(
 			self.tx_id,
 			key,
-			&[key, &[0u8]].concat(), // Key range is [key, key+\0)
-			true,                    // is_write = true for writes
+			&end_of_key_range(&key),
+			true, // is_write = true for writes
 		);
 
-		let mut state = self.state.lock().unwrap();
-		state.operations.set(key, value);
+		self.operations.set(key, value);
 	}
 
 	fn clear(&self, key: &[u8]) {
-		// Add write conflict range for this key
+		// Add write conflict range for this range
 		let _ = self.conflict_tracker.add_range(
 			self.tx_id,
 			key,
-			&[key, &[0u8]].concat(), // Key range is [key, key+\0)
-			true,                    // is_write = true for writes
+			&end_of_key_range(&key),
+			true, // is_write = true for writes
 		);
 
-		let mut state = self.state.lock().unwrap();
-		state.operations.clear(key);
+		self.operations.clear(key);
 	}
 
 	fn clear_range(&self, begin: &[u8], end: &[u8]) {
@@ -431,25 +274,20 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			self.tx_id, begin, end, true, // is_write = true for writes
 		);
 
-		let mut state = self.state.lock().unwrap();
-		state.operations.clear_range(begin, end);
+		self.operations.clear_range(begin, end);
 	}
 
 	fn commit(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
 		Box::pin(async move {
-			// Get the operations and conflict ranges to commit
-			let operations = {
-				let mut state = self.state.lock().unwrap();
-				if state.committed {
-					return Err(DatabaseError::UsedDuringCommit.into());
-				}
-				state.committed = true;
+			if self.committed.load(Ordering::SeqCst) {
+				return Ok(());
+			}
+			self.committed.store(true, Ordering::SeqCst);
 
-				state.operations.clone()
-			};
+			let (operations, _conflict_ranges) = self.operations.consume();
 
 			// Get the transaction sender
-			let tx_sender = self.ensure_transaction().await.map_err(|e| e)?;
+			let tx_sender = self.ensure_transaction().await?;
 
 			// Send commit command with operations and conflict ranges
 			let (response_tx, response_rx) = oneshot::channel();
@@ -471,7 +309,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 				self.conflict_tracker.release_transaction(self.tx_id);
 			}
 
-			result.map_err(|e| e)
+			result
 		})
 	}
 
@@ -482,11 +320,9 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		// Generate a new transaction ID for the reset transaction
 		self.tx_id = TransactionId::new();
 
-		let mut state = self.state.lock().unwrap();
-		*state = TransactionState::default();
+		self.operations.clear_all();
 		// Clear the transaction senders to reset connections
-		self.tx_sender = Arc::new(OnceCell::new());
-		self.snapshot_tx_sender = Arc::new(OnceCell::new());
+		self.tx_sender = OnceCell::new();
 	}
 
 	fn cancel(&self) {
@@ -497,9 +333,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		if let Some(tx_sender) = self.tx_sender.get() {
 			let _ = tx_sender.try_send(TransactionCommand::Cancel);
 		}
-		if let Some(snapshot_tx_sender) = self.snapshot_tx_sender.get() {
-			let _ = snapshot_tx_sender.try_send(TransactionCommand::Cancel);
-		}
 	}
 
 	fn add_conflict_range(
@@ -508,21 +341,17 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		end: &[u8],
 		conflict_type: ConflictRangeType,
 	) -> Result<()> {
-		// Determine if this is a write conflict range
 		let is_write = match conflict_type {
 			ConflictRangeType::Write => true,
 			ConflictRangeType::Read => false,
 		};
 
-		// Add to the shared conflict tracker
 		self.conflict_tracker
 			.add_range(self.tx_id, begin, end, is_write)?;
 
-		// Also store locally for later release
-		let mut state = self.state.lock().unwrap();
-		state
-			.operations
+		self.operations
 			.add_conflict_range(begin, end, conflict_type);
+
 		Ok(())
 	}
 
@@ -535,7 +364,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		let end = end.to_vec();
 
 		Box::pin(async move {
-			let tx_sender = self.ensure_snapshot_transaction().await?;
+			let tx_sender = self.ensure_transaction().await?;
 
 			// Send query command
 			let (response_tx, response_rx) = oneshot::channel();
@@ -559,16 +388,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 
 	fn commit_ref(&self) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
 		Box::pin(async move {
-			// Get the operations to commit
-			let operations = {
-				let mut state = self.state.lock().unwrap();
-				if state.committed {
-					return Err(DatabaseError::UsedDuringCommit.into());
-				}
-				state.committed = true;
+			if self.committed.load(Ordering::SeqCst) {
+				return Ok(());
+			}
+			self.committed.store(true, Ordering::SeqCst);
 
-				state.operations.clone()
-			};
+			let (operations, _conflict_ranges) = self.operations.consume();
 
 			// Get the transaction sender
 			let tx_sender = self.ensure_transaction().await?;

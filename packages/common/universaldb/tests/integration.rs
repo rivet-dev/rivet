@@ -16,7 +16,10 @@ mod integration_gas;
 
 #[tokio::test]
 async fn test_postgres_driver() {
-	let _ = tracing_subscriber::fmt::try_init();
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
 
 	let (db_config, docker_config) = TestDatabase::Postgres
 		.config(Uuid::new_v4(), 1)
@@ -25,7 +28,7 @@ async fn test_postgres_driver() {
 	let mut docker_config = docker_config.unwrap();
 	docker_config.start().await.unwrap();
 
-	tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+	tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
 
 	let rivet_config::config::Database::Postgres(postgres_config) = db_config else {
 		unreachable!();
@@ -39,7 +42,7 @@ async fn test_postgres_driver() {
 		.unwrap();
 	let db = Database::new(Arc::new(driver));
 
-	run_all_tests(db).await;
+	run_all_tests(db).await
 }
 
 #[tokio::test]
@@ -467,6 +470,17 @@ async fn test_conflict_ranges(db: &Database) {
 		let range2_begin = test_subspace.pack(&("multi3",));
 		let range2_end = test_subspace.pack(&("multi4",));
 		tx.add_conflict_range(&range2_begin, &range2_end, ConflictRangeType::Write)?;
+
+		Ok(())
+	})
+	.await
+	.unwrap();
+
+	db.run(|tx| async move {
+		let test_subspace = Subspace::from("test");
+		let key = test_subspace.pack(&("counter",));
+
+		tx.set(&key, b"bar");
 
 		Ok(())
 	})

@@ -1,3 +1,5 @@
+// TODO: Revise to work like postgres (add conflict ranges at commit)
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -35,21 +37,16 @@ impl ConflictRange {
 	}
 }
 
-struct TrackerState {
-	// Map from transaction ID to its held conflict ranges
-	transaction_ranges: HashMap<TransactionId, Vec<ConflictRange>>,
-}
-
+#[derive(Clone)]
 pub struct ConflictRangeTracker {
-	state: Arc<RwLock<TrackerState>>,
+	// Map from transaction ID to its held conflict ranges
+	transaction_ranges: Arc<RwLock<HashMap<TransactionId, Vec<ConflictRange>>>>,
 }
 
 impl ConflictRangeTracker {
 	pub fn new() -> Self {
 		ConflictRangeTracker {
-			state: Arc::new(RwLock::new(TrackerState {
-				transaction_ranges: HashMap::new(),
-			})),
+			transaction_ranges: Arc::new(RwLock::new(HashMap::new())),
 		}
 	}
 
@@ -67,10 +64,8 @@ impl ConflictRangeTracker {
 			is_write,
 		};
 
-		let state = self.state.read().unwrap();
-
 		// Check against all other transactions' ranges
-		for (other_tx_id, ranges) in &state.transaction_ranges {
+		for (other_tx_id, ranges) in &*self.transaction_ranges.read().unwrap() {
 			if *other_tx_id == tx_id {
 				// Skip our own ranges
 				continue;
@@ -104,9 +99,9 @@ impl ConflictRangeTracker {
 			is_write,
 		};
 
-		let mut state = self.state.write().unwrap();
-		state
-			.transaction_ranges
+		self.transaction_ranges
+			.write()
+			.unwrap()
 			.entry(tx_id)
 			.or_insert_with(Vec::new)
 			.push(new_range);
@@ -116,15 +111,14 @@ impl ConflictRangeTracker {
 
 	/// Release all conflict ranges for a transaction
 	pub fn release_transaction(&self, tx_id: TransactionId) {
-		let mut state = self.state.write().unwrap();
-		state.transaction_ranges.remove(&tx_id);
+		self.transaction_ranges.write().unwrap().remove(&tx_id);
 	}
 
 	/// Get all ranges held by a transaction (for debugging)
 	pub fn get_transaction_ranges(&self, tx_id: TransactionId) -> Vec<(Vec<u8>, Vec<u8>, bool)> {
-		let state = self.state.read().unwrap();
-		state
-			.transaction_ranges
+		self.transaction_ranges
+			.read()
+			.unwrap()
 			.get(&tx_id)
 			.map(|ranges| {
 				ranges
@@ -137,16 +131,7 @@ impl ConflictRangeTracker {
 
 	/// Clear all conflict ranges (for testing)
 	pub fn clear_all(&self) {
-		let mut state = self.state.write().unwrap();
-		state.transaction_ranges.clear();
-	}
-}
-
-impl Clone for ConflictRangeTracker {
-	fn clone(&self) -> Self {
-		ConflictRangeTracker {
-			state: Arc::clone(&self.state),
-		}
+		self.transaction_ranges.write().unwrap().clear();
 	}
 }
 

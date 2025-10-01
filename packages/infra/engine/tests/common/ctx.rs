@@ -42,7 +42,7 @@ impl TestCtx {
 	pub async fn new_with_opts(opts: TestOpts) -> Result<Self> {
 		// Set up logging
 		let _ = tracing_subscriber::fmt()
-			.with_env_filter("info,rivet=debug,pegboard=debug,epoxy=off,test=debug")
+			.with_env_filter("info")
 			.with_ansi(false)
 			.with_test_writer()
 			.try_init();
