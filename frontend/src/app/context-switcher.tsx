@@ -76,6 +76,7 @@ function Breadcrumbs() {
 
 	const matchProject = match({
 		to: "/orgs/$organization/projects/$project",
+		fuzzy: true,
 	});
 
 	if (matchProject) {

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { CatchBoundary, createFileRoute } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 import { BuildPrefiller } from "@/app/build-prefiller";
 
@@ -13,8 +13,10 @@ export function RouteComponent() {
 
 	return (
 		<>
-			<Actors actorId={actorId} />
-			{!n ? <BuildPrefiller /> : null}
+			<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
+				<Actors actorId={actorId} />
+				{!n ? <BuildPrefiller /> : null}
+			</CatchBoundary>
 		</>
 	);
 }

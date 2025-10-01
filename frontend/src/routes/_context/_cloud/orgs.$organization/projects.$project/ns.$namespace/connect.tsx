@@ -32,10 +32,10 @@ function RouteComponent() {
 
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-			<div className="max-w-5xl mx-auto mt-2 flex justify-between items-center px-6 py-4">
+			<div className="max-w-5xl  mt-2 flex justify-between items-center px-6 py-4">
 				<H1>Connect</H1>
 			</div>
-			<p className=" mx-auto mb-6 px-6 text-muted-foreground">
+			<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 				Connect your RivetKit application to Rivet Cloud. Use your cloud
 				of choice to run Rivet Actors.{" "}
 				<DocsSheet path={docsLinks.runners} title="Runners">
@@ -48,7 +48,7 @@ function RouteComponent() {
 			<hr className="mb-4" />
 			{isLoading ? (
 				<>
-					<div className="p-4 px-6">
+					<div className="p-4 px-6 max-w-5xl ">
 						<Skeleton className="h-8 w-48 mb-4" />
 						<div className="flex flex-wrap gap-2 my-4">
 							<Skeleton className="h-10 w-32 rounded-md" />
@@ -58,7 +58,7 @@ function RouteComponent() {
 					</div>
 				</>
 			) : configsCount === 0 ? (
-				<div className="p-4 px-6">
+				<div className="p-4 px-6 max-w-5xl">
 					<H3>Select Provider</H3>
 					<div className="flex flex-wrap gap-2 my-4">
 						<Button
@@ -109,7 +109,7 @@ function Providers() {
 	});
 
 	return (
-		<div className="p-4 px-6">
+		<div className="p-4 px-6 max-w-5xl">
 			<H3>Providers</H3>
 			<div className="flex flex-wrap gap-2 mt-4">
 				{data?.map(([name]) => (
@@ -156,7 +156,7 @@ function Runners() {
 	});
 
 	return (
-		<div className="pb-4 px-6">
+		<div className="pb-4 px-6 max-w-5xl ">
 			<H3 className="mb-4 mt-6">Runners</H3>
 			<div className="max-w-5xl mx-auto">
 				<div className="border rounded-md">

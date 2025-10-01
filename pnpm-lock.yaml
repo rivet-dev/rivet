@@ -3196,7 +3196,7 @@ packages:
     resolution: {integrity: sha512-aGJVImxsmz8fLLzeZHUlFRJ/7Y/xBrke9bOvMpooVaJpHor/XmiP19QeEtB2hmQUOPlgS3dz5o8UtCZ5+LcQGg==}
 
   '@rivet-gg/cloud@file:frontend/vendor/rivet-cloud.tgz':
-    resolution: {integrity: sha512-O2b6Rm4HDGHkFEZMasXzQ08wyMw12CwSsGZzwXFLCq5oaulJdxoPA7U1V8EhwUykI3+2ur1EQGiiC2v2K2Fqvg==, tarball: file:frontend/vendor/rivet-cloud.tgz}
+    resolution: {integrity: sha512-kfR9nz6QqN0Mp0U28C8gGm5cX5o1lc4KciDjRXnnxsAwIYRxBe6SKvhsa1eSbnSZKSG1MmCAs8ISp81CjCvQRA==, tarball: file:frontend/vendor/rivet-cloud.tgz}
     version: 0.0.0
 
   '@rivetkit/engine-runner-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839':

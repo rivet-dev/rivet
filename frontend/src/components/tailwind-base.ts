@@ -180,6 +180,9 @@ const config = {
 				".field-sizing-content": {
 					"field-sizing": "content",
 				},
+				".justify-safe-center": {
+					"justify-content": "safe center",
+				},
 			});
 		}),
 	],

@@ -23,23 +23,27 @@ import { useCloudDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
 export function UserDropdown() {
-	const org = useParams({
+	const params = useParams({
 		strict: false,
-		select: (p) => p.organization,
 	});
 
 	const clerk = useClerk();
-
-	const { data: url } = useQuery(
-		useCloudDataProvider().billingCustomerPortalSessionQueryOptions(),
-	);
-
+	const navigate = useNavigate();
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger asChild={!org}>
-				{org ? <Preview org={org} /> : null}
+			<DropdownMenuTrigger asChild={!params.organization}>
+				{params.organization ? (
+					<Preview org={params.organization} />
+				) : null}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
+				<DropdownMenuItem
+					onSelect={() => {
+						clerk.openUserProfile();
+					}}
+				>
+					Profile
+				</DropdownMenuItem>
 				<DropdownMenuItem
 					onSelect={() => {
 						clerk.openOrganizationProfile();
@@ -58,7 +62,14 @@ export function UserDropdown() {
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onSelect={() => {
-						window.open(url, "_blank");
+						console.log(params);
+						if (!params.organization || !params.project) {
+							return;
+						}
+						navigate({
+							to: ".",
+							search: (old) => ({ ...old, modal: "billing" }),
+						});
 					}}
 				>
 					Billing
@@ -70,7 +81,7 @@ export function UserDropdown() {
 					</DropdownMenuSubTrigger>
 					<DropdownMenuPortal>
 						<DropdownMenuSubContent>
-							<OrganizationSwitcher value={org} />
+							<OrganizationSwitcher value={params.organization} />
 						</DropdownMenuSubContent>
 					</DropdownMenuPortal>
 				</DropdownMenuSub>

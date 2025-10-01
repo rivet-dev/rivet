@@ -64,7 +64,21 @@ function CloudApp() {
 	return (
 		<ClerkProvider
 			Clerk={clerk}
-			appearance={{ baseTheme: dark }}
+			appearance={{
+				baseTheme: dark,
+				variables: {
+					colorPrimary: "hsl(var(--primary))",
+					colorPrimaryForeground: "hsl(var(--primary-foreground))",
+					colorTextOnPrimaryBackground:
+						"hsl(var(--primary-foreground))",
+					colorBackground: "hsl(var(--background))",
+					colorInput: "hsl(var(--input))",
+					colorText: "hsl(var(--text))",
+					colorTextSecondary: "hsl(var(--muted-foreground))",
+					borderRadius: "var(--radius)",
+					colorModalBackdrop: "rgb(0 0 0 / 0.8)",
+				},
+			}}
 			publishableKey={cloudEnv().VITE_CLERK_PUBLISHABLE_KEY}
 		>
 			<RouterProvider router={router} />

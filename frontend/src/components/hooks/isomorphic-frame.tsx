@@ -1,6 +1,8 @@
+import { DialogDescription } from "@radix-ui/react-dialog";
 import { createContext, useContext } from "react";
 import {
 	CardContent,
+	CardDescription,
 	CardFooter,
 	CardHeader,
 	CardTitle,
@@ -19,6 +21,17 @@ export const Header = (props: React.ComponentProps<typeof DialogHeader>) => {
 export const Title = (props: React.ComponentProps<typeof DialogTitle>) => {
 	const isInModal = useContext(IsInModalContext);
 	return isInModal ? <DialogTitle {...props} /> : <CardTitle {...props} />;
+};
+
+export const Description = (
+	props: React.HTMLAttributes<HTMLParagraphElement>,
+) => {
+	const isInModal = useContext(IsInModalContext);
+	return isInModal ? (
+		<DialogDescription {...props} />
+	) : (
+		<CardDescription {...props} />
+	);
 };
 
 export const Content = (props: React.HTMLAttributes<HTMLDivElement>) => {
