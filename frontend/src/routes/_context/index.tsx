@@ -1,9 +1,10 @@
+import { CreateOrganization } from "@clerk/clerk-react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { InspectorRoot } from "@/app/inspector-root";
-import Login from "@/app/login";
 import { Logo } from "@/app/logo";
+import { RouteLayout } from "@/app/route-layout";
 import { Card } from "@/components";
 
 export const Route = createFileRoute("/_context/")({
@@ -26,7 +27,6 @@ export const Route = createFileRoute("/_context/")({
 				});
 			})
 			.with({ __type: "engine" }, async (ctx) => {
-				console.log("????");
 				const result = await ctx.queryClient.fetchInfiniteQuery(
 					ctx.dataProvider.namespacesQueryOptions(),
 				);
@@ -60,12 +60,22 @@ export const Route = createFileRoute("/_context/")({
 
 function CloudRoute() {
 	return (
-		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
-			<div className="flex flex-col items-center gap-6 w-full">
-				<Logo className="h-10 mb-4" />
-				<Login />
+		<RouteLayout>
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex flex-col items-center justify-center h-full">
+					<div className="w-full sm:w-96">
+						<CreateOrganization
+							hideSlug
+							appearance={{
+								variables: {
+									colorBackground: "hsl(var(--card))",
+								},
+							}}
+						/>
+					</div>
+				</div>
 			</div>
-		</div>
+		</RouteLayout>
 	);
 }
 

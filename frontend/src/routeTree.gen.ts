@@ -9,11 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SsoCallbackRouteImport } from './routes/sso-callback'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as JoinRouteImport } from './routes/join'
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
 import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
-import { Route as ContextCloudJoinRouteImport } from './routes/_context/_cloud/join'
 import { Route as ContextCloudOrgsIndexRouteImport } from './routes/_context/_cloud/orgs.index'
 import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/_engine/ns.$namespace'
 import { Route as ContextCloudOrgsOrganizationRouteImport } from './routes/_context/_cloud/orgs.$organization'
@@ -27,6 +29,21 @@ import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceRouteImp
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/index'
 import { Route as ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRouteImport } from './routes/_context/_cloud/orgs.$organization/projects.$project/ns.$namespace/connect'
 
+const SsoCallbackRoute = SsoCallbackRouteImport.update({
+  id: '/sso-callback',
+  path: '/sso-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContextRoute = ContextRouteImport.update({
   id: '/_context',
   getParentRoute: () => rootRouteImport,
@@ -43,11 +60,6 @@ const ContextEngineRoute = ContextEngineRouteImport.update({
 const ContextCloudRoute = ContextCloudRouteImport.update({
   id: '/_cloud',
   getParentRoute: () => ContextRoute,
-} as any)
-const ContextCloudJoinRoute = ContextCloudJoinRouteImport.update({
-  id: '/join',
-  path: '/join',
-  getParentRoute: () => ContextCloudRoute,
 } as any)
 const ContextCloudOrgsIndexRoute = ContextCloudOrgsIndexRouteImport.update({
   id: '/orgs/',
@@ -128,8 +140,10 @@ const ContextCloudOrgsOrganizationProjectsProjectNsNamespaceConnectRoute =
   )
 
 export interface FileRoutesByFullPath {
+  '/join': typeof JoinRoute
+  '/login': typeof LoginRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/': typeof ContextIndexRoute
-  '/join': typeof ContextCloudJoinRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/orgs': typeof ContextCloudOrgsIndexRoute
@@ -144,8 +158,10 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextCloudOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
 export interface FileRoutesByTo {
+  '/join': typeof JoinRoute
+  '/login': typeof LoginRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/': typeof ContextIndexRoute
-  '/join': typeof ContextCloudJoinRoute
   '/orgs': typeof ContextCloudOrgsIndexRoute
   '/ns/$namespace/runners': typeof ContextEngineNsNamespaceRunnersRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationIndexRoute
@@ -158,10 +174,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_context': typeof ContextRouteWithChildren
+  '/join': typeof JoinRoute
+  '/login': typeof LoginRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/_context/_cloud': typeof ContextCloudRouteWithChildren
   '/_context/_engine': typeof ContextEngineRouteWithChildren
   '/_context/': typeof ContextIndexRoute
-  '/_context/_cloud/join': typeof ContextCloudJoinRoute
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
   '/_context/_engine/ns/$namespace': typeof ContextEngineNsNamespaceRouteWithChildren
   '/_context/_cloud/orgs/': typeof ContextCloudOrgsIndexRoute
@@ -178,8 +196,10 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | '/join'
+    | '/login'
+    | '/sso-callback'
+    | '/'
     | '/orgs/$organization'
     | '/ns/$namespace'
     | '/orgs'
@@ -194,8 +214,10 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/join'
+    | '/login'
+    | '/sso-callback'
+    | '/'
     | '/orgs'
     | '/ns/$namespace/runners'
     | '/orgs/$organization'
@@ -207,10 +229,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_context'
+    | '/join'
+    | '/login'
+    | '/sso-callback'
     | '/_context/_cloud'
     | '/_context/_engine'
     | '/_context/'
-    | '/_context/_cloud/join'
     | '/_context/_cloud/orgs/$organization'
     | '/_context/_engine/ns/$namespace'
     | '/_context/_cloud/orgs/'
@@ -227,10 +251,34 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ContextRoute: typeof ContextRouteWithChildren
+  JoinRoute: typeof JoinRoute
+  LoginRoute: typeof LoginRoute
+  SsoCallbackRoute: typeof SsoCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sso-callback': {
+      id: '/sso-callback'
+      path: '/sso-callback'
+      fullPath: '/sso-callback'
+      preLoaderRoute: typeof SsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_context': {
       id: '/_context'
       path: ''
@@ -258,13 +306,6 @@ declare module '@tanstack/react-router' {
       fullPath: ''
       preLoaderRoute: typeof ContextCloudRouteImport
       parentRoute: typeof ContextRoute
-    }
-    '/_context/_cloud/join': {
-      id: '/_context/_cloud/join'
-      path: '/join'
-      fullPath: '/join'
-      preLoaderRoute: typeof ContextCloudJoinRouteImport
-      parentRoute: typeof ContextCloudRoute
     }
     '/_context/_cloud/orgs/': {
       id: '/_context/_cloud/orgs/'
@@ -411,13 +452,11 @@ const ContextCloudOrgsOrganizationRouteWithChildren =
   )
 
 interface ContextCloudRouteChildren {
-  ContextCloudJoinRoute: typeof ContextCloudJoinRoute
   ContextCloudOrgsOrganizationRoute: typeof ContextCloudOrgsOrganizationRouteWithChildren
   ContextCloudOrgsIndexRoute: typeof ContextCloudOrgsIndexRoute
 }
 
 const ContextCloudRouteChildren: ContextCloudRouteChildren = {
-  ContextCloudJoinRoute: ContextCloudJoinRoute,
   ContextCloudOrgsOrganizationRoute:
     ContextCloudOrgsOrganizationRouteWithChildren,
   ContextCloudOrgsIndexRoute: ContextCloudOrgsIndexRoute,
@@ -472,6 +511,9 @@ const ContextRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   ContextRoute: ContextRouteWithChildren,
+  JoinRoute: JoinRoute,
+  LoginRoute: LoginRoute,
+  SsoCallbackRoute: SsoCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

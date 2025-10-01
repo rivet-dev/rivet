@@ -18,8 +18,8 @@
 		"preview:cloud": "vite preview --config vite.cloud.config.ts"
 	},
 	"dependencies": {
-		"@clerk/clerk-js": "^5.92.1",
-		"@clerk/clerk-react": "^5.47.0",
+		"@clerk/clerk-js": "^5.97",
+		"@clerk/clerk-react": "^5.49.1",
 		"@clerk/elements": "^0.23.63",
 		"@clerk/shared": "*",
 		"@clerk/themes": "^2.4.18",

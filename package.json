@@ -23,6 +23,6 @@
 	},
 	"resolutions": {
 		"rivetkit": "https://pkg.pr.new/rivet-dev/rivetkit@1296",
-		"@clerk/shared": "3.26.1"
+		"@clerk/shared": "3.27.1"
 	}
 }

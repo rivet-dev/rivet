@@ -1,9 +1,11 @@
 "use client";
+import { useClerk } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as SignIn from "@clerk/elements/sign-in";
 import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { Badge } from "@/components";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -16,7 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function SignInPage() {
+export function Login() {
+	const clerk = useClerk();
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4 sm:justify-center"
@@ -70,6 +73,13 @@ export default function SignInPage() {
 															)
 														}
 													</Clerk.Loading>
+													{clerk.client
+														.lastAuthenticationStrategy ===
+													"oauth_github" ? (
+														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
+															Last used
+														</Badge>
+													) : null}
 												</Button>
 											</Clerk.Connection>
 											<Clerk.Connection
@@ -103,6 +113,13 @@ export default function SignInPage() {
 															)
 														}
 													</Clerk.Loading>
+													{clerk.client
+														.lastAuthenticationStrategy ===
+													"oauth_google" ? (
+														<Badge className="ml-2 absolute -top-1/2 -right-4 text-xs">
+															Last used
+														</Badge>
+													) : null}
 												</Button>
 											</Clerk.Connection>
 										</div>

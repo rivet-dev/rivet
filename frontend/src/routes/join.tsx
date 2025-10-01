@@ -1,9 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Logo } from "@/app/logo";
 import { SignUp } from "@/app/sign-up";
+import { waitForClerk } from "@/lib/waitForClerk";
 
-export const Route = createFileRoute("/_context/_cloud/join")({
+export const Route = createFileRoute("/join")({
 	component: RouteComponent,
+	beforeLoad: async ({context}) => {
+		await waitForClerk(context.clerk);
+		if (context.clerk.user) {
+			throw redirect({to: "/"})
+		}
+	}
 });
 
 function RouteComponent() {
