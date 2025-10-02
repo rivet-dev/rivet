@@ -24,7 +24,6 @@ export const Route = createFileRoute(
 					namespace: params.namespace,
 					engineNamespaceId: ns.access.engineNamespaceId,
 					engineNamespaceName: ns.access.engineNamespaceName,
-					engineToken: ns.access.token,
 				}),
 			},
 		};
