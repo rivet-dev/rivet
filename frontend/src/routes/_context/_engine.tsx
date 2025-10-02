@@ -34,23 +34,62 @@ function EngineModals() {
 
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
 
+	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
+	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
+
 	return (
-		<CreateNamespaceDialog
-			dialogProps={{
-				open: search.modal === "create-ns",
-				// FIXME
-				onOpenChange: (value: any) => {
-					if (!value) {
-						navigate({
-							to: ".",
-							search: (old) => ({
-								...old,
-								modal: undefined,
-							}),
-						});
-					}
-				},
-			}}
-		/>
+		<>
+			<CreateNamespaceDialog
+				dialogProps={{
+					open: search.modal === "create-ns",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectVercelDialog
+				dialogProps={{
+					open: search.modal === "connect-vercel",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectRailwayDialog
+				dialogProps={{
+					open: search.modal === "connect-railway",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+		</>
 	);
 }

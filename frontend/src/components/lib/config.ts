@@ -23,16 +23,16 @@ export const ConfigContext = createContext<Config>({
 export const useConfig = () => useContext(ConfigContext);
 export const ConfigProvider = ConfigContext.Provider;
 
-const getApiEndpoint = (apiEndpoint: string) => {
-	if (apiEndpoint === "__AUTO__") {
-		if (location.hostname.startsWith("hub.")) {
+export const getApiEndpoint = (apiEndpoint: string) => {
+	if (typeof window !== "undefined" && apiEndpoint === "__AUTO__") {
+		if (window.location.hostname.startsWith("hub.")) {
 			// Connect to the corresponding API endpoint
-			return `https://${location.hostname.replace("hub.", "api.")}`;
+			return `https://${window.location.hostname.replace("hub.", "api.")}`;
 		}
 		// Default to staging servers for all other endpoints
 		return "https://api.staging2.gameinc.io";
-	} else if (apiEndpoint === "__SAME__") {
-		return location.origin;
+	} else if (typeof window !== "undefined" && apiEndpoint === "__SAME__") {
+		return window.location.origin;
 	}
 	return apiEndpoint;
 };

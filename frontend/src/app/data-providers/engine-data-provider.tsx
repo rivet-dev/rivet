@@ -15,7 +15,6 @@ import {
 	type DefaultDataProvider,
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
-import { getConfig } from "@/components/lib/config";
 
 const mightRequireAuth = __APP_TYPE__ === "engine";
 
@@ -44,7 +43,7 @@ export function createClient(
 export const createGlobalContext = (opts: {
 	engineToken: (() => string) | string;
 }) => {
-	const client = createClient(getConfig().apiUrl, {
+	const client = createClient(engineEnv().VITE_APP_API_URL, {
 		token: opts.engineToken,
 	});
 	return {

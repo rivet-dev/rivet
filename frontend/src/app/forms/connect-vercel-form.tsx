@@ -1,36 +1,22 @@
-import { faCopy, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import {
-	Button,
-	CodePreview,
-	CopyButton,
 	createSchemaForm,
 	FormControl,
+	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,
 	FormMessage,
 	Input,
-	Label,
-	ScrollArea,
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "@/components";
-import { useCloudDataProvider } from "@/components/actors";
 
 export const formSchema = z.object({
-	name: z
-		.string()
-		.max(16)
-		.refine((value) => value.trim() !== "" && value.trim() === value, {
-			message: "Name cannot be empty or contain whitespaces",
-		}),
 	plan: z.string(),
 	endpoint: z.string().url(),
 });
@@ -44,29 +30,6 @@ export type SubmitHandler = (
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
 export { Form, Submit, SetValue };
 
-export const Name = ({ className }: { className?: string }) => {
-	const { control } = useFormContext<FormValues>();
-	return (
-		<FormField
-			control={control}
-			name="name"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">Name</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							placeholder="Enter a runner name..."
-							maxLength={25}
-							{...field}
-						/>
-					</FormControl>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
 export const Plan = ({ className }: { className?: string }) => {
 	const { control } = useFormContext<FormValues>();
 	return (
@@ -75,17 +38,14 @@ export const Plan = ({ className }: { className?: string }) => {
 			name="plan"
 			render={({ field }) => (
 				<FormItem className={className}>
-					<FormLabel className="col-span-1">Plan</FormLabel>
+					<FormLabel className="col-span-1">Vercel Plan</FormLabel>
 					<FormControl className="row-start-2">
 						<Select
 							onValueChange={field.onChange}
 							value={field.value}
 						>
-							<SelectTrigger
-								variant="ghost"
-								className="h-full pr-2 rounded-none"
-							>
-								<SelectValue placeholder="Select table or view..." />
+							<SelectTrigger>
+								<SelectValue placeholder="Select your Vercel plan..." />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="hobby">Hobby</SelectItem>
@@ -96,6 +56,7 @@ export const Plan = ({ className }: { className?: string }) => {
 							</SelectContent>
 						</Select>
 					</FormControl>
+					<FormDescription className="col-span-1"></FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
 			)}
@@ -127,60 +88,3 @@ export const Endpoint = ({ className }: { className?: string }) => {
 		/>
 	);
 };
-
-const code = ({
-	token,
-	name,
-}: {
-	token: string;
-	name: string;
-}) => `import { registry } from "./registry";
-
-registry.runServer({ 
-	token: "${token}",
-	name: "${name}",
-});`;
-
-export function Preview() {
-	const params = useParams({
-		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
-	});
-	const { data } = useQuery(
-		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions(params),
-	);
-
-	const { watch } = useFormContext<FormValues>();
-	const name = watch("name");
-	return (
-		<div className="space-y-2">
-			<Label>Code</Label>
-			<div className="text-xs border rounded-md p-2 relative w-full">
-				<ScrollArea>
-					<CodePreview
-						className="w-full min-w-0"
-						language="typescript"
-						code={code({
-							token: data?.access.token || "<TOKEN>",
-							name,
-						})}
-					/>
-				</ScrollArea>
-
-				<CopyButton
-					value={code({
-						token: data?.access.token || "<TOKEN>",
-						name,
-					})}
-				>
-					<Button
-						variant="secondary"
-						size="icon-sm"
-						className="absolute top-1 right-2"
-					>
-						<Icon icon={faCopy} />
-					</Button>
-				</CopyButton>
-			</div>
-		</div>
-	);
-}
