@@ -242,17 +242,26 @@ async fn outbound_handler(
 				v.parse::<HeaderValue>().ok()?,
 			))
 		})
+		.chain(std::iter::once((
+			X_RIVETKIT_TOTAL_SLOTS,
+			HeaderValue::try_from(slots_per_runner)?,
+		)))
+		// Add token if auth is enabled
+		.chain(
+			ctx.config()
+				.auth
+				.as_ref()
+				.map(|auth| {
+					anyhow::Ok((
+						X_RIVET_TOKEN,
+						HeaderValue::try_from(auth.admin_token.read())?,
+					))
+				})
+				.transpose()?,
+		)
 		.collect();
 
-	let mut req = client
-		.get(url)
-		.headers(headers)
-		.header(X_RIVETKIT_TOTAL_SLOTS, slots_per_runner.to_string());
-
-	// Add admin token if configured
-	if let Some(auth) = &ctx.config().auth {
-		req = req.header(X_RIVET_TOKEN, auth.admin_token.read());
-	}
+	let mut req = client.get(url).headers(headers);
 
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
