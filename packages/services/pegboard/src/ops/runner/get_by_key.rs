@@ -44,6 +44,7 @@ pub async fn pegboard_runner_get_by_key(ctx: &OperationCtx, input: &Input) -> Re
 				}
 			}
 		})
+		.custom_instrument(tracing::info_span!("runner_get_by_key_tx"))
 		.await?;
 
 	Ok(Output { runner })

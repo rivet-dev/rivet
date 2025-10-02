@@ -5,6 +5,7 @@ use universaldb::Transaction;
 use crate::replica::ballot;
 
 // EPaxos Steps 21-22
+#[tracing::instrument(skip_all)]
 pub async fn committed(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

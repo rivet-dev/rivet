@@ -6,6 +6,7 @@ use universaldb::utils::{FormalKey, IsolationLevel::*};
 use crate::keys;
 use crate::replica::{ballot, messages, utils};
 
+#[tracing::instrument(skip_all)]
 pub async fn lead_consensus(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

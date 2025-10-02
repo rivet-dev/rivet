@@ -77,6 +77,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 				.await
 			}
 		})
+		.custom_instrument(tracing::info_span!("get_optimistic_tx"))
 		.await?;
 
 	if value.is_some() {
@@ -144,6 +145,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 						.await
 					}
 				})
+				.custom_instrument(tracing::info_span!("cache_value_tx"))
 				.await?;
 
 			return Ok(Output { value: Some(value) });

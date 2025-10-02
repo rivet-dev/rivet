@@ -53,7 +53,7 @@ impl PostgresDatabaseDriver {
 			.context("failed to create btree_gist extension")?;
 
 		conn.execute(
-			"CREATE SEQUENCE global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
+			"CREATE SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
 			&[],
 		)
 		.await

@@ -15,6 +15,7 @@ pub fn state_order(state: &protocol::State) -> u8 {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn update_log(
 	tx: &Transaction,
 	replica_id: ReplicaId,

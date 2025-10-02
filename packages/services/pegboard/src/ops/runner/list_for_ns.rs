@@ -202,6 +202,7 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 					.await
 			}
 		})
+		.custom_instrument(tracing::info_span!("runner_list_for_ns_tx"))
 		.await?;
 
 	Ok(Output { runners })

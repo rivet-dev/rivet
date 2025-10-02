@@ -41,6 +41,7 @@ pub async fn epoxy_kv_get_local(ctx: &OperationCtx, input: &Input) -> Result<Out
 				.await
 			}
 		})
+		.custom_instrument(tracing::info_span!("get_local_tx"))
 		.await?;
 
 	Ok(Output { value })

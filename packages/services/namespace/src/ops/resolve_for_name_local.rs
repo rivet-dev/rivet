@@ -35,7 +35,7 @@ pub async fn namespace_resolve_for_name_local(
 				get_inner(namespace_id, &tx).await
 			}
 		})
-		.custom_instrument(tracing::info_span!("namespace_resolve_for_name_tx"))
+		.custom_instrument(tracing::info_span!("namespace_resolve_for_name_local_tx"))
 		.await
 		.map_err(Into::into)
 }

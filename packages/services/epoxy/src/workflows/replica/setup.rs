@@ -14,6 +14,7 @@ use crate::types;
 // `BeginLearning`. This is because the value of `read_cluster_config` may change between
 // activities which can cause the learning process to enter an invalid state.
 
+#[tracing::instrument(skip_all)]
 pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Result<()> {
 	// Wait for cooridinator to send begin learning signal
 	let begin_learning = ctx.listen::<super::BeginLearning>().await?;
@@ -232,6 +233,7 @@ pub async fn download_instances_chunk(
 /// If we committed values during this phase, we might incorrectly apply an older value when
 /// a newer one exists but hasn't been downloaded yet, or apply a value that should be superseded
 /// by another concurrent operation.
+#[tracing::instrument(skip_all)]
 async fn apply_log_entry(
 	ctx: &ActivityCtx,
 	log_entry: &protocol::LogEntry,
@@ -247,7 +249,7 @@ async fn apply_log_entry(
 
 	// Replay the log entry
 	ctx.udb()?
-		.run(move |tx| {
+		.run(|tx| {
 			let log_entry = log_entry.clone();
 			let instance = instance.clone();
 
@@ -301,6 +303,7 @@ async fn apply_log_entry(
 				Result::Ok(())
 			}
 		})
+		.custom_instrument(tracing::info_span!("apply_log_entry_tx"))
 		.await?;
 
 	tracing::info!(
@@ -364,7 +367,7 @@ pub async fn recover_keys_chunk(
 
 	let (last_key, recovered_count) = ctx
 		.udb()?
-		.run(move |tx| {
+		.run(|tx| {
 			let after_key = input.after_key.clone();
 			let count = input.count;
 
@@ -491,6 +494,7 @@ pub async fn recover_keys_chunk(
 				Result::Ok((last_processed_key, recovered_count))
 			}
 		})
+		.custom_instrument(tracing::info_span!("recover_keys_chunk_tx"))
 		.await?;
 
 	Ok(RecoverKeysChunkOutput {
@@ -623,6 +627,7 @@ fn topological_sort_entries(
 ///
 /// This is why we can't commit values during `apply_log_entry` - we need to see all
 /// instances and their dependencies first to correctly determine the execution order.
+#[tracing::instrument(skip_all)]
 async fn recover_key_value_with_instances(
 	tx: &universaldb::Transaction,
 	replica_id: protocol::ReplicaId,

@@ -6,6 +6,7 @@ use universaldb::prelude::*;
 use crate::{keys, ops::propose::CommandError, replica::utils};
 
 /// Commits a proposal to KV store.
+#[tracing::instrument(skip_all)]
 pub async fn commit_kv(
 	tx: &Transaction,
 	replica_id: ReplicaId,

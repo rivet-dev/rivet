@@ -48,7 +48,7 @@ Projects powering Rivet Engine:
 
 - **[Pegboard](packages/services/pegboard/)**: Actor orchestrator
 - **[Guard](packages/core/guard/)**: Proxy for routing traffic to Rivet Actors
-- **[Chirp](packages/common/chirp-workflow/)**: Core workflow engine that powers Rivet
+- **[Gasoline](packages/common/gasoline/)**: Core durable execution engine that powers Rivet
 
 ## Get Started
 

@@ -8,6 +8,7 @@ use crate::types;
 
 use super::State;
 
+#[tracing::instrument(skip_all)]
 pub async fn reconfigure(ctx: &mut WorkflowCtx) -> Result<()> {
 	// Check for config changes
 	let config_change = ctx.activity(CheckConfigChangesInput {}).await?;
