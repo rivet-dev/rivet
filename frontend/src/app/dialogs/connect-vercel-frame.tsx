@@ -41,9 +41,8 @@ export default function CreateProjectFrameContent() {
 			</Frame.Header>
 			<Frame.Content>
 				<Flex gap="4" direction="col">
-					<ConnectVercelForm.Name />
+					<ConnectVercelForm.Plan />
 					<ConnectVercelForm.Endpoint />
-					<ConnectVercelForm.Preview />
 				</Flex>
 			</Frame.Content>
 			<Frame.Footer>
