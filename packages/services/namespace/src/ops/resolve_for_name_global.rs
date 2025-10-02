@@ -31,7 +31,7 @@ pub async fn namespace_resolve_for_name_global(
 					let client = client.clone();
 					async move {
 						let url = leader_dc.api_peer_url.join(&format!("/namespaces"))?;
-						let res = client.get(url).query(&("name", &input.name)).send().await?;
+						let res = client.get(url).query(&[("name", &input.name)]).send().await?;
 
 						let res = rivet_api_util::parse_response::<
 							rivet_api_types::namespaces::list::ListResponse,
