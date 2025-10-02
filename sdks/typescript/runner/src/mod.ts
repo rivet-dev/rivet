@@ -8,6 +8,7 @@ import type { Logger } from "pino";
 import { setLogger, logger } from "./log.js";
 
 const KV_EXPIRE: number = 30_000;
+const PROTOCOL_VERSION: number = 1;
 
 export interface ActorInstance {
 	actorId: string;
@@ -394,7 +395,7 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
+		return `${wsEndpoint}?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
 	get pegboardTunnelUrl() {
@@ -405,7 +406,7 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		return `${wsEndpoint}?protocol_version=1&namespace=${encodeURIComponent(this.#config.namespace)}&runner_name=${encodeURIComponent(this.#config.runnerName)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
+		return `${wsEndpoint}?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_name=${encodeURIComponent(this.#config.runnerName)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
 	// MARK: Runner protocol
@@ -1274,7 +1275,12 @@ export class Runner {
 			}
 		});
 
-		return Buffer.from(data).toString('base64');
+		// Embed version
+		const buffer = Buffer.alloc(data.length + 2);
+		buffer.writeUInt16LE(PROTOCOL_VERSION, 0);
+		Buffer.from(data).copy(buffer, 2);
+
+		return buffer.toString('base64');
 	}
 
 	#scheduleReconnect() {
