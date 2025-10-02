@@ -21,7 +21,7 @@ use crate::shared_state::{SharedState, TunnelMessageData};
 
 pub mod shared_state;
 
-const UPS_REQ_TIMEOUT: Duration = Duration::from_secs(2);
+const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocket-protocol");
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
@@ -33,6 +33,7 @@ pub struct PegboardGateway {
 }
 
 impl PegboardGateway {
+	#[tracing::instrument(skip_all, fields(?actor_id, ?runner_id))]
 	pub fn new(ctx: StandaloneCtx, shared_state: SharedState, runner_id: Id, actor_id: Id) -> Self {
 		Self {
 			ctx,
@@ -45,6 +46,7 @@ impl PegboardGateway {
 
 #[async_trait]
 impl CustomServeTrait for PegboardGateway {
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
@@ -67,6 +69,7 @@ impl CustomServeTrait for PegboardGateway {
 		}
 	}
 
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
 	async fn handle_websocket(
 		&self,
 		client_ws: WebSocketHandle,
@@ -91,6 +94,7 @@ impl CustomServeTrait for PegboardGateway {
 }
 
 impl PegboardGateway {
+	#[tracing::instrument(skip_all)]
 	async fn handle_request_inner(
 		&self,
 		req: Request<Full<Bytes>>,
@@ -155,9 +159,16 @@ impl PegboardGateway {
 		self.shared_state.send_message(request_id, message).await?;
 
 		// Wait for response
-		tracing::debug!("starting response handler task");
+		tracing::debug!("gateway waiting for response from tunnel");
 		let response_start = loop {
-			let Some(msg) = msg_rx.recv().await else {
+			let Some(msg) = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, msg_rx.recv())
+				.await
+				.map_err(|_| {
+					tracing::warn!("timed out waiting for tunnel ack");
+
+					RequestError::ServiceUnavailable
+				})?
+			else {
 				tracing::warn!("received no message response");
 				return Err(RequestError::ServiceUnavailable.into());
 			};
@@ -195,6 +206,7 @@ impl PegboardGateway {
 		Ok(response)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn handle_websocket_inner(
 		&self,
 		client_ws: WebSocketHandle,
@@ -247,34 +259,42 @@ impl PegboardGateway {
 			.send_message(request_id, open_message)
 			.await?;
 
+		tracing::debug!("gateway waiting for websocket open from tunnel");
+
 		// Wait for WebSocket open acknowledgment
-		let open_ack_received = loop {
-			let Some(msg) = msg_rx.recv().await else {
-				bail!("received no websocket open response");
+		loop {
+			let Some(msg) = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, msg_rx.recv())
+				.await
+				.map_err(|_| {
+					tracing::warn!("timed out waiting for tunnel ack");
+
+					RequestError::ServiceUnavailable
+				})?
+			else {
+				tracing::warn!("received no message response");
+				return Err(RequestError::ServiceUnavailable.into());
 			};
 
 			match msg {
 				TunnelMessageData::Message(
 					protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen,
 				) => {
-					break true;
+					break;
 				}
 				TunnelMessageData::Message(
 					protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
 				) => {
-					bail!("websocket closed before opening: {close:?}");
+					tracing::warn!(?close, "websocket closed before opening");
+					return Err(RequestError::ServiceUnavailable.into());
 				}
 				TunnelMessageData::Timeout => {
-					bail!("websocket open timeout");
+					tracing::warn!("websocket open timeout");
+					return Err(RequestError::ServiceUnavailable.into());
 				}
 				_ => {
 					tracing::warn!("received unexpected message while waiting for websocket open");
 				}
 			}
-		};
-
-		if !open_ack_received {
-			bail!("failed to open websocket");
 		}
 
 		// Accept the WebSocket

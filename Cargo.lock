@@ -3320,6 +3320,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite",
+ "tracing",
  "universalpubsub",
  "vbare",
 ]

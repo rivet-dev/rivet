@@ -20,6 +20,7 @@ https://rivet.gg/blog/2025-09-14-weekly-updates
 https://rivet.gg/blog/2025-09-21-weekly-updates
 https://rivet.gg/blog/2025-09-24-vbare-simple-schema-evolution-with-maximum-performance
 https://rivet.gg/blog/2025-1-12-rivet-inspector
+https://rivet.gg/blog/2025-10-01-railway-selfhost
 https://rivet.gg/blog/godot-multiplayer-compared-to-unity
 https://rivet.gg/changelog
 https://rivet.gg/changelog.json
@@ -40,6 +41,7 @@ https://rivet.gg/changelog/2025-09-14-weekly-updates
 https://rivet.gg/changelog/2025-09-21-weekly-updates
 https://rivet.gg/changelog/2025-09-24-vbare-simple-schema-evolution-with-maximum-performance
 https://rivet.gg/changelog/2025-1-12-rivet-inspector
+https://rivet.gg/changelog/2025-10-01-railway-selfhost
 https://rivet.gg/changelog/godot-multiplayer-compared-to-unity
 https://rivet.gg/cloud
 https://rivet.gg/docs/actors

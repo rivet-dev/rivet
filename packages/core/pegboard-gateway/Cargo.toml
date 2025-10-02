@@ -23,5 +23,6 @@ rivet-util.workspace = true
 thiserror.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 universalpubsub.workspace = true
 vbare.workspace = true

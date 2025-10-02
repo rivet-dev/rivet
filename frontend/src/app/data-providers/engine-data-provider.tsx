@@ -15,6 +15,7 @@ import {
 	type DefaultDataProvider,
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
+import { getConfig } from "@/components/lib/config";
 
 export type CreateNamespace = {
 	displayName: string;
@@ -29,7 +30,7 @@ export type Namespace = {
 };
 
 export function createClient(
-	baseUrl = engineEnv().VITE_APP_API_URL,
+	baseUrl = getConfig().apiUrl,
 	opts: { token: (() => string) | string },
 ) {
 	return new RivetClient({
@@ -42,7 +43,7 @@ export function createClient(
 export const createGlobalContext = (opts: {
 	engineToken: (() => string) | string;
 }) => {
-	const client = createClient(engineEnv().VITE_APP_API_URL, {
+	const client = createClient(getConfig().apiUrl, {
 		token: opts.engineToken,
 	});
 	return {

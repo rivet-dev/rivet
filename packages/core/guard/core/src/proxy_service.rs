@@ -1798,7 +1798,7 @@ impl ProxyService {
 								.await
 							{
 								Result::Ok(()) => {
-									tracing::debug!("websocket closed");
+									tracing::debug!("websocket handler complete, closing");
 
 									// Send graceful close
 									ws_handle
