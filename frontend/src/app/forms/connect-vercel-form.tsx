@@ -16,6 +16,11 @@ import {
 	Input,
 	Label,
 	ScrollArea,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 
@@ -26,6 +31,7 @@ export const formSchema = z.object({
 		.refine((value) => value.trim() !== "" && value.trim() === value, {
 			message: "Name cannot be empty or contain whitespaces",
 		}),
+	plan: z.string(),
 	endpoint: z.string().url(),
 });
 
@@ -53,6 +59,42 @@ export const Name = ({ className }: { className?: string }) => {
 							maxLength={25}
 							{...field}
 						/>
+					</FormControl>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const Plan = ({ className }: { className?: string }) => {
+	const { control } = useFormContext<FormValues>();
+	return (
+		<FormField
+			control={control}
+			name="plan"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Plan</FormLabel>
+					<FormControl className="row-start-2">
+						<Select
+							onValueChange={field.onChange}
+							value={field.value}
+						>
+							<SelectTrigger
+								variant="ghost"
+								className="h-full pr-2 rounded-none"
+							>
+								<SelectValue placeholder="Select table or view..." />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="hobby">Hobby</SelectItem>
+								<SelectItem value="pro">Pro</SelectItem>
+								<SelectItem value="enterprise">
+									Enterprise
+								</SelectItem>
+							</SelectContent>
+						</Select>
 					</FormControl>
 					<FormMessage className="col-span-1" />
 				</FormItem>

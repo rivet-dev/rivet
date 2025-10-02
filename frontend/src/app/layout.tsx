@@ -397,12 +397,12 @@ const Subnav = () => {
 		<div className="flex gap-1.5 flex-col">
 			{__APP_TYPE__ === "engine" ? (
 				<HeaderLink
-					to="/ns/$namespace/runners"
+					to="/ns/$namespace/connect"
 					className="font-normal"
 					params={nsMatch}
-					icon={faServer}
+					icon={faBolt}
 				>
-					Runners
+					Connect
 				</HeaderLink>
 			) : null}
 			<div className="w-full">

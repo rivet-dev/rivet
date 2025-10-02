@@ -17,9 +17,10 @@ import {
 } from "./default-data-provider";
 import { getConfig } from "@/components/lib/config";
 
+const mightRequireAuth = __APP_TYPE__ === "engine";
+
 export type CreateNamespace = {
 	displayName: string;
-	name?: string;
 };
 
 export type Namespace = {
@@ -30,8 +31,8 @@ export type Namespace = {
 };
 
 export function createClient(
-	baseUrl = getConfig().apiUrl,
-	opts: { token: (() => string) | string },
+	baseUrl = engineEnv().VITE_APP_API_URL,
+	opts: { token: (() => string) | string | (() => Promise<string>) },
 ) {
 	return new RivetClient({
 		baseUrl: () => baseUrl,
@@ -88,7 +89,7 @@ export const createGlobalContext = (opts: {
 				mutationFn: async (data: CreateNamespace) => {
 					const response = await client.namespaces.create({
 						displayName: data.displayName,
-						name: data.name || convertStringToId(data.displayName),
+						name: convertStringToId(data.displayName),
 					});
 
 					return {
@@ -133,7 +134,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -158,7 +159,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -187,7 +188,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -214,7 +215,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -289,7 +290,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -330,7 +331,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -354,7 +355,7 @@ export const createNamespaceContext = ({
 				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			};
 		},
@@ -364,7 +365,7 @@ export const createNamespaceContext = ({
 				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 				mutationFn: async () => {
 					await client.actorsDelete(actorId);
@@ -375,14 +376,14 @@ export const createNamespaceContext = ({
 
 	return {
 		...dataProvider,
-		runnersQueryOptions(opts: { namespace: string }) {
+		runnersQueryOptions() {
 			return infiniteQueryOptions({
-				queryKey: [opts.namespace, "runners"],
+				queryKey: [{ namespace }, "runners"],
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ pageParam, signal: abortSignal }) => {
 					const data = await client.runners.list(
 						{
-							namespace: opts.namespace,
+							namespace,
 							cursor: pageParam ?? undefined,
 							limit: RECORDS_PER_PAGE,
 						},
@@ -399,7 +400,7 @@ export const createNamespaceContext = ({
 				select: (data) => data.pages.flatMap((page) => page.runners),
 				retry: shouldRetryAllExpect403,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -430,7 +431,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -457,7 +458,7 @@ export const createNamespaceContext = ({
 				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -482,7 +483,7 @@ export const createNamespaceContext = ({
 				},
 				retry: shouldRetryAllExpect403,
 				meta: {
-					mightRequireAuth: true,
+					mightRequireAuth,
 				},
 			});
 		},
@@ -506,6 +507,10 @@ export const createNamespaceContext = ({
 						...config,
 					});
 					return response;
+				},
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth,
 				},
 			};
 		},
@@ -538,6 +543,12 @@ export const createNamespaceContext = ({
 						return undefined;
 					}
 					return lastPage.pagination.cursor;
+				},
+
+				retryDelay: 50_000,
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth,
 				},
 			});
 		},

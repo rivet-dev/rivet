@@ -1,5 +1,5 @@
 import { faQuestionCircle, faRailway, faVercel, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	notFound,
@@ -9,10 +9,7 @@ import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnersTable } from "@/app/runners-table";
 import { Button, DocsSheet, H1, H3, Link, Skeleton } from "@/components";
-import {
-	useCloudDataProvider,
-	useEngineCompatDataProvider,
-} from "@/components/actors";
+import { useEngineCompatDataProvider } from "@/components/actors";
 import { docsLinks } from "@/content/data";
 
 export const Route = createFileRoute(
@@ -25,7 +22,7 @@ export const Route = createFileRoute(
 		}),
 });
 
-function RouteComponent() {
+export function RouteComponent() {
 	const { data: configsCount, isLoading } = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
 		select: (data) => Object.values(data.pages[0].runnerConfigs).length,
@@ -58,16 +55,14 @@ function RouteComponent() {
 
 			<hr className="mb-4" />
 			{isLoading ? (
-				<>
-					<div className="p-4 px-6 max-w-5xl ">
-						<Skeleton className="h-8 w-48 mb-4" />
-						<div className="flex flex-wrap gap-2 my-4">
-							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-							<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						</div>
+				<div className="p-4 px-6 max-w-5xl ">
+					<Skeleton className="h-8 w-48 mb-4" />
+					<div className="flex flex-wrap gap-2 my-4">
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 					</div>
-				</>
+				</div>
 			) : configsCount === 0 ? (
 				<div className="p-4 px-6 max-w-5xl">
 					<H3>Select Provider</H3>
@@ -147,10 +142,6 @@ function Providers() {
 }
 
 function Runners() {
-	const params = Route.useParams();
-	const { data: namespace } = useQuery(
-		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions(params),
-	);
 	const {
 		isLoading,
 		isError,
@@ -158,11 +149,8 @@ function Runners() {
 		hasNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnersQueryOptions({
-			namespace: namespace?.access.engineNamespaceName || "",
-		}),
+		...useEngineCompatDataProvider().runnersQueryOptions(),
 		refetchInterval: 5000,
-		enabled: !!namespace,
 	});
 
 	return (
