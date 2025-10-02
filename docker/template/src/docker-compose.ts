@@ -148,7 +148,7 @@ export function generateDockerCompose(context: TemplateContext) {
       );
       services[postgresServiceName] = {
          restart: "unless-stopped",
-         image: "postgres:16-alpine",
+         image: "postgres:17-alpine",
          environment: [
             "POSTGRES_USER=postgres",
             "POSTGRES_PASSWORD=postgres",
@@ -325,6 +325,7 @@ export function generateDockerCompose(context: TemplateContext) {
             restart: "unless-stopped",
             environment: [
                `RIVET_ENDPOINT=http://${context.getServiceHost("rivet-engine", datacenter.name, 0)}:6420`,
+               `RIVET_RUNNER_TOTAL_SLOTS=1000000`,
             ],
             stop_grace_period: "4s",
             ports: isPrimary && i === 0 ? [`5050:5050`] : undefined,

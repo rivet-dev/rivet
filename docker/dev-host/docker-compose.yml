@@ -47,7 +47,7 @@ services:
     network_mode: host
   postgres:
     restart: unless-stopped
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -167,6 +167,7 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://127.0.0.1:6420
+      - RIVET_RUNNER_TOTAL_SLOTS=1000000
     stop_grace_period: 4s
     depends_on:
       rivet-engine:

@@ -54,7 +54,7 @@ services:
         condition: service_healthy
   postgres-dc-a:
     restart: unless-stopped
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -198,6 +198,7 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-a:6420
+      - RIVET_RUNNER_TOTAL_SLOTS=1000000
     stop_grace_period: 4s
     ports:
       - '5050:5050'
@@ -208,7 +209,7 @@ services:
       - rivet-network-dc-a
   postgres-dc-b:
     restart: unless-stopped
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -348,6 +349,7 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-b:6420
+      - RIVET_RUNNER_TOTAL_SLOTS=1000000
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-b:
@@ -356,7 +358,7 @@ services:
       - rivet-network-dc-b
   postgres-dc-c:
     restart: unless-stopped
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -496,6 +498,7 @@ services:
     restart: unless-stopped
     environment:
       - RIVET_ENDPOINT=http://rivet-engine-dc-c:6420
+      - RIVET_RUNNER_TOTAL_SLOTS=1000000
     stop_grace_period: 4s
     depends_on:
       rivet-engine-dc-c:
