@@ -5838,11 +5838,25 @@ Rivet Engine supports scaling transparently across multiple regions.
 
 Railway provides a simple platform for deploying Rivet Engine with automatic scaling and managed infrastructure.
 
+## Video Tutorial
+
 ## Quick Deploy
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/rivet?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic)
+Choose the template that best fits your needs:
+
+| **Rivet Template** | **Rivet Starter** |
+|-------------------|-------------------|
+| [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/rivet?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic) | [![Deploy Rivet Starter](https://railway.com/button.svg)](https://railway.com/deploy/rivet-starter) |
+| **Blank template** to start fresh | **Complete example** with chat app |
+| - Rivet Engine | - Pre-configured Rivet Engine |
+| - PostgreSQL database | - Example chat application with Actors |
+| - Basic configuration | - PostgreSQL database |
+| - Manual setup required | - Rivet Inspector for debugging |
+| | - Ready to run immediately |
 
 You can also use the [Rivet Railway template](https://github.com/rivet-gg/template-railway) as a starting point for your application.
+
+After deploying either template, you can find the `RIVET__AUTH__ADMIN_TOKEN` under the **Variables** tab in the Railway dashboard. This token is required to access the Rivet Inspector.
 
 ## Manual Deployment
 

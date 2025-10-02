@@ -12,6 +12,7 @@ use crate::{
 	utils,
 };
 
+#[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, sub: Subscriber) {
 	match task_inner(ctx, conn, sub).await {
 		Ok(_) => {}
@@ -21,6 +22,7 @@ pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, sub: Subscriber) {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 	while let Result::Ok(NextOutput::Message(ups_msg)) = sub.next().await {
 		tracing::debug!(
@@ -37,6 +39,7 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) ->
 				continue;
 			}
 		};
+		let is_close = utils::is_to_client_close(&msg);
 
 		// Handle tunnel messages
 		if let protocol::ToClient::ToClientTunnelMessage(tunnel_msg) = &mut msg {
@@ -57,11 +60,17 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) ->
 			tracing::error!(?e, "failed to send message to WebSocket");
 			break;
 		}
+
+		if is_close {
+			tracing::debug!("manually closing websocket");
+			break;
+		}
 	}
 
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(conn: &Arc<Conn>, msg: &mut protocol::ToClientTunnelMessage) {
 	// Save active request
 	//

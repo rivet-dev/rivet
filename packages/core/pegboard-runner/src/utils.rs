@@ -4,10 +4,6 @@ use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_util::rt::TokioIo;
 use rivet_error::*;
 use rivet_runner_protocol as protocol;
-use tokio_tungstenite::{
-	WebSocketStream,
-	tungstenite::protocol::frame::{CloseFrame, coding::CloseCode},
-};
 
 #[derive(Clone)]
 pub struct UrlData {
@@ -70,6 +66,13 @@ pub fn is_to_client_tunnel_message_kind_request_close(
 	match kind {
 		// WebSocket terminal states (either side closes)
 		protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(_) => true,
+		_ => false,
+	}
+}
+
+pub fn is_to_client_close(kind: &protocol::ToClient) -> bool {
+	match kind {
+		protocol::ToClient::ToClientClose => true,
 		_ => false,
 	}
 }

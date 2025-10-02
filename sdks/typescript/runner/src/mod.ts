@@ -538,7 +538,8 @@ export class Runner {
 			} else if (message.tag === "ToClientTunnelMessage") {
 				this.#tunnel?.handleTunnelMessage(message.val);
 			} else if (message.tag === "ToClientClose") {
-				// TODO: Close ws
+				this.#tunnel.shutdown();
+				ws.close(1000, "manual closure");
 			} else {
 				unreachable(message);
 			}

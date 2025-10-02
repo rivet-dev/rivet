@@ -16,6 +16,7 @@ use crate::{
 	utils::{self},
 };
 
+#[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, ws_rx: WebSocketReceiver) {
 	match task_inner(ctx, conn, ws_rx).await {
 		Ok(_) => {}
@@ -25,6 +26,7 @@ pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, ws_rx: WebSocketReceiver)
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn task_inner(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
@@ -77,6 +79,7 @@ async fn task_inner(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle_message(
 	ctx: &StandaloneCtx,
 	conn: &Arc<Conn>,
@@ -354,6 +357,7 @@ async fn handle_message(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
 	conn: &Arc<Conn>,
