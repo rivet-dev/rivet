@@ -78,7 +78,7 @@ pub async fn list(
 }
 
 async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
-	ctx.skip_auth();
+	ctx.auth().await?;
 
 	// Parse query
 	let actor_ids = query.actor_ids.as_ref().map(|x| {
