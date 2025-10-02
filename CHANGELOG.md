@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.7.3](https://github.com/rivet-dev/engine/compare/v25.7.2...v25.7.3) (2025-10-02)
+
+
+### Features
+
+* add datacenter field to actors list row ([#3018](https://github.com/rivet-dev/engine/issues/3018)) ([513b5e0](https://github.com/rivet-dev/engine/commit/513b5e057dbfd6dffed0b766f3470b0a0946835f))
+* add datacenter field to runners table ([#3016](https://github.com/rivet-dev/engine/issues/3016)) ([f25aad6](https://github.com/rivet-dev/engine/commit/f25aad64d40fc6358d5a53350e208daf0bb369a7))
+* add runner status indicator ([#3015](https://github.com/rivet-dev/engine/issues/3015)) ([eec209e](https://github.com/rivet-dev/engine/commit/eec209eea3da63836cff454317adfd9b888a14a3))
+* **cloud:** add support ([#2946](https://github.com/rivet-dev/engine/issues/2946)) ([7f257de](https://github.com/rivet-dev/engine/commit/7f257dee56d15bd6b0028fbd0989126e7fc86dcb))
+* **cloud:** billing ([#2931](https://github.com/rivet-dev/engine/issues/2931)) ([4b6e561](https://github.com/rivet-dev/engine/commit/4b6e56170309d2ac89d62f08c4c4e0daef3e529a))
+* **cloud:** connect page ([#2912](https://github.com/rivet-dev/engine/issues/2912)) ([a72dcad](https://github.com/rivet-dev/engine/commit/a72dcadea1db8a885f68754733929f6fde2c37df))
+* **cloud:** deployment ([#2905](https://github.com/rivet-dev/engine/issues/2905)) ([014d80d](https://github.com/rivet-dev/engine/commit/014d80d77d2168732a47215819bdfd6178270a39))
+* **cloud:** namespaces ([#2890](https://github.com/rivet-dev/engine/issues/2890)) ([f7933af](https://github.com/rivet-dev/engine/commit/f7933af2fc278585db4d7f1fda757a1792e29742))
+* **cloud:** projects ([#2882](https://github.com/rivet-dev/engine/issues/2882)) ([4b6f44a](https://github.com/rivet-dev/engine/commit/4b6f44ab166c0e516d8679480530c9c1456749c1))
+* **pb:** configure total slots header for rivetkit from outbound req ([#3021](https://github.com/rivet-dev/engine/issues/3021)) ([06ccf9d](https://github.com/rivet-dev/engine/commit/06ccf9d73da6d55523277aa54f6d9fb47971dbf0))
+
+
+### Bug Fixes
+
+* **core:** fix x-region namespace query ([#3032](https://github.com/rivet-dev/engine/issues/3032)) ([14b0429](https://github.com/rivet-dev/engine/commit/14b0429f131c20bea3d8063ff95180ebc821ff3d))
+* **frontend:** allow __SAME__ for VITE_APP_API_URL ([67584f2](https://github.com/rivet-dev/engine/commit/67584f2fa2bcd6175f119ca8b7c701753ea950db))
+* **gas:** clear chunked keys before writing new ([#3010](https://github.com/rivet-dev/engine/issues/3010)) ([a6201d7](https://github.com/rivet-dev/engine/commit/a6201d7bd594983dd00223b23ae9dbc10ea7f451))
+* **guard:** proxy routing errors through ws ([#3006](https://github.com/rivet-dev/engine/issues/3006)) ([956eaaf](https://github.com/rivet-dev/engine/commit/956eaafd280f50ca7bde6fcf879e1eac1ecddaeb))
+* init clerk only on cloud ([#3028](https://github.com/rivet-dev/engine/issues/3028)) ([9672d17](https://github.com/rivet-dev/engine/commit/9672d17f4e403268755252eefea3dcb8e67a9e9f))
+* misc bug fixes ([#3019](https://github.com/rivet-dev/engine/issues/3019)) ([2dd73e4](https://github.com/rivet-dev/engine/commit/2dd73e43a07195b4abee8def55c6b50f2ee3894d))
+* **pb:** fix tunnel race condition handling ([#3043](https://github.com/rivet-dev/engine/issues/3043)) ([68d6944](https://github.com/rivet-dev/engine/commit/68d6944844474ee1857842424ce51dae5b5437f9))
+* **pb:** use runner protocol for serverless ([#3020](https://github.com/rivet-dev/engine/issues/3020)) ([c09e161](https://github.com/rivet-dev/engine/commit/c09e161bd0993ec9193293117c3a050bdab2d164))
+* prepend version to serverless packet ([#3033](https://github.com/rivet-dev/engine/issues/3033)) ([63e1f81](https://github.com/rivet-dev/engine/commit/63e1f81d7ce78709e79893fa57a7e940376b0ca6))
+* **runner:** add retries to ws error ([#3012](https://github.com/rivet-dev/engine/issues/3012)) ([4ad1e71](https://github.com/rivet-dev/engine/commit/4ad1e71bd41de94715ac48eb68644243f9077db0))
+* **serverless:** add headers validation ([#2999](https://github.com/rivet-dev/engine/issues/2999)) ([c63f3f5](https://github.com/rivet-dev/engine/commit/c63f3f502ae59c79f720ead2473f61009546527f))
+* **serverless:** overwrite headers instead of appending ([#3044](https://github.com/rivet-dev/engine/issues/3044)) ([76efee0](https://github.com/rivet-dev/engine/commit/76efee09cc65bacf4350af2a4d55b3b1a54731f0))
+* **serverless:** pass admin token to outbound reqs ([#3007](https://github.com/rivet-dev/engine/issues/3007)) ([7e1ba5c](https://github.com/rivet-dev/engine/commit/7e1ba5cd7b5cd339b485f57eeb546808923b9048))
+
+
+### Code Refactoring
+
+* **cloud:** polish ([#3009](https://github.com/rivet-dev/engine/issues/3009)) ([de92843](https://github.com/rivet-dev/engine/commit/de92843e2d3ca73abcef8a75f14e6f9b45563a97))
+* **cloud:** polish ([#3022](https://github.com/rivet-dev/engine/issues/3022)) ([315142a](https://github.com/rivet-dev/engine/commit/315142a3365c394e7ec3eafc068a5d57e870a52f))
+* **fe:** cleanup ([#2899](https://github.com/rivet-dev/engine/issues/2899)) ([4e6bf02](https://github.com/rivet-dev/engine/commit/4e6bf0250aa33d2f599c31c87333f06a2016dbc0))
+
+
+### Chores
+
+* add simple local stress script ([#3013](https://github.com/rivet-dev/engine/issues/3013)) ([eeca0e3](https://github.com/rivet-dev/engine/commit/eeca0e3c6016ec83634e0c4e88d473cf1003c9a6))
+* **api:** make list endpoint private ([#3045](https://github.com/rivet-dev/engine/issues/3045)) ([6dd43e9](https://github.com/rivet-dev/engine/commit/6dd43e9e40a3f42481e1a653ddb4969690b01fdd))
+* clean up gas tests ([#2961](https://github.com/rivet-dev/engine/issues/2961)) ([56b6dd4](https://github.com/rivet-dev/engine/commit/56b6dd4fe14dc73832434b416009f880a94b5c11))
+* move changes from ee ([#2956](https://github.com/rivet-dev/engine/issues/2956)) ([d261c71](https://github.com/rivet-dev/engine/commit/d261c71c9ed84d3926001b05a86b8943efb7ca82))
+* og change and description ([#3036](https://github.com/rivet-dev/engine/issues/3036)) ([6c6b495](https://github.com/rivet-dev/engine/commit/6c6b495be7441cd0c5a7cd23618cf91d6441e410))
+* railway blog ([#3031](https://github.com/rivet-dev/engine/issues/3031)) ([8646035](https://github.com/rivet-dev/engine/commit/86460351a7b4bb11b5d87264d702daca6f75fece))
+* railway docs ([#3038](https://github.com/rivet-dev/engine/issues/3038)) ([b897d63](https://github.com/rivet-dev/engine/commit/b897d635a6eb45b69048cfaebdfb6ceb0e1f6dc3))
+* release 25.7.3 ([aadd55a](https://github.com/rivet-dev/engine/commit/aadd55a79ed7330a052d7a5da4edc1d5b895a8cd))
+* **release:** update version to 25.7.3 ([71a62eb](https://github.com/rivet-dev/engine/commit/71a62eb4b999f29b1431a65f37acbf52bcb8842d))
+* update readme and logo ([#2884](https://github.com/rivet-dev/engine/issues/2884)) ([e58f339](https://github.com/rivet-dev/engine/commit/e58f339e2a1a038b5858b8fc6e056510b477b68f))
+
 ## [25.7.2](https://github.com/rivet-dev/engine/compare/v25.7.1...v25.7.2) (2025-09-27)
 
 
