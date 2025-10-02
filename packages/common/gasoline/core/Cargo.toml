@@ -48,7 +48,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-rand.workspace = true
-statrs.workspace = true
 dirs.workspace = true
+rand.workspace = true
 rivet-runtime.workspace = true
+statrs.workspace = true

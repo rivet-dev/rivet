@@ -13,7 +13,6 @@ pub mod prelude;
 pub mod registry;
 pub mod signal;
 mod stub;
-pub mod test;
 pub mod utils;
 mod worker;
 pub mod workflow;

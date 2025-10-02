@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gas::prelude::*;
-use gas::test;
+use gasoline as gas;
 
 mod workflows;
 use workflows::activity_test::*;
@@ -17,7 +17,7 @@ use workflows::sub_test::*;
 async fn test_workflow_basic() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<BasicWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	// Test basic workflow execution
 	let workflow_id = test_ctx
@@ -45,7 +45,7 @@ async fn test_workflow_basic() {
 async fn test_workflow_activity() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<ActivityTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(ActivityTestInput {
@@ -71,7 +71,7 @@ async fn test_workflow_sub_workflow() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<BasicWorkflow>().unwrap();
 	reg.register_workflow::<SubTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(SubWorkflowInput {
@@ -96,7 +96,7 @@ async fn test_workflow_sub_workflow() {
 async fn test_workflow_sleep() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<SleepTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let start_time = std::time::Instant::now();
 	let workflow_id = test_ctx
@@ -122,7 +122,7 @@ async fn test_workflow_sleep() {
 async fn test_workflow_signal() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<SignalTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(SignalTestInput {})
@@ -156,7 +156,7 @@ async fn test_workflow_signal() {
 async fn test_workflow_loop() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<LoopTestWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(LoopWorkflowInput { iterations: 3 })
@@ -179,7 +179,7 @@ async fn test_workflow_loop() {
 async fn test_workflow_listen_with_timeout() {
 	let mut reg = Registry::new();
 	reg.register_workflow::<ListenTimeoutWorkflow>().unwrap();
-	let test_ctx = test::setup(reg).await.unwrap();
+	let test_ctx = TestCtx::new(reg).await.unwrap();
 
 	let workflow_id = test_ctx
 		.workflow(ListenTimeoutInput { timeout_ms: 100 })
@@ -215,7 +215,9 @@ async fn test_workflow_eviction() {
 		let test_deps = rivet_test_deps::TestDeps::new_with_test_id(test_id)
 			.await
 			.unwrap();
-		let mut test_ctx = test::setup_with_deps(build_reg(), test_deps).await.unwrap();
+		let mut test_ctx = TestCtx::new_with_deps(build_reg(), test_deps)
+			.await
+			.unwrap();
 
 		let mut sub = test_ctx
 			.subscribe::<RunningMessage>(("test", test_id))
@@ -263,7 +265,9 @@ async fn test_workflow_eviction() {
 		let test_deps = rivet_test_deps::TestDeps::new_with_test_id(test_id)
 			.await
 			.unwrap();
-		let test_ctx = test::setup_with_deps(build_reg(), test_deps).await.unwrap();
+		let test_ctx = TestCtx::new_with_deps(build_reg(), test_deps)
+			.await
+			.unwrap();
 
 		let mut sub = test_ctx
 			.subscribe::<RunningMessage>(("test", test_id))

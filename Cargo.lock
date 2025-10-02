@@ -448,6 +448,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bare_gen"
+version = "25.7.1"
+dependencies = [
+ "heck 0.5.0",
+ "pest",
+ "pest_derive",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3312,8 +3325,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "pegboard-runner"
-version = "25.7.2"
+name = "pegboard-runner-ws"
+version = "25.7.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3362,6 +3375,41 @@ dependencies = [
  "tracing",
  "universaldb",
  "vbare",
+]
+
+[[package]]
+name = "pegboard-tunnel"
+version = "25.7.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures",
+ "gasoline",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-tungstenite",
+ "namespace",
+ "pegboard",
+ "rand 0.8.5",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-error",
+ "rivet-guard-core",
+ "rivet-metrics",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-tunnel-protocol",
+ "rivet-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "universalpubsub",
+ "url",
+ "uuid",
+ "versioned-data-util",
 ]
 
 [[package]]
@@ -4619,6 +4667,23 @@ dependencies = [
  "tokio-postgres",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "rivet-tunnel-protocol"
+version = "25.7.1"
+dependencies = [
+ "anyhow",
+ "bare_gen",
+ "base64 0.22.1",
+ "indoc",
+ "prettyplease",
+ "rivet-util",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "syn 2.0.104",
+ "versioned-data-util",
 ]
 
 [[package]]
@@ -6533,6 +6598,15 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "versioned-data-util"
+version = "25.7.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+]
 
 [[package]]
 name = "vte"

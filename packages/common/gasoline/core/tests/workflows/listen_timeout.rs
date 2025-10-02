@@ -1,5 +1,6 @@
 use super::signal_test::TestSignal;
 use gas::prelude::*;
+use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListenTimeoutInput {
