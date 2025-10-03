@@ -5,8 +5,6 @@ import {
 	Button,
 	type DialogContentProps,
 	Frame,
-	Step,
-	Steps,
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
 
@@ -25,7 +23,7 @@ const { Stepper } = defineStepper(
 	},
 	{
 		id: "step-4",
-		title: "Add Vercel Endpoint",
+		title: "Confirm Connection",
 	},
 );
 
@@ -69,7 +67,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 					<Stepper.Navigation>
 						{methods.all.map((step) => (
 							<Stepper.Step
-							className="min-w-0"
+								className="min-w-0"
 								of={step.id}
 								onClick={() => methods.goTo(step.id)}
 							>

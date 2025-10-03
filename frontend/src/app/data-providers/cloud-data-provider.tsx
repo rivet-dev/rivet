@@ -171,6 +171,7 @@ export const createOrganizationContext = ({
 	};
 
 	return {
+		organization,
 		orgProjectNamespacesQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {
 			project: string;
@@ -233,6 +234,7 @@ export const createProjectContext = ({
 } & ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
 	return {
+		project,
 		createNamespaceMutationOptions(opts: {
 			onSuccess?: (data: Namespace) => void;
 		}) {
@@ -354,6 +356,30 @@ export const createNamespaceContext = ({
 		}),
 		namespaceQueryOptions() {
 			return parent.currentProjectNamespaceQueryOptions({ namespace });
+		},
+		connectRunnerTokenQueryOptions() {
+			return queryOptions({
+				staleTime: 5 * 60 * 1000, // 5 minutes
+				gcTime: 5 * 60 * 1000, // 5 minutes
+				queryKey: [
+					{
+						namespace,
+						project: parent.project,
+						organization: parent.organization,
+					},
+					"runners",
+					"connect",
+				],
+				queryFn: async () => {
+					const f = parent.client.namespaces.createPublishableToken(
+						parent.project,
+						namespace,
+						{ org: parent.organization },
+					);
+					const t = await f;
+					return t.token;
+				},
+			});
 		},
 	};
 };
