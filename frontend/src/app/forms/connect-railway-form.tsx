@@ -118,5 +118,3 @@ export function ConnectionCheck() {
 		</AnimatePresence>
 	);
 }
-
-export { Preview } from "./connect-vercel-form";

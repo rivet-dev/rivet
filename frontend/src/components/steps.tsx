@@ -19,7 +19,7 @@ export function Steps({ className, children }: StepsProps) {
 }
 
 interface StepProps {
-	children: React.ReactNode;
+	children?: React.ReactNode;
 	className?: string;
 	title: string;
 }
@@ -29,7 +29,7 @@ export function Step({ children, className, title }: StepProps) {
 		<>
 			<h3
 				className={cn(
-					"font-heading mt-8 scroll-m-20 text-xl font-semibold tracking-tight",
+					"mt-8 scroll-m-20 text-xl font-semibold tracking-tight",
 					className,
 				)}
 			>

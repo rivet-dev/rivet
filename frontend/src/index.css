@@ -84,6 +84,8 @@
 	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
 	--shiki-token-punctuation: theme("colors.zinc.200");
 
+	--spacing: 0.25rem;
+
 	::-webkit-scrollbar {
 		@apply w-2.5 h-2.5;
 	
