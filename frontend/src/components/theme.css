@@ -63,7 +63,7 @@
 
 .shiki .line {
 	display: inline-block;
-	width: 100%;;
+	width: 100%;
 	@apply px-2;
 }
 
