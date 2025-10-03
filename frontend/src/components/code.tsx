@@ -104,7 +104,7 @@ export const CodeFrame = ({
 }: CodeFrameProps) => {
 	return (
 		<div className="not-prose my-4 rounded-lg border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
-			<div className="bg-background text-wrap p-2 text-sm">
+			<div className="bg-background text-wrap py-2 text-sm">
 				<ScrollArea className="w-full">
 					{children
 						? cloneElement(children, { escaped: true })

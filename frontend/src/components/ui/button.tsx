@@ -52,7 +52,7 @@ export interface ButtonProps
 	isLoading?: boolean;
 	startIcon?: React.ReactElement;
 	endIcon?: React.ReactElement;
-	onClick?: (e?: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+	onClick?: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(

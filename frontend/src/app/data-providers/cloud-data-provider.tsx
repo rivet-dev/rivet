@@ -3,6 +3,7 @@ import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
+import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
 import {
 	type CreateNamespace,
@@ -170,6 +171,7 @@ export const createOrganizationContext = ({
 	};
 
 	return {
+		organization,
 		orgProjectNamespacesQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {
 			project: string;
@@ -209,8 +211,7 @@ export const createOrganizationContext = ({
 				}) => {
 					const response = await client.projects.create({
 						displayName: data.displayName,
-						name: data.nameId,
-						organizationId: organization,
+						org: organization,
 					});
 
 					return response;
@@ -233,6 +234,7 @@ export const createProjectContext = ({
 } & ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
 	return {
+		project,
 		createNamespaceMutationOptions(opts: {
 			onSuccess?: (data: Namespace) => void;
 		}) {
@@ -241,7 +243,6 @@ export const createProjectContext = ({
 				mutationKey: ["namespaces"],
 				mutationFn: async (data: CreateNamespace) => {
 					const response = await client.namespaces.create(project, {
-						name: data.name,
 						displayName: data.displayName,
 						org: organization,
 					});
@@ -304,6 +305,25 @@ export const createProjectContext = ({
 				},
 			};
 		},
+		accessTokenQueryOptions({ namespace }: { namespace: string }) {
+			return queryOptions({
+				staleTime: 15 * 60 * 1000, // 15 minutes
+				gcTime: 15 * 60 * 1000, // 15 minutes
+				queryKey: [
+					{ organization, project, namespace },
+					"access-token",
+				],
+				queryFn: async ({ signal: abortSignal }) => {
+					const response = await client.namespaces.createAccessToken(
+						project,
+						namespace,
+						{ org: organization },
+						{ abortSignal },
+					);
+					return response;
+				},
+			});
+		},
 	};
 };
 
@@ -311,13 +331,11 @@ export const createNamespaceContext = ({
 	namespace,
 	engineNamespaceName,
 	engineNamespaceId,
-	engineToken,
 	...parent
 }: {
 	namespace: string;
 	engineNamespaceName: string;
 	engineNamespaceId: string;
-	engineToken?: (() => string) | string;
 } & ReturnType<typeof createProjectContext> &
 	ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
@@ -327,11 +345,41 @@ export const createNamespaceContext = ({
 			namespace: engineNamespaceName,
 			namespaceId: engineNamespaceId,
 			client: createEngineClient(cloudEnv().VITE_APP_CLOUD_ENGINE_URL, {
-				token: engineToken,
+				token: async () => {
+					const response = await queryClient.fetchQuery(
+						parent.accessTokenQueryOptions({ namespace }),
+					);
+
+					return response.token;
+				},
 			}),
 		}),
 		namespaceQueryOptions() {
 			return parent.currentProjectNamespaceQueryOptions({ namespace });
+		},
+		connectRunnerTokenQueryOptions() {
+			return queryOptions({
+				staleTime: 5 * 60 * 1000, // 5 minutes
+				gcTime: 5 * 60 * 1000, // 5 minutes
+				queryKey: [
+					{
+						namespace,
+						project: parent.project,
+						organization: parent.organization,
+					},
+					"runners",
+					"connect",
+				],
+				queryFn: async () => {
+					const f = parent.client.namespaces.createPublishableToken(
+						parent.project,
+						namespace,
+						{ org: parent.organization },
+					);
+					const t = await f;
+					return t.token;
+				},
+			});
 		},
 	};
 };

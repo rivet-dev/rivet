@@ -1,7 +1,7 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { faCopy, Icon } from "@rivet-gg/icons";
+import { faCopy, faEye, faEyeSlash, Icon } from "@rivet-gg/icons";
 import {
 	type ComponentProps,
 	forwardRef,
@@ -139,7 +139,7 @@ export const DiscreteCopyButton = forwardRef<
 						type="button"
 						variant="ghost"
 						size={props.size}
-						className={cn(props.className, "max-w-full min-w-0")}
+						className={cn("max-w-full min-w-0", props.className)}
 						endIcon={
 							<Icon
 								className="group-hover:opacity-100 opacity-0 transition-opacity"
@@ -170,5 +170,40 @@ export function ClickToCopy({ children, value }: ClickToCopyProps) {
 			content="Click to copy"
 			trigger={<Slot onClick={handleClick}>{children}</Slot>}
 		/>
+	);
+}
+
+export function DiscreteInput({
+	value,
+	show,
+}: {
+	value: string;
+	show?: boolean;
+}) {
+	const [showState, setShowState] = useState(!!show);
+
+	const finalShow = showState || !!show;
+	return (
+		<div className="relative">
+			<ClickToCopy value={value}>
+				<Input
+					type={finalShow ? "text" : "password"}
+					readOnly
+					value={finalShow ? value : "very-secure-password"}
+					className={cn("font-mono cursor-pointer", !show && "pr-8")}
+				/>
+			</ClickToCopy>
+			{!show ? (
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50"
+					type="button"
+					onClick={() => setShowState(!showState)}
+				>
+					<Icon icon={showState ? faEye : faEyeSlash} />
+				</Button>
+			) : null}
+		</div>
 	);
 }

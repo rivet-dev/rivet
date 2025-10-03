@@ -1,30 +1,43 @@
 import { faQuestionCircle, faVercel, Icon } from "@rivet-gg/icons";
-import { useMutation } from "@tanstack/react-query";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { HelpDropdown } from "@/app/help-dropdown";
-import { Button, Flex, Frame } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import {
+	Button,
+	type DialogContentProps,
+	Frame,
+} from "@/components";
+import { defineStepper } from "@/components/ui/stepper";
 
-export default function CreateProjectFrameContent() {
-	const provider = useEngineCompatDataProvider();
+const { Stepper } = defineStepper(
+	{
+		id: "step-1",
+		title: "Select Vercel Plan",
+	},
+	{
+		id: "step-2",
+		title: "Edit vercel.json",
+	},
+	{
+		id: "step-3",
+		title: "Deploy to Vercel",
+	},
+	{
+		id: "step-4",
+		title: "Confirm Connection",
+	},
+);
 
-	const { mutateAsync } = useMutation(
-		provider.createRunnerConfigMutationOptions(),
-	);
+interface CreateProjectFrameContentProps extends DialogContentProps {}
 
+export default function CreateProjectFrameContent({
+	onClose,
+}: CreateProjectFrameContentProps) {
 	return (
 		<ConnectVercelForm.Form
-			onSubmit={async (values) => {
-				await mutateAsync({
-					name: values.name,
-					config: {
-						serverless: {
-							url: values.endpoint,
-						},
-					},
-				});
-			}}
-			defaultValues={{ name: "" }}
+			onSubmit={async () => {}}
+			mode="onChange"
+			revalidateMode="onChange"
+			defaultValues={{ plan: "hobby", endpoint: "" }}
 		>
 			<Frame.Header>
 				<Frame.Title className="justify-between flex items-center">
@@ -40,17 +53,80 @@ export default function CreateProjectFrameContent() {
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<Flex gap="4" direction="col">
-					<ConnectVercelForm.Name />
-					<ConnectVercelForm.Endpoint />
-					<ConnectVercelForm.Preview />
-				</Flex>
+				<FormStepper onClose={onClose} />
 			</Frame.Content>
-			<Frame.Footer>
-				<ConnectVercelForm.Submit type="submit">
-					Add
-				</ConnectVercelForm.Submit>
-			</Frame.Footer>
 		</ConnectVercelForm.Form>
+	);
+}
+
+function FormStepper({ onClose }: { onClose?: () => void }) {
+	return (
+		<Stepper.Provider variant="vertical">
+			{({ methods }) => (
+				<>
+					<Stepper.Navigation>
+						{methods.all.map((step) => (
+							<Stepper.Step
+								className="min-w-0"
+								of={step.id}
+								onClick={() => methods.goTo(step.id)}
+							>
+								<Stepper.Title>{step.title}</Stepper.Title>
+								{methods.when(step.id, (step) => {
+									return (
+										<Stepper.Panel className="space-y-4">
+											{step.id === "step-1" && (
+												<ConnectVercelForm.Plan />
+											)}
+											{step.id === "step-2" && (
+												<ConnectVercelForm.Json />
+											)}
+											{step.id === "step-3" && (
+												<>
+													<p>
+														Deploy your project to
+														Vercel using your
+														favorite method. After
+														deployment, return here
+														to add the endpoint.
+													</p>
+												</>
+											)}
+											{step.id === "step-4" && (
+												<div>
+													<ConnectVercelForm.Endpoint className="mb-2" />
+													<ConnectVercelForm.ConnectionCheck />
+												</div>
+											)}
+											<Stepper.Controls>
+												<Button
+													type="button"
+													variant="secondary"
+													onClick={methods.prev}
+													disabled={methods.isFirst}
+												>
+													Previous
+												</Button>
+												<Button
+													onClick={
+														methods.isLast
+															? onClose
+															: methods.next
+													}
+												>
+													{methods.isLast
+														? "Done"
+														: "Next"}
+												</Button>
+											</Stepper.Controls>
+										</Stepper.Panel>
+									);
+								})}
+							</Stepper.Step>
+						))}
+					</Stepper.Navigation>
+				</>
+			)}
+		</Stepper.Provider>
 	);
 }

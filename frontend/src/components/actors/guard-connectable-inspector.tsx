@@ -1,7 +1,13 @@
 import { faPowerOff, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useMemo,
+	useState,
+} from "react";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
 import { DiscreteCopyButton } from "../copy-area";
@@ -33,6 +39,12 @@ export function GuardConnectableInspector({
 	} = useQuery({
 		...useDataProvider().actorQueryOptions(actorId),
 		refetchInterval: 1000,
+		select: (data) => ({
+			destroyedAt: data.destroyedAt,
+			sleepingAt: data.sleepingAt,
+			pendingAllocationAt: data.pendingAllocationAt,
+			startedAt: data.startedAt,
+		}),
 	});
 
 	if (destroyedAt) {
@@ -126,7 +138,7 @@ function ActorInspectorProvider({ children }: { children: ReactNode }) {
 }
 
 function useActorRunner({ actorId }: { actorId: ActorId }) {
-	const { data: actor } = useSuspenseQuery(
+	const { data: actor, isLoading } = useSuspenseQuery(
 		useDataProvider().actorQueryOptions(actorId),
 	);
 
@@ -142,19 +154,29 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 		throw new Error("Actor is missing required fields");
 	}
 
-	const { data: runner } = useQuery({
+	const {
+		data: runner,
+		isLoading: isLoadingRunner,
+		isSuccess,
+	} = useQuery({
 		...useEngineCompatDataProvider().runnerByNameQueryOptions({
 			runnerName: actor.runner,
 			namespace: match.params.namespace,
 		}),
+		retryDelay: 10_000,
 		refetchInterval: 1000,
 	});
 
-	return { actor, runner };
+	return {
+		actor,
+		runner,
+		isLoading: isLoading || isLoadingRunner,
+		isSuccess,
+	};
 }
 
 function useActorEngineContext({ actorId }: { actorId: ActorId }) {
-	const { actor, runner } = useActorRunner({ actorId });
+	const { actor, runner, isLoading } = useActorRunner({ actorId });
 
 	const actorContext = useMemo(() => {
 		return createInspectorActorContext({
@@ -164,7 +186,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 		});
 	}, [runner?.metadata?.inspectorToken]);
 
-	return { actorContext, actor, runner };
+	return { actorContext, actor, runner, isLoading };
 }
 
 function ActorEngineProvider({
@@ -174,7 +196,9 @@ function ActorEngineProvider({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const { actorContext, actor, runner } = useActorEngineContext({ actorId });
+	const { actorContext, actor, runner } = useActorEngineContext({
+		actorId,
+	});
 
 	if (!runner || !actor.runner) {
 		return (
@@ -207,6 +231,7 @@ function NoRunnerInfo({ runner }: { runner: string }) {
 					<span className="font-mono-console">{runner}</span>
 				</DiscreteCopyButton>
 			</p>
+			<p>Will retry automatically in the background.</p>
 		</Info>
 	);
 }
@@ -232,9 +257,11 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 }
 
 function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
-	const { runner, actor, actorContext } = useActorEngineContext({ actorId });
+	const { runner, actor, actorContext } = useActorEngineContext({
+		actorId,
+	});
 
-	const { isPending } = useQuery(
+	useQuery(
 		actorContext.actorAutoWakeUpQueryOptions(actorId, {
 			enabled: !!runner,
 		}),
@@ -242,12 +269,12 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 
 	if (!runner) return <NoRunnerInfo runner={actor.runner || "unknown"} />;
 
-	return isPending ? (
+	return (
 		<Info>
 			<div className="flex items-center">
 				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
 				Waiting for Actor to wake...
 			</div>
 		</Info>
-	) : null;
+	);
 }

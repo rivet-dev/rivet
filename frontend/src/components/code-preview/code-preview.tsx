@@ -1,3 +1,4 @@
+import { transformerNotationHighlight } from "@shikijs/transformers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	createHighlighterCore,
@@ -8,9 +9,14 @@ import {
 import { Skeleton } from "../ui/skeleton";
 import theme from "./theme.json";
 
+const langs = {
+	typescript: () => import("@shikijs/langs/typescript"),
+	json: () => import("@shikijs/langs/json"),
+};
+
 interface CodePreviewProps {
 	code: string;
-	language: "typescript";
+	language: keyof typeof langs;
 	className?: string;
 }
 
@@ -24,7 +30,7 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 		async function createHighlighter() {
 			highlighter.current ??= await createHighlighterCore({
 				themes: [theme as ThemeInput],
-				langs: [import("@shikijs/langs/typescript")],
+				langs: [await langs[language]()],
 				engine: createOnigurumaEngine(import("shiki/wasm")),
 			});
 		}
@@ -36,7 +42,7 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 		return () => {
 			highlighter.current?.dispose();
 		};
-	}, []);
+	}, [language]);
 
 	const result = useMemo(
 		() =>
@@ -45,6 +51,7 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 				: (highlighter.current?.codeToHtml(code, {
 						lang: language,
 						theme: theme.name,
+						transformers: [transformerNotationHighlight()],
 					}) as TrustedHTML),
 		[isLoading, code, language],
 	);
