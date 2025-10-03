@@ -4,11 +4,23 @@ import {
 	createFileRoute,
 	notFound,
 	Link as RouterLink,
+	useNavigate,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnersTable } from "@/app/runners-table";
-import { Button, DocsSheet, H1, H3, Link, Skeleton } from "@/components";
+import {
+	Button,
+	DocsSheet,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+	H1,
+	H3,
+	Link,
+	Skeleton,
+} from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { docsLinks } from "@/content/data";
 
@@ -23,9 +35,9 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { data: configsCount, isLoading } = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
-		select: (data) => Object.values(data.pages[0].runnerConfigs).length,
+	const { data: runnerNamesCount, isLoading } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
+		select: (data) => data.pages[0].names?.length,
 	});
 
 	return (
@@ -63,7 +75,7 @@ export function RouteComponent() {
 						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 					</div>
 				</div>
-			) : configsCount === 0 ? (
+			) : runnerNamesCount !== 0 ? (
 				<div className="p-4 px-6 max-w-5xl">
 					<H3>Select Provider</H3>
 					<div className="flex flex-wrap gap-2 my-4">
@@ -113,6 +125,8 @@ function Providers() {
 		refetchInterval: 5000,
 	});
 
+	const navigate = Route.useNavigate();
+
 	return (
 		<div className="p-4 px-6 max-w-5xl">
 			<H3>Providers</H3>
@@ -136,6 +150,39 @@ function Providers() {
 						</RouterLink>
 					</Button>
 				))}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							size="lg"
+							className="min-w-32"
+							variant="outline"
+						></Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent>
+						<DropdownMenuItem
+							indicator={<Icon icon={faRailway} />}
+							onSelect={() => {
+								navigate({
+									to: ".",
+									search: { modal: "connect-railway" },
+								});
+							}}
+						>
+							Railway
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							indicator={<Icon icon={faVercel} />}
+							onSelect={() => {
+								navigate({
+									to: ".",
+									search: { modal: "connect-vercel" },
+								});
+							}}
+						>
+							Vercel
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
 		</div>
 	);

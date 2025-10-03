@@ -11,7 +11,7 @@ import {
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
-import { engineEnv } from "@/lib/env";
+import { cloudEnv, engineEnv } from "@/lib/env";
 
 const { Stepper } = defineStepper(
 	{
@@ -58,6 +58,10 @@ export default function ConnectRailwayFrameContent({
 }
 
 function FormStepper({ onClose }: { onClose?: () => void }) {
+	const dataProvider = useEngineCompatDataProvider();
+
+	const { data } = useQuery(dataProvider.connectRunnerTokenQueryOptions());
+
 	return (
 		<Stepper.Provider variant="vertical">
 			{({ methods }) => (
@@ -86,7 +90,14 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 														quickly.
 													</p>
 													<a
-														href="https://railway.com/deploy/rivet?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic"
+														href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data}&RIVET_ENGINE=${
+															__APP_TYPE__ ===
+															"engine"
+																? engineEnv()
+																		.VITE_APP_API_URL
+																: cloudEnv()
+																		.VITE_APP_CLOUD_ENGINE_URL
+														}`}
 														target="_blank"
 														rel="noreferrer"
 														className="inline-block h-10"
@@ -156,7 +167,6 @@ function EnvVariablesStep() {
 	const { data, isLoading } = useQuery(
 		dataProvider.connectRunnerTokenQueryOptions(),
 	);
-
 	return (
 		<>
 			<p>
