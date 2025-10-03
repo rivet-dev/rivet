@@ -100,7 +100,7 @@ async fn list_inner(
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsUpsertRequest)]
 pub struct UpsertRequest(
-	#[schema(inline)] HashMap<String, rivet_types::runner_configs::RunnerConfig>,
+	#[schema(inline)] HashMap<String, rivet_api_types::namespaces::runner_configs::RunnerConfig>,
 );
 
 #[utoipa::path(
@@ -151,7 +151,7 @@ async fn upsert_inner(
 		ctx.op(namespace::ops::runner_config::upsert_default::Input {
 			namespace_id: namespace.namespace_id,
 			name: path.runner_name.clone(),
-			config: default_config,
+			config: default_config.into(),
 		})
 		.await?;
 	}
