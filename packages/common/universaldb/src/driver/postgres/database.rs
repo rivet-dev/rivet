@@ -1,7 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::{
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 use anyhow::{Context, Result};
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
+use tokio::task::JoinHandle;
 use tokio_postgres::NoTls;
 
 use crate::{
@@ -14,9 +18,13 @@ use crate::{
 
 use super::transaction::PostgresTransactionDriver;
 
+const TXN_TIMEOUT: Duration = Duration::from_secs(5);
+const GC_INTERVAL: Duration = Duration::from_secs(5);
+
 pub struct PostgresDatabaseDriver {
 	pool: Arc<Pool>,
 	max_retries: Arc<Mutex<i32>>,
+	gc_handle: JoinHandle<()>,
 }
 
 impl PostgresDatabaseDriver {
@@ -53,7 +61,7 @@ impl PostgresDatabaseDriver {
 			.context("failed to create btree_gist extension")?;
 
 		conn.execute(
-			"CREATE SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
+			"CREATE UNLOGGED SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1",
 			&[],
 		)
 		.await
@@ -123,12 +131,39 @@ impl PostgresDatabaseDriver {
 		.await
 		.context("failed to create conflict_ranges table")?;
 
-		// Connection is automatically returned to the pool when dropped
-		drop(conn);
+		// Create index on ts column for efficient garbage collection
+		conn.execute(
+			"CREATE INDEX IF NOT EXISTS idx_conflict_ranges_ts ON conflict_ranges (ts)",
+			&[],
+		)
+		.await
+		.context("failed to create index on conflict_ranges ts column")?;
+
+		let gc_handle = tokio::spawn(async move {
+			let mut interval = tokio::time::interval(GC_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				interval.tick().await;
+
+				// NOTE: Transactions have a max limit of 5 seconds, we delete after 10 seconds for extra padding
+				// Delete old conflict ranges
+				if let Err(err) = conn
+					.execute(
+						"DELETE FROM conflict_ranges where ts < now() - interval '10 seconds'",
+						&[],
+					)
+					.await
+				{
+					tracing::error!(?err, "failed postgres gc task");
+				}
+			}
+		});
 
 		Ok(PostgresDatabaseDriver {
 			pool: Arc::new(pool),
 			max_retries: Arc::new(Mutex::new(100)),
+			gc_handle,
 		})
 	}
 }
@@ -155,13 +190,15 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 				retryable.maybe_committed = maybe_committed;
 
 				// Execute transaction
-				let error = match closure(retryable.clone()).await {
-					Ok(res) => match retryable.inner.driver.commit_ref().await {
-						Ok(_) => return Ok(res),
-						Err(e) => e,
-					},
-					Err(e) => e,
-				};
+				let error =
+					match tokio::time::timeout(TXN_TIMEOUT, closure(retryable.clone())).await {
+						Ok(Ok(res)) => match retryable.inner.driver.commit_ref().await {
+							Ok(_) => return Ok(res),
+							Err(e) => e,
+						},
+						Ok(Err(e)) => e,
+						Err(e) => anyhow::Error::from(DatabaseError::TransactionTooOld),
+					};
 
 				let chain = error
 					.chain()
@@ -194,5 +231,11 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 				Ok(())
 			}
 		}
+	}
+}
+
+impl Drop for PostgresDatabaseDriver {
+	fn drop(&mut self) {
+		self.gc_handle.abort();
 	}
 }
