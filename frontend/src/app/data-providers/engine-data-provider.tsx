@@ -404,14 +404,14 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		runnerNamesQueryOptions(opts: { namespace: string }) {
+		runnerNamesQueryOptions() {
 			return infiniteQueryOptions({
-				queryKey: [opts.namespace, "runner", "names"],
+				queryKey: [{ namespace }, "runner", "names"],
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const data = await client.runners.listNames(
 						{
-							namespace: opts.namespace,
+							namespace,
 							cursor: pageParam ?? undefined,
 							limit: RECORDS_PER_PAGE,
 						},
@@ -546,6 +546,33 @@ export const createNamespaceContext = ({
 				},
 
 				retryDelay: 50_000,
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth,
+				},
+			});
+		},
+		runnerConfigQueryOptions(runnerName: string) {
+			return queryOptions({
+				queryKey: [{ namespace }, "runners", "config", runnerName],
+				enabled: !!runnerName,
+				queryFn: async ({ signal: abortSignal }) => {
+					const response = await client.runnerConfigs.list(
+						{
+							namespace,
+							runnerNames: runnerName,
+						},
+						{ abortSignal },
+					);
+
+					const config = response.runnerConfigs[runnerName];
+
+					if (!config) {
+						throw new Error("Runner config not found");
+					}
+
+					return config;
+				},
 				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
