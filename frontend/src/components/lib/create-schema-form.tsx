@@ -18,6 +18,8 @@ import { Button, type ButtonProps, Form } from "@/components";
 interface FormProps<FormValues extends FieldValues>
 	extends Omit<ComponentProps<"form">, "onSubmit"> {
 	onSubmit: SubmitHandler<FormValues>;
+	mode?: UseFormProps<FormValues>["mode"];
+	revalidateMode?: UseFormProps<FormValues>["reValidateMode"];
 	defaultValues: DefaultValues<FormValues>;
 	errors?: UseFormProps<FormValues>["errors"];
 	values?: FormValues;
@@ -35,6 +37,8 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 	return {
 		Form: ({
 			defaultValues,
+			mode,
+			revalidateMode = "onSubmit",
 			values,
 			children,
 			onSubmit,
@@ -42,8 +46,9 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 			...props
 		}: FormProps<z.TypeOf<Schema>>) => {
 			const form = useForm<z.TypeOf<Schema>>({
-				reValidateMode: "onSubmit",
 				resolver: zodResolver(schema),
+				mode,
+				reValidateMode: revalidateMode,
 				defaultValues,
 				values,
 				errors,

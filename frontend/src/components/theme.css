@@ -60,3 +60,13 @@
 	--chart-4: 280 65% 60%;
 	--chart-5: 340 75% 55%;
 }
+
+.shiki .line {
+	display: inline-block;
+	width: 100%;;
+	@apply px-2;
+}
+
+.shiki .highlighted {
+	@apply bg-secondary/50;
+}
