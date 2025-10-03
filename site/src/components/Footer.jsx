@@ -18,7 +18,9 @@ import {
 } from "@rivet-gg/icons";
 
 const footer = {
-	product: [{ name: "Actors", href: "/docs/actors" }],
+	product: [
+		{ name: "Actors", href: "/docs/actors" }
+	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -34,6 +36,7 @@ const footer = {
 			href: "/rivet-vs-cloudflare-workers",
 		},
 		{ name: "Pricing", href: "/pricing" },
+		{ name: "Support", href: "/support" },
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
@@ -137,7 +140,7 @@ function SmallPrint() {
 					{/* Logo */}
 					<Image className="size-12" src={imgLogo} alt="Rivet" />
 					<p className="text-sm leading-6 text-gray-300">
-						The open-source alternative to Durable Objects
+						Build and scale stateful workloads
 					</p>
 
 					{/* Social */}

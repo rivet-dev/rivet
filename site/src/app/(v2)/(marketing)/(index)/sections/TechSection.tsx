@@ -6,7 +6,6 @@ import rivetWhiteLogo from "../images/platforms/rivet-white.svg";
 import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
 import bunLogo from "../images/platforms/bun.svg";
 import nodejsLogo from "../images/platforms/nodejs.svg";
-import redisLogo from "../images/platforms/redis.svg";
 import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
 import vercelLogo from "../images/platforms/vercel.svg";
@@ -248,12 +247,6 @@ export function TechSection() {
 						</TechSubSection>
 
 						<TechSubSection title="Storage">
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Redis"
-								icon={redisLogo}
-								alt="Redis"
-							/>
 							<TechLink
 								href="/docs/actors/"
 								name="Postgres"

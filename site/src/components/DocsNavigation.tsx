@@ -147,7 +147,7 @@ export function NavLink({
 
 	return (
 		<ActiveLink
-			strict
+			strict="true"
 			href={href}
 			target={external && "_blank"}
 			className={cn(

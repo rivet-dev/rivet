@@ -100,11 +100,10 @@ export const CommandCenterSection = () => {
 					{/* Header */}
 					<div className="max-w-7xl mx-auto relative z-10">
 						<h2 className="max-w-lg text-4xl font-medium tracking-tight text-white">
-							The command center your backend is missing
+							Meet your command center
 						</h2>
 						<p className="max-w-lg mt-4 text-lg text-white/70">
-							Complete visibility and control over your serverless
-							infrastructure
+							Complete visibility and control over your Rivet Actors
 						</p>
 					</div>
 
