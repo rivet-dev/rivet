@@ -132,7 +132,11 @@ function ProjectBreadcrumb({
 		return <Skeleton className={cn("h-5 w-32", className)} />;
 	}
 
-	return <span className={className}>{data?.displayName}</span>;
+	return (
+		<span className={className}>
+			{data?.displayName || "Unknown Project"}
+		</span>
+	);
 }
 
 function NamespaceBreadcrumb({
@@ -154,7 +158,11 @@ function NamespaceBreadcrumb({
 		return <Skeleton className="h-5 w-32" />;
 	}
 
-	return <span className={className}>{data?.displayName}</span>;
+	return (
+		<span className={className}>
+			{data?.displayName || "Unknown Namespace"}
+		</span>
+	);
 }
 
 function Content({ onClose }: { onClose?: () => void }) {

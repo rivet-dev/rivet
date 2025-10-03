@@ -2,16 +2,25 @@ import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { createRouter, Link, RouterProvider } from "@tanstack/react-router";
 import { Suspense } from "react";
 import {
+	Button,
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
 	ConfigProvider,
 	FullscreenLoading,
 	getConfig,
+	H2,
 	ThirdPartyProviders,
 	Toaster,
 	TooltipProvider,
 } from "@/components";
+import { RouteLayout } from "./app/route-layout";
+import { RootLayout } from "./components/layout";
 import { clerk } from "./lib/auth";
 import { queryClient } from "./queries/global";
 import { routeTree } from "./routeTree.gen";
@@ -49,6 +58,31 @@ export const router = createRouter({
 		console.error("Router caught an error:", error);
 		Sentry.captureException(error);
 	},
+	defaultNotFoundComponent: () => (
+		<RouteLayout>
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex flex-col items-center justify-center h-full">
+					<div className="w-full sm:w-96">
+						<Card>
+							<CardHeader>
+								<CardTitle className="flex items-center">
+									404
+								</CardTitle>
+								<CardDescription>
+									The page was not found
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<Button asChild variant="secondary">
+									<Link to="/">Go home</Link>
+								</Button>
+							</CardContent>
+						</Card>
+					</div>
+				</div>
+			</div>
+		</RouteLayout>
+	),
 });
 
 function InnerApp() {

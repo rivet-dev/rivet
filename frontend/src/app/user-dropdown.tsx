@@ -131,7 +131,7 @@ function Preview({ org }: { org: string }) {
 			className="text-muted-foreground justify-between py-1 min-h-8 gap-2 w-full"
 			endIcon={<Icon icon={faChevronDown} />}
 		>
-			<div className="flex gap-2 items-center w-full">
+			<div className="flex gap-2 items-center w-full min-w-0">
 				<Avatar className="size-5">
 					<AvatarImage src={data?.imageUrl} />
 					<AvatarFallback>
@@ -142,11 +142,13 @@ function Preview({ org }: { org: string }) {
 						)}
 					</AvatarFallback>
 				</Avatar>
-				{isLoading ? (
-					<Skeleton className="w-full h-4 flex-1" />
-				) : (
-					data?.name
-				)}
+				<span className="text-sm truncate">
+					{isLoading ? (
+						<Skeleton className="w-full h-4 flex-1" />
+					) : (
+						data?.name
+					)}
+				</span>
 			</div>
 		</Button>
 	);
