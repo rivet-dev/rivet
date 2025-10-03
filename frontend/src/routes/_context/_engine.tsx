@@ -57,6 +57,9 @@ function EngineModals() {
 				}}
 			/>
 			<ConnectVercelDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
 				dialogProps={{
 					open: search.modal === "connect-vercel",
 					// FIXME
@@ -74,6 +77,9 @@ function EngineModals() {
 				}}
 			/>
 			<ConnectRailwayDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
 				dialogProps={{
 					open: search.modal === "connect-railway",
 					// FIXME

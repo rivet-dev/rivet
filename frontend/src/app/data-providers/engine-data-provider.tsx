@@ -1,5 +1,6 @@
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { getConfig, ls } from "@/components";
 import {
 	type Actor,
 	ActorFeature,
@@ -546,6 +547,19 @@ export const createNamespaceContext = ({
 
 				retryDelay: 50_000,
 				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth,
+				},
+			});
+		},
+		connectRunnerTokenQueryOptions() {
+			return queryOptions({
+				staleTime: 1000,
+				gcTime: 1000,
+				queryKey: [{ namespace }, "runners", "connect"],
+				queryFn: async () => {
+					return ls.engineCredentials.get(getConfig().apiUrl) || "";
+				},
 				meta: {
 					mightRequireAuth,
 				},

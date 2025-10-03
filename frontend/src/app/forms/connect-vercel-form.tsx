@@ -1,11 +1,12 @@
 import { faCheck, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import {
+	Button,
 	CodeFrame,
-	CodeGroup,
 	CodePreview,
 	cn,
 	createSchemaForm,
@@ -16,13 +17,13 @@ import {
 	FormLabel,
 	FormMessage,
 	Input,
-	ScrollArea,
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "@/components";
+import { HelpDropdown } from "../help-dropdown";
 
 export const formSchema = z.object({
 	plan: z.string(),
@@ -116,7 +117,13 @@ export const Json = () => {
 	);
 };
 
-export const Endpoint = ({ className }: { className?: string }) => {
+export const Endpoint = ({
+	className,
+	placeholder,
+}: {
+	className?: string;
+	placeholder?: string;
+}) => {
 	const { control } = useFormContext<FormValues>();
 	return (
 		<FormField
@@ -124,12 +131,13 @@ export const Endpoint = ({ className }: { className?: string }) => {
 			name="endpoint"
 			render={({ field }) => (
 				<FormItem className={className}>
-					<FormLabel className="col-span-1">
-						Functions Endpoint
-					</FormLabel>
+					<FormLabel className="col-span-1">Endpoint</FormLabel>
 					<FormControl className="row-start-2">
 						<Input
-							placeholder="https://your-application.vercel.app"
+							type="url"
+							placeholder={
+								placeholder || "https://my-rivet-app.vercel.app"
+							}
 							{...field}
 						/>
 					</FormControl>
@@ -141,7 +149,7 @@ export const Endpoint = ({ className }: { className?: string }) => {
 };
 
 export function ConnectionCheck() {
-	const { watch, formState } = useFormContext<FormValues>();
+	const { watch } = useFormContext<FormValues>();
 	const endpoint = watch("endpoint");
 	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
 
@@ -180,7 +188,7 @@ export function ConnectionCheck() {
 						success && "text-primary-foreground",
 					)}
 					initial={{ height: 0, opacity: 0.5 }}
-					animate={{ height: "4rem", opacity: 1 }}
+					animate={{ height: "6rem", opacity: 1 }}
 				>
 					{success ? (
 						<>
@@ -191,16 +199,38 @@ export function ConnectionCheck() {
 							Runner successfully connected
 						</>
 					) : (
-						<>
-							<Icon
-								icon={faSpinnerThird}
-								className="mr-1.5 animate-spin"
-							/>{" "}
-							Waiting for runner to connect...
-						</>
+						<div className="flex flex-col items-center gap-2">
+							<div className="flex items-center">
+								<Icon
+									icon={faSpinnerThird}
+									className="mr-1.5 animate-spin"
+								/>{" "}
+								Waiting for Runner to connect...
+							</div>
+							<NeedHelp />
+						</div>
 					)}
 				</motion.div>
 			) : null}
 		</AnimatePresence>
+	);
+}
+
+export function NeedHelp() {
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		const timeout = setTimeout(() => {
+			setOpen(true);
+		}, 10000);
+		return () => clearTimeout(timeout);
+	}, []);
+
+	if (!open) return null;
+
+	return (
+		<HelpDropdown>
+			<Button variant="outline">Need help?</Button>
+		</HelpDropdown>
 	);
 }
