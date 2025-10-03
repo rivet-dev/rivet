@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { createProjectContext } from "@/app/data-providers/cloud-data-provider";
+import { RouteError } from "@/app/route-error";
 import { useDialog } from "@/app/use-dialog";
 
 export const Route = createFileRoute(
@@ -23,6 +24,7 @@ export const Route = createFileRoute(
 				throw new Error("Invalid context type for this route");
 			});
 	},
+	errorComponent: RouteError,
 });
 
 function RouteComponent() {

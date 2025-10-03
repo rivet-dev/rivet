@@ -9,8 +9,11 @@ export const Route = createFileRoute("/sso-callback")({
 function RouteComponent() {
 	return (
 		<>
-			<FullscreenLoading />
+			<FullscreenLoading>
+				{/** biome-ignore lint/correctness/useUniqueElementIds: required by clerk */}
+				<div id="clerk-captcha" />
+			</FullscreenLoading>
 			<AuthenticateWithRedirectCallback />
 		</>
-	)
+	);
 }

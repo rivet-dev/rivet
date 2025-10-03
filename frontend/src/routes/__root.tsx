@@ -1,5 +1,6 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { ClerkProvider } from "@clerk/clerk-react";
+import * as ClerkComponents from "@clerk/elements/common";
 import { dark } from "@clerk/themes";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -45,10 +46,11 @@ function CloudRoute() {
 				},
 			}}
 			publishableKey={cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY}
-			signUpForceRedirectUrl="/"
-			signInForceRedirectUrl="/"
 			routerPush={(to) => navigate({ to })}
 			routerReplace={(to) => navigate({ to, replace: true })}
+			taskUrls={{
+				"choose-organization": "/onboarding/choose-organization",
+			}}
 		>
 			<Outlet />
 			{import.meta.env.DEV ? (

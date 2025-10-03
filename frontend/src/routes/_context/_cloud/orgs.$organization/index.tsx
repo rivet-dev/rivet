@@ -1,13 +1,9 @@
-import {
-	createFileRoute,
-	Link,
-	notFound,
-	redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
+import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
-import { Button, Card, H2, Skeleton } from "@/components";
+import { Card, H2, Skeleton } from "@/components";
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	loader: async ({ context, params }) => {
@@ -65,34 +61,7 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 		</RouteLayout>
 	),
 	component: RouteComponent,
-	errorComponent: ({ error }) => (
-		<RouteLayout>
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-				<div className="mt-2 flex flex-col items-center justify-center h-full">
-					<H2 className="mb-2">
-						{"statusCode" in error && error.statusCode === 404
-							? "Organization not found"
-							: error.message}
-					</H2>
-					<p>
-						{"statusCode" in error && error.statusCode === 404
-							? "The organization you are looking for does not exist or you do not have access to it."
-							: "An unexpected error occurred. Please try again later."}
-					</p>
-					<div className="mt-4" />
-					<Button asChild variant="secondary">
-						{"statusCode" in error && error.statusCode === 404 ? (
-							<Link to="/orgs">Go to organizations</Link>
-						) : (
-							<Link to="." reloadDocument>
-								Retry
-							</Link>
-						)}
-					</Button>
-				</div>
-			</div>
-		</RouteLayout>
-	),
+	errorComponent: RouteError,
 });
 
 function RouteComponent() {

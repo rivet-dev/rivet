@@ -1,12 +1,8 @@
-import {
-	faChevronLeft,
-	faChevronRight,
-	faHome,
-	faPlus,
-	Icon,
-} from "@rivet-gg/icons";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { faChevronRight, faPlus, Icon } from "@rivet-gg/icons";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { RouteError } from "@/app/route-error";
+import { RouteLayout } from "@/app/route-layout";
 import {
 	Card,
 	CardContent,
@@ -21,28 +17,34 @@ export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/",
 )({
 	component: RouteComponent,
+	errorComponent: RouteError,
 });
 
 function RouteComponent() {
 	return (
-		<div className="flex flex-col gap-6 px-4 w-full mx-auto h-screen min-h-0 max-h-screen items-center justify-safe-center overflow-auto py-8">
-			<div className="flex flex-col items-center gap-6 min-h-fit">
-				<div>
-					<Breadcrumbs />
-					<Card className="w-full sm:w-96 mb-4">
-						<CardHeader>
-							<CardTitle>Projects</CardTitle>
-							<CardDescription>
-								Select a project to continue.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<ProjectList />
-						</CardContent>
-					</Card>
+		<RouteLayout>
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex flex-col items-center justify-center h-full">
+					<div className="w-full sm:w-96">
+						<Card>
+							<CardHeader>
+								<CardTitle className="flex items-center">
+									Projects
+								</CardTitle>
+								<CardDescription>
+									Manage your organization&apos;s projects.
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<div className="flex flex-col">
+									<ProjectList />
+								</div>
+							</CardContent>
+						</Card>
+					</div>
 				</div>
 			</div>
-		</div>
+		</RouteLayout>
 	);
 }
 
@@ -86,25 +88,6 @@ function ListItemSkeleton() {
 		<div className="p-2 border-b last:border-0 w-full flex text-left items-center rounded-md transition-colors h-10">
 			<Skeleton className="size-4 mr-2 rounded-full" />
 			<Skeleton className="flex-1 h-4 rounded" />
-		</div>
-	);
-}
-
-function Breadcrumbs() {
-	const { data } = useQuery(
-		Route.useRouteContext().dataProvider.organizationQueryOptions({
-			org: Route.useParams().organization,
-		}),
-	);
-	return (
-		<div className="text-xs text-muted-foreground mb-2 flex gap-1 items-center">
-			<Link from={Route.to} to="/orgs" className="hover:underline">
-				<Icon icon={faHome} />
-			</Link>
-			<Icon icon={faChevronRight} />
-			<span className="text-foreground font-medium">
-				{data?.name || <Skeleton className="h-4 w-16" />}
-			</span>
 		</div>
 	);
 }

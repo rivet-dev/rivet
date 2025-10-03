@@ -1,10 +1,8 @@
-import { CreateOrganization } from "@clerk/clerk-react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { InspectorRoot } from "@/app/inspector-root";
 import { Logo } from "@/app/logo";
-import { RouteLayout } from "@/app/route-layout";
 import { Card } from "@/components";
 
 export const Route = createFileRoute("/_context/")({
@@ -19,7 +17,9 @@ export const Route = createFileRoute("/_context/")({
 			.with({ __type: "cloud" }, () => {
 				const { organization } = context.clerk ?? {};
 				if (!organization) {
-					return;
+					throw redirect({
+						to: "/onboarding/choose-organization",
+					});
 				}
 				throw redirect({
 					to: "/orgs/$organization",
@@ -59,24 +59,7 @@ export const Route = createFileRoute("/_context/")({
 });
 
 function CloudRoute() {
-	return (
-		<RouteLayout>
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-				<div className="mt-2 flex flex-col items-center justify-center h-full">
-					<div className="w-full sm:w-96">
-						<CreateOrganization
-							hideSlug
-							appearance={{
-								variables: {
-									colorBackground: "hsl(var(--card))",
-								},
-							}}
-						/>
-					</div>
-				</div>
-			</div>
-		</RouteLayout>
-	);
+	return null;
 }
 
 function EngineRoute() {
