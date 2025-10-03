@@ -12,6 +12,7 @@ pub trait Activity {
 	type Output: Serialize + DeserializeOwned + Debug + Send;
 
 	const NAME: &'static str;
+	/// Seconds.
 	const MAX_RETRIES: usize;
 	const TIMEOUT: std::time::Duration;
 
