@@ -22,7 +22,7 @@ export default function Earth(props) {
 			)}
 		>
 			<source
-				src="https://assets2.rivet.gg/effects/earth.webm"
+				src="https://assets2.rivet.dev/effects/earth.webm"
 				type="video/webm"
 			/>
 		</video>

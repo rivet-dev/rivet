@@ -1,0 +1,224 @@
+# Deploying to Cloudflare Workers
+#
+Run Rivet Actors on Cloudflare Workers with Durable Objects. If you still need a sample app, walk through the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare-workers) first.
+
+<Steps>
+<Step title="Prerequisites">
+
+- [Cloudflare account](https://dash.cloudflare.com/) with Durable Objects enabled
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) v3
+- RivetKit project (or use the [Quickstart](/docs/actors/quickstart/cloudflare-workers))
+
+</Step>
+<Step title="Install Rivet">
+
+Install the Cloudflare Worker driver alongside RivetKit:
+
+```sh
+npm install rivetkit @rivetkit/cloudflare-workers
+```
+
+</Step>
+<Step title="Configure Worker">
+
+Wire your actors into a Cloudflare Worker using the same setup as the quickstart:
+
+```ts {{"title":"registry.ts"}}
+import { actor, setup } from "rivetkit";
+
+export const counter = actor({
+	state: { count: 0 },
+	actions: {
+		increment: (c, amount: number = 1) => {
+			c.state.count += amount;
+			c.broadcast("countChanged", c.state.count);
+			return c.state.count;
+		},
+		getCount: (c) => c.state.count,
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+```
+
+<CodeGroup>
+
+```ts {{"title":"index.ts (Hono)"}}
+import { createHandler, type Client } from "@rivetkit/cloudflare-workers";
+import { Hono } from "hono";
+import { registry } from "./registry";
+
+const app = new Hono<{ Bindings: { RIVET: Client<typeof registry> } }>();
+
+app.post("/increment/:name", async (c) => {
+	const client = c.env.RIVET;
+	const name = c.req.param("name");
+
+	// Get or create actor and call action
+	const counter = client.counter.getOrCreate(name);
+	const newCount = await counter.increment(1);
+
+	return c.json({ count: newCount });
+});
+
+const { handler, ActorHandler } = createHandler(registry, { fetch: app.fetch });
+export { handler as default, ActorHandler };
+```
+
+```ts {{"title":"index.ts (No Router)"}}
+import { createHandler } from "@rivetkit/cloudflare-workers";
+import { registry } from "./registry";
+
+const { handler, ActorHandler } = createHandler(registry, {
+	fetch: async (request, env, ctx) => {
+		const url = new URL(request.url);
+
+		if (url.pathname.startsWith("/increment/")) {
+			const name = url.pathname.split("/")[2];
+			const client = env.RIVET;
+
+			const counter = client.counter.getOrCreate(name);
+			const newCount = await counter.increment(1);
+
+			return new Response(JSON.stringify({ count: newCount }), {
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		return new Response("Not Found", { status: 404 });
+	}
+});
+
+export { handler as default, ActorHandler };
+```
+
+</CodeGroup>
+
+Configure Durable Objects and KV namespaces in `wrangler.json` (same as the quickstart):
+
+```json {{"title":"wrangler.json"}}
+{
+  "name": "my-rivetkit-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ActorHandler"]
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ACTOR_DO",
+        "class_name": "ActorHandler"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ACTOR_KV",
+      "id": "your_namespace_id"
+    }
+  ]
+}
+```
+
+Configuration requirements:
+
+- `ACTOR_DO` durable object binding for actor persistence
+- `ACTOR_KV` KV namespace binding for metadata storage
+- `nodejs_compat` compatibility flag
+- Migration entry defining the `ActorHandler` class
+
+</Step>
+<Step title="Run and Deploy">
+
+Start the worker locally:
+
+```sh
+wrangler dev
+```
+
+Call your actor at `http://localhost:8787/increment/my-counter`.
+
+When you're ready, deploy to Cloudflare's network:
+
+```sh
+wrangler deploy
+```
+
+Durable Objects back your actor state globally, and the Rivet endpoint is automatically mounted at `/rivet`.
+
+</Step>
+</Steps>
+
+## Advanced
+
+### Accessing Environment Bindings
+
+You can access Cloudflare Workers environment bindings directly using the importable `env`:
+
+```typescript
+import { env } from "cloudflare:workers";
+
+// Access environment variables and secrets in top-level scope
+const API_KEY = env.API_KEY;
+const LOG_LEVEL = env.LOG_LEVEL || "info";
+
+// Use bindings in your actor
+const myActor = actor({
+  state: { count: 0 },
+  
+  actions: {
+    // Access KV, D1, or other bindings during request handling
+    getFromKV: async (c, key: string) => {
+      // Access additional KV namespaces defined in wrangler.json
+      if (env.MY_CACHE_KV) {
+        return await env.MY_CACHE_KV.get(key);
+      }
+    }
+  }
+});
+```
+
+### Driver Context
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
+
+```typescript
+import { actor, ActorInitContext } from "rivetkit";
+import type { DriverContext } from "@rivetkit/cloudflare-workers";
+
+const myActor = actor({
+  state: { count: 0 },
+  
+  // Save the Cloudflare driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => ({ 
+    state: driver.state,
+  }),
+  
+  actions: {
+    // Example: Access Durable Object info (not recommended in practice)
+    kvGet: (c, key: string) => {
+      const doState = c.vars.state;
+	  return await doState.storage.get(key)
+    },
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
+
+```typescript
+interface DriverContext {
+  state: DurableObjectState;
+}
+```
+
+<Warning>
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
+</Warning>

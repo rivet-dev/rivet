@@ -99,7 +99,7 @@ export function GitHubStarsDropdown({
 					<div className="rounded-md border border-white/10 bg-background/95 backdrop-blur-sm shadow-lg">
 						<div className="py-1">
 							<a
-								href="https://github.com/rivet-gg/rivetkit"
+								href="https://github.com/rivet-dev/rivetkit"
 								target="_blank"
 								rel="noreferrer"
 								className="group flex items-center justify-between px-4 py-2 text-sm text-white/90 hover:bg-white/5 hover:text-white transition-colors"
@@ -118,7 +118,7 @@ export function GitHubStarsDropdown({
 								/>
 							</a>
 							<a
-								href="https://github.com/rivet-gg/rivet"
+								href="https://github.com/rivet-dev/rivet"
 								target="_blank"
 								rel="noreferrer"
 								className="group flex items-center justify-between px-4 py-2 text-sm text-white/90 hover:bg-white/5 hover:text-white transition-colors"

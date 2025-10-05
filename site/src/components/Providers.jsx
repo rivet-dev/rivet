@@ -8,7 +8,7 @@ import { Suspense, useEffect } from "react";
 // Check that PostHog is client-side
 if (typeof window !== "undefined") {
 	posthog.init("phc_6kfTNEAVw7rn1LA51cO3D69FefbKupSWFaM7OUgEpEo", {
-		api_host: "https://ph.rivet.gg",
+		api_host: "https://ph.rivet.dev",
 		// Enable debug mode in development
 		loaded: (posthog) => {
 			if (process.env.NODE_ENV === "development") posthog.debug();

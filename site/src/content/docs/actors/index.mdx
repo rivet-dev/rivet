@@ -1,4 +1,4 @@
-import { faNodeJs, faReact } from "@rivet-gg/icons";
+import { faCloudflare, faNodeJs, faReact, faSquareJs } from "@rivet-gg/icons";
 
 # Overview
 
@@ -13,47 +13,33 @@ Actors for long-lived processes with durable state, realtime, and hibernate when
 <Card title="React Quickstart" href="/docs/actors/quickstart/react" icon={faReact}>
   Build real-time React applications with actors
 </Card>
+<Card title="Next.js Quickstart" href="/docs/actors/quickstart/next-js" icon={faSquareJs}>
+  Build server-rendered Next.js experiences backed by actors
+</Card>
+<Card title="Cloudflare Workers Quickstart" href="/docs/actors/quickstart/cloudflare-workers" icon={faCloudflare}>
+  Deploy actors on Cloudflare Workers with zero infrastructure
+</Card>
 </CardGroup>
 
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
-
 - **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes.
-
-- **Realtime, Made Simple**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
-
-- **Store Data Near Your Users**: Your state lives close to your users on the edge – not in a faraway data center – so every interaction feels instant. (Not all platforms supported.)
-
+- **Realtime**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
-
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
-
-- **Type Safety**: End-to-end TypeScript safety between clients and actors with full type inference and compile-time checking.
 
 ## Use Cases
 
 Actors are perfect for applications that need persistent state and real-time updates:
 
-- **AI & Automation**
-  - **AI agents**: Stateful AI assistants with conversation history
-  - **AI sandbox orchestration**: Actors can orchestrate logic running inside of agents' sandboxes
-  - **Durable workflows**: Long-running business processes with state persistence and recovery
-
-- **Real-time Communication**
-  - **Chat rooms**: Real-time messaging with message history and user presence
-  - **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
-  - **Multiplayer games**: Game state management with real-time updates
-  - **Live events**: Broadcasting updates to many participants
-
-- **Data & Synchronization**
-  - **Local-first sync**: Offline-first applications with server synchronization
-  - **Multi-tenant databases**: Isolated data stores for each user or tenant
-  - **Scheduling**: Time-based task execution with persistent state
-
-- **Infrastructure**
-  - **Rate limiting**: Distributed rate limiting with persistent counters
-  - **Stream processing**: Real-time data processing with persistent state
+- **AI agents**: Stateful AI assistants with conversation history
+- **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
+- **Local-first sync**: Offline-first applications with server synchronization
+- **Per-tenant databases**: Isolated data stores for each user or tenant
+- **Background job**: Background & time-based task execution with persistent state
+- **Rate limiting**: Distributed rate limiting with persistent counters
+- **Stream processing**: Real-time data processing with persistent state
 
 ## Core Concepts
 

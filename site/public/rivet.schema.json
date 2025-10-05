@@ -467,7 +467,7 @@
 		"CloudVersionMatchmakerNetworkMode": {
 			"type": "string",
 			"enum": ["bridge", "host"],
-			"description": "Configures how the container's network is isolated from the host.\n`bridge` (default) networking isolates the container's network from the host & other containers.\n`host` networking removes isolation between the container and the host. Only available in Rivet Open Source & Enterprise.\nRead more about bridge vs host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking)."
+			"description": "Configures how the container's network is isolated from the host.\n`bridge` (default) networking isolates the container's network from the host & other containers.\n`host` networking removes isolation between the container and the host. Only available in Rivet Open Source & Enterprise.\nRead more about bridge vs host networking [here](https://rivet.dev/docs/dynamic-servers/concepts/host-bridge-networking)."
 		},
 		"CloudVersionMatchmakerGameModeRuntimeDockerPort": {
 			"type": "object",
@@ -610,7 +610,7 @@
 		},
 		"CloudVersionMatchmakerPortRange": {
 			"type": "object",
-			"description": "Range of ports that can be connected to.\nIf configured, `network_mode` must equal `host`.\nPort ranges may overlap between containers, it is the responsibility of the developer to ensure ports are available before using.\nRead more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking).\nOnly available on Rivet Open Source & Enterprise.\n\n### Related\n\n- cloud.version.matchmaker.PortProtocol\n- cloud.version.matchmaker.ProxyKind",
+			"description": "Range of ports that can be connected to.\nIf configured, `network_mode` must equal `host`.\nPort ranges may overlap between containers, it is the responsibility of the developer to ensure ports are available before using.\nRead more about host networking [here](https://rivet.dev/docs/dynamic-servers/concepts/host-bridge-networking).\nOnly available on Rivet Open Source & Enterprise.\n\n### Related\n\n- cloud.version.matchmaker.PortProtocol\n- cloud.version.matchmaker.ProxyKind",
 			"properties": {
 				"min": {
 					"type": "integer",
@@ -631,7 +631,7 @@
 		"CloudVersionMatchmakerProxyKind": {
 			"type": "string",
 			"enum": ["none", "game_guard"],
-			"description": "Range of ports that can be connected to.\n`game_guard` (default) proxies all traffic through [Game Guard](https://rivet.gg/docs/dynamic-servers/concepts/game-guard) to mitigate DDoS attacks and provide TLS termination.\n`none` sends traffic directly to the game server. If configured, `network_mode` must equal `host`. Read more about host networking [here](https://rivet.gg/docs/dynamic-servers/concepts/host-bridge-networking). Only available on Rivet Open Source & Enterprise.\n\n### Related - /docs/dynamic-servers/concepts/game-guard - cloud.version.matchmaker.PortProtocol"
+			"description": "Range of ports that can be connected to.\n`game_guard` (default) proxies all traffic through [Game Guard](https://rivet.dev/docs/dynamic-servers/concepts/game-guard) to mitigate DDoS attacks and provide TLS termination.\n`none` sends traffic directly to the game server. If configured, `network_mode` must equal `host`. Read more about host networking [here](https://rivet.dev/docs/dynamic-servers/concepts/host-bridge-networking). Only available on Rivet Open Source & Enterprise.\n\n### Related - /docs/dynamic-servers/concepts/game-guard - cloud.version.matchmaker.PortProtocol"
 		},
 		"CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig": {
 			"type": "object",

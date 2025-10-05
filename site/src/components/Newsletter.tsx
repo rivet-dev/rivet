@@ -45,7 +45,7 @@ export function Newsletter() {
 					autoComplete="email"
 					name="$survey_response_2adad347-bc39-48f3-b5d1-755278685c94"
 				/>
-				<Button variant="secondary" type="submit" size="sm">
+				<Button variant="secondary" type="submit">
 					{isSubmitted ? "Subscribed" : "Subscribe"}
 				</Button>
 			</div>

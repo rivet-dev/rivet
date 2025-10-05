@@ -29,7 +29,7 @@ export default function LevelUpSection() {
 					<div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-8">
 						<Button
 							variant="blackJuicy"
-							href="https://hub.rivet.gg"
+							href="https://dashboard.rivet.dev"
 						>
 							<Icon icon={faRocketLaunch} className="mr-2" />
 							Get Started

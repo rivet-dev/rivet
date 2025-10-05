@@ -7,15 +7,15 @@ import { Fragment } from "react";
 const tiers = [
 	{
 		name: "Free",
-		href: "https://hub.rivet.gg/",
+		href: "https://dashboard.rivet.dev/",
 	},
 	{
 		name: "Hobby",
-		href: "https://hub.rivet.gg/",
+		href: "https://dashboard.rivet.dev/",
 	},
 	{
 		name: "Team",
-		href: "https://hub.rivet.gg/",
+		href: "https://dashboard.rivet.dev/",
 	},
 	{
 		name: "Enterprise",

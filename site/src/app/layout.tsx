@@ -23,11 +23,11 @@ export const metadata: Metadata = {
 	openGraph: {
 		type: "website",
 		locale: "en_US",
-		url: "https://www.rivet.gg",
+		url: "https://www.rivet.dev",
 		siteName: "Rivet",
 		images: [
 			{
-				url: "https://www.rivet.gg/promo/og.png",
+				url: "https://www.rivet.dev/promo/og.png",
 				width: 1200,
 				height: 630,
 				alt: "Rivet",

@@ -116,12 +116,12 @@ export function Header({
 						support={
 							<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 								<RivetHeader.NavItem asChild>
-									<Link href="https://hub.rivet.gg">
+									<Link href="https://dashboard.rivet.dev">
 										Sign In
 									</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
-									<Link href="https://rivet.gg/discord">Discord</Link>
+									<Link href="https://rivet.dev/discord">Discord</Link>
 								</RivetHeader.NavItem>
 								<RivetHeader.NavItem asChild>
 									<Link href="/support">Support</Link>
@@ -136,7 +136,7 @@ export function Header({
 									className="p-2 mr-4"
 								>
 									<Link
-										href="https://rivet.gg/discord"
+										href="https://rivet.dev/discord"
 										className="text-white/90"
 									>
 										<Icon
@@ -147,7 +147,7 @@ export function Header({
 								</RivetHeader.NavItem>
 								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
 								<Link
-									href="https://hub.rivet.gg"
+									href="https://dashboard.rivet.dev"
 									className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 								>
 									Sign In
@@ -166,14 +166,6 @@ export function Header({
 									}
 								>
 									Documentation
-								</TextNavItem>
-								<TextNavItem
-									href="/cloud"
-									ariaCurrent={
-										active === "cloud" ? "page" : undefined
-									}
-								>
-									Cloud
 								</TextNavItem>
 								<TextNavItem
 									href="/pricing"
@@ -225,7 +217,7 @@ export function Header({
 			support={
 				<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
 					<RivetHeader.NavItem asChild>
-						<Link href="https://hub.rivet.gg">Sign In</Link>
+						<Link href="https://dashboard.rivet.dev">Sign In</Link>
 					</RivetHeader.NavItem>
 					<RivetHeader.NavItem asChild>
 						<Link href="/discord">Discord</Link>
@@ -241,13 +233,13 @@ export function Header({
 						<HeaderSearch />
 					</div>
 					<RivetHeader.NavItem asChild className="p-2 mr-4">
-						<Link href="https://rivet.gg/discord" className="text-white/90">
+						<Link href="https://rivet.dev/discord" className="text-white/90">
 							<Icon icon={faDiscord} className="drop-shadow-md" />
 						</Link>
 					</RivetHeader.NavItem>
 					<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
 					<Link
-						href="https://hub.rivet.gg"
+						href="https://dashboard.rivet.dev"
 						className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
 					>
 						Sign In
@@ -264,10 +256,10 @@ export function Header({
 						Documentation
 					</TextNavItem>
 					<TextNavItem
-						href="/cloud"
-						ariaCurrent={active === "cloud" ? "page" : undefined}
+						href="/pricing"
+						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
-						Cloud
+						Pricing
 					</TextNavItem>
 					<TextNavItem
 						href="/changelog"
@@ -286,7 +278,6 @@ function DocsMobileNavigation({ tree }) {
 
 	const docsLinks = [
 		{ href: "/docs/actors", label: "Actors" },
-		{ href: "/docs/cloud", label: "Cloud" },
 	];
 
 	const otherLinks = [
