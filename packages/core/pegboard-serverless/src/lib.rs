@@ -142,10 +142,25 @@ async fn tick(
 		// Remove finished and draining connections from list
 		curr.retain(|conn| !conn.handle.is_finished() && !conn.draining.load(Ordering::SeqCst));
 
-		let desired_count = (desired_slots.div_ceil(*slots_per_runner).max(*min_runners)
-			+ *runners_margin)
-			.min(*max_runners)
-			.try_into()?;
+		// Log warning and reset to 0 if negative
+		let adjusted_desired_slots = if *desired_slots < 0 {
+			tracing::warn!(
+				?ns_id,
+				?runner_name,
+				desired_slots = ?desired_slots,
+				"Negative desired_slots detected, resetting to 0"
+			);
+			0
+		} else {
+			*desired_slots
+		};
+
+		let desired_count =
+			(rivet_util::math::div_ceil_i64(adjusted_desired_slots, *slots_per_runner as i64)
+				.max(*min_runners as i64)
+				+ *runners_margin as i64)
+				.min(*max_runners as i64)
+				.try_into()?;
 
 		// Calculate diff
 		let drain_count = curr.len().saturating_sub(desired_count);
