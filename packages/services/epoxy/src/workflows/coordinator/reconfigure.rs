@@ -87,7 +87,7 @@ pub async fn check_config_changes(
 				replica_id: dc.datacenter_label as u64,
 				status: status.into(),
 				api_peer_url: dc.api_peer_url.to_string(),
-				guard_url: dc.guard_url.to_string(),
+				guard_url: dc.public_url.to_string(),
 			}
 		})
 		.collect::<Vec<types::ReplicaConfig>>();
@@ -277,7 +277,7 @@ fn should_abort_reconfigure(
 			return Ok(true);
 		}
 
-		if url::Url::parse(&replica.guard_url)? != current_dc.guard_url {
+		if url::Url::parse(&replica.guard_url)? != current_dc.public_url {
 			tracing::info!(
 				"config changed during reconfigure (guard_url changed), aborting reconfigure"
 			);

@@ -939,16 +939,20 @@
       "Datacenter": {
         "type": "object",
         "required": [
-          "datacenter_label",
-          "name"
+          "label",
+          "name",
+          "url"
         ],
         "properties": {
-          "datacenter_label": {
+          "label": {
             "type": "integer",
             "format": "int32",
             "minimum": 0
           },
           "name": {
+            "type": "string"
+          },
+          "url": {
             "type": "string"
           }
         },

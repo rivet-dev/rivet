@@ -184,3 +184,39 @@ pub fn extract_duplicate_key_error(err: &anyhow::Error) -> Option<Id> {
 
 	None
 }
+
+/// Determine the datacenter label to create the actor in.
+pub async fn find_dc_for_actor_creation(
+	ctx: &ApiCtx,
+	namespace_id: Id,
+	namespace_name: &str,
+	runner_name: &str,
+	dc_name: Option<&str>,
+) -> Result<u16> {
+	let target_dc_label = if let Some(dc_name) = &dc_name {
+		// Use user-configured DC
+		ctx.config()
+			.dc_for_name(dc_name)
+			.ok_or_else(|| crate::errors::Datacenter::NotFound.build())?
+			.datacenter_label
+	} else {
+		// Find the nearest DC with runners
+		let res = ctx
+			.op(pegboard::ops::runner::find_dc_with_runner::Input {
+				namespace_id,
+				runner_name: runner_name.into(),
+			})
+			.await?;
+		if let Some(dc_label) = res.dc_label {
+			dc_label
+		} else {
+			return Err(pegboard::errors::Actor::NoRunnersAvailable {
+				namespace: namespace_name.into(),
+				runner_name: runner_name.into(),
+			}
+			.build());
+		}
+	};
+
+	Ok(target_dc_label)
+}

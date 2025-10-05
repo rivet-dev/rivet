@@ -48,19 +48,20 @@ impl Default for Topology {
 		Topology {
 			datacenter_label: 1,
 			datacenters: vec![Datacenter {
-				name: "local".into(),
+				name: "default".into(),
 				datacenter_label: 1,
 				is_leader: true,
+				public_url: Url::parse(&format!(
+					"http://127.0.0.1:{}",
+					crate::defaults::ports::GUARD
+				))
+				.unwrap(),
 				api_peer_url: Url::parse(&format!(
 					"http://127.0.0.1:{}",
 					crate::defaults::ports::API_PEER
 				))
 				.unwrap(),
-				guard_url: Url::parse(&format!(
-					"http://127.0.0.1:{}",
-					crate::defaults::ports::GUARD
-				))
-				.unwrap(),
+				valid_hosts: None,
 			}],
 		}
 	}
@@ -72,8 +73,28 @@ pub struct Datacenter {
 	pub name: String,
 	pub datacenter_label: u16,
 	pub is_leader: bool,
-	/// Url of the api-peer service
+	/// Public origin that can be used to connect to this region.
+	pub public_url: Url,
+	/// URL of the api-peer service
 	pub api_peer_url: Url,
-	/// Url of the peer's guard server
-	pub guard_url: Url,
+	/// List of hosts that are valid to connect to this region with. This is used in regional
+	/// endpoints to validate that incoming requests to this datacenter are going to a
+	/// region-specific domain.
+	///
+	/// IMPORTANT: Do not use a global origin that routes to multiple different regions. This will
+	/// cause unpredictable behavior when requests are expected to go to a specific region.
+	#[serde(default)]
+	pub valid_hosts: Option<Vec<String>>,
+}
+
+impl Datacenter {
+	pub fn is_valid_regional_host(&self, host: &str) -> bool {
+		if let Some(valid_hosts) = &self.valid_hosts {
+			// Check if host is in the valid_hosts list
+			valid_hosts.iter().any(|valid_host| valid_host == host)
+		} else {
+			// Check if host matches the origin of public_url
+			self.public_url.host_str() == Some(host)
+		}
+	}
 }

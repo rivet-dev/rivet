@@ -11,12 +11,36 @@ pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 pub async fn route_request(
 	ctx: &StandaloneCtx,
 	target: &str,
-	_host: &str,
+	host: &str,
 	_path: &str,
 	headers: &hyper::HeaderMap,
 ) -> Result<Option<RoutingOutput>> {
 	if target != "runner" {
 		return Ok(None);
+	}
+
+	// Validate that the host is valid for the current datacenter
+	let current_dc = ctx.config().topology().current_dc()?;
+	if !current_dc.is_valid_regional_host(host) {
+		tracing::warn!(?host, datacenter = ?current_dc.name, "invalid host for current datacenter");
+
+		// Determine valid hosts for error message
+		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {
+			hosts.join(", ")
+		} else {
+			current_dc
+				.public_url
+				.host_str()
+				.map(|h| h.to_string())
+				.unwrap_or_else(|| "unknown".to_string())
+		};
+
+		return Err(crate::errors::MustUseRegionalHost {
+			host: host.to_string(),
+			datacenter: current_dc.name.clone(),
+			valid_hosts,
+		}
+		.build());
 	}
 
 	let is_websocket = headers
