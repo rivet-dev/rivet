@@ -46,9 +46,24 @@ export const createDialogHook = <
 
 		return (
 			<IsInModalContext.Provider value={true}>
-				<Dialog {...dialogProps}>
+				<Dialog
+					{...dialogProps}
+					onOpenChange={
+						props.dismissible
+							? () => {}
+							: props.dialogProps?.onOpenChange
+					}
+				>
 					<DialogContent
 						{...dialogContentProps}
+						hideClose={
+							props.dismissible === false ||
+							dialogContentProps?.hideClose
+						}
+						disableOutsidePointerEvents={
+							props.dismissible === false ||
+							dialogContentProps?.disableOutsidePointerEvents
+						}
 						onOpenAutoFocus={(e) => {
 							if (opts.autoFocus === false) {
 								return e.preventDefault();

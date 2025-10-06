@@ -41,7 +41,10 @@ import {
 	ScrollArea,
 	Skeleton,
 } from "@/components";
-import { useInspectorDataProvider } from "@/components/actors";
+import {
+	useDataProviderCheck,
+	useInspectorDataProvider,
+} from "@/components/actors";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
@@ -388,6 +391,7 @@ const Subnav = () => {
 				}
 			: { to: "/", fuzzy: true },
 	);
+	const hasDataProvider = useDataProviderCheck();
 
 	if (nsMatch === false) {
 		return null;
@@ -405,12 +409,14 @@ const Subnav = () => {
 					Connect
 				</HeaderLink>
 			) : null}
-			<div className="w-full">
-				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-					Instances
-				</span>
-				<ActorBuildsList />
-			</div>
+			{hasDataProvider ? (
+				<div className="w-full">
+					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
+						Instances
+					</span>
+					<ActorBuildsList />
+				</div>
+			) : null}
 		</div>
 	);
 };
@@ -535,6 +541,8 @@ function CloudSidebarContent() {
 		fuzzy: true,
 	});
 
+	const hasDataProvider = useDataProviderCheck();
+
 	if (matchNamespace) {
 		return (
 			<div className="flex gap-1.5 flex-col">
@@ -546,12 +554,14 @@ function CloudSidebarContent() {
 				>
 					Connect
 				</HeaderLink>
-				<div className="w-full pt-1.5">
-					<span className="block text-muted-foreground text-xs px-1 py-1 transition-colors mb-0.5">
-						Instances
-					</span>
-					<ActorBuildsList />
-				</div>
+				{hasDataProvider ? (
+					<div className="w-full pt-1.5">
+						<span className="block text-muted-foreground text-xs px-1 py-1 transition-colors mb-0.5">
+							Instances
+						</span>
+						<ActorBuildsList />
+					</div>
+				) : null}
 			</div>
 		);
 	}
