@@ -97,6 +97,8 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 																		.VITE_APP_API_URL
 																: cloudEnv()
 																		.VITE_APP_CLOUD_ENGINE_URL
+														}&RIVET_NAMESPACE=${
+															dataProvider.engineNamespace
 														}`}
 														target="_blank"
 														rel="noreferrer"
@@ -167,27 +169,28 @@ function EnvVariablesStep() {
 	const { data, isLoading } = useQuery(
 		dataProvider.connectRunnerTokenQueryOptions(),
 	);
+
 	return (
 		<>
 			<p>
 				Set the following environment variables in your Railway project
 				settings.
 			</p>
-			<div className="gap-1 items-center">
+			<div className="gap-1 items-center grid grid-cols-2">
 				{__APP_TYPE__ === "engine" ? (
-					<div className="flex gap-1 items-center border-b border-b-border/40 pb-2 mb-2">
+					<>
 						<DiscreteInput value="RIVET_ENGINE" show />
 						<DiscreteInput value={engineEnv().VITE_APP_API_URL} />
-					</div>
+					</>
 				) : null}
-				<div className="flex gap-1 items-center">
-					<DiscreteInput value="RIVET_TOKEN" show />
-					{isLoading ? (
-						<Skeleton className="w-56 h-10" />
-					) : (
-						<DiscreteInput value={data || ""} />
-					)}
-				</div>
+				<DiscreteInput value="RIVET_TOKEN" show />
+				{isLoading ? (
+					<Skeleton className="w-56 h-10" />
+				) : (
+					<DiscreteInput value={data || ""} />
+				)}
+				<DiscreteInput value="RIVET_NAMESPACE" show />
+				<DiscreteInput value={dataProvider.engineNamespace} show />
 			</div>
 		</>
 	);
