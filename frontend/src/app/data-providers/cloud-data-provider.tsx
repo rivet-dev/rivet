@@ -357,7 +357,7 @@ export const createNamespaceContext = ({
 		namespaceQueryOptions() {
 			return parent.currentProjectNamespaceQueryOptions({ namespace });
 		},
-		connectRunnerTokenQueryOptions() {
+		engineAdminTokenQueryOptions() {
 			return queryOptions({
 				staleTime: 5 * 60 * 1000, // 5 minutes
 				gcTime: 5 * 60 * 1000, // 5 minutes
@@ -367,11 +367,11 @@ export const createNamespaceContext = ({
 						project: parent.project,
 						organization: parent.organization,
 					},
-					"runners",
-					"connect",
+					"tokens",
+					"engine-admin",
 				],
 				queryFn: async () => {
-					const f = parent.client.namespaces.createPublishableToken(
+					const f = parent.client.namespaces.createSecretToken(
 						parent.project,
 						namespace,
 						{ org: parent.organization },

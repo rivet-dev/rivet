@@ -15,6 +15,7 @@ import {
 } from "../../ui/form";
 import { BuildSelect } from "../build-select";
 import { CrashPolicySelect } from "../crash-policy-select";
+import { useEngineCompatDataProvider } from "../data-provider";
 import { CrashPolicy as CrashPolicyEnum } from "../queries";
 import { RegionSelect } from "../region-select";
 import { RunnerSelect } from "../runner-select";
@@ -153,7 +154,7 @@ export const JsonInput = () => {
 	);
 };
 
-export const RunnerNameSelector = ({ namespace }: { namespace: string }) => {
+export const RunnerNameSelector = () => {
 	const { control } = useFormContext<FormValues>();
 
 	return (
@@ -165,7 +166,6 @@ export const RunnerNameSelector = ({ namespace }: { namespace: string }) => {
 					<FormLabel>Runner</FormLabel>
 					<FormControl>
 						<RunnerSelect
-							namespace={namespace}
 							onValueChange={field.onChange}
 							value={field.value || ""}
 						/>
@@ -212,12 +212,12 @@ export const ActorPreview = () => {
 	);
 };
 
-export const PrefillRunnerName = ({ namespace }: { namespace: string }) => {
+export const PrefillRunnerName = () => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
 
 	const { data = [], isSuccess } = useInfiniteQuery(
-		runnerNamesQueryOptions({ namespace }),
+		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 
 	const watchedValue = watch("runnerNameSelector");
