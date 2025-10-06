@@ -15,16 +15,16 @@ if (!rivetToken) {
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||
-	(await rl.question("Rivet Endpoint (default: https://api.rivet.gg): ")) ||
-	"https://api.rivet.gg";
+	(await rl.question("Rivet Endpoint (default: http://localhost:6420): ")) ||
+	"http://localhost:6420";
 const namespace =
 	(await rl.question("Namespace (default: default): ")) || "default";
 const runnerName =
 	(await rl.question("Runner name (default: serverless): ")) || "serverless";
 const serverlessUrl =
 	(await rl.question(
-		"Serverless URL (default: http://localhost:8080/api/start): ",
-	)) || "http://localhost:8080/api/start";
+		"Serverless URL (default: http://localhost:3000/api/rivet/start): ",
+	)) || "http://localhost:3000/api/rivet/start";
 
 rl.close();
 

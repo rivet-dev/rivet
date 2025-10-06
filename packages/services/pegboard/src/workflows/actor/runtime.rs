@@ -20,12 +20,13 @@ use super::{
 pub struct LifecycleState {
 	pub generation: u32,
 
-	// TODO: Make these optional? These might not match the properties in the workflow state but it shouldn't
-	// matter for the functionality of the lifecycle loop
-	pub runner_id: Id,
-	pub runner_workflow_id: Id,
+	// Set when currently running (not rescheduling or sleeping)
+	pub runner_id: Option<Id>,
+	pub runner_workflow_id: Option<Id>,
 
 	pub sleeping: bool,
+	#[serde(default)]
+	pub will_wake: bool,
 	pub alarm_ts: Option<i64>,
 	pub gc_timeout_ts: Option<i64>,
 
@@ -36,9 +37,10 @@ impl LifecycleState {
 	pub fn new(runner_id: Id, runner_workflow_id: Id) -> Self {
 		LifecycleState {
 			generation: 0,
-			runner_id,
-			runner_workflow_id,
+			runner_id: Some(runner_id),
+			runner_workflow_id: Some(runner_workflow_id),
 			sleeping: false,
+			will_wake: false,
 			alarm_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS),
 			reschedule_state: RescheduleState::default(),
@@ -352,6 +354,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
 			if let Some(runner_id) = runner_id {
+				// Only clear slot if we have a runner id
 				destroy::clear_slot(
 					input.actor_id,
 					namespace_id,
@@ -361,15 +364,6 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 					&tx,
 				)
 				.await?;
-			} else if for_serverless {
-				tx.atomic_op(
-					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
-						namespace_id,
-						runner_name_selector.clone(),
-					),
-					&(-1i64).to_le_bytes(),
-					MutationType::Add,
-				);
 			}
 
 			Ok(())
@@ -551,8 +545,8 @@ pub async fn reschedule_actor(
 	// Update loop state
 	if let Some((reschedule_state, res)) = res {
 		state.generation = next_generation;
-		state.runner_id = res.runner_id;
-		state.runner_workflow_id = res.runner_workflow_id;
+		state.runner_id = Some(res.runner_id);
+		state.runner_workflow_id = Some(res.runner_workflow_id);
 
 		// Save reschedule state in global state
 		state.reschedule_state = reschedule_state;

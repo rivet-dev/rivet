@@ -145,11 +145,11 @@ async fn tick(
 
 		// Log warning and reset to 0 if negative
 		let adjusted_desired_slots = if *desired_slots < 0 {
-			tracing::warn!(
+			tracing::error!(
 				?ns_id,
 				?runner_name,
-				desired_slots = ?desired_slots,
-				"Negative desired_slots detected, resetting to 0"
+				?desired_slots,
+				"negative desired slots, scaling to 0"
 			);
 			0
 		} else {

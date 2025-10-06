@@ -15,8 +15,8 @@ if (!rivetToken) {
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||
-	(await rl.question("Rivet Endpoint (default: https://api.rivet.gg): ")) ||
-	"https://api.rivet.gg";
+	(await rl.question("Rivet Endpoint (default: http://localhost:6420): ")) ||
+	"http://localhost:6420";
 const namespace =
 	(await rl.question("Namespace (default: default): ")) || "default";
 
