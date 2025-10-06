@@ -16,6 +16,7 @@ import { Route as JoinRouteImport } from './routes/join'
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as OnboardingChooseOrganizationRouteImport } from './routes/onboarding/choose-organization'
+import { Route as OnboardingAcceptInvitationRouteImport } from './routes/onboarding/accept-invitation'
 import { Route as ContextEngineRouteImport } from './routes/_context/_engine'
 import { Route as ContextCloudRouteImport } from './routes/_context/_cloud'
 import { Route as ContextEngineNsNamespaceRouteImport } from './routes/_context/_engine/ns.$namespace'
@@ -63,6 +64,12 @@ const OnboardingChooseOrganizationRoute =
   OnboardingChooseOrganizationRouteImport.update({
     id: '/choose-organization',
     path: '/choose-organization',
+    getParentRoute: () => OnboardingRoute,
+  } as any)
+const OnboardingAcceptInvitationRoute =
+  OnboardingAcceptInvitationRouteImport.update({
+    id: '/accept-invitation',
+    path: '/accept-invitation',
     getParentRoute: () => OnboardingRoute,
   } as any)
 const ContextEngineRoute = ContextEngineRouteImport.update({
@@ -151,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sso-callback': typeof SsoCallbackRoute
+  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/': typeof ContextIndexRoute
   '/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
@@ -170,6 +178,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sso-callback': typeof SsoCallbackRoute
+  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/': typeof ContextIndexRoute
   '/ns/$namespace/connect': typeof ContextEngineNsNamespaceConnectRoute
@@ -189,6 +198,7 @@ export interface FileRoutesById {
   '/sso-callback': typeof SsoCallbackRoute
   '/_context/_cloud': typeof ContextCloudRouteWithChildren
   '/_context/_engine': typeof ContextEngineRouteWithChildren
+  '/onboarding/accept-invitation': typeof OnboardingAcceptInvitationRoute
   '/onboarding/choose-organization': typeof OnboardingChooseOrganizationRoute
   '/_context/': typeof ContextIndexRoute
   '/_context/_cloud/orgs/$organization': typeof ContextCloudOrgsOrganizationRouteWithChildren
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/sso-callback'
+    | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
     | '/'
     | '/orgs/$organization'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/sso-callback'
+    | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
     | '/'
     | '/ns/$namespace/connect'
@@ -247,6 +259,7 @@ export interface FileRouteTypes {
     | '/sso-callback'
     | '/_context/_cloud'
     | '/_context/_engine'
+    | '/onboarding/accept-invitation'
     | '/onboarding/choose-organization'
     | '/_context/'
     | '/_context/_cloud/orgs/$organization'
@@ -319,6 +332,13 @@ declare module '@tanstack/react-router' {
       path: '/choose-organization'
       fullPath: '/onboarding/choose-organization'
       preLoaderRoute: typeof OnboardingChooseOrganizationRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/onboarding/accept-invitation': {
+      id: '/onboarding/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/onboarding/accept-invitation'
+      preLoaderRoute: typeof OnboardingAcceptInvitationRouteImport
       parentRoute: typeof OnboardingRoute
     }
     '/_context/_engine': {
@@ -529,10 +549,12 @@ const ContextRouteWithChildren =
   ContextRoute._addFileChildren(ContextRouteChildren)
 
 interface OnboardingRouteChildren {
+  OnboardingAcceptInvitationRoute: typeof OnboardingAcceptInvitationRoute
   OnboardingChooseOrganizationRoute: typeof OnboardingChooseOrganizationRoute
 }
 
 const OnboardingRouteChildren: OnboardingRouteChildren = {
+  OnboardingAcceptInvitationRoute: OnboardingAcceptInvitationRoute,
   OnboardingChooseOrganizationRoute: OnboardingChooseOrganizationRoute,
 }
 
