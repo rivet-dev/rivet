@@ -7,6 +7,7 @@ import rehypeMdxTitle from "rehype-mdx-title";
 import * as shiki from "shiki";
 import { visit } from "unist-util-visit";
 import theme from "../lib/textmate-code-theme";
+import { transformerTemplateVariables } from "./transformers";
 
 function rehypeParseCodeBlocks() {
 	return (tree) => {
@@ -28,6 +29,12 @@ function rehypeParseCodeBlocks() {
 
 					if (typeof annotations === "string") {
 						annotations = { title: annotations.trim() };
+					}
+
+					// Autofill is handled client-side in AutofillCodeBlock.tsx
+					// Just pass through the autofill flag
+					if (annotations.autofill) {
+						parentNode.properties.autofill = true;
 					}
 
 					for (const key in annotations) {
@@ -69,7 +76,7 @@ function rehypeShiki() {
 			],
 		});
 
-		visit(tree, "element", (node) => {
+		visit(tree, "element", (node, _index, parentNode) => {
 			if (
 				node.tagName === "pre" &&
 				node.children[0]?.tagName === "code"
@@ -80,10 +87,20 @@ function rehypeShiki() {
 				node.properties.code = textNode.value;
 
 				if (node.properties.language) {
+					const transformers = [transformerNotationFocus()];
+
+					// Add template variable transformer for autofill blocks
+					if (
+						node.properties?.autofill ||
+						parentNode.properties?.autofill
+					) {
+						transformers.push(transformerTemplateVariables());
+					}
+
 					textNode.value = highlighter.codeToHtml(textNode.value, {
 						lang: node.properties.language,
 						theme: theme.name,
-						transformers: [transformerNotationFocus()],
+						transformers,
 					});
 				}
 			}

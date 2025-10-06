@@ -12,7 +12,7 @@ export function Comments({ className }: CommentsProps) {
 		<div className={cn(className, "mt-4 no-prose")}>
 			<Giscus
 				id="comments"
-				repo="rivet-gg/rivet"
+				repo="rivet-dev/engine"
 				repoId="R_kgDOJwPLtw"
 				category="Comments"
 				categoryId="DIC_kwDOJwPLt84Co34O"
@@ -21,7 +21,7 @@ export function Comments({ className }: CommentsProps) {
 				reactionsEnabled="1"
 				emitMetadata="0"
 				inputPosition="top"
-				theme="https://rivet.gg/giscus.css"
+				theme="https://rivet.dev/giscus.css"
 				lang="en"
 				loading="lazy"
 			/>
