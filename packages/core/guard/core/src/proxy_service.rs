@@ -2253,6 +2253,9 @@ fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
 	let (status, error_response) =
 		if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
 			let status = match (rivet_err.group(), rivet_err.code()) {
+				("api", "not_found") => StatusCode::NOT_FOUND,
+				("api", "unauthorized") => StatusCode::UNAUTHORIZED,
+				("api", "forbidden") => StatusCode::FORBIDDEN,
 				("guard", "rate_limit") => StatusCode::TOO_MANY_REQUESTS,
 				("guard", "upstream_error") => StatusCode::BAD_GATEWAY,
 				("guard", "routing_error") => StatusCode::BAD_GATEWAY,
