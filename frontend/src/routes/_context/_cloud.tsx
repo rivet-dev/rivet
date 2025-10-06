@@ -39,6 +39,7 @@ function CloudModals() {
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
+	const TokensDialog = useDialog.Tokens.Dialog;
 
 	return (
 		<>
@@ -102,6 +103,23 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search.modal === "connect-railway",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<TokensDialog
+				dialogProps={{
+					open: search.modal === "tokens",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

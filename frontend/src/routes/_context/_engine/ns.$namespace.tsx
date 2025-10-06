@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { createNamespaceContext } from "@/app/data-providers/engine-data-provider";
+import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 
 export const Route = createFileRoute("/_context/_engine/ns/$namespace")({
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/_context/_engine/ns/$namespace")({
 			});
 	},
 	component: RouteComponent,
+	notFoundComponent: () => <NotFoundCard />,
 });
 
 function RouteComponent() {

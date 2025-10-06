@@ -209,6 +209,7 @@ const defaultContext = {
 					: null,
 				sleepingAt: data.sleepingAt ? new Date(data.sleepingAt) : null,
 				region: data.region,
+				runner: data.runner,
 				crashPolicy: data.crashPolicy,
 			}),
 		});
