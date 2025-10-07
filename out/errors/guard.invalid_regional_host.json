@@ -1,0 +1,5 @@
+{
+  "code": "invalid_regional_host",
+  "group": "guard",
+  "message": "Request must use a regional URL for this datacenter."
+}

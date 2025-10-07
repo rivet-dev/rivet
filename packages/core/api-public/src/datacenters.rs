@@ -32,8 +32,9 @@ async fn list_inner(ctx: ApiCtx) -> Result<ListResponse> {
 			.datacenters
 			.iter()
 			.map(|dc| Datacenter {
-				datacenter_label: dc.datacenter_label,
+				label: dc.datacenter_label,
 				name: dc.name.clone(),
+				url: dc.public_url.to_string(),
 			})
 			.collect(),
 		pagination: Pagination { cursor: None },
