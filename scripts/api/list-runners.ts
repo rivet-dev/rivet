@@ -23,7 +23,7 @@ const namespace =
 rl.close();
 
 const response = await fetch(
-	`${endpoint}/runner-configs?namespace=${namespace}`,
+	`${endpoint}/runners?namespace=${namespace}`,
 	{
 		method: "GET",
 		headers: {
