@@ -59,7 +59,7 @@ define_keys! {
 	(31, DBS, "dbs"),
 	(32, ACTOR, "actor"),
 	(33, BY_NAME, "by_name"),
-	// 34
+	(34, DEFAULT, "default"),
 	(35, REMAINING_MEMORY, "remaining_memory"),
 	(36, REMAINING_CPU, "remaining_cpu"),
 	(37, TOTAL_MEMORY, "total_memory"),

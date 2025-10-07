@@ -28,7 +28,7 @@ use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
 		datacenters::list,
 	),
 	components(
-		schemas(namespace::keys::RunnerConfigVariant)
+		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
 	),
 	security( ("bearer_auth" = []) ),
     modifiers(&SecurityAddon),

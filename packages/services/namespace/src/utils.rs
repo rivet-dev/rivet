@@ -1,9 +1,9 @@
-use rivet_types::namespaces::RunnerConfig;
+use rivet_types::{
+	keys::namespace::runner_config::RunnerConfigVariant, runner_configs::RunnerConfig,
+};
 
-use crate::keys;
-
-pub fn runner_config_variant(runner_config: &RunnerConfig) -> keys::RunnerConfigVariant {
+pub fn runner_config_variant(runner_config: &RunnerConfig) -> RunnerConfigVariant {
 	match runner_config {
-		RunnerConfig::Serverless { .. } => keys::RunnerConfigVariant::Serverless,
+		RunnerConfig::Serverless { .. } => RunnerConfigVariant::Serverless,
 	}
 }

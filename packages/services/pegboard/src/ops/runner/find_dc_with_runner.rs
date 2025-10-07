@@ -1,11 +1,11 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use futures_util::{StreamExt, TryFutureExt, stream::FuturesUnordered};
+use futures_util::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
 use gas::prelude::*;
-use rivet_api_types::runners::list as runners_list;
+use rivet_api_types::{runner_configs::list as runner_configs_list, runners::list as runners_list};
 use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
-use rivet_types::namespaces::RunnerConfig;
+use rivet_types::runner_configs::RunnerConfig;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +67,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 
 	// Check if serverless runner config exists
 	let res = ctx
-		.op(namespace::ops::runner_config::get_global::Input {
+		.op(namespace::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
 		})
 		.await?;
@@ -92,14 +92,14 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		.next()
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	// Fanout to all datacenters
-	let runners =
+	// Fanout two requests to all datacenters: runner list, and runner config list (with specific name)
+	let runners_fut =
 		race_request_to_datacenters::<runners_list::ListQuery, runners_list::ListResponse, _>(
 			ctx,
 			Default::default(),
 			"/runners",
 			runners_list::ListQuery {
-				namespace: namespace.name,
+				namespace: namespace.name.clone(),
 				name: Some(input.runner_name.clone()),
 				runner_ids: None,
 				include_stopped: Some(false),
@@ -108,9 +108,34 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 			},
 			|res| !res.runners.is_empty(),
 		)
-		.await?;
+		.map(|res| res.map(|x| x.map(|x| x.0)))
+		.boxed();
 
-	Ok(runners.map(|x| x.0))
+	let runner_configs_fut = race_request_to_datacenters::<
+		runner_configs_list::ListQuery,
+		runner_configs_list::ListResponse,
+		_,
+	>(
+		ctx,
+		Default::default(),
+		"/runner-configs",
+		runner_configs_list::ListQuery {
+			namespace: namespace.name.clone(),
+			variant: None,
+			runner_names: Some(input.runner_name.clone()),
+			limit: Some(1),
+			cursor: None,
+		},
+		|res| !res.runner_configs.is_empty(),
+	)
+	.map(|res| res.map(|x| x.map(|x| x.0)))
+	.boxed();
+
+	let mut futs = [runners_fut, runner_configs_fut]
+		.into_iter()
+		.collect::<FuturesUnordered<_>>();
+
+	Ok(futs.next().await.transpose()?.flatten())
 }
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -131,33 +156,31 @@ where
 {
 	// Create futures for all dcs except the current
 	let dcs = &ctx.config().topology().datacenters;
-	let mut responses = futures_util::stream::iter(
-		dcs.iter()
-			.filter(|dc| dc.datacenter_label != ctx.config().dc_label())
-			.map(|dc| {
-				let headers = headers.clone();
-				let query = query.clone();
-				async move {
-					tokio::time::timeout(
-						REQUEST_TIMEOUT,
-						// Remote datacenter
-						request_remote_datacenter::<R>(
-							ctx.config(),
-							dc.datacenter_label,
-							&endpoint,
-							Method::GET,
-							headers,
-							Some(&query),
-							Option::<&()>::None,
-						)
-						.map_ok(|x| (dc.datacenter_label, x)),
+	let mut responses = dcs
+		.iter()
+		.filter(|dc| dc.datacenter_label != ctx.config().dc_label())
+		.map(|dc| {
+			let headers = headers.clone();
+			let query = query.clone();
+			async move {
+				tokio::time::timeout(
+					REQUEST_TIMEOUT,
+					// Remote datacenter
+					request_remote_datacenter::<R>(
+						ctx.config(),
+						dc.datacenter_label,
+						&endpoint,
+						Method::GET,
+						headers,
+						Some(&query),
+						Option::<&()>::None,
 					)
-					.await
-				}
-			}),
-	)
-	.collect::<FuturesUnordered<_>>()
-	.await;
+					.map_ok(|x| (dc.datacenter_label, x)),
+				)
+				.await
+			}
+		})
+		.collect::<FuturesUnordered<_>>();
 
 	// Collect responses until we reach quorum or all futures complete
 	while let Some(out) = responses.next().await {

@@ -1,6 +1,5 @@
 use gas::prelude::*;
-use rivet_cache::CacheKey;
-use rivet_types::namespaces::RunnerConfig;
+use rivet_types::runner_configs::RunnerConfig;
 use universaldb::options::MutationType;
 
 use crate::{errors, keys, utils::runner_config_variant};
@@ -14,23 +13,19 @@ pub struct Input {
 
 #[operation]
 pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<()> {
-	if !ctx.config().is_leader() {
-		return Err(errors::Namespace::NotLeader.build());
-	}
-
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// TODO: Once other types of configs get added, delete previous config before writing
 			tx.write(
-				&keys::RunnerConfigKey::new(input.namespace_id, input.name.clone()),
+				&keys::runner_config::DataKey::new(input.namespace_id, input.name.clone()),
 				input.config.clone(),
 			)?;
 
 			// Write to secondary idx
 			tx.write(
-				&keys::RunnerConfigByVariantKey::new(
+				&keys::runner_config::ByVariantKey::new(
 					input.namespace_id,
 					runner_config_variant(&input.config),
 					input.name.clone(),
@@ -107,16 +102,9 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 		.await?
 		.map_err(|err| err.build())?;
 
-	// Purge cache in all dcs
-	let variant_str = serde_json::to_string(&runner_config_variant(&input.config))?;
-	ctx.op(internal::ops::cache::purge_global::Input {
-		base_key: format!("namespace.runner_config.{variant_str}.get_global"),
-		keys: vec![(input.namespace_id, input.name.as_str()).cache_key().into()],
-	})
-	.await?;
-
-	// Bump autoscaler in all dcs
-	ctx.op(internal::ops::bump_serverless_autoscaler_global::Input {})
+	// Bump autoscaler
+	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+		.send()
 		.await?;
 
 	Ok(())

@@ -230,7 +230,7 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			"/actors",
 			peer_query,
 			|ctx, query| async move { rivet_api_peer::actors::list::list(ctx, (), query).await },
-			|res, agg| agg.extend(res.actors),
+			|_, res, agg| agg.extend(res.actors),
 		)
 		.await?;
 

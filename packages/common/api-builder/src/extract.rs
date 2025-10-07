@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use axum::{
 	extract::{
 		Request,
