@@ -1,0 +1,9 @@
+{
+  "name": "@rivetkit/run-config-scripts",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0"
+  }
+}
