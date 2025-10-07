@@ -95,15 +95,30 @@ export type ActorStatus =
 	| "stopped"
 	| "crashed"
 	| "sleeping"
+	| "pending"
 	| "unknown";
 
 export function getActorStatus(
 	actor: Pick<
 		Actor,
-		"createdAt" | "startedAt" | "destroyedAt" | "sleepingAt"
+		| "createdAt"
+		| "startedAt"
+		| "destroyedAt"
+		| "sleepingAt"
+		| "pendingAllocationAt"
 	>,
 ): ActorStatus {
-	const { createdAt, startedAt, destroyedAt, sleepingAt } = actor;
+	const {
+		createdAt,
+		startedAt,
+		destroyedAt,
+		sleepingAt,
+		pendingAllocationAt,
+	} = actor;
+
+	if (pendingAllocationAt && !startedAt && !destroyedAt) {
+		return "pending";
+	}
 
 	if (createdAt && sleepingAt && !destroyedAt) {
 		return "sleeping";

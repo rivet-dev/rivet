@@ -54,6 +54,7 @@ export const ActorStatusIndicator = ({
 					"bg-blue-600 animate-pulse": status === "starting",
 					"bg-destructive": status === "crashed",
 					"bg-foreground/10": status === "stopped",
+					"bg-primary": status === "pending",
 					"bg-accent": status === "unknown",
 				},
 				props.className,
