@@ -69,3 +69,16 @@ pub struct ActorDestroyed {
 pub struct ActorReadyTimeout {
 	pub actor_id: Id,
 }
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"must_use_regional_host",
+	"Request must use a regional URL for this datacenter.",
+	"Invalid host {host} for datacenter {datacenter}. Please use one of the following hosts: {valid_hosts}"
+)]
+pub struct MustUseRegionalHost {
+	pub host: String,
+	pub datacenter: String,
+	pub valid_hosts: String,
+}

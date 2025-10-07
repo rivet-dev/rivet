@@ -53,6 +53,16 @@ pub enum Actor {
 		"Actor key is already reserved in the datacenter '{datacenter_label}'. Either remove the datacenter constraint to automatically create this actor in the correct datacenter or provide the datacenter that matches."
 	)]
 	KeyReservedInDifferentDatacenter { datacenter_label: u16 },
+
+	#[error(
+		"no_runners_available",
+		"No runners are available in any datacenter. Validate the runner is listed in the Connect tab and that the runner's name matches the requested runner name.",
+		"No runners with name '{runner_name}' are available in any datacenter for the namespace '{namespace}'. Validate the runner is listed in the Connect tab and that the runner's name matches the requested runner name."
+	)]
+	NoRunnersAvailable {
+		namespace: String,
+		runner_name: String,
+	},
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

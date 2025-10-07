@@ -14,7 +14,6 @@ use utoipa::{IntoParams, ToSchema};
 
 use crate::actors::utils;
 use crate::ctx::ApiCtx;
-use crate::errors;
 
 #[derive(Debug, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
@@ -123,15 +122,14 @@ async fn get_or_create_inner(
 	}
 
 	// Actor doesn't exist for any key, create it
-	// Determine which datacenter to create the actor in
-	let target_dc_label = if let Some(dc_name) = &query.datacenter {
-		ctx.config()
-			.dc_for_name(dc_name)
-			.ok_or_else(|| errors::Datacenter::NotFound.build())?
-			.datacenter_label
-	} else {
-		ctx.config().dc_label()
-	};
+	let target_dc_label = super::utils::find_dc_for_actor_creation(
+		&ctx,
+		namespace.namespace_id,
+		&query.namespace,
+		&body.runner_name_selector,
+		query.datacenter.as_ref().map(String::as_str),
+	)
+	.await?;
 
 	let actor_id = Id::new_v1(target_dc_label);
 

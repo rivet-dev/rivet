@@ -68,15 +68,21 @@ async fn create_inner(
 ) -> Result<CreateResponse> {
 	ctx.skip_auth();
 
-	// Determine which datacenter to create the actor in
-	let target_dc_label = if let Some(dc_name) = &query.datacenter {
-		ctx.config()
-			.dc_for_name(dc_name)
-			.ok_or_else(|| crate::errors::Datacenter::NotFound.build())?
-			.datacenter_label
-	} else {
-		ctx.config().dc_label()
-	};
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	let target_dc_label = super::utils::find_dc_for_actor_creation(
+		&ctx,
+		namespace.namespace_id,
+		&query.namespace,
+		&body.runner_name_selector,
+		query.datacenter.as_ref().map(String::as_str),
+	)
+	.await?;
 
 	let query = rivet_api_types::actors::create::CreateQuery {
 		namespace: query.namespace,

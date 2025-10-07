@@ -21,6 +21,7 @@ use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 use vbare::OwnedVersionedData;
 
+const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-slots");
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
@@ -266,6 +267,8 @@ async fn outbound_handler(
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
+	let current_dc = ctx.config().topology().current_dc()?;
+
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
 	let headers = headers
 		.into_iter()
@@ -276,6 +279,10 @@ async fn outbound_handler(
 				v.parse::<HeaderValue>().ok()?,
 			))
 		})
+		.chain(std::iter::once((
+			X_RIVET_ENDPOINT,
+			HeaderValue::try_from(current_dc.public_url.to_string())?,
+		)))
 		.chain(std::iter::once((
 			X_RIVET_TOTAL_SLOTS,
 			HeaderValue::try_from(slots_per_runner)?,
