@@ -5,7 +5,9 @@ import type { ActorId } from "./queries";
 
 type RequestOptions = Parameters<typeof createActorInspectorClient>[1];
 
-export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
+export const createDefaultActorContext = (
+	{ hash }: { hash: string } = { hash: `${Date.now()}` },
+) => ({
 	createActorInspectorFetchConfiguration: (
 		actorId: ActorId | string,
 	): RequestOptions => ({
@@ -33,7 +35,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			refetchInterval: 1000,
 			...opts,
 			queryKey: [hash, "actor", actorId, "ping"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.ping.$get();
 				if (!response.ok) {
@@ -52,7 +54,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			enabled,
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "state"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.state.$get();
 
@@ -75,7 +77,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			enabled,
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "connections"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.connections.$get();
 
@@ -94,7 +96,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 		return queryOptions({
 			enabled,
 			queryKey: [hash, "actor", actorId, "database"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.db.$get();
 
@@ -143,7 +145,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			staleTime: 0,
 			gcTime: 5000,
 			queryKey: [hash, "actor", actorId, "database", table],
-			queryFn: async ({ queryKey: [, actorId, , table] }) => {
+			queryFn: async ({ queryKey: [, , actorId, , table] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.db.$post({
 					json: { query: `SELECT * FROM ${table} LIMIT 500` },
@@ -164,7 +166,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			enabled,
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "events"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.events.$get();
 
@@ -183,7 +185,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 		return queryOptions({
 			enabled,
 			queryKey: [hash, "actor", actorId, "rpcs"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.rpcs.$get();
 
@@ -234,7 +236,7 @@ export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 			staleTime: 0,
 			gcTime: 0,
 			queryKey: [hash, "actor", actorId, "auto-wake-up"],
-			queryFn: async ({ queryKey: [, actorId] }) => {
+			queryFn: async ({ queryKey: [, , actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				try {
 					await client.ping.$get();
