@@ -37,7 +37,7 @@ export function ChangelogEntry({
 					<div className="bg-white text-background size-8 rounded-full flex items-center justify-center">
 						<Icon icon={faSparkle} className="m-0" />
 					</div>
-					<h4 className="font-bold text-lg text-foreground">
+					<h4 className=" text-lg text-foreground">
 						{isNew ? (
 							<span>New Update</span>
 						) : (

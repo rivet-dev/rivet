@@ -1,11 +1,7 @@
 import { faQuestionCircle, faVercel, Icon } from "@rivet-gg/icons";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { HelpDropdown } from "@/app/help-dropdown";
-import {
-	Button,
-	type DialogContentProps,
-	Frame,
-} from "@/components";
+import { Button, type DialogContentProps, Frame } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
 
 const { Stepper } = defineStepper(
@@ -40,7 +36,7 @@ export default function CreateProjectFrameContent({
 			defaultValues={{ plan: "hobby", endpoint: "" }}
 		>
 			<Frame.Header>
-				<Frame.Title className="justify-between flex items-center">
+				<Frame.Title className="gap-2 flex items-center">
 					<div>
 						Add <Icon icon={faVercel} className="ml-0.5" />
 						Vercel

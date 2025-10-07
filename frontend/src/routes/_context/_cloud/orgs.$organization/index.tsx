@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	pendingComponent: () => (
 		<RouteLayout>
 			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-				<div className="max-w-5xl  mt-2 flex justify-between items-center px-6 py-4">
+				<div className="mt-2 flex justify-between items-center px-6 py-4">
 					<H2 className="mb-2">
 						<Skeleton className="w-48 h-8" />
 					</H2>

@@ -52,8 +52,8 @@ export function DocsSheet({
 								rel="noopener noreferrer"
 								href={
 									path.startsWith("http")
-										? `${path}?utm_source=engine&embed=true`
-										: `https://rivet.gg/${path}?utm_source=engine&embed=true#${hash}`
+										? `${path}?utm_source=engine`
+										: `https://rivet.gg/${path}?utm_source=engine#${hash}`
 								}
 							>
 								Open in new tab

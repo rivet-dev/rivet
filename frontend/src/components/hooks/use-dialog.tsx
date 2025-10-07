@@ -49,9 +49,9 @@ export const createDialogHook = <
 				<Dialog
 					{...dialogProps}
 					onOpenChange={
-						props.dismissible
+						props.dismissible === false
 							? () => {}
-							: props.dialogProps?.onOpenChange
+							: dialogProps?.onOpenChange
 					}
 				>
 					<DialogContent

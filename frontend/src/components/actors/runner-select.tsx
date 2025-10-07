@@ -6,14 +6,9 @@ import { useEngineCompatDataProvider } from "./data-provider";
 interface RunnerSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
-	namespace: string;
 }
 
-export function RunnerSelect({
-	onValueChange,
-	value,
-	namespace,
-}: RunnerSelectProps) {
+export function RunnerSelect({ onValueChange, value }: RunnerSelectProps) {
 	const {
 		data = [],
 		hasNextPage,
@@ -21,7 +16,7 @@ export function RunnerSelect({
 		isLoading,
 		isFetchingNextPage,
 	} = useInfiniteQuery(
-		useEngineCompatDataProvider().runnerNamesQueryOptions({ namespace }),
+		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 
 	const [newRunner, setNewRunner] = useState<string | null>(null);
