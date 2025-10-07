@@ -25,6 +25,7 @@ export const ls = {
 		localStorage.clear();
 	},
 	engineCredentials: {
+		key: (url: string) => btoa(`engine-credentials-${JSON.stringify(url)}`),
 		set: (url: string, token: string) => {
 			ls.set(
 				btoa(`engine-credentials-${JSON.stringify(url)}`),

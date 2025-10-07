@@ -469,16 +469,13 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		runnerByNameQueryOptions(opts: {
-			namespace: string;
-			runnerName: string;
-		}) {
+		runnerByNameQueryOptions(opts: { runnerName: string }) {
 			return queryOptions({
-				queryKey: [opts.namespace, "runner", opts.runnerName],
+				queryKey: [{ namespace }, "runner", opts.runnerName],
 				enabled: !!opts.runnerName,
 				queryFn: async ({ signal: abortSignal }) => {
 					const data = await client.runners.list(
-						{ namespace: opts.namespace, name: opts.runnerName },
+						{ namespace, name: opts.runnerName },
 						{
 							abortSignal,
 						},
