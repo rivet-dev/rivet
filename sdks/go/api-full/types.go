@@ -265,8 +265,9 @@ func (c CrashPolicy) Ptr() *CrashPolicy {
 }
 
 type Datacenter struct {
-	DatacenterLabel int    `json:"datacenter_label"`
-	Name            string `json:"name"`
+	Label int    `json:"label"`
+	Name  string `json:"name"`
+	Url   string `json:"url"`
 
 	_rawJSON json.RawMessage
 }
