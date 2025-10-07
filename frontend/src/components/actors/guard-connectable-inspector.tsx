@@ -14,7 +14,7 @@ import { getConfig } from "../lib/config";
 import { ls } from "../lib/utils";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
-import { ActorProvider } from "./actor-queries-context";
+import { ActorProvider, useActor } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
@@ -137,7 +137,13 @@ function ActorContextProvider(props: {
 	);
 }
 
-function ActorInspectorProvider({ children }: { children: ReactNode }) {
+function ActorInspectorProvider({
+	actorId,
+	children,
+}: {
+	actorId: ActorId;
+	children: ReactNode;
+}) {
 	const { credentials } = useInspectorCredentials();
 
 	if (!credentials?.url || !credentials?.token) {
@@ -150,7 +156,11 @@ function ActorInspectorProvider({ children }: { children: ReactNode }) {
 		});
 	}, [credentials]);
 
-	return <ActorProvider value={actorContext}>{children}</ActorProvider>;
+	return (
+		<ActorProvider value={actorContext}>
+			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
+		</ActorProvider>
+	);
 }
 
 function useActorRunner({ actorId }: { actorId: ActorId }) {
@@ -230,7 +240,11 @@ function ActorEngineProvider({
 		);
 	}
 
-	return <ActorProvider value={actorContext}>{children}</ActorProvider>;
+	return (
+		<ActorProvider value={actorContext}>
+			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
+		</ActorProvider>
+	);
 }
 
 function NoRunnerInfo({ runner }: { runner: string }) {
@@ -293,4 +307,37 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 			</div>
 		</Info>
 	);
+}
+
+function InspectorGuard({
+	actorId,
+	children,
+}: {
+	actorId: ActorId;
+	children: ReactNode;
+}) {
+	const { isError } = useQuery({
+		...useActor().actorPingQueryOptions(actorId),
+		enabled: true,
+	});
+
+	if (isError) {
+		return (
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						<p>Unable to connect to the Actor's Inspector.</p>
+						<p>
+							Check that your Actor has the Inspector enabled and
+							that your network allows connections to the
+							Inspector URL.
+						</p>
+					</Info>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
+		);
+	}
+	return children;
 }
