@@ -375,6 +375,7 @@ export const createNamespaceContext = ({
 	} satisfies DefaultDataProvider;
 
 	return {
+		engineNamespace: namespace,
 		...dataProvider,
 		runnersQueryOptions() {
 			return infiniteQueryOptions({
