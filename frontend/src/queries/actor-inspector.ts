@@ -13,7 +13,9 @@ export const createInspectorActorContext = ({
 	token: string;
 	engineToken?: string;
 }) => {
-	const def = createDefaultActorContext();
+	const def = createDefaultActorContext({
+		hash: btoa(url + inspectorToken + (engineToken || "")).slice(0, 8),
+	});
 	const newUrl = new URL(url);
 	if (!newUrl.pathname.endsWith("inspect")) {
 		newUrl.pathname = `${ensureTrailingSlash(newUrl.pathname)}inspect`;

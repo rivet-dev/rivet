@@ -357,6 +357,9 @@ export const createNamespaceContext = ({
 		namespaceQueryOptions() {
 			return parent.currentProjectNamespaceQueryOptions({ namespace });
 		},
+		currentNamespaceAccessTokenQueryOptions() {
+			return parent.accessTokenQueryOptions({ namespace });
+		},
 		engineAdminTokenQueryOptions() {
 			return queryOptions({
 				staleTime: 5 * 60 * 1000, // 5 minutes
