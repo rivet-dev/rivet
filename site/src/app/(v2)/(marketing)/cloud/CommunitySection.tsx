@@ -20,9 +20,9 @@ export const CommunitySection = () => {
 		{
 			name: "Discussions",
 			icon: faGithub,
-			href: "https://github.com/rivet-gg/rivet/discussions",
+			href: "https://github.com/rivet-dev/rivet/discussions",
 		},
-		{ name: "X", icon: faXTwitter, href: "https://x.com/rivet_gg" },
+		{ name: "X", icon: faXTwitter, href: "https://x.com/rivet_dev" },
 		{
 			name: "Bluesky",
 			icon: faBluesky,
@@ -38,7 +38,7 @@ export const CommunitySection = () => {
 				user: "Jane Doe",
 				handle: "@janedoe",
 				content:
-					"Just deployed my first stateful job with @rivet_gg and I'm blown away by how simple it was. The documentation is excellent!",
+					"Just deployed my first stateful job with @rivet_dev and I'm blown away by how simple it was. The documentation is excellent!",
 			},
 			{
 				user: "Mike Williams",
@@ -50,7 +50,7 @@ export const CommunitySection = () => {
 				user: "Sara Chen",
 				handle: "@sarac",
 				content:
-					"Been using @rivet_gg for our AI agents and the performance is incredible. Self-hosting was a breeze too!",
+					"Been using @rivet_dev for our AI agents and the performance is incredible. Self-hosting was a breeze too!",
 			},
 		],
 		// Column 2
@@ -65,7 +65,7 @@ export const CommunitySection = () => {
 				user: "Emma Rodriguez",
 				handle: "@emmar",
 				content:
-					"The desktop sandbox feature in @rivet_gg is a game changer for our GUI-based applications. Nothing else comes close.",
+					"The desktop sandbox feature in @rivet_dev is a game changer for our GUI-based applications. Nothing else comes close.",
 			},
 			{
 				user: "David Kim",
@@ -80,13 +80,13 @@ export const CommunitySection = () => {
 				user: "Alex Johnson",
 				handle: "@alexj",
 				content:
-					"I've tried all the serverless platforms out there, and @rivet_gg is hands down the best one for my needs. The open-source aspect sealed the deal for me.",
+					"I've tried all the serverless platforms out there, and @rivet_dev is hands down the best one for my needs. The open-source aspect sealed the deal for me.",
 			},
 			{
 				user: "Taylor Morgan",
 				handle: "@taylorm",
 				content:
-					"Moving from AWS to self-hosted @rivet_gg cut our costs by 70% while improving performance. Best decision we made this year.",
+					"Moving from AWS to self-hosted @rivet_dev cut our costs by 70% while improving performance. Best decision we made this year.",
 			},
 			{
 				user: "Jordan Lee",

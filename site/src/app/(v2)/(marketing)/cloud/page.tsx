@@ -1,12 +1,10 @@
+import { ArchitectureSection } from "./ArchitectureSection";
 import { CommandCenterSection } from "./CommandCenterSection";
-import { CommunitySection } from "./CommunitySection";
-import { CtaButtons } from "./CtaButtons";
 import { CtaSection } from "./CtaSection";
-import { FeaturesGrid } from "./FeaturesGrid";
-import { PerformanceSection } from "./PerformanceSection";
-import { PowerfulPrimitivesSection } from "./PowerfulPrimitivesSection";
-import { RivetCloudSection } from "./RivetCloudSection";
 import { ServerlessLimitationsSection } from "./ServerlessLimitationsSection";
+import { Icon, faArrowRight } from "@rivet-gg/icons";
+import { MarketingButton } from "./MarketingButton";
+import Link from "next/link";
 
 export default function IndexPage() {
 	// an empty div at the top of the page is a workaround for a bug in Next.js that causes the page to jump when the user navigates to it
@@ -21,15 +19,11 @@ export default function IndexPage() {
 			{/* Content */}
 			<main className="min-h-screen w-full max-w-[1500px] mx-auto px-4 md:px-8">
 				<Hero />
-				<FeaturesGrid />
-				<PowerfulPrimitivesSection />
+				<ArchitectureSection />
 				<ServerlessLimitationsSection />
-				<PerformanceSection />
 				{/*<FrameworksSection />*/}
 				{/*<TutorialsSection />*/}
 				<CommandCenterSection />
-				<RivetCloudSection />
-				<CommunitySection />
 				<CtaSection />
 			</main>
 		</>
@@ -74,23 +68,10 @@ const Hero = () => {
 					{/* Title */}
 					<div className="space-y-6 text-center sm:text-left">
 						<h1 className="text-4xl sm:text-5xl md:text-6xl font-700 text-white leading-[1.3] sm:leading-[1.1] tracking-normal">
-							The open-source serverless cloud
+							Scale and manage your Actors on Rivet Cloud
 						</h1>
 						<p className="text-lg sm:text-xl leading-[1.2] tracking-tight font-500 text-white/40 max-w-lg mx-auto sm:mx-0">
-							Easily deploy & scale{" "}
-							<span className="text-white/90">AI agents</span>,{" "}
-							<span className="text-white/90">
-								complex workloads
-							</span>
-							, and{" "}
-							<span className="text-white/90">backends</span> —
-							all on a frictionless cloud.
-							{/*<span className="text-white/80">
-								Open-source
-							</span> &{" "}
-							<span className="text-white/80">
-								self-hostable
-							</span>.*/}
+							Rivet cloud scales actors that connect seamlessly to your applications deployed anywhere
 						</p>
 					</div>
 
@@ -98,7 +79,18 @@ const Hero = () => {
 
 					{/* CTA */}
 					<div className="flex justify-center sm:justify-start">
-						<CtaButtons />
+						<div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+							<MarketingButton href="/talk-to-an-engineer" primary>
+								Get Started
+							</MarketingButton>
+							<MarketingButton href="/docs/cloud">
+								<span>Documentation</span>
+								<Icon
+									icon={faArrowRight}
+									className="ml-2 text-xs group-hover:translate-x-0.5 transition-transform duration-200"
+								/>
+							</MarketingButton>
+						</div>
 					</div>
 
 					{/*<div className="mt-4">

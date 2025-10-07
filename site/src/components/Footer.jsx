@@ -18,7 +18,10 @@ import {
 } from "@rivet-gg/icons";
 
 const footer = {
-	product: [{ name: "Actors", href: "/docs/actors" }],
+	product: [
+		{ name: "Actors", href: "/docs/actors" },
+		{ name: "Rivet Cloud", href: "/cloud" }
+	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
 		// { name: "Integrations", href: "/integrations" },
@@ -52,7 +55,7 @@ const footer = {
 		},
 		{
 			name: "Twitter",
-			href: "https://twitter.com/rivet_gg",
+			href: "https://x.com/rivet_dev",
 			icon: faTwitter,
 		},
 		{
@@ -62,12 +65,12 @@ const footer = {
 		},
 		{
 			name: "GitHub",
-			href: "https://github.com/rivet-gg",
+			href: "https://github.com/rivet-dev",
 			icon: faGithub,
 		},
 		{
 			name: "YouTube",
-			href: "https://www.youtube.com/@rivet-gg",
+			href: "https://www.youtube.com/@rivet-dev",
 			icon: faYoutube,
 		},
 		{
@@ -137,7 +140,7 @@ function SmallPrint() {
 					{/* Logo */}
 					<Image className="size-12" src={imgLogo} alt="Rivet" />
 					<p className="text-sm leading-6 text-gray-300">
-						The open-source alternative to Durable Objects
+						Build and scale stateful workloads
 					</p>
 
 					{/* Social */}
