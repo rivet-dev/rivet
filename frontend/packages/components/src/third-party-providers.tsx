@@ -35,6 +35,7 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 		Sentry.init({
 			dsn: config.sentry.dsn,
 			integrations,
+			tunnel: getConfig().sentry?.tunnel,
 		});
 	}
 }
