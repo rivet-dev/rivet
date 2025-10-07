@@ -22,7 +22,9 @@ use universaldb::utils::IsolationLevel::*;
 use vbare::OwnedVersionedData;
 
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
-const X_RIVETKIT_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivetkit-total-slots");
+const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-slots");
+const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
+const X_RIVET_NAMESPACE_ID: HeaderName = HeaderName::from_static("x-rivet-namespace-id");
 
 struct OutboundConnection {
 	handle: JoinHandle<()>,
@@ -107,6 +109,15 @@ async fn tick(
 			.find(|rc| rc.namespace_id == *ns_id)
 			.context("runner config not found")?;
 
+		let namespace = ctx
+			.op(namespace::ops::get_global::Input {
+				namespace_ids: vec![ns_id.clone()],
+			})
+			.await
+			.context("runner namespace not found")?;
+		let namespace = namespace.first().context("runner namespace not found")?;
+		let namespace_name = &namespace.name;
+
 		let RunnerConfig::Serverless {
 			url,
 			headers,
@@ -160,6 +171,8 @@ async fn tick(
 				headers.clone(),
 				Duration::from_secs(*request_lifespan as u64),
 				*slots_per_runner,
+				runner_name.clone(),
+				namespace_name.clone(),
 			)
 		})
 		.take(start_count);
@@ -186,6 +199,8 @@ fn spawn_connection(
 	headers: HashMap<String, String>,
 	request_lifespan: Duration,
 	slots_per_runner: u32,
+	runner_name: String,
+	namespace_name: String,
 ) -> OutboundConnection {
 	let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 	let draining = Arc::new(AtomicBool::new(false));
@@ -198,6 +213,8 @@ fn spawn_connection(
 			headers,
 			request_lifespan,
 			slots_per_runner,
+			runner_name,
+			namespace_name,
 			shutdown_rx,
 			draining2,
 		)
@@ -229,6 +246,8 @@ async fn outbound_handler(
 	headers: HashMap<String, String>,
 	request_lifespan: Duration,
 	slots_per_runner: u32,
+	runner_name: String,
+	namespace_name: String,
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -243,8 +262,16 @@ async fn outbound_handler(
 			))
 		})
 		.chain(std::iter::once((
-			X_RIVETKIT_TOTAL_SLOTS,
+			X_RIVET_TOTAL_SLOTS,
 			HeaderValue::try_from(slots_per_runner)?,
+		)))
+		.chain(std::iter::once((
+			X_RIVET_RUNNER_NAME,
+			HeaderValue::try_from(runner_name)?,
+		)))
+		.chain(std::iter::once((
+			X_RIVET_NAMESPACE_ID,
+			HeaderValue::try_from(namespace_name)?,
 		)))
 		// Add token if auth is enabled
 		.chain(
