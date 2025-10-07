@@ -1,13 +1,12 @@
 import { faPowerOff, faSpinnerThird, Icon } from "@rivet-gg/icons";
-import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useMatch } from "@tanstack/react-router";
 import {
-	createContext,
-	type ReactNode,
-	useContext,
-	useMemo,
-	useState,
-} from "react";
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
+import { useMatch } from "@tanstack/react-router";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
 import { DiscreteCopyButton } from "../copy-area";
@@ -87,17 +86,7 @@ export function GuardConnectableInspector({
 
 	if (pendingAllocationAt && !startedAt) {
 		return (
-			<InspectorGuardContext.Provider
-				value={
-					<Info>
-						<p>Cannot start Actor, runners are out of capacity.</p>
-						<p>
-							Add more runners to run the Actor or increase runner
-							capacity.
-						</p>
-					</Info>
-				}
-			>
+			<InspectorGuardContext.Provider value={<NoRunners />}>
 				{children}
 			</InspectorGuardContext.Provider>
 		);
@@ -107,6 +96,33 @@ export function GuardConnectableInspector({
 		<ActorContextProvider actorId={actorId}>
 			{children}
 		</ActorContextProvider>
+	);
+}
+
+function NoRunners() {
+	const { data } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnersQueryOptions(),
+		refetchInterval: 5_000,
+	});
+
+	if (data?.length === 0) {
+		return (
+			<Info>
+				<p>There are no runners.</p>
+				<p>
+					Check that you have at least one runner available to run
+					your Actors.
+				</p>
+			</Info>
+		);
+	}
+	return (
+		<Info>
+			<p>Cannot start Actor, runners are out of capacity.</p>
+			<p>
+				Add more runners to run the Actor or increase runner capacity.
+			</p>
+		</Info>
 	);
 }
 
