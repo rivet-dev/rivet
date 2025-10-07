@@ -104,6 +104,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 													Previous
 												</Button>
 												<Button
+													type="button"
 													onClick={
 														methods.isLast
 															? onClose
