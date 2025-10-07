@@ -1,7 +1,6 @@
 use anyhow::Result;
 use axum::{
 	body::Bytes,
-	extract::Path,
 	response::IntoResponse,
 	routing::{
 		delete as axum_delete, get as axum_get, patch as axum_patch, post as axum_post,
@@ -14,7 +13,7 @@ use std::future::Future;
 use crate::{
 	context::ApiCtx,
 	error_response::ApiError,
-	extract::{Extension, Json, Query},
+	extract::{Extension, Json, Path, Query},
 };
 
 /// Macro to generate wrapper functions for HTTP methods
