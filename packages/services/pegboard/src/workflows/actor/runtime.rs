@@ -294,6 +294,7 @@ async fn allocate_actor(
 		.record(dt, &[KeyValue::new("did_reserve", res.is_ok().to_string())]);
 
 	state.for_serverless = for_serverless;
+	state.allocated_slot = true;
 
 	match &res {
 		Ok(res) => {
@@ -339,8 +340,13 @@ pub struct DeallocateInput {
 	pub actor_id: Id,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeallocateOutput {
+	pub for_serverless: bool,
+}
+
 #[activity(Deallocate)]
-pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()> {
+pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<DeallocateOutput> {
 	let mut state = ctx.state::<State>()?;
 	let runner_name_selector = &state.runner_name_selector;
 	let namespace_id = state.namespace_id;
@@ -353,8 +359,8 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
 
+			// Only clear slot if we have a runner id
 			if let Some(runner_id) = runner_id {
-				// Only clear slot if we have a runner id
 				destroy::clear_slot(
 					input.actor_id,
 					namespace_id,
@@ -374,8 +380,12 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	state.connectable_ts = None;
 	state.runner_id = None;
 	state.runner_workflow_id = None;
+	// Slot was cleared by the above txn
+	state.allocated_slot = false;
 
-	Ok(())
+	Ok(DeallocateOutput {
+		for_serverless: state.for_serverless,
+	})
 }
 
 /// Returns None if a destroy signal was received while pending for allocation.
@@ -393,6 +403,11 @@ pub async fn spawn_actor(
 		})
 		.await?;
 
+	// Always bump the autoscaler so it can scale up
+	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+		.send()
+		.await?;
+
 	let allocate_res = match allocate_res {
 		Ok(x) => x,
 		Err(pending_allocation_ts) => {
@@ -400,10 +415,6 @@ pub async fn spawn_actor(
 				actor_id=?input.actor_id,
 				"failed to allocate (no availability), waiting for allocation",
 			);
-
-			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-				.send()
-				.await?;
 
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
 			// an `Allocate` signal
