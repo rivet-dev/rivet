@@ -78,7 +78,8 @@ pub async fn create_router(
 pub async fn health_check() -> impl IntoResponse {
 	Json(json!({
 		"status": "ok",
-		"timestamp": chrono::Utc::now().timestamp_millis()
+		"runtime": "engine",
+		"version": env!("CARGO_PKG_VERSION")
 	}))
 }
 
