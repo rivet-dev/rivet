@@ -1,18 +1,20 @@
-import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
 import {
 	Badge,
 	Button,
+	cn,
 	ScrollArea,
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
 	WithTooltip,
-	cn,
 } from "@rivet-gg/components";
-import { Icon, faCopy, faFile } from "@rivet-gg/icons";
+import { faCopy, faFile, Icon } from "@rivet-gg/icons";
 import escapeHTML from "escape-html";
-import { Children, type ReactElement, cloneElement } from "react";
+import { Children, cloneElement, type ReactElement } from "react";
+import { AutofillCodeBlock } from "@/components/v2/AutofillCodeBlock";
+import { AutofillFooter } from "@/components/v2/AutofillFooter";
+import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
 
 const languageNames = {
 	csharp: "C#",
@@ -93,6 +95,8 @@ interface PreProps {
 	language: keyof typeof languageNames;
 	isInGroup?: boolean;
 	children?: ReactElement;
+	autofill?: boolean;
+	code?: string;
 }
 export const pre = ({
 	children,
@@ -100,8 +104,10 @@ export const pre = ({
 	language,
 	title,
 	isInGroup,
+	autofill,
+	code,
 }: PreProps) => {
-	return (
+	const codeBlock = (
 		<div className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none">
 			<div className="bg-background text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
@@ -112,7 +118,7 @@ export const pre = ({
 			</div>
 
 			<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
-				<div className="text-muted-foreground flex items-center gap-1">
+				<div className="text-muted-foreground flex items-center gap-2">
 					{file ? (
 						<>
 							<Icon icon={faFile} className="block" />
@@ -123,6 +129,7 @@ export const pre = ({
 							{title || languageNames[language]}
 						</Badge>
 					)}
+					{autofill && <AutofillFooter />}
 				</div>
 				<WithTooltip
 					trigger={
@@ -137,6 +144,13 @@ export const pre = ({
 			</div>
 		</div>
 	);
+
+	// Wrap with autofill component if enabled
+	if (autofill && code) {
+		return <AutofillCodeBlock code={code}>{codeBlock}</AutofillCodeBlock>;
+	}
+
+	return codeBlock;
 };
 
 export { pre as Code };
