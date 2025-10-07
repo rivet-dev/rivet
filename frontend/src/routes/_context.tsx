@@ -33,6 +33,9 @@ const searchSchema = z
 		n: z.array(z.string()).optional(),
 		u: z.string().optional(),
 		t: z.string().optional(),
+		// clerk related
+		__clerk_ticket: z.string().optional(),
+		__clerk_status: z.string().optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 
@@ -67,6 +70,17 @@ export const Route = createFileRoute("/_context")({
 		return await match(route.context)
 			.with({ __type: "cloud" }, () => async () => {
 				await waitForClerk(route.context.clerk);
+
+				if (
+					route.location.search.__clerk_ticket &&
+					route.location.search.__clerk_status
+				) {
+					throw redirect({
+						to: "/onboarding/accept-invitation",
+						search: { ...route.location.search },
+					});
+				}
+
 				if (!route.context.clerk.user) {
 					throw redirect({
 						to: "/login",
