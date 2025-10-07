@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { InspectorRoot } from "@/app/inspector-root";
@@ -27,17 +27,27 @@ export const Route = createFileRoute("/_context/")({
 				});
 			})
 			.with({ __type: "engine" }, async (ctx) => {
-				const result = await ctx.queryClient.fetchInfiniteQuery(
-					ctx.dataProvider.namespacesQueryOptions(),
-				);
-				const firstNamespace = result.pages[0]?.namespaces[0];
-				if (!firstNamespace) {
+				try {
+					const result = await ctx.queryClient.fetchInfiniteQuery(
+						ctx.dataProvider.namespacesQueryOptions(),
+					);
+
+					const firstNamespace = result.pages[0]?.namespaces[0];
+					if (!firstNamespace) {
+						return;
+					}
+					throw redirect({
+						to: "/ns/$namespace",
+						params: { namespace: firstNamespace.name },
+					});
+				} catch (e) {
+					if (isRedirect(e)) {
+						throw e;
+					}
+
+					// Ignore errors here, they will be handled in the UI
 					return;
 				}
-				throw redirect({
-					to: "/ns/$namespace",
-					params: { namespace: firstNamespace.name },
-				});
 			})
 			.with({ __type: "inspector" }, async (ctx) => {
 				if (!search.t || !search.u) {

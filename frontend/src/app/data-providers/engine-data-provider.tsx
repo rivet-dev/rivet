@@ -78,6 +78,11 @@ export const createGlobalContext = (opts: {
 					return lastPage.pagination.cursor;
 				},
 				select: (data) => data.pages.flatMap((page) => page.namespaces),
+				retry: shouldRetryAllExpect403,
+				throwOnError: noThrow,
+				meta: {
+					mightRequireAuth,
+				},
 			});
 		},
 		createNamespaceMutationOptions(opts: {

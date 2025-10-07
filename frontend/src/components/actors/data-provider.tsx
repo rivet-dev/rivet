@@ -1,6 +1,8 @@
 import {
 	type RegisteredRouter,
 	type RouteIds,
+	useMatches,
+	useMatchRoute,
 	useRouteContext,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
@@ -33,6 +35,26 @@ export const useDataProvider = () =>
 				});
 		})
 		.exhaustive();
+
+export const useDataProviderCheck = () => {
+	const matchRoute = useMatchRoute();
+
+	return matchRoute({
+		to: match(__APP_TYPE__)
+			.with("cloud", () => {
+				return "/orgs/$organization/projects/$project/ns/$namespace" as const;
+			})
+			.with("engine", () => {
+				return "/ns/$namespace" as const;
+			})
+			.with("inspector", () => {
+				return "/" as const;
+			})
+			.otherwise(() => {
+				throw new Error("Not in a valid context");
+			}),
+	});
+};
 
 export const useEngineDataProvider = () => {
 	return useRouteContext({

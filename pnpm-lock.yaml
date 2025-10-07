@@ -177,8 +177,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@18.3.7(@types/react@18.3.24))(@types/react@18.3.24)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@7090780
-        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@7090780
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -858,6 +858,9 @@ importers:
       '@rivet-gg/api':
         specifier: 0.0.1-rc8
         version: 0.0.1-rc8
+      '@rivet-gg/cloud':
+        specifier: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
+        version: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -3184,8 +3187,8 @@ packages:
   '@rivet-gg/api@0.0.1-rc8':
     resolution: {integrity: sha512-aGJVImxsmz8fLLzeZHUlFRJ/7Y/xBrke9bOvMpooVaJpHor/XmiP19QeEtB2hmQUOPlgS3dz5o8UtCZ5+LcQGg==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@7090780':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@7090780}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2}
     version: 0.0.0
 
   '@rivetkit/engine-runner-protocol@https://pkg.pr.new/rivet-dev/engine/@rivetkit/engine-runner-protocol@b72b2324c50c5449ed1844a060928d80d1151839':
@@ -10470,7 +10473,7 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@7090780':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.4
@@ -12540,7 +12543,7 @@ snapshots:
       eslint: 8.26.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.26.0)
       eslint-plugin-react: 7.37.5(eslint@8.26.0)
       eslint-plugin-react-hooks: 4.6.2(eslint@8.26.0)
@@ -12562,7 +12565,7 @@ snapshots:
     dependencies:
       debug: 4.4.1
       eslint: 8.26.0
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
       glob: 7.2.3
       is-glob: 4.0.3
       resolve: 1.22.10
@@ -12581,7 +12584,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9

@@ -1,4 +1,8 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import {
+	CatchBoundary,
+	createFileRoute,
+	useSearch,
+} from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 import { BuildPrefiller } from "@/app/build-prefiller";
 
@@ -12,7 +16,13 @@ export function RouteComponent() {
 	return (
 		<>
 			<Actors actorId={actorId} />
-			{!n ? <BuildPrefiller /> : null}
+
+			<CatchBoundary
+				getResetKey={() => n?.join(",") ?? "no-build-name"}
+				errorComponent={() => null}
+			>
+				{!n ? <BuildPrefiller /> : null}
+			</CatchBoundary>
 		</>
 	);
 }

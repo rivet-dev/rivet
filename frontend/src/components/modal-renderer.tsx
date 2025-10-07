@@ -34,7 +34,7 @@ export function ModalRenderer() {
 
 function getDialogComponent(dialogKey: string) {
 	const dialogs = useDialog;
-	const dialog = dialogs[dialogKey];
+	const dialog = dialogs[dialogKey as keyof typeof dialogs];
 
 	if (!dialog || typeof dialog !== "function") {
 		return null;

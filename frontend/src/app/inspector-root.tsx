@@ -1,5 +1,5 @@
 import {
-	Route,
+	CatchBoundary,
 	useNavigate,
 	useRouteContext,
 	useSearch,
@@ -50,7 +50,14 @@ export function InspectorRoot() {
 			<InspectorCredentialsProvider value={ctxValue}>
 				<RouteLayout>
 					<Actors actorId={search.actorId} />
-					{!search.n ? <BuildPrefiller /> : null}
+					<CatchBoundary
+						getResetKey={() =>
+							search.n?.join(",") ?? "no-build-name"
+						}
+						errorComponent={() => null}
+					>
+						{!search.n ? <BuildPrefiller /> : null}
+					</CatchBoundary>
 				</RouteLayout>
 			</InspectorCredentialsProvider>
 		);

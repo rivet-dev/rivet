@@ -15,7 +15,7 @@ const queryCache = new QueryCache({
 			"statusCode" in error &&
 			error.statusCode === 403
 		) {
-			modal.open("ProvideEngineCredentials");
+			modal.open("ProvideEngineCredentials", { dismissible: false });
 			return;
 		}
 	},
