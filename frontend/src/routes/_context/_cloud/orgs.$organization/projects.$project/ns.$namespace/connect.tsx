@@ -1,10 +1,15 @@
-import { faQuestionCircle, faRailway, faVercel, Icon } from "@rivet-gg/icons";
+import {
+	faPlus,
+	faQuestionCircle,
+	faRailway,
+	faVercel,
+	Icon,
+} from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	notFound,
 	Link as RouterLink,
-	useNavigate,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -156,7 +161,10 @@ function Providers() {
 							size="lg"
 							className="min-w-32"
 							variant="outline"
-						></Button>
+							startIcon={<Icon icon={faPlus} />}
+						>
+							Add Provider
+						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent>
 						<DropdownMenuItem

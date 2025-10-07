@@ -185,25 +185,34 @@ export function DiscreteInput({
 	const finalShow = showState || !!show;
 	return (
 		<div className="relative">
-			<ClickToCopy value={value}>
-				<Input
-					type={finalShow ? "text" : "password"}
-					readOnly
-					value={finalShow ? value : "very-secure-password"}
-					className={cn("font-mono cursor-pointer", !show && "pr-8")}
-				/>
-			</ClickToCopy>
-			{!show ? (
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50"
-					type="button"
-					onClick={() => setShowState(!showState)}
-				>
-					<Icon icon={showState ? faEye : faEyeSlash} />
-				</Button>
-			) : null}
+			<Input
+				type={finalShow ? "text" : "password"}
+				readOnly
+				value={finalShow ? value : "very-secure-password"}
+				className={cn("font-mono", !show ? "pr-16" : "pr-8")}
+			/>
+			<div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50 flex gap-1">
+				<ClickToCopy value={value}>
+					<Button variant="ghost" size="icon-sm" type="button">
+						<Icon icon={faCopy} />
+					</Button>
+				</ClickToCopy>
+				{!show ? (
+					<WithTooltip
+						content={finalShow ? "Hide" : "Show"}
+						trigger={
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								type="button"
+								onClick={() => setShowState(!showState)}
+							>
+								<Icon icon={showState ? faEye : faEyeSlash} />
+							</Button>
+						}
+					/>
+				) : null}
+			</div>
 		</div>
 	);
 }
