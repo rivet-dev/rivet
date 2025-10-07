@@ -22,6 +22,7 @@
     "@fortawesome/free-brands-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.6",
+    "@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2",
     "@giscus/react": "^3.1.0",
     "@headlessui/react": "^2.2.7",
     "@heroicons/react": "^2.2.0",
