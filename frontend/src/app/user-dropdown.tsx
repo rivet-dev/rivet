@@ -59,6 +59,16 @@ export function UserDropdown() {
 				>
 					Profile
 				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { ...params, modal: "tokens" },
+						});
+					}}
+				>
+					Tokens
+				</DropdownMenuItem>
 				{clerk.organization ? (
 					<DropdownMenuItem
 						onSelect={() => {
