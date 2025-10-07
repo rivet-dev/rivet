@@ -109,24 +109,43 @@ function Modals() {
 	const params = useParams({ strict: false });
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
+	const FeedbackDialog = useDialog.Feedback.Dialog;
 
 	return (
-		<CreateActorDialog
-			namespace={params.namespace || ""}
-			dialogProps={{
-				open: search.modal === "create-actor",
-				onOpenChange: (value) => {
-					if (!value) {
-						navigate({
-							to: ".",
-							search: (old) => ({
-								...old,
-								modal: undefined,
-							}),
-						});
-					}
-				},
-			}}
-		/>
+		<>
+			<CreateActorDialog
+				namespace={params.namespace || ""}
+				dialogProps={{
+					open: search.modal === "create-actor",
+					onOpenChange: (value) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<FeedbackDialog
+				dialogProps={{
+					open: search.modal === "feedback",
+					onOpenChange: (value) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+		</>
 	);
 }
