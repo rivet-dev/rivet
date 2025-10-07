@@ -19,14 +19,9 @@ import { useDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
 import { CrashPolicy } from "../queries";
 
-interface ContentProps extends DialogContentProps {
-	namespace: string;
-}
+interface ContentProps extends DialogContentProps {}
 
-export default function CreateActorDialog({
-	onClose,
-	namespace,
-}: ContentProps) {
+export default function CreateActorDialog({ onClose }: ContentProps) {
 	const { mutateAsync } = useMutation(
 		useDataProvider().createActorMutationOptions(),
 	);
@@ -44,6 +39,7 @@ export default function CreateActorDialog({
 					name: values.name,
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
+					datacenter: values.datacenter,
 					crashPolicy: values.crashPolicy || CrashPolicy.Destroy,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
@@ -52,7 +48,7 @@ export default function CreateActorDialog({
 			defaultValues={{
 				name,
 				crashPolicy: CrashPolicy.Destroy,
-				region: "auto",
+				datacenter: "auto",
 			}}
 		>
 			<DialogHeader>
@@ -75,7 +71,7 @@ export default function CreateActorDialog({
 						<AccordionContent className="flex gap-4 flex-col">
 							{["engine", "cloud"].includes(__APP_TYPE__) ? (
 								<>
-									<ActorCreateForm.Region />
+									<ActorCreateForm.Datacenter />
 									<ActorCreateForm.RunnerNameSelector />
 									<ActorCreateForm.CrashPolicy />
 								</>
