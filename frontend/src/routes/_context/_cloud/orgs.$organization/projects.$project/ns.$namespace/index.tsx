@@ -45,7 +45,12 @@ export function RouteComponent() {
 		<>
 			<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
 				<Actors actorId={actorId} />
-				{!n ? <BuildPrefiller /> : null}
+				<CatchBoundary
+					getResetKey={() => n?.join(",") ?? "no-build-name"}
+					errorComponent={() => null}
+				>
+					{!n ? <BuildPrefiller /> : null}
+				</CatchBoundary>
 			</CatchBoundary>
 		</>
 	);

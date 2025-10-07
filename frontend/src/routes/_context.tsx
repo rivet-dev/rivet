@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_context")({
 		return match(__APP_TYPE__)
 			.with("engine", () => ({
 				dataProvider: createGlobalEngineContext({
-					engineToken:
+					engineToken: () =>
 						ls.engineCredentials.get(getConfig().apiUrl) || "",
 				}),
 				__type: "engine" as const,
