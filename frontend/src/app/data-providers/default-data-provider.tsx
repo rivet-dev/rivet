@@ -62,6 +62,7 @@ type CreateActor = Omit<InspectorCreateActor, "keys" | "key"> & {
 	runnerNameSelector: string;
 	key: string;
 	crashPolicy: CrashPolicy;
+	datacenter?: string;
 };
 
 const defaultContext = {

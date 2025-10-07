@@ -41,11 +41,11 @@ export const formSchema = z
 		input: jsonValid.optional(),
 		// tags: tagsFormSchema.shape.tags,
 
-		region: z.string(),
+		datacenter: z.string(),
 		runnerNameSelector: z.string(),
 		crashPolicy: z.nativeEnum(CrashPolicyEnum),
 	})
-	.partial({ region: true, runnerNameSelector: true, crashPolicy: true });
+	.partial({ datacenter: true, runnerNameSelector: true, crashPolicy: true });
 
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
@@ -239,16 +239,16 @@ export const PrefillRunnerName = () => {
 	return null;
 };
 
-export const Region = () => {
+export const Datacenter = () => {
 	const { control } = useFormContext<FormValues>();
 
 	return (
 		<FormField
 			control={control}
-			name="region"
+			name="datacenter"
 			render={({ field }) => (
 				<FormItem>
-					<FormLabel>Region</FormLabel>
+					<FormLabel>Datacenter</FormLabel>
 					<FormControl>
 						<RegionSelect
 							value={field.value}
@@ -256,7 +256,7 @@ export const Region = () => {
 						/>
 					</FormControl>
 					<FormDescription>
-						The region where the Actor will be deployed.
+						The datacenter where the Actor will be deployed.
 					</FormDescription>
 					<FormMessage />
 				</FormItem>

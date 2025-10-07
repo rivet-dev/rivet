@@ -349,6 +349,7 @@ export const createNamespaceContext = ({
 						namespace,
 						name: data.name,
 						key: data.key,
+						datacenter: data.datacenter,
 						crashPolicy: data.crashPolicy,
 						runnerNameSelector: data.runnerNameSelector,
 						input: JSON.stringify(data.input),
