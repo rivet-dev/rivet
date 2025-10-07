@@ -8,13 +8,15 @@ import * as core from "../../core";
 
 export const Datacenter: core.serialization.ObjectSchema<serializers.Datacenter.Raw, Rivet.Datacenter> =
     core.serialization.object({
-        datacenterLabel: core.serialization.property("datacenter_label", core.serialization.number()),
+        label: core.serialization.number(),
         name: core.serialization.string(),
+        url: core.serialization.string(),
     });
 
 export declare namespace Datacenter {
     export interface Raw {
-        datacenter_label: number;
+        label: number;
         name: string;
+        url: string;
     }
 }
