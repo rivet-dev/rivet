@@ -40,6 +40,7 @@ export const useDataProviderCheck = () => {
 	const matchRoute = useMatchRoute();
 
 	return matchRoute({
+		fuzzy: true,
 		to: match(__APP_TYPE__)
 			.with("cloud", () => {
 				return "/orgs/$organization/projects/$project/ns/$namespace" as const;
