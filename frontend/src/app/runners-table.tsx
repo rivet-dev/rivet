@@ -35,8 +35,8 @@ export function RunnersTable({
 			<TableHeader>
 				<TableRow>
 					<TableHead />
-					<TableHead>ID</TableHead>
-					<TableHead>Name</TableHead>
+					<TableHead className="pl-8">ID</TableHead>
+					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
 					<TableHead>Last ping</TableHead>
