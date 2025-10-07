@@ -11,6 +11,7 @@ interface Config {
 	sentry?: {
 		dsn: string;
 		projectId: string;
+		tunnel?: string;
 	};
 	outerbaseProviderToken: string;
 }

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: safe guarded by build consts */
 import { faPowerOff, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
@@ -5,8 +6,9 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useMatch } from "@tanstack/react-router";
+import { useMatch, useRouteContext } from "@tanstack/react-router";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { useLocalStorage } from "usehooks-ts";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
 import { DiscreteCopyButton } from "../copy-area";
@@ -32,52 +34,22 @@ export function GuardConnectableInspector({
 	actorId,
 	children,
 }: GuardConnectableInspectorProps) {
-	const filters = useFiltersValue({ includeEphemeral: true });
-	const {
-		data: { destroyedAt, sleepingAt, pendingAllocationAt, startedAt } = {},
-	} = useQuery({
-		...useDataProvider().actorQueryOptions(actorId),
-		refetchInterval: 1000,
-		select: (data) => ({
-			destroyedAt: data.destroyedAt,
-			sleepingAt: data.sleepingAt,
-			pendingAllocationAt: data.pendingAllocationAt,
-			startedAt: data.startedAt,
-		}),
-	});
+	const { data: { destroyedAt, pendingAllocationAt, startedAt } = {} } =
+		useQuery({
+			...useDataProvider().actorQueryOptions(actorId),
+			refetchInterval: 1000,
+			select: (data) => ({
+				destroyedAt: data.destroyedAt,
+				sleepingAt: data.sleepingAt,
+				pendingAllocationAt: data.pendingAllocationAt,
+				startedAt: data.startedAt,
+			}),
+		});
 
 	if (destroyedAt) {
 		return (
 			<InspectorGuardContext.Provider
 				value={<Info>Unavailable for inactive Actors.</Info>}
-			>
-				{children}
-			</InspectorGuardContext.Provider>
-		);
-	}
-
-	if (sleepingAt) {
-		if (filters.wakeOnSelect?.value?.[0] === "1") {
-			return (
-				<InspectorGuardContext.Provider
-					value={
-						<Info>
-							<AutoWakeUpActor actorId={actorId} />
-						</Info>
-					}
-				>
-					{children}
-				</InspectorGuardContext.Provider>
-			);
-		}
-		return (
-			<InspectorGuardContext.Provider
-				value={
-					<Info>
-						<p>Unavailable for sleeping Actors.</p>
-						<WakeUpActorButton actorId={actorId} />
-					</Info>
-				}
 			>
 				{children}
 			</InspectorGuardContext.Provider>
@@ -187,7 +159,6 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 	} = useQuery({
 		...useEngineCompatDataProvider().runnerByNameQueryOptions({
 			runnerName: actor.runner,
-			namespace: match.params.namespace,
 		}),
 		retryDelay: 10_000,
 		refetchInterval: 1000,
@@ -201,16 +172,36 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 	};
 }
 
+function useEngineToken() {
+	if (__APP_TYPE__ === "cloud") {
+		const { data } = useQuery(
+			useRouteContext({
+				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+			}).dataProvider.publishableTokenQueryOptions(),
+		);
+		return data;
+	}
+	const [data] = useLocalStorage(
+		ls.engineCredentials.key(getConfig().apiUrl),
+		"",
+		{ serializer: JSON.stringify, deserializer: JSON.parse },
+	);
+	return data;
+}
+
 function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const { actor, runner, isLoading } = useActorRunner({ actorId });
+	const engineToken = useEngineToken();
 
 	const actorContext = useMemo(() => {
-		return createInspectorActorContext({
-			url: getConfig().apiUrl,
-			token: (runner?.metadata?.inspectorToken as string) || "",
-			engineToken: ls.engineCredentials.get(getConfig().apiUrl) || "",
-		});
-	}, [runner?.metadata?.inspectorToken]);
+		return engineToken
+			? createInspectorActorContext({
+					url: getConfig().apiUrl,
+					token: (runner?.metadata?.inspectorToken as string) || "",
+					engineToken,
+				})
+			: null;
+	}, [runner?.metadata?.inspectorToken, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };
 }
@@ -233,6 +224,24 @@ function ActorEngineProvider({
 					<NoRunnerInfo
 						runner={runner?.name || actor.runner || "unknown"}
 					/>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
+		);
+	}
+
+	if (!actorContext) {
+		return (
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						<p>Unable to connect to the Actor's Inspector.</p>
+						<p>
+							Check that your application is running and that your
+							network allows connections to the Inspector URL.
+						</p>
+					</Info>
 				}
 			>
 				{children}
@@ -267,7 +276,8 @@ function NoRunnerInfo({ runner }: { runner: string }) {
 }
 
 function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
-	const { runner, actorContext } = useActorEngineContext({ actorId });
+	const actorContext = useActor();
+	const { runner } = useActorRunner({ actorId });
 
 	const { mutate, isPending } = useMutation(
 		actorContext.actorWakeUpMutationOptions(actorId),
@@ -287,9 +297,8 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 }
 
 function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
-	const { runner, actor, actorContext } = useActorEngineContext({
-		actorId,
-	});
+	const actorContext = useActor();
+	const { actor, runner } = useActorRunner({ actorId });
 
 	useQuery(
 		actorContext.actorAutoWakeUpQueryOptions(actorId, {
@@ -316,11 +325,62 @@ function InspectorGuard({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
+	const filters = useFiltersValue({ includeEphemeral: true });
+
+	const { data: { sleepingAt } = {} } = useQuery({
+		...useDataProvider().actorQueryOptions(actorId),
+		refetchInterval: 1000,
+		select: (data) => ({
+			destroyedAt: data.destroyedAt,
+			sleepingAt: data.sleepingAt,
+			pendingAllocationAt: data.pendingAllocationAt,
+			startedAt: data.startedAt,
+		}),
+	});
+
+	if (sleepingAt) {
+		if (filters.wakeOnSelect?.value?.[0] === "1") {
+			return (
+				<InspectorGuardContext.Provider
+					value={
+						<Info>
+							<AutoWakeUpActor actorId={actorId} />
+						</Info>
+					}
+				>
+					{children}
+				</InspectorGuardContext.Provider>
+			);
+		}
+		return (
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						<p>Unavailable for sleeping Actors.</p>
+						<WakeUpActorButton actorId={actorId} />
+					</Info>
+				}
+			>
+				{children}
+			</InspectorGuardContext.Provider>
+		);
+	}
+	return (
+		<InspectorGuardInner actorId={actorId}>{children}</InspectorGuardInner>
+	);
+}
+
+function InspectorGuardInner({
+	actorId,
+	children,
+}: {
+	actorId: ActorId;
+	children: ReactNode;
+}) {
 	const { isError } = useQuery({
 		...useActor().actorPingQueryOptions(actorId),
 		enabled: true,
 	});
-
 	if (isError) {
 		return (
 			<InspectorGuardContext.Provider
@@ -339,5 +399,6 @@ function InspectorGuard({
 			</InspectorGuardContext.Provider>
 		);
 	}
+
 	return children;
 }

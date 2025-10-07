@@ -5,7 +5,7 @@ import type { ActorId } from "./queries";
 
 type RequestOptions = Parameters<typeof createActorInspectorClient>[1];
 
-export const defaultActorContext = {
+export const createDefaultActorContext = ({ hash }: { hash: string } = {}) => ({
 	createActorInspectorFetchConfiguration: (
 		actorId: ActorId | string,
 	): RequestOptions => ({
@@ -32,7 +32,7 @@ export const defaultActorContext = {
 			enabled: false,
 			refetchInterval: 1000,
 			...opts,
-			queryKey: ["actor", actorId, "ping"],
+			queryKey: [hash, "actor", actorId, "ping"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.ping.$get();
@@ -51,7 +51,7 @@ export const defaultActorContext = {
 		return queryOptions({
 			enabled,
 			refetchInterval: 1000,
-			queryKey: ["actor", actorId, "state"],
+			queryKey: [hash, "actor", actorId, "state"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.state.$get();
@@ -74,7 +74,7 @@ export const defaultActorContext = {
 		return queryOptions({
 			enabled,
 			refetchInterval: 1000,
-			queryKey: ["actor", actorId, "connections"],
+			queryKey: [hash, "actor", actorId, "connections"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.connections.$get();
@@ -93,7 +93,7 @@ export const defaultActorContext = {
 	) {
 		return queryOptions({
 			enabled,
-			queryKey: ["actor", actorId, "database"],
+			queryKey: [hash, "actor", actorId, "database"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.db.$get();
@@ -142,7 +142,7 @@ export const defaultActorContext = {
 			enabled,
 			staleTime: 0,
 			gcTime: 5000,
-			queryKey: ["actor", actorId, "database", table],
+			queryKey: [hash, "actor", actorId, "database", table],
 			queryFn: async ({ queryKey: [, actorId, , table] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.db.$post({
@@ -163,7 +163,7 @@ export const defaultActorContext = {
 		return queryOptions({
 			enabled,
 			refetchInterval: 1000,
-			queryKey: ["actor", actorId, "events"],
+			queryKey: [hash, "actor", actorId, "events"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.events.$get();
@@ -182,7 +182,7 @@ export const defaultActorContext = {
 	) {
 		return queryOptions({
 			enabled,
-			queryKey: ["actor", actorId, "rpcs"],
+			queryKey: [hash, "actor", actorId, "rpcs"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.rpcs.$get();
@@ -197,7 +197,7 @@ export const defaultActorContext = {
 
 	actorClearEventsMutationOptions(actorId: ActorId) {
 		return {
-			mutationKey: ["actor", actorId, "clear-events"],
+			mutationKey: [hash, "actor", actorId, "clear-events"],
 			mutationFn: async () => {
 				const client = this.createActorInspector(actorId);
 				const response = await client.events.clear.$post();
@@ -211,7 +211,7 @@ export const defaultActorContext = {
 
 	actorWakeUpMutationOptions(actorId: ActorId) {
 		return {
-			mutationKey: ["actor", actorId, "wake-up"],
+			mutationKey: [hash, "actor", actorId, "wake-up"],
 			mutationFn: async () => {
 				const client = this.createActorInspector(actorId);
 				try {
@@ -233,7 +233,7 @@ export const defaultActorContext = {
 			refetchInterval: 1000,
 			staleTime: 0,
 			gcTime: 0,
-			queryKey: ["actor", actorId, "auto-wake-up"],
+			queryKey: [hash, "actor", actorId, "auto-wake-up"],
 			queryFn: async ({ queryKey: [, actorId] }) => {
 				const client = this.createActorInspector(actorId);
 				try {
@@ -246,13 +246,9 @@ export const defaultActorContext = {
 			retry: false,
 		});
 	},
-};
+});
 
-export type ActorContext = typeof defaultActorContext;
-
-export function createDefaultActorContext(): ActorContext {
-	return defaultActorContext;
-}
+export type ActorContext = ReturnType<typeof createDefaultActorContext>;
 
 const ActorContext = createContext({} as ActorContext);
 

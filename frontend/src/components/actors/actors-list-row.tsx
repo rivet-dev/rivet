@@ -64,7 +64,7 @@ export const ActorsListRow = memo(
 									/>
 								}
 							/>
-							<div className="min-w-0">
+							<div className="min-w-0 flex items-center">
 								<Id actorId={actorId} />
 								<Datacenter actorId={actorId} />
 								<Tags actorId={actorId} />
@@ -128,11 +128,13 @@ function Datacenter({ actorId }: { actorId: ActorId }) {
 	}
 
 	if (!datacenter) {
-		return <SmallText className="text-foreground">-</SmallText>;
+		return <SmallText className="text-foreground mr-2">-</SmallText>;
 	}
 
 	return (
-		<SmallText className="text-muted-foreground">{datacenter}</SmallText>
+		<SmallText className="text-muted-foreground mr-2">
+			{datacenter}
+		</SmallText>
 	);
 }
 
