@@ -129,7 +129,7 @@ async fn allocate_actor(
 						namespace_id,
 						input.runner_name_selector.clone(),
 					),
-					&1u32.to_le_bytes(),
+					&1i64.to_le_bytes(),
 					MutationType::Add,
 				);
 			}
@@ -367,7 +367,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 						namespace_id,
 						runner_name_selector.clone(),
 					),
-					&(-1i32).to_le_bytes(),
+					&(-1i64).to_le_bytes(),
 					MutationType::Add,
 				);
 			}

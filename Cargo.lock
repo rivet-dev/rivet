@@ -3360,6 +3360,7 @@ dependencies = [
  "rivet-config",
  "rivet-runner-protocol",
  "rivet-types",
+ "rivet-util",
  "tracing",
  "universaldb",
  "vbare",

@@ -29,11 +29,11 @@ impl ServerlessDesiredSlotsKey {
 
 impl FormalKey for ServerlessDesiredSlotsKey {
 	/// Count.
-	type Value = u32;
+	type Value = i64;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		// NOTE: Atomic ops use little endian
-		Ok(u32::from_le_bytes(raw.try_into()?))
+		Ok(i64::from_le_bytes(raw.try_into()?))
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
