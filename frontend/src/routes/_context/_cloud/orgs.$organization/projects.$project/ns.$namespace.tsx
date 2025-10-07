@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
+import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 
 export const Route = createFileRoute(
@@ -28,6 +29,7 @@ export const Route = createFileRoute(
 			},
 		};
 	},
+	notFoundComponent: () => <NotFoundCard />,
 });
 
 function RouteComponent() {

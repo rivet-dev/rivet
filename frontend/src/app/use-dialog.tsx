@@ -18,4 +18,5 @@ export const useDialog = {
 	ProvideEngineCredentials: createDialogHook(
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),
 	),
+	Tokens: createDialogHook(() => import("@/app/dialogs/tokens-frame")),
 };

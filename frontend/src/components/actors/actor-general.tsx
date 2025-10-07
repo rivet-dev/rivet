@@ -21,6 +21,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 			pendingAllocationAt,
 			sleepingAt,
 			crashPolicy,
+			runner,
 		} = {},
 	} = useQuery(useDataProvider().actorGeneralQueryOptions(actorId));
 
@@ -61,6 +62,8 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 							/>
 						</Flex>
 					</Dd>
+					<Dt>Runner</Dt>
+					<Dd>{runner}</Dd>
 					<Dt>Crash Policy</Dt>
 					<Dd>{crashPolicy}</Dd>
 					<Dt>Created</Dt>

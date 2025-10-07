@@ -381,5 +381,29 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
+		publishableTokenQueryOptions() {
+			return queryOptions({
+				staleTime: 5 * 60 * 1000, // 5 minutes
+				gcTime: 5 * 60 * 1000, // 5 minutes
+				queryKey: [
+					{
+						namespace,
+						project: parent.project,
+						organization: parent.organization,
+					},
+					"tokens",
+					"publishable",
+				],
+				queryFn: async () => {
+					const f = parent.client.namespaces.createPublishableToken(
+						parent.project,
+						namespace,
+						{ org: parent.organization },
+					);
+					const t = await f;
+					return t.token;
+				},
+			});
+		},
 	};
 };
