@@ -19,19 +19,13 @@ const endpoint =
 	"https://api.rivet.gg";
 const namespace =
 	(await rl.question("Namespace (default: default): ")) || "default";
-const runnerName = await rl.question("Runner name to delete: ");
 
 rl.close();
 
-if (!runnerName) {
-	console.error("Error: Runner name is required");
-	process.exit(1);
-}
-
 const response = await fetch(
-	`${endpoint}/runner-configs/${runnerName}?namespace=${namespace}`,
+	`${endpoint}/runner-configs?namespace=${namespace}`,
 	{
-		method: "DELETE",
+		method: "GET",
 		headers: {
 			Authorization: `Bearer ${rivetToken}`,
 		},
@@ -44,4 +38,7 @@ if (!response.ok) {
 	process.exit(1);
 }
 
-console.log(`✅ Successfully deleted runner configuration "${runnerName}"!`);
+const data = await response.json();
+
+// Just show the raw formatted JSON
+console.log(JSON.stringify(data, null, 2));
