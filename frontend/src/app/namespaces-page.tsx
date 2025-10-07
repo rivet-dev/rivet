@@ -32,7 +32,7 @@ export function NamespacesPage({ from }: { from: LinkComponentProps["from"] }) {
 
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-			<div className="max-w-5xl mx-auto my-2 flex justify-between items-center px-6 py-4">
+			<div className="mx-auto my-2 flex justify-between items-center px-6 py-4">
 				<H1>Namespaces</H1>
 				<div className="flex items-center gap-2">
 					<WithTooltip

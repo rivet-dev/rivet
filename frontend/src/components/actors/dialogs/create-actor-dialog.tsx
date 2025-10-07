@@ -65,20 +65,18 @@ export default function CreateActorDialog({
 				{!name ? <ActorCreateForm.Build /> : null}
 				<ActorCreateForm.Keys />
 				<ActorCreateForm.ActorPreview />
-				{__APP_TYPE__ === "engine" ? (
-					<ActorCreateForm.PrefillRunnerName namespace={namespace} />
+				{["engine", "cloud"].includes(__APP_TYPE__) ? (
+					<ActorCreateForm.PrefillRunnerName />
 				) : null}
 
 				<Accordion type="single" collapsible>
 					<AccordionItem value="item-1">
 						<AccordionTrigger>Advanced</AccordionTrigger>
 						<AccordionContent className="flex gap-4 flex-col">
-							{__APP_TYPE__ === "engine" ? (
+							{["engine", "cloud"].includes(__APP_TYPE__) ? (
 								<>
 									<ActorCreateForm.Region />
-									<ActorCreateForm.RunnerNameSelector
-										namespace={namespace}
-									/>
+									<ActorCreateForm.RunnerNameSelector />
 									<ActorCreateForm.CrashPolicy />
 								</>
 							) : null}

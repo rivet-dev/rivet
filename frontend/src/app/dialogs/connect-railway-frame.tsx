@@ -24,7 +24,7 @@ const { Stepper } = defineStepper(
 	},
 	{
 		id: "step-3",
-		title: "Confirm Connection",
+		title: "Wait for a Runner to connect",
 	},
 );
 
@@ -39,7 +39,7 @@ export default function ConnectRailwayFrameContent({
 			defaultValues={{ endpoint: "" }}
 		>
 			<Frame.Header>
-				<Frame.Title className="justify-between flex items-center">
+				<Frame.Title className="gap-2 flex items-center">
 					<div>
 						Add <Icon icon={faRailway} className="ml-0.5" /> Railway
 					</div>
@@ -60,7 +60,7 @@ export default function ConnectRailwayFrameContent({
 function FormStepper({ onClose }: { onClose?: () => void }) {
 	const dataProvider = useEngineCompatDataProvider();
 
-	const { data } = useQuery(dataProvider.connectRunnerTokenQueryOptions());
+	const { data } = useQuery(dataProvider.engineAdminTokenQueryOptions());
 
 	return (
 		<Stepper.Provider variant="vertical">
@@ -90,7 +90,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 														quickly.
 													</p>
 													<a
-														href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data}&RIVET_ENGINE=${
+														href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data}&RIVET_ENDPOINT=${
 															__APP_TYPE__ ===
 															"engine"
 																? engineEnv()
@@ -123,10 +123,6 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 											)}
 											{step.id === "step-3" && (
 												<div>
-													<ConnectRailwayForm.Endpoint
-														placeholder="https://your-application.up.railway.app/"
-														className="mb-2"
-													/>
 													<ConnectRailwayForm.ConnectionCheck />
 												</div>
 											)}
@@ -167,7 +163,7 @@ function EnvVariablesStep() {
 	const dataProvider = useEngineCompatDataProvider();
 
 	const { data, isLoading } = useQuery(
-		dataProvider.connectRunnerTokenQueryOptions(),
+		dataProvider.engineAdminTokenQueryOptions(),
 	);
 
 	return (
@@ -179,7 +175,7 @@ function EnvVariablesStep() {
 			<div className="gap-1 items-center grid grid-cols-2">
 				{__APP_TYPE__ === "engine" ? (
 					<>
-						<DiscreteInput value="RIVET_ENGINE" show />
+						<DiscreteInput value="RIVET_ENDPOINT" show />
 						<DiscreteInput value={engineEnv().VITE_APP_API_URL} />
 					</>
 				) : null}

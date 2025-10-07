@@ -585,11 +585,11 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		connectRunnerTokenQueryOptions() {
+		engineAdminTokenQueryOptions() {
 			return queryOptions({
 				staleTime: 1000,
 				gcTime: 1000,
-				queryKey: [{ namespace }, "runners", "connect"],
+				queryKey: [{ namespace }, "tokens", "engine-admin"],
 				queryFn: async () => {
 					return ls.engineCredentials.get(getConfig().apiUrl) || "";
 				},

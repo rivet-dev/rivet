@@ -47,7 +47,7 @@ export function RouteComponent() {
 
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-			<div className="max-w-5xl  mt-2 flex justify-between items-center px-6 py-4">
+			<div className=" mt-2 flex justify-between items-center px-6 py-4">
 				<H1>Connect</H1>
 				<div>
 					<HelpDropdown>
@@ -80,7 +80,7 @@ export function RouteComponent() {
 						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 					</div>
 				</div>
-			) : runnerNamesCount !== 0 ? (
+			) : runnerNamesCount === 0 ? (
 				<div className="p-4 px-6 max-w-5xl">
 					<H3>Select Provider</H3>
 					<div className="flex flex-wrap gap-2 my-4">
@@ -166,7 +166,7 @@ function Providers() {
 							Add Provider
 						</Button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent>
+					<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
 						<DropdownMenuItem
 							indicator={<Icon icon={faRailway} />}
 							onSelect={() => {
