@@ -95,7 +95,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 							input.namespace_id,
 							input.name.clone(),
 						),
-						&0u32.to_le_bytes(),
+						&0i64.to_le_bytes(),
 						MutationType::Add,
 					);
 				}

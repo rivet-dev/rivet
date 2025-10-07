@@ -240,7 +240,7 @@ pub(crate) async fn clear_slot(
 				namespace_id,
 				runner_name_selector.to_string(),
 			),
-			&(-1i32).to_le_bytes(),
+			&(-1i64).to_le_bytes(),
 			MutationType::Add,
 		);
 	}
