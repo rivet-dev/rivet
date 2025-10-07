@@ -77,6 +77,7 @@ https://rivet.gg/docs/clients/openapi
 https://rivet.gg/docs/clients/react
 https://rivet.gg/docs/clients/rust
 https://rivet.gg/docs/deploy/freestyle
+https://rivet.gg/docs/deploy/railway
 https://rivet.gg/docs/drivers/build-your-own
 https://rivet.gg/docs/drivers/file-system
 https://rivet.gg/docs/drivers/memory
