@@ -150,7 +150,7 @@ impl Transaction {
 			.map_err(Into::into)
 	}
 
-	pub fn atomic_op<'de, T: FormalKey + TuplePack + TupleUnpack<'de>>(
+	pub fn atomic_op<'de, T: std::fmt::Debug + FormalKey + TuplePack + TupleUnpack<'de>>(
 		&self,
 		key: &'de T,
 		param: &[u8],

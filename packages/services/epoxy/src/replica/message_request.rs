@@ -104,6 +104,7 @@ pub async fn message_request(
 				replica_id: req.replica_id,
 				status: req.status.into(),
 			})
+			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.to_workflow::<crate::workflows::coordinator::Workflow>()
 			.tag("replica", replica_id)
 			.send()
@@ -121,6 +122,7 @@ pub async fn message_request(
 			ctx.signal(crate::workflows::replica::BeginLearning {
 				config: req.config.clone().into(),
 			})
+			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.to_workflow::<crate::workflows::replica::Workflow>()
 			.tag("replica", replica_id)
 			.send()

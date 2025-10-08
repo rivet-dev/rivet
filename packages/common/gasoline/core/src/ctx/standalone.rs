@@ -30,6 +30,7 @@ pub struct StandaloneCtx {
 	pools: rivet_pools::Pools,
 	cache: rivet_cache::Cache,
 	msg_ctx: MessageCtx,
+	from_workflow: bool,
 }
 
 impl StandaloneCtx {
@@ -61,12 +62,13 @@ impl StandaloneCtx {
 			pools,
 			cache,
 			msg_ctx,
+			from_workflow: false,
 		})
 	}
 
 	#[tracing::instrument(skip_all)]
 	pub fn new_from_activity(ctx: &ActivityCtx, req_id: Id) -> WorkflowResult<Self> {
-		StandaloneCtx::new(
+		let mut ctx = StandaloneCtx::new(
 			ctx.db().clone(),
 			ctx.config().clone(),
 			ctx.pools().clone(),
@@ -74,12 +76,16 @@ impl StandaloneCtx {
 			ctx.name(),
 			ctx.ray_id(),
 			req_id,
-		)
+		)?;
+
+		ctx.from_workflow = true;
+
+		Ok(ctx)
 	}
 
 	#[tracing::instrument(skip_all)]
 	pub fn new_from_operation(ctx: &OperationCtx, req_id: Id) -> WorkflowResult<Self> {
-		StandaloneCtx::new(
+		let mut ctx = StandaloneCtx::new(
 			ctx.db().clone(),
 			ctx.config().clone(),
 			ctx.pools().clone(),
@@ -87,7 +93,11 @@ impl StandaloneCtx {
 			ctx.name(),
 			ctx.ray_id(),
 			req_id,
-		)
+		)?;
+
+		ctx.from_workflow = ctx.from_workflow;
+
+		Ok(ctx)
 	}
 }
 
@@ -107,7 +117,7 @@ impl StandaloneCtx {
 			self.config.clone(),
 			self.ray_id,
 			input,
-			false,
+			self.from_workflow,
 		)
 	}
 
@@ -134,7 +144,7 @@ impl StandaloneCtx {
 			self.config.clone(),
 			self.ray_id,
 			body,
-			false,
+			self.from_workflow,
 		)
 	}
 
@@ -153,7 +163,7 @@ impl StandaloneCtx {
 			&self.pools,
 			&self.cache,
 			self.ray_id,
-			false,
+			self.from_workflow,
 			input,
 		)
 		.in_current_span()

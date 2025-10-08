@@ -294,7 +294,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											ctx,
 											input.actor_id,
 											state.generation,
-											state.runner_workflow_id,
+											state.runner_workflow_id.context(
+												"should have runner_workflow_id set if sleeping",
+											)?,
 										)
 										.await?;
 									}
@@ -311,7 +313,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											ctx,
 											input.actor_id,
 											state.generation,
-											state.runner_workflow_id,
+											state.runner_workflow_id.context(
+												"should have runner_workflow_id set if stopping",
+											)?,
 										)
 										.await?;
 									}
@@ -330,7 +334,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										.await?;
 
 										ctx.msg(Ready {
-											runner_id: state.runner_id,
+											runner_id: state
+												.runner_id
+												.context("should have runner_id set if running")?,
 										})
 										.tag("actor_id", input.actor_id)
 										.send()
@@ -355,20 +361,28 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 						}
 						Main::Wake(_sig) => {
-							// Ignore wake if we are not sleeping. This is expected to happen under certain
-							// circumstances.
 							if state.sleeping {
-								state.alarm_ts = None;
-								state.sleeping = false;
+								if state.runner_id.is_none() {
+									state.alarm_ts = None;
+									state.sleeping = false;
+									state.will_wake = false;
 
-								if runtime::reschedule_actor(ctx, &input, state).await? {
-									// Destroyed early
-									return Ok(Loop::Break(runtime::LifecycleRes {
-										generation: state.generation,
-										// False here because if we received the destroy signal, it is
-										// guaranteed that we did not allocate another actor.
-										kill: false,
-									}));
+									if runtime::reschedule_actor(ctx, &input, state).await? {
+										// Destroyed early
+										return Ok(Loop::Break(runtime::LifecycleRes {
+											generation: state.generation,
+											// False here because if we received the destroy signal, it is
+											// guaranteed that we did not allocate another actor.
+											kill: false,
+										}));
+									}
+								} else {
+									state.will_wake = true;
+
+									tracing::debug!(
+										actor_id=?input.actor_id,
+										"cannot wake an actor that intends to sleep but has not stopped yet, deferring wake until after stop",
+									);
 								}
 							} else {
 								tracing::debug!(
@@ -447,19 +461,22 @@ async fn handle_stopped(
 ) -> Result<Option<runtime::LifecycleRes>> {
 	tracing::debug!(?code, "actor stopped");
 
-	// Reset retry count
+	// Reset retry count on successful exit
 	if let Some(protocol::StopCode::Ok) = code {
 		state.reschedule_state = Default::default();
 	}
 
+	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
+	state.runner_id = None;
+	state.runner_workflow_id = None;
 
 	ctx.activity(runtime::DeallocateInput {
 		actor_id: input.actor_id,
 	})
 	.await?;
 
-	// Allocate other pending actors from queue
+	// Allocate other pending actors from queue since a slot has now cleared
 	let res = ctx
 		.activity(AllocatePendingActorsInput {
 			namespace_id: input.namespace_id,
@@ -467,7 +484,7 @@ async fn handle_stopped(
 		})
 		.await?;
 
-	// Dispatch pending allocs
+	// Dispatch pending allocs (if any)
 	for alloc in res.allocations {
 		ctx.signal(alloc.signal)
 			.to_workflow::<Workflow>()
@@ -476,6 +493,7 @@ async fn handle_stopped(
 			.await?;
 	}
 
+	// Handle rescheduling if not marked as sleeping
 	if !state.sleeping {
 		let failed = matches!(code, None | Some(protocol::StopCode::Error));
 
@@ -487,7 +505,9 @@ async fn handle_stopped(
 						ctx,
 						input.actor_id,
 						state.generation,
-						state.runner_workflow_id,
+						state
+							.runner_workflow_id
+							.context("should have runner_workflow_id set if not sleeping")?,
 					)
 					.await?;
 				}
@@ -529,6 +549,20 @@ async fn handle_stopped(
 					kill: lost,
 				}));
 			}
+		}
+	}
+	// Rewake actor immediately after stopping if `will_wake` was set
+	else if state.will_wake {
+		state.will_wake = false;
+
+		if runtime::reschedule_actor(ctx, &input, state).await? {
+			// Destroyed early
+			return Ok(Some(runtime::LifecycleRes {
+				generation: state.generation,
+				// False here because if we received the destroy signal, it is
+				// guaranteed that we did not allocate another actor.
+				kill: false,
+			}));
 		}
 	}
 
