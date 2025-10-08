@@ -5,6 +5,7 @@ use universaldb::Transaction;
 use crate::replica::{ballot, messages, utils};
 
 // EPaxos Step 16
+#[tracing::instrument(skip_all)]
 pub async fn accepted(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

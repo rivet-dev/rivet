@@ -179,6 +179,7 @@ async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutp
 
 			Ok(final_size)
 		})
+		.custom_instrument(tracing::info_span!("actor_clear_kv_tx"))
 		.await?;
 
 	Ok(ClearKvOutput { final_size })

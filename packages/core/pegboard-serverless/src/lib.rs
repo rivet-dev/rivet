@@ -91,6 +91,7 @@ async fn tick(
 			.try_collect::<Vec<_>>()
 			.await
 		})
+		.custom_instrument(tracing::info_span!("tick_tx"))
 		.await?;
 
 	let runner_configs = ctx

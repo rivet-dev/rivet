@@ -33,16 +33,18 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 	// Read config
 	let config = ctx
 		.udb()?
-		.run(move |tx| async move { utils::read_config(&tx, replica_id).await })
+		.run(|tx| async move { utils::read_config(&tx, replica_id).await })
+		.custom_instrument(tracing::info_span!("read_config_tx"))
 		.await?;
 
 	// Lead consensus
 	let payload = ctx
 		.udb()?
-		.run(move |tx| {
+		.run(|tx| {
 			let proposal = input.proposal.clone();
 			async move { replica::lead_consensus::lead_consensus(&*tx, replica_id, proposal).await }
 		})
+		.custom_instrument(tracing::info_span!("lead_consensus_tx"))
 		.await?;
 
 	// Get quorum members (only active replicas for voting)
@@ -55,11 +57,12 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 	// Decide path
 	let path = ctx
 		.udb()?
-		.run(move |tx| {
+		.run(|tx| {
 			let pre_accept_oks = pre_accept_oks.clone();
 			let payload = payload.clone();
 			async move { replica::decide_path::decide_path(&*tx, pre_accept_oks, &payload) }
 		})
+		.custom_instrument(tracing::info_span!("decide_path_tx"))
 		.await?;
 
 	match path {
@@ -72,6 +75,7 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn run_paxos_accept(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
@@ -84,10 +88,11 @@ pub async fn run_paxos_accept(
 
 	// Mark as accepted
 	ctx.udb()?
-		.run(move |tx| {
+		.run(|tx| {
 			let payload = payload.clone();
 			async move { replica::messages::accepted(&*tx, replica_id, payload).await }
 		})
+		.custom_instrument(tracing::info_span!("accept_tx"))
 		.await?;
 
 	// EPaxos Step 17
@@ -115,6 +120,7 @@ pub async fn run_paxos_accept(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn commit(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
@@ -130,7 +136,7 @@ pub async fn commit(
 	let cmd_err = {
 		let payload = payload.clone();
 		ctx.udb()?
-			.run(move |tx| {
+			.run(|tx| {
 				let payload = payload.clone();
 				async move {
 					let cmd_err = replica::messages::committed(&*tx, replica_id, &payload).await?;
@@ -138,6 +144,7 @@ pub async fn commit(
 					Result::Ok(cmd_err)
 				}
 			})
+			.custom_instrument(tracing::info_span!("committed_tx"))
 			.await?
 	};
 
@@ -163,6 +170,7 @@ pub async fn commit(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn send_pre_accepts(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
@@ -207,6 +215,7 @@ async fn send_pre_accepts(
 	Ok(responses)
 }
 
+#[tracing::instrument(skip_all)]
 async fn send_accepts(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
@@ -252,6 +261,7 @@ async fn send_accepts(
 	Ok(responses.len() + 1)
 }
 
+#[tracing::instrument(skip_all)]
 async fn send_commits(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,

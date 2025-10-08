@@ -44,7 +44,7 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 				.try_collect::<Vec<_>>()
 				.await
 		})
-		.custom_instrument(tracing::info_span!("actor_list_wf_tx"))
+		.custom_instrument(tracing::info_span!("actor_get_tx"))
 		.await?;
 
 	let wfs = ctx

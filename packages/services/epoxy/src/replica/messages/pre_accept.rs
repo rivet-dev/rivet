@@ -5,6 +5,7 @@ use universaldb::Transaction;
 
 use crate::replica::{ballot, messages, utils};
 
+#[tracing::instrument(skip_all)]
 pub async fn pre_accept(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

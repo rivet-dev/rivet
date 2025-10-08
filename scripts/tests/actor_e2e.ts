@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 
 import { RIVET_ENDPOINT, createActor, destroyActor } from "./utils";
-import WebSocket from "ws";
 
 async function main() {
 	try {
@@ -74,7 +73,7 @@ function testWebSocket(actorId: string): Promise<void> {
 			resolve();
 		}, 2000);
 
-		ws.on("open", () => {
+		ws.addEventListener("open", () => {
 			console.log("WebSocket connected");
 
 			// Test ping-pong
@@ -82,7 +81,7 @@ function testWebSocket(actorId: string): Promise<void> {
 			ws.send("ping");
 		});
 
-		ws.on("message", (data) => {
+		ws.addEventListener("message", (data) => {
 			const message = data.toString();
 			console.log(`WebSocket received raw data:`, data);
 			console.log(`WebSocket received message: "${message}"`);
@@ -108,12 +107,12 @@ function testWebSocket(actorId: string): Promise<void> {
 			}
 		});
 
-		ws.on("error", (error) => {
+		ws.addEventListener("error", (error) => {
 			clearTimeout(timeout);
 			reject(new Error(`WebSocket error: ${error.message}`));
 		});
 
-		ws.on("close", () => {
+		ws.addEventListener("close", () => {
 			clearTimeout(timeout);
 			if (!pingReceived || !echoReceived) {
 				reject(new Error("WebSocket closed before completing tests"));
