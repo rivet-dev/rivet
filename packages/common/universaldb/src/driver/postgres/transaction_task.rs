@@ -330,11 +330,20 @@ impl TransactionTask {
 		tx: Transaction<'_>,
 		start_version: i64,
 		operations: Vec<Operation>,
-		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+		mut conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 	) -> Result<()> {
-		let commit_version = tx
-			.query_one("SELECT nextval('global_version_seq')", &[])
-			.await
+		// // Defer all constraint checks until commit
+		// tx.execute("SET CONSTRAINTS ALL DEFERRED", &[])
+		// 	.await
+		// 	.map_err(map_postgres_error)?;
+
+		let (_, _, version_res) = tokio::join!(
+			tx.execute("SET LOCAL lock_timeout = '0'", &[],),
+			tx.execute("SET LOCAL deadlock_timeout = '10ms'", &[],),
+			tx.query_one("SELECT nextval('global_version_seq')", &[]),
+		);
+
+		let commit_version = version_res
 			.context("failed to get postgres txn commit_version")?
 			.get::<_, i64>(0);
 
@@ -355,7 +364,7 @@ impl TransactionTask {
 
 		let query = "
 			INSERT INTO conflict_ranges (range_data, conflict_type, start_version, commit_version)
-			SELECT 
+			SELECT
 				bytearange(begin_key, end_key, '[)'),
 				conflict_type::range_type,
 				$4,
@@ -377,13 +386,22 @@ impl TransactionTask {
 		.await
 		.map_err(map_postgres_error)?;
 
-		// TODO: Parallelize
 		for op in operations {
 			match op {
 				Operation::Set { key, value } => {
 					// TODO: versionstamps need to be calculated on the sql side, not in rust
 					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
 
+					// // Poor man's upsert, you cant use ON CONFLICT with deferred constraints
+					// let query = "WITH updated AS (
+					// 		UPDATE kv
+					// 		SET value = $2
+					// 		WHERE key = $1
+					// 		RETURNING 1
+					// 	)
+					// 	INSERT INTO kv (key, value)
+					// 	SELECT $1, $2
+					// 	WHERE NOT EXISTS (SELECT 1 FROM updated)";
 					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
 					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
@@ -435,6 +453,16 @@ impl TransactionTask {
 
 					// Store the result
 					if let Some(new_value) = new_value {
+						// // Poor man's upsert, you cant use ON CONFLICT with deferred constraints
+						// let update_query = "WITH updated AS (
+						// 		UPDATE kv
+						// 		SET value = $2
+						// 		WHERE key = $1
+						// 		RETURNING 1
+						// 	)
+						// 	INSERT INTO kv (key, value)
+						// 	SELECT $1, $2
+						// 	WHERE NOT EXISTS (SELECT 1 FROM updated)";
 						let update_query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
 						let stmt = tx
 							.prepare_cached(update_query)

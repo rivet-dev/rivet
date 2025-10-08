@@ -53,7 +53,7 @@ impl WebSocketHandleInner {
 		let mut state = self.state.lock().await;
 		match &mut *state {
 			WebSocketState::Unaccepted { .. } | WebSocketState::Accepting => {
-				bail!("websocket has not been accepted")
+				bail!("websocket has not been accepted");
 			}
 			WebSocketState::Split { ws_tx } => {
 				ws_tx.send(message).await?;

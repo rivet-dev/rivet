@@ -264,7 +264,7 @@ pub enum MutationType {
 	/// Performs an atomic ``compare and clear`` operation. If the existing value in the database is equal to the given value, then given key is cleared.
 	CompareAndClear,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum ConflictRangeType {
 	/// Used to add a read conflict range
