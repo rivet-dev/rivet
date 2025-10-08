@@ -197,7 +197,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 							Err(e) => e,
 						},
 						Ok(Err(e)) => e,
-						Err(e) => anyhow::Error::from(DatabaseError::TransactionTooOld),
+						Err(_) => anyhow::Error::from(DatabaseError::TransactionTooOld),
 					};
 
 				let chain = error

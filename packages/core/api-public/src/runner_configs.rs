@@ -146,16 +146,6 @@ async fn upsert_inner(
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	// Upsert default to epoxy
-	if let Some(default_config) = body.0.remove("default") {
-		ctx.op(namespace::ops::runner_config::upsert_default::Input {
-			namespace_id: namespace.namespace_id,
-			name: path.runner_name.clone(),
-			config: default_config.into(),
-		})
-		.await?;
-	}
-
 	for dc in &ctx.config().topology().datacenters {
 		if let Some(runner_config) = body.0.remove(&dc.name) {
 			if ctx.config().dc_label() == dc.datacenter_label {
@@ -273,13 +263,6 @@ async fn delete_inner(
 			.await?;
 		}
 	}
-
-	// Delete default from epoxy
-	ctx.op(namespace::ops::runner_config::delete_default::Input {
-		namespace_id: namespace.namespace_id,
-		name: path.runner_name.clone(),
-	})
-	.await?;
 
 	Ok(DeleteResponse {})
 }
