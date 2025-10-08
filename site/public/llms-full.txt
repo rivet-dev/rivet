@@ -4036,6 +4036,101 @@ The Rivet Rust client provides a way to connect to and interact with actors from
 _Coming Soon_
 
 For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-gg/rivetkit/blob/main/clients/rust).
+## Freestyle
+
+# Freestyle
+
+Deploy Rivet Actors to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability.
+
+Freestyle provides built-in security for running untrusted AI-generated code, making it ideal for AI agent applications. Using Rivet, it is easy to deploy your vibe-coded or user-provided RivetKit backends straight to Freestyle.
+
+Complete example of deploying Rivet actors to Freestyle.sh.
+
+## Setup
+
+Install RivetKit and create your registry:
+
+```bash
+npm install rivetkit
+```
+
+Update your server code to use the serverless engine driver:
+
+```typescript }
+registry.startServerless(,
+});
+
+// Freestyle uses Deno under the hood for web deployments
+// @ts-ignore
+Deno.serve(app.fetch);
+```
+
+**Configuration Requirements:**
+
+- `endpoint` - Rivet API endpoint (use "api.rivet.gg" for Rivet Cloud)
+- `namespace` - Your Rivet namespace for actor isolation
+- `inspector.enabled` - Enable debugging and monitoring
+
+Deploy your application to Freestyle with the correct configuration. Create a deployment script or add this to your existing deployment process:
+
+```typescript
+const FREESTYLE_DOMAIN = "my-domain.style.dev"; // Change to your desired Freestyle domain
+
+const res = await freestyle.deployWeb(buildDir, `,
+		RIVET_RUNNER_KIND: "serverless",
+		// For self-hosted instances:
+		// RIVET_ENDPOINT: "http://127.0.0.1:6420",
+		RIVET_ENDPOINT: "api.rivet.gg",
+	},
+	timeout: 60 * 5, // Increases max request lifetime on the runner
+	entrypoint: "server.ts", // File which starts serverless runner
+	domains: [FREESTYLE_DOMAIN],
+	build: false,
+});
+```
+
+Details on `buildDir` and other settings are available on [Freestyle docs](https://docs.freestyle.sh/web/web).
+
+Run this deployment script to push your application to Freestyle.
+
+**Deployment Configuration:**
+
+- `timeout: 60 * 5` - Set timeout to 5 minutes for actor operations - it's important to keep this high!
+- `entrypoint: "server.ts"` - Entry point file with your serverless setup
+- `domains` - Your Freestyle domain(s)
+- `build: false` - Disable build if you're pre-building your assets
+
+Update the runner configuration on the Rivet side to connect with your Freestyle deployment. Create a configuration script and run it after your Freestyle deployment is live:
+
+```typescript
+const rivet = new RivetClient();
+
+const FREESTYLE_DOMAIN = "my-domain.style.dev"; // Change to your desired Freestyle domain
+const RIVET_NAMESPACE = "my-rivet-namespace"; // Change to your Rivet namespace
+
+await rivet.runnerConfigs.upsert("freestyle-runner", /start`,
+		runnersMargin: 1,
+		minRunners: 1,
+		maxRunners: 1,
+		slotsPerRunner: 1,
+		// Must be shorter than Freestyle request `timeout` config
+		requestLifespan: 60 * 5 - 5,
+	},
+	namespace: RIVET_NAMESPACE,
+});
+```
+
+Execute this configuration script to register your Freestyle deployment with Rivet.
+
+**Runner Configuration:**
+
+- `url` - Freestyle deployment URL with `/start` endpoint
+- `runnersMargin` - Buffer of runners to maintain
+- `minRunners/maxRunners` - Scaling limits
+- `slotsPerRunner` - Concurrent actors per runner
+- `requestLifespan` - Request timeout (slightly less than Freestyle timeout)
+
+Once this configuration script is run, Rivet will be connect with your Freestyle serverless instance and you will be done!
 ## Build Your Own
 
 # Build Your Own
