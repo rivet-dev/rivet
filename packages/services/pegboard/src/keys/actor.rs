@@ -269,3 +269,47 @@ impl<'de> TupleUnpack<'de> for DestroyTsKey {
 		Ok((input, v))
 	}
 }
+
+#[derive(Debug)]
+pub struct NamespaceIdKey {
+	actor_id: Id,
+}
+
+impl NamespaceIdKey {
+	pub fn new(actor_id: Id) -> Self {
+		NamespaceIdKey { actor_id }
+	}
+}
+
+impl FormalKey for NamespaceIdKey {
+	type Value = Id;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Id::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes())
+	}
+}
+
+impl TuplePack for NamespaceIdKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (ACTOR, DATA, self.actor_id, NAMESPACE_ID);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for NamespaceIdKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, _)) = <(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+
+		let v = NamespaceIdKey { actor_id };
+
+		Ok((input, v))
+	}
+}
