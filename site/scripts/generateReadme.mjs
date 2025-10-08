@@ -50,10 +50,10 @@ const RIVET_COMMUNITY_CONTENT = `## Community & Support
 Join thousands of developers building with Rivet Actors today:
 
 - [Discord](https://rivet.gg/discord) - Chat with the community
-- [X/Twitter](https://x.com/rivet_gg) - Follow for updates
+- [X/Twitter](https://x.com/rivet_dev) - Follow for updates
 - [Bluesky](https://bsky.app/profile/rivet.gg) - Follow for updates
-- [GitHub Discussions](https://github.com/rivet-gg/rivetkit/discussions) - Ask questions and share ideas
-- [GitHub Issues](https://github.com/rivet-gg/rivetkit/issues) - Report bugs and request features
+- [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions) - Ask questions and share ideas
+- [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues) - Report bugs and request features
 - [Talk to an engineer](https://rivet.gg/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
 
 const RIVETKIT_COMMUNITY_CONTENT = `## Community & Support
@@ -61,10 +61,10 @@ const RIVETKIT_COMMUNITY_CONTENT = `## Community & Support
 Join thousands of developers building with RivetKit today:
 
 - [Discord](https://rivet.gg/discord) - Chat with the community
-- [X/Twitter](https://x.com/rivet_gg) - Follow for updates
+- [X/Twitter](https://x.com/rivet_dev) - Follow for updates
 - [Bluesky](https://bsky.app/profile/rivet.gg) - Follow for updates
-- [GitHub Discussions](https://github.com/rivet-gg/rivetkit/discussions) - Ask questions and share ideas
-- [GitHub Issues](https://github.com/rivet-gg/rivetkit/issues) - Report bugs and request features
+- [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions) - Ask questions and share ideas
+- [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues) - Report bugs and request features
 - [Talk to an engineer](https://rivet.gg/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
 
 const LICENSE_CONTENT = `## License
@@ -90,8 +90,8 @@ Generated from: github.com/rivet-gg/rivet/site/scripts/generateReadme.mjs
 function generateExamplesList() {
   return Object.entries(EXAMPLE_METADATA)
     .map(([id, example]) => {
-      const githubUrl = `https://github.com/rivet-gg/rivetkit/tree/main/examples/${id}`;
-      const stackblitzUrl = `https://stackblitz.com/github/rivet-gg/rivetkit/tree/main/examples/${id}`;
+      const githubUrl = `https://github.com/rivet-dev/rivetkit/tree/main/examples/${id}`;
+      const stackblitzUrl = `https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/${id}`;
       return `- ${example.title} — [GitHub](${githubUrl}) · [StackBlitz](${stackblitzUrl})`;
     })
     .join('\n');

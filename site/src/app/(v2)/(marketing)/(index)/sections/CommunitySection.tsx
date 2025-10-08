@@ -15,7 +15,7 @@ export function CommunitySection() {
 			label: "Discord",
 		},
 		{
-			href: "https://x.com/rivet_gg",
+			href: "https://x.com/rivet_dev",
 			icon: faXTwitter,
 			label: "X",
 		},
@@ -25,12 +25,12 @@ export function CommunitySection() {
 			label: "Bluesky",
 		},
 		{
-			href: "https://github.com/rivet-gg/rivetkit/discussions",
+			href: "https://github.com/rivet-dev/rivetkit/discussions",
 			icon: faGithub,
 			label: "Discussions",
 		},
 		{
-			href: "https://github.com/rivet-gg/rivetkit/issues",
+			href: "https://github.com/rivet-dev/rivetkit/issues",
 			icon: faGithub,
 			label: "Issues",
 		},

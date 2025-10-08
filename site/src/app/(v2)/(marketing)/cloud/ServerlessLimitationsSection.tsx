@@ -73,11 +73,10 @@ export const ServerlessLimitationsSection = () => {
 		<div className="mx-auto max-w-7xl py-32 lg:py-40">
 			<div className="text-center mb-12">
 				<h2 className="text-4xl font-medium tracking-tight text-white">
-					Serverless without limitations
+					Rivet without limitations
 				</h2>
 				<p className="mt-4 text-lg text-white/70">
-					All the benefits of serverless with none of the traditional
-					constraints
+					All the benefits of Rivet on a managed cloud with custom features
 				</p>
 			</div>
 
