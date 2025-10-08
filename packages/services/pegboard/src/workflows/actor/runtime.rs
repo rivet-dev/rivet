@@ -5,6 +5,7 @@ use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol as protocol;
+use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
@@ -114,9 +115,9 @@ async fn allocate_actor(
 			let for_serverless = tx
 				.with_subspace(namespace::keys::subspace())
 				.exists(
-					&namespace::keys::RunnerConfigByVariantKey::new(
+					&namespace::keys::runner_config::ByVariantKey::new(
 						namespace_id,
-						namespace::keys::RunnerConfigVariant::Serverless,
+						RunnerConfigVariant::Serverless,
 						input.runner_name_selector.clone(),
 					),
 					Serializable,

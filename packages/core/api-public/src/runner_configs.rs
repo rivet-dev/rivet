@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use axum::{
 	http::HeaderMap,
@@ -7,11 +9,21 @@ use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
 };
-
 use rivet_api_peer::runner_configs::*;
-use rivet_api_util::request_remote_datacenter;
+use rivet_api_types::{pagination::Pagination, runner_configs::list::*};
+use rivet_api_util::{fanout_to_datacenters, request_remote_datacenter};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::ctx::ApiCtx;
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = RunnerConfigsListResponse)]
+pub struct ListResponse {
+	pub runner_configs: HashMap<String, HashMap<String, rivet_types::runner_configs::RunnerConfig>>,
+	pub pagination: Pagination,
+}
 
 #[utoipa::path(
 	get,
@@ -45,22 +57,51 @@ async fn list_inner(
 ) -> Result<ListResponse> {
 	ctx.auth().await?;
 
-	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::list(ctx.into(), path, query).await
-	} else {
-		let leader_dc = ctx.config().leader_dc()?;
-		request_remote_datacenter::<ListResponse>(
-			ctx.config(),
-			leader_dc.datacenter_label,
-			"/runner-configs",
-			axum::http::Method::GET,
-			headers,
-			Some(&query),
-			Option::<&()>::None,
-		)
-		.await
-	}
+	let runner_configs = fanout_to_datacenters::<
+		rivet_api_types::runner_configs::list::ListResponse,
+		_,
+		_,
+		_,
+		_,
+		HashMap<String, HashMap<String, rivet_types::runner_configs::RunnerConfig>>,
+	>(
+		ctx.clone().into(),
+		headers,
+		"/runner-configs",
+		query.clone(),
+		move |ctx, query| {
+			let path = path.clone();
+			async move { rivet_api_peer::runner_configs::list(ctx, path, query).await }
+		},
+		|dc_label, res, agg| {
+			for (runner_name, runner_config) in res.runner_configs {
+				let entry = agg.entry(runner_name).or_insert_with(HashMap::new);
+
+				entry.insert(
+					ctx.config()
+						.dc_for_label(dc_label)
+						.expect("dc should exist")
+						.name
+						.clone(),
+					runner_config,
+				);
+			}
+		},
+	)
+	.await?;
+
+	Ok(ListResponse {
+		runner_configs,
+		pagination: Pagination { cursor: None },
+	})
 }
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = RunnerConfigsUpsertRequest)]
+pub struct UpsertRequest(
+	#[schema(inline)] HashMap<String, rivet_types::runner_configs::RunnerConfig>,
+);
 
 #[utoipa::path(
 	put,
@@ -94,25 +135,77 @@ async fn upsert_inner(
 	headers: HeaderMap,
 	path: UpsertPath,
 	query: UpsertQuery,
-	body: UpsertRequest,
+	mut body: UpsertRequest,
 ) -> Result<UpsertResponse> {
 	ctx.auth().await?;
 
-	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::upsert(ctx.into(), path, query, body).await
-	} else {
-		let leader_dc = ctx.config().leader_dc()?;
-		request_remote_datacenter::<UpsertResponse>(
-			ctx.config(),
-			leader_dc.datacenter_label,
-			&format!("/runner-configs/{}", path.runner_name),
-			axum::http::Method::PUT,
-			headers,
-			Some(&query),
-			Some(&body),
-		)
-		.await
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	// Upsert default to epoxy
+	if let Some(default_config) = body.0.remove("default") {
+		ctx.op(namespace::ops::runner_config::upsert_default::Input {
+			namespace_id: namespace.namespace_id,
+			name: path.runner_name.clone(),
+			config: default_config,
+		})
+		.await?;
 	}
+
+	for dc in &ctx.config().topology().datacenters {
+		if let Some(runner_config) = body.0.remove(&dc.name) {
+			if ctx.config().dc_label() == dc.datacenter_label {
+				rivet_api_peer::runner_configs::upsert(
+					ctx.clone().into(),
+					path.clone(),
+					query.clone(),
+					rivet_api_peer::runner_configs::UpsertRequest(runner_config),
+				)
+				.await?;
+			} else {
+				request_remote_datacenter::<UpsertResponse>(
+					ctx.config(),
+					dc.datacenter_label,
+					&format!("/runner-configs/{}", path.runner_name),
+					axum::http::Method::PUT,
+					headers.clone(),
+					Some(&query),
+					Some(&runner_config),
+				)
+				.await?;
+			}
+		} else {
+			if ctx.config().dc_label() == dc.datacenter_label {
+				rivet_api_peer::runner_configs::delete(
+					ctx.clone().into(),
+					DeletePath {
+						runner_name: path.runner_name.clone(),
+					},
+					DeleteQuery {
+						namespace: query.namespace.clone(),
+					},
+				)
+				.await?;
+			} else {
+				request_remote_datacenter::<DeleteResponse>(
+					ctx.config(),
+					dc.datacenter_label,
+					&format!("/runner-configs/{}", path.runner_name),
+					axum::http::Method::DELETE,
+					headers.clone(),
+					Some(&query),
+					Option::<&()>::None,
+				)
+				.await?;
+			}
+		}
+	}
+
+	Ok(UpsertResponse {})
 }
 
 #[utoipa::path(
@@ -148,19 +241,45 @@ async fn delete_inner(
 ) -> Result<DeleteResponse> {
 	ctx.auth().await?;
 
-	if ctx.config().is_leader() {
-		rivet_api_peer::runner_configs::delete(ctx.into(), path, query).await
-	} else {
-		let leader_dc = ctx.config().leader_dc()?;
-		request_remote_datacenter::<DeleteResponse>(
-			ctx.config(),
-			leader_dc.datacenter_label,
-			&format!("/runner-configs/{}", path.runner_name),
-			axum::http::Method::DELETE,
-			headers,
-			Some(&query),
-			Option::<&()>::None,
-		)
-		.await
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	for dc in &ctx.config().topology().datacenters {
+		if ctx.config().dc_label() == dc.datacenter_label {
+			rivet_api_peer::runner_configs::delete(
+				ctx.clone().into(),
+				DeletePath {
+					runner_name: path.runner_name.clone(),
+				},
+				DeleteQuery {
+					namespace: query.namespace.clone(),
+				},
+			)
+			.await?;
+		} else {
+			request_remote_datacenter::<DeleteResponse>(
+				ctx.config(),
+				dc.datacenter_label,
+				&format!("/runner-configs/{}", path.runner_name),
+				axum::http::Method::DELETE,
+				headers.clone(),
+				Some(&query),
+				Option::<&()>::None,
+			)
+			.await?;
+		}
 	}
+
+	// Delete default from epoxy
+	ctx.op(namespace::ops::runner_config::delete_default::Input {
+		namespace_id: namespace.namespace_id,
+		name: path.runner_name.clone(),
+	})
+	.await?;
+
+	Ok(DeleteResponse {})
 }

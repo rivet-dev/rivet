@@ -14,11 +14,12 @@ pub struct Input {
 pub struct RunnerConfig {
 	pub namespace_id: Id,
 	pub name: String,
-	pub config: rivet_types::namespaces::RunnerConfig,
+	pub config: rivet_types::runner_configs::RunnerConfig,
+	pub is_default: bool,
 }
 
 #[operation]
-pub async fn namespace_runner_config_get_local(
+pub async fn namespace_runner_config_get(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<RunnerConfig>> {
@@ -37,19 +38,36 @@ pub async fn namespace_runner_config_get_local(
 						let tx = tx.with_subspace(keys::subspace());
 
 						let runner_config_key =
-							keys::RunnerConfigKey::new(namespace_id, runner_name.clone());
+							keys::runner_config::DataKey::new(namespace_id, runner_name.clone());
 
 						// Runner config not found
 						let Some(runner_config) =
 							tx.read_opt(&runner_config_key, Serializable).await?
 						else {
-							return Ok(None);
+							let default_config = ctx
+								.op(crate::ops::runner_config::get_default::Input {
+									namespace_id,
+									name: runner_name.clone(),
+								})
+								.await?;
+
+							let Some(default_config) = default_config else {
+								return Ok(None);
+							};
+
+							return Ok(Some(RunnerConfig {
+								namespace_id,
+								name: runner_name,
+								config: default_config,
+								is_default: true,
+							}));
 						};
 
 						Ok(Some(RunnerConfig {
 							namespace_id,
 							name: runner_name,
 							config: runner_config,
+							is_default: false,
 						}))
 					}
 				})

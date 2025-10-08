@@ -1,5 +1,4 @@
 use gas::prelude::*;
-use rivet_cache::CacheKey;
 use universaldb::utils::IsolationLevel::*;
 
 use crate::{errors, keys, utils::runner_config_variant};
@@ -22,13 +21,13 @@ pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -
 
 			// Read existing config to determine variant
 			let runner_config_key =
-				keys::RunnerConfigKey::new(input.namespace_id, input.name.clone());
+				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
 			if let Some(config) = tx.read_opt(&runner_config_key, Serializable).await? {
 				tx.delete(&runner_config_key);
 
 				// Clear secondary idx
-				tx.delete(&keys::RunnerConfigByVariantKey::new(
+				tx.delete(&keys::runner_config::ByVariantKey::new(
 					input.namespace_id,
 					runner_config_variant(&config),
 					input.name.clone(),
@@ -40,15 +39,9 @@ pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -
 		.custom_instrument(tracing::info_span!("runner_config_upsert_tx"))
 		.await?;
 
-	// Purge cache in all dcs
-	ctx.op(internal::ops::cache::purge_global::Input {
-		base_key: "namespace.runner_config.{}.get_global".to_string(),
-		keys: vec![(input.namespace_id, input.name.as_str()).cache_key().into()],
-	})
-	.await?;
-
-	// Bump autoscaler in all dcs
-	ctx.op(internal::ops::bump_serverless_autoscaler_global::Input {})
+	// Bump autoscaler
+	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+		.send()
 		.await?;
 
 	Ok(())

@@ -1,35 +1,10 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use namespace::utils::runner_config_variant;
 use rivet_api_builder::ApiCtx;
-use rivet_api_types::pagination::Pagination;
+use rivet_api_types::{pagination::Pagination, runner_configs::list::*};
+use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
-
-#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct ListQuery {
-	pub namespace: String,
-	pub limit: Option<usize>,
-	pub cursor: Option<String>,
-	pub variant: Option<namespace::keys::RunnerConfigVariant>,
-	#[serde(default)]
-	pub runner_names: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ListPath {}
-
-#[derive(Deserialize, Serialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = RunnerConfigsListResponse)]
-pub struct ListResponse {
-	pub runner_configs: HashMap<String, rivet_types::namespaces::RunnerConfig>,
-	pub pagination: Pagination,
-}
 
 pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<ListResponse> {
 	let namespace = ctx
@@ -41,7 +16,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 
 	if let Some(runner_names) = query.runner_names {
 		let runner_configs = ctx
-			.op(namespace::ops::runner_config::get_local::Input {
+			.op(namespace::ops::runner_config::get::Input {
 				runners: runner_names
 					.split(',')
 					.map(|name| (namespace.namespace_id, name.to_string()))
@@ -65,7 +40,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 					(query.variant, Some(after_name.to_string()))
 				} else {
 					(
-						namespace::keys::RunnerConfigVariant::parse(variant),
+						RunnerConfigVariant::parse(variant),
 						Some(after_name.to_string()),
 					)
 				}
@@ -97,23 +72,22 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
+#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct UpsertQuery {
 	pub namespace: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct UpsertPath {
 	pub runner_name: String,
 }
 
-#[derive(Deserialize, Serialize, ToSchema)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-#[schema(as = RunnerConfigsUpsertRequest)]
-pub struct UpsertRequest(#[schema(inline)] rivet_types::namespaces::RunnerConfig);
+pub struct UpsertRequest(pub rivet_types::runner_configs::RunnerConfig);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsUpsertResponse)]
@@ -154,11 +128,6 @@ pub struct DeleteQuery {
 pub struct DeletePath {
 	pub runner_name: String,
 }
-
-#[derive(Deserialize, Serialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[schema(as = RunnerConfigsDeleteRequest)]
-pub struct DeleteRequest(rivet_types::namespaces::RunnerConfig);
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsDeleteResponse)]

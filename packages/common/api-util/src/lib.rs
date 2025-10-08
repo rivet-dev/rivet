@@ -102,7 +102,7 @@ where
 	Q: Serialize + Clone + Send + 'static,
 	F: Fn(ApiCtx, Q) -> Fut + Clone + Send + 'static,
 	Fut: Future<Output = Result<I>> + Send,
-	A: Fn(I, &mut R),
+	A: Fn(u16, I, &mut R),
 	R: Default + Send + 'static,
 {
 	let dcs = &ctx.config().topology().datacenters;
@@ -117,19 +117,22 @@ where
 		async move {
 			if dc.datacenter_label == ctx.config().dc_label() {
 				// Local datacenter - use direct API call
-				local_handler(ctx, query).await
+				(dc.datacenter_label, local_handler(ctx, query).await)
 			} else {
 				// Remote datacenter - HTTP request
-				request_remote_datacenter::<I>(
-					ctx.config(),
+				(
 					dc.datacenter_label,
-					&endpoint,
-					Method::GET,
-					headers,
-					Some(&query),
-					Option::<&()>::None,
+					request_remote_datacenter::<I>(
+						ctx.config(),
+						dc.datacenter_label,
+						&endpoint,
+						Method::GET,
+						headers,
+						Some(&query),
+						Option::<&()>::None,
+					)
+					.await,
 				)
-				.await
 			}
 		}
 	}))
@@ -141,11 +144,11 @@ where
 	let result_count = results.len();
 	let mut errors = Vec::new();
 	let mut aggregated = R::default();
-	for res in results {
+	for (dc_label, res) in results {
 		match res {
-			Ok(data) => aggregator(data, &mut aggregated),
+			Ok(data) => aggregator(dc_label, data, &mut aggregated),
 			Err(err) => {
-				tracing::error!(?err, "failed to request edge dc");
+				tracing::error!(?dc_label, ?err, "failed to request edge dc");
 				errors.push(err);
 			}
 		}
