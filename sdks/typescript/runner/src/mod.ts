@@ -398,17 +398,6 @@ export class Runner {
 		return `${wsEndpoint}?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
-	get pegboardTunnelUrl() {
-		const endpoint =
-			this.#config.pegboardRelayEndpoint ||
-			this.#config.pegboardEndpoint ||
-			this.#config.endpoint;
-		const wsEndpoint = endpoint
-			.replace("http://", "ws://")
-			.replace("https://", "wss://");
-		return `${wsEndpoint}?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_name=${encodeURIComponent(this.#config.runnerName)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
-	}
-
 	// MARK: Runner protocol
 	async #openPegboardWebSocket() {
 		const protocols = ["rivet", `rivet_target.runner`];
