@@ -9,7 +9,7 @@ pub enum Error {
 	#[error("pools: {0}")]
 	Pools(#[from] rivet_pools::Error),
 
-	#[error("getter: {0}")]
+	#[error("cache getter: {0}")]
 	Getter(anyhow::Error),
 
 	#[error("serde decode: {0}")]

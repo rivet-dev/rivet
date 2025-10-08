@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+	collections::BTreeMap,
+	sync::{Mutex, MutexGuard},
+};
 
 use anyhow::Result;
 
@@ -7,6 +10,7 @@ use crate::{
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
+	utils::{IsolationLevel, end_of_key_range},
 	value::{KeyValue, Slice, Values},
 };
 
@@ -39,40 +43,55 @@ pub enum GetOutput {
 	ApplyAtomicOps(Vec<(Vec<u8>, MutationType)>), // (param, op_type) pairs
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct TransactionOperations {
-	operations: Vec<Operation>,
-	conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+	operations: Mutex<Vec<Operation>>,
+	conflict_ranges: Mutex<Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>>,
 }
 
 impl TransactionOperations {
-	pub fn add_operation(&mut self, op: Operation) {
-		self.operations.push(op);
+	pub fn consume(&self) -> (Vec<Operation>, Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>) {
+		(
+			std::mem::take(&mut self.operations.lock().unwrap()),
+			std::mem::take(&mut self.conflict_ranges.lock().unwrap()),
+		)
 	}
 
-	pub fn operations(&self) -> &[Operation] {
-		&self.operations
+	pub fn add_operation(&self, operation: Operation) {
+		self.operations.lock().unwrap().push(operation);
 	}
 
-	pub fn set(&mut self, key: &[u8], value: &[u8]) {
+	pub fn operations(&self) -> MutexGuard<'_, Vec<Operation>> {
+		self.operations.lock().unwrap()
+	}
+
+	pub fn set(&self, key: &[u8], value: &[u8]) {
+		self.add_conflict_range(key, &end_of_key_range(key), ConflictRangeType::Write);
+
 		self.add_operation(Operation::Set {
 			key: key.to_vec(),
 			value: value.to_vec(),
 		});
 	}
 
-	pub fn clear(&mut self, key: &[u8]) {
+	pub fn clear(&self, key: &[u8]) {
+		self.add_conflict_range(key, &end_of_key_range(key), ConflictRangeType::Write);
+
 		self.add_operation(Operation::Clear { key: key.to_vec() });
 	}
 
-	pub fn clear_range(&mut self, begin: &[u8], end: &[u8]) {
+	pub fn clear_range(&self, begin: &[u8], end: &[u8]) {
+		self.add_conflict_range(begin, end, ConflictRangeType::Write);
+
 		self.add_operation(Operation::ClearRange {
 			begin: begin.to_vec(),
 			end: end.to_vec(),
 		});
 	}
 
-	pub fn atomic_op(&mut self, key: &[u8], param: &[u8], op_type: MutationType) {
+	pub fn atomic_op(&self, key: &[u8], param: &[u8], op_type: MutationType) {
+		self.add_conflict_range(key, &end_of_key_range(key), ConflictRangeType::Write);
+
 		self.add_operation(Operation::AtomicOp {
 			key: key.to_vec(),
 			param: param.to_vec(),
@@ -80,11 +99,15 @@ impl TransactionOperations {
 		});
 	}
 
-	pub fn get(&self, key: &[u8]) -> GetOutput {
+	pub fn get(&self, key: &[u8], isolation_level: IsolationLevel) -> GetOutput {
+		if let IsolationLevel::Serializable = isolation_level {
+			self.add_conflict_range(key, &end_of_key_range(key), ConflictRangeType::Read);
+		}
+
 		let mut atomic_ops: Vec<(Vec<u8>, MutationType)> = Vec::new();
 
 		// Iterate through operations in reverse order to find the most recent operation for this key
-		for op in self.operations.iter().rev() {
+		for op in self.operations().iter().rev() {
 			match op {
 				Operation::Set {
 					key: set_key,
@@ -137,6 +160,7 @@ impl TransactionOperations {
 	pub async fn get_with_callback<F, Fut>(
 		&self,
 		key: &[u8],
+		isolation_level: IsolationLevel,
 		get_from_db: F,
 	) -> Result<Option<Slice>>
 	where
@@ -144,7 +168,7 @@ impl TransactionOperations {
 		Fut: std::future::Future<Output = Result<Option<Slice>>>,
 	{
 		// Check local operations first
-		match self.get(key) {
+		match self.get(key, isolation_level) {
 			GetOutput::Value(value) => Ok(Some(value.into())),
 			GetOutput::Cleared => Ok(None),
 			GetOutput::None => {
@@ -171,7 +195,12 @@ impl TransactionOperations {
 		}
 	}
 
-	pub async fn get_key<F, Fut>(&self, selector: &KeySelector<'_>, get_from_db: F) -> Result<Slice>
+	pub async fn get_key<F, Fut>(
+		&self,
+		selector: &KeySelector<'_>,
+		isolation_level: IsolationLevel,
+		get_from_db: F,
+	) -> Result<Slice>
 	where
 		F: FnOnce() -> Fut,
 		Fut: std::future::Future<Output = Result<Slice>>,
@@ -180,17 +209,27 @@ impl TransactionOperations {
 		let db_key = get_from_db().await?;
 
 		// If there are no local operations, just return the database result
-		if self.operations.is_empty() {
+		if self.operations().is_empty() {
+			// Add conflict range on resolved key
+			if let IsolationLevel::Serializable = isolation_level {
+				self.add_conflict_range(
+					&db_key,
+					&end_of_key_range(&db_key),
+					ConflictRangeType::Read,
+				);
+			}
+
 			return Ok(db_key);
 		}
 
 		// Check if db_key is cleared locally
-		let db_key_cleared = !db_key.is_empty() && matches!(self.get(&db_key), GetOutput::Cleared);
+		let db_key_cleared =
+			!db_key.is_empty() && matches!(self.get(&db_key, isolation_level), GetOutput::Cleared);
 
 		// Build a map of all local keys that currently exist (not cleared)
 		let mut local_keys = BTreeMap::new();
 
-		for op in &self.operations {
+		for op in &*self.operations() {
 			match op {
 				Operation::Set { key, .. } => {
 					local_keys.insert(key.clone(), ());
@@ -249,41 +288,57 @@ impl TransactionOperations {
 		};
 
 		// Determine which key to return
-		match (best_local, db_key_cleared) {
+		let key = match (best_local, db_key_cleared) {
 			(Some(local), false) if !db_key.is_empty() => {
 				// Both keys exist, pick the appropriate one based on direction
 				if is_forward {
 					// Return the smaller key
 					if db_key.as_slice() < local.as_slice() {
-						Ok(db_key)
+						db_key
 					} else {
-						Ok(local.into())
+						local.into()
 					}
 				} else {
 					// Return the larger key
 					if db_key.as_slice() > local.as_slice() {
-						Ok(db_key)
+						db_key
 					} else {
-						Ok(local.into())
+						local.into()
 					}
 				}
 			}
-			(Some(local), _) => Ok(local.into()),
-			(None, false) => Ok(db_key),
-			(None, true) => Ok(vec![].into()),
+			(Some(local), _) => local.into(),
+			(None, false) => db_key,
+			(None, true) => vec![].into(),
+		};
+
+		// Add conflict range on resolved key
+		if let IsolationLevel::Serializable = isolation_level {
+			self.add_conflict_range(&key, &end_of_key_range(&key), ConflictRangeType::Read);
 		}
+
+		Ok(key)
 	}
 
-	pub async fn get_range<F, Fut>(&self, opt: &RangeOption<'_>, get_from_db: F) -> Result<Values>
+	pub async fn get_range<F, Fut>(
+		&self,
+		opt: &RangeOption<'_>,
+		isolation_level: IsolationLevel,
+		get_from_db: F,
+	) -> Result<Values>
 	where
 		F: FnOnce() -> Fut,
 		Fut: std::future::Future<Output = Result<Values>>,
 	{
+		if let IsolationLevel::Serializable = isolation_level {
+			self.add_conflict_range(opt.begin.key(), opt.end.key(), ConflictRangeType::Read);
+		}
+
 		// Get database results
 		let db_values = get_from_db().await?;
 
 		// If there are no local operations, just return the database results
-		if self.operations.is_empty() {
+		if self.operations().is_empty() {
 			return Ok(db_values);
 		}
 
@@ -299,7 +354,7 @@ impl TransactionOperations {
 		}
 
 		// Apply local operations
-		for op in &self.operations {
+		for op in &*self.operations() {
 			match op {
 				Operation::Set { key, value } => {
 					if key.as_slice() >= begin && key.as_slice() < end {
@@ -356,22 +411,15 @@ impl TransactionOperations {
 		Ok(Values::new(keyvalues))
 	}
 
-	pub fn clear_all(&mut self) {
-		self.operations.clear();
-		self.conflict_ranges.clear();
+	pub fn clear_all(&self) {
+		self.operations.lock().unwrap().clear();
+		self.conflict_ranges.lock().unwrap().clear();
 	}
 
-	pub fn add_conflict_range(
-		&mut self,
-		begin: &[u8],
-		end: &[u8],
-		conflict_type: ConflictRangeType,
-	) {
+	pub fn add_conflict_range(&self, begin: &[u8], end: &[u8], conflict_type: ConflictRangeType) {
 		self.conflict_ranges
+			.lock()
+			.unwrap()
 			.push((begin.to_vec(), end.to_vec(), conflict_type));
-	}
-
-	pub fn conflict_ranges(&self) -> &[(Vec<u8>, Vec<u8>, ConflictRangeType)] {
-		&self.conflict_ranges
 	}
 }

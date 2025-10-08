@@ -1,7 +1,7 @@
 use axum::{
 	extract::Request,
 	middleware::{self, Next},
-	response::{Redirect, Response},
+	response::{IntoResponse, Redirect, Response},
 };
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
@@ -103,11 +103,11 @@ async fn auth_middleware(
 	headers: HeaderMap,
 	mut req: Request,
 	next: Next,
-) -> std::result::Result<Response, String> {
+) -> std::result::Result<Response, Response> {
 	let ctx = req
 		.extensions()
 		.get::<rivet_api_builder::ApiCtx>()
-		.ok_or_else(|| "ctx should exist".to_string())?;
+		.ok_or_else(|| "ctx should exist".into_response())?;
 
 	// Extract token
 	let token = headers
@@ -133,9 +133,11 @@ async fn auth_middleware(
 		&& !path.starts_with("/ui/")
 		&& !ctx.is_auth_handled()
 	{
-		return Err(format!(
-			"developer error: must explicitly handle auth in all endpoints (path: {path})"
-		));
+		return Err((
+			reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+			format!("developer error: must explicitly handle auth in all endpoints (path: {path})"),
+		)
+			.into_response());
 	}
 
 	Ok(res)

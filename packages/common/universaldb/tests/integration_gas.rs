@@ -7,7 +7,7 @@ use universaldb::{
 use uuid::Uuid;
 
 #[tokio::test]
-async fn test_postgres_driver() {
+async fn test_postgres_gasoline() {
 	let _ = tracing_subscriber::fmt::try_init();
 
 	let (db_config, docker_config) = TestDatabase::Postgres
