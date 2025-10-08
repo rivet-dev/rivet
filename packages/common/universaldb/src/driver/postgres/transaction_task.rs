@@ -1,33 +1,28 @@
-use anyhow::{Result, anyhow};
-use deadpool_postgres::Pool;
+use anyhow::{Context, Result, anyhow, bail};
+use deadpool_postgres::{Pool, Transaction};
 use tokio::sync::{mpsc, oneshot};
 use tokio_postgres::IsolationLevel;
 
 use crate::{
 	atomic::apply_atomic_op,
 	error::DatabaseError,
-	options::{ConflictRangeType, MutationType},
+	options::ConflictRangeType,
+	tx_ops::Operation,
+	value::{KeyValue, Slice, Values},
 	versionstamp::substitute_versionstamp_if_incomplete,
 };
 
-#[derive(Debug, Clone, Copy)]
-pub enum TransactionIsolationLevel {
-	Serializable,
-	RepeatableReadReadOnly,
-}
-
-#[derive(Debug)]
 pub enum TransactionCommand {
 	// Read operations
 	Get {
 		key: Vec<u8>,
-		response: oneshot::Sender<Result<Option<Vec<u8>>>>,
+		response: oneshot::Sender<Result<Option<Slice>>>,
 	},
 	GetKey {
 		key: Vec<u8>,
 		or_equal: bool,
 		offset: i32,
-		response: oneshot::Sender<Result<Option<Vec<u8>>>>,
+		response: oneshot::Sender<Result<Option<Slice>>>,
 	},
 	GetRange {
 		begin: Vec<u8>,
@@ -38,39 +33,12 @@ pub enum TransactionCommand {
 		end_offset: i32,
 		limit: Option<usize>,
 		reverse: bool,
-		response: oneshot::Sender<Result<Vec<(Vec<u8>, Vec<u8>)>>>,
-	},
-	// Write operations
-	Set {
-		key: Vec<u8>,
-		value: Vec<u8>,
-		response: oneshot::Sender<Result<()>>,
-	},
-	Clear {
-		key: Vec<u8>,
-		response: oneshot::Sender<Result<()>>,
-	},
-	ClearRange {
-		begin: Vec<u8>,
-		end: Vec<u8>,
-		response: oneshot::Sender<Result<()>>,
-	},
-	AtomicOp {
-		key: Vec<u8>,
-		param: Vec<u8>,
-		op_type: MutationType,
-		response: oneshot::Sender<Result<()>>,
+		response: oneshot::Sender<Result<Values>>,
 	},
 	// Transaction control
 	Commit {
-		has_conflict_ranges: bool,
-		response: oneshot::Sender<Result<()>>,
-	},
-	// Conflict ranges
-	AddConflictRange {
-		begin: Vec<u8>,
-		end: Vec<u8>,
-		conflict_type: ConflictRangeType,
+		operations: Vec<Operation>,
+		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 		response: oneshot::Sender<Result<()>>,
 	},
 	GetEstimatedRangeSize {
@@ -86,27 +54,17 @@ pub enum TransactionCommand {
 /// that don't work well with the FoundationDB-style API. Specifically:
 /// - The transaction must outlive all references to it
 /// - We can't store the transaction in a mutex due to lifetime issues with the connection
-/// - The synchronous `set`/`clear` methods in the TransactionDriver trait can't await
 ///
 /// By running in a separate task and communicating via channels, we avoid these lifetime
 /// issues while maintaining a single serializable transaction for all operations.
 pub struct TransactionTask {
 	pool: Pool,
 	receiver: mpsc::Receiver<TransactionCommand>,
-	isolation_level: TransactionIsolationLevel,
 }
 
 impl TransactionTask {
-	pub fn new(
-		pool: Pool,
-		receiver: mpsc::Receiver<TransactionCommand>,
-		isolation_level: TransactionIsolationLevel,
-	) -> Self {
-		Self {
-			pool,
-			receiver,
-			isolation_level,
-		}
+	pub fn new(pool: Pool, receiver: mpsc::Receiver<TransactionCommand>) -> Self {
+		Self { pool, receiver }
 	}
 
 	pub async fn run(mut self) {
@@ -115,144 +73,42 @@ impl TransactionTask {
 			Ok(conn) => conn,
 			Err(_) => {
 				// If we can't get a connection, respond to all pending commands with errors
-				while let Some(cmd) = self.receiver.recv().await {
-					match cmd {
-						TransactionCommand::Get { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetKey { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Set { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Clear { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::ClearRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::AtomicOp { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Commit { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::AddConflictRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetEstimatedRangeSize { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-					}
-				}
+				self.fail_receiver().await;
 				return;
 			}
 		};
 
-		// Start transaction with appropriate isolation level
-		let tx = match self.isolation_level {
-			TransactionIsolationLevel::Serializable => {
-				conn.build_transaction()
-					.isolation_level(IsolationLevel::Serializable)
-					.start()
-					.await
-			}
-			TransactionIsolationLevel::RepeatableReadReadOnly => {
-				conn.build_transaction()
-					.isolation_level(IsolationLevel::RepeatableRead)
-					.read_only(true)
-					.start()
-					.await
-			}
-		};
-
-		let tx = match tx {
+		let tx = match conn
+			.build_transaction()
+			.isolation_level(IsolationLevel::RepeatableRead)
+			.start()
+			.await
+		{
 			Ok(tx) => tx,
 			Err(_) => {
 				// If we can't start a transaction, respond to all pending commands with errors
-				while let Some(cmd) = self.receiver.recv().await {
-					match cmd {
-						TransactionCommand::Get { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetKey { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Set { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Clear { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::ClearRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::AtomicOp { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::Commit { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::AddConflictRange { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-						TransactionCommand::GetEstimatedRangeSize { response, .. } => {
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-						}
-					}
-				}
+				self.fail_receiver().await;
 				return;
 			}
 		};
 
-		// Set lock timeout to 0 for serializable transactions
-		// This ensures conflict range acquisition fails immediately if there's a conflict
-		if let TransactionIsolationLevel::Serializable = self.isolation_level {
-			if let Err(_) = tx.execute("SET LOCAL lock_timeout = '0'", &[]).await {
-				// If we can't set lock timeout, continue anyway
+		let start_version = match tx
+			.query_one("SELECT nextval('global_version_seq')", &[])
+			.await
+		{
+			Ok(row) => row.get::<_, i64>(0),
+			Err(err) => {
+				tracing::error!(?err, "failed to get postgres txn start_version");
+				self.fail_receiver().await;
+				return;
 			}
-		}
+		};
 
 		// Process commands
 		while let Some(cmd) = self.receiver.recv().await {
 			match cmd {
 				TransactionCommand::Get { key, response } => {
-					let query = "SELECT value FROM kv WHERE key = $1";
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => tx
-							.query_opt(&stmt, &[&key])
-							.await
-							.map_err(map_postgres_error)
-							.map(|row| row.map(|r| r.get::<_, Vec<u8>>(0))),
-						Err(e) => Err(map_postgres_error(e)),
-					};
+					let result = self.handle_get(&tx, &key).await;
 
 					let _ = response.send(result);
 				}
@@ -262,41 +118,7 @@ impl TransactionTask {
 					offset,
 					response,
 				} => {
-					// Determine selector type and build appropriate query
-					let query = match (or_equal, offset) {
-						(false, 1) => {
-							// first_greater_or_equal
-							"SELECT key FROM kv WHERE key >= $1 ORDER BY key LIMIT 1"
-						}
-						(true, 1) => {
-							// first_greater_than
-							"SELECT key FROM kv WHERE key > $1 ORDER BY key LIMIT 1"
-						}
-						(false, 0) => {
-							// last_less_than
-							"SELECT key FROM kv WHERE key < $1 ORDER BY key DESC LIMIT 1"
-						}
-						(true, 0) => {
-							// last_less_or_equal
-							"SELECT key FROM kv WHERE key <= $1 ORDER BY key DESC LIMIT 1"
-						}
-						_ => {
-							// For other offset values, we need more complex logic
-							// This is a simplified fallback that may not handle all cases perfectly
-							let _ = response
-								.send(Err(anyhow!("postgres transaction connection failed")));
-							continue;
-						}
-					};
-
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => tx
-							.query_opt(&stmt, &[&key])
-							.await
-							.map_err(map_postgres_error)
-							.map(|row| row.map(|r| r.get::<_, Vec<u8>>(0))),
-						Err(e) => Err(map_postgres_error(e)),
-					};
+					let result = self.handle_get_key(&tx, &key, or_equal, offset).await;
 
 					let _ = response.send(result);
 				}
@@ -311,311 +133,43 @@ impl TransactionTask {
 					reverse,
 					response,
 				} => {
-					// Determine SQL operators based on key selector types
-					// For begin selector:
-					// first_greater_or_equal: or_equal = false, offset = 1 -> ">="
-					// first_greater_than: or_equal = true, offset = 1 -> ">"
-					let begin_op = if begin_offset == 1 {
-						if begin_or_equal { ">" } else { ">=" }
-					} else {
-						// This shouldn't happen for begin in range queries
-						">="
-					};
-
-					// For end selector:
-					// first_greater_than: or_equal = true, offset = 1 -> "<="
-					// first_greater_or_equal: or_equal = false, offset = 1 -> "<"
-					let end_op = if end_offset == 1 {
-						if end_or_equal { "<=" } else { "<" }
-					} else {
-						// This shouldn't happen for end in range queries
-						"<"
-					};
-
-					// Build query with CTE that adds conflict range
-					let base_select = if reverse {
-						if let Some(limit) = limit {
-							format!(
-								"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC LIMIT {limit}"
-							)
-						} else {
-							format!(
-								"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC"
-							)
-						}
-					} else if let Some(limit) = limit {
-						format!(
-							"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key LIMIT {limit}"
+					let result = self
+						.handle_get_range(
+							&tx,
+							begin,
+							begin_or_equal,
+							begin_offset,
+							end,
+							end_or_equal,
+							end_offset,
+							limit,
+							reverse,
 						)
-					} else {
-						format!(
-							"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key"
-						)
-					};
-
-					let query = match self.isolation_level {
-						TransactionIsolationLevel::Serializable => {
-							// Use CTE to atomically add conflict range and read data
-							format!(
-								"WITH conflict_range AS (
-									INSERT INTO conflict_ranges (range_data, conflict_type) 
-									VALUES (bytearange($1, $2, '[)'), 'read')
-									ON CONFLICT DO NOTHING
-								)
-								{base_select}"
-							)
-						}
-						TransactionIsolationLevel::RepeatableReadReadOnly => base_select,
-					};
-
-					let result = match tx.prepare_cached(&query).await {
-						Ok(stmt) => tx
-							.query(&stmt, &[&begin, &end])
-							.await
-							.map_err(map_postgres_error)
-							.map(|rows| {
-								rows.into_iter()
-									.map(|row| {
-										let key: Vec<u8> = row.get(0);
-										let value: Vec<u8> = row.get(1);
-										(key, value)
-									})
-									.collect()
-							}),
-						Err(e) => Err(map_postgres_error(e)),
-					};
-
-					let _ = response.send(result);
-				}
-				TransactionCommand::Set {
-					key,
-					value,
-					response,
-				} => {
-					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
-					{
-						let _ = response.send(Err(anyhow!("cannot set in read only txn")));
-						continue;
-					};
-
-					// TODO: versionstamps need to be calculated on the sql side, not in rust
-					let value = substitute_versionstamp_if_incomplete(value, 0);
-
-					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => tx
-							.execute(&stmt, &[&key, &value])
-							.await
-							.map_err(map_postgres_error)
-							.map(|_| ()),
-						Err(e) => Err(map_postgres_error(e)),
-					};
-
-					let _ = response.send(result);
-				}
-				TransactionCommand::Clear { key, response } => {
-					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
-					{
-						let _ = response.send(Err(anyhow!("cannot set in read only txn")));
-						continue;
-					};
-
-					let query = "DELETE FROM kv WHERE key = $1";
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => tx
-							.execute(&stmt, &[&key])
-							.await
-							.map_err(map_postgres_error)
-							.map(|_| ()),
-						Err(e) => Err(map_postgres_error(e)),
-					};
-
-					let _ = response.send(result);
-				}
-				TransactionCommand::ClearRange {
-					begin,
-					end,
-					response,
-				} => {
-					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
-					{
-						let _ = response.send(Err(anyhow!("cannot clear range in read only txn")));
-						continue;
-					};
-
-					// No conversion needed - we'll use bytea ranges directly
-
-					// Use CTE to atomically add conflict range and delete data
-					let query = "WITH conflict_range AS (
-						INSERT INTO conflict_ranges (range_data, conflict_type) 
-						VALUES (bytearange($1, $2, '[)'), 'write')
-						ON CONFLICT DO NOTHING
-					)
-					DELETE FROM kv WHERE key >= $1 AND key < $2";
-
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => tx
-							.execute(&stmt, &[&begin, &end])
-							.await
-							.map_err(map_postgres_error)
-							.map(|_| ()),
-						Err(e) => Err(map_postgres_error(e)),
-					};
-
-					let _ = response.send(result);
-				}
-				TransactionCommand::AtomicOp {
-					key,
-					param,
-					op_type,
-					response,
-				} => {
-					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
-					{
-						let _ =
-							response.send(Err(anyhow!("cannot apply atomic op in read only txn")));
-						continue;
-					};
-
-					// Get current value from database
-					let current_query = "SELECT value FROM kv WHERE key = $1";
-					let current_result = match tx.prepare_cached(current_query).await {
-						Ok(stmt) => tx
-							.query_opt(&stmt, &[&key])
-							.await
-							.map_err(map_postgres_error),
-						Err(e) => Err(map_postgres_error(e)),
-					};
-
-					let result = match current_result {
-						Ok(current_row) => {
-							// Extract current value or use None if key doesn't exist
-							let current_value = current_row.map(|row| row.get::<_, Vec<u8>>(0));
-							let current_slice = current_value.as_deref();
-
-							// Apply atomic operation
-							let new_value = apply_atomic_op(current_slice, &param, op_type);
-
-							// Store the result
-							if let Some(new_value) = new_value {
-								let update_query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
-								match tx.prepare_cached(update_query).await {
-									Ok(stmt) => tx
-										.execute(&stmt, &[&key, &new_value])
-										.await
-										.map_err(map_postgres_error)
-										.map(|_| ()),
-									Err(e) => Err(map_postgres_error(e)),
-								}
-							} else {
-								let update_query = "DELETE FROM kv WHERE key = $1";
-								match tx.prepare_cached(update_query).await {
-									Ok(stmt) => tx
-										.execute(&stmt, &[&key])
-										.await
-										.map_err(map_postgres_error)
-										.map(|_| ()),
-									Err(e) => Err(map_postgres_error(e)),
-								}
-							}
-						}
-						Err(e) => Err(e),
-					};
+						.await;
 
 					let _ = response.send(result);
 				}
 				TransactionCommand::Commit {
-					has_conflict_ranges,
+					operations,
+					conflict_ranges,
 					response,
 				} => {
-					if has_conflict_ranges {
-						if let TransactionIsolationLevel::RepeatableReadReadOnly =
-							self.isolation_level
-						{
-							let _ = response.send(Err(anyhow!(
-								"cannot release conflict ranges in read only txn"
-							)));
-							continue;
-						};
+					let result = self
+						.handle_commit(tx, start_version, operations, conflict_ranges)
+						.await;
 
-						// Release all conflict ranges in a single query
-						let query = "DELETE FROM conflict_ranges WHERE txn_id = txid_current()";
-
-						if let Err(err) = tx.execute(query, &[]).await.map_err(map_postgres_error) {
-							let _ = response.send(Err(err));
-							return;
-						}
-					}
-
-					let result = tx.commit().await.map_err(map_postgres_error);
 					let _ = response.send(result);
 					// Exit after commit
 					return;
-				}
-				TransactionCommand::AddConflictRange {
-					begin,
-					end,
-					conflict_type,
-					response,
-				} => {
-					if let TransactionIsolationLevel::RepeatableReadReadOnly = self.isolation_level
-					{
-						let _ = response
-							.send(Err(anyhow!("cannot add conflict range in read only txn")));
-						continue;
-					};
-
-					let conflict_type = match conflict_type {
-						ConflictRangeType::Read => "read",
-						ConflictRangeType::Write => "write",
-					};
-
-					// Try to add the conflict range
-					let result = tx
-						.execute(
-							"INSERT INTO conflict_ranges (range_data, conflict_type) VALUES (bytearange($1, $2, '[)'), $3::text::range_type)",
-							&[&begin, &end, &conflict_type],
-						)
-						.await
-						.map_err(map_postgres_error)
-						.map(|_| ());
-
-					let _ = response.send(result);
 				}
 				TransactionCommand::GetEstimatedRangeSize {
 					begin,
 					end,
 					response,
 				} => {
-					// Sample's 1% of the range
-					let query = "
-						WITH range_stats AS (
-							SELECT 
-								COUNT(*) as estimated_count,
-								COALESCE(SUM(pg_column_size(key) + pg_column_size(value)), 0) as sample_size
-							FROM kv TABLESAMPLE SYSTEM(1) 
-							WHERE key >= $1 AND key < $2
-						),
-						table_stats AS (
-							SELECT reltuples::bigint as total_rows 
-							FROM pg_class 
-							WHERE relname = 'kv' AND relkind = 'r'
-						)
-						SELECT 
-							CASE 
-								WHEN r.estimated_count = 0 THEN 0
-								ELSE (r.sample_size * 100)::bigint
-							END as estimated_size
-						FROM range_stats r, table_stats t";
-
-					let result = match tx.prepare_cached(query).await {
-						Ok(stmt) => match tx.query_opt(&stmt, &[&begin, &end]).await {
-							Ok(Some(row)) => Ok(row.get::<_, i64>(0)),
-							Ok(None) => Ok(0),
-							Err(e) => Err(map_postgres_error(e)),
-						},
-						Err(e) => Err(map_postgres_error(e)),
-					};
+					let result = self
+						.handle_get_estimated_range_size(&tx, &begin, &end)
+						.await;
 
 					let _ = response.send(result);
 				}
@@ -623,6 +177,311 @@ impl TransactionTask {
 		}
 
 		// If the channel is closed, the transaction will be rolled back when dropped
+	}
+
+	async fn handle_get(&mut self, tx: &Transaction<'_>, key: &[u8]) -> Result<Option<Slice>> {
+		let query = "SELECT value FROM kv WHERE key = $1";
+		let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+		tx.query_opt(&stmt, &[&key])
+			.await
+			.map(|row| row.map(|r| r.get::<_, Vec<u8>>(0).into()))
+			.map_err(map_postgres_error)
+	}
+
+	async fn handle_get_key(
+		&mut self,
+		tx: &Transaction<'_>,
+		key: &[u8],
+		or_equal: bool,
+		offset: i32,
+	) -> Result<Option<Slice>> {
+		// Determine selector type and build appropriate query
+		let query = match (or_equal, offset) {
+			// first_greater_or_equal
+			(false, 1) => "SELECT key FROM kv WHERE key >= $1 ORDER BY key LIMIT 1",
+			// first_greater_than
+			(true, 1) => "SELECT key FROM kv WHERE key > $1 ORDER BY key LIMIT 1",
+			// last_less_than
+			(false, 0) => "SELECT key FROM kv WHERE key < $1 ORDER BY key DESC LIMIT 1",
+			// last_less_or_equal
+			(true, 0) => "SELECT key FROM kv WHERE key <= $1 ORDER BY key DESC LIMIT 1",
+			_ => bail!("invalid or_equal + offset combo"),
+		};
+
+		let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+		tx.query_opt(&stmt, &[&key])
+			.await
+			.map(|row| row.map(|r| r.get::<_, Vec<u8>>(0).into()))
+			.map_err(map_postgres_error)
+	}
+
+	async fn handle_get_range(
+		&mut self,
+		tx: &Transaction<'_>,
+		begin_key: Vec<u8>,
+		begin_or_equal: bool,
+		begin_offset: i32,
+		end_key: Vec<u8>,
+		end_or_equal: bool,
+		end_offset: i32,
+		limit: Option<usize>,
+		reverse: bool,
+	) -> Result<Values> {
+		// Determine SQL operators based on key selector types
+		// For begin selector:
+		// first_greater_or_equal: or_equal = false, offset = 1 -> ">="
+		// first_greater_than: or_equal = true, offset = 1 -> ">"
+		let begin_op = if begin_offset == 1 {
+			if begin_or_equal { ">" } else { ">=" }
+		} else {
+			// This shouldn't happen for begin in range queries
+			">="
+		};
+
+		// For end selector:
+		// first_greater_than: or_equal = true, offset = 1 -> "<="
+		// first_greater_or_equal: or_equal = false, offset = 1 -> "<"
+		let end_op = if end_offset == 1 {
+			if end_or_equal { "<=" } else { "<" }
+		} else {
+			// This shouldn't happen for end in range queries
+			"<"
+		};
+
+		// Build query with CTE that adds conflict range
+		let query = if reverse {
+			if let Some(limit) = limit {
+				format!(
+					"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC LIMIT {limit}"
+				)
+			} else {
+				format!(
+					"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC"
+				)
+			}
+		} else if let Some(limit) = limit {
+			format!(
+				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key LIMIT {limit}"
+			)
+		} else {
+			format!(
+				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key"
+			)
+		};
+
+		let stmt = tx
+			.prepare_cached(&query)
+			.await
+			.map_err(map_postgres_error)?;
+
+		tx.query(&stmt, &[&begin_key, &end_key])
+			.await
+			.map(|rows| {
+				rows.into_iter()
+					.map(|row| {
+						let key: Vec<u8> = row.get(0);
+						let value: Vec<u8> = row.get(1);
+						KeyValue::new(key, value)
+					})
+					.collect()
+			})
+			.map(Values::new)
+			.map_err(map_postgres_error)
+	}
+
+	async fn handle_get_estimated_range_size(
+		&mut self,
+		tx: &Transaction<'_>,
+		begin: &[u8],
+		end: &[u8],
+	) -> Result<i64> {
+		// Sample's 1% of the range
+		let query = "
+			WITH range_stats AS (
+				SELECT 
+					COUNT(*) as estimated_count,
+					COALESCE(SUM(pg_column_size(key) + pg_column_size(value)), 0) as sample_size
+				FROM kv TABLESAMPLE SYSTEM(1) 
+				WHERE key >= $1 AND key < $2
+			),
+			table_stats AS (
+				SELECT reltuples::bigint as total_rows 
+				FROM pg_class 
+				WHERE relname = 'kv' AND relkind = 'r'
+			)
+			SELECT 
+				CASE 
+					WHEN r.estimated_count = 0 THEN 0
+					ELSE (r.sample_size * 100)::bigint
+				END as estimated_size
+			FROM range_stats r, table_stats t";
+		let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+		tx.query_opt(&stmt, &[&begin, &end])
+			.await
+			.map(|row| row.map(|r| r.get::<_, i64>(0)).unwrap_or(0))
+			.map_err(map_postgres_error)
+	}
+
+	async fn handle_commit(
+		&mut self,
+		tx: Transaction<'_>,
+		start_version: i64,
+		operations: Vec<Operation>,
+		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+	) -> Result<()> {
+		let commit_version = tx
+			.query_one("SELECT nextval('global_version_seq')", &[])
+			.await
+			.context("failed to get postgres txn commit_version")?
+			.get::<_, i64>(0);
+
+		let mut begins = Vec::with_capacity(conflict_ranges.len());
+		let mut ends = Vec::with_capacity(conflict_ranges.len());
+		let mut conflict_types = Vec::with_capacity(conflict_ranges.len());
+
+		for (begin, end, conflict_type) in conflict_ranges {
+			let conflict_type = match conflict_type {
+				ConflictRangeType::Read => "read",
+				ConflictRangeType::Write => "write",
+			};
+
+			begins.push(begin);
+			ends.push(end);
+			conflict_types.push(conflict_type);
+		}
+
+		let query = "
+			INSERT INTO conflict_ranges (range_data, conflict_type, start_version, commit_version)
+			SELECT 
+				bytearange(begin_key, end_key, '[)'),
+				conflict_type::range_type,
+				$4,
+				$5
+			FROM UNNEST($1::bytea[], $2::bytea[], $3::text[]) AS t(begin_key, end_key, conflict_type)";
+		let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+		// Insert all conflict ranges at once
+		tx.execute(
+			&stmt,
+			&[
+				&begins,
+				&ends,
+				&conflict_types,
+				&start_version,
+				&commit_version,
+			],
+		)
+		.await
+		.map_err(map_postgres_error)?;
+
+		// TODO: Parallelize
+		for op in operations {
+			match op {
+				Operation::Set { key, value } => {
+					// TODO: versionstamps need to be calculated on the sql side, not in rust
+					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
+
+					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
+					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+					tx.execute(&stmt, &[&key, &value])
+						.await
+						.map_err(map_postgres_error)?;
+				}
+				Operation::Clear { key } => {
+					let query = "DELETE FROM kv WHERE key = $1";
+					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+					tx.execute(&stmt, &[&key])
+						.await
+						.map_err(map_postgres_error)?;
+				}
+				Operation::ClearRange { begin, end } => {
+					let query = "DELETE FROM kv WHERE key >= $1 AND key < $2";
+					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
+
+					tx.execute(&stmt, &[&begin, &end])
+						.await
+						.map_err(map_postgres_error)?;
+				}
+				Operation::AtomicOp {
+					key,
+					param,
+					op_type,
+				} => {
+					// TODO: All operations need to be done on the sql side, not in rust
+
+					// Get current value from database
+					let current_query = "SELECT value FROM kv WHERE key = $1";
+					let stmt = tx
+						.prepare_cached(current_query)
+						.await
+						.map_err(map_postgres_error)?;
+
+					let current_row = tx
+						.query_opt(&stmt, &[&key])
+						.await
+						.map_err(map_postgres_error)?;
+
+					// Extract current value or use None if key doesn't exist
+					let current_value = current_row.map(|row| row.get::<_, Vec<u8>>(0));
+					let current_slice = current_value.as_deref();
+
+					// Apply atomic operation
+					let new_value = apply_atomic_op(current_slice, &param, op_type);
+
+					// Store the result
+					if let Some(new_value) = new_value {
+						let update_query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
+						let stmt = tx
+							.prepare_cached(update_query)
+							.await
+							.map_err(map_postgres_error)?;
+
+						tx.execute(&stmt, &[&key, &new_value])
+							.await
+							.map_err(map_postgres_error)?;
+					} else {
+						let update_query = "DELETE FROM kv WHERE key = $1";
+						let stmt = tx
+							.prepare_cached(update_query)
+							.await
+							.map_err(map_postgres_error)?;
+
+						tx.execute(&stmt, &[&key])
+							.await
+							.map_err(map_postgres_error)?;
+					}
+				}
+			}
+		}
+
+		tx.commit().await.map_err(map_postgres_error)
+	}
+
+	async fn fail_receiver(&mut self) {
+		while let Some(cmd) = self.receiver.recv().await {
+			match cmd {
+				TransactionCommand::Get { response, .. } => {
+					let _ = response.send(Err(anyhow!("postgres transaction connection failed")));
+				}
+				TransactionCommand::GetKey { response, .. } => {
+					let _ = response.send(Err(anyhow!("postgres transaction connection failed")));
+				}
+				TransactionCommand::GetRange { response, .. } => {
+					let _ = response.send(Err(anyhow!("postgres transaction connection failed")));
+				}
+				TransactionCommand::Commit { response, .. } => {
+					let _ = response.send(Err(anyhow!("postgres transaction connection failed")));
+				}
+				TransactionCommand::GetEstimatedRangeSize { response, .. } => {
+					let _ = response.send(Err(anyhow!("postgres transaction connection failed")));
+				}
+			}
+		}
 	}
 }
 
