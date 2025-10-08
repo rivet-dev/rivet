@@ -20,11 +20,8 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 	});
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 
-	if key.is_some() && !include_destroyed {
-		bail!(
-			"key queries should be resolved by api-public. this is because non-destroyed actors are replicated to all datacenters via raft, so it's more efficient to query directly."
-		)
-	}
+	// TODO: Update api-peer to require including the reservation ID in the query if querying with
+	// key in order to assert the request was sent to the correct datacenter
 
 	// If actor_ids are provided, fetch actors directly by ID
 	if let Some(actor_ids) = actor_ids {
