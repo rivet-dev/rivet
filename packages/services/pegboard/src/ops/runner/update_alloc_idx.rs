@@ -108,15 +108,20 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 						continue;
 					};
 
-					// Runner is expired, updating will do nothing
+					// Runner is expired, AddIdx is invalid and UpdatePing will do nothing
 					if expired_ts_entry.is_some() {
-						notifications.push(RunnerNotification {
-							runner_id: runner.runner_id,
-							workflow_id,
-							eligibility: RunnerEligibility::Expired,
-						});
+						match runner.action {
+							Action::ClearIdx => {}
+							Action::AddIdx | Action::UpdatePing { .. } => {
+								notifications.push(RunnerNotification {
+									runner_id: runner.runner_id,
+									workflow_id,
+									eligibility: RunnerEligibility::Expired,
+								});
 
-						continue;
+								continue;
+							}
+						}
 					}
 
 					let remaining_millislots = (remaining_slots * 1000) / total_slots;

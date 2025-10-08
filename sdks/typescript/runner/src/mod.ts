@@ -491,7 +491,13 @@ export class Runner {
 			// Handle message
 			if (message.tag === "ToClientInit") {
 				const init = message.val;
-				this.runnerId = init.runnerId;
+
+				if (this.runnerId != init.runnerId) {
+					this.runnerId = init.runnerId;
+
+					// Clear history if runner id changed
+					this.#eventHistory.length = 0;
+				}
 
 				// Store the runner lost threshold from metadata
 				this.#runnerLostThreshold = init.metadata?.runnerLostThreshold
@@ -779,7 +785,7 @@ export class Runner {
 				tag: "ActorStateStopped",
 				val: {
 					code: protocol.StopCode.Ok,
-					message: "hello",
+					message: null,
 				},
 			};
 		} else {
