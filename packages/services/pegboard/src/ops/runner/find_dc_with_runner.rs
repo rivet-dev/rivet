@@ -51,21 +51,27 @@ pub async fn find_dc_with_runner(ctx: &OperationCtx, input: &Input) -> Result<Ou
 }
 
 async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<Option<u16>> {
-	// Check if this DC has any runners
+	// Check if this DC has any non-draining runners
 	let res = ctx
 		.op(super::list_for_ns::Input {
 			namespace_id: input.namespace_id,
 			name: Some(input.runner_name.clone()),
 			include_stopped: false,
 			created_before: None,
-			limit: 1,
+			limit: 16,
 		})
 		.await?;
-	if !res.runners.is_empty() {
+	if res
+		.runners
+		.iter()
+		.filter(|runner| runner.drain_ts.is_none())
+		.count()
+		!= 0
+	{
 		return Ok(Some(ctx.config().dc_label()));
 	}
 
-	// Check if serverless runner config exists
+	// Check if a serverless runner config with a max runners > 0 exists
 	let res = ctx
 		.op(namespace::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
@@ -74,7 +80,6 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 	if let Some(runner) = res.first() {
 		match &runner.config {
 			RunnerConfig::Serverless { max_runners, .. } => {
-				// Check if runner config does not have a max runner count of 0
 				if *max_runners != 0 {
 					return Ok(Some(ctx.config().dc_label()));
 				}
@@ -103,10 +108,16 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 				name: Some(input.runner_name.clone()),
 				runner_ids: None,
 				include_stopped: Some(false),
-				limit: Some(1),
+				limit: Some(16),
 				cursor: None,
 			},
-			|res| !res.runners.is_empty(),
+			// Check for non draining runners
+			|res| {
+				res.runners
+					.iter()
+					.filter(|runner| runner.drain_ts.is_none())
+					.count() != 0
+			},
 		)
 		.map(|res| res.map(|x| x.map(|x| x.0)))
 		.boxed();
@@ -123,10 +134,20 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 			namespace: namespace.name.clone(),
 			variant: None,
 			runner_names: Some(input.runner_name.clone()),
-			limit: Some(1),
+			limit: None,
 			cursor: None,
 		},
-		|res| !res.runner_configs.is_empty(),
+		// Check for configs with a max runners > 0
+		|res| {
+			res.runner_configs
+				.iter()
+				.filter(|(_, rc)| match rc {
+					rivet_types::runner_configs::RunnerConfig::Serverless {
+						max_runners, ..
+					} => *max_runners != 0,
+				})
+				.count() != 0
+		},
 	)
 	.map(|res| res.map(|x| x.map(|x| x.0)))
 	.boxed();
