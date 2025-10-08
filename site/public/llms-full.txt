@@ -4040,29 +4040,29 @@ For detailed API documentation, please refer to the [RivetKit Rust client implem
 
 # Freestyle
 
-Deploy Rivet Actors to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability.
+Deploy RivetKit app to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability.
 
 Freestyle provides built-in security for running untrusted AI-generated code, making it ideal for AI agent applications. Using Rivet, it is easy to deploy your vibe-coded or user-provided RivetKit backends straight to Freestyle.
 
-Complete example of deploying Rivet actors to Freestyle.sh.
+Complete example of deploying RivetKit app to Freestyle.sh.
 
 ## Setup
 
-Install RivetKit and create your registry:
+Install RivetKit + Hono and create your registry:
 
 ```bash
-npm install rivetkit
+npm install rivetkit hono
 ```
 
-Update your server code to use the serverless engine driver:
+Update your server code to run the registry through Deno.
 
 ```typescript }
-registry.startServerless(,
+const  = registry.start(/api`,
 });
 
 // Freestyle uses Deno under the hood for web deployments
 // @ts-ignore
-Deno.serve(app.fetch);
+Deno.serve(fetch);
 ```
 
 **Configuration Requirements:**
@@ -4095,7 +4095,7 @@ Run this deployment script to push your application to Freestyle.
 
 **Deployment Configuration:**
 
-- `timeout: 60 * 5` - Set timeout to 5 minutes for actor operations - it's important to keep this high!
+- `timeout: 60 * 5` - Set timeout to 5 minutes for actor operations - it's important to keep this high
 - `entrypoint: "server.ts"` - Entry point file with your serverless setup
 - `domains` - Your Freestyle domain(s)
 - `build: false` - Disable build if you're pre-building your assets
@@ -4130,7 +4130,74 @@ Execute this configuration script to register your Freestyle deployment with Riv
 - `slotsPerRunner` - Concurrent actors per runner
 - `requestLifespan` - Request timeout (slightly less than Freestyle timeout)
 
-Once this configuration script is run, Rivet will be connect with your Freestyle serverless instance and you will be done!
+Once executed, Rivet will be connected to your Freestyle serverless instance.
+## Deploying to Railway
+
+# Deploying to Railway
+Deploy your RivetKit app to [Railway](https://railway.app).
+
+## Deploy from Template
+
+github & railway app button https://github.com/rivet-dev/template-railway
+
+## Deploy Manually
+
+### Prerequisites
+
+- [Railway account](https://railway.app)
+- Your RivetKit app (to get started, see the [Quickstart](/docs/actors/quickstart) page or [Examples](https://github.com/rivet-dev/rivetkit/tree/main/examples))
+- Access to the Rivet Cloud or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+
+### Step 1: Setup Node Project for Railway
+
+Ensure your `package.json` has a start script:
+
+```json
+
+  // ... rest of package.json
+}
+```
+
+### Step 2: Deploy to Railway
+
+1. Connect your GitHub account to Railway
+2. Select your repository containing your RivetKit app
+3. Railway will automatically detect and deploy your app
+
+Detailed steps are available on [Railway's docs](https://docs.railway.com/quick-start).
+
+After this point, Railway automatically deploys your RivetKit app on every git push.
+
+### Step 3: Set Environment Variables
+
+After selecting your project on the Rivet dashboard, go to Connect > Railway to get the environment variables needed.
+
+Then follow [Railway's documentation](https://docs.railway.com/guides/variables#service-variables) to add them to your app.
+
+### Step 4: Verify Deployment
+-- you will see your runner connected on the connect tab
+-- you can now create and connect to actors
+
+### Step 3: Deployed
+
+Railway automatically deploys your RivetKit app. At this point, on the Connect tab of your Rivet dashboard, you will be able to create your actors. 
+
+Railway automatically deploys your RivetKit app on every git push.
+
+## Configuration Examples
+
+### Node.js RivetKit App
+
+### Docker-based RivetKit App
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+CMD ["npm", "start"]
+```
 ## Build Your Own
 
 # Build Your Own
