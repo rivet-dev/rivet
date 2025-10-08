@@ -5,7 +5,7 @@ import type { Config } from "tailwindcss/types/config";
 const config = {
 	content: [
 		"./src/**/*.{ts,tsx,jsx,js,mdx,md}",
-		"../node_modules/@rivet-gg/components/**/*.{ts,tsx}",
+		"../node_modules/@rivet-gg/components/src/**/*.{ts,tsx}",
 	],
 	theme: {
 		extend: {

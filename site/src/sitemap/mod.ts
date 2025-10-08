@@ -57,6 +57,7 @@ import {
 	faVercel,
     faSquareRootVariable,
     faCloudflare,
+	faRocket,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -312,6 +313,21 @@ export const sitemap = [
 							{
 								title: "Cloudflare Workers",
 								href: "/docs/integrations/cloudflare-workers",
+							},
+						],
+					},
+					{
+						title: "Deploy",
+						icon: faRocket,
+						collapsible: true,
+						pages: [
+							{
+								title: "Freestyle",
+								href: "/docs/deploy/freestyle",
+							},
+							{
+								title: "Railway",
+								href: "/docs/deploy/railway",
 							},
 						],
 					},
