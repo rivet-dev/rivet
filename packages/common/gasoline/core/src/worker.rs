@@ -3,7 +3,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use opentelemetry::trace::TraceContextExt;
 use rivet_util::{Id, signal::TermSignal};
@@ -19,6 +19,8 @@ const PING_INTERVAL: Duration = Duration::from_secs(20);
 const METRICS_INTERVAL: Duration = Duration::from_secs(20);
 /// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
 const SHUTDOWN_DURATION: Duration = Duration::from_secs(30);
+// How long the pull workflows function can take before shutting down the runtime.
+const PULL_WORKFLOWS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -128,11 +130,13 @@ impl Worker {
 		gc_handle.abort();
 		metrics_handle.abort();
 
-		res?;
+		if let Err(err) = &res {
+			tracing::error!(?err, "worker errored, attempting graceful shutdown");
+		}
 
 		self.shutdown(term_signal).await;
 
-		Ok(())
+		res
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -217,10 +221,12 @@ impl Worker {
 			.collect::<Vec<_>>();
 
 		// Query awake workflows
-		let workflows = self
-			.db
-			.pull_workflows(self.worker_instance_id, &filter)
-			.await?;
+		let workflows = tokio::time::timeout(
+			PULL_WORKFLOWS_TIMEOUT,
+			self.db.pull_workflows(self.worker_instance_id, &filter),
+		)
+		.await
+		.context("took too long pulling workflows, worker cannot continue")??;
 
 		// Remove join handles for completed workflows. This must happen after we pull workflows to ensure an
 		// accurate state of the current workflows
