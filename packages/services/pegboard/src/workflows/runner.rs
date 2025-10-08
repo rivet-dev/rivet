@@ -162,6 +162,10 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
 							for event in &events {
+								if event.index <= state.last_event_idx {
+									tracing::warn!(idx=%event.index, "event already received, ignoring");
+								}
+
 								let actor_id =
 									crate::utils::event_actor_id(&event.inner).to_string();
 								let res = ctx
@@ -186,29 +190,28 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								}
 							}
 
-							if !events.is_empty() {
+							// Check if events is empty
+							if let Some(last_event_idx) = events.last().map(|event| event.index) {
 								ctx.activity(InsertEventsInput {
 									events: events.clone(),
 								})
 								.await?;
 
-								// Ack every 500 events
-								let last_event_idx = events.last().map(|event| event.index);
-								if let Some(last_event_idx) = last_event_idx {
-									if last_event_idx > state.last_event_ack_idx.saturating_add(500)
-									{
-										state.last_event_ack_idx = last_event_idx;
+								state.last_event_idx = last_event_idx;
 
-										ctx.activity(SendMessageToRunnerInput {
-											runner_id: input.runner_id,
-											message: protocol::ToClient::ToClientAckEvents(
-												protocol::ToClientAckEvents {
-													last_event_idx: state.last_event_ack_idx,
-												},
-											),
-										})
-										.await?;
-									}
+								// Ack every 500 events
+								if last_event_idx > state.last_event_ack_idx.saturating_add(500) {
+									state.last_event_ack_idx = last_event_idx;
+
+									ctx.activity(SendMessageToRunnerInput {
+										runner_id: input.runner_id,
+										message: protocol::ToClient::ToClientAckEvents(
+											protocol::ToClientAckEvents {
+												last_event_idx: state.last_event_ack_idx,
+											},
+										),
+									})
+									.await?;
 								}
 							}
 						}
@@ -436,6 +439,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 #[derive(Debug, Serialize, Deserialize)]
 struct LifecycleState {
 	draining: bool,
+	last_event_idx: i64,
 	last_event_ack_idx: i64,
 }
 
@@ -443,6 +447,7 @@ impl LifecycleState {
 	fn new() -> Self {
 		LifecycleState {
 			draining: false,
+			last_event_idx: -1,
 			last_event_ack_idx: -1,
 		}
 	}

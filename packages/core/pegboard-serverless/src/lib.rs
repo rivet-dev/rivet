@@ -279,22 +279,18 @@ async fn outbound_handler(
 				v.parse::<HeaderValue>().ok()?,
 			))
 		})
-		.chain(std::iter::once((
-			X_RIVET_ENDPOINT,
-			HeaderValue::try_from(current_dc.public_url.to_string())?,
-		)))
-		.chain(std::iter::once((
-			X_RIVET_TOTAL_SLOTS,
-			HeaderValue::try_from(slots_per_runner)?,
-		)))
-		.chain(std::iter::once((
-			X_RIVET_RUNNER_NAME,
-			HeaderValue::try_from(runner_name)?,
-		)))
-		.chain(std::iter::once((
-			X_RIVET_NAMESPACE_ID,
-			HeaderValue::try_from(namespace_name)?,
-		)))
+		.chain([
+			(
+				X_RIVET_ENDPOINT,
+				HeaderValue::try_from(current_dc.public_url.to_string())?,
+			),
+			(
+				X_RIVET_TOTAL_SLOTS,
+				HeaderValue::try_from(slots_per_runner)?,
+			),
+			(X_RIVET_RUNNER_NAME, HeaderValue::try_from(runner_name)?),
+			(X_RIVET_NAMESPACE_ID, HeaderValue::try_from(namespace_name)?),
+		])
 		// Add token if auth is enabled
 		.chain(
 			ctx.config()
@@ -310,7 +306,7 @@ async fn outbound_handler(
 		)
 		.collect();
 
-	let mut req = client.get(url).headers(headers);
+	let req = client.get(url).headers(headers);
 
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
