@@ -41,6 +41,16 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		}
 	}
 
+	// TODO: Get rid of this
+	// NOTE: This is a bad implementation because it disregards other errors that may have happened earlier
+	pub fn bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING(mut self) -> Self {
+		if let Some(BuilderError::CannotDispatchFromOpInWorkflow) = &self.error {
+			self.error = None;
+		}
+
+		self
+	}
+
 	pub fn to_workflow_id(mut self, workflow_id: Id) -> Self {
 		if self.error.is_some() {
 			return self;

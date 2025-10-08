@@ -13,8 +13,11 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	)?;
 
 	tokio::try_join!(
-		setup_epoxy_coordinator(&ctx),
-		setup_epoxy_replica(&ctx),
+		async {
+			// Replicas must exist before coordinator
+			setup_epoxy_replica(&ctx).await?;
+			setup_epoxy_coordinator(&ctx).await
+		},
 		create_default_namespace(&ctx),
 	)?;
 
