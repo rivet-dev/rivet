@@ -1107,31 +1107,48 @@ impl Database for DatabaseKv {
 						tx.clear(raw_key);
 					}
 
-					// TODO: Parallelize
+					let leased_workflow_ids = leased_workflows
+						.iter()
+						.map(|(workflow_id, _, _)| *workflow_id)
+						.collect::<Vec<_>>();
+
 					// Clear secondary indexes so that we don't get any new wake conditions inserted while
 					// the workflow is running
-					for (workflow_id, _, _) in &leased_workflows {
-						// Clear sub workflow secondary idx
-						let wake_sub_workflow_key =
-							keys::workflow::WakeSubWorkflowKey::new(*workflow_id);
-						if let Some(entry) = tx
-							.get(&self.subspace.pack(&wake_sub_workflow_key), Serializable)
-							.await?
-						{
-							let sub_workflow_id = wake_sub_workflow_key.deserialize(&entry)?;
+					futures_util::stream::iter(leased_workflow_ids)
+						.map(|workflow_id| {
+							let tx = tx.clone();
+							async move {
+								// Clear sub workflow secondary idx
+								let wake_sub_workflow_key =
+									keys::workflow::WakeSubWorkflowKey::new(workflow_id);
+								if let Some(entry) = tx
+									.get(&self.subspace.pack(&wake_sub_workflow_key), Serializable)
+									.await?
+								{
+									let sub_workflow_id =
+										wake_sub_workflow_key.deserialize(&entry)?;
 
-							let sub_workflow_wake_key =
-								keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, *workflow_id);
+									let sub_workflow_wake_key = keys::wake::SubWorkflowWakeKey::new(
+										sub_workflow_id,
+										workflow_id,
+									);
 
-							tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
-						}
+									tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
+								}
 
-						// Clear signals secondary index
-						let wake_signals_subspace = self
-							.subspace
-							.subspace(&keys::workflow::WakeSignalKey::subspace(*workflow_id));
-						tx.clear_subspace_range(&wake_signals_subspace);
-					}
+								// Clear signals secondary index
+								let wake_signals_subspace = self.subspace.subspace(
+									&keys::workflow::WakeSignalKey::subspace(workflow_id),
+								);
+								tx.clear_subspace_range(&wake_signals_subspace);
+
+								anyhow::Ok(())
+							}
+						})
+						// TODO: How to get rid of this buffer?
+						.buffer_unordered(1024)
+						.try_collect::<()>()
+						.await?;
 
 					// NOTE: We don't read any workflow data in this txn since its only for acquiring leases.
 					// The less operations we do in this txn the less contention there is with other workers.

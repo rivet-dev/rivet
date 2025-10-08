@@ -252,7 +252,7 @@ pub async fn run_server(
 	// Start graceful shutdown with timeout
 	tokio::select! {
 		_ = graceful.shutdown() => {
-			tracing::info!("Gracefully shutdown completed");
+			tracing::info!("Graceful shutdown completed");
 		},
 		_ = tokio::time::sleep(Duration::from_secs(30)) => {
 			tracing::error!("Waited 30 seconds for graceful shutdown, aborting...");
