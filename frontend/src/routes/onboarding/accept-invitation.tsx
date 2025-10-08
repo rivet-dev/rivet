@@ -49,27 +49,7 @@ function RouteComponent() {
 
 	if (search.__clerk_status === "complete") {
 		// if we get here, the user is already signed in
-		return (
-			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
-				<div className="flex flex-col items-center gap-6">
-					<Logo className="h-10 mb-4" />
-					<Card className="w-full sm:w-96">
-						<CardHeader>
-							<CardTitle>Invitation Accepted</CardTitle>
-							<CardDescription>
-								You have successfully accepted the invitation.
-								You can now proceed to the dashboard.
-							</CardDescription>
-						</CardHeader>
-						<CardFooter>
-							<Button asChild>
-								<Link to="/">Go Home</Link>
-							</Button>
-						</CardFooter>
-					</Card>
-				</div>
-			</div>
-		);
+		return <CompleteFlow />;
 	}
 
 	return (
@@ -211,5 +191,30 @@ function OrgSignInFlow({ ticket }: { ticket: string }) {
 				</CardContent>
 			)}
 		</Card>
+	);
+}
+
+function CompleteFlow() {
+	const { organization } = useOrganization();
+	return (
+		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
+			<div className="flex flex-col items-center gap-6">
+				<Logo className="h-10 mb-4" />
+				<Card className="w-full sm:w-96">
+					<CardHeader>
+						<CardTitle>Invitation Accepted</CardTitle>
+						<CardDescription>
+							You have successfully accepted the invitation. You
+							can now proceed to the dashboard.
+						</CardDescription>
+					</CardHeader>
+					<CardFooter>
+						<Button asChild>
+							<Link to="/">Go to {organization?.name}</Link>
+						</Button>
+					</CardFooter>
+				</Card>
+			</div>
+		</div>
 	);
 }

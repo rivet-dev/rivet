@@ -20,7 +20,7 @@ export function RegionSelect({ onValueChange, value }: RegionSelectProps) {
 		{
 			label: <span>Automatic (Recommended)</span>,
 			value: "auto",
-			region: { id: "auto", name: "Automatic (Recommended)" },
+			region: { id: "auto", name: "Automatic" },
 		},
 		...data.map((region) => {
 			return {

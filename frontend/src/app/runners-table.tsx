@@ -1,5 +1,6 @@
 import { faHourglassClock, Icon } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
+import { formatRelative } from "date-fns";
 import {
 	Button,
 	DiscreteCopyButton,
@@ -36,17 +37,17 @@ export function RunnersTable({
 				<TableRow>
 					<TableHead />
 					<TableHead className="pl-8">ID</TableHead>
+					<TableHead className="pl-8">Key</TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
-					<TableHead>Last ping</TableHead>
 					<TableHead>Created</TableHead>
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{!isLoading && runners?.length === 0 ? (
+				{!isLoading && !isError && runners?.length === 0 ? (
 					<TableRow>
-						<TableCell colSpan={9}>
+						<TableCell colSpan={7}>
 							<Text className="text-center">
 								There's no runners matching criteria.
 							</Text>
@@ -55,7 +56,7 @@ export function RunnersTable({
 				) : null}
 				{isError ? (
 					<TableRow>
-						<TableCell colSpan={9}>
+						<TableCell colSpan={7}>
 							<Text className="text-center">
 								An error occurred while fetching runners.
 							</Text>
@@ -80,7 +81,7 @@ export function RunnersTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={6}>
+						<TableCell colSpan={7}>
 							<Button
 								variant="outline"
 								isLoading={isLoading}
@@ -135,8 +136,18 @@ function Row(runner: Rivet.Runner) {
 				<WithTooltip
 					content={runner.runnerId}
 					trigger={
-						<DiscreteCopyButton value={runner.name}>
-							{runner.name}
+						<DiscreteCopyButton value={runner.runnerId}>
+							{runner.runnerId.slice(0, 8)}
+						</DiscreteCopyButton>
+					}
+				/>
+			</TableCell>
+			<TableCell>
+				<WithTooltip
+					content={runner.key}
+					trigger={
+						<DiscreteCopyButton value={runner.key}>
+							{runner.key || "—"}
 						</DiscreteCopyButton>
 					}
 				/>
@@ -152,11 +163,7 @@ function Row(runner: Rivet.Runner) {
 				{runner.remainingSlots}/{runner.totalSlots}
 			</TableCell>
 
-			<TableCell>
-				{new Date(runner.lastPingTs).toLocaleString()}
-			</TableCell>
-
-			<TableCell>{new Date(runner.createTs).toLocaleString()}</TableCell>
+			<TableCell>{formatRelative(runner.createTs, new Date())}</TableCell>
 		</TableRow>
 	);
 }
@@ -165,7 +172,7 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 	if (runner.drainTs) {
 		return (
 			<WithTooltip
-				content="Draining"
+				content={`Draining (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
 				trigger={
 					<Icon icon={faHourglassClock} className="text-warning" />
 				}
@@ -175,7 +182,7 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 	if (runner.stopTs) {
 		return (
 			<WithTooltip
-				content="Stopped"
+				content={`Stopped (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
 				trigger={
 					<span className={"size-2 rounded-full, bg-foreground/10"} />
 				}
@@ -183,5 +190,10 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 		);
 	}
 
-	return <Ping variant="success" className="relative right-auto" />;
+	return (
+		<WithTooltip
+			content={`Running (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
+			trigger={<Ping variant="success" className="relative right-auto" />}
+		/>
+	);
 }

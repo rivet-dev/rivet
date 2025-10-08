@@ -1,4 +1,6 @@
 import { faQuestionCircle, faVercel, Icon } from "@rivet-gg/icons";
+import { useFormContext } from "react-hook-form";
+import z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Button, type DialogContentProps, Frame } from "@/components";
@@ -80,11 +82,19 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 											{step.id === "step-3" && (
 												<>
 													<p>
-														Deploy your project to
-														Vercel using your
-														favorite method. After
-														deployment, return here
-														to add the endpoint.
+														<a
+															href="https://vercel.com/docs/deployments"
+															target="_blank"
+															rel="noreferrer"
+															className=" underline"
+														>
+															Deploy your project
+															to Vercel using your
+															preferred method
+														</a>
+														. After deployment,
+														return here to add the
+														endpoint.
 													</p>
 												</>
 											)}
@@ -95,6 +105,9 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 												</div>
 											)}
 											<Stepper.Controls>
+												{step.id === "step-4" ? (
+													<NeedHelpButton />
+												) : null}
 												<Button
 													type="button"
 													variant="secondary"
@@ -126,4 +139,16 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 			)}
 		</Stepper.Provider>
 	);
+}
+
+function NeedHelpButton() {
+	const { watch } = useFormContext();
+	const endpoint = watch("endpoint");
+	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
+
+	if (enabled) {
+		return <ConnectVercelForm.NeedHelp />;
+	}
+
+	return null;
 }
