@@ -4,8 +4,6 @@ package api
 
 import (
 	json "encoding/json"
-	fmt "fmt"
-	core "sdk/core"
 )
 
 type RunnerConfigsDeleteRequest struct {
@@ -20,43 +18,20 @@ type RunnerConfigsListRequest struct {
 	RunnerNames *string              `json:"-"`
 }
 
-type RunnerConfigsUpsertRequestServerless struct {
-	Headers    map[string]string `json:"headers,omitempty"`
-	MaxRunners int               `json:"max_runners"`
-	MinRunners int               `json:"min_runners"`
-	// Seconds.
-	RequestLifespan int    `json:"request_lifespan"`
-	RunnersMargin   int    `json:"runners_margin"`
-	SlotsPerRunner  int    `json:"slots_per_runner"`
-	Url             string `json:"url"`
-
-	_rawJSON json.RawMessage
+type RunnerConfigsUpsertRequest struct {
+	Namespace string                         `json:"-"`
+	Body      RunnerConfigsUpsertRequestBody `json:"-"`
 }
 
-func (r *RunnerConfigsUpsertRequestServerless) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsUpsertRequestServerless
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
+func (r *RunnerConfigsUpsertRequest) UnmarshalJSON(data []byte) error {
+	var body RunnerConfigsUpsertRequestBody
+	if err := json.Unmarshal(data, &body); err != nil {
 		return err
 	}
-	*r = RunnerConfigsUpsertRequestServerless(value)
-	r._rawJSON = json.RawMessage(data)
+	r.Body = body
 	return nil
 }
 
-func (r *RunnerConfigsUpsertRequestServerless) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsUpsertRequest struct {
-	Namespace  string                                `json:"-"`
-	Serverless *RunnerConfigsUpsertRequestServerless `json:"serverless,omitempty"`
+func (r *RunnerConfigsUpsertRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Body)
 }

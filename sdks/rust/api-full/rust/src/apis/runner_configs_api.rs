@@ -134,11 +134,11 @@ pub async fn runner_configs_list(configuration: &configuration::Configuration, n
     }
 }
 
-pub async fn runner_configs_upsert(configuration: &configuration::Configuration, runner_name: &str, namespace: &str, runner_configs_upsert_request: models::RunnerConfigsUpsertRequest) -> Result<serde_json::Value, Error<RunnerConfigsUpsertError>> {
+pub async fn runner_configs_upsert(configuration: &configuration::Configuration, runner_name: &str, namespace: &str, request_body: std::collections::HashMap<String, models::RunnerConfigsUpsertRequestBodyValue>) -> Result<serde_json::Value, Error<RunnerConfigsUpsertError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_runner_name = runner_name;
     let p_namespace = namespace;
-    let p_runner_configs_upsert_request = runner_configs_upsert_request;
+    let p_request_body = request_body;
 
     let uri_str = format!("{}/runner-configs/{runner_name}", configuration.base_path, runner_name=crate::apis::urlencode(p_runner_name));
     let mut req_builder = configuration.client.request(reqwest::Method::PUT, &uri_str);
@@ -150,7 +150,7 @@ pub async fn runner_configs_upsert(configuration: &configuration::Configuration,
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
     };
-    req_builder = req_builder.json(&p_runner_configs_upsert_request);
+    req_builder = req_builder.json(&p_request_body);
 
     let req = req_builder.build()?;
     let resp = configuration.client.execute(req).await?;

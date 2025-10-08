@@ -32,7 +32,9 @@ docs/RunnerConfigServerless.md
 docs/RunnerConfigVariant.md
 docs/RunnerConfigsApi.md
 docs/RunnerConfigsListResponse.md
-docs/RunnerConfigsUpsertRequest.md
+docs/RunnerConfigsUpsertRequestBodyValue.md
+docs/RunnerConfigsUpsertRequestBodyValueOneOf.md
+docs/RunnerConfigsUpsertRequestBodyValueOneOfServerless.md
 docs/RunnersApi.md
 docs/RunnersListNamesResponse.md
 docs/RunnersListResponse.md
@@ -71,6 +73,8 @@ src/models/runner_config.rs
 src/models/runner_config_serverless.rs
 src/models/runner_config_variant.rs
 src/models/runner_configs_list_response.rs
-src/models/runner_configs_upsert_request.rs
+src/models/runner_configs_upsert_request_body_value.rs
+src/models/runner_configs_upsert_request_body_value_one_of.rs
+src/models/runner_configs_upsert_request_body_value_one_of_serverless.rs
 src/models/runners_list_names_response.rs
 src/models/runners_list_response.rs

@@ -8,20 +8,19 @@ import * as Rivet from "../../../../index";
  * @example
  *     {
  *         namespace: "namespace",
- *         serverless: {
- *             headers: {
- *                 "key": "value"
- *             },
- *             maxRunners: 1,
- *             minRunners: 1,
- *             requestLifespan: 1,
- *             runnersMargin: 1,
- *             slotsPerRunner: 1,
- *             url: "url"
+ *         body: {
+ *             "key": {
+ *                 serverless: {
+ *                     maxRunners: 1,
+ *                     requestLifespan: 1,
+ *                     slotsPerRunner: 1,
+ *                     url: "url"
+ *                 }
+ *             }
  *         }
  *     }
  */
 export interface RunnerConfigsUpsertRequest {
     namespace: string;
-    serverless: Rivet.RunnerConfigsUpsertRequestServerless;
+    body: Rivet.RunnerConfigsUpsertRequestBody;
 }

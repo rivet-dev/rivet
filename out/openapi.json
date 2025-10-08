@@ -504,7 +504,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RunnerConfigsUpsertRequest"
+                "$ref": "#/components/schemas/RunnerConfigsUpsertRequestBody"
               }
             }
           },
@@ -1257,7 +1257,7 @@
         },
         "additionalProperties": false
       },
-      "RunnerConfigsUpsertRequest": {
+      "RunnerConfigsUpsertRequestBody": {
         "type": "object",
         "additionalProperties": {
           "oneOf": [

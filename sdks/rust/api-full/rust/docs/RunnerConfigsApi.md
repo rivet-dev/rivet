@@ -73,7 +73,7 @@ Name | Type | Description  | Required | Notes
 
 ## runner_configs_upsert
 
-> serde_json::Value runner_configs_upsert(runner_name, namespace, runner_configs_upsert_request)
+> serde_json::Value runner_configs_upsert(runner_name, namespace, request_body)
 
 
 ### Parameters
@@ -83,7 +83,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **runner_name** | **String** |  | [required] |
 **namespace** | **String** |  | [required] |
-**runner_configs_upsert_request** | [**RunnerConfigsUpsertRequest**](RunnerConfigsUpsertRequest.md) |  | [required] |
+**request_body** | [**std::collections::HashMap<String, models::RunnerConfigsUpsertRequestBodyValue>**](RunnerConfigsUpsertRequestBody_value.md) |  | [required] |
 
 ### Return type
 

@@ -15,13 +15,16 @@ export const RunnerConfigsListResponse: core.serialization.ObjectSchema<
     pagination: Pagination,
     runnerConfigs: core.serialization.property(
         "runner_configs",
-        core.serialization.record(core.serialization.string(), RunnerConfig),
+        core.serialization.record(
+            core.serialization.string(),
+            core.serialization.record(core.serialization.string(), RunnerConfig),
+        ),
     ),
 });
 
 export declare namespace RunnerConfigsListResponse {
     export interface Raw {
         pagination: Pagination.Raw;
-        runner_configs: Record<string, RunnerConfig.Raw>;
+        runner_configs: Record<string, Record<string, RunnerConfig.Raw>>;
     }
 }
