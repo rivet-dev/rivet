@@ -1,10 +1,11 @@
 "use client";
-import { useClerk } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as SignIn from "@clerk/elements/sign-in";
 import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 import { Badge } from "@/components";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,16 @@ import { Label } from "@/components/ui/label";
 
 export function Login() {
 	const clerk = useClerk();
+	const { user } = useUser();
+	const navigate = useNavigate();
+
+	// HACK: redirect if user is already logged in, race condition with clerk
+	useEffect(() => {
+		if (user) {
+			navigate({ to: "/" });
+		}
+	}, [user]);
+
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4 sm:justify-center"
@@ -27,7 +38,7 @@ export function Login() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<SignIn.Root routing="virtual">
+			<SignIn.Root routing="virtual" path="/login">
 				<Clerk.Loading>
 					{(isGlobalLoading) => (
 						<>
@@ -41,8 +52,8 @@ export function Login() {
 										</CardDescription>
 									</CardHeader>
 									<CardContent className="grid gap-y-4">
-										<div className="grid grid-cols-2 gap-x-4">
-											<Clerk.Connection
+										<div className="grid grid-cols-1 gap-x-4">
+											{/* <Clerk.Connection
 												name="github"
 												asChild
 											>
@@ -81,7 +92,7 @@ export function Login() {
 														</Badge>
 													) : null}
 												</Button>
-											</Clerk.Connection>
+											</Clerk.Connection> */}
 											<Clerk.Connection
 												name="google"
 												asChild
@@ -275,8 +286,13 @@ export function Login() {
 												<Clerk.Input
 													type="password"
 													asChild
+													placeholder="Your password"
 												>
-													<Input />
+													<Input
+														type="password"
+														name="password"
+														autoComplete="current-password"
+													/>
 												</Clerk.Input>
 												<Clerk.FieldError className="block text-sm text-destructive" />
 											</Clerk.Field>

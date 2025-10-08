@@ -2,6 +2,7 @@ import {
 	faPlus,
 	faQuestionCircle,
 	faRailway,
+	faServer,
 	faVercel,
 	Icon,
 } from "@rivet-gg/icons";
@@ -16,18 +17,15 @@ import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnersTable } from "@/app/runners-table";
 import {
 	Button,
-	DocsSheet,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 	H1,
 	H3,
-	Link,
 	Skeleton,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { docsLinks } from "@/content/data";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -43,6 +41,7 @@ export function RouteComponent() {
 	const { data: runnerNamesCount, isLoading } = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
 		select: (data) => data.pages[0].names?.length,
+		refetchInterval: 5000,
 	});
 
 	return (
@@ -62,12 +61,7 @@ export function RouteComponent() {
 			</div>
 			<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
 				Connect your RivetKit application to Rivet Cloud. Use your cloud
-				of choice to run Rivet Actors.{" "}
-				<DocsSheet path={docsLinks.runners} title="Runners">
-					<Link className="cursor-pointer">
-						Learn more about runners.
-					</Link>
-				</DocsSheet>
+				of choice to run Rivet Actors.
 			</p>
 
 			<hr className="mb-4" />
@@ -82,7 +76,7 @@ export function RouteComponent() {
 				</div>
 			) : runnerNamesCount === 0 ? (
 				<div className="p-4 px-6 max-w-5xl">
-					<H3>Select Provider</H3>
+					<H3>Add Provider</H3>
 					<div className="flex flex-wrap gap-2 my-4">
 						<Button
 							size="lg"
@@ -102,6 +96,21 @@ export function RouteComponent() {
 							size="lg"
 							variant="outline"
 							className="min-w-48 h-auto min-h-28 text-xl"
+							startIcon={<Icon icon={faServer} />}
+							asChild
+						>
+							<RouterLink
+								to="."
+								search={{ modal: "connect-manual" }}
+							>
+								Manual
+							</RouterLink>
+						</Button>
+						<Button
+							size="lg"
+							disabled
+							variant="outline"
+							className="min-w-48 h-auto min-h-28 text-xl"
 							startIcon={<Icon icon={faVercel} />}
 							asChild
 						>
@@ -109,14 +118,19 @@ export function RouteComponent() {
 								to="."
 								search={{ modal: "connect-vercel" }}
 							>
-								Vercel
+								<span className="relative right-0 top-0">
+									Vercel
+									<span className="text-[0.55rem] leading-none absolute right-0 -bottom-[0.5rem] ">
+										Coming soon!
+									</span>
+								</span>
 							</RouterLink>
 						</Button>
 					</div>
 				</div>
 			) : (
 				<>
-					<Providers />
+					{/* <Providers /> */}
 					<Runners />
 				</>
 			)}
@@ -130,11 +144,9 @@ function Providers() {
 		refetchInterval: 5000,
 	});
 
-	const navigate = Route.useNavigate();
-
 	return (
 		<div className="p-4 px-6 max-w-5xl">
-			<H3>Providers</H3>
+			<H3>Configurations</H3>
 			<div className="flex flex-wrap gap-2 mt-4">
 				{data?.map(([name]) => (
 					<Button
@@ -155,42 +167,6 @@ function Providers() {
 						</RouterLink>
 					</Button>
 				))}
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button
-							size="lg"
-							className="min-w-32"
-							variant="outline"
-							startIcon={<Icon icon={faPlus} />}
-						>
-							Add Provider
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-						<DropdownMenuItem
-							indicator={<Icon icon={faRailway} />}
-							onSelect={() => {
-								navigate({
-									to: ".",
-									search: { modal: "connect-railway" },
-								});
-							}}
-						>
-							Railway
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							indicator={<Icon icon={faVercel} />}
-							onSelect={() => {
-								navigate({
-									to: ".",
-									search: { modal: "connect-vercel" },
-								});
-							}}
-						>
-							Vercel
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
 			</div>
 		</div>
 	);
@@ -210,7 +186,19 @@ function Runners() {
 
 	return (
 		<div className="pb-4 px-6 max-w-5xl ">
-			<H3 className="mb-4 mt-6">Runners</H3>
+			<div className="flex gap-2 items-center mb-4 mt-6">
+				<H3 className="">Runners</H3>
+
+				<ProviderDropdown>
+					<Button
+						className="min-w-32"
+						variant="outline"
+						startIcon={<Icon icon={faPlus} />}
+					>
+						Add Runner
+					</Button>
+				</ProviderDropdown>
+			</div>
 			<div className="max-w-5xl mx-auto">
 				<div className="border rounded-md">
 					<RunnersTable
@@ -223,5 +211,54 @@ function Runners() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function ProviderDropdown({ children }: { children: React.ReactNode }) {
+	const navigate = Route.useNavigate();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
+				<DropdownMenuItem
+					indicator={<Icon icon={faRailway} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-railway" },
+						});
+					}}
+				>
+					Railway
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					indicator={<Icon icon={faServer} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-manual" },
+						});
+					}}
+				>
+					Manual
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					disabled
+					className="relative"
+					indicator={<Icon icon={faVercel} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-vercel" },
+						});
+					}}
+				>
+					Vercel{" "}
+					<span className="text-[0.55rem] leading-none absolute right-0 top-[0.1rem] ">
+						Coming soon!
+					</span>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }

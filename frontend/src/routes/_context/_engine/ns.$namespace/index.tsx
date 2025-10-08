@@ -8,6 +8,11 @@ import { BuildPrefiller } from "@/app/build-prefiller";
 
 export const Route = createFileRoute("/_context/_engine/ns/$namespace/")({
 	component: RouteComponent,
+	beforeLoad: async ({ context }) => {
+		if (context.__type !== "engine") {
+			throw new Error("Invalid context type for this route");
+		}
+	},
 });
 
 export function RouteComponent() {

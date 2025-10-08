@@ -2,9 +2,7 @@ import { CreateOrganization } from "@clerk/clerk-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { RouteLayout } from "@/app/route-layout";
 
-export const Route = createFileRoute(
-	"/onboarding/choose-organization",
-)({
+export const Route = createFileRoute("/onboarding/choose-organization")({
 	component: RouteComponent,
 });
 
@@ -16,6 +14,9 @@ function RouteComponent() {
 					<div className="w-full sm:w-96">
 						<CreateOrganization
 							hideSlug
+							afterCreateOrganizationUrl={(org) =>
+								`/orgs/${org.id}`
+							}
 							appearance={{
 								variables: {
 									colorBackground: "hsl(var(--card))",
@@ -26,5 +27,5 @@ function RouteComponent() {
 				</div>
 			</div>
 		</RouteLayout>
-	)
+	);
 }

@@ -84,8 +84,8 @@ export function SignUp() {
 										</CardDescription>
 									</CardHeader>
 									<CardContent className="grid gap-y-4">
-										<div className="grid grid-cols-2 gap-x-4">
-											<Clerk.Connection
+										<div className="grid grid-cols-1 gap-x-4">
+											{/* <Clerk.Connection
 												name="github"
 												asChild
 											>
@@ -124,7 +124,7 @@ export function SignUp() {
 														</Badge>
 													) : null}
 												</Button>
-											</Clerk.Connection>
+											</Clerk.Connection> */}
 											<Clerk.Connection
 												name="google"
 												asChild
@@ -181,6 +181,8 @@ export function SignUp() {
 												type="email"
 												required
 												placeholder="you@company.com"
+												autoComplete="email"
+												name="email"
 												asChild
 											>
 												<Input />
@@ -198,6 +200,8 @@ export function SignUp() {
 												type="password"
 												required
 												placeholder="Your password"
+												name="password"
+												autoComplete="current-password"
 												asChild
 											>
 												<Input />
@@ -262,6 +266,7 @@ export function SignUp() {
 											<Clerk.Input
 												type="text"
 												required
+												autoComplete="username"
 												asChild
 											>
 												<Input />

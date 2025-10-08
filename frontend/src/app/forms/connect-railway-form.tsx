@@ -1,13 +1,26 @@
 import { faCheck, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import type { UseFormReturn } from "react-hook-form";
-import z from "zod";
-import { cn, createSchemaForm } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
 import confetti from "canvas-confetti";
+import { useEffect, useRef } from "react";
+import { type UseFormReturn, useFormContext } from "react-hook-form";
+import z from "zod";
+import {
+	cn,
+	createSchemaForm,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormMessage,
+	Input,
+} from "@/components";
+import { useEngineCompatDataProvider } from "@/components/actors";
+import { RegionSelect } from "@/components/actors/region-select";
 
-export const formSchema = z.object({});
+export const formSchema = z.object({
+	runnerName: z.string().default("rivetkit"),
+	datacenter: z.string().default("auto"),
+});
 
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
@@ -17,6 +30,47 @@ export type SubmitHandler = (
 
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
 export { Form, Submit, SetValue };
+
+export const RunnerName = function RunnerName() {
+	const { control } = useFormContext<FormValues>();
+	return (
+		<FormField
+			control={control}
+			name="runnerName"
+			render={({ field }) => (
+				<FormItem>
+					<FormLabel className="col-span-1">Runner Name</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="text" {...field} />
+					</FormControl>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const Datacenter = function Datacenter() {
+	const { control } = useFormContext<FormValues>();
+	return (
+		<FormField
+			control={control}
+			name="datacenter"
+			render={({ field }) => (
+				<FormItem>
+					<FormLabel>Region</FormLabel>
+					<FormControl>
+						<RegionSelect
+							onValueChange={field.onChange}
+							value={field.value}
+						/>
+					</FormControl>
+					<FormMessage />
+				</FormItem>
+			)}
+		/>
+	);
+};
 
 export const ConnectionCheck = function ConnectionCheck() {
 	const { data } = useInfiniteQuery({
@@ -37,7 +91,7 @@ export const ConnectionCheck = function ConnectionCheck() {
 		data !== undefined && data > 0 && data !== lastCount.current;
 
 	useEffect(() => {
-		if(success){
+		if (success) {
 			confetti({
 				angle: 60,
 				spread: 55,
@@ -49,7 +103,7 @@ export const ConnectionCheck = function ConnectionCheck() {
 				origin: { x: 1 },
 			});
 		}
-	}, [success])
+	}, [success]);
 
 	return (
 		<div
