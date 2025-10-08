@@ -100,6 +100,7 @@ async fn tick(
 				.iter()
 				.map(|(ns_id, runner_name, _)| (*ns_id, runner_name.clone()))
 				.collect(),
+			bypass_cache: true,
 		})
 		.await?;
 

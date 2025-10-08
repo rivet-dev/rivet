@@ -5,7 +5,10 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol as protocol;
-use rivet_types::{actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant};
+use rivet_types::{
+	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
+	runner_configs::RunnerConfig,
+};
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
@@ -103,7 +106,6 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct AllocateActorInput {
 	actor_id: Id,
-	runner_name_selector: String,
 	generation: u32,
 	from_alarm: bool,
 }
@@ -127,9 +129,25 @@ async fn allocate_actor(
 	input: &AllocateActorInput,
 ) -> Result<AllocateActorOutput> {
 	let start_instant = Instant::now();
+
 	let mut state = ctx.state::<State>()?;
 	let namespace_id = state.namespace_id;
 	let crash_policy = state.crash_policy;
+	let runner_name_selector = &state.runner_name_selector;
+
+	// Check if valid serverless config exists for the current ns + runner name
+	let runner_config_res = ctx
+		.op(namespace::ops::runner_config::get::Input {
+			runners: vec![(namespace_id, runner_name_selector.clone())],
+			bypass_cache: false,
+		})
+		.await?;
+	let has_valid_serverless = runner_config_res
+		.first()
+		.map(|runner| match &runner.config {
+			RunnerConfig::Serverless { max_runners, .. } => *max_runners != 0,
+		})
+		.unwrap_or_default();
 
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
@@ -145,7 +163,7 @@ async fn allocate_actor(
 					&namespace::keys::runner_config::ByVariantKey::new(
 						namespace_id,
 						RunnerConfigVariant::Serverless,
-						input.runner_name_selector.clone(),
+						runner_name_selector.clone(),
 					),
 					Serializable,
 				)
@@ -157,7 +175,7 @@ async fn allocate_actor(
 				tx.atomic_op(
 					&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
 						namespace_id,
-						input.runner_name_selector.clone(),
+						runner_name_selector.clone(),
 					),
 					&1i64.to_le_bytes(),
 					MutationType::Add,
@@ -168,7 +186,7 @@ async fn allocate_actor(
 			let pending_actor_subspace = keys::subspace().subspace(
 				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
 					namespace_id,
-					input.runner_name_selector.clone(),
+					runner_name_selector.clone(),
 				),
 			);
 			let queue_exists = tx
@@ -190,7 +208,7 @@ async fn allocate_actor(
 				let runner_alloc_subspace =
 					keys::subspace().subspace(&keys::ns::RunnerAllocIdxKey::subspace(
 						namespace_id,
-						input.runner_name_selector.clone(),
+						runner_name_selector.clone(),
 					));
 
 				let mut stream = tx.get_ranges_keyvalues(
@@ -248,7 +266,7 @@ async fn allocate_actor(
 					tx.write(
 						&keys::ns::RunnerAllocIdxKey::new(
 							namespace_id,
-							input.runner_name_selector.clone(),
+							runner_name_selector.clone(),
 							old_runner_alloc_key.version,
 							new_remaining_millislots,
 							old_runner_alloc_key.last_ping_ts,
@@ -297,8 +315,10 @@ async fn allocate_actor(
 
 			// At this point in the txn there is no availability
 
-			match (crash_policy, input.from_alarm) {
-				(CrashPolicy::Sleep, false) => Ok((for_serverless, AllocateActorOutput::Sleep)),
+			match (crash_policy, input.from_alarm, has_valid_serverless) {
+				(CrashPolicy::Sleep, false, false) => {
+					Ok((for_serverless, AllocateActorOutput::Sleep))
+				}
 				// Write the actor to the alloc queue to wait
 				_ => {
 					let pending_allocation_ts = util::timestamp::now();
@@ -309,7 +329,7 @@ async fn allocate_actor(
 					tx.write(
 						&keys::ns::PendingActorByRunnerNameSelectorKey::new(
 							namespace_id,
-							input.runner_name_selector.clone(),
+							runner_name_selector.clone(),
 							pending_allocation_ts,
 							input.actor_id,
 						),
@@ -459,7 +479,6 @@ pub async fn spawn_actor(
 	let allocate_res = ctx
 		.activity(AllocateActorInput {
 			actor_id: input.actor_id,
-			runner_name_selector: input.runner_name_selector.clone(),
 			generation,
 			from_alarm,
 		})

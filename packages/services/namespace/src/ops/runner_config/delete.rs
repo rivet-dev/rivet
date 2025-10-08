@@ -1,7 +1,7 @@
 use gas::prelude::*;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys, utils::runner_config_variant};
+use crate::{keys, utils::runner_config_variant};
 
 #[derive(Debug)]
 pub struct Input {

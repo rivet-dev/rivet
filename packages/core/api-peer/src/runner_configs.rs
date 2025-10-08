@@ -21,6 +21,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 					.split(',')
 					.map(|name| (namespace.namespace_id, name.to_string()))
 					.collect(),
+				bypass_cache: false,
 			})
 			.await?;
 

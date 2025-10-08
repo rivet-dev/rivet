@@ -5,7 +5,7 @@ use rivet_types::runner_configs::RunnerConfig;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{errors, keys};
+use crate::keys;
 
 #[derive(Debug)]
 pub struct Input {
