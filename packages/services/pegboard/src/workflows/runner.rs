@@ -16,6 +16,8 @@ pub const RUNNER_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
 /// How long to wait after last ping before forcibly removing a runner from the database and deleting its
 /// workflow, evicting all actors. Note that the runner may still be running and can reconnect.
 const RUNNER_LOST_THRESHOLD_MS: i64 = util::duration::minutes(2);
+/// Batch size of how many events to ack.
+const EVENT_ACK_BATCH_SIZE: i64 = 500;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -199,8 +201,12 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 
 								state.last_event_idx = last_event_idx;
 
-								// Ack every 500 events
-								if last_event_idx > state.last_event_ack_idx.saturating_add(500) {
+								// Ack events in batch
+								if last_event_idx
+									> state
+										.last_event_ack_idx
+										.saturating_add(EVENT_ACK_BATCH_SIZE)
+								{
 									state.last_event_ack_idx = last_event_idx;
 
 									ctx.activity(SendMessageToRunnerInput {
