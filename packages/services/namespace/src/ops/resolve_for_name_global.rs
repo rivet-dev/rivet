@@ -30,7 +30,7 @@ pub async fn namespace_resolve_for_name_global(
 					let leader_dc = leader_dc.clone();
 					let client = client.clone();
 					async move {
-						let url = leader_dc.api_peer_url.join("/namespaces")?;
+						let url = leader_dc.peer_url.join("/namespaces")?;
 						let res = client
 							.get(url)
 							.query(&[("name", &input.name)])
