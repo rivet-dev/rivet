@@ -42,6 +42,7 @@ import {
 	Skeleton,
 } from "@/components";
 import {
+	useDataProvider,
 	useDataProviderCheck,
 	useInspectorDataProvider,
 } from "@/components/actors";
@@ -392,6 +393,7 @@ const Subnav = () => {
 			: { to: "/", fuzzy: true },
 	);
 	const hasDataProvider = useDataProviderCheck();
+	const hasQuery = !!useDataProvider().buildsQueryOptions;
 
 	if (nsMatch === false) {
 		return null;
@@ -409,7 +411,7 @@ const Subnav = () => {
 					Connect
 				</HeaderLink>
 			) : null}
-			{hasDataProvider ? (
+			{hasDataProvider && hasQuery ? (
 				<div className="w-full">
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Instances
@@ -542,6 +544,7 @@ function CloudSidebarContent() {
 	});
 
 	const hasDataProvider = useDataProviderCheck();
+	const hasQuery = !!useDataProvider().buildsQueryOptions;
 
 	if (matchNamespace) {
 		return (
@@ -554,7 +557,7 @@ function CloudSidebarContent() {
 				>
 					Connect
 				</HeaderLink>
-				{hasDataProvider ? (
+				{hasDataProvider && hasQuery ? (
 					<div className="w-full pt-1.5">
 						<span className="block text-muted-foreground text-xs px-1 py-1 transition-colors mb-0.5">
 							Instances
