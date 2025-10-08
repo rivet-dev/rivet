@@ -560,8 +560,8 @@ type RunnerConfigVariant = string
 type RunnerConfigsDeleteResponse = map[string]interface{}
 
 type RunnerConfigsListResponse struct {
-	Pagination    *Pagination              `json:"pagination,omitempty"`
-	RunnerConfigs map[string]*RunnerConfig `json:"runner_configs,omitempty"`
+	Pagination    *Pagination                         `json:"pagination,omitempty"`
+	RunnerConfigs map[string]map[string]*RunnerConfig `json:"runner_configs,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -578,6 +578,73 @@ func (r *RunnerConfigsListResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (r *RunnerConfigsListResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsUpsertRequestBody = map[string]*RunnerConfigsUpsertRequestBodyValue
+
+type RunnerConfigsUpsertRequestBodyValue struct {
+	Serverless *RunnerConfigsUpsertRequestBodyValueServerless `json:"serverless,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsUpsertRequestBodyValue) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsUpsertRequestBodyValue
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsUpsertRequestBodyValue(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsUpsertRequestBodyValue) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsUpsertRequestBodyValueServerless struct {
+	Headers    map[string]string `json:"headers,omitempty"`
+	MaxRunners int               `json:"max_runners"`
+	MinRunners *int              `json:"min_runners,omitempty"`
+	// Seconds.
+	RequestLifespan int    `json:"request_lifespan"`
+	RunnersMargin   *int   `json:"runners_margin,omitempty"`
+	SlotsPerRunner  int    `json:"slots_per_runner"`
+	Url             string `json:"url"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsUpsertRequestBodyValueServerless) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsUpsertRequestBodyValueServerless
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsUpsertRequestBodyValueServerless(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsUpsertRequestBodyValueServerless) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value

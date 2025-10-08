@@ -98,7 +98,7 @@ async fn list_inner(
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-#[schema(as = RunnerConfigsUpsertRequest)]
+#[schema(as = RunnerConfigsUpsertRequestBody)]
 pub struct UpsertRequest(
 	#[schema(inline)] HashMap<String, rivet_api_types::namespaces::runner_configs::RunnerConfig>,
 );

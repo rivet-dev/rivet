@@ -127,16 +127,15 @@ export class RunnerConfigs {
      * @example
      *     await client.runnerConfigs.upsert("runner_name", {
      *         namespace: "namespace",
-     *         serverless: {
-     *             headers: {
-     *                 "key": "value"
-     *             },
-     *             maxRunners: 1,
-     *             minRunners: 1,
-     *             requestLifespan: 1,
-     *             runnersMargin: 1,
-     *             slotsPerRunner: 1,
-     *             url: "url"
+     *         body: {
+     *             "key": {
+     *                 serverless: {
+     *                     maxRunners: 1,
+     *                     requestLifespan: 1,
+     *                     slotsPerRunner: 1,
+     *                     url: "url"
+     *                 }
+     *             }
      *         }
      *     })
      */
@@ -145,7 +144,7 @@ export class RunnerConfigs {
         request: Rivet.RunnerConfigsUpsertRequest,
         requestOptions?: RunnerConfigs.RequestOptions,
     ): Promise<Rivet.RunnerConfigsUpsertResponse> {
-        const { namespace, ..._body } = request;
+        const { namespace, body: _body } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         const _response = await (this._options.fetcher ?? core.fetcher)({
@@ -165,7 +164,7 @@ export class RunnerConfigs {
             contentType: "application/json",
             queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.RunnerConfigsUpsertRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            body: serializers.RunnerConfigsUpsertRequestBody.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,

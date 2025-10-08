@@ -64,7 +64,9 @@ Class | Method | HTTP request | Description
  - [RunnerConfigServerless](docs/RunnerConfigServerless.md)
  - [RunnerConfigVariant](docs/RunnerConfigVariant.md)
  - [RunnerConfigsListResponse](docs/RunnerConfigsListResponse.md)
- - [RunnerConfigsUpsertRequest](docs/RunnerConfigsUpsertRequest.md)
+ - [RunnerConfigsUpsertRequestBodyValue](docs/RunnerConfigsUpsertRequestBodyValue.md)
+ - [RunnerConfigsUpsertRequestBodyValueOneOf](docs/RunnerConfigsUpsertRequestBodyValueOneOf.md)
+ - [RunnerConfigsUpsertRequestBodyValueOneOfServerless](docs/RunnerConfigsUpsertRequestBodyValueOneOfServerless.md)
  - [RunnersListNamesResponse](docs/RunnersListNamesResponse.md)
  - [RunnersListResponse](docs/RunnersListResponse.md)
 
