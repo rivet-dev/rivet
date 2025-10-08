@@ -87,7 +87,7 @@ pub async fn check_config_changes(
 			types::ReplicaConfig {
 				replica_id: dc.datacenter_label as u64,
 				status: status.into(),
-				api_peer_url: dc.api_peer_url.to_string(),
+				api_peer_url: dc.peer_url.to_string(),
 				guard_url: dc.public_url.to_string(),
 			}
 		})
@@ -272,7 +272,7 @@ fn should_abort_reconfigure(
 			return Ok(true);
 		};
 
-		if url::Url::parse(&replica.api_peer_url)? != current_dc.api_peer_url {
+		if url::Url::parse(&replica.api_peer_url)? != current_dc.peer_url {
 			tracing::info!(
 				"config changed during reconfigure (api_peer_url changed), aborting reconfigure"
 			);

@@ -27,7 +27,7 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 					let leader_dc = leader_dc.clone();
 					let client = client.clone();
 					async move {
-						let url = leader_dc.api_peer_url.join(&format!("/namespaces"))?;
+						let url = leader_dc.peer_url.join(&format!("/namespaces"))?;
 						let res = client
 							.get(url)
 							.query(
