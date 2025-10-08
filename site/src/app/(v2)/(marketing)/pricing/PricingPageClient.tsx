@@ -547,7 +547,7 @@ export default function PricingPageClient() {
 									</li>
 									<li className="flex items-center gap-2">
 										<CheckIcon className="w-4 h-4 text-green-400" />
-										Full source code access
+										Apache 2.0 license
 									</li>
 									<li className="flex items-center gap-2">
 										<CheckIcon className="w-4 h-4 text-green-400" />
