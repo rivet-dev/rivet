@@ -7,17 +7,25 @@ use syn::{
 	spanned::Spanned,
 };
 
+#[derive(Default)]
 struct Config {
-	max_retries: usize,
-	timeout: u64,
+	max_retries: Option<syn::Expr>,
+	timeout: Option<syn::Expr>,
 }
 
-impl Default for Config {
-	fn default() -> Self {
-		Config {
-			max_retries: 5,
-			timeout: 30,
-		}
+impl Config {
+	fn max_retries(&self) -> proc_macro2::TokenStream {
+		self.max_retries
+			.as_ref()
+			.map(|e| e.to_token_stream())
+			.unwrap_or_else(|| quote! { 5 })
+	}
+
+	fn timeout(&self) -> proc_macro2::TokenStream {
+		self.timeout
+			.as_ref()
+			.map(|e| e.to_token_stream())
+			.unwrap_or_else(|| quote! { 30 })
 	}
 }
 
@@ -130,8 +138,8 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
-	let max_retries = config.max_retries;
-	let timeout = config.timeout;
+	let max_retries = config.max_retries();
+	let timeout = config.timeout();
 
 	let expanded = quote! {
 		#vis struct #struct_ident;
@@ -201,7 +209,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let fn_body = item_fn.block;
 	let vis = item_fn.vis;
 
-	let timeout = config.timeout;
+	let timeout = config.timeout();
 
 	let expanded = quote! {
 		#vis struct #struct_ident;
@@ -441,12 +449,13 @@ fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
 
 		// Verify config property
 		if ident == "max_retries" {
-			config.max_retries =
-				syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
-					.base10_parse()?;
+			config.max_retries = Some(syn::parse::<syn::Expr>(
+				name_value.value.to_token_stream().into(),
+			)?);
 		} else if ident == "timeout" {
-			config.timeout = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
-				.base10_parse()?;
+			config.timeout = Some(syn::parse::<syn::Expr>(
+				name_value.value.to_token_stream().into(),
+			)?);
 		} else if ident != "doc" {
 			return Err(syn::Error::new(
 				name_value.span(),
