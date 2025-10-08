@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, RIVET_TOKEN, createActor, destroyActor } from "./utils";
+import { RIVET_ENDPOINT, RIVET_TOKEN, RIVET_NAMESPACE, createActor, destroyActor } from "./utils";
 
 const ACTORS = parseInt(process.argv[2]) || 15;
 
@@ -18,17 +18,21 @@ async function main() {
 }
 
 async function testActor(i: number) {
+	let actorId;
 	try {
 		// Create an actor
 		console.log(`Creating actor ${i}...`);
-		const actorResponse = await createActor("default", "test-runner");
+		const actorResponse = await createActor(RIVET_NAMESPACE, "test-runner");
 		console.log("Actor created:", actorResponse.actor);
+
+		actorId = actorResponse.actor.actor_id;
 
 		// Make a request to the actor
 		console.log(`Making request to actor ${i}...`);
 		const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
 			method: "GET",
 			headers: {
+				"X-Rivet-Token": RIVET_TOKEN,
 				"X-Rivet-Target": "actor",
 				"X-Rivet-Actor": actorResponse.actor.actor_id,
 			},
@@ -45,11 +49,13 @@ async function testActor(i: number) {
 		console.log(`Actor ${i} ping response:`, pingResult);
 
 		await testWebSocket(actorResponse.actor.actor_id);
-
-		console.log(`Destroying actor ${i}...`);
-		await destroyActor("default", actorResponse.actor.actor_id);
 	} catch (error) {
 		console.error(`Actor ${i} test failed:`, error);
+	} finally {
+		if (actorId) {
+			console.log(`Destroying actor ${i}...`);
+			await destroyActor(RIVET_NAMESPACE, actorId);
+		}
 	}
 }
 

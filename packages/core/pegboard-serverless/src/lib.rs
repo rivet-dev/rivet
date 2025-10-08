@@ -1,14 +1,14 @@
 use std::{
 	collections::HashMap,
 	sync::{
-		atomic::{AtomicBool, Ordering},
 		Arc,
+		atomic::{AtomicBool, Ordering},
 	},
 };
 
 use anyhow::Result;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use pegboard::keys;
