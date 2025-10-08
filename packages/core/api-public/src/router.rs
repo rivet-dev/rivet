@@ -25,6 +25,7 @@ use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
 		runner_configs::list,
 		runner_configs::upsert,
 		runner_configs::delete,
+		runner_configs::serverless_health_check,
 		datacenters::list,
 	),
 	components(
@@ -51,6 +52,10 @@ pub async fn router(
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
 			.route("/runner-configs", axum::routing::get(runner_configs::list))
+			.route(
+				"/runner-configs/serverless-health-check",
+				axum::routing::post(runner_configs::serverless_health_check),
+			)
 			.route(
 				"/runner-configs/{runner_name}",
 				axum::routing::put(runner_configs::upsert),

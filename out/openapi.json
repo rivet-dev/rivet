@@ -476,6 +476,41 @@
         ]
       }
     },
+    "/runner-configs/serverless-health-check": {
+      "post": {
+        "tags": [
+          "runner_configs"
+        ],
+        "operationId": "runner_configs_serverless_health_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/runner-configs/{runner_name}": {
       "put": {
         "tags": [
@@ -1256,6 +1291,177 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "invalid_request"
+            ],
+            "properties": {
+              "invalid_request": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_failed"
+            ],
+            "properties": {
+              "request_failed": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_timed_out"
+            ],
+            "properties": {
+              "request_timed_out": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "non_success_status"
+            ],
+            "properties": {
+              "non_success_status": {
+                "type": "object",
+                "required": [
+                  "status_code",
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "status_code": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "invalid_response_json"
+            ],
+            "properties": {
+              "invalid_response_json": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "invalid_response_schema"
+            ],
+            "properties": {
+              "invalid_response_schema": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "runtime",
+                  "version"
+                ],
+                "properties": {
+                  "runtime": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigsServerlessHealthCheckRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "success"
+            ],
+            "properties": {
+              "success": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "failure"
+            ],
+            "properties": {
+              "failure": {
+                "type": "object",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckError"
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "RunnerConfigsUpsertRequestBody": {
         "type": "object",
