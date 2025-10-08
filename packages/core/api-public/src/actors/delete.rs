@@ -1,12 +1,11 @@
 use anyhow::Result;
 use axum::{
-	extract::Path,
 	http::HeaderMap,
 	response::{IntoResponse, Response},
 };
 use rivet_api_builder::{
 	ApiError,
-	extract::{Extension, Json, Query},
+	extract::{Extension, Json, Path, Query},
 };
 use rivet_api_util::request_remote_datacenter_raw;
 use rivet_util::Id;
