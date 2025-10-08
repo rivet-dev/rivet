@@ -46,7 +46,7 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			"/runners",
 			query.clone(),
 			|ctx, query| async move { rivet_api_peer::runners::list(ctx, (), query).await },
-			|res, agg| agg.extend(res.runners),
+			|_, res, agg| agg.extend(res.runners),
 		)
 		.await?;
 
@@ -136,7 +136,7 @@ async fn list_names_inner(
 		"/runners/names",
 		peer_query,
 		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },
-		|res, agg| agg.extend(res.names),
+		|_, res, agg| agg.extend(res.names),
 	)
 	.await?;
 

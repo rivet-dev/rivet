@@ -63,7 +63,7 @@ async fn list_names_inner(
 			|ctx, query| async move {
 				rivet_api_peer::actors::list_names::list_names(ctx, (), query).await
 			},
-			|res, agg| agg.extend(res.names),
+			|_, res, agg| agg.extend(res.names),
 		)
 		.await?;
 

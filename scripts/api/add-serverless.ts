@@ -37,15 +37,17 @@ const response = await fetch(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify({
-			serverless: {
-				url: serverlessUrl,
-				headers: {},
-				runners_margin: 1,
-				min_runners: 1,
-				max_runners: 3,
-				slots_per_runner: 100,
-				request_lifespan: 15 * 60,
-			},
+			default: {
+				serverless: {
+					url: serverlessUrl,
+					headers: {},
+					runners_margin: 1,
+					min_runners: 1,
+					max_runners: 3,
+					slots_per_runner: 100,
+					request_lifespan: 15 * 60,
+				},
+			}
 		}),
 	},
 );

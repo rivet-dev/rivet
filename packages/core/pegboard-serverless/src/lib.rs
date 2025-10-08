@@ -15,7 +15,7 @@ use pegboard::keys;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
-use rivet_types::namespaces::RunnerConfig;
+use rivet_types::runner_configs::RunnerConfig;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
@@ -94,7 +94,7 @@ async fn tick(
 		.await?;
 
 	let runner_configs = ctx
-		.op(namespace::ops::runner_config::get_global::Input {
+		.op(namespace::ops::runner_config::get::Input {
 			runners: serverless_data
 				.iter()
 				.map(|(ns_id, runner_name, _)| (*ns_id, runner_name.clone()))
@@ -102,7 +102,7 @@ async fn tick(
 		})
 		.await?;
 
-	tracing::debug!(?serverless_data, ?runner_configs);
+	tracing::info!(?runner_configs, "------------------");
 
 	for (ns_id, runner_name, desired_slots) in &serverless_data {
 		let runner_config = runner_configs

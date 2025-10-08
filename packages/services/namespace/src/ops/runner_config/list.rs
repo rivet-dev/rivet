@@ -1,6 +1,7 @@
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
-use rivet_types::namespaces::RunnerConfig;
+use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
+use rivet_types::runner_configs::RunnerConfig;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
 
@@ -9,11 +10,12 @@ use crate::{errors, keys};
 #[derive(Debug)]
 pub struct Input {
 	pub namespace_id: Id,
-	pub variant: Option<keys::RunnerConfigVariant>,
+	pub variant: Option<RunnerConfigVariant>,
 	pub after_name: Option<String>,
 	pub limit: usize,
 }
 
+// TODO: Needs to return default configs if they exist (currently no way to list from epoxy)
 #[operation]
 pub async fn namespace_runner_config_list(
 	ctx: &OperationCtx,
@@ -30,14 +32,14 @@ pub async fn namespace_runner_config_list(
 
 			let (start, end) = if let Some(variant) = input.variant {
 				let (start, end) = keys::subspace()
-					.subspace(&keys::RunnerConfigByVariantKey::subspace_with_variant(
+					.subspace(&keys::runner_config::ByVariantKey::subspace_with_variant(
 						input.namespace_id,
 						variant,
 					))
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					tx.pack(&keys::RunnerConfigByVariantKey::new(
+					tx.pack(&keys::runner_config::ByVariantKey::new(
 						input.namespace_id,
 						variant,
 						name.clone(),
@@ -49,11 +51,11 @@ pub async fn namespace_runner_config_list(
 				(start, end)
 			} else {
 				let (start, end) = keys::subspace()
-					.subspace(&keys::RunnerConfigKey::subspace(input.namespace_id))
+					.subspace(&keys::runner_config::DataKey::subspace(input.namespace_id))
 					.range();
 
 				let start = if let Some(name) = &input.after_name {
-					tx.pack(&keys::RunnerConfigKey::new(
+					tx.pack(&keys::runner_config::DataKey::new(
 						input.namespace_id,
 						name.clone(),
 					))
@@ -76,10 +78,11 @@ pub async fn namespace_runner_config_list(
 				Ok(entry) => {
 					if input.variant.is_some() {
 						let (key, config) =
-							tx.read_entry::<keys::RunnerConfigByVariantKey>(&entry)?;
+							tx.read_entry::<keys::runner_config::ByVariantKey>(&entry)?;
 						Ok((key.name, config))
 					} else {
-						let (key, config) = tx.read_entry::<keys::RunnerConfigKey>(&entry)?;
+						let (key, config) =
+							tx.read_entry::<keys::runner_config::DataKey>(&entry)?;
 						Ok((key.name, config))
 					}
 				}

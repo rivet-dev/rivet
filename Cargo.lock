@@ -2762,6 +2762,8 @@ name = "namespace"
 version = "25.7.3"
 dependencies = [
  "anyhow",
+ "epoxy",
+ "epoxy-protocol",
  "gasoline",
  "internal",
  "reqwest",
@@ -4634,6 +4636,7 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-util",
  "serde",
+ "strum",
  "universaldb",
  "utoipa",
  "vbare",
