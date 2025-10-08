@@ -1271,16 +1271,16 @@
                   "type": "object",
                   "required": [
                     "url",
-                    "headers",
                     "request_lifespan",
                     "slots_per_runner",
-                    "min_runners",
-                    "max_runners",
-                    "runners_margin"
+                    "max_runners"
                   ],
                   "properties": {
                     "headers": {
-                      "type": "object",
+                      "type": [
+                        "object",
+                        "null"
+                      ],
                       "additionalProperties": {
                         "type": "string"
                       },
@@ -1294,7 +1294,10 @@
                       "minimum": 0
                     },
                     "min_runners": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "format": "int32",
                       "minimum": 0
                     },
@@ -1305,7 +1308,10 @@
                       "minimum": 0
                     },
                     "runners_margin": {
-                      "type": "integer",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "format": "int32",
                       "minimum": 0
                     },
