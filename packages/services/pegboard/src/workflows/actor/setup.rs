@@ -94,6 +94,10 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				&keys::actor::WorkflowIdKey::new(input.actor_id),
 				ctx.workflow_id(),
 			)?;
+			tx.write(
+				&keys::actor::NamespaceIdKey::new(input.actor_id),
+				input.namespace_id,
+			)?;
 
 			Ok(())
 		})

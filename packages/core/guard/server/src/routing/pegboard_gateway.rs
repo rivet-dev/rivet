@@ -4,7 +4,6 @@ use anyhow::Result;
 use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
-use universaldb::utils::IsolationLevel::*;
 
 use super::SEC_WEBSOCKET_PROTOCOL;
 use crate::{errors, shared_state::SharedState};
@@ -93,26 +92,6 @@ pub async fn route_request(
 		})));
 	}
 
-	// Lookup actor
-	find_actor(ctx, shared_state, actor_id, path).await
-}
-
-struct FoundActor {
-	workflow_id: Id,
-	sleeping: bool,
-	destroyed: bool,
-}
-
-/// Find an actor by actor_id
-#[tracing::instrument(skip_all, fields(%actor_id, %path))]
-async fn find_actor(
-	ctx: &StandaloneCtx,
-	shared_state: &SharedState,
-	actor_id: Id,
-	path: &str,
-) -> Result<Option<RoutingOutput>> {
-	// TODO: Optimize this down to a single FDB call
-
 	// Create subs before checking if actor exists/is not destroyed
 	let mut ready_sub = ctx
 		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
@@ -124,37 +103,11 @@ async fn find_actor(
 		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
 		.await?;
 
-	let actor_res = tokio::time::timeout(
-		Duration::from_secs(5),
-		ctx.udb()?
-			.run(|tx| async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
-				let workflow_id_key = pegboard::keys::actor::WorkflowIdKey::new(actor_id);
-				let sleep_ts_key = pegboard::keys::actor::SleepTsKey::new(actor_id);
-				let destroy_ts_key = pegboard::keys::actor::DestroyTsKey::new(actor_id);
-
-				let (workflow_id_entry, sleeping, destroyed) = tokio::try_join!(
-					tx.read_opt(&workflow_id_key, Serializable),
-					tx.exists(&sleep_ts_key, Serializable),
-					tx.exists(&destroy_ts_key, Serializable),
-				)?;
-
-				let Some(workflow_id) = workflow_id_entry else {
-					return Ok(None);
-				};
-
-				Ok(Some(FoundActor {
-					workflow_id,
-					sleeping,
-					destroyed,
-				}))
-			})
-			.custom_instrument(tracing::info_span!("actor_exists_tx")),
-	)
-	.await??;
-
-	let Some(actor) = actor_res else {
+	// Fetch actor info
+	let Some(actor) = ctx
+		.op(pegboard::ops::actor::get_for_gateway::Input { actor_id })
+		.await?
+	else {
 		return Err(errors::ActorNotFound { actor_id }.build());
 	};
 
@@ -170,15 +123,8 @@ async fn find_actor(
 			.await?;
 	}
 
-	// Check if actor is connectable and get runner_id
-	let get_runner_fut = ctx.op(pegboard::ops::actor::get_runner::Input {
-		actor_ids: vec![actor_id],
-	});
-	let res = tokio::time::timeout(Duration::from_secs(5), get_runner_fut).await??;
-	let actor = res.actors.into_iter().next().filter(|x| x.is_connectable);
-
-	let runner_id = if let Some(actor) = actor {
-		actor.runner_id
+	let runner_id = if let (Some(runner_id), true) = (actor.runner_id, actor.connectable) {
+		runner_id
 	} else {
 		tracing::debug!(?actor_id, "waiting for actor to become ready");
 
