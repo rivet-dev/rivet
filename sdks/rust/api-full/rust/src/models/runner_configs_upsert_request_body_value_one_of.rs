@@ -12,14 +12,14 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RunnerConfigsUpsertRequest {
+pub struct RunnerConfigsUpsertRequestBodyValueOneOf {
     #[serde(rename = "serverless")]
-    pub serverless: Box<models::RunnerConfigServerless>,
+    pub serverless: Box<models::RunnerConfigsUpsertRequestBodyValueOneOfServerless>,
 }
 
-impl RunnerConfigsUpsertRequest {
-    pub fn new(serverless: models::RunnerConfigServerless) -> RunnerConfigsUpsertRequest {
-        RunnerConfigsUpsertRequest {
+impl RunnerConfigsUpsertRequestBodyValueOneOf {
+    pub fn new(serverless: models::RunnerConfigsUpsertRequestBodyValueOneOfServerless) -> RunnerConfigsUpsertRequestBodyValueOneOf {
+        RunnerConfigsUpsertRequestBodyValueOneOf {
             serverless: Box::new(serverless),
         }
     }
