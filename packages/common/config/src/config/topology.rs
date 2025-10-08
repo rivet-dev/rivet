@@ -56,7 +56,7 @@ impl Default for Topology {
 					crate::defaults::ports::GUARD
 				))
 				.unwrap(),
-				api_peer_url: Url::parse(&format!(
+				peer_url: Url::parse(&format!(
 					"http://127.0.0.1:{}",
 					crate::defaults::ports::API_PEER
 				))
@@ -76,7 +76,7 @@ pub struct Datacenter {
 	/// Public origin that can be used to connect to this region.
 	pub public_url: Url,
 	/// URL of the api-peer service
-	pub api_peer_url: Url,
+	pub peer_url: Url,
 	/// List of hosts that are valid to connect to this region with. This is used in regional
 	/// endpoints to validate that incoming requests to this datacenter are going to a
 	/// region-specific domain.
