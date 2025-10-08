@@ -121,7 +121,7 @@ pub async fn run_paxos_accept(
 }
 
 #[tracing::instrument(skip_all)]
-async fn commit(
+pub async fn commit(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	replica_id: ReplicaId,
