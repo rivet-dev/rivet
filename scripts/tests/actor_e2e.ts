@@ -1,21 +1,26 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, RIVET_TOKEN, createActor, destroyActor } from "./utils";
+import { RIVET_ENDPOINT, RIVET_TOKEN, RIVET_NAMESPACE, createActor, destroyActor } from "./utils";
 
 async function main() {
+	let actorId;
+
 	try {
 		console.log("Starting actor E2E test...");
 
 		// Create an actor
 		console.log("Creating actor...");
-		const actorResponse = await createActor("default", "test-runner");
+		const actorResponse = await createActor(RIVET_NAMESPACE, "test-runner");
 		console.log("Actor created:", actorResponse.actor);
+
+		actorId = actorResponse.actor.actor_id;
 
 		// Make a request to the actor
 		console.log("Making request to actor...");
 		const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
 			method: "GET",
 			headers: {
+				"X-Rivet-Token": RIVET_TOKEN,
 				"X-Rivet-Target": "actor",
 				"X-Rivet-Actor": actorResponse.actor.actor_id,
 			},
@@ -32,17 +37,13 @@ async function main() {
 		console.log("Actor ping response:", pingResult);
 
 		await testWebSocket(actorResponse.actor.actor_id);
-
-		console.log("Destroying actor...");
-		await destroyActor("default", actorResponse.actor.actor_id);
-
-		console.log("E2E test completed successfully!");
-
-		// HACK: This script does not exit by itself for some reason
-		process.exit(0);
 	} catch (error) {
-		console.error("E2E test failed:", error);
-		process.exit(1);
+		console.error(`Actor ${i} test failed:`, error);
+	} finally {
+		if (actorId) {
+			console.log(`Destroying actor ${i}...`);
+			await destroyActor(RIVET_NAMESPACE, actorId);
+		}
 	}
 }
 
