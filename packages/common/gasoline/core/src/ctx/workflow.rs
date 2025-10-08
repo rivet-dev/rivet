@@ -612,7 +612,7 @@ impl WorkflowCtx {
 						// errors
 						let err = match err {
 							WorkflowError::ActivityFailure(err, _) => {
-								if error_count + 1 >= I::Activity::MAX_RETRIES {
+								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err)
 								} else {
 									// Add error count to the error for backoff calculation
@@ -620,7 +620,7 @@ impl WorkflowCtx {
 								}
 							}
 							WorkflowError::ActivityTimeout(_) => {
-								if error_count + 1 >= I::Activity::MAX_RETRIES {
+								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err.into())
 								} else {
 									// Add error count to the error for backoff calculation
@@ -628,7 +628,7 @@ impl WorkflowCtx {
 								}
 							}
 							WorkflowError::OperationTimeout(_) => {
-								if error_count + 1 >= I::Activity::MAX_RETRIES {
+								if error_count.saturating_add(1) >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err.into())
 								} else {
 									// Add error count to the error for backoff calculation

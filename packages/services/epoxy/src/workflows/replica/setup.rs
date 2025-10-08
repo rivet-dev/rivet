@@ -740,6 +740,7 @@ pub struct NotifyActiveInput {
 }
 
 #[activity(NotifyActive)]
+#[max_retries = usize::MAX]
 pub async fn notify_active(ctx: &ActivityCtx, input: &NotifyActiveInput) -> Result<()> {
 	let config = &input.learning_config;
 	let proto_config: protocol::ClusterConfig = config.clone().into();

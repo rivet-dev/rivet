@@ -135,6 +135,7 @@ pub struct HealthCheckNewReplicasInput {
 }
 
 #[activity(HealthCheckNewReplicas)]
+#[max_retries = usize::MAX]
 pub async fn health_check_new_replicas(
 	ctx: &ActivityCtx,
 	input: &HealthCheckNewReplicasInput,
