@@ -1,14 +1,14 @@
 use std::{
 	collections::HashMap,
 	sync::{
-		Arc,
 		atomic::{AtomicBool, Ordering},
+		Arc,
 	},
 };
 
 use anyhow::Result;
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use futures_util::{StreamExt, TryStreamExt};
 use gas::prelude::*;
 use pegboard::keys;
@@ -271,6 +271,16 @@ async fn outbound_handler(
 	let current_dc = ctx.config().topology().current_dc()?;
 
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
+
+	let token = if let Some(auth) = &ctx.config().auth {
+		Some((
+			X_RIVET_TOKEN,
+			HeaderValue::try_from(auth.admin_token.read())?,
+		))
+	} else {
+		None
+	};
+
 	let headers = headers
 		.into_iter()
 		.flat_map(|(k, v)| {
@@ -292,19 +302,7 @@ async fn outbound_handler(
 			(X_RIVET_RUNNER_NAME, HeaderValue::try_from(runner_name)?),
 			(X_RIVET_NAMESPACE_ID, HeaderValue::try_from(namespace_name)?),
 		])
-		// Add token if auth is enabled
-		.chain(
-			ctx.config()
-				.auth
-				.as_ref()
-				.map(|auth| {
-					anyhow::Ok((
-						X_RIVET_TOKEN,
-						HeaderValue::try_from(auth.admin_token.read())?,
-					))
-				})
-				.transpose()?,
-		)
+		.chain(token)
 		.collect();
 
 	let req = client.get(url).headers(headers);
