@@ -230,7 +230,7 @@ export function NeedHelp() {
 
 	return (
 		<HelpDropdown>
-			<Button variant="outline">Need help?</Button>
+			<Button variant="ghost">Need help?</Button>
 		</HelpDropdown>
 	);
 }
