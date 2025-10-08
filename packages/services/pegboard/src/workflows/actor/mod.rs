@@ -48,6 +48,8 @@ pub struct State {
 
 	#[serde(default)]
 	pub for_serverless: bool,
+	#[serde(default)]
+	pub allocated_slot: bool,
 
 	pub start_ts: Option<i64>,
 	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
@@ -83,6 +85,7 @@ impl State {
 			create_complete_ts: None,
 
 			for_serverless: false,
+			allocated_slot: false,
 
 			start_ts: None,
 			pending_allocation_ts: None,
@@ -471,26 +474,36 @@ async fn handle_stopped(
 	state.runner_id = None;
 	state.runner_workflow_id = None;
 
-	ctx.activity(runtime::DeallocateInput {
-		actor_id: input.actor_id,
-	})
-	.await?;
+	let deallocate_res = ctx
+		.activity(runtime::DeallocateInput {
+			actor_id: input.actor_id,
+		})
+		.await?;
 
 	// Allocate other pending actors from queue since a slot has now cleared
-	let res = ctx
+	let allocate_pending_res = ctx
 		.activity(AllocatePendingActorsInput {
 			namespace_id: input.namespace_id,
 			name: input.runner_name_selector.clone(),
 		})
 		.await?;
 
-	// Dispatch pending allocs (if any)
-	for alloc in res.allocations {
-		ctx.signal(alloc.signal)
-			.to_workflow::<Workflow>()
-			.tag("actor_id", alloc.actor_id)
-			.send()
-			.await?;
+	if allocate_pending_res.allocations.is_empty() {
+		// Bump autoscaler so it can scale down if needed
+		if deallocate_res.for_serverless {
+			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+				.send()
+				.await?;
+		}
+	} else {
+		// Dispatch pending allocs (if any)
+		for alloc in allocate_pending_res.allocations {
+			ctx.signal(alloc.signal)
+				.to_workflow::<Workflow>()
+				.tag("actor_id", alloc.actor_id)
+				.send()
+				.await?;
+		}
 	}
 
 	// Handle rescheduling if not marked as sleeping

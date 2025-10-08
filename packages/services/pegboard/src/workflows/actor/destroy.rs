@@ -38,6 +38,14 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 		kill(ctx, input.actor_id, input.generation, runner_workflow_id).await?;
 	}
 
+	// If a slot was allocated at the time of actor destruction then bump the serverless autoscaler so it can scale down
+	// if needed
+	if res.allocated_serverless_slot {
+		ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+			.send()
+			.await?;
+	}
+
 	// Clear KV
 	ctx.activity(ClearKvInput {
 		actor_id: input.actor_id,
@@ -60,6 +68,7 @@ struct UpdateStateAndDbInput {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateStateAndDbOutput {
 	runner_workflow_id: Option<Id>,
+	allocated_serverless_slot: bool,
 }
 
 #[activity(UpdateStateAndDb)]
@@ -89,6 +98,17 @@ async fn update_state_and_db(
 						&tx,
 					)
 					.await?;
+				} else if state.allocated_slot {
+					// Clear the serverless slot even if we do not have a runner id. This happens when the
+					// actor is destroyed while pending allocation
+					tx.atomic_op(
+						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
+							state.namespace_id,
+							state.runner_name_selector.clone(),
+						),
+						&(-1i64).to_le_bytes(),
+						MutationType::Add,
+					);
 				}
 
 				// Update namespace indexes
@@ -125,7 +145,13 @@ async fn update_state_and_db(
 	state.runner_id = None;
 	let runner_workflow_id = state.runner_workflow_id.take();
 
-	Ok(UpdateStateAndDbOutput { runner_workflow_id })
+	let old_allocated_slot = state.allocated_slot;
+	state.allocated_slot = false;
+
+	Ok(UpdateStateAndDbOutput {
+		runner_workflow_id,
+		allocated_serverless_slot: state.for_serverless && old_allocated_slot,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
