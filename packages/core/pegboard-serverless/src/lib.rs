@@ -103,8 +103,6 @@ async fn tick(
 		})
 		.await?;
 
-	tracing::info!(?runner_configs, "------------------");
-
 	for (ns_id, runner_name, desired_slots) in &serverless_data {
 		let runner_config = runner_configs
 			.iter()

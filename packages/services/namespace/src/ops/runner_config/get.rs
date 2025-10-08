@@ -23,10 +23,6 @@ pub async fn namespace_runner_config_get(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<RunnerConfig>> {
-	if !ctx.config().is_leader() {
-		return Err(errors::Namespace::NotLeader.build());
-	}
-
 	let runner_configs = ctx
 		.udb()?
 		.run(|tx| async move {

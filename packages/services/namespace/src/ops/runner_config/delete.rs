@@ -11,10 +11,6 @@ pub struct Input {
 
 #[operation]
 pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -> Result<()> {
-	if !ctx.config().is_leader() {
-		return Err(errors::Namespace::NotLeader.build());
-	}
-
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
