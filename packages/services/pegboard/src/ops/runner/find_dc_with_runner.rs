@@ -5,6 +5,7 @@ use futures_util::{StreamExt, TryFutureExt, stream::FuturesUnordered};
 use gas::prelude::*;
 use rivet_api_types::runners::list as runners_list;
 use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
+use rivet_types::namespaces::RunnerConfig;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +63,23 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		.await?;
 	if !res.runners.is_empty() {
 		return Ok(Some(ctx.config().dc_label()));
+	}
+
+	// Check if serverless runner config exists
+	let res = ctx
+		.op(namespace::ops::runner_config::get_global::Input {
+			runners: vec![(input.namespace_id, input.runner_name.clone())],
+		})
+		.await?;
+	if let Some(runner) = res.first() {
+		match &runner.config {
+			RunnerConfig::Serverless { max_runners, .. } => {
+				// Check if runner config does not have a max runner count of 0
+				if *max_runners != 0 {
+					return Ok(Some(ctx.config().dc_label()));
+				}
+			}
+		}
 	}
 
 	// Get namespace
