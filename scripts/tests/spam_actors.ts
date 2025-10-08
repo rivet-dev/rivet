@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, createActor, destroyActor } from "./utils";
+import { RIVET_ENDPOINT, RIVET_TOKEN, createActor, destroyActor } from "./utils";
 
 const ACTORS = parseInt(process.argv[2]) || 15;
 
@@ -44,7 +44,7 @@ async function testActor(i: number) {
 
 		console.log(`Actor ${i} ping response:`, pingResult);
 
-		// await testWebSocket(actorResponse.actor.actor_id);
+		await testWebSocket(actorResponse.actor.actor_id);
 
 		console.log(`Destroying actor ${i}...`);
 		await destroyActor("default", actorResponse.actor.actor_id);
@@ -66,7 +66,7 @@ function testWebSocket(actorId: string): Promise<void> {
 
 		console.log(`Connecting WebSocket to: ${wsUrl}`);
 
-		const protocols = ["rivet", "rivet_target.actor", `rivet_actor.${actorId}`];
+		const protocols = ["rivet", "rivet_target.actor", `rivet_actor.${actorId}`, `rivet_token.${RIVET_TOKEN}`];
 		const ws = new WebSocket(wsUrl, protocols);
 
 		let pingReceived = false;
@@ -88,9 +88,9 @@ function testWebSocket(actorId: string): Promise<void> {
 			ws.send("ping");
 		});
 
-		ws.addEventListener("message", (data) => {
-			const message = data.toString();
-			console.log(`WebSocket received raw data:`, data);
+		ws.addEventListener("message", (ev) => {
+			const message = ev.data.toString();
+			console.log(`WebSocket received raw data:`, ev.data);
 			console.log(`WebSocket received message: "${message}"`);
 
 			if (
