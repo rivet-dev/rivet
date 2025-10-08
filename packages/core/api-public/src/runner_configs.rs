@@ -139,13 +139,6 @@ async fn upsert_inner(
 ) -> Result<UpsertResponse> {
 	ctx.auth().await?;
 
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace.clone(),
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
 	for dc in &ctx.config().topology().datacenters {
 		if let Some(runner_config) = body.0.remove(&dc.name) {
 			if ctx.config().dc_label() == dc.datacenter_label {
@@ -230,13 +223,6 @@ async fn delete_inner(
 	query: DeleteQuery,
 ) -> Result<DeleteResponse> {
 	ctx.auth().await?;
-
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace.clone(),
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	for dc in &ctx.config().topology().datacenters {
 		if ctx.config().dc_label() == dc.datacenter_label {

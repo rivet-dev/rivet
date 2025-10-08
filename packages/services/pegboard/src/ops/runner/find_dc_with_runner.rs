@@ -75,6 +75,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 	let res = ctx
 		.op(namespace::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
+			bypass_cache: false,
 		})
 		.await?;
 	if let Some(runner) = res.first() {

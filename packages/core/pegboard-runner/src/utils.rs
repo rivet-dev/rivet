@@ -2,7 +2,6 @@ use gas::prelude::*;
 use hyper::upgrade::Upgraded;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use hyper_util::rt::TokioIo;
-use rivet_error::*;
 use rivet_runner_protocol as protocol;
 
 #[derive(Clone)]
