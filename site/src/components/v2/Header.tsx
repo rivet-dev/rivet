@@ -176,6 +176,14 @@ export function Header({
 									Cloud
 								</TextNavItem>
 								<TextNavItem
+									href="/pricing"
+									ariaCurrent={
+										active === "pricing" ? "page" : undefined
+									}
+								>
+									Pricing
+								</TextNavItem>
+								<TextNavItem
 									href="/changelog"
 									ariaCurrent={
 										active === "blog" ? "page" : undefined

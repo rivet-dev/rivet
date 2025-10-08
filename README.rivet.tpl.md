@@ -7,7 +7,7 @@
   </a>
   <br/>
   <br/>
-  <p><b>Scale and orchestrate <a href="https://github.com/rivet-gg/rivetkit">RivetKit</a> workloads</b></p>
+  <p><b>Scale and orchestrate <a href="https://github.com/rivet-dev/rivetkit">RivetKit</a> workloads</b></p>
   <p>
     Built to provide production grade scale and orchestration for the most intensive workloads.
   </p>
@@ -16,13 +16,13 @@
     <a href="https://rivet.gg/docs/actors">Documentation</a> •
     <a href="https://rivet.gg/docs/general/self-hosting">Self-Hosting</a> •
     <a href="https://rivet.gg/discord">Discord</a> •
-    <a href="https://x.com/rivet_gg">X</a> •
+    <a href="https://x.com/rivet_dev">X</a> •
     <a href="https://bsky.app/profile/rivet.gg">Bluesky</a>
   </p>
   <!--<p>
     <a href="https://github.com/rivet-gg/rivet/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?logo=github&logoColor=fff"></a>
     <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/discord/822914074136018994?color=7389D8&label&logo=discord&logoColor=ffffff"/></a>
-    <a href="https://twitter.com/rivet_gg"><img src="https://img.shields.io/twitter/follow/rivet_gg" alt="Rivet Twitter" /></a>
+    <a href="https://x.com/rivet_dev"><img src="https://img.shields.io/twitter/follow/rivet_dev" alt="Rivet Twitter" /></a>
     <a href="https://bsky.app/profile/rivet.gg"><img src="https://img.shields.io/badge/Follow%20%40rivet.gg-4C1?color=0285FF&logo=bluesky&logoColor=ffffff" alt="Rivet Bluesky" /></a>
     <a href="/LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?logo=open-source-initiative&logoColor=white"></a>
   </p>-->
@@ -33,7 +33,7 @@
 Public-facing projects:
 
 - **Rivet Engine** (you are here): Engine that powers RivetKit at scale
-- **[RivetKit](https://github.com/rivet-gg/rivetkit)**: Lightweight TypeScript library for building Rivet Actors — works with Redis or Rivet Engine
+- **[RivetKit](https://github.com/rivet-dev/rivetkit)**: Lightweight TypeScript library for building Rivet Actors — works with Redis or Rivet Engine
 - **[Rivet Inspector](/frontend/apps/studio)**: Like Postman, but for Rivet Actors
 - **[Rivet Hub](/frontend/apps/hub)**: UI for Rivet Engine
 - **[Rivet Documentation](/site/src/content/docs)**

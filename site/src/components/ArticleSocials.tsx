@@ -17,7 +17,7 @@ export function ArticleSocials({ title }) {
 		<div className="after:bg-secondary relative mt-14 flex items-center justify-center after:absolute after:inset-x-0 after:-z-[1] after:h-[1px]">
 			<SocialIcon url="/rss/feed.xml" icon={faRssSquare} />
 			<SocialIcon
-				url={`https://x.com/share?text=${encodeURIComponent(`${title} ${articleUrl} via @rivet_gg`)}`}
+				url={`https://x.com/share?text=${encodeURIComponent(`${title} ${articleUrl} via @rivet_dev`)}`}
 				icon={faXTwitter}
 			/>
 			<SocialIcon

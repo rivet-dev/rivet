@@ -17,7 +17,7 @@
     <a href="https://rivet.gg/docs/actors">Documentation</a> •
     <a href="https://rivet.gg/docs/general/self-hosting">Self-Hosting</a> •
     <a href="https://rivet.gg/discord">Discord</a> •
-    <a href="https://x.com/rivet_gg">X</a> •
+    <a href="https://x.com/rivet_dev">X</a> •
     <a href="https://bsky.app/profile/rivet.gg">Bluesky</a>
   </p>
   <p>

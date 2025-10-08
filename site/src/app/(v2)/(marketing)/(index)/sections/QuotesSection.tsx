@@ -24,7 +24,7 @@ export function QuotesSection() {
 			avatar: devgerredAvatar,
 			name: "gerred",
 			handle: "@devgerred",
-			content: "Nice work, @rivet_gg - nailed it",
+			content: "Nice work, @rivet_dev - nailed it",
 		},
 		{
 			href: "https://x.com/samk0_com/status/1909278348812952007",
