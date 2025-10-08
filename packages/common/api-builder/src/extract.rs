@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use axum::{
 	extract::{
 		Request,
-		rejection::{ExtensionRejection, JsonRejection},
+		rejection::{ExtensionRejection, JsonRejection, PathRejection},
 		{FromRequest, FromRequestParts},
 	},
 	response::IntoResponse,
@@ -102,7 +102,36 @@ where
 			.map(|ext| Extension(ext.0))
 			.map_err(|err| {
 				ExtractorError(
-					anyhow!("developer error: extension error: {}", err.body_text()).into(),
+					ApiBadRequest {
+						reason: err.body_text(),
+					}
+					.build()
+					.into(),
+				)
+			})
+	}
+}
+
+pub struct Path<T>(pub T);
+
+impl<S, T> FromRequestParts<S> for Path<T>
+where
+	axum::extract::Path<T>: FromRequestParts<S, Rejection = PathRejection>,
+	S: Send + Sync,
+{
+	type Rejection = ExtractorError;
+
+	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+		axum::extract::Path::<T>::from_request_parts(parts, state)
+			.await
+			.map(|ext| Path(ext.0))
+			.map_err(|err| {
+				ExtractorError(
+					ApiBadRequest {
+						reason: err.body_text(),
+					}
+					.build()
+					.into(),
 				)
 			})
 	}

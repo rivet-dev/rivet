@@ -1,9 +1,9 @@
 use axum::{
-	extract::Path,
 	http::{StatusCode, header},
 	response::{IntoResponse, Response},
 };
 use include_dir::{Dir, include_dir};
+use rivet_api_builder::extract::Path;
 
 static UI_DIR: Dir<'_> = include_dir!("$OUT_DIR/ui");
 
