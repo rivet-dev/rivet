@@ -3,9 +3,9 @@ use std::result::Result::{Err, Ok};
 use anyhow::*;
 use entry::{EntryBaseKey, EntryBuilder, EntryMetadataKey, EntryValueChunkKey};
 use futures_util::{StreamExt, TryStreamExt};
+use gas::prelude::*;
 use key::{KeyWrapper, ListKeyWrapper};
 use rivet_runner_protocol as rp;
-use rivet_util_id::Id;
 use universaldb::prelude::*;
 use universaldb::tuple::Subspace;
 use utils::{validate_entries, validate_keys};
@@ -27,6 +27,7 @@ fn subspace(actor_id: Id) -> universaldb::utils::Subspace {
 }
 
 /// Returns estimated size of the given subspace.
+#[tracing::instrument(skip_all)]
 pub async fn get_subspace_size(db: &universaldb::Database, subspace: &Subspace) -> Result<i64> {
 	let (start, end) = subspace.range();
 
@@ -38,6 +39,7 @@ pub async fn get_subspace_size(db: &universaldb::Database, subspace: &Subspace) 
 }
 
 /// Gets keys from the KV store.
+#[tracing::instrument(skip_all)]
 pub async fn get(
 	db: &universaldb::Database,
 	actor_id: Id,
@@ -120,11 +122,13 @@ pub async fn get(
 			Ok((keys, values, metadata))
 		}
 	})
+	.custom_instrument(tracing::info_span!("kv_get_tx"))
 	.await
 	.map_err(Into::<anyhow::Error>::into)
 }
 
 /// Gets keys from the KV store.
+#[tracing::instrument(skip_all)]
 pub async fn list(
 	db: &universaldb::Database,
 	actor_id: Id,
@@ -210,11 +214,13 @@ pub async fn list(
 			Ok((keys, values, metadata))
 		}
 	})
+	.custom_instrument(tracing::info_span!("kv_list_tx"))
 	.await
 	.map_err(Into::<anyhow::Error>::into)
 }
 
 /// Puts keys into the KV store.
+#[tracing::instrument(skip_all)]
 pub async fn put(
 	db: &universaldb::Database,
 	actor_id: Id,
@@ -273,11 +279,13 @@ pub async fn put(
 				.await
 		}
 	})
+	.custom_instrument(tracing::info_span!("kv_put_tx"))
 	.await
 	.map_err(Into::into)
 }
 
 /// Deletes keys from the KV store. Cannot be undone.
+#[tracing::instrument(skip_all)]
 pub async fn delete(db: &universaldb::Database, actor_id: Id, keys: Vec<rp::KvKey>) -> Result<()> {
 	validate_keys(&keys)?;
 
@@ -293,16 +301,19 @@ pub async fn delete(db: &universaldb::Database, actor_id: Id, keys: Vec<rp::KvKe
 			Ok(())
 		}
 	})
+	.custom_instrument(tracing::info_span!("kv_delete_tx"))
 	.await
 	.map_err(Into::into)
 }
 
 /// Deletes all keys from the KV store. Cannot be undone.
+#[tracing::instrument(skip_all)]
 pub async fn delete_all(db: &universaldb::Database, actor_id: Id) -> Result<()> {
 	db.run(|tx| async move {
 		tx.clear_subspace_range(&subspace(actor_id));
 		Ok(())
 	})
+	.custom_instrument(tracing::info_span!("kv_delete_all_tx"))
 	.await
 	.map_err(Into::into)
 }

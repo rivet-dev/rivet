@@ -6,6 +6,7 @@ use universaldb::utils::{FormalKey, IsolationLevel::*};
 use crate::keys;
 
 /// Get the current ballot for this replica
+#[tracing::instrument(skip_all)]
 pub async fn get_ballot(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
@@ -31,6 +32,7 @@ pub async fn get_ballot(
 }
 
 /// Increment the ballot number and return the new ballot
+#[tracing::instrument(skip_all)]
 pub async fn increment_ballot(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
@@ -67,6 +69,7 @@ pub fn compare_ballots(
 /// ballot if needed.
 ///
 /// Returns true if the ballot is valid (higher than previously seen).
+#[tracing::instrument(skip_all)]
 pub async fn validate_and_update_ballot_for_instance(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

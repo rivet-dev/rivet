@@ -37,6 +37,7 @@ pub async fn pegboard_runner_get(ctx: &OperationCtx, input: &Input) -> Result<Ou
 				Ok(runners)
 			}
 		})
+		.custom_instrument(tracing::info_span!("runner_get_tx"))
 		.await?;
 
 	Ok(Output { runners })

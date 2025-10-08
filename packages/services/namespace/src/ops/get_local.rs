@@ -30,7 +30,7 @@ pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Ve
 				.try_collect::<Vec<_>>()
 				.await
 		})
-		.custom_instrument(tracing::info_span!("namespace_get_tx"))
+		.custom_instrument(tracing::info_span!("namespace_get_local_tx"))
 		.await?;
 
 	Ok(namespaces)

@@ -276,6 +276,7 @@ pub async fn reserve_actor_key(
 
 			Ok(ReserveActorKeyOutput::Success)
 		})
+		.custom_instrument(tracing::info_span!("actor_reserve_key_tx"))
 		.await?;
 
 	Ok(res)

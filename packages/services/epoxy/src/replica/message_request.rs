@@ -5,6 +5,7 @@ use rivet_api_builder::prelude::*;
 
 use crate::{ops, replica};
 
+#[tracing::instrument(skip_all)]
 pub async fn message_request(
 	ctx: &ApiCtx,
 	replica_id: ReplicaId,
@@ -20,10 +21,11 @@ pub async fn message_request(
 
 			// Store the configuration
 			ctx.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move { replica::update_config::update_config(&*tx, replica_id, req) }
 				})
+				.custom_instrument(tracing::info_span!("update_config_tx"))
 				.await?;
 
 			protocol::ResponseKind::UpdateConfigResponse
@@ -31,33 +33,36 @@ pub async fn message_request(
 		protocol::RequestKind::PreAcceptRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move { replica::messages::pre_accept(&*tx, replica_id, req).await }
 				})
+				.custom_instrument(tracing::info_span!("pre_accept_tx"))
 				.await?;
 			protocol::ResponseKind::PreAcceptResponse(response)
 		}
 		protocol::RequestKind::AcceptRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move { replica::messages::accept(&*tx, replica_id, req).await }
 				})
+				.custom_instrument(tracing::info_span!("accept_tx"))
 				.await?;
 			protocol::ResponseKind::AcceptResponse(response)
 		}
 		protocol::RequestKind::CommitRequest(req) => {
 			// Commit and update KV store
 			ctx.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move {
 						replica::messages::commit(&*tx, replica_id, req, true).await?;
 						Result::Ok(())
 					}
 				})
+				.custom_instrument(tracing::info_span!("commit_tx"))
 				.await?;
 
 			protocol::ResponseKind::CommitResponse
@@ -65,10 +70,11 @@ pub async fn message_request(
 		protocol::RequestKind::PrepareRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move { replica::messages::prepare(&*tx, replica_id, req).await }
 				})
+				.custom_instrument(tracing::info_span!("prepare_tx"))
 				.await?;
 			protocol::ResponseKind::PrepareResponse(response)
 		}
@@ -76,10 +82,11 @@ pub async fn message_request(
 			// Handle download instances request - read from UDB and return instances
 			let instances = ctx
 				.udb()?
-				.run(move |tx| {
+				.run(|tx| {
 					let req = req.clone();
 					async move { replica::messages::download_instances(&*tx, replica_id, req).await }
 				})
+				.custom_instrument(tracing::info_span!("download_instances_tx"))
 				.await?;
 
 			protocol::ResponseKind::DownloadInstancesResponse(protocol::DownloadInstancesResponse {

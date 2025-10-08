@@ -5,6 +5,7 @@ use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{keys, replica::ballot};
 
+#[tracing::instrument(skip_all)]
 pub async fn prepare(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

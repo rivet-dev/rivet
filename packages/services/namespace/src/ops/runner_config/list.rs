@@ -91,7 +91,7 @@ pub async fn namespace_runner_config_list(
 			.try_collect()
 			.await
 		})
-		.custom_instrument(tracing::info_span!("runner_config_get_local_tx"))
+		.custom_instrument(tracing::info_span!("runner_config_list_tx"))
 		.await?;
 
 	Ok(runner_configs)

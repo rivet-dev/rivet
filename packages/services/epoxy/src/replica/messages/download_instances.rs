@@ -6,6 +6,7 @@ use universaldb::{KeySelector, RangeOption, Transaction, options::StreamingMode}
 
 use crate::keys;
 
+#[tracing::instrument(skip_all)]
 pub async fn download_instances(
 	tx: &Transaction,
 	replica_id: ReplicaId,

@@ -22,6 +22,7 @@ pub async fn epoxy_read_cluster_config(ctx: &OperationCtx, input: &Input) -> Res
 			let replica_id = input.replica_id;
 			async move { utils::read_config(&tx, replica_id).await }
 		})
+		.custom_instrument(tracing::info_span!("read_cluster_config_tx"))
 		.await?;
 
 	Ok(Output { config })

@@ -8,6 +8,7 @@ use universaldb::{KeySelector, RangeOption, Transaction, options::StreamingMode}
 use crate::keys;
 
 // Helper function to find interference for a key
+#[tracing::instrument(skip_all)]
 pub async fn find_interference(
 	tx: &Transaction,
 	replica_id: ReplicaId,
@@ -54,6 +55,7 @@ pub async fn find_interference(
 }
 
 // Helper function to find max sequence number from interference set
+#[tracing::instrument(skip_all)]
 pub async fn find_max_seq(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,

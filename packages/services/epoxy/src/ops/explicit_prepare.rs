@@ -36,13 +36,15 @@ pub async fn epoxy_explicit_prepare(
 	// Read config
 	let config = ctx
 		.udb()?
-		.run(move |tx| async move { utils::read_config(&tx, replica_id).await })
+		.run(|tx| async move { utils::read_config(&tx, replica_id).await })
+		.custom_instrument(tracing::info_span!("read_config_tx"))
 		.await?;
 
 	// EPaxos Step 25: Increment ballot number
 	let new_ballot = ctx
 		.udb()?
-		.run(move |tx| async move { replica::ballot::increment_ballot(&tx, replica_id).await })
+		.run(|tx| async move { replica::ballot::increment_ballot(&tx, replica_id).await })
+		.custom_instrument(tracing::info_span!("increment_ballot_tx"))
 		.await?;
 
 	// Get quorum members
@@ -248,6 +250,7 @@ fn compare_ballots(a: &protocol::Ballot, b: &protocol::Ballot) -> std::cmp::Orde
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn send_prepares(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
@@ -300,6 +303,7 @@ async fn send_prepares(
 	Ok(responses)
 }
 
+#[tracing::instrument(skip_all)]
 async fn restart_phase1(
 	ctx: &OperationCtx,
 	_config: &protocol::ClusterConfig,
