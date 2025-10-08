@@ -12,15 +12,12 @@ import {
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { cloudEnv, engineEnv } from "@/lib/env";
+import { NeedHelp } from "../forms/connect-vercel-form";
 
 const { Stepper } = defineStepper(
 	{
 		id: "step-1",
 		title: "Deploy to Railway",
-	},
-	{
-		id: "step-2",
-		title: "Set Environment Variables",
 	},
 	{
 		id: "step-3",
@@ -43,11 +40,6 @@ export default function ConnectRailwayFrameContent({
 					<div>
 						Add <Icon icon={faRailway} className="ml-0.5" /> Railway
 					</div>
-					<HelpDropdown>
-						<Button variant="ghost" size="icon">
-							<Icon icon={faQuestionCircle} />
-						</Button>
-					</HelpDropdown>
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
@@ -91,12 +83,8 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 													</p>
 													<a
 														href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data}&RIVET_ENDPOINT=${
-															__APP_TYPE__ ===
-															"engine"
-																? engineEnv()
-																		.VITE_APP_API_URL
-																: cloudEnv()
-																		.VITE_APP_CLOUD_ENGINE_URL
+															engineEnv()
+																.VITE_APP_API_URL
 														}&RIVET_NAMESPACE=${
 															dataProvider.engineNamespace
 														}`}
@@ -111,15 +99,8 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 														/>
 													</a>
 
-													<p>
-														After deploying your app
-														to Railway, return here
-														to add the endpoint.
-													</p>
+													<EnvVariablesStep />
 												</>
-											)}
-											{step.id === "step-2" && (
-												<EnvVariablesStep />
 											)}
 											{step.id === "step-3" && (
 												<div>
@@ -127,6 +108,9 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 												</div>
 											)}
 											<Stepper.Controls>
+												{step.id === "step-3" ? (
+													<NeedHelp />
+												) : null}
 												<Button
 													type="button"
 													variant="secondary"
@@ -173,12 +157,8 @@ function EnvVariablesStep() {
 				settings.
 			</p>
 			<div className="gap-1 items-center grid grid-cols-2">
-				{__APP_TYPE__ === "engine" ? (
-					<>
-						<DiscreteInput value="RIVET_ENDPOINT" show />
-						<DiscreteInput value={engineEnv().VITE_APP_API_URL} />
-					</>
-				) : null}
+				<DiscreteInput value="RIVET_ENDPOINT" show />
+				<DiscreteInput value={engineEnv().VITE_APP_API_URL} />
 				<DiscreteInput value="RIVET_TOKEN" show />
 				{isLoading ? (
 					<Skeleton className="w-56 h-10" />
