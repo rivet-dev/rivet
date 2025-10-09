@@ -139,6 +139,7 @@ impl DatabaseKv {
 
 		let workflow_name_key = keys::workflow::NameKey::new(workflow_id);
 
+		// TODO: This does not check if the workflow is silenced
 		// Check if the workflow exists
 		let Some(workflow_name_entry) = tx
 			.get(&self.subspace.pack(&workflow_name_key), Serializable)

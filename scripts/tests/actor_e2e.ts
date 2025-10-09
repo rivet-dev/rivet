@@ -38,10 +38,10 @@ async function main() {
 
 		await testWebSocket(actorResponse.actor.actor_id);
 	} catch (error) {
-		console.error(`Actor ${i} test failed:`, error);
+		console.error(`Actor test failed:`, error);
 	} finally {
 		if (actorId) {
-			console.log(`Destroying actor ${i}...`);
+			console.log(`Destroying actor...`);
 			await destroyActor(RIVET_NAMESPACE, actorId);
 		}
 	}

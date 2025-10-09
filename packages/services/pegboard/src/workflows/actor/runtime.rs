@@ -107,10 +107,11 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 struct AllocateActorInput {
 	actor_id: Id,
 	generation: u32,
-	from_alarm: bool,
+	force_allocate: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AllocateActorOutput {
 	Allocated {
 		runner_id: Id,
@@ -315,7 +316,7 @@ async fn allocate_actor(
 
 			// At this point in the txn there is no availability
 
-			match (crash_policy, input.from_alarm, has_valid_serverless) {
+			match (crash_policy, input.force_allocate, has_valid_serverless) {
 				(CrashPolicy::Sleep, false, false) => {
 					Ok((for_serverless, AllocateActorOutput::Sleep))
 				}
@@ -373,6 +374,11 @@ async fn allocate_actor(
 		AllocateActorOutput::Pending {
 			pending_allocation_ts,
 		} => {
+			tracing::warn!(
+				actor_id=?input.actor_id,
+				"failed to allocate (no availability), waiting for allocation",
+			);
+
 			state.pending_allocation_ts = Some(*pending_allocation_ts);
 		}
 		AllocateActorOutput::Sleep => {}
@@ -473,14 +479,14 @@ pub async fn spawn_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	generation: u32,
-	from_alarm: bool,
+	force_allocate: bool,
 ) -> Result<SpawnActorOutput> {
 	// Attempt allocation
 	let allocate_res = ctx
 		.activity(AllocateActorInput {
 			actor_id: input.actor_id,
 			generation,
-			from_alarm,
+			force_allocate,
 		})
 		.await?;
 
@@ -524,11 +530,6 @@ pub async fn spawn_actor(
 		AllocateActorOutput::Pending {
 			pending_allocation_ts,
 		} => {
-			tracing::warn!(
-				actor_id=?input.actor_id,
-				"failed to allocate (no availability), waiting for allocation",
-			);
-
 			// Bump the autoscaler so it can scale up
 			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
 				.send()
@@ -611,6 +612,7 @@ pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut LifecycleState,
+	force_reschedule: bool,
 ) -> Result<SpawnActorOutput> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
@@ -653,7 +655,13 @@ pub async fn reschedule_actor(
 	}
 
 	let next_generation = state.generation + 1;
-	let spawn_res = spawn_actor(ctx, &input, next_generation, state.wake_for_alarm).await?;
+	let spawn_res = spawn_actor(
+		ctx,
+		&input,
+		next_generation,
+		force_reschedule || state.wake_for_alarm,
+	)
+	.await?;
 
 	if let SpawnActorOutput::Allocated {
 		runner_id,

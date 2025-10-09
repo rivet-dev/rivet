@@ -266,6 +266,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							// Fake signal
 							Main::Lost(Lost {
 								generation: state.generation,
+								force_reschedule: false,
 							})
 						}
 					} else if let Some(alarm_ts) = state.alarm_ts {
@@ -365,7 +366,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										protocol::ActorStateStopped { code, .. },
 									) => {
 										if let Some(res) =
-											handle_stopped(ctx, &input, state, Some(code), false)
+											handle_stopped(ctx, &input, state, Some(code), false, false)
 												.await?
 										{
 											return Ok(Loop::Break(res));
@@ -386,7 +387,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									state.sleeping = false;
 									state.will_wake = false;
 
-									match runtime::reschedule_actor(ctx, &input, state).await? {
+									match runtime::reschedule_actor(ctx, &input, state, false).await? {
 										runtime::SpawnActorOutput::Allocated { .. } => {},
 										runtime::SpawnActorOutput::Sleep => {
 											state.sleeping = true;
@@ -416,6 +417,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									actor_id=?input.actor_id,
 									"cannot wake actor that is not sleeping",
 								);
+
+								state.wake_for_alarm = false;
 							}
 						}
 						Main::Lost(sig) => {
@@ -425,7 +428,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 
 							if let Some(res) =
-								handle_stopped(ctx, &input, state, None, true).await?
+								handle_stopped(ctx, &input, state, None, true, sig.force_reschedule).await?
 							{
 								return Ok(Loop::Break(res));
 							}
@@ -485,8 +488,9 @@ async fn handle_stopped(
 	state: &mut runtime::LifecycleState,
 	code: Option<protocol::StopCode>,
 	lost: bool,
+	force_reschedule: bool,
 ) -> Result<Option<runtime::LifecycleRes>> {
-	tracing::debug!(?code, "actor stopped");
+	tracing::debug!(?code, %force_reschedule, "actor stopped");
 
 	// Reset retry count on successful exit
 	if let Some(protocol::StopCode::Ok) = code {
@@ -496,7 +500,7 @@ async fn handle_stopped(
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
 	state.runner_id = None;
-	state.runner_workflow_id = None;
+	let old_runner_workflow_id = state.runner_workflow_id.take();
 
 	let deallocate_res = ctx
 		.activity(runtime::DeallocateInput {
@@ -530,26 +534,44 @@ async fn handle_stopped(
 		}
 	}
 
+	// Reschedule no matter what
+	if force_reschedule {
+		match runtime::reschedule_actor(ctx, &input, state, true).await? {
+			runtime::SpawnActorOutput::Allocated { .. } => {}
+			// NOTE: This should be unreachable because force_reschedule is true
+			runtime::SpawnActorOutput::Sleep => {
+				state.sleeping = true;
+			}
+			runtime::SpawnActorOutput::Destroy => {
+				// Destroyed early
+				return Ok(Some(runtime::LifecycleRes {
+					generation: state.generation,
+					// False here because if we received the destroy signal, it is
+					// guaranteed that we did not allocate another actor.
+					kill: false,
+				}));
+			}
+		}
+	}
 	// Handle rescheduling if not marked as sleeping
-	if !state.sleeping {
+	else if !state.sleeping {
 		let failed = matches!(code, None | Some(protocol::StopCode::Error));
 
-		match (failed, input.crash_policy) {
-			(true, CrashPolicy::Restart) => {
+		match (input.crash_policy, failed) {
+			(CrashPolicy::Restart, true) => {
 				// Kill old actor immediately if lost
 				if lost {
 					destroy::kill(
 						ctx,
 						input.actor_id,
 						state.generation,
-						state
-							.runner_workflow_id
+						old_runner_workflow_id
 							.context("should have runner_workflow_id set if not sleeping")?,
 					)
 					.await?;
 				}
 
-				match runtime::reschedule_actor(ctx, &input, state).await? {
+				match runtime::reschedule_actor(ctx, &input, state, false).await? {
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
 					// policy is `Restart`.
@@ -564,7 +586,7 @@ async fn handle_stopped(
 					}
 				}
 			}
-			(true, CrashPolicy::Sleep) => {
+			(CrashPolicy::Sleep, true) => {
 				tracing::debug!(actor_id=?input.actor_id, "actor sleeping due to crash");
 
 				state.sleeping = true;
@@ -577,15 +599,6 @@ async fn handle_stopped(
 			_ => {
 				ctx.activity(runtime::SetCompleteInput {}).await?;
 
-				if lost {
-					ctx.msg(Failed {
-						error: errors::Actor::DestroyedWhileWaitingForReady,
-					})
-					.tag("actor_id", input.actor_id)
-					.send()
-					.await?;
-				}
-
 				return Ok(Some(runtime::LifecycleRes {
 					generation: state.generation,
 					kill: lost,
@@ -596,9 +609,8 @@ async fn handle_stopped(
 	// Rewake actor immediately after stopping if `will_wake` was set
 	else if state.will_wake {
 		state.sleeping = false;
-		state.will_wake = false;
 
-		match runtime::reschedule_actor(ctx, &input, state).await? {
+		match runtime::reschedule_actor(ctx, &input, state, false).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
@@ -613,9 +625,10 @@ async fn handle_stopped(
 				}));
 			}
 		}
-
-		state.wake_for_alarm = false;
 	}
+
+	state.wake_for_alarm = false;
+	state.will_wake = false;
 
 	Ok(None)
 }
@@ -651,6 +664,7 @@ pub struct Wake {}
 #[signal("pegboard_actor_lost")]
 pub struct Lost {
 	pub generation: u32,
+	pub force_reschedule: bool,
 }
 
 #[signal("pegboard_actor_destroy")]
