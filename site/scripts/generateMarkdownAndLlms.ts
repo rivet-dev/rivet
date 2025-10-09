@@ -221,7 +221,7 @@ async function setupTypesenseCollection(client: Typesense.Client, collectionName
 async function indexDocumentsToTypesense(client: Typesense.Client, collectionName: string, pages: DocsPage[]) {
 	if (!client) return;
 
-	const siteUrl = "https://rivet.gg";
+	const siteUrl = "https://rivet.dev";
 	const documents = pages.map((page, index) => ({
 		id: `doc_${index}`,
 		title: page.title,
@@ -288,7 +288,7 @@ async function generateMarkdownAndLlms() {
 	const guides = await getAllGuides();
 	
 	// Generate llms.txt (URL index version)
-	const siteUrl = "https://rivet.gg";
+	const siteUrl = "https://rivet.dev";
 	const docsUrls = pages
 		.map((page) => `${siteUrl}/docs/${page.cleanPath}`)
 		.filter((url) => !url.includes('/docs/cloud'));

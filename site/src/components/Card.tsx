@@ -18,17 +18,25 @@ export function Card({
 	href,
 	target,
 }: CardProps) {
+	const hasHeader = Boolean(title || icon || href);
+	const hasBody = Boolean(children);
+
 	const content = (
 		<div
 			className={clsx(
-				"rounded-xl bg-white/2 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col",
+				"rounded-xl bg-white/2 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col w-full h-full",
 				href && "group-hover:border-[white]/40 cursor-pointer",
 				className,
 			)}
 		>
-			{(title || icon || href) && (
-				<div className="px-8 mt-6">
-					<div className="flex items-center justify-between mb-4 text-white text-base">
+			{hasHeader && (
+				<div className={clsx("px-8 mt-6", !hasBody && "pb-6")}>
+					<div
+						className={clsx(
+							"flex items-center justify-between text-white text-base",
+							hasBody && "mb-4",
+						)}
+					>
 						<div className="flex items-center gap-3">
 							{icon && <Icon icon={icon} />}
 							{title && <h3 className="font-medium">{title}</h3>}
@@ -42,15 +50,17 @@ export function Card({
 					</div>
 				</div>
 			)}
-			<div className={clsx("px-8", title || icon ? "pb-6" : "py-6")}>
-				{children}
-			</div>
+			{hasBody && (
+				<div className={clsx("px-8", hasHeader ? "pb-6" : "py-6")}>
+					{children}
+				</div>
+			)}
 		</div>
 	);
 
 	if (href) {
 		return (
-			<Link href={href} className="flex group" target={target}>
+			<Link href={href} className="flex group w-full" target={target}>
 				{content}
 			</Link>
 		);

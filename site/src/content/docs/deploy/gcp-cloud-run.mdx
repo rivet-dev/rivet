@@ -1,0 +1,78 @@
+# Deploying to Google Cloud Run
+
+Run your backend on Cloud Run with a lightweight container image and one command deploy.
+
+## Guide
+
+<Steps>
+<Step title="Prerequisites">
+
+- Google Cloud project with Cloud Run and Artifact Registry enabled
+- `gcloud` CLI authenticated (`gcloud auth login`) and project set (`gcloud config set project YOUR_PROJECT`)
+- Artifact Registry repository or Container Registry enabled
+- Your backend application repository
+
+</Step>
+<Step title="Generate Environment Variables">
+
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used when deploying. They should look something like this:
+
+```bash
+RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_NAMESPACE=your-namespace-id
+RIVET_TOKEN=your-token
+```
+
+</Step>
+<Step title="Package Your App">
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+ENV PORT=8080
+CMD ["node", "server.js"]
+```
+
+</Step>
+<Step title="Build and Push the Image">
+
+Use Cloud Build to build and push the image. Replace the region and repository with your own.
+
+```bash
+gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_PROJECT/backend/backend:latest
+```
+
+</Step>
+<Step title="Deploy to Cloud Run">
+
+Deploy the service to Cloud Run, passing the Rivet environment variables. Adjust the region, image, and VPC connector settings as needed.
+
+```bash
+gcloud run deploy backend \
+  --image us-central1-docker.pkg.dev/YOUR_PROJECT/backend/backend:latest \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --min-instances 1 \
+  --set-env-vars RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
+```
+
+<Note>You do not need to expose a container port. Rivet tunnels traffic directly to your backend.</Note>
+
+</Step>
+<Step title="Verify the Runner">
+
+Confirm the service is running:
+
+```bash
+gcloud run services describe backend --region us-central1 --format 'value(status.conditions[?type="Ready"].status)'
+```
+
+Your runner should appear as connected on the Rivet dashboard once the service reports ready.
+
+</Step>
+</Steps>

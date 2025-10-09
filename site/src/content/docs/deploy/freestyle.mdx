@@ -62,7 +62,7 @@ const res = await freestyle.deployWeb(buildDir, {
 		RIVET_RUNNER_KIND: "serverless",
 		// For self-hosted instances:
 		// RIVET_ENDPOINT: "http://127.0.0.1:6420",
-		RIVET_ENDPOINT: "api.rivet.gg",
+		RIVET_ENDPOINT: "api.rivet.dev",
 	},
 	timeout: 60 * 5, // Increases max request lifetime on the runner
 	entrypoint: "server.ts", // File which starts serverless runner
@@ -92,7 +92,7 @@ Update the runner configuration on the Rivet side to connect with your Freestyle
 import { RivetClient } from "rivetkit/client";
 
 const rivet = new RivetClient({
-	endpoint: "api.rivet.gg",
+	endpoint: "api.rivet.dev",
 	token: process.env.RIVET_API_TOKEN,
 });
 

@@ -209,8 +209,8 @@ export const Header = forwardRef(function Header(
 						{/* Social icons */}
 						{/* <div className='flex gap-1.5'> */}
 						{[
-							[faDiscord, "https://rivet.gg/discord"],
-							[faGithub, "https://github.com/rivet-gg/rivet"],
+							[faDiscord, "https://rivet.dev/discord"],
+							[faGithub, "https://github.com/rivet-dev/rivet"],
 						].map(([icon, href]) => (
 							<Link
 								className="flex items-center justify-center p-1 opacity-75 transition hover:opacity-100"
@@ -229,7 +229,7 @@ export const Header = forwardRef(function Header(
 						{/* <ModeToggle /> */}
 						<div className="hidden min-[416px]:contents">
 							<Button
-								href="https://hub.rivet.gg"
+								href="https://dashboard.rivet.dev"
 								variant="secondary"
 							>
 								Sign In

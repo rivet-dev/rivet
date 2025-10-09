@@ -36,7 +36,7 @@ export const EXAMPLE_ICON_MAP: Record<string, any> = {
 export const createExampleActions = (exampleId: string, exampleFiles?: Record<string, string>) => {
 	const handleOpenGithub = () => {
 		window.open(
-			`https://github.com/rivet-gg/rivetkit/tree/main/examples/${exampleId}`,
+			`https://github.com/rivet-dev/rivetkit/tree/main/examples/${exampleId}`,
 			"_blank",
 		);
 	};

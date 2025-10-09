@@ -11,8 +11,8 @@ const RIVETKIT_TEMPLATE_PATH = join(process.cwd(), '..', 'README.rivetkit.tpl.md
 
 const RIVET_QUICKSTART = `Get started with Rivet by following a quickstart guide:
 
-- [Node.js & Bun](https://www.rivet.gg/docs/actors/quickstart/backend/)
-- [React](https://www.rivet.gg/docs/actors/quickstart/react/)
+- [Node.js & Bun](https://www.rivet.dev/docs/actors/quickstart/backend/)
+- [React](https://www.rivet.dev/docs/actors/quickstart/react/)
 `
 
 // Content chunks
@@ -49,23 +49,23 @@ const RIVET_COMMUNITY_CONTENT = `## Community & Support
 
 Join thousands of developers building with Rivet Actors today:
 
-- [Discord](https://rivet.gg/discord) - Chat with the community
+- [Discord](https://rivet.dev/discord) - Chat with the community
 - [X/Twitter](https://x.com/rivet_dev) - Follow for updates
-- [Bluesky](https://bsky.app/profile/rivet.gg) - Follow for updates
+- [Bluesky](https://bsky.app/profile/rivet.dev) - Follow for updates
 - [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions) - Ask questions and share ideas
 - [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues) - Report bugs and request features
-- [Talk to an engineer](https://rivet.gg/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
+- [Talk to an engineer](https://rivet.dev/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
 
 const RIVETKIT_COMMUNITY_CONTENT = `## Community & Support
 
 Join thousands of developers building with RivetKit today:
 
-- [Discord](https://rivet.gg/discord) - Chat with the community
+- [Discord](https://rivet.dev/discord) - Chat with the community
 - [X/Twitter](https://x.com/rivet_dev) - Follow for updates
-- [Bluesky](https://bsky.app/profile/rivet.gg) - Follow for updates
+- [Bluesky](https://bsky.app/profile/rivet.dev) - Follow for updates
 - [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions) - Ask questions and share ideas
 - [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues) - Report bugs and request features
-- [Talk to an engineer](https://rivet.gg/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
+- [Talk to an engineer](https://rivet.dev/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges`;
 
 const LICENSE_CONTENT = `## License
 
