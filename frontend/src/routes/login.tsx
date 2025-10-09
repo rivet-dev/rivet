@@ -28,7 +28,7 @@ function RouteComponent() {
 				<Logo className="h-10 mb-4" />
 				<Login />
 				<p className="max-w-md text-center text-xs text-muted-foreground">
-					Looking for Rivet Cloud? Visit{" "}
+					Looking for Rivet Enterprise Cloud? Visit{" "}
 					<a
 						href="https://hub.rivet.gg"
 						className="underline"
