@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
 import { NotFoundCard } from "@/app/not-found-card";
-import { RouteLayout } from "@/app/route-layout";
+import { PendingRouteLayout, RouteLayout } from "@/app/route-layout";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
@@ -30,6 +30,9 @@ export const Route = createFileRoute(
 		};
 	},
 	notFoundComponent: () => <NotFoundCard />,
+	pendingMinMs: 0,
+	pendingMs: 0,
+	pendingComponent: PendingRouteLayout,
 });
 
 function RouteComponent() {

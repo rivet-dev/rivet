@@ -4,17 +4,17 @@
 	"tasks": {
 		"build:engine": {
 			"dependsOn": ["^build"],
-			"env": ["VITE_APP_*"],
+			"env": ["VITE_APP_*", "DEPLOYMENT_TYPE"],
 			"outputs": ["dist/**"]
 		},
 		"build:inspector": {
 			"dependsOn": ["^build"],
-			"env": ["VITE_APP_*"],
+			"env": ["VITE_APP_*", "DEPLOYMENT_TYPE"],
 			"outputs": ["dist/**"]
 		},
 		"build:cloud": {
 			"dependsOn": ["^build"],
-			"env": ["VITE_APP_*"],
+			"env": ["VITE_APP_*", "DEPLOYMENT_TYPE"],
 			"outputs": ["dist/**"]
 		},
 		"dev": {
