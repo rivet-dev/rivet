@@ -44,7 +44,7 @@ export default function BillingFrameContent() {
 	return (
 		<>
 			<Frame.Header>
-				<Frame.Title>{project.name} billing</Frame.Title>
+				<Frame.Title>{project.displayName} billing</Frame.Title>
 				<Frame.Description>
 					Manage billing for your Rivet Cloud project.{" "}
 					<DocsSheet

@@ -33,6 +33,7 @@ export function UserDropdown() {
 
 	const isMatchingProjectRoute = match({
 		to: "/orgs/$organization/projects/$project",
+		fuzzy: true,
 	});
 
 	return (
