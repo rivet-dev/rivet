@@ -2,6 +2,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { createProjectContext } from "@/app/data-providers/cloud-data-provider";
 import { RouteError } from "@/app/route-error";
+import { PendingRouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
 
 export const Route = createFileRoute(
@@ -25,6 +26,9 @@ export const Route = createFileRoute(
 			});
 	},
 	errorComponent: RouteError,
+	pendingMinMs: 0,
+	pendingMs: 0,
+	pendingComponent: PendingRouteLayout,
 });
 
 function RouteComponent() {

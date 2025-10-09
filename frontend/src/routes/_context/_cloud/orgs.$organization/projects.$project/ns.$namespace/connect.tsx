@@ -255,7 +255,7 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				>
 					Vercel{" "}
 					<span className="text-[0.55rem] leading-none absolute right-0 top-[0.1rem] ">
-						Coming soon!
+						Soon!
 					</span>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
