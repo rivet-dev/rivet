@@ -275,14 +275,22 @@ export class Tunnel {
 		requestId: ArrayBuffer,
 		req: protocol.ToClientRequestStart,
 	) {
-		// Track this request for the actor
+		// Load actor
 		const requestIdStr = bufferToString(requestId);
 		const actor = this.#runner.getActor(req.actorId);
-		if (actor) {
-			actor.requests.add(requestIdStr);
+		if (!actor) {
+			logger()?.warn({
+				msg: "ignoring request for unknown actor",
+				actorId: req.actorId,
+			});
+			this.#sendResponseError(requestId, 404, "Actor not found");
+			return;
 		}
 
 		try {
+			// Track request
+			actor.requests.add(requestIdStr);
+
 			// Convert headers map to Headers object
 			const headers = new Headers();
 			for (const [key, value] of req.headers) {
@@ -340,9 +348,13 @@ export class Tunnel {
 			this.#sendResponseError(requestId, 500, "Internal Server Error");
 		} finally {
 			// Clean up request tracking
-			const actor = this.#runner.getActor(req.actorId);
-			if (actor) {
-				actor.requests.delete(requestIdStr);
+			// Always try to delete from actorPendingRequests in case it was added
+			this.#actorPendingRequests.delete(requestIdStr);
+
+			// Clean up actor tracking (actor may have been removed in the meantime)
+			const currentActor = this.#runner.getActor(req.actorId);
+			if (currentActor) {
+				currentActor.requests.delete(requestIdStr);
 			}
 		}
 	}
