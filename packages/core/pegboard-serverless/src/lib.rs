@@ -236,7 +236,7 @@ fn spawn_connection(
 		)
 		.await
 		{
-			tracing::error!(?err, "outbound req failed");
+			tracing::warn!(?err, "outbound req failed");
 
 			// TODO: Add backoff
 			tokio::time::sleep(Duration::from_secs(1)).await;
@@ -368,7 +368,20 @@ async fn outbound_handler(
 				// If runner_id is none at this point it means we did not send the stopping signal yet, so
 				// send it now
 				if runner_id.is_none() {
-					stop_runner(ctx, Id::parse(&msg.data)?).await?;
+					let data = BASE64.decode(msg.data).context("invalid base64 message")?;
+					let payload =
+						protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(
+							&data,
+						)
+						.context("invalid payload")?;
+
+					match payload {
+						protocol::ToServerlessServer::ToServerlessServerInit(init) => {
+							let runner_id =
+								Id::parse(&init.runner_id).context("invalid runner id")?;
+							stop_runner(ctx, runner_id).await?;
+						}
+					}
 				}
 			}
 			Err(sse::Error::StreamEnded) => break,
@@ -376,7 +389,7 @@ async fn outbound_handler(
 		}
 	}
 
-	tracing::info!("outbound req stopped");
+	tracing::debug!("outbound req stopped");
 
 	Ok(())
 }

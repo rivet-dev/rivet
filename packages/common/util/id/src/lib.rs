@@ -289,6 +289,8 @@ fn base36_char_to_base10(c: char) -> Result<u8, IdError> {
 	match c {
 		'0'..='9' => Ok(c as u8 - b'0'),
 		'a'..='z' => Ok(c as u8 - b'a' + 10),
+		// Uppercase is treated the same as lowercase
+		'A'..='Z' => Ok(c as u8 - b'A' + 10),
 		_ => return Err(IdError::InvalidChar(c)),
 	}
 }
@@ -309,6 +311,17 @@ mod tests {
 		let label = 0xABCD;
 		let id = Id::v1(uuid, label);
 		let s = id.to_string();
+		assert_eq!(s.len(), 30);
+		let parsed = Id::from_str(&s).unwrap();
+		assert_eq!(parsed, id);
+	}
+
+	#[test]
+	fn test_v1_parse_uppercase() {
+		let uuid = Uuid::new_v4();
+		let label = 0xABCD;
+		let id = Id::v1(uuid, label);
+		let s = id.to_string().to_ascii_uppercase();
 		assert_eq!(s.len(), 30);
 		let parsed = Id::from_str(&s).unwrap();
 		assert_eq!(parsed, id);

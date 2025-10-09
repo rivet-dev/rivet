@@ -227,71 +227,74 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							ctx.activity(AckCommandsInput { last_command_idx }).await?;
 						}
 						protocol::ToServer::ToServerStopping => {
-							// The workflow will enter a draining state where it can still process signals if
-							// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
-							state.draining = true;
+							if !state.draining {
+								// The workflow will enter a draining state where it can still process signals if
+								// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
+								state.draining = true;
 
-							// Can't parallelize these two, requires reading from state
-							ctx.activity(ClearDbInput {
-								runner_id: input.runner_id,
-								name: input.name.clone(),
-								key: input.key.clone(),
-								update_state: RunnerState::Draining,
-							})
-							.await?;
-
-							let actors = ctx
-								.activity(FetchRemainingActorsInput {
+								// Can't parallelize these two activities, requires reading from state
+								ctx.activity(ClearDbInput {
 									runner_id: input.runner_id,
+									name: input.name.clone(),
+									key: input.key.clone(),
+									update_state: RunnerState::Draining,
 								})
 								.await?;
 
-							// Set all remaining actors to lost immediately and send stop commands to the
-							// runner. We do both so that the actor's reschedule immediately and the runner is
-							// informed that the actors should be stopped (if it is still connected)
-							if !actors.is_empty() {
-								for (actor_id, generation) in &actors {
-									ctx.signal(crate::workflows::actor::Lost {
-										generation: *generation,
+								let actors = ctx
+									.activity(FetchRemainingActorsInput {
+										runner_id: input.runner_id,
 									})
-									.to_workflow::<crate::workflows::actor::Workflow>()
-									.tag("actor_id", actor_id)
-									.send()
+									.await?;
+
+								// Set all remaining actors to lost immediately and send stop commands to the
+								// runner. We do both so that the actor's reschedule immediately and the runner is
+								// informed that the actors should be stopped (if it is still connected)
+								if !actors.is_empty() {
+									for (actor_id, generation) in &actors {
+										ctx.signal(crate::workflows::actor::Lost {
+											generation: *generation,
+											force_reschedule: false,
+										})
+										.to_workflow::<crate::workflows::actor::Workflow>()
+										.tag("actor_id", actor_id)
+										.send()
+										.await?;
+									}
+
+									let commands = actors
+										.into_iter()
+										.map(|(actor_id, generation)| {
+											protocol::Command::CommandStopActor(
+												protocol::CommandStopActor {
+													actor_id: actor_id.to_string(),
+													generation,
+												},
+											)
+										})
+										.collect::<Vec<_>>();
+
+									let index = ctx
+										.activity(InsertCommandsInput {
+											commands: commands.clone(),
+										})
+										.await?;
+
+									ctx.activity(SendMessageToRunnerInput {
+										runner_id: input.runner_id,
+										message: protocol::ToClient::ToClientCommands(
+											commands
+												.into_iter()
+												.enumerate()
+												.map(|(i, cmd)| protocol::CommandWrapper {
+													index: index + i as i64,
+													inner: cmd,
+												})
+												.collect(),
+										),
+									})
 									.await?;
 								}
-
-								let commands = actors
-									.into_iter()
-									.map(|(actor_id, generation)| {
-										protocol::Command::CommandStopActor(
-											protocol::CommandStopActor {
-												actor_id: actor_id.to_string(),
-												generation,
-											},
-										)
-									})
-									.collect::<Vec<_>>();
-
-								let index = ctx
-									.activity(InsertCommandsInput {
-										commands: commands.clone(),
-									})
-									.await?;
-
-								ctx.activity(SendMessageToRunnerInput {
-									runner_id: input.runner_id,
-									message: protocol::ToClient::ToClientCommands(
-										commands
-											.into_iter()
-											.enumerate()
-											.map(|(i, cmd)| protocol::CommandWrapper {
-												index: index + i as i64,
-												inner: cmd,
-											})
-											.collect(),
-									),
-								})
-								.await?;
 							}
 						}
 						protocol::ToServer::ToServerPing(_)
@@ -320,6 +323,9 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 						let res = ctx
 							.signal(crate::workflows::actor::Lost {
 								generation: *generation,
+								// Because this is a race condition, we want the actor to reschedule
+								// regardless of its crash policy
+								force_reschedule: true,
 							})
 							.to_workflow::<crate::workflows::actor::Workflow>()
 							.tag("actor_id", actor_id)
@@ -412,7 +418,10 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	// Set all remaining actors as lost
 	for (actor_id, generation) in actors {
 		let res = ctx
-			.signal(crate::workflows::actor::Lost { generation })
+			.signal(crate::workflows::actor::Lost {
+				generation,
+				force_reschedule: false,
+			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)
 			.send()
