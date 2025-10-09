@@ -45,12 +45,21 @@ Choose your preferred web framework:
 
 <CodeGroup>
 
+```ts {{"title":"Standalone"}}
+import { registry } from "./registry";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+
+// Start Rivet
+const { client } = registry.start();
+```
+
 ```ts {{"title":"Hono"}}
 import { registry } from "./registry";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 
-// Start Rivet with file system driver (for development)
+// Start Rivet
 const { client } = registry.start();
 
 // Setup Hono app
@@ -67,7 +76,7 @@ app.post("/increment/:name", async (c) => {
 	return c.json({ count: newCount });
 });
 
-// Start server with Rivet
+// Start server
 serve(app);
 ```
 
@@ -122,10 +131,6 @@ console.log("Server running at http://localhost:8080");
 
 </CodeGroup>
 
-<Info>
-The `/registry` endpoint is automatically mounted by Rivet and is required for client communication. When using `serve()` with Hono, this is handled automatically.
-</Info>
-
 </Step>
 
 <Step title="Run Server">
@@ -146,48 +151,13 @@ Your server is now running at `http://localhost:8080`
 
 </Step>
 
-<Step title="Test Your Actor">
+<Step title="Connect To The Rivet Actor">
 
-Test your counter actor using HTTP requests:
-
-<CodeGroup>
-
-```ts {{"title":"JavaScript"}}
-// Increment counter
-const response = await fetch("http://localhost:8080/increment/my-counter", {
-	method: "POST"
-});
-
-const result = await response.json();
-console.log("Count:", result.count); // 1
-```
-
-```sh curl
-# Increment counter
-curl -X POST http://localhost:8080/increment/my-counter
-```
-
-</CodeGroup>
-
-</Step>
-
-<Step title="Deploy">
-
-<Hosting />
-
-</Step>
-
-</Steps>
-
-## Configuration Options
-
-### Connect Frontend To The Rivet Actor
-
-Create a type-safe client to connect from your frontend:
+This code can run either in your frontend or within your backend:
 
 <Tabs>
 
-<Tab title="JavaScript">
+<Tab title="TypeScript">
 
 ```ts {{"title":"client.ts"}}
 import { createClient } from "rivetkit/client";
@@ -298,3 +268,14 @@ See the [Rust client documentation](/clients/rust) for more information.
 </Tab>
 
 </Tabs>
+
+</Step>
+
+<Step title="Deploy">
+
+<Hosting />
+
+</Step>
+
+</Steps>
+

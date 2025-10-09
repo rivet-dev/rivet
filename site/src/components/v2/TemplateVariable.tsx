@@ -21,7 +21,7 @@ interface TemplateVariableProps {
 }
 
 const CLOUD_LOGIN_URL =
-	process.env.NEXT_PUBLIC_CLOUD_URL || "https://cloud.rivet.gg";
+	process.env.NEXT_PUBLIC_CLOUD_URL || "https://dashboard.rivet.dev";
 
 export function TemplateVariable({ variable, defaultValue }: TemplateVariableProps) {
 	const [open, setOpen] = useState(false);

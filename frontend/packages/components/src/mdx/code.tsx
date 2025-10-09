@@ -56,13 +56,13 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
 		<div
 			className={cn(
-				"code-group group my-4 rounded-md border pt-2",
+				"code-group group my-4 rounded-md border",
 				className,
 			)}
 			data-code-group
 		>
-			<Tabs defaultValue={getChildIdx(children[0])}>
-				<div className="flex gap-1 border-b pr-2">
+				<Tabs defaultValue={getChildIdx(children[0])}>
+					<div className="flex gap-1 border-b pr-2">
 					<ScrollArea
 						className="w-full"
 						viewportProps={{ className: "[&>div]:!table" }}
@@ -71,7 +71,11 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 							{Children.map(children, (child) => {
 								const idx = getChildIdx(child);
 								return (
-									<TabsTrigger key={idx} value={idx}>
+									<TabsTrigger
+										key={idx}
+										value={idx}
+										className="data-[state=active]:!text-white"
+									>
 										{child.props.title ||
 											child.props.meta ||
 											languageNames[
@@ -83,20 +87,6 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 							})}
 						</TabsList>
 					</ScrollArea>
-					<WithTooltip
-						trigger={
-							<CopyCodeTrigger>
-								<Button
-									size="icon-sm"
-									className="text-foreground"
-									variant="ghost"
-								>
-									<Icon icon={faCopy} />
-								</Button>
-							</CopyCodeTrigger>
-						}
-						content="Copy code"
-					/>
 				</div>
 				{Children.map(children, (child) => {
 					const idx = getChildIdx(child);
@@ -128,12 +118,14 @@ export const pre = ({
 	title,
 	isInGroup,
 }: PreProps) => {
+	const showHeader = !isInGroup || !!file;
+	const showCopyButton = !isInGroup;
 	return (
 		<div
 			className="not-prose my-4 rounded-md border group-[.code-group]:my-0 group-[.code-group]:-mt-2 group-[.code-group]:border-none"
 			data-code-group
 		>
-			{!file && isInGroup ? null : (
+			{showHeader && (
 				<div className="text-foreground flex items-center justify-between gap-2 border-b p-2 text-xs">
 					<div className="text-muted-foreground flex items-center gap-1">
 						{file ? (
@@ -147,16 +139,18 @@ export const pre = ({
 							</Badge>
 						)}
 					</div>
-					<WithTooltip
-						trigger={
-							<CopyCodeTrigger>
-								<Button size="icon-sm" variant="ghost">
-									<Icon icon={faCopy} />
-								</Button>
-							</CopyCodeTrigger>
-						}
-						content="Copy code"
-					/>
+					{showCopyButton ? (
+						<WithTooltip
+							trigger={
+								<CopyCodeTrigger>
+									<Button size="icon-sm" variant="ghost">
+										<Icon icon={faCopy} />
+									</Button>
+								</CopyCodeTrigger>
+							}
+							content="Copy code"
+						/>
+					) : null}
 				</div>
 			)}
 			<div className="bg-background text-wrap p-2 text-sm">

@@ -74,7 +74,7 @@ export async function generateMetadata({
 	} = await loadContent(path);
 
 	const fullPath = buildFullPath(path);
-	const canonicalUrl = `https://www.rivet.gg${fullPath}/`;
+	const canonicalUrl = `https://www.rivet.dev${fullPath}/`;
 
 	return {
 		title: `${title} - Rivet`,
@@ -143,7 +143,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 							startIcon={<Icon icon={faPencil} />}
 						>
 							<a
-								href={`https://github.com/rivet-gg/rivet/edit/main/site/src/content/${componentSourcePath}`}
+								href={`https://github.com/rivet-dev/rivet/edit/main/site/src/content/${componentSourcePath}`}
 								target="_blank"
 								rel="noreferrer"
 							>

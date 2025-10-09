@@ -1536,7 +1536,7 @@ const honoActor = actor(,
 });
 ```
 
-Also see the [raw fetch handler example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-fetch-handler).
+Also see the [raw fetch handler example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-fetch-handler).
 
 	`onFetch` can be used to expose Server-Sent Events from Rivet Actors.
 
@@ -1554,7 +1554,7 @@ const websocketActor = actor(,
 });
 ```
 
-Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-gg/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
+Also see the [raw WebSocket handler with proxy example project](https://github.com/rivet-dev/rivetkit/tree/main/examples/raw-websocket-handler-proxy).
 
 	Connection lifecycle hooks like `onConnect` and `onDisconnect` do not get called when opening WebSockets for `onWebSocket`. This is because `onWebSocket` provides a low-level connection. Use `ws.addEventListener("open")` and `ws.addEventListener("close")` instead.
 
@@ -1874,45 +1874,29 @@ Actors for long-lived processes with durable state, realtime, and hibernate when
 
   Build real-time React applications with actors
 
+  Build server-rendered Next.js experiences backed by actors
+
+  Deploy actors on Cloudflare Workers with zero infrastructure
+
 ## Features
 
 - **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts.
-
 - **Blazing-Fast Reads & Writes**: State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes.
-
-- **Realtime, Made Simple**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
-
-- **Store Data Near Your Users**: Your state lives close to your users on the edge – not in a faraway data center – so every interaction feels instant. (Not all platforms supported.)
-
+- **Realtime**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
 - **Infinitely Scalable**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
-
 - **Fault Tolerant**: Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations.
-
-- **Type Safety**: End-to-end TypeScript safety between clients and actors with full type inference and compile-time checking.
 
 ## Use Cases
 
 Actors are perfect for applications that need persistent state and real-time updates:
 
-- **AI & Automation**
-  - **AI agents**: Stateful AI assistants with conversation history
-  - **AI sandbox orchestration**: Actors can orchestrate logic running inside of agents' sandboxes
-  - **Durable workflows**: Long-running business processes with state persistence and recovery
-
-- **Real-time Communication**
-  - **Chat rooms**: Real-time messaging with message history and user presence
-  - **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
-  - **Multiplayer games**: Game state management with real-time updates
-  - **Live events**: Broadcasting updates to many participants
-
-- **Data & Synchronization**
-  - **Local-first sync**: Offline-first applications with server synchronization
-  - **Multi-tenant databases**: Isolated data stores for each user or tenant
-  - **Scheduling**: Time-based task execution with persistent state
-
-- **Infrastructure**
-  - **Rate limiting**: Distributed rate limiting with persistent counters
-  - **Stream processing**: Real-time data processing with persistent state
+- **AI agents**: Stateful AI assistants with conversation history
+- **Collaborative documents**: Multiple users editing documents simultaneously (Yjs integration)
+- **Local-first sync**: Offline-first applications with server synchronization
+- **Per-tenant databases**: Isolated data stores for each user or tenant
+- **Background job**: Background & time-based task execution with persistent state
+- **Rate limiting**: Distributed rate limiting with persistent counters
+- **Stream processing**: Real-time data processing with persistent state
 
 ## Core Concepts
 
@@ -2772,7 +2756,12 @@ const registry = setup(,
 Choose your preferred web framework:
 
 ```ts }
-// Start Rivet with file system driver (for development)
+// Start Rivet
+const  = registry.start();
+```
+
+```ts }
+// Start Rivet
 const  = registry.start();
 
 // Setup Hono app
@@ -2782,7 +2771,7 @@ const app = new Hono();
 app.post("/increment/:name", async (c) => );
 });
 
-// Start server with Rivet
+// Start server
 serve(app);
 ```
 
@@ -2825,8 +2814,6 @@ const app = new Elysia()
 console.log("Server running at http://localhost:8080");
 ```
 
-The `/registry` endpoint is automatically mounted by Rivet and is required for client communication. When using `serve()` with Hono, this is handled automatically.
-
 ```sh }
 npx tsx --watch server.ts
 ```
@@ -2837,26 +2824,7 @@ bun --watch server.ts
 
 Your server is now running at `http://localhost:8080`
 
-Test your counter actor using HTTP requests:
-
-```ts }
-// Increment counter
-const response = await fetch("http://localhost:8080/increment/my-counter", );
-
-const result = await response.json();
-console.log("Count:", result.count); // 1
-```
-
-```sh curl
-# Increment counter
-curl -X POST http://localhost:8080/increment/my-counter
-```
-
-## Configuration Options
-
-### Connect Frontend To The Rivet Actor
-
-Create a type-safe client to connect from your frontend:
+This code can run either in your frontend or within your backend:
 
 ```ts }
 // Create typed client
@@ -2968,7 +2936,7 @@ const  = createHandler(registry, ), ,
 ;
 ```
 
-The `/registry` endpoint is automatically mounted by Rivet and is required for client communication. The Cloudflare Workers driver handles this automatically.
+The `/rivet` endpoint is automatically mounted by Rivet and is required for client communication. The Cloudflare Workers driver handles this automatically. This can be configured with `managerPath`.
 
 Configure your `wrangler.json` for Cloudflare Workers:
 
@@ -3156,7 +3124,7 @@ function Counter() );
 
 Make sure to import the `Counter` component in your page or layout.
 
-For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.gg/docs/clients/react/).
+For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.dev/docs/clients/react/).
 ## React Quickstart
 
 # React Quickstart
@@ -3319,7 +3287,7 @@ Scheduling is used to trigger events in the future. The actor scheduler is like 
 
 	Scheduling is supported on the Rivet Cloud, Cloudflare Workers, file system, and memory drivers.
 
-	Follow [this issue](https://github.com/rivet-gg/rivetkit/issues/1095) for Redis support.
+	Follow [this issue](https://github.com/rivet-dev/rivetkit/issues/1095) for Redis support.
 
 ## Use Cases
 
@@ -3690,6 +3658,11 @@ The `setupTest` function automatically calls `vi.useFakeTimers()`, allowing you 
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 Rivet's testing framework automatically handles server setup and teardown, so you can focus on writing effective tests for your business logic.
+## API Reference
+
+# API Reference
+
+This is where the technical API docs live.
 ## Node.js & Bun
 
 # Node.js & Bun
@@ -3700,7 +3673,7 @@ The Rivet JavaScript client allows you to connect to and interact with actors fr
 
 Install the RivetKit package:
 
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
 
 Create client and connect to actors and listen for real-time updates:
 
@@ -3717,7 +3690,7 @@ main();
 
 ## API Reference
 
-Follows the same [API as the Node.js client](http://rivet.gg/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
+Follows the same [API as the Node.js client](http://rivet.dev/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
 ## Next.js
 
 # Next.js
@@ -3732,7 +3705,7 @@ The Rivet Next.js client allows you to connect to and interact with actors in Ne
 
 Install the RivetKit React package:
 
-  Follow the [Next.js backend integration guide](https://rivet.gg/docs/integrations/next-js/) to set up your Next.js backend with Rivet.
+  Follow the [Next.js backend integration guide](https://rivet.dev/docs/integrations/next-js/) to set up your Next.js backend with Rivet.
 
 Create a RivetKit client to connect to your actor:
 
@@ -3771,12 +3744,12 @@ Make sure to import the `Counter` component in your page or layout.
 
 ## API Reference
 
-It's the same as the [React client API reference](https://rivet.gg/docs/clients/react#api-reference), since the RivetKit React package is used in both Next.js and React applications.
+It's the same as the [React client API reference](https://rivet.dev/docs/clients/react#api-reference), since the RivetKit React package is used in both Next.js and React applications.
 ## OpenAPI
 
 # OpenAPI
 
-The Rivet OpenAPI spec is available [here](https://github.com/rivet-gg/rivetkit/blob/main/clients/openapi/openapi.json)
+The Rivet OpenAPI spec is available [here](https://github.com/rivet-dev/rivetkit/blob/main/clients/openapi/openapi.json)
 ## React
 
 # React
@@ -3787,7 +3760,7 @@ Learn how to create real-time, stateful React applications with Rivet's actor mo
 
 Install the RivetKit React package:
 
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
 
 Connect to actors and listen for real-time updates:
 
@@ -4000,7 +3973,7 @@ The Rivet Rust client provides a way to connect to and interact with actors from
     rivetkit-client = "0.1.0"
     ```
 
-      Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.gg/docs/actors/quickstart/backend/) to set up a simple actor server.
+      Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
 
     ```rust src/main.rs
     use rivetkit_client::;
@@ -4035,10 +4008,227 @@ The Rivet Rust client provides a way to connect to and interact with actors from
 
 _Coming Soon_
 
-For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-gg/rivetkit/blob/main/clients/rust).
-## Freestyle
+For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-dev/rivetkit/blob/main/clients/rust).
+## Deploying to AWS ECS
 
-# Freestyle
+# Deploying to AWS ECS
+
+Run your backend on Amazon ECS with Fargate using a simple container image and service definition.
+
+## Guide
+
+- AWS account with permissions for ECS, ECR, and IAM
+- AWS CLI v2 configured (`aws configure`)
+- An existing VPC with private subnets and security groups for ECS
+- Container registry (ECR) and your backend repository
+
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the task definition. They should look something like this:
+
+```bash
+RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_NAMESPACE=your-namespace-id
+RIVET_TOKEN=your-token
+```
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+ENV PORT=8080
+CMD ["node", "server.js"]
+```
+
+Authenticate to ECR, build the image, and push it. Replace the AWS account, region, and repository names with your own.
+
+```bash
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+docker build -t backend:latest .
+docker tag backend:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+```
+
+Create `backend-task.json` describing the ECS task. Update the ARNs, subnets, and security groups for your environment.
+
+```json
+,
+        ,
+        
+      ]
+    }
+  ]
+}
+```
+
+You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
+
+Register the task definition:
+
+```bash
+aws ecs register-task-definition --cli-input-json file://backend-task.json
+```
+
+Create or reuse an ECS cluster, then launch a service with the new task definition. Substitute your subnet and security group IDs.
+
+```bash
+aws ecs create-cluster --cluster-name backend
+aws ecs create-service \
+  --cluster backend \
+  --service-name backend \
+  --task-definition backend \
+  --desired-count 1 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration="
+```
+
+Check that the task is running:
+
+```bash
+aws ecs describe-services --cluster backend --services backend --query "services[0].deployments"
+```
+
+Your runner should appear as connected on the Rivet dashboard once the task is healthy.
+## Deploy To Amazon Web Services Lambda
+
+# Deploy To Amazon Web Services Lambda
+
+_AWS Lambda is coming soon_
+## Deploying to Cloudflare Workers
+
+# Deploying to Cloudflare Workers
+#
+Run Rivet Actors on Cloudflare Workers with Durable Objects. If you still need a sample app, walk through the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare-workers) first.
+
+- [Cloudflare account](https://dash.cloudflare.com/) with Durable Objects enabled
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) v3
+- RivetKit project (or use the [Quickstart](/docs/actors/quickstart/cloudflare-workers))
+
+Install the Cloudflare Worker driver alongside RivetKit:
+
+```sh
+npm install rivetkit @rivetkit/cloudflare-workers
+```
+
+Wire your actors into a Cloudflare Worker using the same setup as the quickstart:
+
+```ts }
+const counter = actor(,
+	actions: ,
+		getCount: (c) => c.state.count,
+	},
+});
+
+const registry = setup(,
+});
+```
+
+```ts }
+const app = new Hono } }>();
+
+app.post("/increment/:name", async (c) => );
+});
+
+const  = createHandler(registry, );
+;
+```
+
+```ts }
+const  = createHandler(registry, ), ,
+			});
+		}
+
+		return new Response("Not Found", );
+	}
+});
+
+;
+```
+
+Configure Durable Objects and KV namespaces in `wrangler.json` (same as the quickstart):
+
+```json }
+
+  ],
+  "durable_objects": 
+    ]
+  },
+  "kv_namespaces": [
+    
+  ]
+}
+```
+
+Configuration requirements:
+
+- `ACTOR_DO` durable object binding for actor persistence
+- `ACTOR_KV` KV namespace binding for metadata storage
+- `nodejs_compat` compatibility flag
+- Migration entry defining the `ActorHandler` class
+
+Start the worker locally:
+
+```sh
+wrangler dev
+```
+
+Call your actor at `http://localhost:8787/increment/my-counter`.
+
+When you're ready, deploy to Cloudflare's network:
+
+```sh
+wrangler deploy
+```
+
+Durable Objects back your actor state globally, and the Rivet endpoint is automatically mounted at `/rivet`.
+
+## Advanced
+
+### Accessing Environment Bindings
+
+You can access Cloudflare Workers environment bindings directly using the importable `env`:
+
+```typescript
+// Access environment variables and secrets in top-level scope
+const API_KEY = env.API_KEY;
+const LOG_LEVEL = env.LOG_LEVEL || "info";
+
+// Use bindings in your actor
+const myActor = actor(,
+  
+  actions: 
+    }
+  }
+});
+```
+
+### Driver Context
+
+The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
+
+```typescript
+const myActor = actor(,
+  
+  // Save the Cloudflare driver context
+  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
+  
+  actions: ,
+  }
+});
+```
+
+The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
+
+```typescript
+interface DriverContext 
+```
+
+While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
+## Deploying to Freestyle
+
+# Deploying to Freestyle
 
 Deploy RivetKit app to [Freestyle.sh](https://freestyle.sh/), a cloud platform for running AI-generated code with built-in security and scalability.
 
@@ -4048,13 +4238,13 @@ Complete example of deploying RivetKit app to Freestyle.sh.
 
 ## Setup
 
-Install RivetKit + Hono and create your registry:
+Install RivetKit and Hono and create your registry:
 
 ```bash
 npm install rivetkit hono
 ```
 
-Update your server code to run the registry through Deno.
+Update your server code to run the registry serverless with Deno.
 
 ```typescript }
 const  = registry.start(/api`,
@@ -4065,12 +4255,6 @@ const  = registry.start(/api`,
 Deno.serve(fetch);
 ```
 
-**Configuration Requirements:**
-
-- `endpoint` - Rivet API endpoint (use "api.rivet.gg" for Rivet Cloud)
-- `namespace` - Your Rivet namespace for actor isolation
-- `inspector.enabled` - Enable debugging and monitoring
-
 Deploy your application to Freestyle with the correct configuration. Create a deployment script or add this to your existing deployment process:
 
 ```typescript
@@ -4080,7 +4264,7 @@ const res = await freestyle.deployWeb(buildDir, `,
 		RIVET_RUNNER_KIND: "serverless",
 		// For self-hosted instances:
 		// RIVET_ENDPOINT: "http://127.0.0.1:6420",
-		RIVET_ENDPOINT: "api.rivet.gg",
+		RIVET_ENDPOINT: "api.rivet.dev",
 	},
 	timeout: 60 * 5, // Increases max request lifetime on the runner
 	entrypoint: "server.ts", // File which starts serverless runner
@@ -4131,72 +4315,292 @@ Execute this configuration script to register your Freestyle deployment with Riv
 - `requestLifespan` - Request timeout (slightly less than Freestyle timeout)
 
 Once executed, Rivet will be connected to your Freestyle serverless instance.
+## Deploying to Google Cloud Run
+
+# Deploying to Google Cloud Run
+
+Run your backend on Cloud Run with a lightweight container image and one command deploy.
+
+## Guide
+
+- Google Cloud project with Cloud Run and Artifact Registry enabled
+- `gcloud` CLI authenticated (`gcloud auth login`) and project set (`gcloud config set project YOUR_PROJECT`)
+- Artifact Registry repository or Container Registry enabled
+- Your backend application repository
+
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used when deploying. They should look something like this:
+
+```bash
+RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_NAMESPACE=your-namespace-id
+RIVET_TOKEN=your-token
+```
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+ENV PORT=8080
+CMD ["node", "server.js"]
+```
+
+Use Cloud Build to build and push the image. Replace the region and repository with your own.
+
+```bash
+gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_PROJECT/backend/backend:latest
+```
+
+Deploy the service to Cloud Run, passing the Rivet environment variables. Adjust the region, image, and VPC connector settings as needed.
+
+```bash
+gcloud run deploy backend \
+  --image us-central1-docker.pkg.dev/YOUR_PROJECT/backend/backend:latest \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --min-instances 1 \
+  --set-env-vars RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev,RIVET_NAMESPACE=your-namespace-id,RIVET_TOKEN=your-token
+```
+
+You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
+
+Confirm the service is running:
+
+```bash
+gcloud run services describe backend --region us-central1 --format 'value(status.conditions[?type="Ready"].status)'
+```
+
+Your runner should appear as connected on the Rivet dashboard once the service reports ready.
+## Deploying to Hetzner
+
+# Deploying to Hetzner
+
+Please see the [VM & Bare Metal](/docs/deploy/vm-and-bare-metal) guide.
+## Deploying to Kubernetes
+
+# Deploying to Kubernetes
+#
+Run your backend on any Kubernetes cluster with a simple container image and deployment manifest.
+
+## Guide
+
+- A Kubernetes cluster with `kubectl` access (AKS, EKS, GKE, k3s, etc.)
+- Container registry credentials (Docker Hub, GHCR, GCR, etc.)
+- Your backend application repository
+
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in later manifests. They should look something like this:
+
+```bash
+RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_NAMESPACE=your-namespace-id
+RIVET_TOKEN=your-token
+```
+
+Create a `Dockerfile` in your project root:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+ENV PORT=8080
+CMD ["node", "server.js"]
+```
+
+```bash
+docker build -t registry.example.com/your-team/backend:latest .
+docker push registry.example.com/your-team/backend:latest
+```
+
+Replace `registry.example.com/your-team` with your registry path. Auth with `docker login` first if needed.
+
+Create a `backend-secrets.yaml` for your environment variables:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+type: Opaque
+stringData:
+  RIVET_API_ENDPOINT: https://api-us-west-1.rivet.dev
+  RIVET_NAMESPACE: your-namespace-id
+  RIVET_TOKEN: your-token
+```
+
+Then create a `deployment.yaml`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: registry.example.com/your-team/backend:latest
+          envFrom:
+            - secretRef:
+                name: backend-secrets
+```
+
+You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
+
+Apply both manifests:
+
+```bash
+kubectl apply -f backend-secrets.yaml
+kubectl apply -f deployment.yaml
+```
+
+Add a `Service` or Ingress if you need external access.
+
+Check that the pod is running:
+
+```bash
+kubectl get pods -l app=backend
+```
+
+Your runner should appear as connected on the Rivet dashboard once the pod is ready.
 ## Deploying to Railway
 
 # Deploying to Railway
+#
 Deploy your RivetKit app to [Railway](https://railway.app).
 
-## Deploy from Template
+## Option A: Deploy from Template
 
-github & railway app button https://github.com/rivet-dev/template-railway
+If you're starting from scratch, go to the Connect tab on the Rivet dashboard and follow the Railway deployment steps. This give you a 1-click deploy of the [RivetKit Railway template]().
 
-## Deploy Manually
-
-### Prerequisites
+## Option B: Deploy Manual
 
 - [Railway account](https://railway.app)
-- Your RivetKit app (to get started, see the [Quickstart](/docs/actors/quickstart) page or [Examples](https://github.com/rivet-dev/rivetkit/tree/main/examples))
-- Access to the Rivet Cloud or a [self-hosted Rivet Engine](/docs/general/self-hosting)
-
-### Step 1: Setup Node Project for Railway
+- Your RivetKit app
+  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivetkit/tree/main/examples)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
 
 Ensure your `package.json` has a start script:
 
 ```json
 
-  // ... rest of package.json
+  // ... Rest of package.json
 }
 ```
-
-### Step 2: Deploy to Railway
 
 1. Connect your GitHub account to Railway
 2. Select your repository containing your RivetKit app
 3. Railway will automatically detect and deploy your app
 
+Railway will automatically deploy your RivetKit app on every git push.
+
 Detailed steps are available on [Railway's docs](https://docs.railway.com/quick-start).
 
-After this point, Railway automatically deploys your RivetKit app on every git push.
-
-### Step 3: Set Environment Variables
+You do not need to expose a container port. Rivet tunnels traffic directly to your backend.
 
 After selecting your project on the Rivet dashboard, go to Connect > Railway to get the environment variables needed.
 
-Then follow [Railway's documentation](https://docs.railway.com/guides/variables#service-variables) to add them to your app.
+To add your environment variables:
+1. Go to your Railway project dashboard
+2. Select your service
+3. Navigate to the **Variables** tab
+4. Add the required environment variables and deploy your changes
 
-### Step 4: Verify Deployment
--- you will see your runner connected on the connect tab
--- you can now create and connect to actors
+Detailed steps are available on [Railway's docs](https://docs.railway.com/guides/variables#service-variables).
 
-### Step 3: Deployed
+You should see your runner connected on the Connect tab of your Rivet Dashboard. Now you can create and connect to your Rivet Actors.
+## Supabase
 
-Railway automatically deploys your RivetKit app. At this point, on the Connect tab of your Rivet dashboard, you will be able to create your actors. 
+# Supabase
 
-Railway automatically deploys your RivetKit app on every git push.
+_Supabase is coming soon_
+## Vercel
 
-## Configuration Examples
+# Vercel
 
-### Node.js RivetKit App
+_Vercel is coming soon_
+## Deploying to VMs & Bare Metal
 
-### Docker-based RivetKit App
+# Deploying to VMs & Bare Metal
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-CMD ["npm", "start"]
+Run your backend on any Linux VM or bare metal host with a basic systemd unit.
+
+## Guide
+
+- Build your backend locally.
+- Copy the build output to your server (example):
+
+```bash
+scp -r ./dist user@server:/opt/backend
+```
+
+Place the files somewhere readable by the service user, such as `/opt/backend`.
+
+Navigate to Rivet and click _Connect > Manual_. Copy the environment variables provided, they will be used in the next step. They should look something like this:
+
+```bash
+RIVET_API_ENDPOINT=https://api-us-west-1.rivet.dev
+RIVET_NAMESPACE=your-namespace-id
+RIVET_TOKEN=your-token
+```
+
+Create `/etc/systemd/system/backend.service`:
+
+```ini
+[Unit]
+Description=Backend Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/backend
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=RIVET_API_ENDPOINT=https://api.rivet.dev
+Environment=RIVET_NAMESPACE=your-namespace-id
+Environment=RIVET_TOKEN=your-token
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Replace the environment values with those from the Connect tab in the Rivet dashboard (or your self-hosted engine) and adjust paths to match your deployment.
+
+Reload systemd units and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now backend.service
+```
+
+## Operating
+
+### Restart
+
+Restart the service after deploying new builds or environment changes:
+
+```bash
+sudo systemctl restart backend.service
+```
+
+### Logs
+
+Follow realtime logs when debugging:
+
+```bash
+sudo journalctl -u backend.service -f
 ```
 ## Build Your Own
 
@@ -4212,9 +4616,9 @@ Each driver implements common interfaces defined by RivetKit, including:
 Get started by looking at source code for the driver interfaces and existing drivers:
 
 - **Driver Interfaces**
-  - **ActorDriver*** [Source Code](https://github.com/rivet-gg/rivetkit/blob/main/packages/core/src/actor/driver.ts)
-  - **ManagerDriver*** [Source Code](https://github.com/rivet-gg/rivetkit/blob/main/packages/core/src/manager/driver.ts)
-- **Driver Implementations**: [Source Code](https://github.com/rivet-gg/rivetkit/tree/main/packages/core/src/drivers)
+  - **ActorDriver*** [Source Code](https://github.com/rivet-dev/rivetkit/blob/main/packages/core/src/actor/driver.ts)
+  - **ManagerDriver*** [Source Code](https://github.com/rivet-dev/rivetkit/blob/main/packages/core/src/manager/driver.ts)
+- **Driver Implementations**: [Source Code](https://github.com/rivet-dev/rivetkit/tree/main/packages/core/src/drivers)
 ## File System
 
 # File System
@@ -4626,8 +5030,8 @@ Each documentation page is also available as clean markdown by appending `.md` t
 
 For example:
 
-- Original URL: `https://rivet.gg/docs/actors`
-- Markdown URL: `https://rivet.gg/docs/actors.md`
+- Original URL: `https://rivet.dev/docs/actors`
+- Markdown URL: `https://rivet.dev/docs/actors.md`
 ## Edge Networking
 
 # Edge Networking
@@ -4779,75 +5183,6 @@ Take full control of your Rivet deployment with flexible hosting options and sto
   In-memory storage for testing and ephemeral use cases
 
   Create custom storage drivers for your specific requirements
-## Rivet Studio
-
-# Rivet Studio
-
-Rivet Studio is a web-based development tool for debugging and monitoring your Rivet Actors in real-time.
-
-## Features
-
-- **View running actors**: See all active Rivet Actors in your application
-- **Edit actor state**: Modify actor state in real-time for debugging
-- **REPL for actions**: Interactive console to call actor actions directly
-- **Event monitoring**: Track actor events including actions, broadcasts, events, and subscriptions
-- **Connection viewer**: Monitor all connected connections & their associated state
-
-## How it works
-
-RivetKit automatically mounts a route at `/registry` on your server for Studio access. When your application starts:
-
-1. RivetKit generates a secure token for authentication on startup
-2. Open to [studio.rivet.gg](https://studio.rivet.gg) in your browser or click the `studio.rivet.gg` URL that's printed to your console on startup
-3. Rivet Studio connects to your application
-
-Rivet Studio is automatically disabled in production when `NODE_ENV=production`.
-
-## Configuration
-
-### Token configuration
-
-By default, Rivet Studio generates and stores a token automatically. You can configure it:
-
-- **Environment variable**: Set `RIVETKIT_STUDIO_TOKEN`
-- **Code configuration**:
-  ```typescript }
-  registry.start(
-  })
-  ```
-
-### Disabling the Studio
-
-Disable Studio using any of these methods:
-
-- Set `RIVETKIT_STUDIO_DISABLE` environment variable
-- Set `NODE_ENV=production`
-- Configure in code:
-  ```typescript }
-  registry.start(
-  })
-  ```
-
-### CORS configuration
-
-Configure CORS for custom Studio deployments:
-
-```typescript }
-registry.start(
-  }
-})
-```
-
-See the [CORS documentation](/docs/general/cors/) for more details.
-
-### Default endpoint
-
-On startup, RivetKit prints a URL for connecting to Studio. By default, Studio connects to `localhost:8080` if no endpoint is provided. Override with:
-
-```typescript }
-registry.start(
-})
-```
 ## System Architecture
 
 # System Architecture
@@ -4864,6 +5199,46 @@ registry.start(
 # Webhooks
 
 TODO
+## Overview
+
+# Overview
+
+Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
+
+## Features
+
+- **Stateful Workloads**: Keep memory between operations & run complex logic that requires stateful processes
+- **Realtime**: Powered by WebSockets or SSE without the complexity
+- **Elastic Scalability**: Scale from zero to millions without cold starts
+- **Multi-Region Durable Storage**: Keep state & operations near your users or comply with data soveirgnty
+
+## Tools
+
+  Long-lived processes with durable state, realtime, and hibernation
+
+## Use Cases
+
+  Deploy assistants that reason and act with durable memory
+
+  Sync state instantly over WebSockets or SSE
+
+  Run long-lived services with automatic failover
+
+  Isolate customer data with multi-tenant storage
+
+  Throttle requests using stateful counters per client
+
+  Build chat and workflow bots with actor logic
+
+## Integrations
+
+))}
+
+## Support
+
+  Chat with the community and get realtime help from Rivet engineers
+
+  File bugs or request features directly in our tracker
 ## Better Auth
 
 # Better Auth
@@ -5168,57 +5543,6 @@ wrangler deploy
 ```
 
 Your actors will now run on Cloudflare's global edge network with persistent state backed by Durable Objects.
-
-## Examples
-
-Example using Cloudflare Workers with Hono web framework.
-
-Basic Cloudflare Workers setup and configuration example.
-
-	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
-
-## Advanced
-
-### Accessing Environment Bindings
-
-You can access Cloudflare Workers environment bindings directly using the importable `env`:
-
-```typescript
-// Access environment variables and secrets in top-level scope
-const API_KEY = env.API_KEY;
-const LOG_LEVEL = env.LOG_LEVEL || "info";
-
-// Use bindings in your actor
-const myActor = actor(,
-  
-  actions: 
-    }
-  }
-});
-```
-
-### Driver Context
-
-The Cloudflare Workers driver provides access to the Durable Object state and environment through the driver context in `createVars`.
-
-```typescript
-const myActor = actor(,
-  
-  // Save the Cloudflare driver context
-  createVars: (ctx: ActorInitContext, driver: DriverContext) => (),
-  
-  actions: ,
-  }
-});
-```
-
-The Cloudflare Workers driver context type is exported as `DriverContext` from `@rivetkit/cloudflare-workers`:
-
-```typescript
-interface DriverContext 
-```
-
-While you have access to the Durable Object state, be cautious when directly modifying KV storage or alarms, as this may interfere with RivetKit's internal operations and potentially break actor functionality.
 ## Elysia
 
 # Elysia
@@ -5400,31 +5724,9 @@ serve(app);
 
 Rivet provides seamless integrations with popular frameworks and tools to help you build modern applications.
 
-## Frontend & Clients
+      ))}
 
-  Full-featured JavaScript client for web and Node.js applications
-
-  React hooks and components for building interactive UIs
-
-  Type-safe Rust client for high-performance applications
-
-## Backend
-
-  Lightweight and fast web framework for modern JavaScript
-
-  Popular Node.js web framework with extensive middleware support
-
-  Fast and type-safe TypeScript web framework
-
-  End-to-end type-safe API development
-
-## Auth
-
-  Modern authentication library with TypeScript support
-
-## Misc
-
-  Fast unit testing framework for JavaScript and TypeScript
+))}
 ## Next.js
 
 # Next.js
@@ -6042,7 +6344,7 @@ For more options:
 ## Build From Source
 
 ```bash
-git clone https://github.com/rivet-gg/rivet.git
+git clone https://github.com/rivet-dev/rivet.git
 cd rivet
 cargo build --release -p rivet-engine
 ./target/release/rivet-engine
@@ -6081,7 +6383,7 @@ Choose the template that best fits your needs:
 | - Manual setup required | - Rivet Inspector for debugging |
 | | - Ready to run immediately |
 
-You can also use the [Rivet Railway template](https://github.com/rivet-gg/template-railway) as a starting point for your application.
+You can also use the [Rivet Railway template](https://github.com/rivet-dev/template-railway) as a starting point for your application.
 
 After deploying either template, you can find the `RIVET__AUTH__ADMIN_TOKEN` under the **Variables** tab in the Railway dashboard. This token is required to access the Rivet Inspector.
 
@@ -6126,3 +6428,61 @@ Follow the [Railway Quick Start guide](https://docs.railway.com/quick-start) to 
 3. Railway will automatically detect and deploy your application
 4. Configure environment variables for your application:
     - `RIVET_ENGINE=$}` - Points to the Rivet Engine service's private domain
+## AI Agents
+
+# AI Agents
+
+Build durable assistants that keep memory between conversations, call tools, and react instantly to user input.
+
+**Examples**
+- [AI Agent Starter](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent)
+## Bots
+
+# Bots
+
+Run bots for Slack, Discord, or autonomous agents that need persistent workers listening, responding, and executing background tasks.
+
+**Examples**
+- [AI Agent Starter](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent)
+- [Realtime Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
+## Durable Compute
+
+# Durable Compute
+
+Run long-lived workloads that survive restarts, keep state close to users, and recover automatically when nodes shift.
+
+**Examples**
+- [Sync Offline Data](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync)
+- [Tenant Isolation](https://github.com/rivet-dev/rivetkit/tree/main/examples/tenant)
+- [Realtime Counter](https://github.com/rivet-dev/rivetkit/tree/main/examples/counter)
+- [Realtime Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
+- [Collaborative CRDT Docs](https://github.com/rivet-dev/rivetkit/tree/main/examples/crdt)
+- [Multiplayer Game State](https://github.com/rivet-dev/rivetkit/tree/main/examples/game)
+## Per-Tenant Databases
+
+# Per-Tenant Databases
+
+Provision isolated storage per customer while sharing infrastructure, keeping noisy neighbours separated and compliant.
+
+**Examples**
+- [Tenant Isolation](https://github.com/rivet-dev/rivetkit/tree/main/examples/tenant)
+- [SQLite Sharding](https://github.com/rivet-dev/rivetkit/tree/main/examples/database)
+## Rate Limiting
+
+# Rate Limiting
+
+Throttle abusive clients with actors that track counters, rolling windows, and quotas without sharing mutable state.
+
+**Examples**
+- [Stateful Rate Limiter](https://github.com/rivet-dev/rivetkit/tree/main/examples/rate)
+## Realtime
+
+# Realtime
+
+Deliver sub-second updates with actors that push changes over WebSockets or SSE without juggling infrastructure.
+
+**Examples**
+- [Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
+- [Multiplayer Game State](https://github.com/rivet-dev/rivetkit/tree/main/examples/game)
+- [Stream Processing](https://github.com/rivet-dev/rivetkit/tree/main/examples/stream)
+- [Sync Offline Data](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync)

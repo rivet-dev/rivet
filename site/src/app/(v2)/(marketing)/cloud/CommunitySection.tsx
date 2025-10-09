@@ -26,7 +26,7 @@ export const CommunitySection = () => {
 		{
 			name: "Bluesky",
 			icon: faBluesky,
-			href: "https://bsky.app/profile/rivet.gg",
+			href: "https://bsky.app/profile/rivet.dev",
 		},
 	];
 

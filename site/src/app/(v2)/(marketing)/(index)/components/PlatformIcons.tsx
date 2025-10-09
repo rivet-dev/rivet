@@ -7,6 +7,7 @@ import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
 import nodejsLogo from "../images/platforms/nodejs.svg";
 import bunLogo from "../images/platforms/bun.svg";
 import redisLogo from "../images/platforms/redis.svg";
+import postgresLogo from "../images/platforms/postgres.svg";
 import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
 
@@ -14,6 +15,7 @@ import memoryLogo from "../images/platforms/memory.svg";
 import typescriptLogo from "../images/clients/typescript.svg";
 import rustLogo from "../images/clients/rust.svg";
 import reactLogo from "../images/clients/react.svg";
+import nextjsLogo from "../images/clients/nextjs.svg";
 
 // Integration images
 import honoLogo from "../images/integrations/hono.svg";
@@ -44,16 +46,16 @@ export function PlatformIcons() {
 			tooltip: "Bun",
 		},
 		{
-			href: "/docs/cloud",
-			src: redisLogo,
-			alt: "Redis",
-			tooltip: "Redis",
-		},
-		{
-			href: "/docs/cloud",
+			href: "/docs/actors/quickstart/cloudflare-workers",
 			src: cloudflareWorkersLogo,
 			alt: "Cloudflare Durable Objects",
 			tooltip: "Cloudflare Durable Objects",
+		},
+		{
+			href: "/docs/cloud",
+			src: postgresLogo,
+			alt: "Postgres",
+			tooltip: "Postgres",
 		},
 		//{
 		//  href: "/docs/cloud",
@@ -74,10 +76,16 @@ export function PlatformIcons() {
 		//  tooltip: "TypeScript"
 		//},
 		{
-			href: "/docs/clients/react",
+			href: "/docs/actors/quickstart/react",
 			src: reactLogo,
 			alt: "React",
 			tooltip: "React",
+		},
+		{
+			href: "/docs/actors/quickstart/next-js",
+			src: nextjsLogo,
+			alt: "Next.js",
+			tooltip: "Next.js",
 		},
 		{
 			href: "/docs/clients/rust",

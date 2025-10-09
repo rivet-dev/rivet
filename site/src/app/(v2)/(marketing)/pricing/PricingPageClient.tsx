@@ -10,7 +10,7 @@ const tiers = [
 	{
 		name: "Free",
 		priceMonthly: "$0",
-		href: "https://hub.rivet.gg/",
+		href: "https://dashboard.rivet.dev/",
 		highlights: [
 			{ description: "5GB Limit", icon: "check" },
 			{ description: "5 Million Writes /mo Limit", icon: "check" },
@@ -22,7 +22,7 @@ const tiers = [
 		{
 			name: "Hobby",
 			priceMonthly: "$5",
-			href: "https://hub.rivet.gg/",
+			href: "https://dashboard.rivet.dev/",
 		highlights: [
 			{ description: "25 Billion Reads /mo included", icon: "gift" },
 			{ description: "50 Million Writes /mo included", icon: "gift" },
@@ -34,7 +34,7 @@ const tiers = [
 	{
 		name: "Team",
 		priceMonthly: "$200",
-		href: "https://hub.rivet.gg/",
+		href: "https://dashboard.rivet.dev/",
 		highlights: [
 			{ description: "25 Billion Reads /mo included", icon: "gift" },
 			{ description: "50 Million Writes /mo included", icon: "gift" },
@@ -244,7 +244,7 @@ function PricingTable() {
 									"string" ? (
 										feature.name === "Regions" ? (
 											<a
-												href="https://rivet.gg/docs/general/edge"
+												href="https://rivet.dev/docs/general/edge"
 												target="_blank"
 												rel="noopener noreferrer"
 												className="text-sm text-white underline hover:brightness-125"

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 	description:
 		"Contact Rivet to discuss enterprise-grade serverless infrastructure for AI agents, realtime systems, and scalable function-based workloads",
 	alternates: {
-		canonical: "https://www.rivet.gg/sales/",
+		canonical: "https://www.rivet.dev/sales/",
 	},
 };
 

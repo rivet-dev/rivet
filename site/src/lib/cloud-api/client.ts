@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 const CLOUD_API_URL =
-	process.env.NEXT_PUBLIC_CLOUD_API_URL || "https://cloud.rivet.gg";
+	process.env.NEXT_PUBLIC_CLOUD_API_URL || "https://cloud.rivet.dev";
 
 class CloudApiClient {
 	private baseUrl: string;

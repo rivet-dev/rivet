@@ -24,199 +24,181 @@ const nextConfig = {
 	},
 	async redirects() {
 		return [
-			// Next.js redirects for Cloudflare deployment
-
-			// Permanent redirects for common 404s (consolidated from duplicates)
-
-			// Convenience Redirects
+			// Redirects for moved Cloud docs
 			{
-				source: '/docs',
-				destination: '/docs/actors',
-				permanent: false,
-			},
-
-			// Redirects for moved Cloud docs  
-			{
-				source: '/docs/actors-low-level',
-				destination: '/docs/cloud/actors',
+				source: "/docs/actors-low-level",
+				destination: "/docs/cloud/actors",
 				permanent: false,
 			},
 			// Redirects for moved Cloud docs
 			{
-				source: '/docs/hub',
-				destination: '/docs/cloud/hub',
+				source: "/docs/hub",
+				destination: "/docs/cloud/hub",
 				permanent: false,
 			},
 			{
-				source: '/docs/install',
-				destination: '/docs/cloud/install',
+				source: "/docs/install",
+				destination: "/docs/cloud/install",
 				permanent: false,
 			},
 			{
-				source: '/docs/limitations',
-				destination: '/docs/cloud/limitations',
+				source: "/docs/limitations",
+				destination: "/docs/cloud/limitations",
 				permanent: false,
 			},
 			{
-				source: '/docs/local-development',
-				destination: '/docs/cloud/local-development',
+				source: "/docs/local-development",
+				destination: "/docs/cloud/local-development",
 				permanent: false,
 			},
 			{
-				source: '/docs/networking',
-				destination: '/docs/cloud/networking',
+				source: "/docs/networking",
+				destination: "/docs/cloud/networking",
 				permanent: false,
 			},
 			{
-				source: '/docs/pricing',
-				destination: '/docs/cloud/pricing',
+				source: "/docs/pricing",
+				destination: "/docs/cloud/pricing",
 				permanent: false,
 			},
 			{
-				source: '/docs/quickstart',
-				destination: '/docs/cloud/quickstart',
+				source: "/docs/quickstart",
+				destination: "/docs/cloud/quickstart",
 				permanent: false,
 			},
 			{
-				source: '/docs/solutions/:slug*',
-				destination: '/docs/cloud/solutions/:slug*',
+				source: "/docs/solutions/:slug*",
+				destination: "/docs/cloud/solutions/:slug*",
 				permanent: false,
 			},
 			{
-				source: '/docs/tokens',
-				destination: '/docs/cloud/tokens',
+				source: "/docs/tokens",
+				destination: "/docs/cloud/tokens",
 				permanent: false,
 			},
 			{
-				source: '/docs/troubleshooting',
-				destination: '/docs/cloud/troubleshooting',
+				source: "/docs/troubleshooting",
+				destination: "/docs/cloud/troubleshooting",
 				permanent: false,
 			},
 			{
-				source: '/docs/workers',
-				destination: '/docs/cloud/workers',
+				source: "/docs/workers",
+				destination: "/docs/cloud/workers",
 				permanent: false,
 			},
 			{
-				source: '/docs/javascript-runtime',
-				destination: '/docs/cloud/actors',
+				source: "/docs/javascript-runtime",
+				destination: "/docs/cloud/actors",
 				permanent: false,
 			},
 			{
-				source: '/docs/container-runtime',
-				destination: '/docs/cloud/containers',
+				source: "/docs/container-runtime",
+				destination: "/docs/cloud/containers",
 				permanent: false,
 			},
 
 			// Additional redirects for missing pages from CSV
 			{
-				source: '/docs/general/authentication',
-				destination: '/docs/actors/authentication',
+				source: "/docs/general/authentication",
+				destination: "/docs/actors/authentication",
 				permanent: false,
 			},
 			{
-				source: '/docs/general/authentication/',
-				destination: '/docs/actors/authentication',
+				source: "/docs/general/authentication/",
+				destination: "/docs/actors/authentication",
 				permanent: false,
 			},
 			{
-				source: '/docs/general/testing',
-				destination: '/docs/actors/testing',
+				source: "/docs/general/testing",
+				destination: "/docs/actors/testing",
 				permanent: false,
 			},
 			{
-				source: '/docs/general/testing/',
-				destination: '/docs/actors/testing',
+				source: "/docs/general/testing/",
+				destination: "/docs/actors/testing",
 				permanent: false,
 			},
 			{
-				source: '/docs/actors/communicating-with-actors',
-				destination: '/docs/actors/communicating-between-actors',
+				source: "/docs/actors/communicating-with-actors",
+				destination: "/docs/actors/communicating-between-actors",
 				permanent: false,
 			},
 			{
-				source: '/docs/actors/communicating-with-actors/',
-				destination: '/docs/actors/communicating-between-actors',
+				source: "/docs/actors/communicating-with-actors/",
+				destination: "/docs/actors/communicating-between-actors",
 				permanent: false,
 			},
 			{
-				source: '/actors/communicating-with-actors',
-				destination: '/docs/actors/communicating-between-actors',
+				source: "/actors/communicating-with-actors",
+				destination: "/docs/actors/communicating-between-actors",
 				permanent: false,
 			},
 			{
-				source: '/actors/communicating-with-actors/',
-				destination: '/docs/actors/communicating-between-actors',
+				source: "/actors/communicating-with-actors/",
+				destination: "/docs/actors/communicating-between-actors",
 				permanent: false,
 			},
 			{
-				source: '/clients/javascript',
-				destination: '/docs/clients/javascript',
+				source: "/clients/javascript",
+				destination: "/docs/clients/javascript",
 				permanent: false,
 			},
 			{
-				source: '/clients/javascript/',
-				destination: '/docs/clients/javascript',
+				source: "/clients/javascript/",
+				destination: "/docs/clients/javascript",
 				permanent: false,
 			},
-
 
 			// Handle specific API variants without trailing slash that may not be caught by :slug* pattern
 			{
-				source: '/docs/api/regions/list',
-				destination: '/docs/cloud/api/regions/list',
+				source: "/docs/api/regions/list",
+				destination: "/docs/cloud/api/regions/list",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/actors/create',
-				destination: '/docs/cloud/api/actors/create',
+				source: "/docs/api/actors/create",
+				destination: "/docs/cloud/api/actors/create",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/actors/upgrade-all',
-				destination: '/docs/cloud/api/actors/upgrade-all',
+				source: "/docs/api/actors/upgrade-all",
+				destination: "/docs/cloud/api/actors/upgrade-all",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/actors/upgrade',
-				destination: '/docs/cloud/api/actors/upgrade',
+				source: "/docs/api/actors/upgrade",
+				destination: "/docs/cloud/api/actors/upgrade",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/actors/destroy',
-				destination: '/docs/cloud/api/actors/destroy',
+				source: "/docs/api/actors/destroy",
+				destination: "/docs/cloud/api/actors/destroy",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/routes/update',
-				destination: '/docs/cloud/api/routes/update',
+				source: "/docs/api/routes/update",
+				destination: "/docs/cloud/api/routes/update",
 				permanent: false,
 			},
 
 			// Additional missing API endpoints
 			{
-				source: '/docs/api/actors/get',
-				destination: '/docs/cloud/api/actors/get',
+				source: "/docs/api/actors/get",
+				destination: "/docs/cloud/api/actors/get",
 				permanent: false,
 			},
 			{
-				source: '/docs/api/actors/list',
-				destination: '/docs/cloud/api/actors/list',
-				permanent: false,
-			},
-			{
-				source: '/docs/api',
-				destination: '/docs/cloud/api',
+				source: "/docs/api/actors/list",
+				destination: "/docs/cloud/api/actors/list",
 				permanent: false,
 			},
 
 			// Missing documentation pages
 			{
-				source: '/docs/containers',
-				destination: '/docs/cloud/containers',
+				source: "/docs/containers",
+				destination: "/docs/cloud/containers",
 				permanent: false,
 			},
-
 		];
 	},
 	webpack: (config) => {

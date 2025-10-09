@@ -20,7 +20,6 @@ import {
 const footer = {
 	product: [
 		{ name: "Actors", href: "/docs/actors" },
-		{ name: "Rivet Cloud", href: "/cloud" }
 	],
 	devs: [
 		{ name: "Documentation", href: "/docs/actors" },
@@ -40,7 +39,7 @@ const footer = {
 		{ name: "Talk to an engineer", href: "/talk-to-an-engineer" },
 		{ name: "Sales", href: "/sales" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
-		{ name: "Press Kit", href: "https://releases.rivet.gg/press-kit.zip" },
+		{ name: "Press Kit", href: "https://releases.rivet.dev/press-kit.zip" },
 	],
 	legal: [
 		{ name: "Terms", href: "/terms" },
@@ -60,7 +59,7 @@ const footer = {
 		},
 		{
 			name: "Bluesky",
-			href: "https://bsky.app/profile/rivet.gg",
+			href: "https://bsky.app/profile/rivet.dev",
 			icon: faBluesky,
 		},
 		{

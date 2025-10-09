@@ -1,6 +1,6 @@
 # Rivet Site
 
-[rivet.gg](https://rivet.gg)
+[rivet.dev](https://rivet.dev)
 
 ## Project structure
 

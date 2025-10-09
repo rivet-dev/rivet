@@ -11,7 +11,12 @@ import {
 } from "@rivet-gg/components";
 import { faCopy, faFile, Icon } from "@rivet-gg/icons";
 import escapeHTML from "escape-html";
-import { Children, cloneElement, type ReactElement } from "react";
+import {
+	Children,
+	cloneElement,
+	isValidElement,
+	type ReactElement,
+} from "react";
 import { AutofillCodeBlock } from "@/components/v2/AutofillCodeBlock";
 import { AutofillFooter } from "@/components/v2/AutofillFooter";
 import { CopyCodeTrigger } from "@/components/v2/CopyCodeButton";
@@ -30,6 +35,8 @@ const languageNames = {
 	yaml: "YAML",
 	gdscript: "GDScript",
 	powershell: "Command Line",
+	dockerfile: "Dockerfile",
+	ini: "Configuration",
 	ps1: "Command Line",
 	docker: "Docker",
 	http: "HTTP",
@@ -48,32 +55,47 @@ const getChildIdx = (child: ReactElement) =>
 	child.props?.file || child.props?.title || child.props?.language || "code";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {
+	const tabChildren = Children.toArray(children).filter(
+		(child): child is ReactElement => isValidElement(child),
+	);
+
+	if (tabChildren.length === 0) {
+		return null;
+	}
+
 	return (
 		<div
 			className={cn(
 				"code-group group my-4 rounded-md border pt-2",
 				className,
 			)}
+			data-code-group
 		>
-			<Tabs defaultValue={getChildIdx(children[0])}>
-				<ScrollArea
-					className="w-full"
-					viewportProps={{ className: "[&>div]:!table" }}
-				>
-					<TabsList>
-						{Children.map(children, (child) => {
-							const idx = getChildIdx(child);
-							return (
-								<TabsTrigger key={idx} value={idx}>
-									{child.props.title ||
-										languageNames[child.props.language] ||
-										"Code"}
-								</TabsTrigger>
-							);
-						})}
-					</TabsList>
-				</ScrollArea>
-				{Children.map(children, (child) => {
+			<Tabs defaultValue={getChildIdx(tabChildren[0])}>
+				<div className="border-b border-border px-2">
+					<ScrollArea
+						className="w-full"
+						viewportProps={{ className: "[&>div]:!table" }}
+					>
+						<TabsList className="-mb-[1px] flex w-max items-center gap-2 px-2 py-1">
+							{tabChildren.map((child) => {
+								const idx = getChildIdx(child);
+								return (
+									<TabsTrigger
+										key={idx}
+										value={idx}
+										className="inline-flex !h-auto items-center border-b-2 border-transparent !px-3 !py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-white data-[state=active]:border-b-white data-[state=active]:bg-primary/10 data-[state=active]:text-white data-[state=active]:!text-white data-[state=active]:shadow-none aria-selected:text-white"
+									>
+										{child.props.title ||
+											languageNames[child.props.language] ||
+											"Code"}
+									</TabsTrigger>
+								);
+							})}
+						</TabsList>
+					</ScrollArea>
+				</div>
+				{tabChildren.map((child) => {
 					const idx = getChildIdx(child);
 					return (
 						<TabsContent key={idx} value={idx}>

@@ -131,7 +131,7 @@ export function Navigation({ navigation, ...props }) {
 					: null}
 				<li className="sticky bottom-0 z-10 mt-6 min-[416px]:hidden">
 					<Button
-						href="https://hub.rivet.gg"
+						href="https://dashboard.rivet.dev"
 						variant="secondary"
 						className="w-full"
 					>

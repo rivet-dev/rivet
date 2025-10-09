@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 	description:
 		"Connect with a Rivet engineer to discuss your technical needs, current stack, and how we can help with your infrastructure challenges",
 	alternates: {
-		canonical: "https://www.rivet.gg/talk-to-an-engineer/",
+		canonical: "https://www.rivet.dev/talk-to-an-engineer/",
 	},
 };
 

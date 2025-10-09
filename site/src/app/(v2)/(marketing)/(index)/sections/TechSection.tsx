@@ -5,14 +5,21 @@ import Image from "next/image";
 import rivetWhiteLogo from "../images/platforms/rivet-white.svg";
 import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
 import bunLogo from "../images/platforms/bun.svg";
+import denoLogo from "../images/platforms/deno.svg";
 import nodejsLogo from "../images/platforms/nodejs.svg";
 import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
 import vercelLogo from "../images/platforms/vercel.svg";
 import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
+import awsEcsLogo from "../images/platforms/aws-ecs.svg";
 import supabaseLogo from "../images/platforms/supabase.svg";
 import postgresLogo from "../images/platforms/postgres.svg";
 import railwayLogo from "../images/platforms/railway.svg";
+import freestyleLogo from "../images/platforms/freestyle.svg";
+import gcpCloudRunLogo from "../images/platforms/gcp-cloud-run.svg";
+import kubernetesLogo from "../images/platforms/kubernetes.svg";
+import hetznerLogo from "../images/platforms/hetzner.svg";
+import vmBareMetalLogo from "../images/platforms/vm-bare-metal.svg";
 
 // Client images
 import reactLogo from "../images/clients/react.svg";
@@ -21,6 +28,7 @@ import typescriptLogo from "../images/clients/typescript.svg";
 import rustLogo from "../images/clients/rust.svg";
 import nextjsLogo from "../images/clients/nextjs.svg";
 import vueLogo from "../images/clients/vue.svg";
+import svelteLogo from "../images/clients/svelte.svg";
 
 // Integration images
 import honoLogo from "../images/integrations/hono.svg";
@@ -40,7 +48,7 @@ interface TechLinkProps {
 	icon: string;
 	alt: string;
 	external?: boolean;
-	status?: "coming-soon" | "help-wanted" | "available-in-july";
+	status?: "coming-soon" | "help-wanted" | "1-click-deploy";
 }
 
 function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
@@ -49,9 +57,9 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 
 	const linkProps = external
 		? {
-				target: "_blank",
-				rel: "noopener noreferrer",
-			}
+			target: "_blank",
+			rel: "noopener noreferrer",
+		}
 		: {};
 
 	const statusText =
@@ -59,15 +67,17 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 			? "On The Roadmap"
 			: status === "help-wanted"
 				? "Help Wanted"
-				: status === "available-in-july"
-					? "Available In July"
+				: status === "1-click-deploy"
+					? "1-Click Deploy"
 					: "";
 	const statusClass =
-		status === "coming-soon" || status === "available-in-july"
+		status === "coming-soon"
 			? "bg-[#ff4f00] text-white"
 			: status === "help-wanted"
 				? "bg-[#0059ff] text-white"
-				: "";
+				: status === "1-click-deploy"
+					? "bg-[#007aff] text-white"
+					: "";
 
 	return (
 		<Link href={href} className={baseClasses} {...linkProps}>
@@ -135,9 +145,9 @@ function TechSectionText({
 }: TechSectionTextProps) {
 	const linkProps = linkExternal
 		? {
-				target: "_blank",
-				rel: "noopener noreferrer",
-			}
+			target: "_blank",
+			rel: "noopener noreferrer",
+		}
 		: {};
 
 	return (
@@ -186,67 +196,14 @@ export function TechSection() {
 					/>
 
 					<TechSectionSubsections>
-						<TechSubSection title="Compute">
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Node.js"
-								icon={nodejsLogo}
-								alt="Node.js"
-							/>
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Bun"
-								icon={bunLogo}
-								alt="Bun"
-							/>
-							{/*<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/905"
-								name="Deno"
-								icon={denoLogo}
-								alt="Deno"
-								external
-								status="help-wanted"
-							/>*/}
-							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/897"
-								name="Vercel"
-								icon={vercelLogo}
-								alt="Vercel"
-								external
-								status="coming-soon"
-							/>
-							<TechLink
-								href="https://railway.com/deploy/rivet"
-								name="Railway"
-								icon={railwayLogo}
-								alt="Railway"
-								external
-							/>
-							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/898"
-								name="AWS Lambda"
-								icon={awsLambdaLogo}
-								alt="AWS Lambda"
-								external
-								status="coming-soon"
-							/>
-							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/905"
-								name="Supabase"
-								icon={supabaseLogo}
-								alt="Supabase"
-								external
-								status="help-wanted"
-							/>
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Durable Objects"
-								icon={cloudflareWorkersLogo}
-								alt="Cloudflare Durable Objects"
-							/>
-						</TechSubSection>
-
 						<TechSubSection title="Storage">
+							<TechLink
+								href="/docs/cloud"
+								name="Rivet Cloud"
+								icon={rivetWhiteLogo}
+								alt="Rivet Cloud"
+								status="1-click-deploy"
+							/>
 							<TechLink
 								href="/docs/actors/"
 								name="Postgres"
@@ -266,6 +223,100 @@ export function TechSection() {
 								alt="Memory"
 							/>
 						</TechSubSection>
+
+						<TechSubSection title="Compute">
+							<TechLink
+								href="/docs/actors/quickstart/backend"
+								name="Node.js"
+								icon={nodejsLogo}
+								alt="Node.js"
+							/>
+							<TechLink
+								href="/docs/actors/quickstart/backend"
+								name="Bun"
+								icon={bunLogo}
+								alt="Bun"
+							/>
+							<TechLink
+								href="/docs/actors/quickstart/deno"
+								name="Deno"
+								icon={denoLogo}
+								alt="Deno"
+							/>
+							<TechLink
+								href="/docs/actors/quickstart/backend"
+								name="Durable Objects"
+								icon={cloudflareWorkersLogo}
+								alt="Cloudflare Durable Objects"
+							/>
+							<TechLink
+								href="https://railway.com/deploy/rivet"
+								name="Railway"
+								icon={railwayLogo}
+								alt="Railway"
+								external
+								status="1-click-deploy"
+							/>
+							<TechLink
+								href="/docs/deploy/vercel"
+								name="Vercel"
+								icon={vercelLogo}
+								alt="Vercel"
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/supabase"
+								name="Supabase"
+								icon={supabaseLogo}
+								alt="Supabase"
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/freestyle"
+								name="Freestyle"
+								icon={freestyleLogo}
+								alt="Freestyle"
+								external
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/aws-lambda"
+								name="AWS Lambda"
+								icon={awsLambdaLogo}
+								alt="AWS Lambda"
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/aws-ecs"
+								name="AWS ECS"
+								icon={awsEcsLogo}
+								alt="AWS ECS"
+							/>
+							<TechLink
+								href="/docs/deploy/gcp-cloud-run"
+								name="GCP Cloud Run"
+								icon={gcpCloudRunLogo}
+								alt="GCP Cloud Run"
+							/>
+							<TechLink
+								href="/docs/deploy/kubernetes"
+								name="Kubernetes"
+								icon={kubernetesLogo}
+								alt="Kubernetes"
+							/>
+							<TechLink
+								href="/docs/deploy/hetzner"
+								name="Hetzner"
+								icon={hetznerLogo}
+								alt="Hetzner"
+							/>
+							<TechLink
+								href="/docs/deploy/vm-bare-metal"
+								name="VM & Bare Metal"
+								icon={vmBareMetalLogo}
+								alt="VM & Bare Metal"
+							/>
+						</TechSubSection>
 					</TechSectionSubsections>
 				</TechSectionGroup>
 
@@ -274,7 +325,7 @@ export function TechSection() {
 						heading="Works With Your Tools"
 						description="Seamlessly integrate Rivet with your favorite frameworks, languages, and tools."
 						linkText="Request an integration"
-						linkHref="https://github.com/rivet-gg/rivetkit/issues/new"
+						linkHref="https://github.com/rivet-dev/rivetkit/issues/new"
 						linkExternal
 					/>
 
@@ -311,11 +362,17 @@ export function TechSection() {
 								alt="Next.js"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/903"
+								href="https://github.com/rivet-dev/rivetkit/pull/1172"
+								name="Svelte"
+								icon={svelteLogo}
+								alt="Svelte"
+								external
+							/>
+							<TechLink
+								href="/docs/clients/vue"
 								name="Vue"
 								icon={vueLogo}
 								alt="Vue"
-								external
 								status="help-wanted"
 							/>
 						</TechSubSection>
@@ -367,46 +424,41 @@ export function TechSection() {
 
 						<TechSubSection title="AI">
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/907"
+								href="/docs/integrations/ai-sdk"
 								name="AI SDK"
 								icon={vercelLogo}
 								alt="AI SDK"
-								external
 								status="coming-soon"
 							/>
 						</TechSubSection>
 
 						<TechSubSection title="Sync">
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/908"
+								href="/docs/integrations/livestore"
 								name="LiveStore"
 								icon={livestoreLogo}
 								alt="LiveStore"
-								external
 								status="coming-soon"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/909"
+								href="/docs/integrations/zerosync"
 								name="ZeroSync"
 								icon={zerosyncLogo}
 								alt="ZeroSync"
-								external
 								status="help-wanted"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/910"
+								href="/docs/integrations/tinybase"
 								name="TinyBase"
 								icon={tinybaseLogo}
 								alt="TinyBase"
-								external
 								status="help-wanted"
 							/>
 							<TechLink
-								href="https://github.com/rivet-gg/rivetkit/issues/911"
+								href="/docs/integrations/yjs"
 								name="Yjs"
 								icon={yjsLogo}
 								alt="Yjs"
-								external
 								status="help-wanted"
 							/>
 						</TechSubSection>

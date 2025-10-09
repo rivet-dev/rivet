@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 	description:
 		"See Rivet's transparent pricing for serverless compute—billed by the millisecond for functions, actors, and containers. No hidden fees.",
 	alternates: {
-		canonical: "https://www.rivet.gg/pricing/",
+		canonical: "https://www.rivet.dev/pricing/",
 	},
 };
 

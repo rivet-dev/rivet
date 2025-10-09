@@ -38,7 +38,7 @@ export const HeaderPopupProductMenu = () => {
 						disableRemotePlayback
 					>
 						<source
-							src="https://assets2.rivet.gg/effects/bg-effect-product-actors.webm?v=2"
+							src="https://assets2.rivet.dev/effects/bg-effect-product-actors.webm?v=2"
 							type="video/webm"
 						/>
 					</video>
@@ -51,7 +51,7 @@ export const HeaderPopupProductMenu = () => {
 				className="col-start-3 h-full justify-start"
 				startIcon={<Icon icon={faCodeBranch} />}
 			>
-				<Link href="https://github.com/rivet-gg/rivet" target="_blank">
+				<Link href="https://github.com/rivet-dev/rivet" target="_blank">
 					Community Edition
 				</Link>
 			</Button>
@@ -60,7 +60,7 @@ export const HeaderPopupProductMenu = () => {
 				className="col-start-3 h-full justify-start"
 				startIcon={<Icon icon={faCloud} />}
 			>
-				<Link href="https://hub.rivet.gg" target="_blank">
+				<Link href="https://dashboard.rivet.dev" target="_blank">
 					Rivet Cloud
 				</Link>
 			</Button>

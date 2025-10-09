@@ -360,7 +360,7 @@ Why we went with our own custom solution:
 - Gateways are always on the bleeding edge of networking standards — if we want to support WebTransport or other new technologies, we don't want to have fork Envoy
 - We have use cases that include TCP & UDP that's not included in this piece. This is not Envoy's strong suite — we'd likely have to also incorporate [Quilkin](https://github.com/googleforgames/quilkin) to make UDP work
 - Less moving parts: this is a single binary with fewer points of failure (no need for a gRPC or REST server)
-- We care a lot about portability & being able to run all of Rivet in a single container for a full local dev environment ([single container docs](https://rivet.gg/docs/cloud/self-hosting/single-container))
+- We care a lot about portability & being able to run all of Rivet in a single container for a full local dev environment ([single container docs](https://rivet.dev/docs/cloud/self-hosting/single-container))
 - Faster & easier to write it from scratch than parse Envoy's obscure documentation; past experiences with Envoy require reading the source to understand how to configure it
 
 ### Cloudflare Pingora

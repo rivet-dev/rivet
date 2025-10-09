@@ -10,7 +10,7 @@ import Link from "next/link";
 export function CommunitySection() {
 	const communityLinks = [
 		{
-			href: "https://rivet.gg/discord",
+			href: "https://rivet.dev/discord",
 			icon: faDiscord,
 			label: "Discord",
 		},
@@ -20,7 +20,7 @@ export function CommunitySection() {
 			label: "X",
 		},
 		{
-			href: "https://bsky.app/profile/rivet.gg",
+			href: "https://bsky.app/profile/rivet.dev",
 			icon: faBluesky,
 			label: "Bluesky",
 		},

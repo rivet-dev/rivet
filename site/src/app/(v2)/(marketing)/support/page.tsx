@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 	description:
 		"Get help with Rivet, from troubleshooting to feature requests.",
 	alternates: {
-		canonical: "https://www.rivet.gg/support/",
+		canonical: "https://www.rivet.dev/support/",
 	},
 };
 
@@ -29,7 +29,7 @@ export default function SupportPage() {
 				<div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
 					{/* Email Tile */}
 					<a
-						href="mailto:support@rivet.gg"
+						href="mailto:support@rivet.dev"
 						className="group rounded-xl bg-white/2 border border-white/20 hover:border-white/40 shadow-sm transition-all duration-200 relative overflow-hidden h-[180px] flex flex-col items-center justify-center px-8"
 					>
 						<div className="flex flex-col items-center">
@@ -41,13 +41,13 @@ export default function SupportPage() {
 								Email
 							</span>
 							<span className="text-white/60 text-sm">
-								support@rivet.gg
+								support@rivet.dev
 							</span>
 						</div>
 					</a>
 					{/* Discord Tile */}
 					<a
-						href="https://rivet.gg/discord"
+						href="https://rivet.dev/discord"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="group rounded-xl bg-white/2 border border-white/20 hover:border-white/40 shadow-sm transition-all duration-200 relative overflow-hidden h-[180px] flex flex-col items-center justify-center px-8"
@@ -61,13 +61,13 @@ export default function SupportPage() {
 								Discord
 							</span>
 							<span className="text-white/60 text-sm">
-								rivet.gg/discord
+								rivet.dev/discord
 							</span>
 						</div>
 					</a>
 					{/* Docs Tile */}
 					<a
-						href="https://rivet.gg/docs/actors"
+						href="https://rivet.dev/docs/actors"
 						target="_blank"
 						rel="noopener noreferrer"
 						className="group rounded-xl bg-white/2 border border-white/20 hover:border-white/40 shadow-sm transition-all duration-200 relative overflow-hidden h-[180px] flex flex-col items-center justify-center px-8"
@@ -81,7 +81,7 @@ export default function SupportPage() {
 								Docs
 							</span>
 							<span className="text-white/60 text-sm">
-								rivet.gg/docs
+								rivet.dev/docs
 							</span>
 						</div>
 					</a>
