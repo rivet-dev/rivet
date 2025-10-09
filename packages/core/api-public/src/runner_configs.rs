@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::Result;
 use axum::{
 	http::HeaderMap,
 	response::{IntoResponse, Response},
 };
+use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -251,4 +252,211 @@ async fn delete_inner(
 	}
 
 	Ok(DeleteResponse {})
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = RunnerConfigsServerlessHealthCheckRequest)]
+pub struct ServerlessHealthCheckRequest {
+	pub url: String,
+	#[serde(default)]
+	pub headers: HashMap<String, String>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = RunnerConfigsServerlessHealthCheckError)]
+pub enum ServerlessHealthCheckError {
+	InvalidRequest {},
+	RequestFailed {},
+	RequestTimedOut {},
+	NonSuccessStatus {
+		status_code: u16,
+		body: String,
+	},
+	InvalidResponseJson {
+		body: String,
+	},
+	InvalidResponseSchema {
+		status: String,
+		runtime: String,
+		version: String,
+	},
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = RunnerConfigsServerlessHealthCheckResponse)]
+pub enum ServerlessHealthCheckResponse {
+	Success { version: String },
+	Failure { error: ServerlessHealthCheckError },
+}
+
+impl ServerlessHealthCheckResponse {
+	fn success(version: String) -> Self {
+		Self::Success { version }
+	}
+
+	fn failure(error: ServerlessHealthCheckError) -> Self {
+		Self::Failure { error }
+	}
+}
+
+const RESPONSE_BODY_MAX_LEN: usize = 1024;
+
+fn truncate_response_body(body: &str) -> String {
+	let mut chars = body.chars();
+	let mut truncated: String = chars.by_ref().take(RESPONSE_BODY_MAX_LEN).collect();
+	if chars.next().is_some() {
+		truncated.push_str("...[truncated]");
+	}
+
+	truncated
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServerlessHealthPayload {
+	status: String,
+	runtime: String,
+	version: String,
+}
+
+#[utoipa::path(
+	post,
+	operation_id = "runner_configs_serverless_health_check",
+	path = "/runner-configs/serverless-health-check",
+	request_body(content = ServerlessHealthCheckRequest, content_type = "application/json"),
+	responses(
+		(status = 200, body = ServerlessHealthCheckResponse),
+	),
+	security(("bearer_auth" = [])),
+)]
+pub async fn serverless_health_check(
+	Extension(ctx): Extension<ApiCtx>,
+	Json(body): Json<ServerlessHealthCheckRequest>,
+) -> Response {
+	match serverless_health_check_inner(ctx, body).await {
+		Ok(response) => Json(response).into_response(),
+		Err(err) => ApiError::from(err).into_response(),
+	}
+}
+
+async fn serverless_health_check_inner(
+	ctx: ApiCtx,
+	body: ServerlessHealthCheckRequest,
+) -> Result<ServerlessHealthCheckResponse> {
+	ctx.auth().await?;
+
+	let ServerlessHealthCheckRequest { url, headers } = body;
+	let trimmed_url = url.trim();
+	if trimmed_url.is_empty() {
+		return Ok(ServerlessHealthCheckResponse::failure(
+			ServerlessHealthCheckError::InvalidRequest {},
+		));
+	}
+
+	let health_url = format!("{}/health", trimmed_url.trim_end_matches('/'));
+
+	if reqwest::Url::parse(&health_url).is_err() {
+		return Ok(ServerlessHealthCheckResponse::failure(
+			ServerlessHealthCheckError::InvalidRequest {},
+		));
+	}
+
+	let mut header_map = ReqwestHeaderMap::new();
+	for (name, value) in headers {
+		let header_name = match HeaderName::from_bytes(name.trim().as_bytes()) {
+			Ok(name) => name,
+			Err(_) => {
+				return Ok(ServerlessHealthCheckResponse::failure(
+					ServerlessHealthCheckError::InvalidRequest {},
+				));
+			}
+		};
+
+		let header_value = match HeaderValue::from_str(value.trim()) {
+			Ok(value) => value,
+			Err(_) => {
+				return Ok(ServerlessHealthCheckResponse::failure(
+					ServerlessHealthCheckError::InvalidRequest {},
+				));
+			}
+		};
+
+		header_map.insert(header_name, header_value);
+	}
+
+	let client = match reqwest::Client::builder()
+		.timeout(Duration::from_secs(10))
+		.build()
+	{
+		Ok(client) => client,
+		Err(_) => {
+			return Ok(ServerlessHealthCheckResponse::failure(
+				ServerlessHealthCheckError::RequestFailed {},
+			));
+		}
+	};
+
+	let response = match client.get(&health_url).headers(header_map).send().await {
+		Ok(response) => response,
+		Err(err) => {
+			let error = if err.is_timeout() {
+				ServerlessHealthCheckError::RequestTimedOut {}
+			} else {
+				ServerlessHealthCheckError::RequestFailed {}
+			};
+
+			return Ok(ServerlessHealthCheckResponse::failure(error));
+		}
+	};
+
+	let status = response.status();
+	let body_raw = response
+		.text()
+		.await
+		.unwrap_or_else(|_| String::from("<failed to read body>"));
+	let body_for_user = truncate_response_body(&body_raw);
+
+	if !status.is_success() {
+		return Ok(ServerlessHealthCheckResponse::failure(
+			ServerlessHealthCheckError::NonSuccessStatus {
+				status_code: status.as_u16(),
+				body: body_for_user,
+			},
+		));
+	}
+
+	let payload = match serde_json::from_str::<ServerlessHealthPayload>(&body_raw) {
+		Ok(payload) => payload,
+		Err(_) => {
+			return Ok(ServerlessHealthCheckResponse::failure(
+				ServerlessHealthCheckError::InvalidResponseJson {
+					body: body_for_user,
+				},
+			));
+		}
+	};
+
+	let ServerlessHealthPayload {
+		status,
+		runtime,
+		version,
+	} = payload;
+
+	let trimmed_version = version.trim();
+	if status != "ok" || runtime != "rivetkit" || trimmed_version.is_empty() {
+		return Ok(ServerlessHealthCheckResponse::failure(
+			ServerlessHealthCheckError::InvalidResponseSchema {
+				status,
+				runtime,
+				version,
+			},
+		));
+	}
+
+	Ok(ServerlessHealthCheckResponse::success(
+		trimmed_version.to_owned(),
+	))
 }
