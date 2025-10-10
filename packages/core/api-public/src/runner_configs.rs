@@ -22,8 +22,14 @@ use crate::ctx::ApiCtx;
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsListResponse)]
 pub struct ListResponse {
-	pub runner_configs: HashMap<String, HashMap<String, rivet_types::runner_configs::RunnerConfig>>,
+	pub runner_configs: HashMap<String, RunnerConfigDatacenters>,
 	pub pagination: Pagination,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[schema(as = RunnerConfigsListResponseRunnerConfigsValue)]
+pub struct RunnerConfigDatacenters {
+	pub datacenters: HashMap<String, rivet_types::runner_configs::RunnerConfig>,
 }
 
 #[utoipa::path(
@@ -64,7 +70,7 @@ async fn list_inner(
 		_,
 		_,
 		_,
-		HashMap<String, HashMap<String, rivet_types::runner_configs::RunnerConfig>>,
+		HashMap<String, RunnerConfigDatacenters>,
 	>(
 		ctx.clone().into(),
 		headers,
@@ -76,9 +82,13 @@ async fn list_inner(
 		},
 		|dc_label, res, agg| {
 			for (runner_name, runner_config) in res.runner_configs {
-				let entry = agg.entry(runner_name).or_insert_with(HashMap::new);
+				let entry = agg
+					.entry(runner_name)
+					.or_insert_with(|| RunnerConfigDatacenters {
+						datacenters: HashMap::new(),
+					});
 
-				entry.insert(
+				entry.datacenters.insert(
 					ctx.config()
 						.dc_for_label(dc_label)
 						.expect("dc should exist")
@@ -100,9 +110,9 @@ async fn list_inner(
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsUpsertRequestBody)]
-pub struct UpsertRequest(
-	#[schema(inline)] HashMap<String, rivet_api_types::namespaces::runner_configs::RunnerConfig>,
-);
+pub struct UpsertRequest {
+	pub datacenters: HashMap<String, rivet_api_types::namespaces::runner_configs::RunnerConfig>,
+}
 
 #[utoipa::path(
 	put,
@@ -141,7 +151,7 @@ async fn upsert_inner(
 	ctx.auth().await?;
 
 	for dc in &ctx.config().topology().datacenters {
-		if let Some(runner_config) = body.0.remove(&dc.name) {
+		if let Some(runner_config) = body.datacenters.remove(&dc.name) {
 			if ctx.config().dc_label() == dc.datacenter_label {
 				rivet_api_peer::runner_configs::upsert(
 					ctx.clone().into(),

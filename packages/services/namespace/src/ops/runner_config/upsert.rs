@@ -20,9 +20,8 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 			let runner_config_key =
 				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
-			// Delete previous config
+			// Delete previous index
 			if let Some(existing_config) = tx.read_opt(&runner_config_key, Serializable).await? {
-				tx.delete(&runner_config_key);
 				tx.delete(&keys::runner_config::ByVariantKey::new(
 					input.namespace_id,
 					runner_config_variant(&existing_config),
