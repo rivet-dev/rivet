@@ -34,6 +34,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 			)?;
 
 			match &input.config {
+				RunnerConfig::Normal {} => {}
 				RunnerConfig::Serverless {
 					url,
 					headers,
@@ -103,9 +104,11 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 		.map_err(|err| err.build())?;
 
 	// Bump autoscaler
-	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-		.send()
-		.await?;
+	if input.config.affects_autoscaler() {
+		ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+			.send()
+			.await?;
+	}
 
 	Ok(())
 }

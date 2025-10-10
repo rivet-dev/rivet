@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerConfig {
+	Normal {},
 	Serverless {
 		url: String,
 		headers: Option<HashMap<String, String>>,
@@ -21,6 +22,7 @@ pub enum RunnerConfig {
 impl Into<rivet_types::runner_configs::RunnerConfig> for RunnerConfig {
 	fn into(self) -> rivet_types::runner_configs::RunnerConfig {
 		match self {
+			RunnerConfig::Normal {} => rivet_types::runner_configs::RunnerConfig::Normal {},
 			RunnerConfig::Serverless {
 				url,
 				headers,

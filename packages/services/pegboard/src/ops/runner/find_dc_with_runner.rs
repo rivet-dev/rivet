@@ -85,6 +85,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 					return Ok(Some(ctx.config().dc_label()));
 				}
 			}
+			_ => {}
 		}
 	}
 
@@ -146,6 +147,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 					rivet_types::runner_configs::RunnerConfig::Serverless {
 						max_runners, ..
 					} => *max_runners != 0,
+					_ => false,
 				})
 				.count() != 0
 		},

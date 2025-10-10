@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunnerConfig {
+	Normal {},
 	Serverless {
 		url: String,
 		headers: HashMap<String, String>,
@@ -21,6 +22,11 @@ pub enum RunnerConfig {
 impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::Data {
 	fn from(value: RunnerConfig) -> Self {
 		match value {
+			RunnerConfig::Normal {} => {
+				rivet_data::generated::namespace_runner_config_v1::Data::Normal(
+					rivet_data::generated::namespace_runner_config_v1::Normal {},
+				)
+			}
 			RunnerConfig::Serverless {
 				url,
 				headers,
@@ -47,6 +53,9 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v1::D
 impl From<rivet_data::generated::namespace_runner_config_v1::Data> for RunnerConfig {
 	fn from(value: rivet_data::generated::namespace_runner_config_v1::Data) -> Self {
 		match value {
+			rivet_data::generated::namespace_runner_config_v1::Data::Normal(_) => {
+				RunnerConfig::Normal {}
+			}
 			rivet_data::generated::namespace_runner_config_v1::Data::Serverless(o) => {
 				RunnerConfig::Serverless {
 					url: o.url,
@@ -58,6 +67,16 @@ impl From<rivet_data::generated::namespace_runner_config_v1::Data> for RunnerCon
 					runners_margin: o.runners_margin,
 				}
 			}
+		}
+	}
+}
+
+impl RunnerConfig {
+	/// If updates to this run config affects the autoscaler.
+	pub fn affects_autoscaler(&self) -> bool {
+		match self {
+			Self::Serverless { .. } => true,
+			Self::Normal { .. } => false,
 		}
 	}
 }

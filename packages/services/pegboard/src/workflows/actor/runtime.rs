@@ -147,6 +147,7 @@ async fn allocate_actor(
 		.first()
 		.map(|runner| match &runner.config {
 			RunnerConfig::Serverless { max_runners, .. } => *max_runners != 0,
+			_ => false,
 		})
 		.unwrap_or_default();
 
