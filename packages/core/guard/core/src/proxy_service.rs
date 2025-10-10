@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Result, anyhow, bail};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
@@ -59,8 +59,8 @@ impl http_body::Body for ResponseBody {
 			ResponseBody::Full(body) => {
 				let pin = std::pin::Pin::new(body);
 				match pin.poll_frame(cx) {
-					std::task::Poll::Ready(Some(Result::Ok(frame))) => {
-						std::task::Poll::Ready(Some(Result::Ok(frame)))
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
 					}
 					std::task::Poll::Ready(Some(Err(e))) => {
 						std::task::Poll::Ready(Some(Err(Box::new(e))))
@@ -72,8 +72,8 @@ impl http_body::Body for ResponseBody {
 			ResponseBody::Incoming(body) => {
 				let pin = std::pin::Pin::new(body);
 				match pin.poll_frame(cx) {
-					std::task::Poll::Ready(Some(Result::Ok(frame))) => {
-						std::task::Poll::Ready(Some(Result::Ok(frame)))
+					std::task::Poll::Ready(Some(Ok(frame))) => {
+						std::task::Poll::Ready(Some(Ok(frame)))
 					}
 					std::task::Poll::Ready(Some(Err(e))) => {
 						std::task::Poll::Ready(Some(Err(Box::new(e))))
@@ -486,7 +486,7 @@ impl ProxyState {
 			timeout(default_timeout, (self.middleware_fn)(actor_id, headers)).await;
 
 		match middleware_result {
-			Result::Ok(result) => match result? {
+			Ok(result) => match result? {
 				MiddlewareResponse::Ok(config) => Ok(config),
 				MiddlewareResponse::NotFound => {
 					// Default values if middleware not found for this actor
@@ -761,7 +761,7 @@ impl ProxyService {
 		};
 
 		let status = match &res {
-			Result::Ok(resp) => resp.status().as_u16().to_string(),
+			Ok(resp) => resp.status().as_u16().to_string(),
 			Err(_) => "error".to_string(),
 		};
 
@@ -830,7 +830,7 @@ impl ProxyService {
 		match resolved_route {
 			ResolveRouteOutput::Target(mut target) => {
 				// Set service IP from target
-				if let Result::Ok(target_ip) =
+				if let Ok(target_ip) =
 					format!("{}:{}", target.host, target.port).parse::<std::net::SocketAddr>()
 				{
 					request_context.service_ip = Some(target_ip.ip());
@@ -839,7 +839,7 @@ impl ProxyService {
 				// Read the request body before proceeding with retries
 				let (req_parts, body) = req.into_parts();
 				let req_body = match http_body_util::BodyExt::collect(body).await {
-					Result::Ok(collected) => collected.to_bytes(),
+					Ok(collected) => collected.to_bytes(),
 					Err(err) => {
 						tracing::debug!(?err, "Failed to read request body");
 						Bytes::new()
@@ -855,8 +855,8 @@ impl ProxyService {
 					attempts += 1;
 
 					// Use the common function to build request parts
-					let (uri_str, builder) = self
-						.build_proxied_request_parts(&req_parts, &target)
+					let builder = self
+						.proxied_request_builder(&req_parts, &target)
 						.map_err(|err| errors::HttpRequestBuildFailed(err.to_string()).build())?;
 
 					// Create the final request with body
@@ -875,7 +875,7 @@ impl ProxyService {
 						})?;
 
 					match res {
-						Result::Ok(resp) => {
+						Ok(resp) => {
 							// Check if this is a retryable response
 							if should_retry(resp.status(), resp.headers()) {
 								// Request connect error, might retry
@@ -928,7 +928,7 @@ impl ProxyService {
 							} else {
 								// For non-streaming responses, buffer as before
 								let body_bytes = match BodyExt::collect(body).await {
-									Result::Ok(collected) => collected.to_bytes(),
+									Ok(collected) => collected.to_bytes(),
 									Err(_) => Bytes::new(),
 								};
 
@@ -994,7 +994,7 @@ impl ProxyService {
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
 				let collected_body = match http_body_util::BodyExt::collect(body).await {
-					Result::Ok(collected) => collected.to_bytes(),
+					Ok(collected) => collected.to_bytes(),
 					Err(err) => {
 						tracing::debug!(?err, "Failed to read request body");
 						Bytes::new()
@@ -1052,12 +1052,11 @@ impl ProxyService {
 		}
 	}
 
-	// Common function to build a request URI and headers
-	fn build_proxied_request_parts(
+	fn proxied_request_builder(
 		&self,
 		req_parts: &hyper::http::request::Parts,
 		target: &RouteTarget,
-	) -> Result<(String, hyper::http::request::Builder)> {
+	) -> Result<hyper::http::request::Builder> {
 		// Build the target URI using the url crate to properly handle IPv6 addresses
 		let mut url = Url::parse("http://example.com")?;
 
@@ -1083,7 +1082,7 @@ impl ProxyService {
 		let headers = builder.headers_mut().unwrap();
 		add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
 
-		Ok((uri, builder))
+		Ok(builder)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -1098,7 +1097,6 @@ impl ProxyService {
 			ResolveRouteOutput::Target(target) => target.actor_id,
 			_ => None,
 		};
-		let actor_id_str = actor_id.map_or_else(|| "none".to_string(), |id| id.to_string());
 
 		// Parsed for retries later
 		let req_host = req
@@ -1115,15 +1113,6 @@ impl ProxyService {
 
 		// Capture headers before request is consumed
 		let req_headers = req.headers().clone();
-
-		// // Log request details
-		// tracing::debug!(
-		// 	"WebSocket upgrade request for path: {}, target host: {}:{}, actor_id: {}",
-		// 	target.path,
-		// 	target.host,
-		// 	target.port,
-		// 	actor_id_str,
-		// );
 
 		// Get middleware config for this actor if it exists
 		let middleware_config = match &actor_id {
@@ -1161,7 +1150,7 @@ impl ProxyService {
 		// Log the headers for debugging
 		tracing::debug!("WebSocket upgrade request headers:");
 		for (name, value) in req.headers() {
-			if let Result::Ok(val) = value.to_str() {
+			if let Ok(val) = value.to_str() {
 				tracing::debug!("  {}: {}", name, val);
 			}
 		}
@@ -1169,7 +1158,7 @@ impl ProxyService {
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		tracing::debug!("Upgrading client connection to WebSocket");
 		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
-			Result::Ok(x) => {
+			Ok(x) => {
 				tracing::debug!("Client WebSocket upgrade successful");
 				x
 			}
@@ -1189,7 +1178,7 @@ impl ProxyService {
 			client_response.status()
 		);
 		for (name, value) in client_response.headers() {
-			if let Result::Ok(val) = value.to_str() {
+			if let Ok(val) = value.to_str() {
 				tracing::debug!("Client upgrade response header - {}: {}", name, val);
 			}
 		}
@@ -1219,11 +1208,11 @@ impl ProxyService {
 						tracing::debug!("Waiting for client WebSocket to be ready...");
 						let mut client_ws =
 							match tokio::time::timeout(timeout_duration, client_ws).await {
-								Result::Ok(Result::Ok(ws)) => {
+								Ok(Ok(ws)) => {
 									tracing::debug!("Client WebSocket is ready");
 									ws
 								}
-								Result::Ok(Err(err)) => {
+								Ok(Err(err)) => {
 									tracing::error!(?err, "Failed to get client WebSocket");
 									return;
 								}
@@ -1243,7 +1232,7 @@ impl ProxyService {
 
 							// Build the WebSocket URL using the url crate to properly handle IPv6 addresses
 							let mut ws_url = match Url::parse("ws://example.com") {
-								Result::Ok(url) => url,
+								Ok(url) => url,
 								Err(err) => {
 									tracing::error!(?err, "Failed to create base WebSocket URL");
 									return;
@@ -1289,7 +1278,7 @@ impl ProxyService {
 
 							// Build the websocket request with headers
 							let mut ws_request = match target_url.into_client_request() {
-								Result::Ok(req) => req,
+								Ok(req) => req,
 								Err(err) => {
 									tracing::error!(?err, "Failed to create websocket request");
 									return;
@@ -1315,7 +1304,7 @@ impl ProxyService {
 							)
 							.await
 							{
-								Result::Ok(Result::Ok((ws_stream, resp))) => {
+								Ok(Ok((ws_stream, resp))) => {
 									tracing::debug!(
 										"Successfully connected to upstream WebSocket server"
 									);
@@ -1326,7 +1315,7 @@ impl ProxyService {
 
 									// Log headers for debugging
 									for (name, value) in resp.headers() {
-										if let Result::Ok(val) = value.to_str() {
+										if let Ok(val) = value.to_str() {
 											tracing::debug!(
 												"Upstream response header - {}: {}",
 												name,
@@ -1338,7 +1327,7 @@ impl ProxyService {
 									upstream_ws = Some(ws_stream);
 									break;
 								}
-								Result::Ok(Err(err)) => {
+								Ok(Err(err)) => {
 									tracing::debug!(
 										?err,
 										"WebSocket request attempt {} failed",
@@ -1371,7 +1360,7 @@ impl ProxyService {
 									))))
 									.await
 								{
-									Result::Ok(_) => {
+									Ok(_) => {
 										tracing::trace!("Successfully sent close message to client")
 									}
 									Err(err) => {
@@ -1383,7 +1372,7 @@ impl ProxyService {
 								};
 
 								match client_sink.flush().await {
-									Result::Ok(_) => {
+									Ok(_) => {
 										tracing::trace!(
 											"Successfully flushed client sink after close"
 										)
@@ -1421,10 +1410,10 @@ impl ProxyService {
 								.await;
 
 							match new_target {
-								Result::Ok(ResolveRouteOutput::Target(new_target)) => {
+								Ok(ResolveRouteOutput::Target(new_target)) => {
 									target = new_target;
 								}
-								Result::Ok(ResolveRouteOutput::Response(response)) => {
+								Ok(ResolveRouteOutput::Response(response)) => {
 									tracing::debug!(
 										status=?response.status,
 										message=?response.message,
@@ -1438,7 +1427,7 @@ impl ProxyService {
 										.await;
 									return;
 								}
-								Result::Ok(ResolveRouteOutput::CustomServe(_)) => {
+								Ok(ResolveRouteOutput::CustomServe(_)) => {
 									let _ = client_ws
 										.close(Some(err_to_close_frame(
 											errors::WebSocketTargetChanged.build(),
@@ -1488,7 +1477,7 @@ impl ProxyService {
 									// Check for shutdown signal
 									shutdown_result = shutdown_rx.changed() => {
 										match shutdown_result {
-											Result::Ok(_) => {
+											Ok(_) => {
 												if *shutdown_rx.borrow() {
 													tracing::debug!("Client-to-upstream forwarder shutting down due to signal");
 													break;
@@ -1505,7 +1494,7 @@ impl ProxyService {
 									// Process next message from client
 									msg_result = stream.next() => {
 										match msg_result {
-											Some(Result::Ok(client_msg)) => {
+											Some(Ok(client_msg)) => {
 												// Convert from hyper_tungstenite::Message to tokio_tungstenite::Message
 												let upstream_msg = match client_msg {
 													hyper_tungstenite::tungstenite::Message::Text(text) => {
@@ -1540,7 +1529,7 @@ impl ProxyService {
 												).await;
 
 												match send_result {
-													Result::Ok(Result::Ok(_)) => {
+													Ok(Ok(_)) => {
 														tracing::trace!("Message sent to upstream successfully");
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing upstream sink");
@@ -1553,7 +1542,7 @@ impl ProxyService {
 															tracing::trace!("Timeout flushing upstream sink");
 															let _ = shutdown_tx.send(true);
 															break;
-														} else if let Result::Ok(Err(err)) = flush_result {
+														} else if let Ok(Err(err)) = flush_result {
 															tracing::trace!(?err, "Error flushing upstream sink");
 															let _ = shutdown_tx.send(true);
 															break;
@@ -1561,7 +1550,7 @@ impl ProxyService {
 															tracing::trace!("Upstream sink flushed successfully");
 														}
 													},
-													Result::Ok(Err(err)) => {
+													Ok(Err(err)) => {
 														tracing::trace!(?err, "Error sending message to upstream");
 														let _ = shutdown_tx.send(true);
 														break;
@@ -1599,7 +1588,7 @@ impl ProxyService {
 								.send(tokio_tungstenite::tungstenite::Message::Close(None))
 								.await
 							{
-								Result::Ok(_) => {
+								Ok(_) => {
 									tracing::trace!("Close message sent to upstream successfully")
 								}
 								Err(err) => {
@@ -1611,7 +1600,7 @@ impl ProxyService {
 							};
 
 							match sink.flush().await {
-								Result::Ok(_) => {
+								Ok(_) => {
 									tracing::trace!(
 										"Upstream sink flushed successfully after close"
 									)
@@ -1639,7 +1628,7 @@ impl ProxyService {
 									// Check for shutdown signal
 									shutdown_result = shutdown_rx.changed() => {
 										match shutdown_result {
-											Result::Ok(_) => {
+											Ok(_) => {
 												if *shutdown_rx.borrow() {
 													tracing::debug!("Upstream-to-client forwarder shutting down due to signal");
 													break;
@@ -1656,7 +1645,7 @@ impl ProxyService {
 									// Process next message from upstream
 									msg_result = stream.next() => {
 										match msg_result {
-											Some(Result::Ok(upstream_msg)) => {
+											Some(Ok(upstream_msg)) => {
 												// Convert from tokio_tungstenite::Message to hyper_tungstenite::Message
 												let client_msg = match upstream_msg {
 													tokio_tungstenite::tungstenite::Message::Text(text) => {
@@ -1691,7 +1680,7 @@ impl ProxyService {
 												).await;
 
 												match send_result {
-													Result::Ok(Result::Ok(_)) => {
+													Ok(Ok(_)) => {
 														tracing::trace!("Message sent to client successfully");
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing client sink");
@@ -1704,7 +1693,7 @@ impl ProxyService {
 															tracing::trace!("Timeout flushing client sink");
 															let _ = shutdown_tx.send(true);
 															break;
-														} else if let Result::Ok(Err(err)) = flush_result {
+														} else if let Ok(Err(err)) = flush_result {
 															tracing::trace!(?err, "Error flushing client sink");
 															let _ = shutdown_tx.send(true);
 															break;
@@ -1712,7 +1701,7 @@ impl ProxyService {
 															tracing::trace!("Client sink flushed successfully");
 														}
 													},
-													Result::Ok(Err(err)) => {
+													Ok(Err(err)) => {
 														tracing::trace!(?err, "Error sending message to client");
 														let _ = shutdown_tx.send(true);
 														break;
@@ -1746,7 +1735,7 @@ impl ProxyService {
 							// Try to send a close frame - ignore errors as the connection might already be closed
 							tracing::trace!("Attempting to send close message to client");
 							match sink.send(to_hyper_close(None)).await {
-								Result::Ok(_) => {
+								Ok(_) => {
 									tracing::trace!("Close message sent to client successfully")
 								}
 								Err(err) => {
@@ -1755,7 +1744,7 @@ impl ProxyService {
 							};
 
 							match sink.flush().await {
-								Result::Ok(_) => {
+								Ok(_) => {
 									tracing::trace!("Client sink flushed successfully after close")
 								}
 								Err(err) => {
@@ -1781,6 +1770,8 @@ impl ProxyService {
 				let req_headers = req_headers.clone();
 				let req_path = req_path.clone();
 				let req_host = req_host.clone();
+
+				// TODO: Handle errors here, the error message is lost
 				tokio::spawn(
 					async move {
 						let mut attempts = 0u32;
@@ -1797,7 +1788,7 @@ impl ProxyService {
 								)
 								.await
 							{
-								Result::Ok(()) => {
+								Ok(()) => {
 									tracing::debug!("websocket handler complete, closing");
 
 									// Send graceful close
@@ -1810,7 +1801,7 @@ impl ProxyService {
 
 									break;
 								}
-								Result::Err(err) => {
+								Err(err) => {
 									attempts += 1;
 									if attempts > max_attempts || !is_retryable_ws_error(&err) {
 										// Close WebSocket with error
@@ -1838,29 +1829,27 @@ impl ProxyService {
 											)
 											.await
 										{
-											Result::Ok(ResolveRouteOutput::CustomServe(
-												new_handlers,
-											)) => {
+											Ok(ResolveRouteOutput::CustomServe(new_handlers)) => {
 												handlers = new_handlers;
 												continue;
 											}
-											Result::Ok(ResolveRouteOutput::Response(response)) => {
+											Ok(ResolveRouteOutput::Response(response)) => {
 												ws_handle
 													.accept_and_send(to_hyper_close(Some(
 														str_to_close_frame(
 															response.message.as_ref(),
 														),
 													)))
-													.await;
+													.await?;
 											}
-											Result::Ok(ResolveRouteOutput::Target(_)) => {
+											Ok(ResolveRouteOutput::Target(_)) => {
 												ws_handle
 													.accept_and_send(to_hyper_close(Some(
 														err_to_close_frame(
 															errors::WebSocketTargetChanged.build(),
 														),
 													)))
-													.await;
+													.await?;
 												break;
 											}
 											Err(err) => {
@@ -1868,7 +1857,7 @@ impl ProxyService {
 													.accept_and_send(to_hyper_close(Some(
 														err_to_close_frame(err),
 													)))
-													.await;
+													.await?;
 												break;
 											}
 										}
@@ -1876,7 +1865,8 @@ impl ProxyService {
 								}
 							}
 						}
-						Ok(())
+
+						anyhow::Ok(())
 					}
 					.instrument(tracing::info_span!("handle_ws_task_custom_serve")),
 				);
@@ -2002,7 +1992,7 @@ impl ProxyService {
 			.handle_request(req, start_time, &mut request_context)
 			.await
 		{
-			Result::Ok(res) => res,
+			Ok(res) => res,
 			Err(err) => {
 				// Log the error
 				tracing::error!(?err, "Request failed");
@@ -2016,7 +2006,7 @@ impl ProxyService {
 				if is_websocket {
 					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
 					match hyper_tungstenite::upgrade(mock_req, None) {
-						Result::Ok((client_response, client_ws)) => {
+						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
 							tokio::spawn(async move {
@@ -2027,7 +2017,7 @@ impl ProxyService {
 								let code_num: u16 = frame.code.into();
 								let reason = frame.reason.clone();
 
-								ws_handle
+								if let Err(err) = ws_handle
 									.accept_and_send(
 										tokio_tungstenite::tungstenite::Message::Close(Some(
 											tokio_tungstenite::tungstenite::protocol::CloseFrame {
@@ -2036,7 +2026,10 @@ impl ProxyService {
 											},
 										)),
 									)
-									.await;
+									.await
+								{
+									tracing::debug!(?err, "failed sending error proxy");
+								}
 							});
 
 							// Return the response that will upgrade the client connection
@@ -2227,7 +2220,7 @@ fn add_proxy_headers_with_addr(
 
 	// Add X-Forwarded-For header
 	if let Some(existing) = original_headers.get(X_FORWARDED_FOR) {
-		if let Result::Ok(forwarded) = existing.to_str() {
+		if let Ok(forwarded) = existing.to_str() {
 			if !forwarded.contains(&remote_addr.ip().to_string()) {
 				headers.insert(
 					X_FORWARDED_FOR,

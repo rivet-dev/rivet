@@ -1,4 +1,4 @@
-use std::result::Result::{Err, Ok};
+use std::result::Result::Ok;
 
 use anyhow::*;
 use entry::{EntryBaseKey, EntryBuilder, EntryMetadataKey, EntryValueChunkKey};

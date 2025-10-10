@@ -5,6 +5,7 @@ use opentelemetry::{KeyValue, global};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
 	Resource,
+	logs::SdkLoggerProvider,
 	metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 };
@@ -90,6 +91,20 @@ fn init_meter_provider() -> SdkMeterProvider {
 	meter_provider
 }
 
+fn init_logger_provider() -> SdkLoggerProvider {
+	let exporter = opentelemetry_otlp::LogExporter::builder()
+		.with_tonic()
+		.with_protocol(opentelemetry_otlp::Protocol::Grpc)
+		.with_endpoint(otel_grpc_endpoint())
+		.build()
+		.unwrap();
+
+	SdkLoggerProvider::builder()
+		.with_resource(resource())
+		.with_batch_exporter(exporter)
+		.build()
+}
+
 /// Initialize OtelProviderGuard for opentelemetry-related termination processing.
 pub fn init_otel_providers() -> Option<OtelProviderGuard> {
 	// Check if otel is enabled
@@ -98,10 +113,12 @@ pub fn init_otel_providers() -> Option<OtelProviderGuard> {
 	if enable_otel {
 		let tracer_provider = init_tracer_provider();
 		let meter_provider = init_meter_provider();
+		let logger_provider = init_logger_provider();
 
 		Some(OtelProviderGuard {
 			tracer_provider,
 			meter_provider,
+			logger_provider,
 		})
 	} else {
 		// NOTE: OTEL's global::meters are no-op without
@@ -115,6 +132,7 @@ pub fn init_otel_providers() -> Option<OtelProviderGuard> {
 pub struct OtelProviderGuard {
 	pub tracer_provider: SdkTracerProvider,
 	pub meter_provider: SdkMeterProvider,
+	pub logger_provider: SdkLoggerProvider,
 }
 
 impl Drop for OtelProviderGuard {
@@ -123,6 +141,9 @@ impl Drop for OtelProviderGuard {
 			eprintln!("{err:?}");
 		}
 		if let Err(err) = self.meter_provider.shutdown() {
+			eprintln!("{err:?}");
+		}
+		if let Err(err) = self.logger_provider.shutdown() {
 			eprintln!("{err:?}");
 		}
 	}

@@ -557,7 +557,7 @@ export class Runner {
 			}
 		});
 
-		ws.addEventListener("close", (ev) => {
+		ws.addEventListener("close", async (ev) => {
 			logger()?.info({
 				msg: "connection closed",
 				code: ev.code,
@@ -565,6 +565,12 @@ export class Runner {
 			});
 
 			this.#config.onDisconnected();
+
+			if (ev.reason.toString() == "ws.eviction") {
+				logger()?.info("runner evicted");
+
+				await this.shutdown(true);
+			}
 
 			// Clear ping loop on close
 			if (this.#pingLoop) {
