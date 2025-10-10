@@ -36,6 +36,10 @@ function EngineModals() {
 
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
+	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
+	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
+	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
+	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
 
 	return (
 		<>
@@ -82,6 +86,86 @@ function EngineModals() {
 				}}
 				dialogProps={{
 					open: search.modal === "connect-railway",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectManualDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-custom",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectAwsDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-aws",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectGcpDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-gcp",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectHetznerDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-hetzner",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

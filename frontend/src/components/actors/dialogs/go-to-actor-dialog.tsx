@@ -1,4 +1,4 @@
-import { DialogContentProps } from "@/components/hooks";
+import type { DialogContentProps } from "@/components/hooks";
 import { Button } from "../../ui/button";
 import { DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
 import { useActorsView } from "../actors-view-context-provider";

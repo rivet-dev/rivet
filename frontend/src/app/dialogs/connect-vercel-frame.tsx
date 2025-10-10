@@ -1,42 +1,96 @@
 import { faQuestionCircle, faVercel, Icon } from "@rivet-gg/icons";
-import { useFormContext } from "react-hook-form";
+import {
+	useMutation,
+	usePrefetchInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
+import confetti from "canvas-confetti";
+import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { HelpDropdown } from "@/app/help-dropdown";
-import { Button, type DialogContentProps, Frame } from "@/components";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+	Button,
+	type DialogContentProps,
+	Frame,
+} from "@/components";
+import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
-const { Stepper } = defineStepper(
+const stepper = defineStepper(
 	{
 		id: "step-1",
-		title: "Select Vercel Plan",
+		title: "Configure",
+		assist: false,
+		next: "Next",
+		schema: z.object({
+			plan: z.string().min(1, "Please select a Vercel plan"),
+			runnerName: z.string().min(1, "Runner name is required"),
+			datacenters: z
+				.record(z.boolean())
+				.refine(
+					(data) => Object.values(data).some(Boolean),
+					"At least one datacenter must be selected",
+				),
+			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
+			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
+			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+		}),
 	},
 	{
 		id: "step-2",
 		title: "Edit vercel.json",
+		assist: false,
+		next: "Next",
+		schema: z.object({}),
 	},
 	{
 		id: "step-3",
 		title: "Deploy to Vercel",
+		assist: false,
+		next: "Next",
+		schema: z.object({
+			endpoint: z
+				.string()
+				.nonempty("Endpoint is required")
+				.url("Please enter a valid URL"),
+		}),
 	},
 	{
 		id: "step-4",
 		title: "Confirm Connection",
+		assist: true,
+		next: "Add",
+		schema: z.object({
+			success: z.boolean().refine((val) => val, "Connection failed"),
+		}),
 	},
 );
+
+type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
 interface CreateProjectFrameContentProps extends DialogContentProps {}
 
 export default function CreateProjectFrameContent({
 	onClose,
 }: CreateProjectFrameContentProps) {
+	usePrefetchInfiniteQuery({
+		...useEngineCompatDataProvider().regionsQueryOptions(),
+		pages: Infinity,
+	});
+
+	const { data: datacenters } = useSuspenseInfiniteQuery(
+		useEngineCompatDataProvider().regionsQueryOptions(),
+	);
+
 	return (
-		<ConnectVercelForm.Form
-			onSubmit={async () => {}}
-			mode="onChange"
-			revalidateMode="onChange"
-			defaultValues={{ plan: "hobby", endpoint: "" }}
-		>
+		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
@@ -51,104 +105,141 @@ export default function CreateProjectFrameContent({
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
-				<FormStepper onClose={onClose} />
+				<FormStepper onClose={onClose} datacenters={datacenters} />
 			</Frame.Content>
-		</ConnectVercelForm.Form>
+		</>
 	);
 }
 
-function FormStepper({ onClose }: { onClose?: () => void }) {
+function FormStepper({
+	datacenters,
+	onClose,
+}: {
+	onClose?: () => void;
+	datacenters: Region[];
+}) {
+	const { mutateAsync } = useMutation({
+		...useEngineCompatDataProvider().createRunnerConfigMutationOptions(),
+		onSuccess: () => {
+			confetti({
+				angle: 60,
+				spread: 55,
+				origin: { x: 0 },
+			});
+			confetti({
+				angle: 120,
+				spread: 55,
+				origin: { x: 1 },
+			});
+			onClose?.();
+		},
+	});
 	return (
-		<Stepper.Provider variant="vertical">
-			{({ methods }) => (
-				<>
-					<Stepper.Navigation>
-						{methods.all.map((step) => (
-							<Stepper.Step
-								className="min-w-0"
-								of={step.id}
-								onClick={() => methods.goTo(step.id)}
-							>
-								<Stepper.Title>{step.title}</Stepper.Title>
-								{methods.when(step.id, (step) => {
-									return (
-										<Stepper.Panel className="space-y-4">
-											{step.id === "step-1" && (
-												<ConnectVercelForm.Plan />
-											)}
-											{step.id === "step-2" && (
-												<ConnectVercelForm.Json />
-											)}
-											{step.id === "step-3" && (
-												<>
-													<p>
-														<a
-															href="https://vercel.com/docs/deployments"
-															target="_blank"
-															rel="noreferrer"
-															className=" underline"
-														>
-															Deploy your project
-															to Vercel using your
-															preferred method
-														</a>
-														. After deployment,
-														return here to add the
-														endpoint.
-													</p>
-												</>
-											)}
-											{step.id === "step-4" && (
-												<div>
-													<ConnectVercelForm.Endpoint className="mb-2" />
-													<ConnectVercelForm.ConnectionCheck />
-												</div>
-											)}
-											<Stepper.Controls>
-												{step.id === "step-4" ? (
-													<NeedHelpButton />
-												) : null}
-												<Button
-													type="button"
-													variant="secondary"
-													onClick={methods.prev}
-													disabled={methods.isFirst}
-												>
-													Previous
-												</Button>
-												<Button
-													type="button"
-													onClick={
-														methods.isLast
-															? onClose
-															: methods.next
-													}
-												>
-													{methods.isLast
-														? "Done"
-														: "Next"}
-												</Button>
-											</Stepper.Controls>
-										</Stepper.Panel>
-									);
-								})}
-							</Stepper.Step>
-						))}
-					</Stepper.Navigation>
-				</>
-			)}
-		</Stepper.Provider>
+		<StepperForm
+			{...stepper}
+			content={{
+				"step-1": () => <Step1 />,
+				"step-2": () => <Step2 />,
+				"step-3": () => <Step3 />,
+				"step-4": () => <Step4 />,
+			}}
+			onSubmit={async ({ values }) => {
+				const selectedDatacenters = Object.entries(values.datacenters)
+					.filter(([, selected]) => selected)
+					.map(([id]) => id);
+
+				const config = {
+					serverless: {
+						url: values.endpoint,
+						maxRunners: values.maxRunners,
+						slotsPerRunner: values.slotsPerRunner,
+						runnersMargin: values.runnerMargin,
+						requestLifespan:
+							ConnectVercelForm.PLAN_TO_MAX_DURATION[values.plan],
+						headers: Object.fromEntries(
+							values.headers.map(([key, value]) => [key, value]),
+						),
+					},
+					metadata: {
+						provider: "vercel",
+					},
+				};
+
+				const payload = Object.fromEntries(
+					selectedDatacenters.map((dc) => [dc, config]),
+				);
+
+				await mutateAsync({
+					name: values.runnerName,
+					config: payload,
+				});
+			}}
+			defaultValues={{
+				plan: "hobby",
+				runnerName: "default",
+				slotsPerRunner: 25,
+				maxRunners: 1000,
+				runnerMargin: 0,
+				headers: [],
+				success: false,
+				datacenters: Object.fromEntries(
+					datacenters.map((dc) => [dc.id, true]),
+				),
+			}}
+		/>
 	);
 }
 
-function NeedHelpButton() {
-	const { watch } = useFormContext();
-	const endpoint = watch("endpoint");
-	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
+function Step1() {
+	return (
+		<>
+			<ConnectVercelForm.Plan />
+			<Accordion type="single" collapsible>
+				<AccordionItem value="item-1">
+					<AccordionTrigger className="text-sm">
+						Advanced options
+					</AccordionTrigger>
+					<AccordionContent className="space-y-4 px-1 pt-2">
+						<ConnectVercelForm.RunnerName />
+						<ConnectVercelForm.Datacenters />
+						<ConnectVercelForm.Headers />
+						<ConnectVercelForm.SlotsPerRunner />
+						<ConnectVercelForm.MaxRunners />
+						<ConnectVercelForm.RunnerMargin />
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
+		</>
+	);
+}
 
-	if (enabled) {
-		return <ConnectVercelForm.NeedHelp />;
-	}
+function Step2() {
+	const plan = useWatch<FormValues>({ name: "plan" as const });
+	return <ConnectVercelForm.Json plan={plan || "hobby"} />;
+}
 
-	return null;
+function Step3() {
+	return (
+		<>
+			<p>
+				<a
+					href="https://vercel.com/docs/deployments"
+					target="_blank"
+					rel="noreferrer"
+					className=" underline"
+				>
+					Deploy your project to Vercel using your preferred method
+				</a>
+				. After deployment, return here to add the endpoint.
+			</p>
+			<div className="mt-2">
+				<ConnectVercelForm.Endpoint />
+			</div>
+		</>
+	);
+}
+
+function Step4() {
+	const endpoint = useWatch<FormValues>({ name: "endpoint" });
+	return <ConnectVercelForm.ConnectionCheck endpoint={endpoint || ""} />;
 }

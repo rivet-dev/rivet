@@ -1330,7 +1330,10 @@ export function createFiltersSchema(definitions: FilterDefinitions) {
 }
 
 export function createFiltersPicker(definitions: FilterDefinitions) {
-	return (object: Record<string, unknown>, opts: PickFiltersOptions = {}): Record<string, FilterValue> => {
+	return (
+		object: Record<string, unknown>,
+		opts: PickFiltersOptions = {},
+	): Record<string, FilterValue> => {
 		const defs =
 			(opts.includeEphemeral ?? true)
 				? definitions

@@ -308,6 +308,9 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 
 	if (!runner) return <NoRunnerInfo runner={actor.runner || "unknown"} />;
 
+	if (runner.drainTs)
+		return <NoRunnerInfo runner={actor.runner || "unknown"} />;
+
 	return (
 		<Info>
 			<div className="flex items-center">
