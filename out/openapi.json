@@ -1308,13 +1308,7 @@
           "runner_configs": {
             "type": "object",
             "additionalProperties": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/components/schemas/RunnerConfig"
-              },
-              "propertyNames": {
-                "type": "string"
-              }
+              "$ref": "#/components/schemas/RunnerConfigsListResponseRunnerConfigsValue"
             },
             "propertyNames": {
               "type": "string"
@@ -1322,6 +1316,23 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunnerConfigsListResponseRunnerConfigsValue": {
+        "type": "object",
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfig"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
       },
       "RunnerConfigsServerlessHealthCheckError": {
         "oneOf": [
@@ -1496,22 +1507,21 @@
       },
       "RunnerConfigsUpsertRequestBody": {
         "type": "object",
-        "additionalProperties": {
-          "allOf": [
-            {
-              "$ref": "#/components/schemas/RunnerConfigKind"
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfig"
             },
-            {
-              "type": "object",
-              "properties": {
-                "metadata": {}
-              }
+            "propertyNames": {
+              "type": "string"
             }
-          ]
+          }
         },
-        "propertyNames": {
-          "type": "string"
-        }
+        "additionalProperties": false
       },
       "RunnerConfigsUpsertResponse": {
         "type": "object"
