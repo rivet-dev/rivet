@@ -15,7 +15,7 @@ use pegboard::keys;
 use reqwest::header::{HeaderName, HeaderValue};
 use reqwest_eventsource as sse;
 use rivet_runner_protocol as protocol;
-use rivet_types::runner_configs::RunnerConfig;
+use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
@@ -119,7 +119,7 @@ async fn tick(
 		let namespace = namespace.first().context("runner namespace not found")?;
 		let namespace_name = &namespace.name;
 
-		let RunnerConfig::Serverless {
+		let RunnerConfigKind::Serverless {
 			url,
 			headers,
 			request_lifespan,
@@ -127,7 +127,7 @@ async fn tick(
 			min_runners,
 			max_runners,
 			runners_margin,
-		} = &runner_config.config
+		} = &runner_config.config.kind
 		else {
 			tracing::warn!(
 				?ns_id,
