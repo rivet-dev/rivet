@@ -133,7 +133,9 @@ const response = await fetch(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify({
-			[datacenter]: dcRunnerConfig,
+			datacenters: {
+				[datacenter]: dcRunnerConfig,
+			},
 		}),
 	},
 );

@@ -89,10 +89,6 @@ impl NamespaceRunnerConfig {
 			NamespaceRunnerConfig::V2(config) => {
 				let namespace_runner_config_v2::RunnerConfig { metadata, kind } = config;
 
-				if metadata.is_some() {
-					bail!("namespace runner config v1 does not support metadata");
-				}
-
 				match kind {
 					namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
 						let namespace_runner_config_v2::Serverless {
