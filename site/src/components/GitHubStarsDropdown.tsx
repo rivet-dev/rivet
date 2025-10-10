@@ -118,7 +118,7 @@ export function GitHubStarsDropdown({
 								/>
 							</a>
 							<a
-								href="https://github.com/rivet-dev/rivet"
+								href="https://github.com/rivet-dev/engine"
 								target="_blank"
 								rel="noreferrer"
 								className="group flex items-center justify-between px-4 py-2 text-sm text-white/90 hover:bg-white/5 hover:text-white transition-colors"
