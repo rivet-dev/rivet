@@ -175,13 +175,13 @@ impl OwnedVersionedData for ActorNameKeyData {
 
 pub enum NamespaceRunnerConfig {
 	V1(namespace_runner_config_v1::Data),
-	V2(namespace_runner_config_v2::Data),
+	V2(namespace_runner_config_v2::RunnerConfig),
 }
 
 impl OwnedVersionedData for NamespaceRunnerConfig {
-	type Latest = namespace_runner_config_v2::Data;
+	type Latest = namespace_runner_config_v2::RunnerConfig;
 
-	fn latest(latest: namespace_runner_config_v2::Data) -> Self {
+	fn latest(latest: namespace_runner_config_v2::RunnerConfig) -> Self {
 		NamespaceRunnerConfig::V2(latest)
 	}
 
@@ -189,17 +189,20 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 		match self {
 			NamespaceRunnerConfig::V1(data) => match data {
 				namespace_runner_config_v1::Data::Serverless(serverless) => {
-					Ok(namespace_runner_config_v2::Data::Serverless(
-						namespace_runner_config_v2::Serverless {
-							url: serverless.url,
-							headers: serverless.headers,
-							request_lifespan: serverless.request_lifespan,
-							slots_per_runner: serverless.slots_per_runner,
-							min_runners: serverless.min_runners,
-							max_runners: serverless.max_runners,
-							runners_margin: serverless.runners_margin,
-						},
-					))
+					Ok(namespace_runner_config_v2::RunnerConfig {
+						kind: namespace_runner_config_v2::RunnerConfigKind::Serverless(
+							namespace_runner_config_v2::Serverless {
+								url: serverless.url,
+								headers: serverless.headers,
+								request_lifespan: serverless.request_lifespan,
+								slots_per_runner: serverless.slots_per_runner,
+								min_runners: serverless.min_runners,
+								max_runners: serverless.max_runners,
+								runners_margin: serverless.runners_margin,
+							},
+						),
+						metadata: None,
+					})
 				}
 			},
 			NamespaceRunnerConfig::V2(data) => Ok(data),

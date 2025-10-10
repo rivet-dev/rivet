@@ -1,5 +1,5 @@
 use gas::prelude::*;
-use rivet_types::runner_configs::RunnerConfig;
+use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
 use universaldb::options::MutationType;
 
 use crate::{errors, keys, utils::runner_config_variant};
@@ -33,9 +33,9 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 				input.config.clone(),
 			)?;
 
-			match &input.config {
-				RunnerConfig::Normal {} => {}
-				RunnerConfig::Serverless {
+			match &input.config.kind {
+				RunnerConfigKind::Normal { .. } => {}
+				RunnerConfigKind::Serverless {
 					url,
 					headers,
 					slots_per_runner,

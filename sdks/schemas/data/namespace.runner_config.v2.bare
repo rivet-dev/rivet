@@ -1,3 +1,5 @@
+type Json str
+
 type Serverless struct {
 	url: str
 	headers: map<str><str>
@@ -10,7 +12,12 @@ type Serverless struct {
 
 type Normal void
 
-type Data union {
+type RunnerConfigKind union {
 	Serverless |
 	Normal
+}
+
+type RunnerConfig struct {
+	kind: RunnerConfigKind
+	metadata: optional<Json>
 }

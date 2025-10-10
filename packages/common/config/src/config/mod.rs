@@ -167,13 +167,13 @@ impl Root {
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {
 		// Set default pubsub to Postgres if configured for database
-		if self.pubsub.is_none()
-			&& let Some(Database::Postgres(pg)) = &self.database
-		{
-			self.pubsub = Some(PubSub::PostgresNotify(pubsub::Postgres {
-				url: pg.url.clone(),
-				memory_optimization: true,
-			}));
+		if self.pubsub.is_none() {
+			if let Some(Database::Postgres(pg)) = &self.database {
+				self.pubsub = Some(PubSub::PostgresNotify(pubsub::Postgres {
+					url: pg.url.clone(),
+					memory_optimization: true,
+				}));
+			}
 		}
 
 		Ok(())
