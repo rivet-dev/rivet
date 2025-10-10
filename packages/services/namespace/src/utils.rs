@@ -4,6 +4,7 @@ use rivet_types::{
 
 pub fn runner_config_variant(runner_config: &RunnerConfig) -> RunnerConfigVariant {
 	match runner_config {
+		RunnerConfig::Normal { .. } => RunnerConfigVariant::Normal,
 		RunnerConfig::Serverless { .. } => RunnerConfigVariant::Serverless,
 	}
 }
