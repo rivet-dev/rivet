@@ -3,6 +3,10 @@ use vbare::OwnedVersionedData;
 
 use crate::generated::*;
 
+mod namespace_runner_config;
+
+pub use namespace_runner_config::*;
+
 pub enum RunnerAllocIdxKeyData {
 	V1(pegboard_namespace_runner_alloc_idx_v1::Data),
 }
@@ -169,55 +173,6 @@ impl OwnedVersionedData for ActorNameKeyData {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			ActorNameKeyData::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
-		}
-	}
-}
-
-pub enum NamespaceRunnerConfig {
-	V1(namespace_runner_config_v1::Data),
-	V2(namespace_runner_config_v2::Data),
-}
-
-impl OwnedVersionedData for NamespaceRunnerConfig {
-	type Latest = namespace_runner_config_v2::Data;
-
-	fn latest(latest: namespace_runner_config_v2::Data) -> Self {
-		NamespaceRunnerConfig::V2(latest)
-	}
-
-	fn into_latest(self) -> Result<Self::Latest> {
-		match self {
-			NamespaceRunnerConfig::V1(data) => match data {
-				namespace_runner_config_v1::Data::Serverless(serverless) => {
-					Ok(namespace_runner_config_v2::Data::Serverless(
-						namespace_runner_config_v2::Serverless {
-							url: serverless.url,
-							headers: serverless.headers,
-							request_lifespan: serverless.request_lifespan,
-							slots_per_runner: serverless.slots_per_runner,
-							min_runners: serverless.min_runners,
-							max_runners: serverless.max_runners,
-							runners_margin: serverless.runners_margin,
-						},
-					))
-				}
-			},
-			NamespaceRunnerConfig::V2(data) => Ok(data),
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(NamespaceRunnerConfig::V1(serde_bare::from_slice(payload)?)),
-			2 => Ok(NamespaceRunnerConfig::V2(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
-		match self {
-			NamespaceRunnerConfig::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
-			NamespaceRunnerConfig::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
 	}
 }

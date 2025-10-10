@@ -1,6 +1,6 @@
 use gas::prelude::*;
-use rivet_types::runner_configs::RunnerConfig;
-use universaldb::options::MutationType;
+use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
+use universaldb::{options::MutationType, utils::IsolationLevel::*};
 
 use crate::{errors, keys, utils::runner_config_variant};
 
@@ -17,13 +17,21 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
-			// TODO: Once other types of configs get added, delete previous config before writing
-			tx.write(
-				&keys::runner_config::DataKey::new(input.namespace_id, input.name.clone()),
-				input.config.clone(),
-			)?;
+			let runner_config_key =
+				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
-			// Write to secondary idx
+			// Delete previous config
+			if let Some(existing_config) = tx.read_opt(&runner_config_key, Serializable).await? {
+				tx.delete(&runner_config_key);
+				tx.delete(&keys::runner_config::ByVariantKey::new(
+					input.namespace_id,
+					runner_config_variant(&existing_config),
+					input.name.clone(),
+				));
+			}
+
+			// Write new config
+			tx.write(&runner_config_key, input.config.clone())?;
 			tx.write(
 				&keys::runner_config::ByVariantKey::new(
 					input.namespace_id,
@@ -33,9 +41,9 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 				input.config.clone(),
 			)?;
 
-			match &input.config {
-				RunnerConfig::Normal {} => {}
-				RunnerConfig::Serverless {
+			match &input.config.kind {
+				RunnerConfigKind::Normal { .. } => {}
+				RunnerConfigKind::Serverless {
 					url,
 					headers,
 					slots_per_runner,

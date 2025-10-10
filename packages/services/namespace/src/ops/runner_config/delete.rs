@@ -20,21 +20,22 @@ pub async fn namespace_runner_config_delete(ctx: &OperationCtx, input: &Input) -
 			let runner_config_key =
 				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
-			let mut bump_autoscaler = false;
+			let bump_autoscaler =
+				if let Some(config) = tx.read_opt(&runner_config_key, Serializable).await? {
+					tx.delete(&runner_config_key);
 
-			if let Some(config) = tx.read_opt(&runner_config_key, Serializable).await? {
-				bump_autoscaler = config.affects_autoscaler();
+					// Clear secondary idx
+					let variant = runner_config_variant(&config);
+					tx.delete(&keys::runner_config::ByVariantKey::new(
+						input.namespace_id,
+						variant,
+						input.name.clone(),
+					));
 
-				tx.delete(&runner_config_key);
-
-				// Clear secondary idx
-				let variant = runner_config_variant(&config);
-				tx.delete(&keys::runner_config::ByVariantKey::new(
-					input.namespace_id,
-					variant,
-					input.name.clone(),
-				));
-			}
+					config.affects_autoscaler()
+				} else {
+					false
+				};
 
 			Ok(bump_autoscaler)
 		})

@@ -5,7 +5,7 @@ use futures_util::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered}
 use gas::prelude::*;
 use rivet_api_types::{runner_configs::list as runner_configs_list, runners::list as runners_list};
 use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
-use rivet_types::runner_configs::RunnerConfig;
+use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,8 +79,8 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		})
 		.await?;
 	if let Some(runner) = res.first() {
-		match &runner.config {
-			RunnerConfig::Serverless { max_runners, .. } => {
+		match &runner.config.kind {
+			RunnerConfigKind::Serverless { max_runners, .. } => {
 				if *max_runners != 0 {
 					return Ok(Some(ctx.config().dc_label()));
 				}
@@ -143,10 +143,8 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		|res| {
 			res.runner_configs
 				.iter()
-				.filter(|(_, rc)| match rc {
-					rivet_types::runner_configs::RunnerConfig::Serverless {
-						max_runners, ..
-					} => *max_runners != 0,
+				.filter(|(_, rc)| match rc.kind {
+					RunnerConfigKind::Serverless { max_runners, .. } => max_runners != 0,
 					_ => false,
 				})
 				.count() != 0
