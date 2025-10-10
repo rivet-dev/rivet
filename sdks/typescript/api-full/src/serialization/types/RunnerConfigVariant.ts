@@ -9,8 +9,8 @@ import * as core from "../../core";
 export const RunnerConfigVariant: core.serialization.Schema<
     serializers.RunnerConfigVariant.Raw,
     Rivet.RunnerConfigVariant
-> = core.serialization.stringLiteral("serverless");
+> = core.serialization.enum_(["serverless", "normal"]);
 
 export declare namespace RunnerConfigVariant {
-    export type Raw = "serverless";
+    export type Raw = "serverless" | "normal";
 }

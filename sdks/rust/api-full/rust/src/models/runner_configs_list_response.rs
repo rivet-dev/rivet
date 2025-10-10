@@ -16,11 +16,11 @@ pub struct RunnerConfigsListResponse {
     #[serde(rename = "pagination")]
     pub pagination: Box<models::Pagination>,
     #[serde(rename = "runner_configs")]
-    pub runner_configs: std::collections::HashMap<String, std::collections::HashMap<String, models::RunnerConfig>>,
+    pub runner_configs: std::collections::HashMap<String, models::RunnerConfigsListResponseRunnerConfigsValue>,
 }
 
 impl RunnerConfigsListResponse {
-    pub fn new(pagination: models::Pagination, runner_configs: std::collections::HashMap<String, std::collections::HashMap<String, models::RunnerConfig>>) -> RunnerConfigsListResponse {
+    pub fn new(pagination: models::Pagination, runner_configs: std::collections::HashMap<String, models::RunnerConfigsListResponseRunnerConfigsValue>) -> RunnerConfigsListResponse {
         RunnerConfigsListResponse {
             pagination: Box::new(pagination),
             runner_configs,

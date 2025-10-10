@@ -120,31 +120,94 @@ export class RunnerConfigs {
     }
 
     /**
+     * @param {Rivet.RunnerConfigsServerlessHealthCheckRequest} request
+     * @param {RunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigs.serverlessHealthCheck({
+     *         url: "url"
+     *     })
+     */
+    public async serverlessHealthCheck(
+        request: Rivet.RunnerConfigsServerlessHealthCheckRequest,
+        requestOptions?: RunnerConfigs.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsServerlessHealthCheckResponse> {
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                "runner-configs/serverless-health-check",
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            requestType: "json",
+            body: serializers.RunnerConfigsServerlessHealthCheckRequest.jsonOrThrow(request, {
+                unrecognizedObjectKeys: "strip",
+            }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsServerlessHealthCheckResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /runner-configs/serverless-health-check.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
      * @param {string} runnerName
-     * @param {Rivet.RunnerConfigsUpsertRequest} request
+     * @param {Rivet.RunnerConfigsUpsertRequestBody} request
      * @param {RunnerConfigs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @example
      *     await client.runnerConfigs.upsert("runner_name", {
      *         namespace: "namespace",
-     *         body: {
-     *             "key": {
-     *                 serverless: {
-     *                     maxRunners: 1,
-     *                     requestLifespan: 1,
-     *                     slotsPerRunner: 1,
-     *                     url: "url"
-     *                 }
-     *             }
+     *         datacenters: {
+     *             "key": {}
      *         }
      *     })
      */
     public async upsert(
         runnerName: string,
-        request: Rivet.RunnerConfigsUpsertRequest,
+        request: Rivet.RunnerConfigsUpsertRequestBody,
         requestOptions?: RunnerConfigs.RequestOptions,
     ): Promise<Rivet.RunnerConfigsUpsertResponse> {
-        const { namespace, body: _body } = request;
+        const { namespace, ..._body } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         const _response = await (this._options.fetcher ?? core.fetcher)({
