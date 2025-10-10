@@ -4,11 +4,6 @@ use serde::Serialize;
 #[derive(RivetError, Debug)]
 #[error("ws")]
 pub enum WsError {
-	#[error(
-		"new_runner_connected",
-		"New runner connected, closing old connection."
-	)]
-	NewRunnerConnected,
 	#[error("connection_closed", "Normal connection close.")]
 	ConnectionClosed,
 	#[error(

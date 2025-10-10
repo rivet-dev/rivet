@@ -150,7 +150,6 @@ pub async fn route_request(
 
 	// Return pegboard-gateway instance
 	let gateway = pegboard_gateway::PegboardGateway::new(
-		ctx.clone(),
 		shared_state.pegboard_gateway.clone(),
 		runner_id,
 		actor_id,

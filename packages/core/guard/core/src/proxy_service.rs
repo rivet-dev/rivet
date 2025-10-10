@@ -944,10 +944,10 @@ impl ProxyService {
 							if !err.is_connect() || attempts >= max_attempts {
 								tracing::error!(?err, "Request error after {} attempts", attempts);
 								return Err(errors::UpstreamError(
-							"failed to connect to runner. Make sure your runners are healthy and the provided runner address is reachable by Rivet."
-								.to_string(),
-						)
-						.build());
+									"failed to connect to runner. Make sure your runners are healthy and the provided runner address is reachable by Rivet."
+										.to_string(),
+								)
+								.build());
 							} else {
 								// Request connect error, might retry
 								tracing::debug!(?err, "Request attempt {attempts} failed");
@@ -2327,7 +2327,7 @@ fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {
 		.unwrap_or_else(|| RivetError::from(&INTERNAL_ERROR));
 
 	let code = match (rivet_err.group(), rivet_err.code()) {
-		("ws", "connection_closed") => CloseCode::Normal,
+		("ws", "connection_closed") | ("ws", "eviction") => CloseCode::Normal,
 		_ => CloseCode::Error,
 	};
 

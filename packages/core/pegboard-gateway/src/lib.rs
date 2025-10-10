@@ -1,21 +1,18 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode, header::HeaderName};
 use rivet_guard_core::{
-	WebSocketHandle,
-	custom_serve::CustomServeTrait,
-	errors::WebSocketServiceUnavailable,
-	proxy_service::{ResponseBody, X_RIVET_ERROR},
-	request_context::RequestContext,
+	WebSocketHandle, custom_serve::CustomServeTrait, errors::WebSocketServiceUnavailable,
+	proxy_service::ResponseBody, request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::time::Duration;
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::{Message, protocol::frame::coding::CloseCode};
 
 use crate::shared_state::{SharedState, TunnelMessageData};
 
@@ -26,7 +23,6 @@ const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocke
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 pub struct PegboardGateway {
-	ctx: StandaloneCtx,
 	shared_state: SharedState,
 	runner_id: Id,
 	actor_id: Id,
@@ -34,9 +30,8 @@ pub struct PegboardGateway {
 
 impl PegboardGateway {
 	#[tracing::instrument(skip_all, fields(?actor_id, ?runner_id))]
-	pub fn new(ctx: StandaloneCtx, shared_state: SharedState, runner_id: Id, actor_id: Id) -> Self {
+	pub fn new(shared_state: SharedState, runner_id: Id, actor_id: Id) -> Self {
 		Self {
-			ctx,
 			shared_state,
 			runner_id,
 			actor_id,
@@ -48,54 +43,6 @@ impl PegboardGateway {
 impl CustomServeTrait for PegboardGateway {
 	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
 	async fn handle_request(
-		&self,
-		req: Request<Full<Bytes>>,
-		request_context: &mut RequestContext,
-	) -> Result<Response<ResponseBody>> {
-		let res = self.handle_request_inner(req, request_context).await;
-		match res {
-			Result::Ok(x) => Ok(x),
-			Err(err) => {
-				if is_tunnel_service_unavailable(&err) {
-					// This will force the request to be retried with a new tunnel
-					Ok(Response::builder()
-						.status(StatusCode::SERVICE_UNAVAILABLE)
-						.header(X_RIVET_ERROR, "pegboard_gateway.tunnel_closed")
-						.body(ResponseBody::Full(Full::new(Bytes::new())))?)
-				} else {
-					Err(err)
-				}
-			}
-		}
-	}
-
-	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
-	async fn handle_websocket(
-		&self,
-		client_ws: WebSocketHandle,
-		headers: &hyper::HeaderMap,
-		path: &str,
-		_request_context: &mut RequestContext,
-	) -> Result<()> {
-		let res = self
-			.handle_websocket_inner(client_ws, headers, path, _request_context)
-			.await;
-		match res {
-			Result::Ok(x) => Ok(x),
-			Err(err) => {
-				if is_tunnel_service_unavailable(&err) {
-					Err(WebSocketServiceUnavailable.build())
-				} else {
-					Err(err)
-				}
-			}
-		}
-	}
-}
-
-impl PegboardGateway {
-	#[tracing::instrument(skip_all)]
-	async fn handle_request_inner(
 		&self,
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
@@ -160,34 +107,36 @@ impl PegboardGateway {
 
 		// Wait for response
 		tracing::debug!("gateway waiting for response from tunnel");
-		let response_start = loop {
-			let Some(msg) = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, msg_rx.recv())
-				.await
-				.map_err(|_| {
-					tracing::warn!("timed out waiting for tunnel ack");
-
-					RequestError::ServiceUnavailable
-				})?
-			else {
-				tracing::warn!("received no message response");
-				return Err(RequestError::ServiceUnavailable.into());
-			};
-
-			match msg {
-				TunnelMessageData::Message(msg) => match msg {
-					protocol::ToServerTunnelMessageKind::ToServerResponseStart(response_start) => {
-						break response_start;
+		let fut = async {
+			while let Some(msg) = msg_rx.recv().await {
+				match msg {
+					TunnelMessageData::Message(msg) => match msg {
+						protocol::ToServerTunnelMessageKind::ToServerResponseStart(
+							response_start,
+						) => {
+							return anyhow::Ok(response_start);
+						}
+						_ => {
+							tracing::warn!("received non-response message from pubsub");
+						}
+					},
+					TunnelMessageData::Timeout => {
+						tracing::warn!("tunnel message timeout");
+						return Err(WebSocketServiceUnavailable.build());
 					}
-					_ => {
-						tracing::warn!("received non-response message from pubsub");
-					}
-				},
-				TunnelMessageData::Timeout => {
-					tracing::warn!("tunnel message timeout");
-					return Err(RequestError::ServiceUnavailable.into());
 				}
 			}
+
+			tracing::warn!("received no message response");
+			Err(WebSocketServiceUnavailable.build())
 		};
+		let response_start = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+			.await
+			.map_err(|_| {
+				tracing::warn!("timed out waiting for tunnel ack");
+
+				WebSocketServiceUnavailable.build()
+			})??;
 		tracing::debug!("response handler task ended");
 
 		// Build HTTP response
@@ -206,8 +155,8 @@ impl PegboardGateway {
 		Ok(response)
 	}
 
-	#[tracing::instrument(skip_all)]
-	async fn handle_websocket_inner(
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, runner_id=?self.runner_id))]
+	async fn handle_websocket(
 		&self,
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
@@ -262,140 +211,139 @@ impl PegboardGateway {
 		tracing::debug!("gateway waiting for websocket open from tunnel");
 
 		// Wait for WebSocket open acknowledgment
-		loop {
-			let Some(msg) = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, msg_rx.recv())
-				.await
-				.map_err(|_| {
-					tracing::warn!("timed out waiting for tunnel ack");
-
-					RequestError::ServiceUnavailable
-				})?
-			else {
-				tracing::warn!("received no message response");
-				return Err(RequestError::ServiceUnavailable.into());
-			};
-
-			match msg {
-				TunnelMessageData::Message(
-					protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen,
-				) => {
-					break;
-				}
-				TunnelMessageData::Message(
-					protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
-				) => {
-					tracing::warn!(?close, "websocket closed before opening");
-					return Err(RequestError::ServiceUnavailable.into());
-				}
-				TunnelMessageData::Timeout => {
-					tracing::warn!("websocket open timeout");
-					return Err(RequestError::ServiceUnavailable.into());
-				}
-				_ => {
-					tracing::warn!("received unexpected message while waiting for websocket open");
+		let fut = async {
+			while let Some(msg) = msg_rx.recv().await {
+				match msg {
+					TunnelMessageData::Message(
+						protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen,
+					) => {
+						return anyhow::Ok(());
+					}
+					TunnelMessageData::Message(
+						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
+					) => {
+						tracing::warn!(?close, "websocket closed before opening");
+						return Err(WebSocketServiceUnavailable.build());
+					}
+					TunnelMessageData::Timeout => {
+						tracing::warn!("websocket open timeout");
+						return Err(WebSocketServiceUnavailable.build());
+					}
+					_ => {
+						tracing::warn!(
+							"received unexpected message while waiting for websocket open"
+						);
+					}
 				}
 			}
-		}
+
+			tracing::warn!("received no message response");
+			Err(WebSocketServiceUnavailable.build())
+		};
+		tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+			.await
+			.map_err(|_| {
+				tracing::warn!("timed out waiting for tunnel ack");
+
+				WebSocketServiceUnavailable.build()
+			})??;
 
 		// Accept the WebSocket
 		let mut ws_rx = client_ws.accept().await?;
 
 		// Spawn task to forward messages from server to client
-		let mut server_to_client = tokio::spawn(async move {
-			while let Some(msg) = msg_rx.recv().await {
-				match msg {
-					TunnelMessageData::Message(
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
-					) => {
-						let msg = if ws_msg.binary {
-							Message::Binary(ws_msg.data.into())
-						} else {
-							Message::Text(String::from_utf8_lossy(&ws_msg.data).into_owned().into())
-						};
-						if let Err(e) = client_ws.send(msg).await {
-							tracing::warn!(?e, "failed to send websocket message to client");
-							break;
+		let mut server_to_client = tokio::spawn(
+			async move {
+				while let Some(msg) = msg_rx.recv().await {
+					match msg {
+						TunnelMessageData::Message(
+							protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
+						) => {
+							let msg = if ws_msg.binary {
+								Message::Binary(ws_msg.data.into())
+							} else {
+								Message::Text(
+									String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
+								)
+							};
+							client_ws.send(msg).await?;
 						}
+						TunnelMessageData::Message(
+							protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
+						) => {
+							tracing::debug!(?close, "server closed websocket");
+							return Err(WebSocketServiceUnavailable.build());
+						}
+						TunnelMessageData::Timeout => {
+							tracing::warn!("websocket message timeout");
+							return Err(WebSocketServiceUnavailable.build());
+						}
+						_ => {}
 					}
-					TunnelMessageData::Message(
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
-					) => {
-						tracing::debug!(?close, "server closed websocket");
-						break;
-					}
-					TunnelMessageData::Timeout => {
-						tracing::warn!("websocket message timeout");
-						break;
-					}
-					_ => {}
 				}
+
+				tracing::debug!("sub closed");
+
+				Err(WebSocketServiceUnavailable.build())
 			}
-		});
+			.instrument(tracing::info_span!("server_to_client_task")),
+		);
 
 		// Spawn task to forward messages from client to server
 		let shared_state_clone = self.shared_state.clone();
-		let mut client_to_server = tokio::spawn(async move {
-			let mut close_reason = None;
-			while let Some(msg) = ws_rx.next().await {
-				match msg {
-					Result::Ok(Message::Binary(data)) => {
-						let ws_message =
-							protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-								protocol::ToClientWebSocketMessage {
-									data: data.into(),
-									binary: true,
-								},
-							);
-						if let Err(err) = shared_state_clone
-							.send_message(request_id, ws_message)
-							.await
-						{
-							if is_tunnel_service_unavailable(&err) {
-								tracing::warn!("tunnel closed sending binary message");
-								close_reason = Some("Tunnel closed".to_string());
-								break;
-							} else {
-								tracing::error!(?err, "error sending binary message");
-							}
+		let mut client_to_server = tokio::spawn(
+			async move {
+				while let Some(msg) = ws_rx.try_next().await? {
+					match msg {
+						Message::Binary(data) => {
+							let ws_message =
+								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+									protocol::ToClientWebSocketMessage {
+										data: data.into(),
+										binary: true,
+									},
+								);
+							shared_state_clone
+								.send_message(request_id, ws_message)
+								.await?;
 						}
-					}
-					Result::Ok(Message::Text(text)) => {
-						let ws_message =
-							protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-								protocol::ToClientWebSocketMessage {
-									data: text.as_bytes().to_vec(),
-									binary: false,
-								},
-							);
-						if let Err(err) = shared_state_clone
-							.send_message(request_id, ws_message)
-							.await
-						{
-							if is_tunnel_service_unavailable(&err) {
-								tracing::warn!("tunnel closed sending text message");
-								close_reason = Some("Tunnel closed".to_string());
-								break;
-							} else {
-								tracing::error!(?err, "error sending text message");
-							}
+						Message::Text(text) => {
+							let ws_message =
+								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+									protocol::ToClientWebSocketMessage {
+										data: text.as_bytes().to_vec(),
+										binary: false,
+									},
+								);
+							shared_state_clone
+								.send_message(request_id, ws_message)
+								.await?;
 						}
+						Message::Close(_) => {
+							return Ok(());
+						}
+						_ => {}
 					}
-					Result::Ok(Message::Close(_)) | Err(_) => break,
-					_ => {}
 				}
+
+				tracing::debug!("websocket stream closed");
+
+				Ok(())
 			}
-			close_reason
-		});
+			.instrument(tracing::info_span!("client_to_server_task")),
+		);
 
 		// Wait for either task to complete
-		let close_reason = tokio::select! {
-			_ = &mut server_to_client => {
-				tracing::info!("server to client task completed");
-				None
+		let lifecycle_res = tokio::select! {
+			res = &mut server_to_client => {
+				let res = res?;
+				tracing::info!(?res, "server to client task completed");
+				res
 			}
 			res = &mut client_to_server => {
-				tracing::info!("client to server task completed");
-				res.unwrap_or(None)
+				let res = res?;
+				tracing::info!(?res, "client to server task completed");
+				res
 			}
 		};
 
@@ -403,10 +351,16 @@ impl PegboardGateway {
 		server_to_client.abort();
 		client_to_server.abort();
 
-		// Send WebSocket close message
+		let (close_code, close_reason) = if lifecycle_res.is_ok() {
+			(CloseCode::Normal.into(), None)
+		} else {
+			(CloseCode::Error.into(), Some("ws.downstream_closed".into()))
+		};
+
+		// Send WebSocket close message to runner
 		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
 			protocol::ToClientWebSocketClose {
-				code: None,
+				code: Some(close_code),
 				reason: close_reason,
 			},
 		);
@@ -416,24 +370,9 @@ impl PegboardGateway {
 			.send_message(request_id, close_message)
 			.await
 		{
-			if is_tunnel_service_unavailable(&err) {
-				tracing::warn!("tunnel closed sending close message");
-			} else {
-				tracing::error!(?err, "error sending close message");
-			}
+			tracing::error!(?err, "error sending close message");
 		}
 
-		Ok(())
+		lifecycle_res
 	}
-}
-
-#[derive(thiserror::Error, Debug)]
-enum RequestError {
-	#[error("service unavailable")]
-	ServiceUnavailable,
-}
-
-/// Determines if the tunnel is closed by if the UPS service is no longer responding.
-fn is_tunnel_service_unavailable(err: &anyhow::Error) -> bool {
-	err.chain().any(|x| x.is::<RequestError>())
 }

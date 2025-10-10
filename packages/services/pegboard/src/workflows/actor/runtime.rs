@@ -359,7 +359,7 @@ async fn allocate_actor(
 	);
 
 	state.for_serverless = for_serverless;
-	state.allocated_slot = true;
+	state.allocated_serverless_slot = for_serverless;
 
 	match &res {
 		AllocateActorOutput::Allocated {
@@ -457,7 +457,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	state.runner_id = None;
 	state.runner_workflow_id = None;
 	// Slot was cleared by the above txn
-	state.allocated_slot = false;
+	state.allocated_serverless_slot = false;
 
 	Ok(DeallocateOutput {
 		for_serverless: state.for_serverless,
