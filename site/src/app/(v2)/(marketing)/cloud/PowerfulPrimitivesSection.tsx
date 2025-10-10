@@ -140,7 +140,7 @@ const TAB_GROUPS: TabGroup[] = [
 					functions: true,
 					guide: "/blog/2025-05-28-building-linear-agents-in-node-js-and-rivet-full-walkthrough-and-starter-kit",
 					sourceCode:
-						"https://github.com/rivet-dev/rivet/tree/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter",
+						"https://github.com/rivet-dev/engine/tree/e13e6e95c56ea63bc73312fa7d01a647412ac507/examples/linear-agent-starter",
 				},
 			},
 			{

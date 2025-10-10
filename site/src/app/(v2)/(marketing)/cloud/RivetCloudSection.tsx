@@ -42,7 +42,7 @@ export const RivetCloudSection = () => {
 			description:
 				"Run the open-source Rivet Engine on your own infrastructure with PostgreSQL or FoundationDB. Complete control over your actor orchestration platform.",
 			buttonText: "View on GitHub",
-			buttonHref: "https://github.com/rivet-dev/rivet",
+			buttonHref: "https://github.com/rivet-dev/engine",
 		},
 	];
 

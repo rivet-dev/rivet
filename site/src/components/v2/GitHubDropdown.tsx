@@ -107,7 +107,7 @@ export function GitHubDropdown({ className, ...props }: GitHubDropdownProps) {
 					>
 						<div className="py-1">
 							<a
-								href="https://github.com/rivet-dev/rivet"
+								href="https://github.com/rivet-dev/engine"
 								target="_blank"
 								rel="noreferrer"
 								className={cn(

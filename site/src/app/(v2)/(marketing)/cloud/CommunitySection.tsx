@@ -20,7 +20,7 @@ export const CommunitySection = () => {
 		{
 			name: "Discussions",
 			icon: faGithub,
-			href: "https://github.com/rivet-dev/rivet/discussions",
+			href: "https://github.com/rivet-dev/engine/discussions",
 		},
 		{ name: "X", icon: faXTwitter, href: "https://x.com/rivet_dev" },
 		{

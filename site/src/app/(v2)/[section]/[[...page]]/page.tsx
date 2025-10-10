@@ -143,7 +143,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 							startIcon={<Icon icon={faPencil} />}
 						>
 							<a
-								href={`https://github.com/rivet-dev/rivet/edit/main/site/src/content/${componentSourcePath}`}
+								href={`https://github.com/rivet-dev/engine/edit/main/site/src/content/${componentSourcePath}`}
 								target="_blank"
 								rel="noreferrer"
 							>
