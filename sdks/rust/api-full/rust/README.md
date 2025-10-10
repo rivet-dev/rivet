@@ -36,6 +36,7 @@ Class | Method | HTTP request | Description
 *NamespacesApi* | [**namespaces_list**](docs/NamespacesApi.md#namespaces_list) | **GET** /namespaces | 
 *RunnerConfigsApi* | [**runner_configs_delete**](docs/RunnerConfigsApi.md#runner_configs_delete) | **DELETE** /runner-configs/{runner_name} | 
 *RunnerConfigsApi* | [**runner_configs_list**](docs/RunnerConfigsApi.md#runner_configs_list) | **GET** /runner-configs | 
+*RunnerConfigsApi* | [**runner_configs_serverless_health_check**](docs/RunnerConfigsApi.md#runner_configs_serverless_health_check) | **POST** /runner-configs/serverless-health-check | 
 *RunnerConfigsApi* | [**runner_configs_upsert**](docs/RunnerConfigsApi.md#runner_configs_upsert) | **PUT** /runner-configs/{runner_name} | 
 *RunnersApi* | [**runners_list**](docs/RunnersApi.md#runners_list) | **GET** /runners | 
 *RunnersApi* | [**runners_list_names**](docs/RunnersApi.md#runners_list_names) | **GET** /runners/names | ## Datacenter Round Trips
@@ -61,12 +62,30 @@ Class | Method | HTTP request | Description
  - [Pagination](docs/Pagination.md)
  - [Runner](docs/Runner.md)
  - [RunnerConfig](docs/RunnerConfig.md)
- - [RunnerConfigServerless](docs/RunnerConfigServerless.md)
+ - [RunnerConfigKind](docs/RunnerConfigKind.md)
+ - [RunnerConfigKindOneOf](docs/RunnerConfigKindOneOf.md)
+ - [RunnerConfigKindOneOf1](docs/RunnerConfigKindOneOf1.md)
+ - [RunnerConfigKindOneOf1Serverless](docs/RunnerConfigKindOneOf1Serverless.md)
  - [RunnerConfigVariant](docs/RunnerConfigVariant.md)
  - [RunnerConfigsListResponse](docs/RunnerConfigsListResponse.md)
- - [RunnerConfigsUpsertRequestBodyValue](docs/RunnerConfigsUpsertRequestBodyValue.md)
- - [RunnerConfigsUpsertRequestBodyValueOneOf](docs/RunnerConfigsUpsertRequestBodyValueOneOf.md)
- - [RunnerConfigsUpsertRequestBodyValueOneOfServerless](docs/RunnerConfigsUpsertRequestBodyValueOneOfServerless.md)
+ - [RunnerConfigsListResponseRunnerConfigsValue](docs/RunnerConfigsListResponseRunnerConfigsValue.md)
+ - [RunnerConfigsServerlessHealthCheckError](docs/RunnerConfigsServerlessHealthCheckError.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf](docs/RunnerConfigsServerlessHealthCheckErrorOneOf.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf1](docs/RunnerConfigsServerlessHealthCheckErrorOneOf1.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf2](docs/RunnerConfigsServerlessHealthCheckErrorOneOf2.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf3](docs/RunnerConfigsServerlessHealthCheckErrorOneOf3.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf3NonSuccessStatus](docs/RunnerConfigsServerlessHealthCheckErrorOneOf3NonSuccessStatus.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf4](docs/RunnerConfigsServerlessHealthCheckErrorOneOf4.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf4InvalidResponseJson](docs/RunnerConfigsServerlessHealthCheckErrorOneOf4InvalidResponseJson.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf5](docs/RunnerConfigsServerlessHealthCheckErrorOneOf5.md)
+ - [RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema](docs/RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema.md)
+ - [RunnerConfigsServerlessHealthCheckRequest](docs/RunnerConfigsServerlessHealthCheckRequest.md)
+ - [RunnerConfigsServerlessHealthCheckResponse](docs/RunnerConfigsServerlessHealthCheckResponse.md)
+ - [RunnerConfigsServerlessHealthCheckResponseOneOf](docs/RunnerConfigsServerlessHealthCheckResponseOneOf.md)
+ - [RunnerConfigsServerlessHealthCheckResponseOneOf1](docs/RunnerConfigsServerlessHealthCheckResponseOneOf1.md)
+ - [RunnerConfigsServerlessHealthCheckResponseOneOf1Failure](docs/RunnerConfigsServerlessHealthCheckResponseOneOf1Failure.md)
+ - [RunnerConfigsServerlessHealthCheckResponseOneOfSuccess](docs/RunnerConfigsServerlessHealthCheckResponseOneOfSuccess.md)
+ - [RunnerConfigsUpsertRequestBody](docs/RunnerConfigsUpsertRequestBody.md)
  - [RunnersListNamesResponse](docs/RunnersListNamesResponse.md)
  - [RunnersListResponse](docs/RunnersListResponse.md)
 

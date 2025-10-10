@@ -69,7 +69,30 @@ func (c *Client) List(ctx context.Context, request *sdk.RunnerConfigsListRequest
 	return response, nil
 }
 
-func (c *Client) Upsert(ctx context.Context, runnerName string, request *sdk.RunnerConfigsUpsertRequest) (sdk.RunnerConfigsUpsertResponse, error) {
+func (c *Client) ServerlessHealthCheck(ctx context.Context, request *sdk.RunnerConfigsServerlessHealthCheckRequest) (*sdk.RunnerConfigsServerlessHealthCheckResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "runner-configs/serverless-health-check"
+
+	var response *sdk.RunnerConfigsServerlessHealthCheckResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPost,
+			Headers:  c.header,
+			Request:  request,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) Upsert(ctx context.Context, runnerName string, request *sdk.RunnerConfigsUpsertRequestBody) (sdk.RunnerConfigsUpsertResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
 		baseURL = c.baseURL

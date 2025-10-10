@@ -6,6 +6,7 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**runner_configs_delete**](RunnerConfigsApi.md#runner_configs_delete) | **DELETE** /runner-configs/{runner_name} | 
 [**runner_configs_list**](RunnerConfigsApi.md#runner_configs_list) | **GET** /runner-configs | 
+[**runner_configs_serverless_health_check**](RunnerConfigsApi.md#runner_configs_serverless_health_check) | **POST** /runner-configs/serverless-health-check | 
 [**runner_configs_upsert**](RunnerConfigsApi.md#runner_configs_upsert) | **PUT** /runner-configs/{runner_name} | 
 
 
@@ -71,9 +72,37 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
+## runner_configs_serverless_health_check
+
+> models::RunnerConfigsServerlessHealthCheckResponse runner_configs_serverless_health_check(runner_configs_serverless_health_check_request)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**runner_configs_serverless_health_check_request** | [**RunnerConfigsServerlessHealthCheckRequest**](RunnerConfigsServerlessHealthCheckRequest.md) |  | [required] |
+
+### Return type
+
+[**models::RunnerConfigsServerlessHealthCheckResponse**](RunnerConfigsServerlessHealthCheckResponse.md)
+
+### Authorization
+
+[bearer_auth](../README.md#bearer_auth)
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
 ## runner_configs_upsert
 
-> serde_json::Value runner_configs_upsert(runner_name, namespace, request_body)
+> serde_json::Value runner_configs_upsert(runner_name, namespace, runner_configs_upsert_request_body)
 
 
 ### Parameters
@@ -83,7 +112,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **runner_name** | **String** |  | [required] |
 **namespace** | **String** |  | [required] |
-**request_body** | [**std::collections::HashMap<String, models::RunnerConfigsUpsertRequestBodyValue>**](RunnerConfigsUpsertRequestBody_value.md) |  | [required] |
+**runner_configs_upsert_request_body** | [**RunnerConfigsUpsertRequestBody**](RunnerConfigsUpsertRequestBody.md) |  | [required] |
 
 ### Return type
 

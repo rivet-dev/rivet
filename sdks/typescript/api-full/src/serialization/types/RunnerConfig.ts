@@ -9,11 +9,15 @@ import { RunnerConfigServerless } from "./RunnerConfigServerless";
 
 export const RunnerConfig: core.serialization.ObjectSchema<serializers.RunnerConfig.Raw, Rivet.RunnerConfig> =
     core.serialization.object({
-        serverless: RunnerConfigServerless,
+        normal: core.serialization.record(core.serialization.string(), core.serialization.unknown()).optional(),
+        serverless: RunnerConfigServerless.optional(),
+        metadata: core.serialization.unknown().optional(),
     });
 
 export declare namespace RunnerConfig {
     export interface Raw {
-        serverless: RunnerConfigServerless.Raw;
+        normal?: Record<string, unknown> | null;
+        serverless?: RunnerConfigServerless.Raw | null;
+        metadata?: unknown | null;
     }
 }

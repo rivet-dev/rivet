@@ -10,22 +10,22 @@ export const RunnerConfigServerless: core.serialization.ObjectSchema<
     serializers.RunnerConfigServerless.Raw,
     Rivet.RunnerConfigServerless
 > = core.serialization.object({
-    headers: core.serialization.record(core.serialization.string(), core.serialization.string()),
+    headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxRunners: core.serialization.property("max_runners", core.serialization.number()),
-    minRunners: core.serialization.property("min_runners", core.serialization.number()),
+    minRunners: core.serialization.property("min_runners", core.serialization.number().optional()),
     requestLifespan: core.serialization.property("request_lifespan", core.serialization.number()),
-    runnersMargin: core.serialization.property("runners_margin", core.serialization.number()),
+    runnersMargin: core.serialization.property("runners_margin", core.serialization.number().optional()),
     slotsPerRunner: core.serialization.property("slots_per_runner", core.serialization.number()),
     url: core.serialization.string(),
 });
 
 export declare namespace RunnerConfigServerless {
     export interface Raw {
-        headers: Record<string, string>;
+        headers?: Record<string, string> | null;
         max_runners: number;
-        min_runners: number;
+        min_runners?: number | null;
         request_lifespan: number;
-        runners_margin: number;
+        runners_margin?: number | null;
         slots_per_runner: number;
         url: string;
     }
