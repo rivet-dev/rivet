@@ -1192,7 +1192,31 @@
         "additionalProperties": false
       },
       "RunnerConfig": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RunnerConfigKind"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {}
+            }
+          }
+        ]
+      },
+      "RunnerConfigKind": {
         "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "normal"
+            ],
+            "properties": {
+              "normal": {
+                "type": "object"
+              }
+            }
+          },
           {
             "type": "object",
             "required": [
@@ -1203,16 +1227,16 @@
                 "type": "object",
                 "required": [
                   "url",
-                  "headers",
                   "request_lifespan",
                   "slots_per_runner",
-                  "min_runners",
-                  "max_runners",
-                  "runners_margin"
+                  "max_runners"
                 ],
                 "properties": {
                   "headers": {
-                    "type": "object",
+                    "type": [
+                      "object",
+                      "null"
+                    ],
                     "additionalProperties": {
                       "type": "string"
                     },
@@ -1226,7 +1250,10 @@
                     "minimum": 0
                   },
                   "min_runners": {
-                    "type": "integer",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
                     "format": "int32",
                     "minimum": 0
                   },
@@ -1237,7 +1264,10 @@
                     "minimum": 0
                   },
                   "runners_margin": {
-                    "type": "integer",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
                     "format": "int32",
                     "minimum": 0
                   },
@@ -1258,7 +1288,8 @@
       "RunnerConfigVariant": {
         "type": "string",
         "enum": [
-          "serverless"
+          "serverless",
+          "normal"
         ]
       },
       "RunnerConfigsDeleteResponse": {
@@ -1466,71 +1497,14 @@
       "RunnerConfigsUpsertRequestBody": {
         "type": "object",
         "additionalProperties": {
-          "oneOf": [
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/RunnerConfigKind"
+            },
             {
               "type": "object",
-              "required": [
-                "serverless"
-              ],
               "properties": {
-                "serverless": {
-                  "type": "object",
-                  "required": [
-                    "url",
-                    "request_lifespan",
-                    "slots_per_runner",
-                    "max_runners"
-                  ],
-                  "properties": {
-                    "headers": {
-                      "type": [
-                        "object",
-                        "null"
-                      ],
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "propertyNames": {
-                        "type": "string"
-                      }
-                    },
-                    "max_runners": {
-                      "type": "integer",
-                      "format": "int32",
-                      "minimum": 0
-                    },
-                    "min_runners": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ],
-                      "format": "int32",
-                      "minimum": 0
-                    },
-                    "request_lifespan": {
-                      "type": "integer",
-                      "format": "int32",
-                      "description": "Seconds.",
-                      "minimum": 0
-                    },
-                    "runners_margin": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ],
-                      "format": "int32",
-                      "minimum": 0
-                    },
-                    "slots_per_runner": {
-                      "type": "integer",
-                      "format": "int32",
-                      "minimum": 0
-                    },
-                    "url": {
-                      "type": "string"
-                    }
-                  }
-                }
+                "metadata": {}
               }
             }
           ]

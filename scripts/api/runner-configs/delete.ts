@@ -7,11 +7,10 @@ const rl = readline.createInterface({
 	output: process.stdout,
 });
 
-const rivetToken = process.env.RIVET_TOKEN;
-if (!rivetToken) {
-	console.error("Error: RIVET_TOKEN environment variable is not set");
-	process.exit(1);
-}
+const rivetToken =
+	process.env.RIVET_TOKEN ||
+	(await rl.question("Rivet Token (default: dev): ")).trim() ||
+	"dev";
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||

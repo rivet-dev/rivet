@@ -6,8 +6,9 @@ use gas::prelude::*;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol as protocol;
 use rivet_types::{
-	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
-	runner_configs::RunnerConfig,
+	actors::CrashPolicy,
+	keys::namespace::runner_config::RunnerConfigVariant,
+	runner_configs::{RunnerConfig, RunnerConfigKind},
 };
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
@@ -145,8 +146,9 @@ async fn allocate_actor(
 		.await?;
 	let has_valid_serverless = runner_config_res
 		.first()
-		.map(|runner| match &runner.config {
-			RunnerConfig::Serverless { max_runners, .. } => *max_runners != 0,
+		.map(|runner| match &runner.config.kind {
+			RunnerConfigKind::Serverless { max_runners, .. } => *max_runners != 0,
+			_ => false,
 		})
 		.unwrap_or_default();
 

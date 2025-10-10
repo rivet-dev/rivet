@@ -32,9 +32,7 @@ impl FormalKey for DataKey {
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
 		rivet_data::versioned::NamespaceRunnerConfig::latest(value.into())
-			.serialize_with_embedded_version(
-				rivet_data::PEGBOARD_NAMESPACE_RUNNER_ALLOC_IDX_VERSION,
-			)
+			.serialize_with_embedded_version(rivet_data::PEGBOARD_NAMESPACE_RUNNER_CONFIG_VERSION)
 	}
 }
 
@@ -125,9 +123,7 @@ impl FormalKey for ByVariantKey {
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
 		rivet_data::versioned::NamespaceRunnerConfig::latest(value.into())
-			.serialize_with_embedded_version(
-				rivet_data::PEGBOARD_NAMESPACE_RUNNER_ALLOC_IDX_VERSION,
-			)
+			.serialize_with_embedded_version(rivet_data::PEGBOARD_NAMESPACE_RUNNER_CONFIG_VERSION)
 	}
 }
 
