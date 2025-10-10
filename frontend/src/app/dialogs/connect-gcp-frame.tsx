@@ -1,4 +1,4 @@
-import { faCheck, faServer, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faCheck, faGoogleCloud, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -56,11 +56,11 @@ const stepper = defineStepper(
 	},
 );
 
-interface CreateProjectFrameContentProps extends DialogContentProps {}
+interface ConnectAwsFrameContentProps extends DialogContentProps {}
 
-export default function CreateProjectFrameContent({
+export default function ConnectAwsFrameContent({
 	onClose,
-}: CreateProjectFrameContentProps) {
+}: ConnectAwsFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
 		pages: Infinity,
@@ -75,7 +75,8 @@ export default function CreateProjectFrameContent({
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faServer} className="ml-0.5" /> Custom
+						Add <Icon icon={faGoogleCloud} className="ml-0.5" />{" "}
+						Google Cloud Run
 					</div>
 				</Frame.Title>
 			</Frame.Header>
@@ -122,7 +123,7 @@ function FormStepper({
 						dc,
 						{
 							normal: {},
-							metadata: { provider: "custom" },
+							metadata: { provider: "gcp" },
 						},
 					]),
 				);
@@ -174,7 +175,7 @@ function Step2() {
 	);
 }
 
-function Step3({ provider = "custom" }: { provider?: string }) {
+function Step3({ provider = "gcp" }: { provider?: string }) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().runnersQueryOptions(),
 		pages: Infinity,
@@ -197,9 +198,10 @@ function Step3({ provider = "custom" }: { provider?: string }) {
 
 	const success = chosenDatacenters
 		.map((dc) =>
-			queryData?.find(
-				(runner) =>
-					runner.datacenter === dc && runner.name === runnerName,
+			queryData?.find((runner) =>
+				runner.datacenter === dc &&
+				runner.name === runnerName &&
+		
 			),
 		)
 		.every((v) => v);

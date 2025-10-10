@@ -47,14 +47,11 @@ const getChildIdx = (child: ReactElement) =>
 export function CodeGroup({ children, className }: CodeGroupProps) {
 	return (
 		<div
-			className={cn(
-				"code-group group my-4 rounded-md border",
-				className,
-			)}
+			className={cn("code-group group my-4 rounded-md border", className)}
 			data-code-group
 		>
-				<Tabs defaultValue={getChildIdx(children[0])}>
-					<div className="flex gap-1 border-b pr-2">
+			<Tabs defaultValue={getChildIdx(children[0])}>
+				<div className="flex gap-1 border-b pr-2">
 					<ScrollArea
 						className="w-full"
 						viewportProps={{ className: "[&>div]:!table" }}

@@ -1,54 +1,42 @@
 import {
 	faCheck,
 	faSpinnerThird,
-	faTriangle,
+	faTrash,
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { type UseFormReturn, useFormContext } from "react-hook-form";
+import { useEffect } from "react";
+import { useController, useFieldArray, useFormContext } from "react-hook-form";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import {
 	Button,
+	Checkbox,
 	CodeFrame,
 	CodePreview,
 	cn,
-	createSchemaForm,
 	FormControl,
 	FormDescription,
 	FormField,
+	FormFieldContext,
 	FormItem,
 	FormLabel,
 	FormMessage,
 	Input,
+	Label,
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
 } from "@/components";
-import { HelpDropdown } from "../help-dropdown";
-
-export const formSchema = z.object({
-	plan: z.string(),
-	endpoint: z.string().url(),
-});
-
-export type FormValues = z.infer<typeof formSchema>;
-export type SubmitHandler = (
-	values: FormValues,
-	form: UseFormReturn<FormValues>,
-) => Promise<void>;
-
-const { Form, Submit, SetValue } = createSchemaForm(formSchema);
-export { Form, Submit, SetValue };
+import { useEngineCompatDataProvider } from "@/components/actors";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 
 export const Plan = ({ className }: { className?: string }) => {
-	const { control } = useFormContext<FormValues>();
+	const { control } = useFormContext();
 	return (
 		<FormField
 			control={control}
@@ -84,7 +72,272 @@ export const Plan = ({ className }: { className?: string }) => {
 	);
 };
 
-const PLAN_TO_MAX_DURATION: Record<string, number> = {
+export const RunnerName = function RunnerName() {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="runnerName"
+			render={({ field }) => (
+				<FormItem>
+					<FormLabel className="col-span-1">Runner Name</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="text" {...field} />
+					</FormControl>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const Datacenters = function Datacenter() {
+	const { control } = useFormContext();
+	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery(
+		useEngineCompatDataProvider().regionsQueryOptions(),
+	);
+
+	return (
+		<div className="space-y-2">
+			<Label>Datacenters</Label>
+			<FormDescription>
+				Rivet datacenters that actors can be created in.
+			</FormDescription>
+
+			<div className="space-y-4">
+				{data?.map((region) => (
+					<FormField
+						key={region.id}
+						control={control}
+						name={`datacenters.${region.id}`}
+						render={({ field }) => (
+							<div className="flex items-start gap-3">
+								<Checkbox
+									id={region.id}
+									checked={field.value}
+									name={field.name}
+									onCheckedChange={field.onChange}
+								/>
+								<div className="grid gap-2">
+									<Label htmlFor={region.id}>
+										{region.name}
+									</Label>
+								</div>
+							</div>
+						)}
+					/>
+				))}
+				{hasNextPage ? (
+					<VisibilitySensor onChange={fetchNextPage} />
+				) : null}
+			</div>
+		</div>
+	);
+};
+
+export const MaxRunners = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="maxRunners"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Max Runners</FormLabel>
+					<FormControl className="row-start-2">
+						<Input
+							type="number"
+							min={1}
+							{...field}
+							value={field.value || ""}
+						/>
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The maximum number of runners that can be created to
+						handle load.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const SlotsPerRunner = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="slotsPerRunner"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">
+						Slots Per Runner
+					</FormLabel>
+					<FormControl className="row-start-2">
+						<Input
+							type="number"
+							min={1}
+							{...field}
+							value={field.value || ""}
+						/>
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The number of concurrent slots each runner can handle.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const RunnerMargin = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="runnerMargin"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Runner Margin</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The number of extra runners to keep running to handle
+						sudden spikes in load.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const Headers = function Headers() {
+	const { control, setValue, watch } = useFormContext();
+	const { fields, append, remove } = useFieldArray({
+		name: "headers",
+		control,
+	});
+
+	return (
+		<div className="space-y-2">
+			<FormLabel asChild>
+				<p>Custom Headers</p>
+			</FormLabel>
+			<FormDescription>
+				Custom headers to add to each request to the runner. Useful for
+				providing authentication or other information.
+			</FormDescription>
+			<div className="grid grid-cols-[1fr,1fr,auto] grid-rows-[repeat(3,auto)] items-start gap-2 empty:hidden">
+				{fields.length > 0 ? (
+					<>
+						<Label asChild>
+							<p>Name</p>
+						</Label>
+						<Label asChild>
+							<p>Value</p>
+						</Label>
+						<p></p>
+					</>
+				) : null}
+				{fields.map((field, index) => (
+					<div
+						key={field.id}
+						className="grid grid-cols-subgrid grid-rows-
+col-span-full flex-1"
+					>
+						<FormFieldContext.Provider
+							value={{ name: `headers.${index}.0` }}
+						>
+							<FormItem
+								flex="1"
+								className="grid grid-cols-subgrid grid-rows-subgrid row-span-full"
+							>
+								<FormLabel aria-hidden hidden>
+									Key
+								</FormLabel>
+								<FormControl>
+									<Input
+										placeholder="Enter a value"
+										className="w-full"
+										value={field[0]}
+										onChange={(e) => {
+											setValue(
+												`headers.${index}.0`,
+												e.target.value,
+												{
+													shouldDirty: true,
+													shouldTouch: true,
+													shouldValidate: true,
+												},
+											);
+										}}
+									/>
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						</FormFieldContext.Provider>
+
+						<FormFieldContext.Provider
+							value={{ name: `headers.${index}.1` }}
+						>
+							<FormItem
+								flex="1"
+								className="grid grid-cols-subgrid grid-rows-subgrid row-span-full"
+							>
+								<FormLabel aria-hidden hidden>
+									Value
+								</FormLabel>
+								<FormControl>
+									<Input
+										placeholder="Enter a value"
+										className="w-full"
+										value={field[1]}
+										onChange={(e) => {
+											setValue(
+												`headers.${index}.1`,
+												e.target.value,
+												{
+													shouldDirty: true,
+													shouldTouch: true,
+													shouldValidate: true,
+												},
+											);
+										}}
+									/>
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						</FormFieldContext.Provider>
+						<Button
+							size="icon"
+							className="self-end row-start-1"
+							variant="secondary"
+							type="button"
+							onClick={() => remove(index)}
+						>
+							<Icon icon={faTrash} />
+						</Button>
+					</div>
+				))}
+			</div>
+			<Button
+				className="justify-self-start"
+				variant="secondary"
+				size="sm"
+				type="button"
+				onClick={() => append([["", ""]])}
+			>
+				Add a header
+			</Button>
+		</div>
+	);
+};
+
+export const PLAN_TO_MAX_DURATION: Record<string, number> = {
 	hobby: 60,
 	pro: 300,
 	enterprise: 900,
@@ -101,10 +354,7 @@ const code = ({ plan }: { plan: string }) =>
 	},
 }`;
 
-export const Json = () => {
-	const { watch } = useFormContext<FormValues>();
-
-	const plan = watch("plan");
+export const Json = ({ plan }: { plan: string }) => {
 	return (
 		<div className="space-y-2 mt-2">
 			<CodeFrame language="json" title="vercel.json">
@@ -114,13 +364,13 @@ export const Json = () => {
 					code={code({ plan })}
 				/>
 			</CodeFrame>
-			<FormDescription className="col-span-1">
+			<p className="col-span-1 text-sm text-muted-foreground">
 				<b>Max Duration</b> - The maximum execution time of your
 				serverless functions.
 				<br />
 				<b>Disable Fluid Compute</b> - Rivet has its own intelligent
 				load balancing mechanism.
-			</FormDescription>
+			</p>
 		</div>
 	);
 };
@@ -132,7 +382,7 @@ export const Endpoint = ({
 	className?: string;
 	placeholder?: string;
 }) => {
-	const { control } = useFormContext<FormValues>();
+	const { control } = useFormContext();
 	return (
 		<FormField
 			control={control}
@@ -156,50 +406,29 @@ export const Endpoint = ({
 	);
 };
 
-export function ConnectionCheck() {
-	const { watch } = useFormContext<FormValues>();
-	const endpoint = watch("endpoint");
+export function ConnectionCheck({ endpoint }: { endpoint: string }) {
+	const { setValue, trigger } = useFormContext();
+	const dataProvider = useEngineCompatDataProvider();
 	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
 
 	const [debounced] = useDebounceValue(endpoint, 300);
 
-	const { isSuccess, isError, isRefetchError, isLoadingError } = useQuery({
-		queryKey: ["vercel-endpoint-check", debounced],
-		queryFn: async ({ signal }) => {
-			try {
-				const url = new URL("/health", debounced);
-				const response = await fetch(url, { signal });
-				if (!response.ok) {
-					throw new Error("Failed to connect");
-				}
-				return response.json();
-			} catch {
-				const url = new URL("/api/rivet/health", endpoint);
-				const response = await fetch(url, { signal });
-				if (!response.ok) {
-					throw new Error("Failed to connect");
-				}
-				return response.json();
-			}
-		},
-		enabled,
-		retry: 0,
-		refetchInterval: 3_000,
-	});
+	const { isSuccess, data, isError, isRefetchError, isLoadingError } =
+		useQuery({
+			...dataProvider.runnerHealthCheckQueryOptions({
+				runnerUrl: debounced,
+			}),
+			enabled,
+			retry: 0,
+			refetchInterval: 3_000,
+		});
+
+	const {
+		field: { onChange },
+	} = useController({ name: "success" });
 
 	useEffect(() => {
-		if (isSuccess) {
-			confetti({
-				angle: 60,
-				spread: 55,
-				origin: { x: 0 },
-			});
-			confetti({
-				angle: 120,
-				spread: 55,
-				origin: { x: 1 },
-			});
-		}
+		onChange(isSuccess);
 	}, [isSuccess]);
 
 	return (
@@ -221,16 +450,31 @@ export function ConnectionCheck() {
 								icon={faCheck}
 								className="mr-1.5 text-primary"
 							/>{" "}
-							Vercel is running with RivetKit v2137
+							Vercel is running with RivetKit{" "}
+							{(data as any)?.version}
 						</>
 					) : isError || isRefetchError || isLoadingError ? (
-						<>
-							<Icon
-								icon={faTriangleExclamation}
-								className="mr-1.5 text-destructive"
-							/>{" "}
-							Health check failed, verify the URL matches.
-						</>
+						<div className="flex flex-col items-center gap-2">
+							<p className="flex items-center">
+								<Icon
+									icon={faTriangleExclamation}
+									className="mr-1.5 text-destructive"
+								/>{" "}
+								Health check failed, verify the endpoint is
+								correct.
+							</p>
+							<p>
+								Endpoint{" "}
+								<a
+									className="underline"
+									href={endpoint}
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									{endpoint}
+								</a>
+							</p>
+						</div>
 					) : (
 						<div className="flex flex-col items-center gap-2">
 							<div className="flex items-center">
@@ -245,24 +489,5 @@ export function ConnectionCheck() {
 				</motion.div>
 			) : null}
 		</AnimatePresence>
-	);
-}
-
-export function NeedHelp() {
-	const [open, setOpen] = useState(false);
-
-	useEffect(() => {
-		const timeout = setTimeout(() => {
-			setOpen(true);
-		}, 10000);
-		return () => clearTimeout(timeout);
-	}, []);
-
-	if (!open) return null;
-
-	return (
-		<HelpDropdown>
-			<Button variant="ghost">Need help?</Button>
-		</HelpDropdown>
 	);
 }
