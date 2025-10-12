@@ -238,7 +238,7 @@ export function TechSection() {
 								alt="Bun"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart/deno"
+								href="/docs/actors/quickstart/backend"
 								name="Deno"
 								icon={denoLogo}
 								alt="Deno"
@@ -311,7 +311,7 @@ export function TechSection() {
 								alt="Hetzner"
 							/>
 							<TechLink
-								href="/docs/deploy/vm-bare-metal"
+								href="/docs/deploy/vm-and-bare-metal"
 								name="VM & Bare Metal"
 								icon={vmBareMetalLogo}
 								alt="VM & Bare Metal"

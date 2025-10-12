@@ -171,7 +171,7 @@ export function FeaturesSection() {
 						title="Fault Tolerant"
 						description="Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations."
 						color="teal-500"
-						docLink="/docs/cloud/durability"
+						docLink="/docs/cloud-ee/durability"
 					/>
 
 					<FeatureCard
