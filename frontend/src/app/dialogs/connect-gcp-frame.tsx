@@ -1,4 +1,4 @@
-import { faCheck, faGoogleCloud, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faCheck, faSquare as faGoogleCloud, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -56,7 +56,7 @@ const stepper = defineStepper(
 	},
 );
 
-interface ConnectAwsFrameContentProps extends DialogContentProps {}
+interface ConnectAwsFrameContentProps extends DialogContentProps { }
 
 export default function ConnectAwsFrameContent({
 	onClose,
@@ -198,10 +198,9 @@ function Step3({ provider = "gcp" }: { provider?: string }) {
 
 	const success = chosenDatacenters
 		.map((dc) =>
-			queryData?.find((runner) =>
-				runner.datacenter === dc &&
-				runner.name === runnerName &&
-		
+			queryData?.find(
+				(runner) =>
+					runner.datacenter === dc && runner.name === runnerName,
 			),
 		)
 		.every((v) => v);

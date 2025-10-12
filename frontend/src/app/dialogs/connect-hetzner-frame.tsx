@@ -1,7 +1,7 @@
 import {
 	faCheck,
-	faGoogleCloud,
-	faHetzner,
+	faSquare as faGoogleCloud,
+	faSquare as faHetzner,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -62,7 +62,7 @@ const stepper = defineStepper(
 	},
 );
 
-interface ConnectHetznerFrameContentProps extends DialogContentProps {}
+interface ConnectHetznerFrameContentProps extends DialogContentProps { }
 
 export default function ConnectHetznerFrameContent({
 	onClose,

@@ -1,7 +1,7 @@
 import {
 	faAws,
-	faGoogleCloud,
-	faHetzner,
+	faSquare as faGoogleCloud,
+	faSquare as faHetzner,
 	faPlus,
 	faQuestionCircle,
 	faRailway,
