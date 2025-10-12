@@ -12,6 +12,11 @@
 			"default": "./dist/mod.cjs"
 		}
 	},
+	"files": [
+		"dist",
+		"src",
+		"package.json"
+	],
 	"scripts": {
 		"build": "tsup src/mod.ts",
 		"check-types": "tsc --noEmit",

@@ -14,8 +14,9 @@
 		}
 	},
 	"files": [
-		"dist/**/*.js",
-		"dist/**/*.d.ts"
+		"dist",
+		"src",
+		"package.json"
 	],
 	"scripts": {
 		"build": "tsup src/index.ts",
@@ -32,3 +33,4 @@
 		"typescript": "^5.9.2"
 	}
 }
+
