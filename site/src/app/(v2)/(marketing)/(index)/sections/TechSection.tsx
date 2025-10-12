@@ -238,7 +238,7 @@ export function TechSection() {
 								alt="Bun"
 							/>
 							<TechLink
-								href="/docs/actors/quickstart/deno"
+								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno"
 								name="Deno"
 								icon={denoLogo}
 								alt="Deno"
@@ -311,7 +311,7 @@ export function TechSection() {
 								alt="Hetzner"
 							/>
 							<TechLink
-								href="/docs/deploy/vm-bare-metal"
+								href="/docs/deploy/vm-and-bare-metal"
 								name="VM & Bare Metal"
 								icon={vmBareMetalLogo}
 								alt="VM & Bare Metal"
@@ -369,7 +369,7 @@ export function TechSection() {
 								external
 							/>
 							<TechLink
-								href="/docs/clients/vue"
+								href="https://github.com/rivet-dev/rivetkit/issues/903"
 								name="Vue"
 								icon={vueLogo}
 								alt="Vue"
@@ -424,7 +424,7 @@ export function TechSection() {
 
 						<TechSubSection title="AI">
 							<TechLink
-								href="/docs/integrations/ai-sdk"
+								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/ai-agent"
 								name="AI SDK"
 								icon={vercelLogo}
 								alt="AI SDK"
@@ -434,28 +434,28 @@ export function TechSection() {
 
 						<TechSubSection title="Sync">
 							<TechLink
-								href="/docs/integrations/livestore"
+								href="https://github.com/rivet-dev/rivetkit/issues/908"
 								name="LiveStore"
 								icon={livestoreLogo}
 								alt="LiveStore"
 								status="coming-soon"
 							/>
 							<TechLink
-								href="/docs/integrations/zerosync"
+								href="https://github.com/rivet-dev/rivetkit/issues/909"
 								name="ZeroSync"
 								icon={zerosyncLogo}
 								alt="ZeroSync"
 								status="help-wanted"
 							/>
 							<TechLink
-								href="/docs/integrations/tinybase"
+								href="https://github.com/rivet-dev/rivetkit/issues/910"
 								name="TinyBase"
 								icon={tinybaseLogo}
 								alt="TinyBase"
 								status="help-wanted"
 							/>
 							<TechLink
-								href="/docs/integrations/yjs"
+								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/crdt"
 								name="Yjs"
 								icon={yjsLogo}
 								alt="Yjs"

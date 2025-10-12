@@ -2849,7 +2849,7 @@ connection.on("countChanged", (newCount) => );
 await connection.increment(1);
 ```
 
-See the [JavaScript client documentation](/clients/javascript) for more information.
+See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
 const client = createClient("http://localhost:8080");
@@ -2870,7 +2870,7 @@ function Counter() );
 }
 ```
 
-See the [React documentation](/clients/react) for more information.
+See the [React documentation](/docs/clients/react) for more information.
 
 ```rust }
 use rivetkit_client::;
@@ -2888,7 +2888,7 @@ async fn main() -> Result> ", count);
 }
 ```
 
-See the [Rust client documentation](/clients/rust) for more information.
+See the [Rust client documentation](/docs/clients/rust) for more information.
 ## Cloudflare Workers Quickstart
 
 # Cloudflare Workers Quickstart
@@ -3012,7 +3012,7 @@ connection.on("countChanged", (newCount) => );
 await connection.increment(1);
 ```
 
-See the [JavaScript client documentation](/clients/javascript) for more information.
+See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
 const client = createClient("https://your-app.workers.dev/rivet");
@@ -3033,7 +3033,7 @@ function Counter() );
 }
 ```
 
-See the [React documentation](/clients/react) for more information.
+See the [React documentation](/docs/clients/react) for more information.
 
 ```rust }
 use rivetkit_client::;
@@ -3051,7 +3051,7 @@ async fn main() -> Result> ", count);
 }
 ```
 
-See the [Rust client documentation](/clients/rust) for more information.
+See the [Rust client documentation](/docs/clients/rust) for more information.
 
 	Cloudflare Workers mounts the Rivet endpoint on `/rivet` by default.
 ## Quickstart
@@ -5060,7 +5060,7 @@ const actor = await client.example.get(
 });
 ```
 
-See [Create  Manage Actors](/actors/communicating-with-actors) for more information.
+See [Create  Manage Actors](/docs/actors/communicating-between-actors) for more information.
 ## Logging
 
 # Logging
@@ -5173,16 +5173,6 @@ Take full control of your Rivet deployment with flexible hosting options and sto
   Run Rivet actors on Cloudflare's edge computing platform
 
   Managed Rivet hosting with enterprise features and support
-
-## Drivers
-
-  High-performance in-memory data store for production workloads
-
-  Simple file-based storage for development and small deployments
-
-  In-memory storage for testing and ephemeral use cases
-
-  Create custom storage drivers for your specific requirements
 ## System Architecture
 
 # System Architecture
@@ -5890,12 +5880,7 @@ async function examples() );
 
 # Vitest
 
-See [Testing](/docs/general/testing) documentation.
-## AWS Fargate Deployment
-
-# AWS Fargate Deployment
-
-	Documentation coming soon
+See [Testing](/docs/actors/testing) documentation.
 ## Configuration
 
 # Configuration
@@ -6267,16 +6252,6 @@ docker run -d \
 
 - Use [Docker Compose](/docs/self-hosting/docker-compose) for multi-container setups
 - See [Configuration](/docs/self-hosting/configuration) for all options
-## Google Cloud Run Deployment
-
-# Google Cloud Run Deployment
-
-	Documentation coming soon
-## Hetzner Deployment
-
-# Hetzner Deployment
-
-	Documentation coming soon
 ## Self-Hosting Overview
 
 # Self-Hosting Overview
@@ -6309,20 +6284,23 @@ Rivet supports multiple storage backends:
 
 Deploy Rivet on your preferred platform:
 
-- [Docker Container](./docker-container)
-- [Docker Compose](./docker-compose)
-- [Kubernetes](./kubernetes)
-- [AWS Fargate](./aws-fargate)
-- [Google Cloud Run](./google-cloud-run)
-- [Hetzner](./hetzner)
-- [Railway](./railway)
+- [Docker Container](/docs/self-hosting/docker-container)
+- [Docker Compose](/docs/self-hosting/docker-compose)
+- [Railway](/docs/self-hosting/railway)
+- Kubernetes
+- AWS Fargate
+- Google Cloud Run
+- Hetzner
+- VM & Bare Metal
+
+_Self-hosting guides coming soon._
 
 ## Next Steps
 
-- [Install Rivet Engine](./install)
-- [Connect your backend](./connect-backend)
-- [Configure your deployment](./configuration)
-- [Multi-region setup](./multi-region)
+- [Install Rivet Engine](/docs/self-hosting/install)
+- [Connect your backend](/docs/self-hosting/connect-backend)
+- [Configure your deployment](/docs/self-hosting/configuration)
+- [Multi-region setup](/docs/self-hosting/multi-region)
 ## Installing Rivet Engine
 
 # Installing Rivet Engine
@@ -6344,7 +6322,7 @@ For more options:
 ## Build From Source
 
 ```bash
-git clone https://github.com/rivet-dev/rivet.git
+git clone https://github.com/rivet-dev/engine.git
 cd rivet
 cargo build --release -p rivet-engine
 ./target/release/rivet-engine

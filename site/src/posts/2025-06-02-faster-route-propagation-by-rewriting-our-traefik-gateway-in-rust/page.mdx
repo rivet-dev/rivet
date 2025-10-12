@@ -10,14 +10,11 @@ export const keywords = ["guard","actors","proxy","rust","traefik"]
 
 # 2,000x faster route propagation by rewriting our Traefik gateway in Rust
 
-**Rivet is an open-source, self-hostable serverless platform that supports [Rivet Functions](/docs/cloud/functions), [Rivet Actors](/docs/actors) (open-source Cloudflare Durable Objects), and [Rivet Containers](/docs/cloud/containers). We've rewritten our Traefik-based gateway in Rust — now named Rivet Guard — to support the hyper-specific needs of building a serverless platform.**
-
 ## What is Rivet Guard
 
 Rivet Guard is our gateway service that handles all incoming traffic to the Rivet platform. Its core responsibilities include:
 
-- **[Rivet Function](/docs/cloud/functions) Routing**: Routing the appropriate paths + hostnames to the correct Rivet Function
-- **[Rivet Actors](/docs/actors) & [Rivet Containers](/docs/cloud/containers) Routing**: Route incoming requests to the correct Rivet Actor or Rivet Container
+- **[Rivet Actors](/docs/actors) Routing**: Route incoming requests to the correct Rivet Actor or Rivet Container
 - **Rivet API**: Route API endpoints to the Rivet API server
 
 ## The Problem with Traefik

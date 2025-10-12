@@ -4,6 +4,7 @@ exclude = [
     '^https://hub\.rivet\.gg/.*',
     '^https://.*\.rivet\.game/',
     '^https://ph\.rivet\.gg/',
+    '^https://studio\.rivet\.dev/',
 
     # Strict rate limits
     '^https://www\.cloudflare\.com/learning/',
@@ -15,7 +16,7 @@ exclude = [
     '@body\.json',
 
     # Bug parsing `src={xxxx}`
-    '%7B.*%7D$'
+    '%7B.*%7D$',
 ]
 # exclude_all_private = true
 exclude_mail = true

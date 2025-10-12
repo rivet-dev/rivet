@@ -561,18 +561,6 @@ export const PowerfulPrimitivesSection = () => {
 												href="/docs/actors"
 											/>
 										)}
-										{activeTabData.docs.containers && (
-											<DocLink
-												title="Containers"
-												href="/docs/cloud/containers"
-											/>
-										)}
-										{activeTabData.docs.functions && (
-											<DocLink
-												title="Functions"
-												href="/docs/cloud/functions"
-											/>
-										)}
 										{activeTabData.docs.guide && (
 											<DocLink
 												title="Guide"
