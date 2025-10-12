@@ -17,7 +17,7 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
 		networkMode: "bridge",
 		datacenters: [
 			{
-				name: "local",
+				name: "default",
 				id: 1,
 				peer_id: 1,
 				engines: 1,
@@ -29,7 +29,7 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
 		networkMode: "bridge",
 		datacenters: [
 			{
-				name: "local",
+				name: "default",
 				id: 1,
 				peer_id: 1,
 				engines: 3,
@@ -93,7 +93,7 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
 		networkMode: "host",
 		datacenters: [
 			{
-				name: "local",
+				name: "default",
 				id: 1,
 				peer_id: 1,
 				engines: 1,

@@ -52,7 +52,7 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 				enabled: true,
 				queryFn: async () => {
 					return {
-						regions: [{ id: "local", name: "Local" }],
+						regions: [{ id: "default", name: "Default" }],
 						pagination: {},
 					};
 				},
