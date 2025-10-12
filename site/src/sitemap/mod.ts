@@ -198,22 +198,6 @@ export const sitemap = [
 										title: "Railway",
 										href: "/docs/self-hosting/railway",
 									},
-									{
-										title: "Kubernetes",
-										href: "/docs/self-hosting/kubernetes",
-									},
-									{
-										title: "AWS Fargate",
-										href: "/docs/self-hosting/aws-fargate",
-									},
-									{
-										title: "Google Cloud Run",
-										href: "/docs/self-hosting/google-cloud-run",
-									},
-									{
-										title: "Hetzner",
-										href: "/docs/self-hosting/hetzner",
-									},
 								],
 							},
 							//{
@@ -388,10 +372,20 @@ export const sitemap = [
 						],
 					},
 					{
-						title: "Architecture",
+						title: "More",
 						icon: faSitemap,
 						collapsible: true,
 						pages: [
+							{
+								title: "Clients",
+								href: "/docs/actors/clients",
+								icon: faCode,
+							},
+							{
+								title: "Testing",
+								href: "/docs/actors/testing",
+								icon: faVialCircleCheck,
+							},
 							{
 								title: "Scaling & Concurrency",
 								href: "/docs/actors/scaling",
@@ -446,16 +440,6 @@ export const sitemap = [
 			{
 				title: "General",
 				pages: [
-					{
-						title: "Clients",
-						href: "/docs/actors/clients",
-						icon: faCode,
-					},
-					{
-						title: "Testing",
-						href: "/docs/actors/testing",
-						icon: faVialCircleCheck,
-					},
 					{
 						title: "CORS",
 						href: "/docs/general/cors",
