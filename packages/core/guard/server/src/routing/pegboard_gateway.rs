@@ -76,14 +76,12 @@ pub async fn route_request(
 			targets: vec![RouteTarget {
 				actor_id: Some(actor_id),
 				host: peer_dc
-					.public_url
-					.host()
-					.context("peer dc public_url has no host")?
+					.public_url_host()
+					.context("bad peer dc public url host")?
 					.to_string(),
 				port: peer_dc
-					.public_url
-					.port()
-					.context("peer dc public_url has no port")?,
+					.public_url_port()
+					.context("bad peer dc public url port")?,
 				path: path.to_owned(),
 			}],
 			timeout: RoutingTimeout {
