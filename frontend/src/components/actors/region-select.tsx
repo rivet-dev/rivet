@@ -25,7 +25,7 @@ export function RegionSelect({ onValueChange, value }: RegionSelectProps) {
 		...data.map((region) => {
 			return {
 				label:
-					region.name === "local" ? (
+					region.name === "default" ? (
 						<ActorRegion regionId={region.id} showLabel />
 					) : (
 						region.name

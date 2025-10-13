@@ -1,4 +1,4 @@
-# Vector Client Configuration for Datacenter: local
+# Vector Client Configuration for Datacenter: default
 # This Vector instance runs on each server to collect local logs and forward them
 # to the central Vector server aggregator.
 
