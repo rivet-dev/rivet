@@ -39,7 +39,7 @@ Create or update your `vercel.json`:
     // Rivet provides is own intelligent load balancing algorithm
 	"fluid": false,
     "functions": {
-        "**": {
+        "app/api/rivet/**": {
             // If your Vercel account type is:
             // - Hobby: Keep maxDuration set to 60
             // - Pro: Set maxDuration to 300
@@ -65,7 +65,7 @@ More information on deployments are available in [Vercel's docs](https://vercel.
 
 1. Visit the Rivet dashboard
 2. Navigate to _Connect > Vercel_
-3. Skip to the _Confirm Connection_ step
+3. Skip to the _Deploy to Vercel_ step
 4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
 	- **Important**: Make sure to include the path `/api/rivet`
 5. Once it shows as successfully connected, click _Done_
