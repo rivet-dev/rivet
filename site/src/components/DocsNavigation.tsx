@@ -48,7 +48,7 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 			<div>
 				<p
 					className={clsx(
-						"mb-2 text-sm font-semibold",
+						"mb-2 text-sm font-semibold flex items-center",
 						index > 0 ? "mt-4" : undefined,
 					)}
 				>
@@ -56,6 +56,11 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 						<Icon icon={item.icon} className="mr-2 size-3.5" />
 					) : null}
 					<span className="truncate"> {item.title}</span>
+					{"badge" in item && item.badge ? (
+						<span className="ml-2 px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full whitespace-nowrap">
+							{item.badge}
+						</span>
+					) : null}
 				</p>
 				<Tree
 					pages={item.pages}
@@ -80,6 +85,11 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 			<span className="truncate">
 				{item.title ?? routes.pages[getAliasedHref(item.href)]?.title}
 			</span>
+			{"badge" in item && item.badge ? (
+				<span className="ml-2 px-[6px] py-0 text-[10px] font-medium bg-muted border border-white/10 text-muted-foreground rounded-sm whitespace-nowrap">
+					{item.badge}
+				</span>
+			) : null}
 			{item.external ? (
 				<Icon icon={faArrowUpRight} className="ml-2 size-3" />
 			) : null}

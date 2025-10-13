@@ -97,7 +97,7 @@ export function CollapsibleSidebarItem({
 					setIsItemOpen(!isItemOpen);
 				}}
 			>
-				<div className="flex items-center truncate">
+				<div className="flex items-center truncate gap-2">
 					{item.icon ? (
 						<Icon
 							icon={item.icon}
@@ -105,6 +105,11 @@ export function CollapsibleSidebarItem({
 						/>
 					) : null}
 					<span className="truncate">{item.title}</span>
+					{"badge" in item && item.badge ? (
+						<span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full whitespace-nowrap">
+							{item.badge}
+						</span>
+					) : null}
 				</div>
 				<motion.span
 					variants={{
