@@ -8,19 +8,19 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { DocsNavigation } from "@/components/DocsNavigation";
-import { DocsTableOfContents } from "@/components/DocsTableOfContents";
-import { DocsPageDropdown } from "@/components/DocsPageDropdown";
-import { Prose } from "@/components/Prose";
-import { type Sitemap, findActiveTab } from "@/lib/sitemap";
-import { sitemap } from "@/sitemap/mod";
 import { Button } from "@rivet-gg/components";
-import { Icon, faPencil } from "@rivet-gg/icons";
+import { faPencil, Icon } from "@rivet-gg/icons";
+import clsx from "clsx";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { VALID_SECTIONS, buildFullPath, buildPathComponents } from "./util";
 import { Comments } from "@/components/Comments";
-import clsx from "clsx";
+import { DocsNavigation } from "@/components/DocsNavigation";
+import { DocsPageDropdown } from "@/components/DocsPageDropdown";
+import { DocsTableOfContents } from "@/components/DocsTableOfContents";
+import { Prose } from "@/components/Prose";
+import { findActiveTab, type Sitemap } from "@/lib/sitemap";
+import { sitemap } from "@/sitemap/mod";
+import { buildFullPath, buildPathComponents, VALID_SECTIONS } from "./util";
 
 interface Param {
 	section: string;
@@ -116,8 +116,13 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 			<div className="flex justify-center w-full">
 				<div className="flex gap-8 max-w-6xl w-full">
 					<main className="w-full py-8 px-8 lg:mx-0 mx-auto max-w-prose lg:max-w-none">
-						<div className="relative">
-							<div className={clsx("absolute right-0 z-10", parentPage ? "top-5" : "top-0")}>
+						<div className="relative flex justify-end">
+							<div
+								className={clsx(
+									"flex items-end md:absolute md:right-0 z-10",
+									parentPage ? "md:top-5" : "md:top-0",
+								)}
+							>
 								<DocsPageDropdown
 									title={title || "Documentation"}
 									markdownPath={markdownPath}
@@ -127,7 +132,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 						</div>
 						<Prose
 							as="article"
-							className="max-w-prose lg:max-w-prose mx-auto pr-40"
+							className="max-w-prose lg:max-w-prose mx-auto [&>h1:first-of-type]:pr-44"
 						>
 							{parentPage && (
 								<div className="eyebrow h-5 text-primary text-sm font-semibold">

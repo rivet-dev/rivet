@@ -65,36 +65,27 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 
 	return (
 		<div
-			className={cn(
-				"code-group group my-4 rounded-md border pt-2",
-				className,
-			)}
+			className={cn("code-group group my-4 rounded-md border", className)}
 			data-code-group
 		>
 			<Tabs defaultValue={getChildIdx(tabChildren[0])}>
-				<div className="border-b border-border px-2">
-					<ScrollArea
-						className="w-full"
-						viewportProps={{ className: "[&>div]:!table" }}
-					>
-						<TabsList className="-mb-[1px] flex w-max items-center gap-2 px-2 py-1">
-							{tabChildren.map((child) => {
-								const idx = getChildIdx(child);
-								return (
-									<TabsTrigger
-										key={idx}
-										value={idx}
-										className="inline-flex !h-auto items-center border-b-2 border-transparent !px-3 !py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-white data-[state=active]:border-b-white data-[state=active]:bg-primary/10 data-[state=active]:text-white data-[state=active]:!text-white data-[state=active]:shadow-none aria-selected:text-white"
-									>
-										{child.props.title ||
-											languageNames[child.props.language] ||
-											"Code"}
-									</TabsTrigger>
-								);
-							})}
-						</TabsList>
-					</ScrollArea>
-				</div>
+				<ScrollArea
+					className="w-full"
+					viewportProps={{ className: "[&>div]:!table" }}
+				>
+					<TabsList>
+						{tabChildren.map((child) => {
+							const idx = getChildIdx(child);
+							return (
+								<TabsTrigger key={idx} value={idx}>
+									{child.props.title ||
+										languageNames[child.props.language] ||
+										"Code"}
+								</TabsTrigger>
+							);
+						})}
+					</TabsList>
+				</ScrollArea>
 				{tabChildren.map((child) => {
 					const idx = getChildIdx(child);
 					return (

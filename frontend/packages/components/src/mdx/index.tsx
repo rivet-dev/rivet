@@ -1,15 +1,15 @@
 import {
-	Icon,
 	faExclamationTriangle,
 	faInfoCircle,
 	faLightbulbOn,
+	Icon,
 } from "@rivet-gg/icons";
 
 import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
-import { CtaCard, CardGroup } from "../cta-card";
+import { CardGroup, CtaCard } from "../cta-card";
+import { cn } from "../lib/utils";
 import { WithTooltip } from "../ui/tooltip";
 import { Link } from "../ui/typography";
-import { cn } from "../lib/utils";
 
 // Custom CalloutBase component for dark backgrounds
 const CalloutBase = ({
@@ -38,7 +38,12 @@ const CalloutBase = ({
 			<div className="flex-shrink-0 pt-0.5">
 				<Icon icon={icon} className={cn("w-5 h-5", iconColor)} />
 			</div>
-			<div className={cn("flex-1 prose-invert prose max-w-full w-full", textColor)}>
+			<div
+				className={cn(
+					"flex-1 prose-invert prose max-w-full w-full",
+					textColor,
+				)}
+			>
 				{children}
 			</div>
 		</div>
@@ -121,4 +126,3 @@ export const Note = ({ children }: { children: ReactNode }) => {
 
 export { Step, Steps } from "../steps";
 export * from "./tabs";
-export * from "./code";
