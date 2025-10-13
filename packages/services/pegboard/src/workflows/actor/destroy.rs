@@ -98,7 +98,7 @@ async fn update_state_and_db(
 						&tx,
 					)
 					.await?;
-				} else if state.allocated_slot {
+				} else if state.allocated_serverless_slot {
 					// Clear the serverless slot even if we do not have a runner id. This happens when the
 					// actor is destroyed while pending allocation
 					tx.atomic_op(
@@ -145,12 +145,12 @@ async fn update_state_and_db(
 	state.runner_id = None;
 	let runner_workflow_id = state.runner_workflow_id.take();
 
-	let old_allocated_slot = state.allocated_slot;
-	state.allocated_slot = false;
+	let old_allocated_serverless_slot = state.allocated_serverless_slot;
+	state.allocated_serverless_slot = false;
 
 	Ok(UpdateStateAndDbOutput {
 		runner_workflow_id,
-		allocated_serverless_slot: state.for_serverless && old_allocated_slot,
+		allocated_serverless_slot: old_allocated_serverless_slot,
 	})
 }
 

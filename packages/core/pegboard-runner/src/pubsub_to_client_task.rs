@@ -1,5 +1,4 @@
 use anyhow::Result;
-use futures_util::SinkExt;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use rivet_runner_protocol::{self as protocol, versioned};
@@ -9,22 +8,16 @@ use vbare::OwnedVersionedData;
 
 use crate::{
 	conn::{Conn, TunnelActiveRequest},
-	utils,
+	errors,
 };
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
-pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, sub: Subscriber) {
-	match task_inner(ctx, conn, sub).await {
-		Ok(_) => {}
-		Err(err) => {
-			tracing::error!(?err, "pubsub to client error");
-		}
-	}
-}
-
-#[tracing::instrument(skip_all)]
-async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
-	while let Result::Ok(NextOutput::Message(ups_msg)) = sub.next().await {
+pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
+	while let NextOutput::Message(ups_msg) = sub
+		.next()
+		.await
+		.context("pubsub_to_client_task sub failed")?
+	{
 		tracing::debug!(
 			payload_len = ups_msg.payload.len(),
 			"received message from pubsub, forwarding to WebSocket"
@@ -39,11 +32,37 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) ->
 				continue;
 			}
 		};
-		let is_close = utils::is_to_client_close(&msg);
 
-		// Handle tunnel messages
-		if let protocol::ToClient::ToClientTunnelMessage(tunnel_msg) = &mut msg {
-			handle_tunnel_message(&conn, tunnel_msg).await;
+		match &mut msg {
+			protocol::ToClient::ToClientClose => return Err(errors::WsError::Eviction.build()),
+			// Handle tunnel messages
+			protocol::ToClient::ToClientTunnelMessage(tunnel_msg) => {
+				// Save active request
+				//
+				// This will remove gateway_reply_to from the message since it does not need to be sent to the
+				// client
+				if let Some(reply_to) = tunnel_msg.gateway_reply_to.take() {
+					tracing::debug!(?tunnel_msg.request_id, ?reply_to, "creating active request");
+					let mut active_requests = conn.tunnel_active_requests.lock().await;
+					active_requests.insert(
+						tunnel_msg.request_id,
+						TunnelActiveRequest {
+							gateway_reply_to: reply_to,
+						},
+					);
+				}
+
+				match tunnel_msg.message_kind {
+					// If terminal, remove active request tracking
+					protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(_) => {
+						tracing::debug!(?tunnel_msg.request_id, "removing active conn due to close message");
+						let mut active_requests = conn.tunnel_active_requests.lock().await;
+						active_requests.remove(&tunnel_msg.request_id);
+					}
+					_ => {}
+				}
+			}
+			_ => {}
 		}
 
 		// Forward raw message to WebSocket
@@ -56,41 +75,11 @@ async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>, mut sub: Subscriber) ->
 				}
 			};
 		let ws_msg = WsMessage::Binary(serialized_msg.into());
-		if let Err(e) = conn.ws_handle.send(ws_msg).await {
-			tracing::error!(?e, "failed to send message to WebSocket");
-			break;
-		}
-
-		if is_close {
-			tracing::debug!("manually closing websocket");
-			break;
-		}
+		conn.ws_handle
+			.send(ws_msg)
+			.await
+			.context("failed to send message to WebSocket")?
 	}
 
 	Ok(())
-}
-
-#[tracing::instrument(skip_all)]
-async fn handle_tunnel_message(conn: &Arc<Conn>, msg: &mut protocol::ToClientTunnelMessage) {
-	// Save active request
-	//
-	// This will remove gateway_reply_to from the message since it does not need to be sent to the
-	// client
-	if let Some(reply_to) = msg.gateway_reply_to.take() {
-		tracing::debug!(?msg.request_id, ?reply_to, "creating active request");
-		let mut active_requests = conn.tunnel_active_requests.lock().await;
-		active_requests.insert(
-			msg.request_id,
-			TunnelActiveRequest {
-				gateway_reply_to: reply_to,
-			},
-		);
-	}
-
-	// If terminal, remove active request tracking
-	if utils::is_to_client_tunnel_message_kind_request_close(&msg.message_kind) {
-		tracing::debug!(?msg.request_id, "removing active conn from close message");
-		let mut active_requests = conn.tunnel_active_requests.lock().await;
-		active_requests.remove(&msg.request_id);
-	}
 }

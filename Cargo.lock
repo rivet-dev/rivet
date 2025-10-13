@@ -3307,6 +3307,7 @@ dependencies = [
  "rivet-guard-core",
  "rivet-runner-protocol",
  "rivet-util",
+ "serde",
  "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite",

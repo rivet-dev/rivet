@@ -4,18 +4,9 @@ use std::sync::{Arc, atomic::Ordering};
 
 use crate::{UPDATE_PING_INTERVAL, conn::Conn};
 
-pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>) {
-	match task_inner(ctx, conn).await {
-		Ok(_) => {}
-		Err(err) => {
-			tracing::error!(?err, "ping task errored");
-		}
-	}
-}
-
 /// Updates the ping of all runners requesting a ping update at once.
 #[tracing::instrument(skip_all)]
-async fn task_inner(ctx: StandaloneCtx, conn: Arc<Conn>) -> Result<()> {
+pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>) -> Result<()> {
 	loop {
 		tokio::time::sleep(UPDATE_PING_INTERVAL).await;
 

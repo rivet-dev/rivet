@@ -1,8 +1,4 @@
 use gas::prelude::*;
-use hyper::upgrade::Upgraded;
-use hyper_tungstenite::tungstenite::Message as WsMessage;
-use hyper_util::rt::TokioIo;
-use rivet_runner_protocol as protocol;
 
 #[derive(Clone)]
 pub struct UrlData {
@@ -40,38 +36,5 @@ impl UrlData {
 			namespace,
 			runner_key,
 		})
-	}
-}
-
-/// Determines if a given message kind will terminate the request.
-pub fn is_to_server_tunnel_message_kind_request_close(
-	kind: &protocol::ToServerTunnelMessageKind,
-) -> bool {
-	match kind {
-		// HTTP terminal states
-		protocol::ToServerTunnelMessageKind::ToServerResponseStart(resp) => !resp.stream,
-		protocol::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.finish,
-		protocol::ToServerTunnelMessageKind::ToServerResponseAbort => true,
-		// WebSocket terminal states (either side closes)
-		protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(_) => true,
-		_ => false,
-	}
-}
-
-/// Determines if a given message kind will terminate the request.
-pub fn is_to_client_tunnel_message_kind_request_close(
-	kind: &protocol::ToClientTunnelMessageKind,
-) -> bool {
-	match kind {
-		// WebSocket terminal states (either side closes)
-		protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(_) => true,
-		_ => false,
-	}
-}
-
-pub fn is_to_client_close(kind: &protocol::ToClient) -> bool {
-	match kind {
-		protocol::ToClient::ToClientClose => true,
-		_ => false,
 	}
 }
