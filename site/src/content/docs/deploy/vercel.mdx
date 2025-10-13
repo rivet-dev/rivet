@@ -1,4 +1,77 @@
-# Vercel
+import { InstallPackage } from "@/components/docs/InstallPackage";
+import { faGitHub } from "@rivet-gg/icons";
 
-_Vercel is coming soon_
+# Deploying to Vercel
 
+Deploy your Next.js + RivetKit app to [Vercel](https://vercel.com/).
+
+<CardGroup>
+<Card title="View Example on GitHub" href="https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js" target="_blank" icon={faGitHub}>
+Complete example Next.js + RivetKit app.
+</Card>
+</CardGroup>
+
+## Guide
+
+<Steps>
+<Step title="Prerequisites">
+
+- [Vercel account](https://vercel.com/)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
+- A Next.js app integrated with RivetKit
+  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js) to get started
+
+</Step>
+<Step title="Verify RivetKit integration with Next.js">
+Your project should have the following files:
+
+- `src/app/api/rivet/[...all]/route.ts`
+- `src/rivet/registry.ts`
+
+If your project is not integrated with RivetKit yet, follow the [Next.js quickstart guide](/docs/actors/quickstart/next-js/) or see the [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js).
+</Step>
+<Step title="Setup Project for Vercel">
+
+Create or update your `vercel.json`:
+
+```json {{"title":"vercel.json"}}
+{
+    // Rivet provides is own intelligent load balancing algorithm
+	"fluid": false,
+    "functions": {
+        "**": {
+            // If your Vercel account type is:
+            // - Hobby: Keep maxDuration set to 60
+            // - Pro: Set maxDuration to 300
+            // - Enterprise: Set maxDuration to 900
+            "maxDuration": 60
+        }
+    }
+    // ... rest of vercel.json
+}
+```
+
+</Step>
+<Step title="Deploy to Vercel">
+
+1. Connect your GitHub account to Vercel
+2. Select your repository containing your Next.js + RivetKit app
+3. Vercel will deploy your app
+
+More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).
+
+</Step>
+<Step title="Connect and Verify">
+
+1. Visit the Rivet dashboard
+2. Navigate to _Connect > Vercel_
+3. Skip to the _Confirm Connection_ step
+4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
+	- **Important**: Make sure to include the path `/api/rivet`
+5. Once it shows as successfully connected, click _Done_
+
+Your Vercel Functions deployment is now connected to Rivet.
+
+</Step>
+
+</Steps>
