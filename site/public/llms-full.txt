@@ -4565,7 +4565,7 @@ More information on deployments are available in [Vercel's docs](https://vercel.
 
 1. Visit the Rivet dashboard
 2. Navigate to _Connect > Vercel_
-3. Skip to the _Confirm Connection_ step
+3. Skip to the _Deploy to Vercel_ step
 4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
 	- **Important**: Make sure to include the path `/api/rivet`
 5. Once it shows as successfully connected, click _Done_
@@ -5259,6 +5259,8 @@ Rivet is a library for long-lived processes with durable state, realtime, and sc
   Throttle requests using stateful counters per client
 
   Build chat and workflow bots with actor logic
+
+## Deploy Options
 
 ## Integrations
 
