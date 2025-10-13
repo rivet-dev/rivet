@@ -11,12 +11,12 @@ import fileSystemLogo from "../images/platforms/file-system.svg";
 import memoryLogo from "../images/platforms/memory.svg";
 import vercelLogo from "../images/platforms/vercel.svg";
 import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
-import awsEcsLogo from "../images/platforms/aws-ecs.svg";
+import awsLogo from "../images/platforms/aws-light.svg";
 import supabaseLogo from "../images/platforms/supabase.svg";
 import postgresLogo from "../images/platforms/postgres.svg";
 import railwayLogo from "../images/platforms/railway.svg";
 import freestyleLogo from "../images/platforms/freestyle.svg";
-import gcpCloudRunLogo from "../images/platforms/gcp-cloud-run.svg";
+import gcpLogo from "../images/platforms/gcp.svg";
 import kubernetesLogo from "../images/platforms/kubernetes.svg";
 import hetznerLogo from "../images/platforms/hetzner.svg";
 import vmBareMetalLogo from "../images/platforms/vm-bare-metal.svg";
@@ -238,10 +238,17 @@ export function TechSection() {
 								alt="Bun"
 							/>
 							<TechLink
+								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno"
+								name="Deno"
+								icon={denoLogo}
+								alt="Deno"
+							/>
+							<TechLink
 								href="/docs/deploy/vercel"
 								name="Vercel"
 								icon={vercelLogo}
 								alt="Vercel"
+								status="1-click-deploy"
 							/>
 							<TechLink
 								href="https://railway.com/deploy/rivet"
@@ -252,56 +259,28 @@ export function TechSection() {
 								status="1-click-deploy"
 							/>
 							<TechLink
-								href="/docs/deploy/supabase"
-								name="Supabase"
-								icon={supabaseLogo}
-								alt="Supabase"
-								status="coming-soon"
-							/>
-							<TechLink
 								href="/docs/actors/quickstart/backend"
 								name="Durable Objects"
 								icon={cloudflareWorkersLogo}
 								alt="Cloudflare Durable Objects"
 							/>
 							<TechLink
-								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno"
-								name="Deno"
-								icon={denoLogo}
-								alt="Deno"
-							/>
-							<TechLink
-								href="/docs/deploy/freestyle"
-								name="Freestyle"
-								icon={freestyleLogo}
-								alt="Freestyle"
-								external
-								status="coming-soon"
-							/>
-							<TechLink
-								href="/docs/deploy/aws-lambda"
-								name="AWS Lambda"
-								icon={awsLambdaLogo}
-								alt="AWS Lambda"
-								status="coming-soon"
-							/>
-							<TechLink
-								href="/docs/deploy/aws-ecs"
-								name="AWS ECS"
-								icon={awsEcsLogo}
-								alt="AWS ECS"
-							/>
-							<TechLink
-								href="/docs/deploy/gcp-cloud-run"
-								name="GCP Cloud Run"
-								icon={gcpCloudRunLogo}
-								alt="GCP Cloud Run"
-							/>
-							<TechLink
 								href="/docs/deploy/kubernetes"
 								name="Kubernetes"
 								icon={kubernetesLogo}
 								alt="Kubernetes"
+							/>
+							<TechLink
+								href="/docs/deploy/aws-ecs"
+								name="AWS ECS"
+								icon={awsLogo}
+								alt="AWS ECS"
+							/>
+							<TechLink
+								href="/docs/deploy/gcp-cloud-run"
+								name="Google Cloud Run"
+								icon={gcpLogo}
+								alt="Google Cloud Run"
 							/>
 							<TechLink
 								href="/docs/deploy/hetzner"
@@ -314,6 +293,28 @@ export function TechSection() {
 								name="VM & Bare Metal"
 								icon={vmBareMetalLogo}
 								alt="VM & Bare Metal"
+							/>
+							<TechLink
+								href="/docs/deploy/aws-lambda"
+								name="AWS Lambda"
+								icon={awsLambdaLogo}
+								alt="AWS Lambda"
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/supabase"
+								name="Supabase"
+								icon={supabaseLogo}
+								alt="Supabase"
+								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/deploy/freestyle"
+								name="Freestyle"
+								icon={freestyleLogo}
+								alt="Freestyle"
+								external
+								status="coming-soon"
 							/>
 						</TechSubSection>
 					</TechSectionSubsections>
