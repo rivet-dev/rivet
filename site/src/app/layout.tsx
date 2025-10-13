@@ -43,7 +43,7 @@ export default function Layout({ children }) {
 				<GoogleAnalytics gaId="G-GHX1328ZFD" />
 				<Script
 					src="https://analytics.ahrefs.com/analytics.js"
-					data-key="wQAsHie9RgJMLNhmUbr/fQ"
+					data-key="9b9IZaKPAs/KhRrWrBjsrw"
 					strategy="beforeInteractive"
 				/>
 
