@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## actors_create
 
-> models::ActorsCreateResponse actors_create(namespace, actors_create_request, datacenter)
+> models::ActorsCreateResponse actors_create(namespace, actors_create_request)
 ## Datacenter Round Trips
 
 **If actor is created in the current datacenter:**  2 round trips: - namespace::ops::resolve_for_name_global - [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)  **If actor is created in a different datacenter:**  3 round trips: - namespace::ops::resolve_for_name_global - POST /actors to remote datacenter - [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)  actor::get will always be in the same datacenter.
@@ -22,7 +22,6 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **namespace** | **String** |  | [required] |
 **actors_create_request** | [**ActorsCreateRequest**](ActorsCreateRequest.md) |  | [required] |
-**datacenter** | Option<**String**> |  |  |
 
 ### Return type
 

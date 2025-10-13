@@ -206,13 +206,9 @@ export class RivetClient {
         request: Rivet.ActorsCreateRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.ActorsCreateResponse> {
-        const { namespace, datacenter, ..._body } = request;
+        const { namespace, ..._body } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
-        if (datacenter != null) {
-            _queryParams["datacenter"] = datacenter;
-        }
-
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -310,13 +306,9 @@ export class RivetClient {
         request: Rivet.ActorsGetOrCreateRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.ActorsGetOrCreateResponse> {
-        const { namespace, datacenter, ..._body } = request;
+        const { namespace, ..._body } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
-        if (datacenter != null) {
-            _queryParams["datacenter"] = datacenter;
-        }
-
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??

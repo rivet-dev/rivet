@@ -15,17 +15,14 @@ use serde::{Deserialize, Serialize};
 pub struct RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema {
     #[serde(rename = "runtime")]
     pub runtime: String,
-    #[serde(rename = "status")]
-    pub status: String,
     #[serde(rename = "version")]
     pub version: String,
 }
 
 impl RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema {
-    pub fn new(runtime: String, status: String, version: String) -> RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema {
+    pub fn new(runtime: String, version: String) -> RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema {
         RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema {
             runtime,
-            status,
             version,
         }
     }
