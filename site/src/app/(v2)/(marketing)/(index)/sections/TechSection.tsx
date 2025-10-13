@@ -238,16 +238,10 @@ export function TechSection() {
 								alt="Bun"
 							/>
 							<TechLink
-								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno"
-								name="Deno"
-								icon={denoLogo}
-								alt="Deno"
-							/>
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Durable Objects"
-								icon={cloudflareWorkersLogo}
-								alt="Cloudflare Durable Objects"
+								href="/docs/deploy/vercel"
+								name="Vercel"
+								icon={vercelLogo}
+								alt="Vercel"
 							/>
 							<TechLink
 								href="https://railway.com/deploy/rivet"
@@ -258,18 +252,23 @@ export function TechSection() {
 								status="1-click-deploy"
 							/>
 							<TechLink
-								href="/docs/deploy/vercel"
-								name="Vercel"
-								icon={vercelLogo}
-								alt="Vercel"
-								status="coming-soon"
-							/>
-							<TechLink
 								href="/docs/deploy/supabase"
 								name="Supabase"
 								icon={supabaseLogo}
 								alt="Supabase"
 								status="coming-soon"
+							/>
+							<TechLink
+								href="/docs/actors/quickstart/backend"
+								name="Durable Objects"
+								icon={cloudflareWorkersLogo}
+								alt="Cloudflare Durable Objects"
+							/>
+							<TechLink
+								href="https://github.com/rivet-dev/rivetkit/tree/9a3d850aee45167eadf249fdbae60129bf37e818/examples/deno"
+								name="Deno"
+								icon={denoLogo}
+								alt="Deno"
 							/>
 							<TechLink
 								href="/docs/deploy/freestyle"

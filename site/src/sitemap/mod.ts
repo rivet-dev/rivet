@@ -126,9 +126,10 @@ export const sitemap = [
 			},
 			{
 				title: "Deploy",
-				pages: deployHosts.map(({ title, href }) => ({
+				pages: deployHosts.map(({ title, href, icon }) => ({
 					title,
 					href,
+					icon,
 				})),
 			},
 			{
