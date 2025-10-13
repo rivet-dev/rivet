@@ -12,6 +12,8 @@ pub struct CreateQuery {
 #[serde(deny_unknown_fields)]
 #[schema(as = ActorsCreateRequest)]
 pub struct CreateRequest {
+	// Ignored in api-peer
+	pub datacenter: Option<String>,
 	pub name: String,
 	pub key: Option<String>,
 	pub input: Option<String>,
