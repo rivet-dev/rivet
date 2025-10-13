@@ -112,8 +112,8 @@ export function DocsPageDropdown({
 				onClick={copyPage}
 				className="h-8 rounded-r-none border-r-0"
 			>
-				<Icon icon={faCopy} className="mr-1 h-4 w-4" />
-				Copy page
+				<Icon icon={faMarkdown} className="mr-1 h-4 w-4" />
+				Copy Markdown
 			</Button>
 			<DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
 				<DropdownMenuTrigger asChild>
@@ -125,7 +125,7 @@ export function DocsPageDropdown({
 						<Icon icon={faChevronDown} className="h-3 w-3" />
 					</Button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="w-56">
+				<DropdownMenuContent align="end" className="w-56 bg-popover">
 					<DropdownMenuItem onClick={copyLinkToMarkdown}>
 						<Icon icon={faLink} className="mr-2 h-4 w-4" />
 						Copy link to Markdown
