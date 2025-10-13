@@ -466,6 +466,16 @@
           "runner_configs"
         ],
         "operationId": "runner_configs_serverless_health_check",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1418,15 +1428,11 @@
               "invalid_response_schema": {
                 "type": "object",
                 "required": [
-                  "status",
                   "runtime",
                   "version"
                 ],
                 "properties": {
                   "runtime": {
-                    "type": "string"
-                  },
-                  "status": {
                     "type": "string"
                   },
                   "version": {

@@ -7,13 +7,14 @@ use axum::{
 };
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_api_builder::{
-	ApiError,
 	extract::{Extension, Json, Path, Query},
+	ApiError,
 };
 use rivet_api_peer::runner_configs::*;
 use rivet_api_types::{pagination::Pagination, runner_configs::list::*};
 use rivet_api_util::{fanout_to_datacenters, request_remote_datacenter};
 use serde::{Deserialize, Serialize};
+use utoipa::IntoParams;
 use utoipa::ToSchema;
 
 use crate::ctx::ApiCtx;
@@ -264,6 +265,14 @@ async fn delete_inner(
 	Ok(DeleteResponse {})
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
+#[serde(deny_unknown_fields)]
+#[into_params(parameter_in = Query)]
+pub struct ServerlessHealthCheckQuery {
+	// NOTE: Only used in ee for ACL
+	pub namespace: String,
+}
+
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = RunnerConfigsServerlessHealthCheckRequest)]
@@ -326,6 +335,9 @@ struct ServerlessMetadataPayload {
 	post,
 	operation_id = "runner_configs_serverless_health_check",
 	path = "/runner-configs/serverless-health-check",
+	params(
+		UpsertQuery,
+	),
 	request_body(content = ServerlessHealthCheckRequest, content_type = "application/json"),
 	responses(
 		(status = 200, body = ServerlessHealthCheckResponse),
@@ -334,9 +346,10 @@ struct ServerlessMetadataPayload {
 )]
 pub async fn serverless_health_check(
 	Extension(ctx): Extension<ApiCtx>,
+	Query(query): Query<ServerlessHealthCheckQuery>,
 	Json(body): Json<ServerlessHealthCheckRequest>,
 ) -> Response {
-	match serverless_health_check_inner(ctx, body).await {
+	match serverless_health_check_inner(ctx, query, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -344,6 +357,7 @@ pub async fn serverless_health_check(
 
 async fn serverless_health_check_inner(
 	ctx: ApiCtx,
+	_query: ServerlessHealthCheckQuery,
 	body: ServerlessHealthCheckRequest,
 ) -> Result<ServerlessHealthCheckResponse> {
 	ctx.auth().await?;
