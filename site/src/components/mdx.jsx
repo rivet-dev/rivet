@@ -41,4 +41,4 @@ export { Summary } from '@/components/Summary';
 export { Accordion, AccordionGroup } from '@/components/Accordion';
 export { Frame } from '@/components/Frame';
 export { Card, CardGroup } from '@/components/Card';
-export { pre, code } from '@/components/v2/Code';
+export { pre, code, CodeGroup, Code } from '@/components/v2/Code';
