@@ -48,8 +48,9 @@ pub struct State {
 
 	#[serde(default)]
 	pub for_serverless: bool,
+	// This is used for state management for incrementing/decrementing the serverless desired slots key
 	#[serde(default)]
-	pub allocated_slot: bool,
+	pub allocated_serverless_slot: bool,
 
 	pub start_ts: Option<i64>,
 	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
@@ -85,7 +86,7 @@ impl State {
 			create_complete_ts: None,
 
 			for_serverless: false,
-			allocated_slot: false,
+			allocated_serverless_slot: false,
 
 			start_ts: None,
 			pending_allocation_ts: None,

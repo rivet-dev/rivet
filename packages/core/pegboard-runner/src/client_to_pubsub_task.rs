@@ -1,5 +1,5 @@
 use anyhow::Context;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
@@ -11,31 +11,14 @@ use std::sync::{Arc, atomic::Ordering};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::{
-	conn::Conn,
-	utils::{self},
-};
+use crate::conn::Conn;
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
-pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, ws_rx: WebSocketReceiver) {
-	match task_inner(ctx, conn, ws_rx).await {
-		Ok(_) => {}
-		Err(err) => {
-			tracing::error!(?err, "client to pubsub errored");
-		}
-	}
-}
-
-#[tracing::instrument(skip_all)]
-async fn task_inner(
-	ctx: StandaloneCtx,
-	conn: Arc<Conn>,
-	mut ws_rx: WebSocketReceiver,
-) -> Result<()> {
+pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, mut ws_rx: WebSocketReceiver) -> Result<()> {
 	tracing::debug!("starting WebSocket to pubsub forwarding task");
-	while let Some(msg) = ws_rx.next().await {
+	while let Some(msg) = ws_rx.try_next().await? {
 		match msg {
-			Result::Ok(WsMessage::Binary(data)) => {
+			WsMessage::Binary(data) => {
 				tracing::trace!(
 					data_len = data.len(),
 					"received binary message from WebSocket"
@@ -46,7 +29,7 @@ async fn task_inner(
 					match versioned::ToServer::deserialize_version(&data, conn.protocol_version)
 						.and_then(|x| x.into_latest())
 					{
-						Result::Ok(x) => x,
+						Ok(x) => x,
 						Err(err) => {
 							tracing::warn!(
 								?err,
@@ -61,20 +44,15 @@ async fn task_inner(
 					.await
 					.context("failed to handle WebSocket message")?;
 			}
-			Result::Ok(WsMessage::Close(_)) => {
+			WsMessage::Close(_) => {
 				tracing::debug!(?conn.runner_id, "WebSocket closed");
 				break;
 			}
-			Result::Ok(_) => {
+			_ => {
 				// Ignore other message types
-			}
-			Err(e) => {
-				tracing::error!(?e, "WebSocket error");
-				break;
 			}
 		}
 	}
-	tracing::debug!("WebSocket to pubsub forwarding task ended");
 
 	Ok(())
 }
@@ -376,7 +354,7 @@ async fn handle_tunnel_message(
 	};
 
 	// Remove active request entries when terminal
-	if utils::is_to_server_tunnel_message_kind_request_close(&msg.message_kind) {
+	if is_to_server_tunnel_message_kind_request_close(&msg.message_kind) {
 		let mut active_requests = conn.tunnel_active_requests.lock().await;
 		active_requests.remove(&request_id);
 	}
@@ -397,4 +375,19 @@ async fn handle_tunnel_message(
 		})?;
 
 	Ok(())
+}
+
+/// Determines if a given message kind will terminate the request.
+fn is_to_server_tunnel_message_kind_request_close(
+	kind: &protocol::ToServerTunnelMessageKind,
+) -> bool {
+	match kind {
+		// HTTP terminal states
+		protocol::ToServerTunnelMessageKind::ToServerResponseStart(resp) => !resp.stream,
+		protocol::ToServerTunnelMessageKind::ToServerResponseChunk(chunk) => chunk.finish,
+		protocol::ToServerTunnelMessageKind::ToServerResponseAbort => true,
+		// WebSocket terminal states (either side closes)
+		protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(_) => true,
+		_ => false,
+	}
 }

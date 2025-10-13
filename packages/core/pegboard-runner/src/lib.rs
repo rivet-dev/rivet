@@ -1,17 +1,19 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::{SinkExt, StreamExt};
 use gas::prelude::*;
 use http_body_util::Full;
 use hyper::{Response, StatusCode};
-use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::Action;
 use rivet_guard_core::{
 	WebSocketHandle, custom_serve::CustomServeTrait, proxy_service::ResponseBody,
 	request_context::RequestContext,
 };
+use rivet_runner_protocol as protocol;
 use std::time::Duration;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use universalpubsub::PublishOpts;
+use vbare::OwnedVersionedData;
 
 mod client_to_pubsub_task;
 mod conn;
@@ -66,8 +68,8 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		// Parse URL to extract parameters
 		let url = url::Url::parse(&format!("ws://placeholder/{path}"))
 			.context("failed to parse WebSocket URL")?;
-		let url_data =
-			utils::UrlData::parse_url(url).context("failed to extract URL parameters")?;
+		let url_data = utils::UrlData::parse_url(url)
+			.map_err(|err| errors::WsError::InvalidUrl(err.to_string()).build())?;
 
 		tracing::debug!(?path, "tunnel ws connection established");
 
@@ -93,11 +95,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.with_context(|| format!("failed to subscribe to runner receiver topic: {}", topic))?;
 
 		// Forward pubsub -> WebSocket
-		let mut pubsub_to_client = tokio::spawn(pubsub_to_client_task::task(
-			self.ctx.clone(),
-			conn.clone(),
-			sub,
-		));
+		let mut pubsub_to_client = tokio::spawn(pubsub_to_client_task::task(conn.clone(), sub));
 
 		// Forward WebSocket -> pubsub
 		let mut client_to_pubsub = tokio::spawn(client_to_pubsub_task::task(
@@ -110,17 +108,23 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let mut ping = tokio::spawn(ping_task::task(self.ctx.clone(), conn.clone()));
 
 		// Wait for either task to complete
-		tokio::select! {
-			_ = &mut pubsub_to_client => {
-				tracing::debug!("pubsub to WebSocket task completed");
+		let lifecycle_res = tokio::select! {
+			res = &mut pubsub_to_client => {
+				let res = res?;
+				tracing::debug!(?res, "pubsub to WebSocket task completed");
+				res
 			}
-			_ = &mut client_to_pubsub => {
-				tracing::debug!("WebSocket to pubsub task completed");
+			res = &mut client_to_pubsub => {
+				let res = res?;
+				tracing::debug!(?res, "WebSocket to pubsub task completed");
+				res
 			}
-			_ = &mut ping => {
-				tracing::debug!("ping task completed");
+			res = &mut ping => {
+				let res = res?;
+				tracing::debug!(?res, "ping task completed");
+				res
 			}
-		}
+		};
 
 		// Abort remaining tasks
 		pubsub_to_client.abort();
@@ -128,28 +132,67 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		ping.abort();
 
 		// Make runner immediately ineligible when it disconnects
-		self.ctx
+		let update_alloc_res = self
+			.ctx
 			.op(pegboard::ops::runner::update_alloc_idx::Input {
 				runners: vec![pegboard::ops::runner::update_alloc_idx::Runner {
 					runner_id: conn.runner_id,
 					action: Action::ClearIdx,
 				}],
 			})
-			.await
-			.map_err(|err| {
-				// Log the error with full context but continue cleanup
-				tracing::error!(
-					?conn.runner_id,
-					?err,
-					"critical: failed to evict runner from allocation index during disconnect"
-				);
-				err
+			.await;
+		if let Err(err) = update_alloc_res {
+			tracing::error!(
+				runner_id=?conn.runner_id,
+				?err,
+				"critical: failed to evict runner from allocation index during disconnect"
+			);
+		}
+
+		// Send WebSocket close messages to all remaining active requests
+		let active_requests = conn.tunnel_active_requests.lock().await;
+		for (request_id, req) in &*active_requests {
+			let (close_code, close_reason) = if lifecycle_res.is_ok() {
+				(CloseCode::Normal.into(), None)
+			} else {
+				(CloseCode::Error.into(), Some("ws.upstream_closed".into()))
+			};
+
+			let close_message = protocol::ToServerTunnelMessage {
+				request_id: request_id.clone(),
+				message_id: Uuid::new_v4().into_bytes(),
+				message_kind: protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(
+					protocol::ToServerWebSocketClose {
+						code: Some(close_code),
+						reason: close_reason,
+					},
+				),
+			};
+
+			let msg_serialized = protocol::versioned::ToGateway::latest(protocol::ToGateway {
+				message: close_message.clone(),
 			})
-			.ok();
+			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
+			.context("failed to serialize tunnel message for gateway")?;
 
-		// Clean up
-		tracing::debug!(?conn.runner_id, "connection closed");
+			// Publish message to UPS
+			let res = self
+				.ctx
+				.ups()
+				.context("failed to get UPS instance for tunnel message")?
+				.publish(&req.gateway_reply_to, &msg_serialized, PublishOpts::one())
+				.await;
 
-		Ok(())
+			if let Err(err) = res {
+				tracing::warn!(
+					?err,
+					%req.gateway_reply_to,
+					"error sending close message to remaining active requests"
+				);
+			}
+		}
+
+		// This will determine the close frame sent back to the runner websocket
+		lifecycle_res
 	}
 }
