@@ -117,7 +117,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 				<div className="flex gap-8 max-w-6xl w-full">
 					<main className="w-full py-8 px-8 lg:mx-0 mx-auto max-w-prose lg:max-w-none">
 						<div className="relative">
-							<div className="absolute top-5 right-0">
+							<div className={clsx("absolute right-0", parentPage ? "top-5" : "top-0")}>
 								<DocsPageDropdown
 									title={title || "Documentation"}
 									markdownPath={markdownPath}
