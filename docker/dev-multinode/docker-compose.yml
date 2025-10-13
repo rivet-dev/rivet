@@ -96,7 +96,7 @@ services:
     image: timberio/vector:0.48.0-distroless-static
     command: '-C /etc/vector'
     volumes:
-      - vector-server-data-local:/var/lib/vector
+      - vector-server-data-default:/var/lib/vector
       - ./vector-server:/etc/vector
     networks:
       - rivet-network
@@ -109,7 +109,7 @@ services:
     image: timberio/vector:0.48.0-distroless-static
     command: '-C /etc/vector'
     volumes:
-      - vector-client-data-local:/var/lib/vector
+      - vector-client-data-default:/var/lib/vector
       - ./vector-client:/etc/vector
     networks:
       - rivet-network
@@ -317,5 +317,5 @@ volumes:
   clickhouse-data: null
   grafana-data: null
   postgres-data: null
-  vector-server-data-local: null
-  vector-client-data-local: null
+  vector-server-data-default: null
+  vector-client-data-default: null

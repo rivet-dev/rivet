@@ -13,7 +13,7 @@
 		"datacenter_label": 1,
 		"datacenters": [
 			{
-				"name": "local",
+				"name": "default",
 				"datacenter_label": 1,
 				"is_leader": true,
 				"public_url": "http://rivet-engine:6420",

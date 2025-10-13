@@ -123,8 +123,8 @@ export const actorsPaginationAtom = atom({
 
 export const actorRegionsAtom = atom<Region[]>([
 	{
-		id: "local",
-		name: "Local",
+		id: "default",
+		name: "Default",
 	},
 ]);
 
