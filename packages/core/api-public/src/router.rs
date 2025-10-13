@@ -8,7 +8,7 @@ use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{actors, ctx, datacenters, namespaces, runner_configs, runners, ui};
+use crate::{actors, ctx, datacenters, metadata, namespaces, runner_configs, runners, ui};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -48,6 +48,8 @@ pub async fn router(
 				"/",
 				axum::routing::get(|| async { Redirect::permanent("/ui/") }),
 			)
+			// MARK: Metadata
+			.route("/metadata", axum::routing::get(metadata::get_metadata))
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
