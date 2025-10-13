@@ -280,18 +280,9 @@ pub enum ServerlessHealthCheckError {
 	InvalidRequest {},
 	RequestFailed {},
 	RequestTimedOut {},
-	NonSuccessStatus {
-		status_code: u16,
-		body: String,
-	},
-	InvalidResponseJson {
-		body: String,
-	},
-	InvalidResponseSchema {
-		status: String,
-		runtime: String,
-		version: String,
-	},
+	NonSuccessStatus { status_code: u16, body: String },
+	InvalidResponseJson { body: String },
+	InvalidResponseSchema { runtime: String, version: String },
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -326,8 +317,7 @@ fn truncate_response_body(body: &str) -> String {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ServerlessHealthPayload {
-	status: String,
+struct ServerlessMetadataPayload {
 	runtime: String,
 	version: String,
 }
@@ -366,7 +356,7 @@ async fn serverless_health_check_inner(
 		));
 	}
 
-	let health_url = format!("{}/health", trimmed_url.trim_end_matches('/'));
+	let health_url = format!("{}/metadata", trimmed_url.trim_end_matches('/'));
 
 	if reqwest::Url::parse(&health_url).is_err() {
 		return Ok(ServerlessHealthCheckResponse::failure(
@@ -438,7 +428,7 @@ async fn serverless_health_check_inner(
 		));
 	}
 
-	let payload = match serde_json::from_str::<ServerlessHealthPayload>(&body_raw) {
+	let payload = match serde_json::from_str::<ServerlessMetadataPayload>(&body_raw) {
 		Ok(payload) => payload,
 		Err(_) => {
 			return Ok(ServerlessHealthCheckResponse::failure(
@@ -449,20 +439,12 @@ async fn serverless_health_check_inner(
 		}
 	};
 
-	let ServerlessHealthPayload {
-		status,
-		runtime,
-		version,
-	} = payload;
+	let ServerlessMetadataPayload { runtime, version } = payload;
 
 	let trimmed_version = version.trim();
-	if status != "ok" || runtime != "rivetkit" || trimmed_version.is_empty() {
+	if runtime != "rivetkit" || trimmed_version.is_empty() {
 		return Ok(ServerlessHealthCheckResponse::failure(
-			ServerlessHealthCheckError::InvalidResponseSchema {
-				status,
-				runtime,
-				version,
-			},
+			ServerlessHealthCheckError::InvalidResponseSchema { runtime, version },
 		));
 	}
 
