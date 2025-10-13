@@ -7,12 +7,14 @@ type Page = {
 	href: Href;
 	external?: boolean;
 	icon?: IconDefinition;
+	badge?: string;
 };
 type PageWithTitle = {
 	title: string;
 	href: Href;
 	external?: boolean;
 	icon?: IconDefinition;
+	badge?: string;
 };
 type PageWithPages = {
 	title: string;
@@ -20,6 +22,7 @@ type PageWithPages = {
 	collapsible?: true;
 	initiallyOpen?: boolean;
 	icon?: IconDefinition;
+	badge?: string;
 };
 export type AnyPage = Page | PageWithTitle | PageWithPages;
 

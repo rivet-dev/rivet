@@ -4530,27 +4530,27 @@ _Supabase is coming soon_
 
 # Deploying to Vercel
 
-Deploy your RivetKit app to [Vercel](https://vercel.com/) using Next.js. 
+Deploy your Next.js + RivetKit app to [Vercel](https://vercel.com/).
 
 Complete example Next.js + RivetKit app.
 
+## Guide
+
 - [Vercel account](https://vercel.com/)
-- Your RivetKit app
-  - If you don't have one, see the our [Next.js Example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js)
-- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
+- A Next.js app integrated with RivetKit
+  - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js) to get started
 
-To serve your RivetKit app from Next.js you must expose RivetKit through a Next.js API route.
+Your project should have the following files:
 
-If you haven't already, create a file at `api/rivet/[...all]/route.ts` inside your Next.js project, and fill it with the following:
+- `src/app/api/rivet/[...all]/route.ts`
+- `src/rivet/registry.ts`
 
-```ts
-// Update path/to/registry.ts below to point to your registry.ts file
-const  = toNextHandler(registry);
-```
+If your project is not integrated with RivetKit yet, follow the [Next.js quickstart guide](/docs/actors/quickstart/next-js/) or see the [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js).
 
-Update your vercel.json
+Create or update your `vercel.json`:
 
-```json
+```json }
 
     }
     // ... rest of vercel.json
@@ -4561,11 +4561,16 @@ Update your vercel.json
 2. Select your repository containing your Next.js + RivetKit app
 3. Vercel will deploy your app
 
-Detailed steps and deployment methods are available on [Vercel's docs](https://vercel.com/docs/deployments).
+More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).
 
-After selecting your project on the Rivet dashboard, go to Connect > Vercel. Skip to the "Confirm Connection" step, and input your deployed Vercel site URL.
+1. Visit the Rivet dashboard
+2. Navigate to _Connect > Vercel_
+3. Skip to the _Confirm Connection_ step
+4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
+	- **Important**: Make sure to include the path `/api/rivet`
+5. Once it shows as successfully connected, click _Done_
 
-The Engine will then connect to your Vercel site. Now you can create and connect to your Rivet Actors.
+Your Vercel Functions deployment is now connected to Rivet.
 ## Deploying to VMs & Bare Metal
 
 # Deploying to VMs & Bare Metal

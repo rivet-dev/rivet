@@ -96,21 +96,26 @@ export const sitemap = [
 		href: "/docs",
 		sidebar: [
 			{
-				title: "Overview",
-				href: "/docs",
-				icon: faSquareInfo,
-			},
-			{
-				title: "Use Cases",
-				icon: faLightbulb,
-				collapsible: true,
+				title: "General",
 				pages: [
-					{ title: "AI Agents", href: "/docs/use-cases/ai-agents" },
-					{ title: "Realtime", href: "/docs/use-cases/realtime" },
-					{ title: "Durable Compute", href: "/docs/use-cases/durable-compute" },
-					{ title: "Per-Tenant Databases", href: "/docs/use-cases/per-tenant-databases" },
-					{ title: "Rate Limiting", href: "/docs/use-cases/rate-limiting" },
-					{ title: "Bots", href: "/docs/use-cases/bots" },
+					{
+						title: "Overview",
+						href: "/docs",
+						icon: faSquareInfo,
+					},
+					{
+						title: "Use Cases",
+						icon: faLightbulb,
+						collapsible: true,
+						pages: [
+							{ title: "AI Agents", href: "/docs/use-cases/ai-agents" },
+							{ title: "Realtime", href: "/docs/use-cases/realtime" },
+							{ title: "Durable Compute", href: "/docs/use-cases/durable-compute" },
+							{ title: "Per-Tenant Databases", href: "/docs/use-cases/per-tenant-databases" },
+							{ title: "Rate Limiting", href: "/docs/use-cases/rate-limiting" },
+							{ title: "Bots", href: "/docs/use-cases/bots" },
+						]
+					},
 				]
 			},
 			{
@@ -126,10 +131,11 @@ export const sitemap = [
 			},
 			{
 				title: "Deploy",
-				pages: deployHosts.map(({ title, href, icon }) => ({
+				pages: deployHosts.map(({ title, href, icon, badge }) => ({
 					title,
 					href,
 					icon,
+					badge,
 				})),
 			},
 			{
@@ -236,37 +242,42 @@ export const sitemap = [
 		//icon: faActorsBorderless,
 		sidebar: [
 			{
-				title: "Overview",
-				href: "/docs/actors",
-				icon: faSquareInfo,
-			},
-			{
-				title: "Quickstart",
-				icon: faForward,
-				collapsible: true,
-				href: "/docs/actors/quickstart",
+				title: "General",
 				pages: [
 					{
-						title: "Node.js & Bun",
-						href: "/docs/actors/quickstart/backend",
-						icon: faNodeJs,
+						title: "Overview",
+						href: "/docs/actors",
+						icon: faSquareInfo,
 					},
 					{
-						title: "React",
-						href: "/docs/actors/quickstart/react",
-						icon: faReact,
+						title: "Quickstart",
+						icon: faForward,
+						collapsible: true,
+						href: "/docs/actors/quickstart",
+						pages: [
+							{
+								title: "Node.js & Bun",
+								href: "/docs/actors/quickstart/backend",
+								icon: faNodeJs,
+							},
+							{
+								title: "React",
+								href: "/docs/actors/quickstart/react",
+								icon: faReact,
+							},
+							{
+								title: "Next.js",
+								href: "/docs/actors/quickstart/next-js",
+								icon: nextjs,
+							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/actors/quickstart/cloudflare-workers",
+								icon: faCloudflare,
+							},
+						],
 					},
-					{
-						title: "Next.js",
-						href: "/docs/actors/quickstart/next-js",
-						icon: nextjs,
-					},
-					{
-						title: "Cloudflare Workers",
-						href: "/docs/actors/quickstart/cloudflare-workers",
-						icon: faCloudflare,
-					},
-				],
+				]
 			},
 			{
 				title: "Concepts",
@@ -421,9 +432,14 @@ export const sitemap = [
 		// IMPORTANT: Also update integrations/index.mdx
 		sidebar: [
 			{
-				title: "Overview",
-				href: "/docs/integrations",
-				icon: faSquareInfo,
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/integrations",
+						icon: faSquareInfo,
+					},
+				]
 			},
 			...integrationSidebarSections,
 		],
@@ -435,12 +451,12 @@ export const sitemap = [
 		//icon: faActorsBorderless,
 		sidebar: [
 			{
-				title: "Overview",
-				href: "/docs/api"
-			},
-			{
 				title: "General",
 				pages: [
+				{
+					title: "Overview",
+					href: "/docs/api"
+				},
 					{
 						title: "CORS",
 						href: "/docs/general/cors",
