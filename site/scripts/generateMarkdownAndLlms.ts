@@ -104,12 +104,15 @@ async function ensureDirectoryExists(dirPath: string) {
 }
 
 async function writeMarkdownFile(page: DocsPage, outputDir: string) {
-	const outputPath = path.join(outputDir, `${page.cleanPath}.md`);
+	// Special case: root index.mdx should write to parent as docs.md
+	const outputPath = page.path === "index.mdx"
+		? path.join(path.dirname(outputDir), path.basename(outputDir) + ".md")
+		: path.join(outputDir, `${page.cleanPath}.md`);
 	const outputDirPath = path.dirname(outputPath);
-	
+
 	// Ensure the directory exists
 	await ensureDirectoryExists(outputDirPath);
-	
+
 	// Write the markdown file
 	await fs.writeFile(outputPath, page.content);
 }
