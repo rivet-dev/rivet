@@ -87,6 +87,7 @@ function Content<const Steps extends Step[]>({
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
 
 	const handleSubmit = (values: z.infer<JoinStepSchemas<Steps>>) => {
+		console.log("submitting");
 		ref.current = { ...ref.current, ...values };
 		if (stepper.isLast) {
 			return onSubmit?.({ values: ref.current, form, stepper });
@@ -122,7 +123,13 @@ function Content<const Steps extends Step[]>({
 											<Button
 												type="button"
 												variant="outline"
-												onClick={stepper.prev}
+												onClick={() => {
+													form.reset(undefined, {
+														keepErrors: false,
+														keepValues: true,
+													});
+													stepper.prev();
+												}}
 												disabled={stepper.isFirst}
 											>
 												Previous

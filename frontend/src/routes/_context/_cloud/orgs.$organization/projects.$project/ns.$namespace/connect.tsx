@@ -1,7 +1,7 @@
 import {
 	faAws,
 	faGoogleCloud,
-	faHetzner,
+	faHetznerH,
 	faPlus,
 	faQuestionCircle,
 	faRailway,
@@ -146,7 +146,7 @@ export function RouteComponent() {
 							size="lg"
 							variant="outline"
 							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faHetzner} />}
+							startIcon={<Icon icon={faHetznerH} />}
 							asChild
 						>
 							<RouterLink
@@ -307,7 +307,7 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 					Google Cloud Run
 				</DropdownMenuItem>
 				<DropdownMenuItem
-					indicator={<Icon icon={faHetzner} />}
+					indicator={<Icon icon={faHetznerH} />}
 					onSelect={() => {
 						navigate({
 							to: ".",
