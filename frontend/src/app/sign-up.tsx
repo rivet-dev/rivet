@@ -182,7 +182,6 @@ export function SignUp() {
 												required
 												placeholder="you@company.com"
 												autoComplete="email"
-												name="email"
 												asChild
 											>
 												<Input />
