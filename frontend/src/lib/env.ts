@@ -14,6 +14,7 @@ export const commonEnvSchema = z.object({
 	SENTRY_AUTH_TOKEN: z.string().optional(),
 	SENTRY_PROJECT: z.string().optional(),
 	APP_TYPE: z.enum(["engine", "cloud", "inspector"]).optional(),
+	DEPLOYMENT_TYPE: z.enum(["staging", "production"]).optional(),
 });
 
 export const commonEnv = () => commonEnvSchema.parse(import.meta.env);

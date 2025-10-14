@@ -3,6 +3,7 @@ import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
+import favigo from "favigo/vite";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { commonEnvSchema } from "./src/lib/env";
@@ -10,6 +11,25 @@ import { commonEnvSchema } from "./src/lib/env";
 // These are only needed in CI. They'll be undefined in dev.
 const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
 const GIT_SHA = process.env.CF_PAGES_COMMIT_SHA;
+
+
+
+const getVariantForMode = (mode: string) => {
+  switch (mode) {
+    case 'staging':
+      return {
+        type: 'badge',
+        text: 'DEV',
+        backgroundColor: '#FF4F00',
+        textColor: '#ffffff',
+        position: 'bottom-right',
+        size: 'large',
+      } as const
+    default:
+      return undefined
+  }
+}
+
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -33,6 +53,14 @@ export default defineConfig(({ mode }) => {
 								: undefined,
 					})
 				: null,
+			favigo({
+				source: "./public/favicon.svg",
+				variant: getVariantForMode(env.DEPLOYMENT_TYPE || 'production'),
+				configuration: {
+					theme_color: "#FF4F00",
+					background: "transparent",
+				}
+			}),
 		],
 		server: {
 			port: 43708,
