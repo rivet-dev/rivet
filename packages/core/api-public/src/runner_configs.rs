@@ -325,7 +325,6 @@ fn truncate_response_body(body: &str) -> String {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ServerlessMetadataPayload {
 	runtime: String,
 	version: String,
