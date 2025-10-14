@@ -97,4 +97,19 @@ impl Datacenter {
 			self.public_url.host_str() == Some(host)
 		}
 	}
+
+	pub fn public_url_host(&self) -> Result<&str> {
+		self.public_url.host_str().context("no host")
+	}
+
+	pub fn public_url_port(&self) -> Result<u16> {
+		self.public_url
+			.port()
+			.or_else(|| match self.public_url.scheme() {
+				"http" => Some(80),
+				"https" => Some(443),
+				_ => None,
+			})
+			.context("unsupported URL scheme")
+	}
 }
