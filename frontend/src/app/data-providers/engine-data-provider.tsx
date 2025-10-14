@@ -384,7 +384,7 @@ export const createNamespaceContext = ({
 					mightRequireAuth,
 				},
 				mutationFn: async () => {
-					await client.actorsDelete(actorId);
+					await client.actorsDelete(actorId, { namespace });
 				},
 			};
 		},
