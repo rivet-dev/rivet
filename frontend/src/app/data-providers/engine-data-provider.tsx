@@ -1,4 +1,5 @@
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
+import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { getConfig, ls } from "@/components";
 import {
@@ -38,6 +39,14 @@ export function createClient(
 		baseUrl: () => baseUrl,
 		environment: "",
 		...opts,
+		fetcher: async (args) => {
+			Object.keys(args.headers).forEach((key) => {
+				if (key.toLowerCase().startsWith("x-fern-")) {
+					delete args.headers[key];
+				}
+			});
+			return await fetcher(args);
+		},
 	});
 }
 

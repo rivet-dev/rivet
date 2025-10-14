@@ -163,6 +163,7 @@ function OrgSignInFlow({ ticket }: { ticket: string }) {
 	const { organization } = useOrganization();
 	const { signIn, setActive: setActiveSignIn } = useSignIn();
 	const isMounted = useIsMounted();
+	const navigate = useNavigate();
 
 	const [error, setError] = useState<string | null>(null);
 
@@ -178,6 +179,7 @@ function OrgSignInFlow({ ticket }: { ticket: string }) {
 				await setActiveSignIn?.({
 					session: signInAttempt?.createdSessionId,
 				});
+				await navigate({ to: "/" });
 			} else {
 				// If the sign-in attempt is not complete, check why.
 				// User may need to complete further steps.
