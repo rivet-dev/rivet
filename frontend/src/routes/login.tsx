@@ -8,7 +8,15 @@ export const Route = createFileRoute("/login")({
 	beforeLoad: async ({ context }) => {
 		await waitForClerk(context.clerk);
 		if (context.clerk.user) {
-			throw redirect({ to: "/" });
+			if (!context.clerk.organization) {
+				throw redirect({
+					to: "/onboarding/choose-organization",
+				});
+			}
+			throw redirect({
+				to: "/orgs/$organization",
+				params: { organization: context.clerk.organization?.id ?? "" },
+			});
 		}
 	},
 });
@@ -19,6 +27,17 @@ function RouteComponent() {
 			<div className="flex flex-col items-center gap-6">
 				<Logo className="h-10 mb-4" />
 				<Login />
+				<p className="max-w-md text-center text-xs text-muted-foreground">
+					Looking for Rivet Cloud? Visit{" "}
+					<a
+						href="https://hub.rivet.gg"
+						className="underline"
+						target="_blank"
+						rel="noreferrer"
+					>
+						hub.rivet.gg
+					</a>
+				</p>
 			</div>
 		</div>
 	);

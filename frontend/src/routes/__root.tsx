@@ -48,6 +48,10 @@ function CloudRoute() {
 			publishableKey={cloudEnv().VITE_APP_CLERK_PUBLISHABLE_KEY}
 			routerPush={(to) => navigate({ to })}
 			routerReplace={(to) => navigate({ to, replace: true })}
+			signInUrl="/login"
+			signUpUrl="/join"
+			signInForceRedirectUrl="/"
+			signUpForceRedirectUrl="/"
 			taskUrls={{
 				"choose-organization": "/onboarding/choose-organization",
 			}}

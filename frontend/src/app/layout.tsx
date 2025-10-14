@@ -543,33 +543,40 @@ function CloudSidebarContent() {
 		fuzzy: true,
 	});
 
-	const hasDataProvider = useDataProviderCheck();
-	const hasQuery = !!useDataProvider().buildsQueryOptions;
-
 	if (matchNamespace) {
-		return (
-			<div className="flex gap-1.5 flex-col">
-				<HeaderLink
-					to="/orgs/$organization/projects/$project/ns/$namespace/connect"
-					className="font-normal"
-					params={matchNamespace}
-					icon={faBolt}
-				>
-					Connect
-				</HeaderLink>
-				{hasDataProvider && hasQuery ? (
-					<div className="w-full pt-1.5">
-						<span className="block text-muted-foreground text-xs px-1 py-1 transition-colors mb-0.5">
-							Instances
-						</span>
-						<ActorBuildsList />
-					</div>
-				) : null}
-			</div>
-		);
+		return <CloudSidebarContentInner {...matchNamespace} />;
 	}
 
 	return null;
+}
+
+function CloudSidebarContentInner(props: {
+	organization: string;
+	project: string;
+	namespace: string;
+}) {
+	const hasDataProvider = useDataProviderCheck();
+	const hasQuery = !!useDataProvider().buildsQueryOptions;
+	return (
+		<div className="flex gap-1.5 flex-col">
+			<HeaderLink
+				to="/orgs/$organization/projects/$project/ns/$namespace/connect"
+				className="font-normal"
+				{...props}
+				icon={faBolt}
+			>
+				Connect
+			</HeaderLink>
+			{hasDataProvider && hasQuery ? (
+				<div className="w-full pt-1.5">
+					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
+						Instances
+					</span>
+					<ActorBuildsList />
+				</div>
+			) : null}
+		</div>
+	);
 }
 
 function CloudSidebarFooter() {

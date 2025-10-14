@@ -166,6 +166,7 @@ export const createNamespaceContext = ({
 						regions: data.datacenters.map((dc) => ({
 							id: dc.name,
 							name: dc.name,
+							url: dc.url,
 						})),
 						pagination: data.pagination,
 					};

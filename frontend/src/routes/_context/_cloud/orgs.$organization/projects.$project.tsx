@@ -1,7 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { createProjectContext } from "@/app/data-providers/cloud-data-provider";
-import { NotFoundCard } from "@/app/not-found-card";
 import { RouteError } from "@/app/route-error";
 import { useDialog } from "@/app/use-dialog";
 
@@ -9,7 +8,7 @@ export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project",
 )({
 	component: RouteComponent,
-	context: ({ context, params }) => {
+	beforeLoad: ({ context, params }) => {
 		return match(context)
 			.with({ __type: "cloud" }, (context) => ({
 				dataProvider: {

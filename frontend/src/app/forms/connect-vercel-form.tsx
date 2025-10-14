@@ -1,8 +1,16 @@
-import { faCheck, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import {
+	faCheck,
+	faSpinnerThird,
+	faTriangle,
+	faTriangleExclamation,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
+import confetti from "canvas-confetti";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
+import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import {
 	Button,
@@ -67,7 +75,7 @@ export const Plan = ({ className }: { className?: string }) => {
 					</FormControl>
 					<FormDescription className="col-span-1">
 						Your Vercel plan determines the configuration required
-						to properly run your Rivet Engine.
+						to properly connect Rivet to Vercel Functions.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
@@ -153,19 +161,21 @@ export function ConnectionCheck() {
 	const endpoint = watch("endpoint");
 	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
 
-	const { data } = useQuery({
-		queryKey: ["vercel-endpoint-check", endpoint],
-		queryFn: async () => {
+	const [debounced] = useDebounceValue(endpoint, 300);
+
+	const { isSuccess, isError, isRefetchError, isLoadingError } = useQuery({
+		queryKey: ["vercel-endpoint-check", debounced],
+		queryFn: async ({ signal }) => {
 			try {
-				const url = new URL("/health", endpoint);
-				const response = await fetch(url);
+				const url = new URL("/health", debounced);
+				const response = await fetch(url, { signal });
 				if (!response.ok) {
 					throw new Error("Failed to connect");
 				}
 				return response.json();
 			} catch {
 				const url = new URL("/api/rivet/health", endpoint);
-				const response = await fetch(url);
+				const response = await fetch(url, { signal });
 				if (!response.ok) {
 					throw new Error("Failed to connect");
 				}
@@ -173,10 +183,24 @@ export function ConnectionCheck() {
 			}
 		},
 		enabled,
-		refetchInterval: 1000,
+		retry: 0,
+		refetchInterval: 3_000,
 	});
 
-	const success = !!data;
+	useEffect(() => {
+		if (isSuccess) {
+			confetti({
+				angle: 60,
+				spread: 55,
+				origin: { x: 0 },
+			});
+			confetti({
+				angle: 120,
+				spread: 55,
+				origin: { x: 1 },
+			});
+		}
+	}, [isSuccess]);
 
 	return (
 		<AnimatePresence>
@@ -185,18 +209,27 @@ export function ConnectionCheck() {
 					layoutId="msg"
 					className={cn(
 						"text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-center",
-						success && "text-primary-foreground",
+						isSuccess && "text-primary-foreground",
+						isError && "text-destructive-foreground",
 					)}
 					initial={{ height: 0, opacity: 0.5 }}
 					animate={{ height: "6rem", opacity: 1 }}
 				>
-					{success ? (
+					{isSuccess ? (
 						<>
 							<Icon
 								icon={faCheck}
 								className="mr-1.5 text-primary"
 							/>{" "}
-							Runner successfully connected
+							Vercel is running with RivetKit v2137
+						</>
+					) : isError || isRefetchError || isLoadingError ? (
+						<>
+							<Icon
+								icon={faTriangleExclamation}
+								className="mr-1.5 text-destructive"
+							/>{" "}
+							Health check failed, verify the URL matches.
 						</>
 					) : (
 						<div className="flex flex-col items-center gap-2">
@@ -207,7 +240,6 @@ export function ConnectionCheck() {
 								/>{" "}
 								Waiting for Runner to connect...
 							</div>
-							<NeedHelp />
 						</div>
 					)}
 				</motion.div>

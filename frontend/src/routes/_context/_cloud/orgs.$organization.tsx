@@ -4,7 +4,7 @@ import { createOrganizationContext } from "@/app/data-providers/cloud-data-provi
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 	component: RouteComponent,
-	context: ({ context, params }) => {
+	beforeLoad: ({ context, params }) => {
 		return match(context)
 			.with({ __type: "cloud" }, (context) => ({
 				dataProvider: {
