@@ -330,7 +330,7 @@ impl TransactionTask {
 		tx: Transaction<'_>,
 		start_version: i64,
 		operations: Vec<Operation>,
-		mut conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 	) -> Result<()> {
 		// // Defer all constraint checks until commit
 		// tx.execute("SET CONSTRAINTS ALL DEFERRED", &[])

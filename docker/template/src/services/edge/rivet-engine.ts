@@ -18,8 +18,8 @@ export function generateDatacenterRivetEngine(
 			name: dc.name,
 			datacenter_label: dc.id,
 			is_leader: dc.id == 1,
-			public_url: `http://${serviceHost}:${GUARD_PORT}`,
 			peer_url: `http://${serviceHost}:${API_PEER_PORT}`,
+			public_url: `http://${serviceHost}:${GUARD_PORT}`,
 		});
 	}
 

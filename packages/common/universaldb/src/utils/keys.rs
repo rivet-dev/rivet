@@ -125,4 +125,10 @@ define_keys! {
 	(97, ACL, "acl"),
 	(98, TOKEN, "token"),
 	(99, SECRET, "secret"),
+	// 100 - RESERVED BY EE
+	// 101 - RESERVED BY EE
+	// 102 - RESERVED BY EE
+	// 103 - RESERVED BY EE
+	// 104 - RESERVED BY EE
+	// 105 - RESERVED BY EE
 }

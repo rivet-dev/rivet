@@ -763,6 +763,7 @@ impl<'de> TupleUnpack<'de> for OutputChunkKey {
 	}
 }
 
+// TODO: Reimplement as an atomic counter key + a latest timestamp?
 #[derive(Debug)]
 pub struct ErrorKey {
 	workflow_id: Id,

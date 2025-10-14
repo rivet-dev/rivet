@@ -337,12 +337,12 @@ impl CustomServeTrait for PegboardGateway {
 		let lifecycle_res = tokio::select! {
 			res = &mut server_to_client => {
 				let res = res?;
-				tracing::info!(?res, "server to client task completed");
+				tracing::debug!(?res, "server to client task completed");
 				res
 			}
 			res = &mut client_to_server => {
 				let res = res?;
-				tracing::info!(?res, "client to server task completed");
+				tracing::debug!(?res, "client to server task completed");
 				res
 			}
 		};
