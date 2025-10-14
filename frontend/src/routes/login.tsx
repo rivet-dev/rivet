@@ -1,23 +1,14 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Login } from "@/app/login";
 import { Logo } from "@/app/logo";
+import { redirectToOrganization } from "@/lib/auth";
 import { waitForClerk } from "@/lib/waitForClerk";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
 	beforeLoad: async ({ context }) => {
 		await waitForClerk(context.clerk);
-		if (context.clerk.user) {
-			if (!context.clerk.organization) {
-				throw redirect({
-					to: "/onboarding/choose-organization",
-				});
-			}
-			throw redirect({
-				to: "/orgs/$organization",
-				params: { organization: context.clerk.organization?.id ?? "" },
-			});
-		}
+		await redirectToOrganization(context.clerk);
 	},
 });
 

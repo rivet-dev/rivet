@@ -8,7 +8,7 @@ import {
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
-import { useController, useFieldArray, useFormContext } from "react-hook-form";
+import { useController, useFieldArray, useForm, useFormContext, useWatch } from "react-hook-form";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import {
@@ -34,6 +34,54 @@ import {
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { defineStepper } from "@/components/ui/stepper";
+import { Rivet } from "@rivetkit/engine-api-full";
+
+const endpointSchema = z
+	.string()
+	.nonempty("Endpoint is required")
+	.url("Please enter a valid URL")
+	.endsWith("/api/rivet", "Endpoint must end with /api/rivet");
+
+export const stepper = defineStepper(
+	{
+		id: "step-1",
+		title: "Configure",
+		assist: false,
+		next: "Next",
+		schema: z.object({
+			plan: z.string().min(1, "Please select a Vercel plan"),
+			runnerName: z.string().min(1, "Runner name is required"),
+			datacenters: z
+				.record(z.boolean())
+				.refine(
+					(data) => Object.values(data).some(Boolean),
+					"At least one datacenter must be selected",
+				),
+			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
+			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
+			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+		}),
+	},
+	{
+		id: "step-2",
+		title: "Edit vercel.json",
+		assist: false,
+		next: "Next",
+		schema: z.object({}),
+	},
+	{
+		id: "step-3",
+		title: "Deploy to Vercel",
+		assist: false,
+		next: "Done",
+		schema: z.object({
+			success: z.boolean().refine((val) => val, "Connection failed"),
+			endpoint: endpointSchema,
+		}),
+	},
+);
 
 export const Plan = ({ className }: { className?: string }) => {
 	const { control } = useFormContext();
@@ -346,18 +394,18 @@ export const PLAN_TO_MAX_DURATION: Record<string, number> = {
 const code = ({ plan }: { plan: string }) =>
 	`{
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"fluid": false, 	// [!code highlight]
+	"fluid": false,	// [!code highlight]
 	"functions": {
-		"**": {
-			"maxDuration": ${PLAN_TO_MAX_DURATION[plan] || 60}, 	// [!code highlight]
+		"app/api/rivet/**": {
+			"maxDuration": ${PLAN_TO_MAX_DURATION[plan] || 60},	// [!code highlight]
 		},
-	},
+	}
 }`;
 
 export const Json = ({ plan }: { plan: string }) => {
 	return (
 		<div className="space-y-2 mt-2">
-			<CodeFrame language="json" title="vercel.json">
+			<CodeFrame language="json" title="vercel.json" code={() => code({plan}).replaceAll("	// [!code highlight]", "")}>
 				<CodePreview
 					className="w-full min-w-0"
 					language="json"
@@ -394,7 +442,7 @@ export const Endpoint = ({
 						<Input
 							type="url"
 							placeholder={
-								placeholder || "https://my-rivet-app.vercel.app"
+								placeholder || "https://my-rivet-app.vercel.app/api/rivet"
 							}
 							{...field}
 						/>
@@ -406,17 +454,23 @@ export const Endpoint = ({
 	);
 };
 
-export function ConnectionCheck({ endpoint }: { endpoint: string }) {
-	const { setValue, trigger } = useFormContext();
+export function ConnectionCheck() {
 	const dataProvider = useEngineCompatDataProvider();
-	const enabled = !!endpoint && z.string().url().safeParse(endpoint).success;
+
+	const endpoint: string = useWatch({ name: "endpoint" });
+	const headers: [string, string][] = useWatch({ name: "headers" });
+
+	const enabled = !!endpoint && endpointSchema.safeParse(endpoint).success;
+
+	console.log(enabled);
 
 	const [debounced] = useDebounceValue(endpoint, 300);
 
-	const { isSuccess, data, isError, isRefetchError, isLoadingError } =
+	const { isSuccess, data, isError, isRefetchError, isLoadingError, error } =
 		useQuery({
 			...dataProvider.runnerHealthCheckQueryOptions({
 				runnerUrl: debounced,
+				headers: Object.fromEntries(headers.filter(([k, v]) => k && v).map(([k, v]) => [k, v])),
 			}),
 			enabled,
 			retry: 0,
@@ -442,7 +496,7 @@ export function ConnectionCheck({ endpoint }: { endpoint: string }) {
 						isError && "text-destructive-foreground",
 					)}
 					initial={{ height: 0, opacity: 0.5 }}
-					animate={{ height: "6rem", opacity: 1 }}
+					animate={{ height: "8rem", opacity: 1 }}
 				>
 					{isSuccess ? (
 						<>
@@ -463,6 +517,7 @@ export function ConnectionCheck({ endpoint }: { endpoint: string }) {
 								Health check failed, verify the endpoint is
 								correct.
 							</p>
+							{isRivetHealthCheckFailureResponse(error) ? <p className="font-mono-console">{JSON.stringify(error.failure.error)}</p> : null}
 							<p>
 								Endpoint{" "}
 								<a
@@ -490,4 +545,9 @@ export function ConnectionCheck({ endpoint }: { endpoint: string }) {
 			) : null}
 		</AnimatePresence>
 	);
+}
+
+
+function isRivetHealthCheckFailureResponse(error: any): error is Rivet.RunnerConfigsServerlessHealthCheckResponseFailure {
+	return error && 'failure' in error;
 }
