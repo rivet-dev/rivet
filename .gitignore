@@ -52,3 +52,4 @@ site/src/generated/
 site/public/docs/
 site/public/llms-full.txt
 site/public/llms.txt
+site/.playwright-mcp/

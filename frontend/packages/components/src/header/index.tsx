@@ -80,19 +80,19 @@ export function Header({
 								</span>
 							</Button>
 						</SheetTrigger>
-						<SheetContent side="left" className="overflow-auto p-0">
+						<SheetContent side="left" className="overflow-auto p-0 [&>button]:fixed [&>button]:left-[calc(100vw-4rem)] [&>button]:top-4 [&>button]:bg-background/80 [&>button]:backdrop-blur [&>button]:border [&>button]:border-border/50 [&>button]:shadow-lg">
 							<nav className="min-h-full text-lg font-medium h-full max-w-full">
 								<div className="flex flex-col min-h-full">
 									<a
 										href="/"
-										className="flex sticky p-6 top-0 z-10 bg-background/10 backdrop-blur block w-full items-center gap-2 text-lg font-semibold"
+										className="hidden"
 									>
 										{logo}
 									</a>
-									<div className="flex flex-1 flex-col px-6 gap-6">
+									<div className="flex flex-1 flex-col px-4 py-4 gap-2">
 										{mobileBreadcrumbs}
 									</div>
-									<div className="px-6 py-6">{support}</div>
+									<div className="px-4 py-4">{support}</div>
 								</div>
 							</nav>
 						</SheetContent>

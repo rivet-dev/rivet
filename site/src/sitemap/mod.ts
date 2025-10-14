@@ -122,7 +122,7 @@ export const sitemap = [
 				// TOOD: These are product pages
 				// - https://tanstack.com/query/latest
 				// - https://docs.restate.dev/use-cases/ai-agents
-				title: "Tools",
+				title: "Libraries",
 				pages: [
 					{ title: "Actors", href: "/docs/tools/actors", icon: faActorsBorderless },
 					// { title: "Workflows", href: "/docs/what-are-workflows", },
