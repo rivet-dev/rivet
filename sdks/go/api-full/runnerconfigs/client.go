@@ -76,6 +76,12 @@ func (c *Client) ServerlessHealthCheck(ctx context.Context, request *sdk.RunnerC
 	}
 	endpointURL := baseURL + "/" + "runner-configs/serverless-health-check"
 
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
 	var response *sdk.RunnerConfigsServerlessHealthCheckResponse
 	if err := c.caller.Call(
 		ctx,

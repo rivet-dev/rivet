@@ -15,8 +15,8 @@ import * as Rivet from "../../index";
  */
 export interface ActorsCreateRequest {
     namespace: string;
-    datacenter?: string;
     crashPolicy: Rivet.CrashPolicy;
+    datacenter?: string;
     input?: string;
     key?: string;
     name: string;

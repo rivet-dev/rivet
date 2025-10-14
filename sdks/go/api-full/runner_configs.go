@@ -15,8 +15,9 @@ type RunnerConfigsListRequest struct {
 }
 
 type RunnerConfigsServerlessHealthCheckRequest struct {
-	Headers map[string]string `json:"headers,omitempty"`
-	Url     string            `json:"url"`
+	Namespace string            `json:"-"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Url       string            `json:"url"`
 }
 
 type RunnerConfigsUpsertRequestBody struct {

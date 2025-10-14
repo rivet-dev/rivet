@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct ActorsCreateRequest {
     #[serde(rename = "crash_policy")]
     pub crash_policy: models::CrashPolicy,
+    #[serde(rename = "datacenter", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub datacenter: Option<Option<String>>,
     #[serde(rename = "input", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub input: Option<Option<String>>,
     #[serde(rename = "key", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
@@ -29,6 +31,7 @@ impl ActorsCreateRequest {
     pub fn new(crash_policy: models::CrashPolicy, name: String, runner_name_selector: String) -> ActorsCreateRequest {
         ActorsCreateRequest {
             crash_policy,
+            datacenter: None,
             input: None,
             key: None,
             name,

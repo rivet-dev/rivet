@@ -9,9 +9,10 @@ import { CrashPolicy } from "../../types/CrashPolicy";
 
 export const ActorsCreateRequest: core.serialization.Schema<
     serializers.ActorsCreateRequest.Raw,
-    Omit<Rivet.ActorsCreateRequest, "namespace" | "datacenter">
+    Omit<Rivet.ActorsCreateRequest, "namespace">
 > = core.serialization.object({
     crashPolicy: core.serialization.property("crash_policy", CrashPolicy),
+    datacenter: core.serialization.string().optional(),
     input: core.serialization.string().optional(),
     key: core.serialization.string().optional(),
     name: core.serialization.string(),
@@ -21,6 +22,7 @@ export const ActorsCreateRequest: core.serialization.Schema<
 export declare namespace ActorsCreateRequest {
     export interface Raw {
         crash_policy: CrashPolicy.Raw;
+        datacenter?: string | null;
         input?: string | null;
         key?: string | null;
         name: string;

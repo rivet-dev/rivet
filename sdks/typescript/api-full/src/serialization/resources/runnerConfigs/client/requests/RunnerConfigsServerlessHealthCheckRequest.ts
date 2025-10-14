@@ -8,7 +8,7 @@ import * as core from "../../../../../core";
 
 export const RunnerConfigsServerlessHealthCheckRequest: core.serialization.Schema<
     serializers.RunnerConfigsServerlessHealthCheckRequest.Raw,
-    Rivet.RunnerConfigsServerlessHealthCheckRequest
+    Omit<Rivet.RunnerConfigsServerlessHealthCheckRequest, "namespace">
 > = core.serialization.object({
     headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     url: core.serialization.string(),

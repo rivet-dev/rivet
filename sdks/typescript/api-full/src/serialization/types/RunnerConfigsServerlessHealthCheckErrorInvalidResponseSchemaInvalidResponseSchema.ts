@@ -11,14 +11,12 @@ export const RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalid
     Rivet.RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema
 > = core.serialization.object({
     runtime: core.serialization.string(),
-    status: core.serialization.string(),
     version: core.serialization.string(),
 });
 
 export declare namespace RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema {
     export interface Raw {
         runtime: string;
-        status: string;
         version: string;
     }
 }
