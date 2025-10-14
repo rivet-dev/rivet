@@ -109,14 +109,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "datacenter",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "requestBody": {
@@ -154,14 +146,6 @@
             "name": "namespace",
             "in": "query",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "datacenter",
-            "in": "query",
-            "required": false,
             "schema": {
               "type": "string"
             }
@@ -841,6 +825,12 @@
           "crash_policy": {
             "$ref": "#/components/schemas/CrashPolicy"
           },
+          "datacenter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "input": {
             "type": [
               "string",
@@ -888,6 +878,12 @@
         "properties": {
           "crash_policy": {
             "$ref": "#/components/schemas/CrashPolicy"
+          },
+          "datacenter": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "input": {
             "type": [

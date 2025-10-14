@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_api_util::{Method, request_remote_datacenter};
+use rivet_api_util::{request_remote_datacenter, Method};
 use rivet_types::actors::{Actor, CrashPolicy};
 
 #[derive(Debug)]
@@ -144,6 +144,7 @@ async fn forward_to_datacenter(
 			namespace: namespace.name.clone(),
 		}),
 		Some(&rivet_api_types::actors::create::CreateRequest {
+			datacenter: None,
 			name,
 			key,
 			input,

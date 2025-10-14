@@ -19,7 +19,6 @@ use crate::ctx::ApiCtx;
 #[into_params(parameter_in = Query)]
 pub struct CreateQuery {
 	pub namespace: String,
-	pub datacenter: Option<String>,
 }
 
 /// ## Datacenter Round Trips
@@ -80,7 +79,7 @@ async fn create_inner(
 		namespace.namespace_id,
 		&query.namespace,
 		&body.runner_name_selector,
-		query.datacenter.as_ref().map(String::as_str),
+		body.datacenter.as_ref().map(String::as_str),
 	)
 	.await?;
 
