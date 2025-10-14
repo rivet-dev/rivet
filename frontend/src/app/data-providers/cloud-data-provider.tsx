@@ -20,11 +20,11 @@ function createClient({ clerk }: { clerk: Clerk }) {
 			return (await clerk.session?.getToken()) || "";
 		},
 		fetcher: async (args) => {
-			if (args.headers) {
-				delete args.headers["X-Fern-Language"];
-				delete args.headers["X-Fern-Runtime"];
-				delete args.headers["X-Fern-Runtime-Version"];
-			}
+			Object.keys(args.headers).forEach((key) => {
+				if (key.toLowerCase().startsWith("x-fern-")) {
+					delete args.headers[key];
+				}
+			});
 			return await fetcher(args);
 		},
 	});
@@ -344,7 +344,7 @@ export const createNamespaceContext = ({
 			...parent,
 			namespace: engineNamespaceName,
 			namespaceId: engineNamespaceId,
-			client: createEngineClient(cloudEnv().VITE_APP_CLOUD_ENGINE_URL, {
+			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
 				token: async () => {
 					const response = await queryClient.fetchQuery(
 						parent.accessTokenQueryOptions({ namespace }),
