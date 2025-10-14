@@ -2,10 +2,6 @@
 
 package api
 
-import (
-	json "encoding/json"
-)
-
 type RunnerConfigsDeleteRequest struct {
 	Namespace string `json:"-"`
 }
@@ -18,20 +14,12 @@ type RunnerConfigsListRequest struct {
 	RunnerNames *string              `json:"-"`
 }
 
-type RunnerConfigsUpsertRequest struct {
-	Namespace string                         `json:"-"`
-	Body      RunnerConfigsUpsertRequestBody `json:"-"`
+type RunnerConfigsServerlessHealthCheckRequest struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Url     string            `json:"url"`
 }
 
-func (r *RunnerConfigsUpsertRequest) UnmarshalJSON(data []byte) error {
-	var body RunnerConfigsUpsertRequestBody
-	if err := json.Unmarshal(data, &body); err != nil {
-		return err
-	}
-	r.Body = body
-	return nil
-}
-
-func (r *RunnerConfigsUpsertRequest) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.Body)
+type RunnerConfigsUpsertRequestBody struct {
+	Namespace   string                   `json:"-"`
+	Datacenters map[string]*RunnerConfig `json:"datacenters,omitempty"`
 }
