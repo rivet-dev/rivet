@@ -39,6 +39,7 @@ const stepper = defineStepper(
 			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
 			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
 			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
 			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
 		}),
 	},
@@ -99,9 +100,10 @@ function FormStepper({
 	onClose?: () => void;
 	datacenters: Region[];
 }) {
+	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
-		...useEngineCompatDataProvider().createRunnerConfigMutationOptions(),
-		onSuccess: () => {
+		...provider.upsertRunnerConfigMutationOptions(),
+		onSuccess: async () => {
 			confetti({
 				angle: 60,
 				spread: 55,
@@ -112,6 +114,10 @@ function FormStepper({
 				spread: 55,
 				origin: { x: 1 },
 			});
+
+			await queryClient.invalidateQueries(
+				provider.runnerConfigsQueryOptions(),
+			);
 			onClose?.();
 		},
 	});
@@ -166,6 +172,7 @@ function Step1() {
 			<ConnectVercelForm.Headers />
 			<ConnectVercelForm.SlotsPerRunner />
 			<ConnectVercelForm.MaxRunners />
+			<ConnectVercelForm.MinRunners />
 			<ConnectVercelForm.RunnerMargin />
 		</div>
 	);

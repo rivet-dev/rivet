@@ -68,6 +68,7 @@ export const stepper = defineStepper(
 			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
 			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
 			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
 			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
 		}),
 	},
@@ -81,7 +82,7 @@ export const stepper = defineStepper(
 	{
 		id: "step-3",
 		title: "Deploy to Vercel",
-		assist: false,
+		assist: true,
 		next: "Done",
 		schema: z.object({
 			success: z.boolean().refine((val) => val, "Connection failed"),
@@ -187,6 +188,33 @@ export const Datacenters = function Datacenter() {
 				) : null}
 			</div>
 		</div>
+	);
+};
+
+export const MinRunners = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="minRunners"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Min Runners</FormLabel>
+					<FormControl className="row-start-2">
+						<Input
+							type="number"
+							min={1}
+							{...field}
+							value={field.value || ""}
+						/>
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The minimum number of runners to keep running.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
 	);
 };
 

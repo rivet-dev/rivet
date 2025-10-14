@@ -1,61 +1,100 @@
-import { faQuestionCircle, faRailway, Icon } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+	useMutation,
+	usePrefetchInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import * as EditRunnerConfigForm from "@/app/forms/edit-runner-config-form";
-import { HelpDropdown } from "@/app/help-dropdown";
-import { Button, type DialogContentProps, Frame } from "@/components";
+import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
+import { queryClient } from "@/queries/global";
 
 interface EditRunnerConfigFrameContentProps extends DialogContentProps {
 	name: string;
+	dc: string;
 }
 
 export default function EditRunnerConfigFrameContent({
 	name,
+	dc,
 	onClose,
 }: EditRunnerConfigFrameContentProps) {
-	const { data } = useSuspenseQuery({
-		...useEngineCompatDataProvider().runnerConfigQueryOptions(name),
-		refetchInterval: 5000,
+	const provider = useEngineCompatDataProvider();
+	usePrefetchInfiniteQuery({
+		...provider.runnerConfigsQueryOptions(),
+		pages: Infinity,
 	});
+
+	const { data } = useSuspenseInfiniteQuery({
+		...provider.runnerConfigsQueryOptions(),
+	});
+
+	const { mutateAsync } = useMutation({
+		...provider.upsertRunnerConfigMutationOptions(),
+		onSuccess: () => {
+			onClose?.();
+		},
+	});
+
+	const config = data.find(([id]) => id === name)?.[1].datacenters?.[dc]
+		.serverless;
+
+	if (!config) {
+		return (
+			<Frame.Content>
+				Selected provider config is not available in this datacenter.
+			</Frame.Content>
+		);
+	}
 
 	return (
 		<EditRunnerConfigForm.Form
-			onSubmit={async () => {
+			onSubmit={async (values) => {
+				await mutateAsync({
+					name,
+					config: {
+						[dc]: {
+							serverless: {
+								...values,
+								headers: Object.fromEntries(
+									values.headers || [],
+								),
+							},
+						},
+					},
+				});
+
+				await queryClient.invalidateQueries(
+					provider.runnerConfigsQueryOptions(),
+				);
 				onClose?.();
 			}}
 			defaultValues={{
-				url: data.serverless.url,
-				maxRunners: data.serverless.maxRunners,
-				minRunners: data.serverless.minRunners,
-				requestLifespan: data.serverless.requestLifespan,
-				runnersMargin: data.serverless.runnersMargin,
-				slotsPerRunner: data.serverless.slotsPerRunner,
+				url: config.url,
+				maxRunners: config.maxRunners,
+				minRunners: config.minRunners,
+				requestLifespan: config.requestLifespan,
+				runnersMargin: config.runnersMargin,
+				slotsPerRunner: config.slotsPerRunner,
 			}}
 		>
 			<Frame.Header>
 				<Frame.Title className="justify-between flex items-center">
-					<div>
-						Add <Icon icon={faRailway} className="ml-0.5" /> Railway
-					</div>
-					<HelpDropdown>
-						<Button variant="ghost" size="icon">
-							<Icon icon={faQuestionCircle} />
-						</Button>
-					</HelpDropdown>
+					Edit {name} Provider
 				</Frame.Title>
 			</Frame.Header>
-			<Frame.Content>
+			<Frame.Content className="space-y-4">
 				<EditRunnerConfigForm.Url />
-				<div className="grid grid-cols-2">
+				<div className="grid grid-cols-2 gap-2">
 					<EditRunnerConfigForm.MinRunners />
 					<EditRunnerConfigForm.MaxRunners />
-					<EditRunnerConfigForm.RunnersMargin />
 				</div>
-				<div className="grid grid-cols-2">
+				<div className="grid grid-cols-2 gap-2">
 					<EditRunnerConfigForm.RequestLifespan />
-					<EditRunnerConfigForm.RunnersMargin />
+					<EditRunnerConfigForm.SlotsPerRunner />
 				</div>
-				<EditRunnerConfigForm.SlotsPerRunner />
+
+				<EditRunnerConfigForm.RunnersMargin />
+				<EditRunnerConfigForm.Headers />
 				<div className="flex justify-end mt-4">
 					<EditRunnerConfigForm.Submit>
 						Save

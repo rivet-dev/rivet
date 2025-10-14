@@ -4,21 +4,28 @@ import { createOrganizationContext } from "@/app/data-providers/cloud-data-provi
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization")({
 	component: RouteComponent,
-	beforeLoad: ({ context, params }) => {
-		return match(context)
-			.with({ __type: "cloud" }, (context) => ({
-				dataProvider: {
-					...context.dataProvider,
-					...createOrganizationContext({
+	beforeLoad: async ({ context, params }) => {
+		return await match(context)
+			.with({ __type: "cloud" }, async (context) => {
+				context.clerk.setActive({
+					organization: params.organization,
+				});
+				return {
+					dataProvider: {
 						...context.dataProvider,
-						organization: params.organization,
-					}),
-				},
-			}))
+						...createOrganizationContext({
+							...context.dataProvider,
+							organization: params.organization,
+						}),
+					},
+				};
+			})
 			.otherwise(() => {
 				throw new Error("Invalid context type for this route");
 			});
 	},
+	pendingMinMs: 0,
+	pendingMs: 0,
 });
 
 function RouteComponent() {

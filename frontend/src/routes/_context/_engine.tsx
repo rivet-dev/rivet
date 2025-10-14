@@ -40,6 +40,8 @@ function EngineModals() {
 	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
 	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
+	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
+	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
 
 	return (
 		<>
@@ -166,6 +168,47 @@ function EngineModals() {
 				}}
 				dialogProps={{
 					open: search.modal === "connect-hetzner",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+
+			<EditProviderConfigDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				name={search.config}
+				dc={search.dc}
+				dialogProps={{
+					open: search.modal === "edit-provider-config",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteConfigDialog
+				name={search.config}
+				dialogProps={{
+					open: search.modal === "delete-provider-config",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

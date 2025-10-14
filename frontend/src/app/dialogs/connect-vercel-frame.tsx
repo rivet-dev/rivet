@@ -20,6 +20,7 @@ import {
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
+import { queryClient } from "@/queries/global";
 
 const { stepper } = ConnectVercelForm;
 
@@ -47,11 +48,6 @@ export default function CreateProjectFrameContent({
 						Add <Icon icon={faVercel} className="ml-0.5" />
 						Vercel
 					</div>
-					<HelpDropdown>
-						<Button variant="ghost" size="icon">
-							<Icon icon={faQuestionCircle} />
-						</Button>
-					</HelpDropdown>
 				</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
@@ -68,9 +64,10 @@ function FormStepper({
 	onClose?: () => void;
 	datacenters: Region[];
 }) {
+	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
-		...useEngineCompatDataProvider().createRunnerConfigMutationOptions(),
-		onSuccess: () => {
+		...provider.upsertRunnerConfigMutationOptions(),
+		onSuccess: async () => {
 			confetti({
 				angle: 60,
 				spread: 55,
@@ -81,6 +78,7 @@ function FormStepper({
 				spread: 55,
 				origin: { x: 1 },
 			});
+			await queryClient.invalidateQueries(provider.runnerConfigsQueryOptions());
 			onClose?.();
 		},
 	});
@@ -127,6 +125,7 @@ function FormStepper({
 				plan: "hobby",
 				runnerName: "default",
 				slotsPerRunner: 25,
+				minRunners: 1,
 				maxRunners: 1000,
 				runnerMargin: 0,
 				headers: [],
@@ -153,6 +152,7 @@ function Step1() {
 						<ConnectVercelForm.Datacenters />
 						<ConnectVercelForm.Headers />
 						<ConnectVercelForm.SlotsPerRunner />
+						<ConnectVercelForm.MinRunners />
 						<ConnectVercelForm.MaxRunners />
 						<ConnectVercelForm.RunnerMargin />
 					</AccordionContent>
