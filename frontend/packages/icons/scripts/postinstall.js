@@ -34,7 +34,7 @@ if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
 				private: true,
 				sideEffects: false,
 				dependencies: {
-					"@awesome.me/kit-63db24046b": "^1.0.18",
+					"@awesome.me/kit-63db24046b": "1.0.26",
 					"@fortawesome/pro-regular-svg-icons": "6.6.0",
 					"@fortawesome/pro-solid-svg-icons": "6.6.0",
 				},

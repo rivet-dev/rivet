@@ -388,15 +388,20 @@ export const createNamespaceContext = ({
 				},
 			};
 		},
-		runnerHealthCheckQueryOptions(opts: { runnerUrl: string }) {
+		runnerHealthCheckQueryOptions(opts: {
+			runnerUrl: string;
+			headers: Record<string, string>;
+		}) {
 			return queryOptions({
-				queryKey: ["runner", "healthcheck", opts.runnerUrl],
+				queryKey: ["runner", "healthcheck", opts],
 				enabled: !!opts.runnerUrl,
 				queryFn: async ({ signal: abortSignal }) => {
 					const res =
 						await client.runnerConfigs.serverlessHealthCheck(
 							{
 								url: opts.runnerUrl,
+								headers: opts.headers,
+								namespace,
 							},
 							{ abortSignal },
 						);

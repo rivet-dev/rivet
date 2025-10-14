@@ -19,59 +19,9 @@ import {
 	Frame,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
-import { defineStepper } from "@/components/ui/stepper";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
-const stepper = defineStepper(
-	{
-		id: "step-1",
-		title: "Configure",
-		assist: false,
-		next: "Next",
-		schema: z.object({
-			plan: z.string().min(1, "Please select a Vercel plan"),
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenters: z
-				.record(z.boolean())
-				.refine(
-					(data) => Object.values(data).some(Boolean),
-					"At least one datacenter must be selected",
-				),
-			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
-		}),
-	},
-	{
-		id: "step-2",
-		title: "Edit vercel.json",
-		assist: false,
-		next: "Next",
-		schema: z.object({}),
-	},
-	{
-		id: "step-3",
-		title: "Deploy to Vercel",
-		assist: false,
-		next: "Next",
-		schema: z.object({
-			endpoint: z
-				.string()
-				.nonempty("Endpoint is required")
-				.url("Please enter a valid URL"),
-		}),
-	},
-	{
-		id: "step-4",
-		title: "Confirm Connection",
-		assist: true,
-		next: "Add",
-		schema: z.object({
-			success: z.boolean().refine((val) => val, "Connection failed"),
-		}),
-	},
-);
+const {stepper} = ConnectVercelForm;
 
 type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
@@ -141,7 +91,6 @@ function FormStepper({
 				"step-1": () => <Step1 />,
 				"step-2": () => <Step2 />,
 				"step-3": () => <Step3 />,
-				"step-4": () => <Step4 />,
 			}}
 			onSubmit={async ({ values }) => {
 				const selectedDatacenters = Object.entries(values.datacenters)
@@ -234,12 +183,8 @@ function Step3() {
 			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
+				 <ConnectVercelForm.ConnectionCheck />
 			</div>
 		</>
 	);
-}
-
-function Step4() {
-	const endpoint = useWatch<FormValues>({ name: "endpoint" });
-	return <ConnectVercelForm.ConnectionCheck endpoint={endpoint || ""} />;
 }

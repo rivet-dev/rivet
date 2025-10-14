@@ -95,7 +95,7 @@ interface CodeFrameProps {
 	title?: string;
 	language: keyof typeof languageNames;
 	isInGroup?: boolean;
-	code?: string;
+	code?: () => string | string;
 	children?: ReactElement;
 }
 export const CodeFrame = ({

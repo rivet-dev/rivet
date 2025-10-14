@@ -4,6 +4,7 @@ import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
 import { InspectorRoot } from "@/app/inspector-root";
 import { Logo } from "@/app/logo";
 import { Card } from "@/components";
+import { redirectToOrganization } from "@/lib/auth";
 
 export const Route = createFileRoute("/_context/")({
 	component: () =>
@@ -13,18 +14,11 @@ export const Route = createFileRoute("/_context/")({
 			.with("inspector", () => <InspectorRoute />)
 			.exhaustive(),
 	beforeLoad: async ({ context, search }) => {
-		return match(context)
-			.with({ __type: "cloud" }, () => {
-				const { organization } = context.clerk ?? {};
-				if (!organization) {
-					throw redirect({
-						to: "/onboarding/choose-organization",
-					});
+		return await match(context)
+			.with({ __type: "cloud" }, async () => {
+				if (!(await redirectToOrganization(context.clerk))) {
+					throw redirect({ to: "/login" });
 				}
-				throw redirect({
-					to: "/orgs/$organization",
-					params: { organization: organization?.id },
-				});
 			})
 			.with({ __type: "engine" }, async (ctx) => {
 				try {
