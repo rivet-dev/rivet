@@ -188,7 +188,7 @@ export function DiscreteInput({
 			<Input
 				type={finalShow ? "text" : "password"}
 				readOnly
-				value={finalShow ? value : "very-secure-password"}
+				value={value}
 				className={cn("font-mono", !show ? "pr-16" : "pr-8")}
 			/>
 			<div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50 flex gap-1">

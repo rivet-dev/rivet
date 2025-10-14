@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 import { BuildPrefiller } from "@/app/build-prefiller";
+import { useDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
@@ -40,6 +41,12 @@ async function getAnyBuild(context: InferAllContext<typeof Route>) {
 
 export function RouteComponent() {
 	const { actorId, n } = Route.useSearch();
+	const provider = useDataProvider();
+
+	// HACK: not sure why it happens
+	if (!provider.buildsQueryOptions) {
+		return null;
+	}
 
 	return (
 		<>

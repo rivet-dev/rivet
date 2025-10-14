@@ -66,7 +66,7 @@ function SecretToken() {
 		<div className="space-y-2">
 			<Label>Secret Token</Label>
 			{isLoading ? (
-				<Skeleton className="w-56 h-10" />
+				<Skeleton className="w-full h-10" />
 			) : (
 				<DiscreteInput value={data || ""} />
 			)}
@@ -90,7 +90,7 @@ function PublishableToken() {
 		<div className="space-y-2">
 			<Label>Publishable Token</Label>
 			{isLoading ? (
-				<Skeleton className="w-56 h-10" />
+				<Skeleton className="w-full h-10" />
 			) : (
 				<DiscreteInput value={data || ""} />
 			)}

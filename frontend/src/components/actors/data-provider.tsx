@@ -13,7 +13,8 @@ export const useDataProvider = () =>
 			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once
 			return useRouteContext({
 				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
-			}).dataProvider;
+				select: (ctx) => ctx.dataProvider,
+			});
 		})
 		.with("engine", () => {
 			// biome-ignore lint/correctness/useHookAtTopLevel: runs only once

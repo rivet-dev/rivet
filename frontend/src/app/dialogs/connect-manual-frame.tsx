@@ -1,16 +1,8 @@
-import { faRailway, Icon } from "@rivet-gg/icons";
-import {
-	useQuery,
-	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { faRailway, faServer, Icon } from "@rivet-gg/icons";
+import { useQuery } from "@tanstack/react-query";
 import { useFormContext } from "react-hook-form";
 import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
 import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
 	Button,
 	CopyButton,
 	type DialogContentProps,
@@ -31,7 +23,7 @@ const { Stepper } = defineStepper(
 	},
 	{
 		id: "step-1",
-		title: "Deploy to Railway",
+		title: "Deploy",
 	},
 	{
 		id: "step-3",
@@ -39,34 +31,25 @@ const { Stepper } = defineStepper(
 	},
 );
 
-interface ConnectRailwayFrameContentProps extends DialogContentProps {}
+interface ConnectManualFrameContentProps extends DialogContentProps {}
 
-export default function ConnectRailwayFrameContent({
+export default function ConnectManualFrameContent({
 	onClose,
-}: ConnectRailwayFrameContentProps) {
-	const { data } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
-	);
-
-	const prefferedRegionForRailway =
-		data.find((region) => region.name.toLowerCase().includes("us-west"))
-			?.id ||
-		data.find((region) => region.name.toLowerCase().includes("ore"))?.id ||
-		"auto";
-
+}: ConnectManualFrameContentProps) {
 	return (
 		<ConnectRailwayForm.Form
 			onSubmit={async () => {}}
 			mode="onChange"
 			defaultValues={{
 				runnerName: "default",
-				datacenter: prefferedRegionForRailway,
+				datacenter: "auto",
 			}}
 		>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faRailway} className="ml-0.5" /> Railway
+						Add <Icon icon={faServer} className="ml-0.5" /> Manual
+						Runner
 					</div>
 				</Frame.Title>
 			</Frame.Header>
@@ -96,40 +79,17 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 										<Stepper.Panel className="space-y-4">
 											{step.id === "initial" && (
 												<>
-													We're going to help you
-													deploy a RivetKit project to
-													Railway and connect it to
-													Rivet.
-													<Accordion
-														type="single"
-														collapsible
-													>
-														<AccordionItem value="item-1">
-															<AccordionTrigger>
-																Advanced options
-															</AccordionTrigger>
-															<AccordionContent className="px-2 space-y-2">
-																<ConnectRailwayForm.RunnerName />
-																<ConnectRailwayForm.Datacenter />
-															</AccordionContent>
-														</AccordionItem>
-													</Accordion>
+													<p>
+														Connect any
+														RivetKit-compatible
+														runner.
+													</p>
+													<ConnectRailwayForm.RunnerName />
+													<ConnectRailwayForm.Datacenter />
 												</>
 											)}
 											{step.id === "step-1" && (
-												<>
-													<p>
-														Deploy any RivetKit app
-														to Railway.
-													</p>
-													<p>
-														Or use our Railway
-														template to get started
-														quickly.
-													</p>
-													<DeployToRailwayButton />
-													<EnvVariablesStep />
-												</>
+												<EnvVariablesStep />
 											)}
 											{step.id === "step-3" && (
 												<div>
@@ -175,10 +135,7 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 function EnvVariablesStep() {
 	return (
 		<>
-			<p>
-				Set the following environment variables in your Railway project
-				settings.
-			</p>
+			<p>Set the following environment variables in your deployment.</p>
 			<div>
 				<div
 					className="gap-1 items-center grid grid-cols-2"
@@ -302,33 +259,6 @@ function RivetNamespaceEnv() {
 				show
 			/>
 		</>
-	);
-}
-
-function DeployToRailwayButton() {
-	const dataProvider = useEngineCompatDataProvider();
-	const { watch } = useFormContext();
-
-	const url = useSelectedDatacenter();
-	const { data } = useQuery(dataProvider.engineAdminTokenQueryOptions());
-	const runnerName = watch("runnerName");
-	return (
-		<a
-			href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data}&RIVET_ENDPOINT=${
-				url || ""
-			}&RIVET_NAMESPACE=${
-				dataProvider.engineNamespace || ""
-			}&RIVET_RUNNER=${runnerName || ""}`}
-			target="_blank"
-			rel="noreferrer"
-			className="inline-block h-10"
-		>
-			<img
-				height={40}
-				src="https://railway.com/button.svg"
-				alt="Deploy to Railway"
-			/>
-		</a>
 	);
 }
 

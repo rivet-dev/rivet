@@ -232,7 +232,10 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			))}
 			<DropdownMenuItem
 				onSelect={() => {
-					clerk.openCreateOrganization({ hideSlug: true });
+					clerk.openCreateOrganization({
+						hideSlug: true,
+						afterCreateOrganizationUrl: (org) => `/orgs/${org.id}`,
+					});
 				}}
 				indicator={<Icon icon={faPlus} className="size-4" />}
 			>

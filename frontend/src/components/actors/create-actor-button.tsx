@@ -9,7 +9,8 @@ export function CreateActorButton(props: ButtonProps) {
 	const navigate = useNavigate();
 
 	const provider = useDataProvider();
-	const { data } = useInfiniteQuery(useDataProvider().buildsQueryOptions());
+
+	const { data } = useInfiniteQuery(provider.buildsQueryOptions());
 
 	const { copy } = useActorsView();
 
