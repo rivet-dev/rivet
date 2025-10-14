@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
-import z from "zod";
+import type z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { HelpDropdown } from "@/app/help-dropdown";
 import {
@@ -21,7 +21,7 @@ import {
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
-const {stepper} = ConnectVercelForm;
+const { stepper } = ConnectVercelForm;
 
 type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
@@ -183,7 +183,7 @@ function Step3() {
 			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
-				 <ConnectVercelForm.ConnectionCheck />
+				<ConnectVercelForm.ConnectionCheck />
 			</div>
 		</>
 	);
