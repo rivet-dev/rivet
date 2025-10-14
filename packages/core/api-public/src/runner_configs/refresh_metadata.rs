@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Result, anyhow};
 use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
