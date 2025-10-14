@@ -20,13 +20,13 @@ use crate::ctx::ApiCtx;
 #[into_params(parameter_in = Query)]
 pub struct GetOrCreateQuery {
 	pub namespace: String,
-	pub datacenter: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[schema(as = ActorsGetOrCreateRequest)]
 pub struct GetOrCreateRequest {
+	pub datacenter: Option<String>,
 	pub name: String,
 	pub key: String,
 	pub input: Option<String>,
@@ -127,7 +127,7 @@ async fn get_or_create_inner(
 		namespace.namespace_id,
 		&query.namespace,
 		&body.runner_name_selector,
-		query.datacenter.as_ref().map(String::as_str),
+		body.datacenter.as_ref().map(String::as_str),
 	)
 	.await?;
 
@@ -143,7 +143,7 @@ async fn get_or_create_inner(
 			input: body.input.clone(),
 			crash_policy: body.crash_policy,
 			forward_request: true,
-			datacenter_name: query.datacenter.clone(),
+			datacenter_name: body.datacenter.clone(),
 		})
 		.await
 	{
