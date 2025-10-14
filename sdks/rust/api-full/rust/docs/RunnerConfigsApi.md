@@ -74,7 +74,7 @@ Name | Type | Description  | Required | Notes
 
 ## runner_configs_serverless_health_check
 
-> models::RunnerConfigsServerlessHealthCheckResponse runner_configs_serverless_health_check(runner_configs_serverless_health_check_request)
+> models::RunnerConfigsServerlessHealthCheckResponse runner_configs_serverless_health_check(namespace, runner_configs_serverless_health_check_request)
 
 
 ### Parameters
@@ -82,6 +82,7 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
+**namespace** | **String** |  | [required] |
 **runner_configs_serverless_health_check_request** | [**RunnerConfigsServerlessHealthCheckRequest**](RunnerConfigsServerlessHealthCheckRequest.md) |  | [required] |
 
 ### Return type

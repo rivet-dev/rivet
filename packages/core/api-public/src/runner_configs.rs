@@ -7,8 +7,8 @@ use axum::{
 };
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_api_builder::{
-	extract::{Extension, Json, Path, Query},
 	ApiError,
+	extract::{Extension, Json, Path, Query},
 };
 use rivet_api_peer::runner_configs::*;
 use rivet_api_types::{pagination::Pagination, runner_configs::list::*};

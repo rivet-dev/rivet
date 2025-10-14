@@ -4,6 +4,5 @@
 
 export interface RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema {
     runtime: string;
-    status: string;
     version: string;
 }

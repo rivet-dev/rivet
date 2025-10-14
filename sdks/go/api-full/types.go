@@ -10,8 +10,8 @@ import (
 
 type ActorsCreateRequest struct {
 	Namespace          string      `json:"-"`
-	Datacenter         *string     `json:"-"`
 	CrashPolicy        CrashPolicy `json:"crash_policy,omitempty"`
+	Datacenter         *string     `json:"datacenter,omitempty"`
 	Input              *string     `json:"input,omitempty"`
 	Key                *string     `json:"key,omitempty"`
 	Name               string      `json:"name"`
@@ -24,8 +24,8 @@ type ActorsDeleteRequest struct {
 
 type ActorsGetOrCreateRequest struct {
 	Namespace          string      `json:"-"`
-	Datacenter         *string     `json:"-"`
 	CrashPolicy        CrashPolicy `json:"crash_policy,omitempty"`
+	Datacenter         *string     `json:"datacenter,omitempty"`
 	Input              *string     `json:"input,omitempty"`
 	Key                string      `json:"key"`
 	Name               string      `json:"name"`
@@ -1030,7 +1030,6 @@ func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema) String() 
 
 type RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema struct {
 	Runtime string `json:"runtime"`
-	Status  string `json:"status"`
 	Version string `json:"version"`
 
 	_rawJSON json.RawMessage

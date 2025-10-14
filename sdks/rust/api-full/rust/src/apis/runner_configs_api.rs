@@ -141,13 +141,15 @@ pub async fn runner_configs_list(configuration: &configuration::Configuration, n
     }
 }
 
-pub async fn runner_configs_serverless_health_check(configuration: &configuration::Configuration, runner_configs_serverless_health_check_request: models::RunnerConfigsServerlessHealthCheckRequest) -> Result<models::RunnerConfigsServerlessHealthCheckResponse, Error<RunnerConfigsServerlessHealthCheckError>> {
+pub async fn runner_configs_serverless_health_check(configuration: &configuration::Configuration, namespace: &str, runner_configs_serverless_health_check_request: models::RunnerConfigsServerlessHealthCheckRequest) -> Result<models::RunnerConfigsServerlessHealthCheckResponse, Error<RunnerConfigsServerlessHealthCheckError>> {
     // add a prefix to parameters to efficiently prevent name collisions
+    let p_namespace = namespace;
     let p_runner_configs_serverless_health_check_request = runner_configs_serverless_health_check_request;
 
     let uri_str = format!("{}/runner-configs/serverless-health-check", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
+    req_builder = req_builder.query(&[("namespace", &p_namespace.to_string())]);
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

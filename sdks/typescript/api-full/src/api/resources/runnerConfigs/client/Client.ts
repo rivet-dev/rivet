@@ -125,6 +125,7 @@ export class RunnerConfigs {
      *
      * @example
      *     await client.runnerConfigs.serverlessHealthCheck({
+     *         namespace: "namespace",
      *         url: "url"
      *     })
      */
@@ -132,6 +133,9 @@ export class RunnerConfigs {
         request: Rivet.RunnerConfigsServerlessHealthCheckRequest,
         requestOptions?: RunnerConfigs.RequestOptions,
     ): Promise<Rivet.RunnerConfigsServerlessHealthCheckResponse> {
+        const { namespace, ..._body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.baseUrl)) ??
@@ -147,8 +151,9 @@ export class RunnerConfigs {
                 ...requestOptions?.headers,
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.RunnerConfigsServerlessHealthCheckRequest.jsonOrThrow(request, {
+            body: serializers.RunnerConfigsServerlessHealthCheckRequest.jsonOrThrow(_body, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,

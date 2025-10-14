@@ -135,9 +135,6 @@ func (c *Client) ActorsCreate(ctx context.Context, request *sdk.ActorsCreateRequ
 
 	queryParams := make(url.Values)
 	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
-	if request.Datacenter != nil {
-		queryParams.Add("datacenter", fmt.Sprintf("%v", *request.Datacenter))
-	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}
@@ -192,9 +189,6 @@ func (c *Client) ActorsGetOrCreate(ctx context.Context, request *sdk.ActorsGetOr
 
 	queryParams := make(url.Values)
 	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
-	if request.Datacenter != nil {
-		queryParams.Add("datacenter", fmt.Sprintf("%v", *request.Datacenter))
-	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}

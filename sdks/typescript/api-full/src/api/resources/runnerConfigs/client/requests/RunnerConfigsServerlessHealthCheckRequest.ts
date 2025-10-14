@@ -5,10 +5,12 @@
 /**
  * @example
  *     {
+ *         namespace: "namespace",
  *         url: "url"
  *     }
  */
 export interface RunnerConfigsServerlessHealthCheckRequest {
+    namespace: string;
     headers?: Record<string, string>;
     url: string;
 }

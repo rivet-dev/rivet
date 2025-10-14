@@ -24,19 +24,15 @@ pub enum ActorsGetOrCreateError {
 
 
 /// **If actor exists**  2 round trips: - namespace::ops::resolve_for_name_global - GET /actors/{}  **If actor does not exist and is created in the current datacenter:**  2 round trips: - namespace::ops::resolve_for_name_global - [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)  **If actor does not exist and is created in a different datacenter:**  3 round trips: - namespace::ops::resolve_for_name_global - POST /actors to remote datacenter - [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)  actor::get will always be in the same datacenter.  ## Optimized Alternative Routes
-pub async fn actors_get_or_create(configuration: &configuration::Configuration, namespace: &str, actors_get_or_create_request: models::ActorsGetOrCreateRequest, datacenter: Option<&str>) -> Result<models::ActorsGetOrCreateResponse, Error<ActorsGetOrCreateError>> {
+pub async fn actors_get_or_create(configuration: &configuration::Configuration, namespace: &str, actors_get_or_create_request: models::ActorsGetOrCreateRequest) -> Result<models::ActorsGetOrCreateResponse, Error<ActorsGetOrCreateError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_namespace = namespace;
     let p_actors_get_or_create_request = actors_get_or_create_request;
-    let p_datacenter = datacenter;
 
     let uri_str = format!("{}/actors", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::PUT, &uri_str);
 
     req_builder = req_builder.query(&[("namespace", &p_namespace.to_string())]);
-    if let Some(ref param_value) = p_datacenter {
-        req_builder = req_builder.query(&[("datacenter", &param_value.to_string())]);
-    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
