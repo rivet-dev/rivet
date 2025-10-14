@@ -1,12 +1,11 @@
 import { faCheck, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import z from "zod";
 import { cn, createSchemaForm } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { NeedHelp } from "./connect-vercel-form";
+import confetti from "canvas-confetti";
 
 export const formSchema = z.object({});
 
@@ -37,15 +36,27 @@ export const ConnectionCheck = function ConnectionCheck() {
 	const success =
 		data !== undefined && data > 0 && data !== lastCount.current;
 
+	useEffect(() => {
+		if(success){
+			confetti({
+				angle: 60,
+				spread: 55,
+				origin: { x: 0 },
+			});
+			confetti({
+				angle: 120,
+				spread: 55,
+				origin: { x: 1 },
+			});
+		}
+	}, [success])
+
 	return (
-		<motion.div
-			layoutId="msg"
+		<div
 			className={cn(
-				"text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-center",
+				"text-center h-24 text-muted-foreground text-sm overflow-hidden flex items-center justify-center",
 				success && "text-primary-foreground",
 			)}
-			initial={{ height: 0, opacity: 0.5 }}
-			animate={{ height: "6rem", opacity: 1 }}
 		>
 			{success ? (
 				<>
@@ -61,9 +72,8 @@ export const ConnectionCheck = function ConnectionCheck() {
 						/>{" "}
 						Waiting for Runner to connect...
 					</div>
-					<NeedHelp />
 				</div>
 			)}
-		</motion.div>
+		</div>
 	);
 };

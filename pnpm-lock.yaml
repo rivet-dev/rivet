@@ -245,6 +245,9 @@ importers:
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
+      '@types/canvas-confetti':
+        specifier: ^1.9.0
+        version: 1.9.0
       '@types/escape-html':
         specifier: ^1.0.4
         version: 1.0.4
@@ -287,6 +290,9 @@ importers:
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      canvas-confetti:
+        specifier: ^1.9.3
+        version: 1.9.3
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -3699,6 +3705,9 @@ packages:
   '@types/bcryptjs@2.4.6':
     resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
 
+  '@types/canvas-confetti@1.9.0':
+    resolution: {integrity: sha512-aBGj/dULrimR1XDZLtG9JwxX1b4HPRF6CX9Yfwh3NvstZEm1ZL7RBnel4keCPSqs1ANRu1u2Aoz9R+VmtjYuTg==}
+
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
 
@@ -4409,6 +4418,9 @@ packages:
 
   caniuse-lite@1.0.30001741:
     resolution: {integrity: sha512-QGUGitqsc8ARjLdgAfxETDhRbJ0REsP6O3I96TAth/mVjh2cYzN2u+3AzPP3aVSm2FehEItaJw1xd+IGBXWeSw==}
+
+  canvas-confetti@1.9.3:
+    resolution: {integrity: sha512-rFfTURMvmVEX1gyXFgn5QMn81bYk70qa0HLzcIOSVEyl57n6o9ItHeBtUSWdvKAPY0xlvBHno4/v3QPrT83q9g==}
 
   cbor-extract@2.2.0:
     resolution: {integrity: sha512-Ig1zM66BjLfTXpNgKpvBePq271BPOvu8MR0Jl080yG7Jsl+wAZunfrwiwA+9ruzm/WEdIV5QF/bjDZTqyAIVHA==}
@@ -11100,6 +11112,8 @@ snapshots:
 
   '@types/bcryptjs@2.4.6': {}
 
+  '@types/canvas-confetti@1.9.0': {}
+
   '@types/cors@2.8.19':
     dependencies:
       '@types/node': 24.3.1
@@ -11895,6 +11909,8 @@ snapshots:
 
   caniuse-lite@1.0.30001741: {}
 
+  canvas-confetti@1.9.3: {}
+
   cbor-extract@2.2.0:
     dependencies:
       node-gyp-build-optional-packages: 5.1.1
@@ -12543,7 +12559,7 @@ snapshots:
       eslint: 8.26.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.26.0)
       eslint-plugin-react: 7.37.5(eslint@8.26.0)
       eslint-plugin-react-hooks: 4.6.2(eslint@8.26.0)
@@ -12565,7 +12581,7 @@ snapshots:
     dependencies:
       debug: 4.4.1
       eslint: 8.26.0
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
       glob: 7.2.3
       is-glob: 4.0.3
       resolve: 1.22.10
@@ -12584,7 +12600,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
