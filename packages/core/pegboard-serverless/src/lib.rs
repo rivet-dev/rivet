@@ -338,7 +338,8 @@ async fn outbound_handler(
 		.chain(token)
 		.collect();
 
-	let req = client.get(url).headers(headers);
+	let endpoint_url = format!("{}/start", url.trim_end_matches('/'));
+	let req = client.get(endpoint_url).headers(headers);
 
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 	let mut runner_id = None;
