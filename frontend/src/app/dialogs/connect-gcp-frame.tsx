@@ -198,10 +198,9 @@ function Step3({ provider = "gcp" }: { provider?: string }) {
 
 	const success = chosenDatacenters
 		.map((dc) =>
-			queryData?.find((runner) =>
-				runner.datacenter === dc &&
-				runner.name === runnerName &&
-		
+			queryData?.find(
+				(runner) =>
+					runner.datacenter === dc && runner.name === runnerName,
 			),
 		)
 		.every((v) => v);
