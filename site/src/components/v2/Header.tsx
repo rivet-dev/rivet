@@ -7,7 +7,9 @@ import { Icon, faDiscord } from "@rivet-gg/icons";
 import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@rivet-gg/components";
+import { faChevronDown } from "@rivet-gg/icons";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
 import { LogoContextMenu } from "./LogoContextMenu";
@@ -99,35 +101,23 @@ export function Header({
 					<RivetHeader
 						className={headerStyles}
 						logo={
-							<LogoContextMenu>
-								<Link href="/">
-									<Image
-										src={logoUrl.src || logoUrl}
-										width={80}
-										height={24}
-										className="ml-1 w-20"
-										alt="Rivet logo"
-										unoptimized
-									/>
-								</Link>
-							</LogoContextMenu>
-						}
-						subnav={subnav}
-						support={
-							<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
-								<RivetHeader.NavItem asChild>
-									<Link href="https://dashboard.rivet.dev">
-										Sign In
+							<div className="hidden md:block">
+								<LogoContextMenu>
+									<Link href="/">
+										<Image
+											src={logoUrl.src || logoUrl}
+											width={80}
+											height={24}
+											className="ml-1 w-20"
+											alt="Rivet logo"
+											unoptimized
+										/>
 									</Link>
-								</RivetHeader.NavItem>
-								<RivetHeader.NavItem asChild>
-									<Link href="https://rivet.dev/discord">Discord</Link>
-								</RivetHeader.NavItem>
-								<RivetHeader.NavItem asChild>
-									<Link href="/support">Support</Link>
-								</RivetHeader.NavItem>
+								</LogoContextMenu>
 							</div>
 						}
+						subnav={subnav}
+						support={null}
 						links={
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
@@ -200,33 +190,23 @@ export function Header({
 				subnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
 			)}
 			logo={
-				<LogoContextMenu>
-					<Link href="/">
-						<Image
-							src={logoUrl.src || logoUrl}
-							width={80}
-							height={24}
-							className="ml-1 w-20"
-							alt="Rivet logo"
-							unoptimized
-						/>
-					</Link>
-				</LogoContextMenu>
-			}
-			subnav={subnav}
-			support={
-				<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
-					<RivetHeader.NavItem asChild>
-						<Link href="https://dashboard.rivet.dev">Sign In</Link>
-					</RivetHeader.NavItem>
-					<RivetHeader.NavItem asChild>
-						<Link href="/discord">Discord</Link>
-					</RivetHeader.NavItem>
-					<RivetHeader.NavItem asChild>
-						<Link href="/support">Support</Link>
-					</RivetHeader.NavItem>
+				<div className="hidden md:block">
+					<LogoContextMenu>
+						<Link href="/">
+							<Image
+								src={logoUrl.src || logoUrl}
+								width={80}
+								height={24}
+								className="ml-1 w-20"
+								alt="Rivet logo"
+								unoptimized
+							/>
+						</Link>
+					</LogoContextMenu>
 				</div>
 			}
+			subnav={subnav}
+			support={null}
 			links={
 				<div className="flex flex-row items-center">
 					<div className="mr-4">
@@ -275,43 +255,70 @@ export function Header({
 
 function DocsMobileNavigation({ tree }) {
 	const pathname = usePathname() || "";
+	const router = useRouter();
+	const isDocsPage = pathname.startsWith("/docs");
 
-	const docsLinks = [
-		{ href: "/docs/actors", label: "Actors" },
+	// Determine current section based on pathname
+	const getCurrentSection = () => {
+		if (pathname.startsWith("/docs/actors")) return "actors";
+		if (pathname.startsWith("/docs/integrations")) return "integrations";
+		if (pathname.startsWith("/docs/api")) return "api";
+		return "overview";
+	};
+
+	const sections = [
+		{ id: "overview", label: "Overview", href: "/docs" },
+		{ id: "actors", label: "Actors", href: "/docs/actors" },
+		{ id: "integrations", label: "Integrations", href: "/docs/integrations" },
+		{ id: "api", label: "API Reference", href: "/docs/api" },
 	];
 
-	const otherLinks = [
+	const mainLinks = [
+		{ href: "/docs", label: "Documentation" },
 		{ href: "/changelog", label: "Changelog" },
 		{ href: "/pricing", label: "Pricing" },
 	];
 
-	return (
-		<div className="flex flex-col gap-4 font-v2 subpixel-antialiased">
-			{/* Docs section */}
-			<div className="text-foreground">Documentation</div>
-			<div className="">
-				{docsLinks.map(({ href, label }) => (
-					<div key={href} className="ml-2">
-						<RivetHeader.NavItem asChild>
-							<ActiveLink includeChildren tree={tree} href={href}>
-								{label}
-							</ActiveLink>
-						</RivetHeader.NavItem>
-					</div>
-				))}
-			</div>
+	const currentSection = sections.find(s => s.id === getCurrentSection());
 
-			{/* Other links */}
-			{otherLinks.map(({ href, external, label }) => (
-				<RivetHeader.NavItem key={href} asChild>
-					<ActiveLink
-						href={href}
-						target={external ? "_blank" : undefined}
-					>
-						{label}
-					</ActiveLink>
-				</RivetHeader.NavItem>
+	return (
+		<div className="flex flex-col gap-1 font-v2 subpixel-antialiased text-sm">
+			{/* Main navigation links */}
+			{mainLinks.map(({ href, label }) => (
+				<Link key={href} href={href} className="text-foreground py-1.5 px-2 hover:bg-accent rounded-sm transition-colors">
+					{label}
+				</Link>
 			))}
+
+			{/* Separator and docs content */}
+			{isDocsPage && (
+				<>
+					<div className="border-t-2 border-border/50 my-2" />
+
+					{/* Section dropdown */}
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="outline" className="w-full justify-between h-9 text-sm">
+								{currentSection?.label || "Select Section"}
+								<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent className="w-[calc(100vw-3rem)]">
+							{sections.map(({ id, label, href }) => (
+								<DropdownMenuItem
+									key={id}
+									onClick={() => router.push(href)}
+								>
+									{label}
+								</DropdownMenuItem>
+							))}
+						</DropdownMenuContent>
+					</DropdownMenu>
+
+					{/* Tree/sidebar content */}
+					{tree && <div className="mt-1">{tree}</div>}
+				</>
+			)}
 		</div>
 	);
 }
