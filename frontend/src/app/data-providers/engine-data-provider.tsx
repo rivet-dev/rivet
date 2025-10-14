@@ -388,7 +388,28 @@ export const createNamespaceContext = ({
 				},
 			};
 		},
-	} satisfies DefaultDataProvider;
+		runnerHealthCheckQueryOptions(opts: { runnerUrl: string }) {
+			return queryOptions({
+				queryKey: ["runner", "healthcheck", opts.runnerUrl],
+				enabled: !!opts.runnerUrl,
+				queryFn: async ({ signal: abortSignal }) => {
+					const res =
+						await client.runnerConfigs.serverlessHealthCheck(
+							{
+								url: opts.runnerUrl,
+							},
+							{ abortSignal },
+						);
+
+					if ("success" in res) {
+						return res.success;
+					}
+
+					throw res.failure;
+				},
+			});
+		},
+	};
 
 	return {
 		engineNamespace: namespace,
@@ -514,11 +535,11 @@ export const createNamespaceContext = ({
 					config,
 				}: {
 					name: string;
-					config: Rivet.RunnerConfig;
+					config: Record<string, Rivet.RunnerConfig>;
 				}) => {
 					const response = await client.runnerConfigs.upsert(name, {
 						namespace,
-						...config,
+						datacenters: config,
 					});
 					return response;
 				},

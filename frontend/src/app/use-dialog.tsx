@@ -17,6 +17,15 @@ export const useDialog = {
 	ConnectManual: createDialogHook(
 		() => import("@/app/dialogs/connect-manual-frame"),
 	),
+	ConnectAws: createDialogHook(
+		() => import("@/app/dialogs/connect-aws-frame"),
+	),
+	ConnectGcp: createDialogHook(
+		() => import("@/app/dialogs/connect-gcp-frame"),
+	),
+	ConnectHetzner: createDialogHook(
+		() => import("@/app/dialogs/connect-hetzner-frame"),
+	),
 	Billing: createDialogHook(() => import("@/app/dialogs/billing-frame")),
 	ProvideEngineCredentials: createDialogHook(
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),

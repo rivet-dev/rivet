@@ -1,4 +1,7 @@
 import {
+	faAws,
+	faGoogleCloud,
+	faHetzner,
 	faPlus,
 	faQuestionCircle,
 	faRailway,
@@ -14,6 +17,7 @@ import {
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { HelpDropdown } from "@/app/help-dropdown";
+import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
 import {
 	Button,
@@ -68,7 +72,10 @@ export function RouteComponent() {
 			{isLoading ? (
 				<div className="p-4 px-6 max-w-5xl ">
 					<Skeleton className="h-8 w-48 mb-4" />
-					<div className="flex flex-wrap gap-2 my-4">
+					<div className="grid grid-cols-3 gap-2 my-4">
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
 						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
@@ -77,7 +84,21 @@ export function RouteComponent() {
 			) : runnerNamesCount === 0 ? (
 				<div className="p-4 px-6 max-w-5xl">
 					<H3>Add Provider</H3>
-					<div className="flex flex-wrap gap-2 my-4">
+					<div className="grid grid-cols-3 gap-2 my-4">
+						<Button
+							size="lg"
+							variant="outline"
+							className="min-w-48 h-auto min-h-28 text-xl"
+							startIcon={<Icon icon={faVercel} />}
+							asChild
+						>
+							<RouterLink
+								to="."
+								search={{ modal: "connect-vercel" }}
+							>
+								Vercel
+							</RouterLink>
+						</Button>
 						<Button
 							size="lg"
 							variant="outline"
@@ -96,41 +117,64 @@ export function RouteComponent() {
 							size="lg"
 							variant="outline"
 							className="min-w-48 h-auto min-h-28 text-xl"
+							startIcon={<Icon icon={faAws} />}
+							asChild
+						>
+							<RouterLink
+								to="."
+								search={{ modal: "connect-aws" }}
+							>
+								AWS ECS
+							</RouterLink>
+						</Button>
+
+						<Button
+							size="lg"
+							variant="outline"
+							className="min-w-48 h-auto min-h-28 text-xl"
+							startIcon={<Icon icon={faGoogleCloud} />}
+							asChild
+						>
+							<RouterLink
+								to="."
+								search={{ modal: "connect-gcp" }}
+							>
+								Google Cloud Run
+							</RouterLink>
+						</Button>
+						<Button
+							size="lg"
+							variant="outline"
+							className="min-w-48 h-auto min-h-28 text-xl"
+							startIcon={<Icon icon={faHetzner} />}
+							asChild
+						>
+							<RouterLink
+								to="."
+								search={{ modal: "connect-hetzner" }}
+							>
+								Hetzner
+							</RouterLink>
+						</Button>
+						<Button
+							size="lg"
+							variant="outline"
+							className="min-w-48 h-auto min-h-28 text-xl"
 							startIcon={<Icon icon={faServer} />}
 							asChild
 						>
 							<RouterLink
 								to="."
-								search={{ modal: "connect-manual" }}
+								search={{ modal: "connect-custom" }}
 							>
-								Manual
-							</RouterLink>
-						</Button>
-						<Button
-							size="lg"
-							disabled
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faVercel} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-vercel" }}
-							>
-								<span className="relative right-0 top-0">
-									Vercel
-									<span className="text-[0.55rem] leading-none absolute right-0 -bottom-[0.5rem] ">
-										Coming soon!
-									</span>
-								</span>
+								Custom
 							</RouterLink>
 						</Button>
 					</div>
 				</div>
 			) : (
 				<>
-					{/* <Providers /> */}
+					<Providers />
 					<Runners />
 				</>
 			)}
@@ -139,34 +183,31 @@ export function RouteComponent() {
 }
 
 function Providers() {
-	const { data } = useInfiniteQuery({
+	const {
+		isLoading,
+		isError,
+		data: configs,
+		hasNextPage,
+		fetchNextPage,
+	} = useInfiniteQuery({
 		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
 		refetchInterval: 5000,
 	});
 
 	return (
 		<div className="p-4 px-6 max-w-5xl">
-			<H3>Configurations</H3>
-			<div className="flex flex-wrap gap-2 mt-4">
-				{data?.map(([name]) => (
-					<Button
-						key={name}
-						size="lg"
-						variant="outline"
-						className="min-w-32"
-						asChild
-					>
-						<RouterLink
-							to="."
-							search={{
-								modal: "edit-runner-config",
-								config: name,
-							}}
-						>
-							{name}
-						</RouterLink>
-					</Button>
-				))}
+			<H3>Providers</H3>
+
+			<div className="max-w-5xl mx-auto">
+				<div className="border rounded-md">
+					<RunnerConfigsTable
+						isLoading={isLoading}
+						isError={isError}
+						configs={configs || []}
+						fetchNextPage={fetchNextPage}
+						hasNextPage={hasNextPage}
+					/>
+				</div>
 			</div>
 		</div>
 	);
@@ -221,6 +262,18 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
 				<DropdownMenuItem
+					className="relative"
+					indicator={<Icon icon={faVercel} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-vercel" },
+						});
+					}}
+				>
+					Vercel
+				</DropdownMenuItem>
+				<DropdownMenuItem
 					indicator={<Icon icon={faRailway} />}
 					onSelect={() => {
 						navigate({
@@ -232,31 +285,48 @@ function ProviderDropdown({ children }: { children: React.ReactNode }) {
 					Railway
 				</DropdownMenuItem>
 				<DropdownMenuItem
+					indicator={<Icon icon={faAws} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-aws" },
+						});
+					}}
+				>
+					AWS ECS
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					indicator={<Icon icon={faGoogleCloud} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-gcp" },
+						});
+					}}
+				>
+					Google Cloud Run
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					indicator={<Icon icon={faHetzner} />}
+					onSelect={() => {
+						navigate({
+							to: ".",
+							search: { modal: "connect-hetzner" },
+						});
+					}}
+				>
+					Hetzner
+				</DropdownMenuItem>
+				<DropdownMenuItem
 					indicator={<Icon icon={faServer} />}
 					onSelect={() => {
 						navigate({
 							to: ".",
-							search: { modal: "connect-manual" },
+							search: { modal: "connect-custom" },
 						});
 					}}
 				>
-					Manual
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					disabled
-					className="relative"
-					indicator={<Icon icon={faVercel} />}
-					onSelect={() => {
-						navigate({
-							to: ".",
-							search: { modal: "connect-vercel" },
-						});
-					}}
-				>
-					Vercel{" "}
-					<span className="text-[0.55rem] leading-none absolute right-0 top-[0.1rem] ">
-						Soon!
-					</span>
+					Custom
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

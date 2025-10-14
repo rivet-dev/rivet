@@ -22,7 +22,7 @@ export function ActorObjectInspector(
 				table={false}
 				data={props.data}
 				// Invalid types for theme
-				// @ts-ignore
+				// @ts-expect-error
 				theme={INSPECTOR_THEME}
 			/>
 		</div>

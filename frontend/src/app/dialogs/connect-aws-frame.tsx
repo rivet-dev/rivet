@@ -1,4 +1,10 @@
-import { faCheck, faServer, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import {
+	faAws,
+	faCheck,
+	faServer,
+	faSpinnerThird,
+	Icon,
+} from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -56,11 +62,11 @@ const stepper = defineStepper(
 	},
 );
 
-interface CreateProjectFrameContentProps extends DialogContentProps {}
+interface ConnectAwsFrameContentProps extends DialogContentProps {}
 
-export default function CreateProjectFrameContent({
+export default function ConnectAwsFrameContent({
 	onClose,
-}: CreateProjectFrameContentProps) {
+}: ConnectAwsFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
 		pages: Infinity,
@@ -75,7 +81,7 @@ export default function CreateProjectFrameContent({
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faServer} className="ml-0.5" /> Custom
+						Add <Icon icon={faAws} className="ml-0.5" /> AWS ECS
 					</div>
 				</Frame.Title>
 			</Frame.Header>
@@ -122,7 +128,7 @@ function FormStepper({
 						dc,
 						{
 							normal: {},
-							metadata: { provider: "custom" },
+							metadata: { provider: "aws" },
 						},
 					]),
 				);
@@ -174,7 +180,7 @@ function Step2() {
 	);
 }
 
-function Step3({ provider = "custom" }: { provider?: string }) {
+function Step3({ provider = "aws" }: { provider?: string }) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().runnersQueryOptions(),
 		pages: Infinity,

@@ -85,6 +85,7 @@ export type Build = {
 export type Region = {
 	id: string;
 	name: string;
+	url?: string;
 };
 
 export * from "./actor";
