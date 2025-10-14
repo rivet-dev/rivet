@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
-use hyper_tungstenite::HyperWebsocket;
 
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;
