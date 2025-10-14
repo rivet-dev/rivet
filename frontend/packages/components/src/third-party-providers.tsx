@@ -36,6 +36,12 @@ export function initThirdPartyProviders(router: unknown, debug: boolean) {
 			dsn: config.sentry.dsn,
 			integrations,
 			tunnel: getConfig().sentry?.tunnel,
+			tracePropagationTargets: [
+				/.*\.rivet\.dev/,
+				/.*\.rivet\.gg/,
+				/.*rivet-dev\.vercel\.app/,
+				/localhost/,
+			],
 		});
 	}
 }
