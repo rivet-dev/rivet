@@ -63,10 +63,13 @@ function PlanCard({
 					className="w-full mt-4"
 					children="Current Plan"
 					{...buttonProps}
-				>
-				</Button>
+				></Button>
 			) : (
-				<Button className="w-full mt-4" children={<>{custom ? "Contact Us" : "Upgrade"}</>} {...buttonProps}/>
+				<Button
+					className="w-full mt-4"
+					children={<>{custom ? "Contact Us" : "Upgrade"}</>}
+					{...buttonProps}
+				/>
 			)}
 		</div>
 	);

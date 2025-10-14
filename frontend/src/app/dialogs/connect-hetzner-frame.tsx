@@ -1,4 +1,10 @@
-import { faCheck, faServer, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import {
+	faCheck,
+	faGoogleCloud,
+	faHetzner,
+	faSpinnerThird,
+	Icon,
+} from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useMutation,
@@ -56,11 +62,11 @@ const stepper = defineStepper(
 	},
 );
 
-interface CreateProjectFrameContentProps extends DialogContentProps {}
+interface ConnectHetznerFrameContentProps extends DialogContentProps {}
 
-export default function CreateProjectFrameContent({
+export default function ConnectHetznerFrameContent({
 	onClose,
-}: CreateProjectFrameContentProps) {
+}: ConnectHetznerFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
 		pages: Infinity,
@@ -75,7 +81,7 @@ export default function CreateProjectFrameContent({
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faServer} className="ml-0.5" /> Custom
+						Add <Icon icon={faHetzner} className="ml-0.5" /> Hetzner
 					</div>
 				</Frame.Title>
 			</Frame.Header>
@@ -122,7 +128,7 @@ function FormStepper({
 						dc,
 						{
 							normal: {},
-							metadata: { provider: "custom" },
+							metadata: { provider: "hetzner" },
 						},
 					]),
 				);
@@ -174,7 +180,7 @@ function Step2() {
 	);
 }
 
-function Step3({ provider = "custom" }: { provider?: string }) {
+function Step3({ provider = "hetzner" }: { provider?: string }) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().runnersQueryOptions(),
 		pages: Infinity,
