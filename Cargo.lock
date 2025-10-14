@@ -4138,6 +4138,7 @@ dependencies = [
  "rivet-api-types",
  "rivet-api-util",
  "rivet-config",
+ "rivet-data",
  "rivet-error",
  "rivet-pools",
  "rivet-types",

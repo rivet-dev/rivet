@@ -22,10 +22,11 @@ use crate::{actors, ctx, datacenters, metadata, namespaces, runner_configs, runn
 		runners::list_names,
 		namespaces::list,
 		namespaces::create,
-		runner_configs::list,
-		runner_configs::upsert,
-		runner_configs::delete,
-		runner_configs::serverless_health_check,
+		runner_configs::list::list,
+		runner_configs::upsert::upsert,
+		runner_configs::delete::delete,
+		runner_configs::serverless_health_check::serverless_health_check,
+		runner_configs::refresh_metadata::refresh_metadata,
 		datacenters::list,
 	),
 	components(
@@ -65,6 +66,10 @@ pub async fn router(
 			.route(
 				"/runner-configs/{runner_name}",
 				axum::routing::delete(runner_configs::delete),
+			)
+			.route(
+				"/runner-configs/{runner_name}/refresh-metadata",
+				axum::routing::post(runner_configs::refresh_metadata),
 			)
 			// MARK: Actors
 			.route("/actors", axum::routing::get(actors::list::list))
