@@ -6,7 +6,7 @@ import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
 import { Pagination } from "./Pagination";
-import { RunnerConfig } from "./RunnerConfig";
+import { RunnerConfigsListResponseRunnerConfigsValue } from "./RunnerConfigsListResponseRunnerConfigsValue";
 
 export const RunnerConfigsListResponse: core.serialization.ObjectSchema<
     serializers.RunnerConfigsListResponse.Raw,
@@ -15,16 +15,13 @@ export const RunnerConfigsListResponse: core.serialization.ObjectSchema<
     pagination: Pagination,
     runnerConfigs: core.serialization.property(
         "runner_configs",
-        core.serialization.record(
-            core.serialization.string(),
-            core.serialization.record(core.serialization.string(), RunnerConfig),
-        ),
+        core.serialization.record(core.serialization.string(), RunnerConfigsListResponseRunnerConfigsValue),
     ),
 });
 
 export declare namespace RunnerConfigsListResponse {
     export interface Raw {
         pagination: Pagination.Raw;
-        runner_configs: Record<string, Record<string, RunnerConfig.Raw>>;
+        runner_configs: Record<string, RunnerConfigsListResponseRunnerConfigsValue.Raw>;
     }
 }

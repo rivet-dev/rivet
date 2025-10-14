@@ -6,5 +6,5 @@ import * as Rivet from "../index";
 
 export interface RunnerConfigsListResponse {
     pagination: Rivet.Pagination;
-    runnerConfigs: Record<string, Record<string, Rivet.RunnerConfig>>;
+    runnerConfigs: Record<string, Rivet.RunnerConfigsListResponseRunnerConfigsValue>;
 }

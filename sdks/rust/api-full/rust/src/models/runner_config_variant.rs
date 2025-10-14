@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 pub enum RunnerConfigVariant {
     #[serde(rename = "serverless")]
     Serverless,
+    #[serde(rename = "normal")]
+    Normal,
 
 }
 
@@ -23,6 +25,7 @@ impl std::fmt::Display for RunnerConfigVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Serverless => write!(f, "serverless"),
+            Self::Normal => write!(f, "normal"),
         }
     }
 }

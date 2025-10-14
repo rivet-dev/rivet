@@ -13,14 +13,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunnerConfig {
+    #[serde(rename = "normal")]
+    pub normal: serde_json::Value,
     #[serde(rename = "serverless")]
-    pub serverless: Box<models::RunnerConfigServerless>,
+    pub serverless: Box<models::RunnerConfigKindOneOf1Serverless>,
+    #[serde(rename = "metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Option<serde_json::Value>>,
 }
 
 impl RunnerConfig {
-    pub fn new(serverless: models::RunnerConfigServerless) -> RunnerConfig {
+    pub fn new(normal: serde_json::Value, serverless: models::RunnerConfigKindOneOf1Serverless) -> RunnerConfig {
         RunnerConfig {
+            normal,
             serverless: Box::new(serverless),
+            metadata: None,
         }
     }
 }
