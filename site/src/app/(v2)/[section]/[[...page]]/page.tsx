@@ -119,7 +119,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 						<div className="relative flex justify-end">
 							<div
 								className={clsx(
-									"flex items-end md:absolute md:right-0 z-10",
+									"flex items-end md:absolute md:right-0",
 									parentPage ? "md:top-5" : "md:top-0",
 								)}
 							>
