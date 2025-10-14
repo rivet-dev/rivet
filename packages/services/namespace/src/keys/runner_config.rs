@@ -1,8 +1,15 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
+use serde::{Deserialize, Serialize};
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActorNamesMetadata {
+	pub actor_names: Vec<(String, serde_json::Map<String, serde_json::Value>)>,
+	pub fetched_at: i64,
+}
 
 #[derive(Debug)]
 pub struct DataKey {
