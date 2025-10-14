@@ -5,10 +5,18 @@ import {
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
+import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
-import { useController, useFieldArray, useForm, useFormContext, useWatch } from "react-hook-form";
+import {
+	useController,
+	useFieldArray,
+	useForm,
+	useFormContext,
+	useWatch,
+} from "react-hook-form";
+import { match, P } from "ts-pattern";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import {
@@ -33,9 +41,8 @@ import {
 	SelectValue,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { VisibilitySensor } from "@/components/visibility-sensor";
 import { defineStepper } from "@/components/ui/stepper";
-import { Rivet } from "@rivetkit/engine-api-full";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 
 const endpointSchema = z
 	.string()
@@ -405,7 +412,13 @@ const code = ({ plan }: { plan: string }) =>
 export const Json = ({ plan }: { plan: string }) => {
 	return (
 		<div className="space-y-2 mt-2">
-			<CodeFrame language="json" title="vercel.json" code={() => code({plan}).replaceAll("	// [!code highlight]", "")}>
+			<CodeFrame
+				language="json"
+				title="vercel.json"
+				code={() =>
+					code({ plan }).replaceAll("	// [!code highlight]", "")
+				}
+			>
 				<CodePreview
 					className="w-full min-w-0"
 					language="json"
@@ -442,7 +455,8 @@ export const Endpoint = ({
 						<Input
 							type="url"
 							placeholder={
-								placeholder || "https://my-rivet-app.vercel.app/api/rivet"
+								placeholder ||
+								"https://my-rivet-app.vercel.app/api/rivet"
 							}
 							{...field}
 						/>
@@ -462,15 +476,15 @@ export function ConnectionCheck() {
 
 	const enabled = !!endpoint && endpointSchema.safeParse(endpoint).success;
 
-	console.log(enabled);
-
 	const [debounced] = useDebounceValue(endpoint, 300);
 
 	const { isSuccess, data, isError, isRefetchError, isLoadingError, error } =
 		useQuery({
 			...dataProvider.runnerHealthCheckQueryOptions({
 				runnerUrl: debounced,
-				headers: Object.fromEntries(headers.filter(([k, v]) => k && v).map(([k, v]) => [k, v])),
+				headers: Object.fromEntries(
+					headers.filter(([k, v]) => k && v).map(([k, v]) => [k, v]),
+				),
 			}),
 			enabled,
 			retry: 0,
@@ -517,7 +531,9 @@ export function ConnectionCheck() {
 								Health check failed, verify the endpoint is
 								correct.
 							</p>
-							{isRivetHealthCheckFailureResponse(error) ? <p className="font-mono-console">{JSON.stringify(error.failure.error)}</p> : null}
+							{isRivetHealthCheckFailureResponse(error) ? (
+								<HealthCheckFailure error={error} />
+							) : null}
 							<p>
 								Endpoint{" "}
 								<a
@@ -547,7 +563,58 @@ export function ConnectionCheck() {
 	);
 }
 
+function isRivetHealthCheckFailureResponse(
+	error: any,
+): error is Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"] {
+	return error && "error" in error;
+}
 
-function isRivetHealthCheckFailureResponse(error: any): error is Rivet.RunnerConfigsServerlessHealthCheckResponseFailure {
-	return error && 'failure' in error;
+function HealthCheckFailure({
+	error,
+}: {
+	error: Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
+}) {
+	if (!("error" in error)) {
+		return null;
+	}
+	if (!error.error) {
+		return null;
+	}
+
+	return match(error.error)
+		.with({ nonSuccessStatus: P.any }, (e) => {
+			return (
+				<p>
+					Health check failed with status{" "}
+					{e.nonSuccessStatus.statusCode}
+				</p>
+			);
+		})
+		.with({ invalidRequest: P.any }, (e) => {
+			return <p>Health check failed because the request was invalid.</p>;
+		})
+		.with({ invalidResponseJson: P.any }, (e) => {
+			return (
+				<p>
+					Health check failed because the response was not valid JSON.
+				</p>
+			);
+		})
+		.with({ requestFailed: P.any }, (e) => {
+			return (
+				<p>
+					Health check failed because the request could not be
+					completed.
+				</p>
+			);
+		})
+		.with({ requestTimedOut: P.any }, (e) => {
+			return <p>Health check failed because the request timed out.</p>;
+		})
+		.with({ invalidResponseSchema: P.any }, (e) => {
+			return (
+				<p>Health check failed because the response was not valid.</p>
+			);
+		})
+		.exhaustive();
 }

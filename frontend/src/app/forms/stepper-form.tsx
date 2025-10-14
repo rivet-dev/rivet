@@ -87,7 +87,6 @@ function Content<const Steps extends Step[]>({
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
 
 	const handleSubmit = (values: z.infer<JoinStepSchemas<Steps>>) => {
-		console.log("submitting");
 		ref.current = { ...ref.current, ...values };
 		if (stepper.isLast) {
 			return onSubmit?.({ values: ref.current, form, stepper });
