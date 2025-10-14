@@ -10,6 +10,7 @@ import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import {
 	cn,
 	FormControl,
+	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,
@@ -30,10 +31,15 @@ export const Datacenter = function Datacenter() {
 					<FormLabel>Datacenter</FormLabel>
 					<FormControl>
 						<RegionSelect
+							showAuto={false}
 							onValueChange={field.onChange}
 							value={field.value}
 						/>
 					</FormControl>
+					<FormDescription>
+						You can find the region your Railway runners are running
+						in under <i>Settings &gt; Deploy</i>
+					</FormDescription>
 					<FormMessage />
 				</FormItem>
 			)}

@@ -527,7 +527,7 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		createRunnerConfigMutationOptions(
+		upsertRunnerConfigMutationOptions(
 			opts: {
 				onSuccess?: (data: Rivet.RunnerConfigsUpsertResponse) => void;
 			} = {},
@@ -547,6 +547,21 @@ export const createNamespaceContext = ({
 						datacenters: config,
 					});
 					return response;
+				},
+				retry: shouldRetryAllExpect403,
+				meta: {
+					mightRequireAuth,
+				},
+			};
+		},
+		deleteRunnerConfigMutationOptions(
+			opts: { onSuccess?: (data: void) => void } = {},
+		) {
+			return {
+				...opts,
+				mutationKey: ["runner-config", "delete"],
+				mutationFn: async (name: string) => {
+					await client.runnerConfigs.delete(name, { namespace });
 				},
 				retry: shouldRetryAllExpect403,
 				meta: {
@@ -592,6 +607,7 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
+
 		runnerConfigQueryOptions(runnerName: string) {
 			return queryOptions({
 				queryKey: [{ namespace }, "runners", "config", runnerName],
