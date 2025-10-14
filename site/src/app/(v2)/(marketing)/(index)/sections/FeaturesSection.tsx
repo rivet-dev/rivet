@@ -1,113 +1,67 @@
-import { Icon, faArrowRight } from "@rivet-gg/icons";
+"use client";
 
-function DocsLink({ href }: { href: string }) {
-	return (
-		<a
-			href={href}
-			className="inline-flex items-center gap-1 text-sm text-white/40 hover:text-white transition-colors group/link"
-		>
-			Documentation
-			<Icon
-				icon={faArrowRight}
-				className="w-3 h-3 transition-transform group-hover/link:translate-x-0.5"
-			/>
-		</a>
-	);
-}
+import { useRef } from "react";
+import { IconWithSpotlight } from "./IconWithSpotlight";
 
 interface FeatureCardProps {
 	title: string;
 	description: string;
-	color: string;
 	className?: string;
 	docLink?: string;
+	iconPath?: string;
 }
 
 function FeatureCard({
 	title,
 	description,
-	color,
 	className = "",
 	docLink,
+	iconPath,
 }: FeatureCardProps) {
-	return (
-		<div className={`group relative ${className}`}>
-			<div className="h-full border border-white/10 rounded-xl p-6 overflow-hidden">
-				<div className="relative z-10">
-					<h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
-					<p className="text-white/40 text-sm leading-relaxed mb-6">
-						{description}
-					</p>
-					{docLink && <DocsLink href={docLink} />}
-				</div>
-				<div
-					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${color === "orange-500"
-							? "bg-orange-500"
-							: color === "blue-500"
-								? "bg-blue-500"
-								: color === "green-500"
-									? "bg-green-500"
-									: color === "purple-500"
-										? "bg-purple-500"
-										: color === "pink-500"
-											? "bg-pink-500"
-											: color === "teal-500"
-												? "bg-teal-500"
-												: color === "amber-500"
-													? "bg-amber-500"
-													: "bg-gray-500"
-						}`}
-				></div>
-			</div>
-		</div>
-	);
-}
+	const cardRef = useRef<HTMLAnchorElement>(null);
 
-interface LargeFeatureCardProps {
-	title: string;
-	description: string;
-	color: string;
-	className?: string;
-	docLink?: string;
-}
+	const handleMouseMove = (e: React.MouseEvent<HTMLAnchorElement>) => {
+		if (!cardRef.current) return;
+		const card = cardRef.current;
 
-function LargeFeatureCard({
-	title,
-	description,
-	color,
-	className = "",
-	docLink,
-}: LargeFeatureCardProps) {
+		// Find the icon container and convert coordinates to icon-relative
+		const iconContainer = card.querySelector('.icon-spotlight-container') as HTMLElement;
+		if (!iconContainer) return;
+
+		// Get the icon's position relative to viewport
+		const iconRect = iconContainer.getBoundingClientRect();
+
+		// Calculate mouse position relative to the icon (not the card)
+		const x = ((e.clientX - iconRect.left) / iconRect.width) * 100;
+		const y = ((e.clientY - iconRect.top) / iconRect.height) * 100;
+
+		// Set CSS custom properties on the icon container
+		iconContainer.style.setProperty('--mouse-x', `${x}%`);
+		iconContainer.style.setProperty('--mouse-y', `${y}%`);
+	};
+
 	return (
-		<div className={`group relative ${className}`}>
-			<div className="relative h-full border border-white/10 rounded-xl p-6 overflow-hidden">
-				<div className="relative z-10">
-					<h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
-					<p className="text-white/40 text-sm leading-relaxed mb-6">
-						{description}
-					</p>
-					{docLink && <DocsLink href={docLink} />}
-				</div>
-				<div
-					className={`absolute bottom-4 left-6 w-8 h-1 rounded-full ${color === "orange-500"
-							? "bg-orange-500"
-							: color === "blue-500"
-								? "bg-blue-500"
-								: color === "green-500"
-									? "bg-green-500"
-									: color === "purple-500"
-										? "bg-purple-500"
-										: color === "pink-500"
-											? "bg-pink-500"
-											: color === "teal-500"
-												? "bg-teal-500"
-												: color === "amber-500"
-													? "bg-amber-500"
-													: "bg-gray-500"
-						}`}
-				></div>
+		<a
+			ref={cardRef}
+			href={docLink}
+			className={`group relative block ${className}`}
+			onMouseMove={handleMouseMove}
+		>
+			<div className="h-full border border-white/10 hover:border-white/30 hover:bg-white/[0.02] rounded-xl p-6 transition-colors relative overflow-hidden">
+				{iconPath && (
+					<>
+						<div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none bg-gradient-to-b from-white/[0.04] via-white/[0.01] to-transparent" />
+						<div className="mb-6 flex justify-center relative z-10">
+							<IconWithSpotlight iconPath={iconPath} title={title} />
+						</div>
+					</>
+				)}
+				<h3 className="text-lg font-semibold text-white mb-3 relative z-10">{title}</h3>
+				<p className="text-white/40 text-sm leading-relaxed relative z-10">
+					{description}
+				</p>
 			</div>
-		</div>
+		</a>
 	);
 }
 
@@ -120,66 +74,67 @@ export function FeaturesSection() {
 						Built for Modern Applications
 					</h2>
 					<p className="text-lg sm:text-xl font-500 text-white/60 max-w-2xl mx-auto">
-						Everything you need to build fast, scalable, and real-time
+						Everything you need to build fast, scalable, and realtime
 						applications without the complexity.
 					</p>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-4 grid-rows-auto md:grid-rows-2 gap-4 md:min-h-[500px]">
-					<LargeFeatureCard
-						className="md:col-span-2 md:row-span-1"
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<FeatureCard
 						title="Long-Lived, Stateful Compute"
 						description="Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with memory and no timeouts."
-						color="orange-500"
 						docLink="/docs/actors"
+						iconPath="/icons/microchip.svg"
 					/>
 
 					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
-						title="Blazing-Fast Reads & Writes"
+						title="No Database Round Trips"
 						description="State is stored on the same machine as your compute, so reads and writes are ultra-fast. No database round trips, no latency spikes."
-						color="blue-500"
 						docLink="/docs/actors/state"
+						iconPath="/icons/database.svg"
 					/>
 
 					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
 						title="Realtime, Made Simple"
 						description="Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events."
-						color="green-500"
 						docLink="/docs/actors/events"
+						iconPath="/icons/bolt.svg"
 					/>
 
 					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
-						title="Store Data Near Your Users"
-						description="Your state lives close to your users on the edge – not in a faraway data center – so every interaction feels instant. (Not all platforms supported.)"
-						color="purple-500"
-						docLink="/docs/general/edge"
-					/>
-
-					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
-						title="Infinitely Scalable"
-						description="Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts."
-						color="pink-500"
-						docLink="/docs/actors/scaling"
-					/>
-
-					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
-						title="Fault Tolerant"
-						description="Built-in error handling and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations."
-						color="teal-500"
+						title="Sleep When Idle, No Cold Starts"
+						description="Actors automatically hibernate when idle and wake up instantly on demand with zero cold start delays. Only pay for active compute time while keeping your state ready."
 						docLink="/docs/actors/lifecycle"
 					/>
 
 					<FeatureCard
-						className="md:col-span-1 md:row-span-1"
-						title="Type Safety"
-						description="End-to-end TypeScript safety between clients and actors with full type inference and compile-time checking."
-						color="amber-500"
-						docLink="/docs/actors/helper-types"
+						title="Architected For Insane Scale"
+						description="Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts."
+						docLink="/docs/actors/scaling"
+					/>
+
+					<FeatureCard
+						title="Resilient by Design"
+						description="Built-in failover and recovery. Actors automatically restart on failure while preserving state integrity and continuing operations."
+						docLink="/docs/actors/lifecycle"
+					/>
+
+					<FeatureCard
+						title="Store State at the Edge"
+						description="Your state lives close to your users on the edge – not in a faraway data center – so every interaction feels instant."
+						docLink="/docs/general/edge"
+					/>
+
+					<FeatureCard
+						title="Built on Web Standards"
+						description="Powered by WebSockets, SSE, and HTTP. Works with existing libraries, tools, and web browsers. Drop down to raw fetch handlers when you need full control."
+						docLink="/docs/actors/fetch-and-websocket-handler/"
+					/>
+
+					<FeatureCard
+						title="No Vendor Lock-In"
+						description="Open-source and fully self-hostable. Works with Node.js, Bun, Deno, and Cloudflare. Run on any cloud provider or on-premises infrastructure."
+						docLink="/docs/self-hosting"
 					/>
 				</div>
 			</div>

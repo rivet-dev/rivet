@@ -79,14 +79,14 @@ The Rivet Engine supports:
 ## Examples
 
 - AI Agent — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/ai-agent)
-- Chat Room — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/chat-room)
-- Collab (Yjs) — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/crdt) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/crdt)
-- Multiplayer Game — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/game) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/game)
+- Realtime Docs — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/crdt) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/crdt)
+- Workflows — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/workflows) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/workflows)
 - Local-First Sync — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/sync)
-- Rate Limiter — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/rate) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/rate)
-- Per-User DB — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/database) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/database)
-- Multi-Tenant SaaS — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/tenant) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/tenant)
-- Stream Processing — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/stream) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/stream)
+- Per-User Database — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/database) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/database)
+- Background Jobs — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/background-jobs) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/background-jobs)
+- Rate Limiting — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/rate) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/rate)
+- Multiplayer Game — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/game) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/game)
+- Bots — [GitHub](https://github.com/rivet-dev/rivetkit/tree/main/examples/bots) · [StackBlitz](https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/bots)
 
 ## Running Rivet
 
@@ -100,12 +100,12 @@ For enterprise use cases, [get in touch](https://rivet.gg/sales) about using Riv
 
 Join thousands of developers building with Rivet Actors today:
 
-- [Discord](https://rivet.gg/discord) - Chat with the community
+- [Discord](https://rivet.dev/discord) - Chat with the community
 - [X/Twitter](https://x.com/rivet_dev) - Follow for updates
 - [Bluesky](https://bsky.app/profile/rivet.gg) - Follow for updates
 - [GitHub Discussions](https://github.com/rivet-dev/rivetkit/discussions) - Ask questions and share ideas
 - [GitHub Issues](https://github.com/rivet-dev/rivetkit/issues) - Report bugs and request features
-- [Talk to an engineer](https://rivet.gg/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges
+- [Talk to an engineer](https://rivet.dev/talk-to-an-engineer) - Discuss your technical needs, current stack, and how Rivet can help with your infrastructure challenges
 
 ## Technologies
 

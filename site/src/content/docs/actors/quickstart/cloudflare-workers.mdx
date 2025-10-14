@@ -23,12 +23,11 @@ import { actor, setup } from "rivetkit";
 export const counter = actor({
 	state: { count: 0 },
 	actions: {
-		increment: (c, amount: number = 1) => {
-			c.state.count += amount;
-			c.broadcast("countChanged", c.state.count);
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
 			return c.state.count;
 		},
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -170,7 +169,7 @@ curl -X POST http://localhost:8787/increment/my-counter
 
 </Step>
 
-<Step title="Deploy">
+<Step title="Deploy to Cloudflare Workers">
 
 Deploy to Cloudflare's global edge network:
 
@@ -179,6 +178,8 @@ wrangler deploy
 ```
 
 Your actors will now run on Cloudflare's edge with persistent state backed by Durable Objects.
+
+See the [Cloudflare Workers deployment guide](/docs/deploy/cloudflare-workers) for detailed deployment instructions and configuration options.
 
 </Step>
 
@@ -229,12 +230,11 @@ See the [JavaScript client documentation](/docs/clients/javascript) for more inf
 <Tab title="React">
 
 ```tsx {{"title":"Counter.tsx"}}
+import { createRivetKit } from "@rivetkit/react";
 import { useState } from "react";
-import { createClient, createRivetKit } from "@rivetkit/react";
 import type { registry } from "./registry";
 
-const client = createClient<typeof registry>("https://your-app.workers.dev/rivet");
-const { useActor } = createRivetKit(client);
+const { useActor } = createRivetKit<typeof registry>("https://your-app.workers.dev/rivet");
 
 function Counter() {
 	const [count, setCount] = useState(0);
@@ -244,9 +244,7 @@ function Counter() {
 		key: ["my-counter"]
 	});
 
-	counter.useEvent("countChanged", (newCount: number) => {
-		setCount(newCount);
-	});
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => {
 		await counter.connection?.increment(1);

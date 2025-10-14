@@ -21,15 +21,13 @@ Create your actor registry on the backend:
 import { actor, setup } from "rivetkit";
 
 export const counter = actor({
-	onAuth: () => {},  // Skip authentication (can be configured later)
 	state: { count: 0 },
 	actions: {
-		increment: (c, amount: number = 1) => {
-			c.state.count += amount;
-			c.broadcast("countChanged", c.state.count);
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
 			return c.state.count;
 		},
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -58,43 +56,33 @@ registry.start();
 Set up your React application:
 
 ```tsx {{"title":"frontend/App.tsx"}}
-import { useState } from "react";
 import { createClient, createRivetKit } from "@rivetkit/react";
+import { useState } from "react";
 import type { registry } from "../backend/registry";
 
-// Create typed client
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>();
 const { useActor } = createRivetKit(client);
 
 function App() {
 	const [count, setCount] = useState(0);
-	const [counterName, setCounterName] = useState("my-counter");
+	const [counterName, setCounterName] = useState("test-counter");
 
-	// Connect to the counter actor
 	const counter = useActor({
 		name: "counter",
 		key: [counterName],
 	});
 
-	// Listen for real-time count updates
-	counter.useEvent("countChanged", (newCount: number) => {
-		setCount(newCount);
-	});
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => {
-		// Call actor action through the connection
 		await counter.connection?.increment(1);
-	};
-
-	const incrementBy = async (amount: number) => {
-		await counter.connection?.increment(amount);
 	};
 
 	return (
 		<div style={{ padding: "2rem" }}>
 			<h1>Rivet Counter</h1>
 			<h2>Count: {count}</h2>
-			
+
 			<div style={{ marginBottom: "1rem" }}>
 				<label>
 					Counter Name:
@@ -107,17 +95,7 @@ function App() {
 				</label>
 			</div>
 
-			<div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-				<button onClick={increment}>
-					+1
-				</button>
-				<button onClick={() => incrementBy(5)}>
-					+5
-				</button>
-				<button onClick={() => incrementBy(10)}>
-					+10
-				</button>
-			</div>
+			<button onClick={increment}>Increment</button>
 
 			<div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
 				<p>Connection Status: {counter.isConnected ? "Connected" : "Disconnected"}</p>
@@ -185,4 +163,8 @@ Open `http://localhost:5173` in your browser. Try opening multiple tabs to see r
 Add custom HTTP endpoints alongside your actors to handle additional business logic, authentication, and integrations with external services.
 
 See [backend quickstart](/docs/actors/quickstart/backend) for more information.
+
+## API Reference
+
+For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 
