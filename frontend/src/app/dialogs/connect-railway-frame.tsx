@@ -48,7 +48,7 @@ const stepper = defineStepper(
 	{
 		id: "step-3",
 		title: "Wait for the Runner to connect",
-		assist: false,
+		assist: true,
 		schema: z.object({
 			success: z.boolean().refine((v) => v === true, {
 				message: "Runner must be connected to proceed",
@@ -73,6 +73,8 @@ export default function ConnectRailwayFrameContent({
 
 	const prefferedRegionForRailway =
 		data.find((region) => region.name.toLowerCase().includes("us-west"))
+			?.id ||
+		data.find((region) => region.name.toLowerCase().includes("us-east"))
 			?.id ||
 		data.find((region) => region.name.toLowerCase().includes("ore"))?.id ||
 		"auto";
@@ -103,9 +105,10 @@ function FormStepper({
 	onClose?: () => void;
 	defaultDatacenter: string;
 }) {
+	const provider = useEngineCompatDataProvider();
 	const { mutateAsync } = useMutation({
-		...useEngineCompatDataProvider().createRunnerConfigMutationOptions(),
-		onSuccess: () => {
+		...provider.upsertRunnerConfigMutationOptions(),
+		onSuccess: async () => {
 			confetti({
 				angle: 60,
 				spread: 55,
@@ -116,6 +119,8 @@ function FormStepper({
 				spread: 55,
 				origin: { x: 1 },
 			});
+
+						await queryClient.invalidateQueries(provider.runnerConfigsQueryOptions());
 			onClose?.();
 		},
 	});

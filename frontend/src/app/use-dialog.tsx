@@ -26,6 +26,12 @@ export const useDialog = {
 	ConnectHetzner: createDialogHook(
 		() => import("@/app/dialogs/connect-hetzner-frame"),
 	),
+	EditProviderConfig: createDialogHook(
+		() => import("@/app/dialogs/edit-runner-config"),
+	),
+	DeleteConfig: createDialogHook(
+		() => import("@/app/dialogs/confirm-delete-config-frame"),
+	),
 	Billing: createDialogHook(() => import("@/app/dialogs/billing-frame")),
 	ProvideEngineCredentials: createDialogHook(
 		() => import("@/app/dialogs/provide-engine-credentials-frame"),

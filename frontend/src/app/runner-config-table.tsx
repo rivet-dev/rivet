@@ -1,5 +1,13 @@
+import {
+	faCog,
+	faCogs,
+	faRailway,
+	faTrash,
+	faVercel,
+	Icon,
+} from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { formatRelative } from "date-fns";
+import { Link } from "@tanstack/react-router";
 import {
 	Button,
 	DiscreteCopyButton,
@@ -13,13 +21,15 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
+import { ActorRegion } from "@/components/actors";
+import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
 	isError?: boolean;
 	hasNextPage?: boolean;
 	fetchNextPage?: () => void;
-	configs: Rivet.RunnerConfig[];
+	configs: [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][];
 }
 
 export function RunnerConfigsTable({
@@ -35,7 +45,8 @@ export function RunnerConfigsTable({
 				<TableRow>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
-					<TableHead>Endpoint</TableHead>
+					<TableHead className="pl-8">Endpoint</TableHead>
+					<TableHead className="text-center">Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
 			</TableHeader>
@@ -70,8 +81,8 @@ export function RunnerConfigsTable({
 						<RowSkeleton />
 					</>
 				) : null}
-				{configs?.map((config) => (
-					<Row {...config} key={config.metadata} />
+				{configs?.map(([id, config]) => (
+					<Row name={id} {...config} key={id} />
 				))}
 
 				{!isLoading && hasNextPage ? (
@@ -112,34 +123,135 @@ function RowSkeleton() {
 	);
 }
 
-function Row(config: Rivet.RunnerConfig) {
+function Row({
+	name,
+	...value
+}: { name: string } & Rivet.RunnerConfigsListResponseRunnerConfigsValue) {
+	const config = Object.values(value.datacenters)[0];
+
 	return (
-		<TableRow key={runner.runnerId}>
+		<TableRow>
+			<TableCell>
+				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
+			</TableCell>
+			<TableCell>
+				<Provider metadata={config.metadata} />
+			</TableCell>
 			<TableCell>
 				<WithTooltip
-					content={config}
+					content={config.serverless?.url || "-"}
 					trigger={
-						<DiscreteCopyButton value={runner.runnerId}>
-							{runner.runnerId.slice(0, 8)}
+						<DiscreteCopyButton value={name}>
+							<span>
+								{config.serverless?.url &&
+								config.serverless.url.length > 32
+									? `${config.serverless.url.slice(0, 16)}...${config.serverless.url.slice(-16)}`
+									: config.serverless?.url}
+							</span>
 						</DiscreteCopyButton>
 					}
 				/>
 			</TableCell>
 			<TableCell>
-				{config.metadata &&
-				typeof config.metadata === "object" &&
-				"provider" in config.metadata
-					? (config.metadata.provider as string)
-					: "unknown"}
+				<Regions regions={Object.keys(value.datacenters)} />
 			</TableCell>
-			<TableCell>-</TableCell>
-			<TableCell>{runner.datacenter}</TableCell>
 
 			<TableCell>
-				{runner.remainingSlots}/{runner.totalSlots}
+				<div className="flex gap-2 justify-end">
+					{config.serverless ? (
+						<WithTooltip
+							content="Edit provider settings"
+							trigger={
+								<Button variant="outline" size="icon" asChild>
+									<Link
+										to="."
+										search={{
+											modal: getModal(
+												config.metadata?.provider,
+											),
+											config: name,
+											dc: Object.keys(
+												value.datacenters,
+											)[0],
+										}}
+									>
+										<Icon icon={faCog} />
+									</Link>
+								</Button>
+							}
+						/>
+					) : null}
+					<WithTooltip
+						content="Delete provider"
+						trigger={
+							<Button variant="outline" size="icon" asChild>
+								<Link
+									to="."
+									search={{
+										modal: "delete-provider-config",
+										config: name,
+									}}
+								>
+									<Icon icon={faTrash} />
+								</Link>
+							</Button>
+						}
+					/>
+				</div>
 			</TableCell>
-
-			<TableCell>{formatRelative(runner.createTs, new Date())}</TableCell>
 		</TableRow>
+	);
+}
+
+function getModal(provider: string | undefined) {
+	return "edit-provider-config";
+}
+
+function Provider({ metadata }: { metadata: unknown }) {
+	if (!metadata || typeof metadata !== "object") {
+		return <span>Unknown</span>;
+	}
+	if ("provider" in metadata && typeof metadata.provider === "string") {
+		if (metadata.provider === "vercel") {
+			return (
+				<div>
+					<Icon icon={faVercel} className="mr-1" /> Vercel
+				</div>
+			);
+		}
+		if (metadata.provider === "railway") {
+			return (
+				<div>
+					<Icon icon={faRailway} className="mr-1" /> Railway
+				</div>
+			);
+		}
+		return <span>{metadata.provider || "-"}</span>;
+	}
+	return <span>Unknown</span>;
+}
+
+function Regions({ regions }: { regions: string[] }) {
+	if (regions.length === 1) {
+		return (
+			<ActorRegion
+				className="w-full items-start flex-1"
+				regionId={regions[0]}
+				showLabel
+			/>
+		);
+	}
+
+	return (
+		<WithTooltip
+			content={regions
+				.map((region) => REGION_LABEL[region] ?? REGION_LABEL.unknown)
+				.join(", ")}
+			trigger={
+				<span className="text-left w-full">
+					{regions.length} regions
+				</span>
+			}
+		/>
 	);
 }

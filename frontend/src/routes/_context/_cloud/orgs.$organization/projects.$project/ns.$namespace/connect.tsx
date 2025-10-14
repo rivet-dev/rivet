@@ -42,15 +42,173 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { data: runnerNamesCount, isLoading } = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
-		select: (data) => data.pages[0].names?.length,
+	const { data: runnerConfigsCount, isLoading } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		select: (data) => Object.values(data.pages[0].runnerConfigs).length,
 		refetchInterval: 5000,
 	});
 
+	const hasConfigs =
+		runnerConfigsCount !== undefined && runnerConfigsCount > 0;
+
+	if (isLoading) {
+		return (
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+				<div className="mt-2 flex justify-between items-center px-6 py-4">
+					<H1>Connect</H1>
+					<div>
+						<HelpDropdown>
+							<Button
+								variant="outline"
+								startIcon={<Icon icon={faQuestionCircle} />}
+							>
+								Need help?
+							</Button>
+						</HelpDropdown>
+					</div>
+				</div>
+				<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
+					Connect your RivetKit application to Rivet Cloud. Use your
+					cloud of choice to run Rivet Actors.
+				</p>
+
+				<hr className="mb-4" />
+				<div className="p-4 px-6 max-w-5xl ">
+					<Skeleton className="h-8 w-48 mb-4" />
+					<div className="grid grid-cols-3 gap-2 my-4">
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (!hasConfigs) {
+		return (
+			<div className="bg-card h-full border my-2 mr-2 rounded-lg flex items-center justify-center">
+				<div className="max-w-5xl border rounded-lg">
+					<div className="mt-2 flex justify-between items-center px-6 py-4">
+						<H1>Connect</H1>
+						<div>
+							<HelpDropdown>
+								<Button
+									variant="outline"
+									startIcon={<Icon icon={faQuestionCircle} />}
+								>
+									Need help?
+								</Button>
+							</HelpDropdown>
+						</div>
+					</div>
+					<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
+						Connect your RivetKit application to Rivet Cloud. Use
+						your cloud of choice to run Rivet Actors.
+					</p>
+
+					<hr className="mb-4" />
+					<div className="p-4 px-6 max-w-5xl">
+						<H3>Add Provider</H3>
+						<div className="grid grid-cols-3 gap-2 my-4">
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faVercel} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-vercel" }}
+								>
+									Vercel
+								</RouterLink>
+							</Button>
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faRailway} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-railway" }}
+								>
+									Railway
+								</RouterLink>
+							</Button>
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faAws} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-aws" }}
+								>
+									AWS ECS
+								</RouterLink>
+							</Button>
+
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faGoogleCloud} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-gcp" }}
+								>
+									Google Cloud Run
+								</RouterLink>
+							</Button>
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faHetznerH} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-hetzner" }}
+								>
+									Hetzner
+								</RouterLink>
+							</Button>
+							<Button
+								size="lg"
+								variant="outline"
+								className="min-w-48 h-auto min-h-28 text-xl"
+								startIcon={<Icon icon={faServer} />}
+								asChild
+							>
+								<RouterLink
+									to="."
+									search={{ modal: "connect-custom" }}
+								>
+									Custom
+								</RouterLink>
+							</Button>
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-			<div className=" mt-2 flex justify-between items-center px-6 py-4">
+			<div className="mt-2 flex justify-between items-center px-6 py-4">
 				<H1>Connect</H1>
 				<div>
 					<HelpDropdown>
@@ -69,115 +227,9 @@ export function RouteComponent() {
 			</p>
 
 			<hr className="mb-4" />
-			{isLoading ? (
-				<div className="p-4 px-6 max-w-5xl ">
-					<Skeleton className="h-8 w-48 mb-4" />
-					<div className="grid grid-cols-3 gap-2 my-4">
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-						<Skeleton className="min-w-48 h-auto min-h-28 rounded-md" />
-					</div>
-				</div>
-			) : runnerNamesCount === 0 ? (
-				<div className="p-4 px-6 max-w-5xl">
-					<H3>Add Provider</H3>
-					<div className="grid grid-cols-3 gap-2 my-4">
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faVercel} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-vercel" }}
-							>
-								Vercel
-							</RouterLink>
-						</Button>
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faRailway} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-railway" }}
-							>
-								Railway
-							</RouterLink>
-						</Button>
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faAws} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-aws" }}
-							>
-								AWS ECS
-							</RouterLink>
-						</Button>
 
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faGoogleCloud} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-gcp" }}
-							>
-								Google Cloud Run
-							</RouterLink>
-						</Button>
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faHetznerH} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-hetzner" }}
-							>
-								Hetzner
-							</RouterLink>
-						</Button>
-						<Button
-							size="lg"
-							variant="outline"
-							className="min-w-48 h-auto min-h-28 text-xl"
-							startIcon={<Icon icon={faServer} />}
-							asChild
-						>
-							<RouterLink
-								to="."
-								search={{ modal: "connect-custom" }}
-							>
-								Custom
-							</RouterLink>
-						</Button>
-					</div>
-				</div>
-			) : (
-				<>
-					<Providers />
-					<Runners />
-				</>
-			)}
+			<Providers />
+			<Runners />
 		</div>
 	);
 }
@@ -196,7 +248,19 @@ function Providers() {
 
 	return (
 		<div className="p-4 px-6 max-w-5xl">
-			<H3>Providers</H3>
+			<div className="flex gap-2 items-center mb-4">
+				<H3>Providers</H3>
+
+				<ProviderDropdown>
+					<Button
+						className="min-w-32"
+						variant="outline"
+						startIcon={<Icon icon={faPlus} />}
+					>
+						Add Provider
+					</Button>
+				</ProviderDropdown>
+			</div>
 
 			<div className="max-w-5xl mx-auto">
 				<div className="border rounded-md">
@@ -228,17 +292,7 @@ function Runners() {
 	return (
 		<div className="pb-4 px-6 max-w-5xl ">
 			<div className="flex gap-2 items-center mb-4 mt-6">
-				<H3 className="">Runners</H3>
-
-				<ProviderDropdown>
-					<Button
-						className="min-w-32"
-						variant="outline"
-						startIcon={<Icon icon={faPlus} />}
-					>
-						Add Runner
-					</Button>
-				</ProviderDropdown>
+				<H3>Runners</H3>
 			</div>
 			<div className="max-w-5xl mx-auto">
 				<div className="border rounded-md">

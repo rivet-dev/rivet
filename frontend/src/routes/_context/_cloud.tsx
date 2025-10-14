@@ -43,6 +43,8 @@ function CloudModals() {
 	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
 	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
 	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
+	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
+	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
 	const TokensDialog = useDialog.Tokens.Dialog;
 
 	return (
@@ -204,6 +206,46 @@ function CloudModals() {
 			<TokensDialog
 				dialogProps={{
 					open: search.modal === "tokens",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<EditProviderConfigDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				name={search.config}
+				dc={search.dc}
+				dialogProps={{
+					open: search.modal === "edit-provider-config",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<DeleteConfigDialog
+				name={search.config}
+				dialogProps={{
+					open: search.modal === "delete-provider-config",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

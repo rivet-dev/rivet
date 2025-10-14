@@ -48,6 +48,10 @@ export const REGION_ICON: Record<string, string | IconProp> = {
 	gru: "🇧🇷", // Sao Paulo
 	bom: "🇮🇳", // Mumbai
 	sin: "🇸🇬", // Singapore
+	"eu-central-1": "🇩🇪", // Frankfurt
+	"us-east-1": "🇺🇸", // Northern Virginia
+	"us-west-1": "🇺🇸", // Oregon
+	"ap-southeast-1": "🇸🇬", // Singapore
 };
 
 export const REGION_LABEL: Record<string, string> = {
@@ -96,12 +100,14 @@ export const REGION_LABEL: Record<string, string> = {
 	gru: "Sao Paulo",
 	bom: "Mumbai, India",
 	sin: "Singapore",
+	"eu-central-1": "Frankfurt, Germany",
+	"us-east-1": "Northern Virginia, USA",
+	"us-west-1": "Oregon, USA",
+	"ap-southeast-1": "Singapore",
 };
 
 export function getRegionKey(regionNameId: string | undefined) {
-	// HACK: Remove prefix for old regions with format `lnd-atl`
-	const regionIdSplit = (regionNameId || "").split("-");
-	return regionIdSplit[regionIdSplit.length - 1];
+	return regionNameId;
 }
 
 export function RegionIcon({

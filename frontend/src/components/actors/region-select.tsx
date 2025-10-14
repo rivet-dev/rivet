@@ -6,9 +6,14 @@ import { useDataProvider } from "./data-provider";
 interface RegionSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
+	showAuto?: boolean;
 }
 
-export function RegionSelect({ onValueChange, value }: RegionSelectProps) {
+export function RegionSelect({
+	onValueChange,
+	value,
+	showAuto = true,
+}: RegionSelectProps) {
 	const {
 		data = [],
 		fetchNextPage,
@@ -17,11 +22,15 @@ export function RegionSelect({ onValueChange, value }: RegionSelectProps) {
 	} = useInfiniteQuery(useDataProvider().regionsQueryOptions());
 
 	const regions = [
-		{
-			label: <span>Automatic (Recommended)</span>,
-			value: "auto",
-			region: { id: "auto", name: "Automatic" },
-		},
+		...(showAuto
+			? [
+					{
+						label: <span>Automatic (Recommended)</span>,
+						value: "auto",
+						region: { id: "auto", name: "Automatic" },
+					},
+				]
+			: []),
 		...data.map((region) => {
 			return {
 				label:

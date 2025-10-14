@@ -20,6 +20,7 @@ export const redirectToOrganization = async (clerk: Clerk) => {
 		const { data: orgs } = await clerk.user.getOrganizationMemberships();
 
 		if (orgs.length > 0) {
+			await clerk.setActive({ organization: orgs[0].organization.id });
 			throw redirect({
 				to: "/orgs/$organization",
 				params: { organization: orgs[0].organization.id },
