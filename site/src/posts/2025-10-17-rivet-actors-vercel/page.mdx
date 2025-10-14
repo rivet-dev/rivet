@@ -1,0 +1,220 @@
+export const author = "nicholas-kissel"
+export const published = "2025-10-17"
+export const category = "changelog"
+export const keywords = ["vercel", "rivet", "actors", "durable-objects", "open-source", "serverless", "launch"]
+
+# Rivet Actors on Vercel Functions: Open-Source Alternative to Durable Objects
+
+**Rivet Actors can now run on Vercel Functions, bringing stateful, realtime workloads to Vercel's serverless platform.**
+
+Cloudflare's Durable Objects introduced a long-lived, stateful primitive in serverless apps – but they come with platform lock-in and resource constraints. Rivet Actors offer an open-source alternative, and by launching on Vercel we unlock better flexibility, control, and developer experience.
+
+## How Vercel + Rivet Compares To Durable Objects
+
+| Dimension                      | Rivet Actors on Vercel Functions                                                                 | Cloudflare Durable Objects                                                                                                           | Why it matters                                                                   |
+|--------------------------------|---------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
+| **Runtime**                    | **Standard Node.js** (Vercel Functions), full support with npm packages                          | **Custom runtime** (workerd), subset of Node.js APIs, partial support with npm packages                                              | Using standard Node.js makes packages and frameworks "just work" and reduces vendor lock-in. |
+| **Memory / CPU per actor**  | **Configurable** up to 4 GB / 2 vCPU       | Per-isolate memory cap **128 MB**                                                                                                       | Memory-heavy workloads are more feasible on Vercel than on Cloudflare       |
+| **Regional control**           | **Configurable** specific regions | DOs can be restricted to broad jurisdictions and accept location hints, though **limited control** | Explicit control helps reduce latency and meet compliance requirements                                    |
+| **Lock-in / portability**      | **Open-source actor library** designed to be portable across standard runtimes/clouds               | DOs run on Cloudflare's runtime and APIs, **not open-source, not portable**                                                     | Open source + standard runtimes provide flexibility, enables migrations, and allows for on-prem deployments  |
+
+## What Are Rivet Actors?
+
+Similar to Durable Objects, Rivet Actors provide long-lived, stateful actors with **storage, real-time (WebSockets/SSE), and hibernation**. However, unlike Durable Objects, Rivet is open-source and portable — you can self-host or run on any platform.
+
+- **Long-Lived, Stateful Compute**: Each unit of compute is like a tiny server that remembers things between requests – no need to re-fetch data from a database or worry about timeouts. Like AWS Lambda, but with persistent memory between invocations and no timeouts.
+
+- **Realtime, Made Simple**: Update state and broadcast changes in realtime with WebSockets or SSE. No external pub/sub systems, no polling – just built-in low-latency events.
+
+- **No Database Round Trips**: State is stored on the same machine as your compute so reads and writes are ultra-fast. No database round trips, no latency spikes.
+
+- **Sleep When Idle, No Cold Starts**: Actors automatically hibernate when idle and wake up instantly on demand with zero cold start delays. Only pay for active compute time.
+
+- **Architected For Insane Scale**: Automatically scale from zero to millions of concurrent actors. Pay only for what you use with instant scaling and no cold starts.
+
+- **No Vendor Lock-In**: Open-source and fully self-hostable.
+
+## Quick Example: Building an AI Agent with Rivet Actors
+
+Here's how simple it is to build a stateful AI agent using Rivet Actors on Vercel. This example demonstrates an AI chatbot that maintains conversation history, processes messages with OpenAI, and broadcasts updates to all connected clients in real-time – all without managing databases or WebSocket infrastructure.
+
+<CodeGroup>
+
+```typescript {{"title":"src/app/rivet/registry.ts"}}
+import { actor, setup } from "rivetkit";
+import { openai } from "@ai-sdk/openai";
+import { generateText, tool } from "ai";
+import { z } from "zod";
+import { type Message, getWeather } from "./utils";
+
+// Create an actor for every agent
+export const aiAgent = actor({
+	// Persistent state that survives restarts
+	state: {
+		messages: [] as Message[],
+	},
+
+	// Actions are callable by your frontend or backend
+	actions: {
+		getMessages: (c) => c.state.messages,
+
+		sendMessage: async (c, userMessage: string) => {
+			const userMsg: Message = {
+				role: "user",
+				content: userMessage,
+				timestamp: Date.now(),
+			};
+
+			// State changes are automatically persisted
+			c.state.messages.push(userMsg);
+
+			const { text } = await generateText({
+				model: openai("gpt-4o"),
+				prompt: userMessage,
+				messages: c.state.messages,
+				tools: {
+					weather: tool({
+						description: "Get the weather in a location",
+						parameters: z.object({
+							location: z
+								.string()
+								.describe("The location to get the weather for"),
+						}),
+						execute: async ({ location }) => {
+							return await getWeather(location);
+						},
+					}),
+				},
+			});
+
+			const assistantMsg: Message = {
+				role: "assistant",
+				content: text,
+				timestamp: Date.now(),
+			};
+			c.state.messages.push(assistantMsg);
+
+			// Send realtime events to all connected clients
+			c.broadcast("messageReceived", assistantMsg);
+
+			return assistantMsg;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { aiAgent },
+});
+```
+
+```typescript {{"title":"src/app/components/AgentChat.tsx"}}
+import { createRivetKit } from "@rivetkit/next-js/client";
+import { useEffect, useState } from "react";
+import { registry } from "../rivet/registry";
+import type { Message } from "../backend/types";
+
+const { useActor } = createRivetKit<typeof registry>();
+
+export function AgentChat() {
+	// Connect to the actor
+	const aiAgent = useActor({
+		name: "aiAgent",
+		key: ["default"],
+	});
+
+	const [messages, setMessages] = useState<Message[]>([]);
+	const [input, setInput] = useState("");
+	const [isLoading, setIsLoading] = useState(false);
+
+	// Fetch initial messages on load
+	useEffect(() => {
+		if (aiAgent.connection) {
+			aiAgent.connection.getMessages().then(setMessages);
+		}
+	}, [aiAgent.connection]);
+
+	// Subscribe to realtime events
+	aiAgent.useEvent("messageReceived", (message: Message) => {
+		setMessages((prev) => [...prev, message]);
+		setIsLoading(false);
+	});
+
+	const handleSendMessage = async () => {
+		if (aiAgent.connection && input.trim()) {
+			setIsLoading(true);
+
+			const userMessage = { role: "user", content: input, timestamp: Date.now() } as Message;
+			setMessages((prev) => [...prev, userMessage]);
+
+			await aiAgent.connection.sendMessage(input);
+			setInput("");
+		}
+	};
+
+	return (
+		<div className="ai-chat">
+			<div className="messages">
+				{messages.length === 0 ? (
+					<div className="empty-message">
+						Ask the AI assistant a question to get started
+					</div>
+				) : (
+					messages.map((msg, i) => (
+						<div key={i} className={`message ${msg.role}`}>
+							<div className="avatar">{msg.role === "user" ? "👤" : "🤖"}</div>
+							<div className="content">{msg.content}</div>
+						</div>
+					))
+				)}
+				{isLoading && (
+					<div className="message assistant loading">
+						<div className="avatar">🤖</div>
+						<div className="content">Thinking...</div>
+					</div>
+				)}
+			</div>
+
+			<div className="input-area">
+				<input
+					value={input}
+					onChange={(e) => setInput(e.target.value)}
+					onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+					placeholder="Ask the AI assistant..."
+					disabled={isLoading}
+				/>
+				<button
+					onClick={handleSendMessage}
+					disabled={isLoading || !input.trim()}
+				>
+					Send
+				</button>
+			</div>
+		</div>
+	);
+}
+
+```
+
+</CodeGroup>
+
+## Why run Rivet on Vercel?
+
+Running Rivet Actors on Vercel sidesteps several constraints with Cloudflare Durable Objects:
+
+- **Industry standard runtime**: Runs on Node.js today (with Bun coming soon to Vercel Functions). No proprietary runtime, use the Node APIs and NPM packages you already know.
+- **More memory & CPU**: Vercel Functions let you configure memory and vCPU per function (up to 4 GB RAM, 2 vCPU cores). This enables larger PDF processing, multiplayer games, agent context, and heavier compute that would exceed typical isolate caps.
+- **Developer experience**: Deploy actors alongside your Next.js app in one place, leverage Vercel's best-in-class observability, and use Rivet's built-in inspector for deep visibility into your actors.
+- **Regions you choose.** Set regions directly to keep actors close to your primary database or within compliance boundaries.
+- **Portability by design.** Your actor logic is built on RivetKit — an open-source library — and runs on industry standard runtimes. If your needs change, you can move between clouds or self-host without rewriting your application.
+
+## Getting started on Vercel
+
+1. Sign in to [Rivet Cloud](https://dashboard.rivet.dev) or [self-host Rivet](/docs/self-hosting)
+2. Select _Vercel_
+3. Follow instructions to deploy the [Vercel starter template](https://github.com/rivet-dev/template-vercel) or [integrate Rivet into your existing Next.js application](https://www.rivet.dev/docs/actors/quickstart/next-js/)
+
+## Support
+
+- [GitHub Issues](https://github.com/rivet-dev/rivet/issues)  
+- [Discord](https://rivet.dev/discord)
+
