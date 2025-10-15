@@ -11,15 +11,9 @@ export default function CodeSnippets() {
 		useState<StateTypeTab>("memory");
 
 	return (
-		<div className="bg-white/2 border border-white/10 rounded-2xl overflow-hidden">
-			<div className="py-2 border-b border-white/5">
-				<h2 className="text-center text-white/40 text-600 text-sm font-medium">
-					Examples
-				</h2>
-			</div>
-			
+		<>
 			{/* Desktop view - hidden on small screens */}
-			<div className="hidden sm:block">
+			<div className="hidden sm:block bg-white/[0.01] border border-white/15 rounded-2xl overflow-hidden">
 				<CodeSnippetsDesktop
 					activeExample={activeExample}
 					setActiveExample={setActiveExample}
@@ -32,6 +26,6 @@ export default function CodeSnippets() {
 			<div className="block sm:hidden">
 				<CodeSnippetsMobile />
 			</div>
-		</div>
+		</>
 	);
 }

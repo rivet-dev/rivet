@@ -257,13 +257,11 @@ Use authenticated sessions with Rivet:
 ```tsx
 // ChatRoom.tsx
 import React, { useState } from "react";
-import { createClient } from "@rivetkit/client";
 import { createRivetKit } from "@rivetkit/react";
 import { authClient } from "./auth-client";
 import type { registry } from "../backend/registry";
 
-const client = createClient<typeof registry>("http://localhost:8080");
-const { useActor } = createRivetKit(client);
+const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
 
 interface ChatRoomProps {
   session: { user: { id: string; name: string } };

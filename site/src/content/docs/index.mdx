@@ -1,27 +1,13 @@
 import { integrationGroups } from "@/data/integrations/shared";
 import { deployOptions } from "@/data/deploy-options";
+import { useCases } from "@/data/use-cases";
 import {
-  faNodeJs,
-  faReact,
   faActorsBorderless,
-  faRobot,
-  faWaveSine,
-  faServer,
-  faDatabase,
-  faGaugeHigh,
-  faMessage,
 } from "@rivet-gg/icons";
 
 # Overview
 
 Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
-
-## Features
-
-- **Stateful Workloads**: Keep memory between operations & run complex logic that requires stateful processes
-- **Realtime**: Powered by WebSockets or SSE without the complexity
-- **Elastic Scalability**: Scale from zero to millions without cold starts
-- **Multi-Region Durable Storage**: Keep state & operations near your users or comply with data soveirgnty
 
 ## Libraries
 
@@ -40,24 +26,16 @@ Rivet is a library for long-lived processes with durable state, realtime, and sc
 ## Use Cases
 
 <CardGroup cols={2}>
-<Card title="AI Agents" href="/docs/use-cases/ai-agents" icon={faRobot}>
-  Deploy assistants that reason and act with durable memory
-</Card>
-<Card title="Realtime" href="/docs/use-cases/realtime" icon={faWaveSine}>
-  Sync state instantly over WebSockets or SSE
-</Card>
-<Card title="Durable Compute" href="/docs/use-cases/durable-compute" icon={faServer}>
-  Run long-lived services with automatic failover
-</Card>
-<Card title="Per-Tenant Databases" href="/docs/use-cases/per-tenant-databases" icon={faDatabase}>
-  Isolate customer data with multi-tenant storage
-</Card>
-<Card title="Rate Limiting" href="/docs/use-cases/rate-limiting" icon={faGaugeHigh}>
-  Throttle requests using stateful counters per client
-</Card>
-<Card title="Bots" href="/docs/use-cases/bots" icon={faMessage}>
-  Build chat and workflow bots with actor logic
-</Card>
+{useCases.map((useCase) => (
+  <Card
+    key={useCase.href}
+    title={useCase.title}
+    href={useCase.href}
+    icon={useCase.icon}
+  >
+    {useCase.description}
+  </Card>
+))}
 </CardGroup>
 
 ## Deploy Options

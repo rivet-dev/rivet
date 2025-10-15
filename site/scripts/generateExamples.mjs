@@ -5,8 +5,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } fr
 import { join } from 'path';
 import { EXAMPLE_METADATA } from './examplesData.mjs';
 
-const REPO_URL = 'https://github.com/rivet-gg/rivetkit.git';
-const BRANCH = '07-09-chore_add_new_examples';
+const REPO_URL = 'https://github.com/rivet-dev/rivetkit.git';
+const BRANCH = 'main';
 const TEMP_DIR = '/tmp/rivetkit-examples';
 const TEMP_EXAMPLE_DIR = '/tmp/rivet-example-temp';
 const OUTPUT_DIR = './src/data/examples';
@@ -34,7 +34,9 @@ function updateRepo() {
 
 // Replace workspace dependencies with version numbers
 function replaceWorkspaceDependencies(content) {
-  return content.replace(/@rivetkit\/([^"]+)": "workspace:\*"/g, '@rivetkit/$1": "^0.9.1"');
+  return content
+    .replace(/@rivetkit\/([^"]+)": "workspace:\*"/g, '@rivetkit/$1": "^0.9.1"')
+    .replace(/"workspace:\*"/g, '"^0.9.1"');
 }
 
 // Get only the examples defined in metadata

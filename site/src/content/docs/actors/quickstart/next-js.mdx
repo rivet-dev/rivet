@@ -23,7 +23,7 @@ cd my-app
 
 <Step title="Create an Actor">
 
-Create a simple counter actor:
+Create a file at `src/rivet/registry.ts` with a simple counter actor:
 
 ```ts {{"title":"src/rivet/registry.ts"}}
 import { actor, setup } from "rivetkit";
@@ -31,12 +31,11 @@ import { actor, setup } from "rivetkit";
 export const counter = actor({
 	state: { count: 0 },
 	actions: {
-		increment: (c, amount: number = 1) => {
-			c.state.count += amount;
-			c.broadcast("countChanged", c.state.count);
+		increment: (c, x: number) => {
+			c.state.count += x;
+			c.broadcast("newCount", c.state.count);
 			return c.state.count;
 		},
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -47,62 +46,46 @@ export const registry = setup({
 
 </Step>
 
-<Step title="Setup RivetKit client">
+<Step title="Setup Rivet API route">
 
-Create a RivetKit client to connect to your actor:
-
-```ts {{"title":"src/lib/rivet-client.ts"}}
-"use client";
-import { createClient, createRivetKit } from "@rivetkit/next-js/client";
-import type { registry } from "@/rivet/registry";
-
-const client = createClient<typeof registry>({
-	endpoint: `${window.location.origin}/api/rivet`,
-	transport: "sse",
-});
-
-export const { useActor } = createRivetKit(client);
-
-```
-
-<Info>It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.</Info>
-
-</Step>
-
-<Step title="Setup Registry API routes">
+Create a file at `src/app/api/rivet/[...all]/route.ts` to setup the API routes:
 
 ```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}}
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
-// Export the Next.js handler for the API routes
-export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(registry);
+export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
 ```
 
 </Step>
 
-<Step title="Use the Actor in a Component">
+<Step title="Use the Actor in a component">
 
+Create a file at `src/components/Counter.tsx` to use the actor in a component:
 
 ```tsx {{"title":"src/components/Counter.tsx"}}
 "use client";
-import { useActor } from "@/lib/rivet-client";
+
+import { createRivetKit } from "@rivetkit/next-js/client";
+import type { registry } from "@/rivet/registry";
 import { useState } from "react";
 
+export const { useActor } = createRivetKit<typeof registry>(
+	process.env.NEXT_RIVET_ENDPOINT ?? "http://localhost:3000/api/rivet",
+);
 
 export function Counter() {
-	const counter = useActor({
-		name: "counter",
-		key: ["test"], // Use a unique key for the actor instance
-	});
 	const [count, setCount] = useState(0);
 
-	counter.on("countChanged", (newCount) => {
-		setCount(newCount);
+	const counter = useActor({
+		name: "counter",
+		key: ["test"],
 	});
 
-	const increment = () => {
-		counter.increment();
+	counter.useEvent("newCount", (x: number) => setCount(x));
+
+	const increment = async () => {
+		await counter.connection?.increment(1);
 	};
 
 	return (
@@ -114,10 +97,20 @@ export function Counter() {
 }
 ```
 
-<Note>Make sure to import the `Counter` component in your page or layout.</Note>
+<Note>Import the `Counter` component in your page or layout to use it.</Note>
 
-For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.dev/docs/clients/react/).
+For more examples on connecting to your actors using React, check the [React documentation for RivetKit](/docs/clients/react).
+
+</Step>
+
+<Step title="Deploy to Vercel">
+
+See the [Vercel deployment guide](/docs/deploy/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
 
 </Step>
 
 </Steps>
+
+## API Reference
+
+For detailed information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).

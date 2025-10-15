@@ -5,52 +5,11 @@ import { InstallPackage } from "@/components/docs/InstallPackage";
 
 The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications.
 
-## Basic Usage
+## Getting Started
 
-<Steps>
-<Step title="Installation">
-Install the RivetKit package:
-<InstallPackage name="rivetkit" />
-</Step>
-
-<Step title="Create Client and Connect to Actor">
-
-<Note>
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
-</Note>
-
-Create client and connect to actors and listen for real-time updates:
-
-```tsx {{"title":"index.ts"}}
-import { createClient } from "rivetkit/client";
-import type { Registry } from "../src/registry";
-
-async function main() {
-	const client = createClient<Registry>(
-		process.env.ENDPOINT ?? "http://127.0.0.1:8080",
-	);
-
-	const counter = await client.counter.getOrCreate().connect();
-
-	counter.on("countChanged", (count: number) => console.log("Count changed:", count));
-
-	for (let i = 0; i < 5; i++) {
-		const out = await counter.increment(1);
-		console.log("Increment:", out);
-
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-	}
-
-	await new Promise((resolve) => setTimeout(resolve, 10000));
-	await counter.dispose();
-}
-
-main();
-
-```
-</Step>
-</Steps>
+See the [backend quickstart guide](/docs/actors/quickstart/backend) for getting started.
 
 ## API Reference
 
-Follows the same [API as the Node.js client](http://rivet.dev/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
+See the [RivetKit client API](http://rivet.dev/docs/actors/clients/#actor-client).
+

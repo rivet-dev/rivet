@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
 	faFolder,
 	faFolderOpen,
@@ -137,15 +137,15 @@ function FileTreeItem({
 					}
 				}}
 				className={`w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center gap-1 ${isActive && node.type === "file"
-						? "bg-white/10 text-white/50"
-						: "text-white/40 hover:text-white/60 hover:bg-white/5"
+						? "bg-white/15 text-white/80"
+						: "text-white/60 hover:text-white/80 hover:bg-white/8"
 					}`}
 				style={{ paddingLeft: `${8 + indentSize}px` }}
 			>
 				{node.type === "folder" && (
 					<Icon
 						icon={node.isOpen ? faChevronDown : faChevronRight}
-						className="w-3 h-3 text-white/30"
+						className="w-3 h-3 text-white/50"
 					/>
 				)}
 				<Icon
@@ -156,7 +156,7 @@ function FileTreeItem({
 								: faFolder
 							: getFileIcon(node.name)
 					}
-					className="w-3 h-3 text-white/40"
+					className="w-3 h-3 text-white/60"
 				/>
 				<span className="truncate">{node.name}</span>
 			</button>
@@ -187,18 +187,47 @@ interface TabProps {
 }
 
 function Tab({ children, isActive, onClick, className = "" }: TabProps) {
+	const buttonRef = useRef<HTMLButtonElement>(null);
+	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+	const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+		if (!buttonRef.current) return;
+		const rect = buttonRef.current.getBoundingClientRect();
+		setMousePosition({
+			x: e.clientX - rect.left,
+			y: e.clientY - rect.top,
+		});
+	};
+
 	return (
 		<button
+			ref={buttonRef}
 			onClick={onClick}
+			onMouseMove={handleMouseMove}
 			className={clsx(
-				`flex flex-col items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-200 border flex-1`,
+				`group relative flex flex-col items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 border flex-1 overflow-hidden`,
 				isActive
-					? "bg-white/[0.08] text-white border-white/10"
-					: "text-white/60 hover:text-white/80 hover:bg-white/5 border-white/5 hover:border-white/10",
+					? "bg-white/[0.15] text-white border-white/10"
+					: "text-white/70 bg-white/[0.05] hover:text-white hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20",
 				className,
 			)}
+			style={
+				{
+					"--mouse-x": `${mousePosition.x}px`,
+					"--mouse-y": `${mousePosition.y}px`,
+				} as React.CSSProperties
+			}
 		>
-			{children}
+			{/* Spotlight effect */}
+			<div
+				className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+				style={{
+					background: `radial-gradient(circle 120px at var(--mouse-x) var(--mouse-y), rgba(255, 255, 255, 0.08), transparent 80%)`,
+				}}
+			/>
+			<div className="relative z-10 flex flex-col items-center justify-center gap-2">
+				{children}
+			</div>
 		</button>
 	);
 }
@@ -225,25 +254,17 @@ function TabGroup({
 	}));
 
 	return (
-		<div className="border-b border-white/10">
-			{/* Example Tabs */}
-			<div className="p-2 border-b border-white/5">
-				<div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
-					{examplesWithIcons.map((example) => (
-						<Tab
-							key={example.id}
-							isActive={activeExample === example.id}
-							onClick={() => setActiveExample(example.id)}
-						>
-							<Icon
-								icon={example.icon as any}
-								className="w-3.5 h-3.5"
-							/>
-							{example.title}
-						</Tab>
-					))}
-				</div>
-			</div>
+		<div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
+			{examplesWithIcons.map((example) => (
+				<Tab
+					key={example.id}
+					isActive={activeExample === example.id}
+					onClick={() => setActiveExample(example.id)}
+				>
+					<Icon icon={example.icon as any} className="w-3.5 h-3.5" />
+					{example.title}
+				</Tab>
+			))}
 		</div>
 	);
 }
@@ -260,7 +281,7 @@ function BottomBarButton({ onClick, icon, children }: BottomBarButtonProps) {
 	return (
 		<button
 			onClick={onClick}
-			className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-normal text-white/50 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all duration-200"
+			className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-normal text-white/70 hover:text-white/90 hover:bg-white/8 rounded-lg transition-all duration-200"
 		>
 			<Icon icon={icon} className="w-3 h-3" />
 			{children}
@@ -274,22 +295,20 @@ interface BottomBarProps {
 
 function BottomBar({ activeExample }: BottomBarProps) {
 	const exampleData = examples.find((ex) => ex.id === activeExample)!;
-	const { handleOpenGithub, handleOpenStackBlitz, handleDownloadZip } = 
+	const { handleOpenGithub, handleOpenStackBlitz, handleDownloadZip } =
 		createExampleActions(activeExample, exampleData.files);
 
 	return (
-		<div className="border-t border-white/10 bg-white/[0.02] p-2">
-			<div className="flex items-center justify-start">
-				<BottomBarButton onClick={handleOpenGithub} icon={faGithub}>
-					View on GitHub
-				</BottomBarButton>
-				<BottomBarButton onClick={handleDownloadZip} icon={faFileZip}>
-					Download ZIP
-				</BottomBarButton>
-				<BottomBarButton onClick={handleOpenStackBlitz} icon={faBolt}>
-					Open in StackBlitz
-				</BottomBarButton>
-			</div>
+		<div className="flex items-center justify-start">
+			<BottomBarButton onClick={handleOpenGithub} icon={faGithub}>
+				View on GitHub
+			</BottomBarButton>
+			<BottomBarButton onClick={handleDownloadZip} icon={faFileZip}>
+				Download ZIP
+			</BottomBarButton>
+			<BottomBarButton onClick={handleOpenStackBlitz} icon={faBolt}>
+				Open in StackBlitz
+			</BottomBarButton>
 		</div>
 	);
 }
@@ -384,51 +403,44 @@ function CodeEditor({ activeExample, activeStateType }: CodeEditorProps) {
 	}, [activeFile, activeExample]);
 
 	return (
-		<div className="w-full flex flex-col">
-			<div className={`h-[${EDITOR_HEIGHT}px] w-full flex`}>
-				{/* Left sidebar - File tree */}
-				<div className="w-[160px] flex-shrink-0 border-r border-white/10 bg-white/[0.02]">
-					<div className="p-2 overflow-auto h-full">
-						{fileTree.map((node) => (
-							<FileTreeItem
-								key={node.path}
-								node={node}
-								depth={0}
-								activeFile={activeFile}
-								onFileClick={handleFileClick}
-								onFolderToggle={handleFolderToggle}
-							/>
-						))}
-					</div>
-				</div>
-
-				{/* Right side - Code viewer */}
-				<div className="flex-1 relative group">
-					{/* Copy button */}
-					<button
-						onClick={handleCopyCode}
-						className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/20 hover:bg-black/40 border border-white/5 hover:border-white/10 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
-						title={copied ? "Copied!" : "Copy code"}
-					>
-						<Icon
-							icon={copied ? faCheck : faCopy}
-							className={`w-3.5 h-3.5 ${copied ? "text-green-400" : "text-white/60"}`}
+		<div className={`h-[${EDITOR_HEIGHT}px] w-full flex`}>
+			{/* Left sidebar - File tree */}
+			<div className="w-[160px] flex-shrink-0 border-r border-white/15 bg-[#0d0b0a]">
+				<div className="p-2 overflow-auto h-full">
+					{fileTree.map((node) => (
+						<FileTreeItem
+							key={node.path}
+							node={node}
+							depth={0}
+							activeFile={activeFile}
+							onFileClick={handleFileClick}
+							onFolderToggle={handleFolderToggle}
 						/>
-					</button>
-					<div 
-						className="h-full overflow-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/60 [&::-webkit-scrollbar-thumb]:rounded"
-					>
-						<div
-							className="code p-4 text-xs"
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: we trust shiki
-							dangerouslySetInnerHTML={{ __html: fileContent }}
-						/>
-					</div>
+					))}
 				</div>
 			</div>
 
-			{/* Bottom bar */}
-			<BottomBar activeExample={activeExample} />
+			{/* Right side - Code viewer */}
+			<div className="flex-1 relative group">
+				{/* Copy button */}
+				<button
+					onClick={handleCopyCode}
+					className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-black/30 hover:bg-black/50 border border-white/10 hover:border-white/20 rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
+					title={copied ? "Copied!" : "Copy code"}
+				>
+					<Icon
+						icon={copied ? faCheck : faCopy}
+						className={`w-3.5 h-3.5 ${copied ? "text-green-400" : "text-white/80"}`}
+					/>
+				</button>
+				<div className="h-full overflow-auto bg-[#0d0b0a] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/70 [&::-webkit-scrollbar-thumb]:rounded">
+					<div
+						className="code p-4 text-xs"
+						// biome-ignore lint/security/noDangerouslySetInnerHtml: we trust shiki
+						dangerouslySetInnerHTML={{ __html: fileContent }}
+					/>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -447,7 +459,13 @@ export default function CodeSnippetsDesktop({
 	setActiveStateType,
 }: CodeSnippetsDesktopProps) {
 	return (
-		<>
+		<div className="p-2 flex flex-col gap-2">
+			{/* Examples Header */}
+			<h2 className="text-center text-white/70 text-600 text-sm font-medium py-0.5">
+				Examples
+			</h2>
+
+			{/* Tabs */}
 			<TabGroup
 				examples={examples}
 				activeExample={activeExample}
@@ -455,10 +473,17 @@ export default function CodeSnippetsDesktop({
 				activeStateType={activeStateType}
 				setActiveStateType={setActiveStateType}
 			/>
-			<CodeEditor
-				activeExample={activeExample}
-				activeStateType={activeStateType}
-			/>
-		</>
+
+			{/* Code Editor with inset rounded rect */}
+			<div className="border border-white/15 rounded-xl overflow-hidden bg-[#0d0b0a]">
+				<CodeEditor
+					activeExample={activeExample}
+					activeStateType={activeStateType}
+				/>
+			</div>
+
+			{/* Bottom bar - outside the inner rect */}
+			<BottomBar activeExample={activeExample} />
+		</div>
 	);
 }
