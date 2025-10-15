@@ -35,8 +35,8 @@ export default function EditRunnerConfigFrameContent({
 		},
 	});
 
-	const config = data.find(([id]) => id === name)?.[1].datacenters?.[dc]
-		.serverless;
+	const datacenters = data.find(([id]) => id === name)?.[1].datacenters;
+	const config = datacenters?.[dc].serverless;
 
 	if (!config) {
 		return (
@@ -52,6 +52,7 @@ export default function EditRunnerConfigFrameContent({
 				await mutateAsync({
 					name,
 					config: {
+						...datacenters,
 						[dc]: {
 							serverless: {
 								...values,

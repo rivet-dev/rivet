@@ -47,8 +47,8 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 			}}
 			defaultValues={{
 				name,
+				key: "example-key",
 				crashPolicy: CrashPolicy.Destroy,
-				datacenter: "auto",
 			}}
 		>
 			<DialogHeader>
@@ -62,7 +62,11 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 				<ActorCreateForm.Keys />
 				<ActorCreateForm.ActorPreview />
 				{["engine", "cloud"].includes(__APP_TYPE__) ? (
-					<ActorCreateForm.PrefillRunnerName />
+					<>
+						<ActorCreateForm.PrefillActorName />
+						<ActorCreateForm.PrefillRunnerName />
+						<ActorCreateForm.PrefillDatacenter />
+					</>
 				) : null}
 
 				<Accordion type="single" collapsible>
