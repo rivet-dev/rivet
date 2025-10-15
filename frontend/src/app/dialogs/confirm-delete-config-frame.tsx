@@ -27,7 +27,7 @@ export default function ConfirmDeleteConfigContent({
 		<>
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
-					<div>Confirm deletion of {name}</div>
+					<div>Confirm deletion of '{name}' provider</div>
 				</Frame.Title>
 				<Frame.Description>
 					This action cannot be undone. Are you sure you want to
