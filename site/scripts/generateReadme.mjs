@@ -81,8 +81,8 @@ Generated from: site/scripts/generateReadme.mjs
 
 const RIVETKIT_HEADER = `<!-- 
 THIS FILE IS AUTO-GENERATED. DO NOT EDIT DIRECTLY.
-To update this README, run: npm run gen:readme in the github.com/rivet-gg/rivet repository
-Generated from: github.com/rivet-gg/rivet/site/scripts/generateReadme.mjs
+To update this README, run: npm run gen:readme in the github.com/rivet-dev/engine repository
+Generated from: github.com/rivet-dev/engine/site/scripts/generateReadme.mjs
 -->
 
 `;

@@ -48,7 +48,7 @@ export const createExampleActions = (exampleId: string, exampleFiles?: Record<st
 	};
 
 	const handleOpenStackBlitz = () => {
-		const stackBlitzUrl = `https://stackblitz.com/github/rivet-gg/rivetkit/tree/main/examples/${exampleId}`;
+		const stackBlitzUrl = `https://stackblitz.com/github/rivet-dev/rivetkit/tree/main/examples/${exampleId}`;
 		window.open(stackBlitzUrl, "_blank");
 	};
 
