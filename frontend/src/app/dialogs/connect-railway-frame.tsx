@@ -353,13 +353,3 @@ function DeployToRailwayButton() {
 		</a>
 	);
 }
-
-const useSelectedDatacenter = () => {
-	const datacenter = useWatch({ name: "datacenter" });
-
-	const { data } = useQuery(
-		useEngineCompatDataProvider().regionQueryOptions(datacenter || "auto"),
-	);
-
-	return data?.url || engineEnv().VITE_APP_API_URL;
-};
