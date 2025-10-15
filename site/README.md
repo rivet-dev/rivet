@@ -14,7 +14,7 @@ src/
   content/        This is where all MDX content lives.
   authors/
   components/     Reusable components
-  generated/      Content generated from the rivet-gg/rivet repo with scripts/generate*.js
+  generated/      Content generated from the rivet-dev/engine repo with scripts/generate*.js
   lib/            Helper libraries used at build time
   mdx/            "
   pages/          MDX & JSX content to serve as pages

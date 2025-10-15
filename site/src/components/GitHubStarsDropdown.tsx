@@ -69,8 +69,8 @@ export function GitHubStarsDropdown({
 	};
 
 	useEffect(() => {
-		fetchStars("rivet-gg/rivet", setRivetStars);
-		fetchStars("rivet-gg/rivetkit", setRivetKitStars);
+		fetchStars("rivet-dev/engine", setRivetStars);
+		fetchStars("rivet-dev/rivetkit", setRivetKitStars);
 	}, []);
 
 	const totalStars = rivetStars.stars + rivetKitStars.stars;

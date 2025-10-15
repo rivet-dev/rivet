@@ -31,9 +31,9 @@ All API requests require [authentication tokens](/docs/tokens). Use these tokens
 While you can use the HTTP API directly, we recommend using our official SDKs:
 
 - [TypeScript & JavaScript](https://www.npmjs.com/package/@rivet-gg/api)
-- [Go](https://github.com/rivet-gg/rivet/tree/main/sdks/api/runtime/go)
-- [Rust](https://github.com/rivet-gg/rivet/tree/main/sdks/api/runtime/rust)
-- [OpenAPI](https://github.com/rivet-gg/rivet/blob/main/sdks/api/runtime/openapi/openapi.yml)
+- [Go](https://github.com/rivet-dev/engine/tree/main/sdks/api/runtime/go)
+- [Rust](https://github.com/rivet-dev/engine/tree/main/sdks/api/runtime/rust)
+- [OpenAPI](https://github.com/rivet-dev/engine/blob/main/sdks/api/runtime/openapi/openapi.yml)
 - [Command Line Interface](/docs/cli)
 
 ## Error Handling
