@@ -1,58 +1,58 @@
 // Shared example metadata used by both generateExamples.mjs and generateReadme.mjs
 
 export const EXAMPLE_METADATA = {
-  "ai-agent": { 
-    icon: "faRobot", 
+  "ai-agent": {
+    icon: "faRobot",
     title: "AI Agent",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
     tab: "memory"
   },
-  "chat-room": { 
-    icon: "faMessage", 
-    title: "Chat Room",
+  "crdt": {
+    icon: "faFilePen",
+    title: "Realtime Docs",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
     tab: "memory"
   },
-  "crdt": { 
-    icon: "faFilePen", 
-    title: "Collab (Yjs)",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
+  "workflows": {
+    icon: "faDiagramNext",
+    title: "Workflows",
+    filesToOpen: ['src/registry.ts', 'src/server.ts'],
     tab: "memory"
   },
-  "game": { 
-    icon: "faGamepad", 
-    title: "Multiplayer Game",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "sync": { 
-    icon: "faRotate", 
+  "sync": {
+    icon: "faRotate",
     title: "Local-First Sync",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
     tab: "memory"
   },
-  "rate": { 
-    icon: "faGaugeHigh", 
-    title: "Rate Limiter",
-    filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
-    tab: "memory"
-  },
-  "database": { 
-    icon: "faDatabase", 
-    title: "Per-User DB",
+  "database": {
+    icon: "faDatabase",
+    title: "Per-User Database",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
     tab: "sqlite"
   },
-  "tenant": { 
-    icon: "faBuilding", 
-    title: "Multi-Tenant SaaS",
+  "background-jobs": {
+    icon: "faClock",
+    title: "Background Jobs",
+    filesToOpen: ['src/registry.ts', 'src/server.ts'],
+    tab: "memory"
+  },
+  "rate": {
+    icon: "faGaugeHigh",
+    title: "Rate Limiting",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
     tab: "memory"
   },
-  "stream": { 
-    icon: "faWaveSine", 
-    title: "Stream Processing",
+  "game": {
+    icon: "faGamepad",
+    title: "Multiplayer Game",
     filesToOpen: ['src/backend/registry.ts', 'src/frontend/App.tsx'],
+    tab: "memory"
+  },
+  "bots": {
+    icon: "faUserRobot",
+    title: "Bots",
+    filesToOpen: ['src/registry.ts', 'src/server.ts'],
     tab: "memory"
   },
 };

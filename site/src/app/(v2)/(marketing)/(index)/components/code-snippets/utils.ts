@@ -16,6 +16,9 @@ import {
 	faBracketsCurly,
 	faJs,
 	faFile,
+	faClock,
+	faUserRobot,
+	faDiagramNext,
 } from "@rivet-gg/icons";
 import { examples } from "@/data/examples/examples";
 import JSZip from "jszip";
@@ -30,6 +33,9 @@ export const EXAMPLE_ICON_MAP: Record<string, any> = {
 	game: faGamepad,
 	sync: faRotate,
 	tenant: faBuilding,
+	bots: faUserRobot,
+	workflows: faDiagramNext,
+	"background-jobs": faClock,
 };
 
 // Shared functionality for example actions

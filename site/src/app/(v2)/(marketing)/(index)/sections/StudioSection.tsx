@@ -13,7 +13,7 @@ import {
 	faEye,
 	faFlask,
 	faMagnifyingGlass,
-    faNetworkWired,
+	faNetworkWired,
 } from "@rivet-gg/icons";
 
 export interface FeatureItem {
@@ -29,7 +29,7 @@ interface FeatureProps {
 
 function Feature({ feature }: FeatureProps) {
 	const title = feature.title || feature.name;
-	
+
 	return (
 		<div className="p-5 text-md">
 			<div className="flex items-center gap-3 mb-3 text-white/90">
@@ -50,19 +50,22 @@ export function StudioSection() {
 				"View and edit your actor state in real-time as messages are sent and processed",
 		},
 		{
+			name: "Event Monitoring",
+			icon: faChartLine,
+			description:
+				"See all events happening in your actor in real-time - track every state change and action as it happens",
+		},
+		{
 			name: "REPL",
 			icon: faTerminal,
-			description: "Debug your actor in real-time - call actions, subscribe to events, and interact directly with your code"
+			description:
+				"Debug your actor in real-time - call actions, subscribe to events, and interact directly with your code",
 		},
 		{
 			name: "Connection Inspection",
 			icon: faNetworkWired,
-			description: "Monitor active connections with state and parameters for each client",
-		},
-		{
-			name: "Hot Reload Code Changes",
-			icon: faCodeBranch,
-			description: "See code changes instantly without restarting - modify and test on the fly"
+			description:
+				"Monitor active connections with state and parameters for each client",
 		},
 	];
 
@@ -70,7 +73,8 @@ export function StudioSection() {
 		<div className="w-full px-6">
 			<div className="relative group">
 				{/* Unified hover area covering screenshot and spacer */}
-				<a 
+				{/*href="https://www.youtube.com/watch?v=RYgo25fH9Ss"*/}
+				<a
 					className="absolute cursor-pointer"
 					style={{
 						top: "200px",
@@ -80,7 +84,7 @@ export function StudioSection() {
 						width: "100%",
 						zIndex: 15,
 					}}
-					href="https://www.youtube.com/watch?v=RYgo25fH9Ss"
+					href="https://x.com/NathanFlurry/status/1976427064678023634"
 					target="_blank"
 					rel="noopener noreferrer"
 				/>
@@ -90,10 +94,12 @@ export function StudioSection() {
 					{/* Header */}
 					<div className="max-w-7xl mx-auto relative z-20 pointer-events-auto">
 						<h2 className="max-w-lg text-4xl font-medium tracking-tight text-white">
-							Supercharged Local Development with the Inspector
+							Built-In Observability at Scale
 						</h2>
 						<p className="max-w-lg mt-4 text-lg text-white/70">
-							Like Postman, but for all of your stateful serverless needs.
+							Powerful debugging and monitoring tools that work
+							seamlessly from local development to production at
+							scale.
 						</p>
 
 						{/* Visit the Studio link */}
@@ -105,7 +111,9 @@ export function StudioSection() {
 								rel="noopener noreferrer"
 							>
 								Visit The Inspector
-								<span className="transition-transform group-hover/link:translate-x-1">→</span>
+								<span className="transition-transform group-hover/link:translate-x-1">
+									→
+								</span>
 							</a>
 						</div>
 					</div>
@@ -115,8 +123,12 @@ export function StudioSection() {
 						{/* Watch Demo overlay that appears on hover */}
 						<div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
 							<div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg px-6 py-3 text-white font-medium flex items-center gap-2">
-								<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-									<path d="M6.3 2.84A1 1 0 004 3.75v12.5a1 1 0 001.59.81l11-6.25a1 1 0 000-1.62l-11-6.25a1 1 0 00-1.29.06z"/>
+								<svg
+									className="w-5 h-5"
+									fill="currentColor"
+									viewBox="0 0 20 20"
+								>
+									<path d="M6.3 2.84A1 1 0 004 3.75v12.5a1 1 0 001.59.81l11-6.25a1 1 0 000-1.62l-11-6.25a1 1 0 00-1.29.06z" />
 								</svg>
 								Watch Demo
 							</div>
@@ -136,7 +148,7 @@ export function StudioSection() {
 				{/* Screenshot */}
 				<div className="absolute inset-0 overflow-hidden">
 					{/* Screenshot wrapper */}
-					<div 
+					<div
 						className="absolute"
 						style={{
 							top: "220px",
@@ -161,7 +173,8 @@ export function StudioSection() {
 									transform:
 										"translateX(-11%) scale(1.2) rotateX(38deg) rotateY(19deg) rotateZ(340deg)",
 									transformOrigin: "top left",
-									boxShadow: "0 35px 60px -15px rgba(0, 0, 0, 0.5)",
+									boxShadow:
+										"0 35px 60px -15px rgba(0, 0, 0, 0.5)",
 								}}
 							>
 								{/* Studio screenshot with enhanced depth */}
@@ -174,7 +187,7 @@ export function StudioSection() {
 								>
 									<Image
 										src={imgStudio}
-										alt="Rivet Studio dashboard"
+										alt="Rivet Dashboard"
 										className="w-full h-full object-cover object-top rounded-md"
 										fill
 										sizes="(max-width: 768px) 100vw, 80vw"
@@ -187,14 +200,14 @@ export function StudioSection() {
 					</div>
 
 					{/* Gradient overlay */}
-					<div 
-						className="absolute inset-0 z-[1] pointer-events-none" 
+					<div
+						className="absolute inset-0 z-[1] pointer-events-none"
 						style={{
-							background: "linear-gradient(90deg, hsl(var(--background) / 0) 66%, hsl(var(--background) / 0.95) 85%, hsl(var(--background) / 1) 100%)",
+							background:
+								"linear-gradient(90deg, hsl(var(--background) / 0) 66%, hsl(var(--background) / 0.95) 85%, hsl(var(--background) / 1) 100%)",
 						}}
 					/>
 				</div>
-
 			</div>
 		</div>
 	);

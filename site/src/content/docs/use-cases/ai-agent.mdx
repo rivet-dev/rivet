@@ -1,0 +1,51 @@
+# AI Agents
+
+## Challenges of Building AI Agents
+
+Common tools: LangChain, OpenAI SDK, custom state management systems, Redis for memory storage
+
+Main pain points:
+- Managing conversation history and agent memory across sessions requires external databases
+- Keeping context and state synchronized while handling multiple concurrent conversations
+- High latency from database round trips to fetch conversation history
+- Complex infrastructure for realtime streaming responses to users
+- Handling tool calls and maintaining agent state during long-running operations
+
+## How Rivet Solves This
+
+Rivet makes building stateful AI agents simple by providing durable actors that keep conversation history and agent state in memory without external databases.
+
+**Persistent Memory**: Each agent actor maintains its own state including conversation history, tool results, and context. State survives restarts and deployments automatically.
+
+```typescript
+const aiAgent = actor({
+  state: {
+    messages: [] as Array<{role: string, content: string}>,
+    context: {}
+  },
+
+  actions: {
+    chat: async (c, userMessage: string) => {
+      c.state.messages.push({ role: "user", content: userMessage });
+
+      const response = await callLLM(c.state.messages);
+      c.state.messages.push({ role: "assistant", content: response });
+
+      c.broadcast("message", { role: "assistant", content: response });
+      return response;
+    }
+  }
+});
+```
+
+**Realtime Streaming**: Use WebSocket connections to stream LLM responses in realtime without additional infrastructure. Learn more about [events](/docs/actors/events).
+
+**Tool Integration**: Execute tool calls within the actor context while maintaining state consistency. See [actions](/docs/actors/actions) for more details.
+
+**No Cold Starts**: Agents hibernate when idle and wake instantly when needed, keeping conversation context ready without paying for idle time. Read about [actor lifecycle](/docs/actors/lifecycle).
+
+## Full Example Projects
+
+<CardGroup>
+<Card href="https://github.com/rivet-gg/rivet/tree/main/examples/ai-agent" title="AI Agent Starter" />
+</CardGroup>

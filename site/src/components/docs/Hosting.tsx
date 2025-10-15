@@ -19,9 +19,16 @@ export function Hosting() {
 				<b>Hosting Providers</b>
 			</p>
 			<CardGroup>
-				{hostingProviders.map(({ title, href }) => (
-					<Card key={href} title={title} href={href} />
-				))}
+				{hostingProviders
+					.filter((x) => !x.specializedPlatform)
+					.map(({ title, href, icon }) => (
+						<Card
+							key={href}
+							title={title}
+							href={href}
+							icon={icon}
+						/>
+					))}
 			</CardGroup>
 		</>
 	);

@@ -15,6 +15,8 @@ export interface DeployOption {
 	href: string;
 	icon?: any;
 	badge?: string;
+	/** If true, this platform should NOT be shown for generic deploy guides for Node/Buns-specific platforms. */
+	specializedPlatform?: boolean;
 }
 
 export const deployOptions: DeployOption[] = [
@@ -23,6 +25,7 @@ export const deployOptions: DeployOption[] = [
 		href: "/docs/deploy/vercel",
 		icon: faVercel,
 		badge: "1-Click Deploy",
+		specializedPlatform: true,
 	},
 	{
 		title: "Railway",
@@ -34,6 +37,7 @@ export const deployOptions: DeployOption[] = [
 		title: "Cloudflare Workers",
 		href: "/docs/deploy/cloudflare-workers",
 		icon: faCloudflare,
+		specializedPlatform: true,
 	},
 	{
 		title: "Kubernetes",
@@ -53,6 +57,7 @@ export const deployOptions: DeployOption[] = [
 	// {
 	// 	title: "Freestyle",
 	// 	href: "/docs/deploy/freestyle",
+	// specializedPlatform: true,
 	// },
 	{
 		title: "Hetzner",

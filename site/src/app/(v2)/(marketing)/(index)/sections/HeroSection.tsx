@@ -2,6 +2,7 @@ import { PlatformIcons } from "../components/PlatformIcons";
 import { MarketingButton } from "../components/MarketingButton";
 import { CopyCommand } from "../components/CopyCommand";
 import Link from "next/link";
+import { WithTooltip } from "@rivet-gg/components";
 
 export function HeroSection() {
 	return (
@@ -21,17 +22,37 @@ export function HeroSection() {
 
 						<div className="h-5" />
 
-						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
-							Rivet is a library for long-lived processes with{" "}
-							<span className="text-white/90">durable state</span>
+						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+							Rivet is a library for{" "}
+							<span className="text-white/90"> long-lived processes</span>{" "} with{" "}
+							<span className="text-white/90">state</span>
 							, <span className="text-white/90">realtime</span>,
 							and{" "}
-							<span className="text-white/90">scalability</span>.
+							<span className="text-white/90">hibernation</span>.
 							<br />
 							Easily{" "}
 							<span className="text-white/90">self-hostable</span>{" "}
 							and works with{" "}
 							<span className="text-white/90">
+								your infrastructure
+							</span>
+							.
+						</p>*/}
+
+
+						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+							Rivet is an open-source library for{" "}
+							<span className="ttext-white/90">long-lived processes</span>.
+							<br />
+							Like Lambda — but with{" "}
+							<span className="text-white/90">persistence</span>,{" "}
+							<span className="text-white/90">realtime</span>, and{" "}
+							<span className="text-white/90">hibernation</span>.
+							<br />
+							Easily{" "}
+							<span className="ttext-white/90">self-hostable</span>{" "}
+							and works with{" "}
+							<span className="ttext-white/90">
 								your infrastructure
 							</span>
 							.
@@ -47,7 +68,7 @@ export function HeroSection() {
 						{/* CTA Buttons */}
 						<div className="hero-bg-exclude flex flex-col sm:flex-row items-center justify-center gap-4">
 							<MarketingButton
-								href="/docs/actors/quickstart"
+								href="/docs/actors"
 								primary
 							>
 								Quickstart — 5 minutes

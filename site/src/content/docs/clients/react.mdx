@@ -4,80 +4,9 @@ import { InstallPackage } from "@/components/docs/InstallPackage";
 
 Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
 
-## Basic Usage
+## Getting Started
 
-<Steps>
-
-<Step title="Installation">
-  
-Install the RivetKit React package:
-<InstallPackage name="rivetkit @rivetkit/react" />
-
-</Step>
-
-<Step title="Use in Components">
-
-<Note>
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
-</Note>
-
-Connect to actors and listen for real-time updates:
-
-```tsx {{"title":"frontend/App.tsx"}}
-import { useState } from "react";
-import { useActor } from "./rivetkit";
-
-function App() {
-  const [count, setCount] = useState(0);
-  const [counterName, setCounterName] = useState("my-counter");
-
-  // Connect to the counter actor
-  const counter = useActor({
-    name: "counter",
-    key: [counterName],
-  });
-
-  // Listen for real-time count updates
-  counter.useEvent("countChanged", (newCount: number) => {
-    setCount(newCount);
-  });
-
-  const increment = async () => {
-    await counter.connection?.increment(1);
-  };
-
-  return (
-    <div style={{ padding: "2rem" }}>
-      <h1>Rivet Counter</h1>
-      <h2>Count: {count}</h2>
-      
-      <div style={{ marginBottom: "1rem" }}>
-        <label>
-          Counter Name:
-          <input
-            type="text"
-            value={counterName}
-            onChange={(e) => setCounterName(e.target.value)}
-            style={{ marginLeft: "0.5rem", padding: "0.25rem" }}
-          />
-        </label>
-      </div>
-
-      <button onClick={increment} disabled={!counter.isConnected}>
-        Increment
-      </button>
-
-      <div style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#666" }}>
-        <p>Status: {counter.isConnected ? "Connected" : "Disconnected"}</p>
-      </div>
-    </div>
-  );
-}
-
-export default App;
-```
-</Step>
-</Steps>
+See the [React quickstart guide](/docs/actors/quickstart/react) for getting started.
 
 ## API Reference
 
@@ -87,8 +16,9 @@ Creates the Rivet hooks for React integration.
 
 ```tsx
 import { createClient, createRivetKit } from "@rivetkit/react";
+import type { registry } from "./backend/registry";
 
-const client = createClient<typeof registry>("http://localhost:8080");
+const client = createClient<typeof registry>();
 const { useActor } = createRivetKit(client);
 ```
 
@@ -124,7 +54,6 @@ const actor = useActor({
   - `createWithInput`: Optional input to pass to the actor on creation
   - `createInRegion`: Optional region to create the actor in if does not exist
   - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
-  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
 
 #### Returns
 
@@ -141,8 +70,8 @@ Subscribe to events emitted by the actor.
 ```tsx
 const actor = useActor({ name: "counter", key: ["my-counter"] });
 
-actor.useEvent("countChanged", (newCount: number) => {
-  console.log("Count changed:", newCount);
+actor.useEvent("newCount", (count: number) => {
+  console.log("Count changed:", count);
 });
 ```
 

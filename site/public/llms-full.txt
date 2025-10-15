@@ -1870,13 +1870,13 @@ Actors for long-lived processes with durable state, realtime, and hibernate when
 
 ## Quickstart
 
-  Set up actors with Node.js, Bun, and web frameworks
+  Set up Rivet with Node.js, Bun, and web frameworks
 
-  Build real-time React applications with actors
+  Set up Rivet with React
 
-  Build server-rendered Next.js experiences backed by actors
+  Set up Rivet with Next.js
 
-  Deploy actors on Cloudflare Workers with zero infrastructure
+  Set up Rivet with Cloudflare Workers
 
 ## Features
 
@@ -2745,7 +2745,6 @@ Create a simple counter actor:
 ```ts }
 const counter = actor(,
 	actions: ,
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -2852,12 +2851,11 @@ await connection.increment(1);
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
-const client = createClient("http://localhost:8080");
-const  = createRivetKit(client);
+const  = createRivetKit("http://localhost:8080");
 
 function Counter() );
 
-	counter.useEvent("countChanged", (newCount: number) => );
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
 
@@ -2904,7 +2902,6 @@ Create a simple counter actor:
 ```ts }
 const counter = actor(,
 	actions: ,
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -2983,6 +2980,8 @@ wrangler deploy
 
 Your actors will now run on Cloudflare's edge with persistent state backed by Durable Objects.
 
+See the [Cloudflare Workers deployment guide](/docs/deploy/cloudflare-workers) for detailed deployment instructions and configuration options.
+
 ## Configuration Options
 
 ### Connect Frontend To The Rivet Actor
@@ -3015,12 +3014,11 @@ await connection.increment(1);
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 ```tsx }
-const client = createClient("https://your-app.workers.dev/rivet");
-const  = createRivetKit(client);
+const  = createRivetKit("https://your-app.workers.dev/rivet");
 
 function Counter() );
 
-	counter.useEvent("countChanged", (newCount: number) => );
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
 
@@ -3061,6 +3059,10 @@ See the [Rust client documentation](/docs/clients/rust) for more information.
   Set up actors with Node.js, Bun, and web frameworks
 
   Build real-time React applications with actors
+
+  Build server-rendered Next.js experiences backed by actors
+
+  Deploy actors on Cloudflare Workers with zero infrastructure
 ## Next.js Quickstart
 
 # Next.js Quickstart
@@ -3072,12 +3074,11 @@ npx create-next-app@latest my-app
 cd my-app
 ```
 
-Create a simple counter actor:
+Create a file at `src/rivet/registry.ts` with a simple counter actor:
 
 ```ts }
 const counter = actor(,
 	actions: ,
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -3085,33 +3086,26 @@ const registry = setup(,
 });
 ```
 
-Create a RivetKit client to connect to your actor:
+Create a file at `src/app/api/rivet/[...all]/route.ts` to setup the API routes:
 
 ```ts }
-"use client";
-const client = createClient(/api/rivet`,
-	transport: "sse",
-});
-
-const  = createRivetKit(client);
-
-```
-
-It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.
-
-```ts }
-// Export the Next.js handler for the API routes
 const  = toNextHandler(registry);
 ```
 
+Create a file at `src/components/Counter.tsx` to use the actor in a component:
+
 ```tsx }
 "use client";
+
+const  = createRivetKit(
+	process.env.NEXT_RIVET_ENDPOINT ?? "http://localhost:3000/api/rivet",
+);
+
 function Counter() );
-	const [count, setCount] = useState(0);
 
-	counter.on("countChanged", (newCount) => );
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
-	const increment = () => ;
+	const increment = async () => ;
 
 	return (
 		
@@ -3122,9 +3116,15 @@ function Counter() );
 }
 ```
 
-Make sure to import the `Counter` component in your page or layout.
+Import the `Counter` component in your page or layout to use it.
 
-For more examples how to connect to your actors using React, check the [RivetKit React documentation](http://rivet.dev/docs/clients/react/).
+For more examples on connecting to your actors using React, check the [React documentation for RivetKit](/docs/clients/react).
+
+See the [Vercel deployment guide](/docs/deploy/vercel) for detailed instructions on deploying your RivetKit app to Vercel.
+
+## API Reference
+
+For detailed information about the Next.js client API, see the [React Client API Reference](/docs/clients/react).
 ## React Quickstart
 
 # React Quickstart
@@ -3138,10 +3138,8 @@ npm install rivetkit @rivetkit/react
 Create your actor registry on the backend:
 
 ```ts }
-const counter = actor(,  // Skip authentication (can be configured later)
-	state: ,
+const counter = actor(,
 	actions: ,
-		getCount: (c) => c.state.count,
 	},
 });
 
@@ -3159,18 +3157,14 @@ registry.start();
 Set up your React application:
 
 ```tsx }
-// Create typed client
-const client = createClient("http://localhost:8080");
+const client = createClient();
 const  = createRivetKit(client);
 
 function App() );
 
-	// Listen for real-time count updates
-	counter.useEvent("countChanged", (newCount: number) => );
+	counter.useEvent("newCount", (x: number) => setCount(x));
 
 	const increment = async () => ;
-
-	const incrementBy = async (amount: number) => ;
 
 	return (
 		
@@ -3182,13 +3176,7 @@ function App() );
 						style=}
 					/>
 
-					+1
-				
-				 incrementBy(5)}>
-					+5
-				
-				 incrementBy(10)}>
-					+10
+			Increment
 
 				Connection Status: 
 				Try opening multiple tabs to see real-time sync.
@@ -3229,6 +3217,10 @@ Open `http://localhost:5173` in your browser. Try opening multiple tabs to see r
 Add custom HTTP endpoints alongside your actors to handle additional business logic, authentication, and integrations with external services.
 
 See [backend quickstart](/docs/actors/quickstart/backend) for more information.
+
+## API Reference
+
+For detailed information about the React client API, see the [React Client API Reference](/docs/clients/react).
 ## Scaling & Concurrency
 
 # Scaling & Concurrency
@@ -3669,28 +3661,13 @@ This is where the technical API docs live.
 
 The Rivet JavaScript client allows you to connect to and interact with actors from browser and Node.js applications.
 
-## Basic Usage
+## Getting Started
 
-Install the RivetKit package:
-
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
-
-Create client and connect to actors and listen for real-time updates:
-
-```tsx }
-async function main() 
-
-	await new Promise((resolve) => setTimeout(resolve, 10000));
-	await counter.dispose();
-}
-
-main();
-
-```
+See the [backend quickstart guide](/docs/actors/quickstart/backend) for getting started.
 
 ## API Reference
 
-Follows the same [API as the Node.js client](http://rivet.dev/docs/actors/clients/#actor-client), allowing you to use the same methods and properties for interacting with actors.
+See the [RivetKit client API](http://rivet.dev/docs/actors/clients/#actor-client).
 ## Next.js
 
 # Next.js
@@ -3701,46 +3678,9 @@ The Rivet Next.js client allows you to connect to and interact with actors in Ne
 
 	Use Next.js API routes to run RivetKit Registry
 
-## Basic Usage
+## Getting Started
 
-Install the RivetKit React package:
-
-  Follow the [Next.js backend integration guide](https://rivet.dev/docs/integrations/next-js/) to set up your Next.js backend with Rivet.
-
-Create a RivetKit client to connect to your actor:
-
-```ts }
-"use client";
-const client = createClient(/api/rivet`,
-	transport: "sse",
-});
-
-const  = createRivetKit(client);
-
-```
-
-It's important to use SSE (Server-Sent Events) for real-time updates in Next.js.
-
-Connect to actors and listen for real-time updates:
-```tsx }
-"use client";
-function Counter() );
-	const [count, setCount] = useState(0);
-
-	counter.on("countChanged", (newCount) => );
-
-	const increment = () => ;
-
-	return (
-		
-			Count: 
-			Increment
-		
-	);
-}
-```
-
-Make sure to import the `Counter` component in your page or layout.
+See the [Next.js quickstart guide](/docs/actors/quickstart/next-js) for getting started.
 
 ## API Reference
 
@@ -3750,47 +3690,17 @@ It's the same as the [React client API reference](https://rivet.dev/docs/clients
 # OpenAPI
 
 The Rivet OpenAPI spec is available [here](https://github.com/rivet-dev/rivetkit/blob/main/clients/openapi/openapi.json)
+
+The OpenAPI spec currently only exposes creating & managing actors. It does not expose how to communicate with actors. See the [HTTP client implementation](https://github.com/rivet-dev/rivetkit/blob/b5072fdac18d90a27bb6cd36e9ee73b00d36d42c/packages/rivetkit/src/client/actor-handle.ts) for reference.
 ## React
 
 # React
 
 Learn how to create real-time, stateful React applications with Rivet's actor model. The React integration provides intuitive hooks for managing actor connections and real-time updates.
 
-## Basic Usage
+## Getting Started
 
-Install the RivetKit React package:
-
-  Make sure you have a running Rivet actor server to connect to. You can follow the [Node.js & Bun Quickstart](https://rivet.dev/docs/actors/quickstart/backend/) to set up a simple actor server.
-
-Connect to actors and listen for real-time updates:
-
-```tsx }
-function App() );
-
-  // Listen for real-time count updates
-  counter.useEvent("countChanged", (newCount: number) => );
-
-  const increment = async () => ;
-
-  return (
-    
-      Rivet Counter
-      Count: 
-
-          Counter Name:
-           setCounterName(e.target.value)}
-            style=}
-          />
-
-        Increment
-
-        Status: 
-
-  );
-}
-
-default App;
-```
+See the [React quickstart guide](/docs/actors/quickstart/react) for getting started.
 
 ## API Reference
 
@@ -3799,7 +3709,7 @@ default App;
 Creates the Rivet hooks for React integration.
 
 ```tsx
-const client = createClient("http://localhost:8080");
+const client = createClient();
 const  = createRivetKit(client);
 ```
 
@@ -3832,7 +3742,6 @@ const actor = useActor(,
   - `createWithInput`: Optional input to pass to the actor on creation
   - `createInRegion`: Optional region to create the actor in if does not exist
   - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
-  - `enabled`: Optional boolean to conditionally enable/disable the connection (default: true)
 
 #### Returns
 
@@ -3849,7 +3758,7 @@ Subscribe to events emitted by the actor.
 ```tsx
 const actor = useActor();
 
-actor.useEvent("countChanged", (newCount: number) => );
+actor.useEvent("newCount", (count: number) => );
 ```
 
 #### Parameters
@@ -4006,8 +3915,6 @@ The Rivet Rust client provides a way to connect to and interact with actors from
 
 ## API Reference
 
-_Coming Soon_
-
 For detailed API documentation, please refer to the [RivetKit Rust client implementation](https://github.com/rivet-dev/rivetkit/blob/main/clients/rust).
 ## Deploying to AWS ECS
 
@@ -4099,90 +4006,43 @@ _AWS Lambda is coming soon_
 ## Deploying to Cloudflare Workers
 
 # Deploying to Cloudflare Workers
-#
-Run Rivet Actors on Cloudflare Workers with Durable Objects. If you still need a sample app, walk through the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare-workers) first.
+
+Deploy your Cloudflare Workers + RivetKit app to [Cloudflare Workers](https://workers.cloudflare.com/).
+
+Complete example Cloudflare Workers + RivetKit app.
+
+## Guide
 
 - [Cloudflare account](https://dash.cloudflare.com/) with Durable Objects enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) v3
-- RivetKit project (or use the [Quickstart](/docs/actors/quickstart/cloudflare-workers))
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
+- A Cloudflare Worker app integrated with RivetKit
+  - See the [Cloudflare Workers quickstart](/docs/actors/quickstart/cloudflare-workers/) or [Cloudflare Workers example](https://github.com/rivet-dev/rivetkit/tree/main/examples/cloudflare-workers) to get started
 
-Install the Cloudflare Worker driver alongside RivetKit:
+Your project should have the following files:
 
-```sh
-npm install rivetkit @rivetkit/cloudflare-workers
-```
+- `src/index.ts` (or similar entry point with `createHandler`)
+- `src/registry.ts` (or similar actor registry file)
+- `wrangler.json` with proper Durable Objects and KV namespace configuration
 
-Wire your actors into a Cloudflare Worker using the same setup as the quickstart:
+If your project is not integrated with RivetKit yet, follow the [Cloudflare Workers quickstart guide](/docs/actors/quickstart/cloudflare-workers/) or see the [Cloudflare Workers example](https://github.com/rivet-dev/rivetkit/tree/main/examples/cloudflare-workers).
 
-```ts }
-const counter = actor(,
-	actions: ,
-		getCount: (c) => c.state.count,
-	},
-});
-
-const registry = setup(,
-});
-```
-
-```ts }
-const app = new Hono } }>();
-
-app.post("/increment/:name", async (c) => );
-});
-
-const  = createHandler(registry, );
-;
-```
-
-```ts }
-const  = createHandler(registry, ), ,
-			});
-		}
-
-		return new Response("Not Found", );
-	}
-});
-
-;
-```
-
-Configure Durable Objects and KV namespaces in `wrangler.json` (same as the quickstart):
-
-```json }
-
-  ],
-  "durable_objects": 
-    ]
-  },
-  "kv_namespaces": [
-    
-  ]
-}
-```
-
-Configuration requirements:
-
-- `ACTOR_DO` durable object binding for actor persistence
-- `ACTOR_KV` KV namespace binding for metadata storage
-- `nodejs_compat` compatibility flag
-- Migration entry defining the `ActorHandler` class
-
-Start the worker locally:
-
-```sh
-wrangler dev
-```
-
-Call your actor at `http://localhost:8787/increment/my-counter`.
-
-When you're ready, deploy to Cloudflare's network:
+Deploy to Cloudflare's global network:
 
 ```sh
 wrangler deploy
 ```
 
-Durable Objects back your actor state globally, and the Rivet endpoint is automatically mounted at `/rivet`.
+Your worker will be deployed and you'll receive a URL like `https://my-rivetkit-worker.workers.dev`.
+
+More information on deployments is available in [Cloudflare's docs](https://developers.cloudflare.com/workers/wrangler/commands/#deploy).
+
+After running `wrangler deploy`, note the URL printed in the output (e.g., `https://my-rivetkit-worker.workers.dev`).
+
+Your RivetKit endpoint will be available at this URL with `/rivet` appended:
+- Example: `https://my-rivetkit-worker.workers.dev/rivet`
+
+Use this endpoint URL when configuring your RivetKit client or connecting from the Rivet dashboard.
 
 ## Advanced
 
@@ -4563,11 +4423,10 @@ Create or update your `vercel.json`:
 
 More information on deployments are available in [Vercel's docs](https://vercel.com/docs/deployments).
 
-1. Visit the Rivet dashboard
+1. Visit the [Rivet dashboard](https://dashboard.rivet.dev)
 2. Navigate to _Connect > Vercel_
 3. Skip to the _Deploy to Vercel_ step
 4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
-	- **Important**: Make sure to include the path `/api/rivet`
 5. Once it shows as successfully connected, click _Done_
 
 Your Vercel Functions deployment is now connected to Rivet.
@@ -5235,30 +5094,13 @@ TODO
 
 Rivet is a library for long-lived processes with durable state, realtime, and scalability. It is easily self-hostable and works with your infrastructure.
 
-## Features
-
-- **Stateful Workloads**: Keep memory between operations & run complex logic that requires stateful processes
-- **Realtime**: Powered by WebSockets or SSE without the complexity
-- **Elastic Scalability**: Scale from zero to millions without cold starts
-- **Multi-Region Durable Storage**: Keep state & operations near your users or comply with data soveirgnty
-
-## Tools
+## Libraries
 
   Long-lived processes with durable state, realtime, and hibernation
 
 ## Use Cases
 
-  Deploy assistants that reason and act with durable memory
-
-  Sync state instantly over WebSockets or SSE
-
-  Run long-lived services with automatic failover
-
-  Isolate customer data with multi-tenant storage
-
-  Throttle requests using stateful counters per client
-
-  Build chat and workflow bots with actor logic
+))}
 
 ## Deploy Options
 
@@ -5410,8 +5252,7 @@ Use authenticated sessions with Rivet:
 
 ```tsx
 // ChatRoom.tsx
-const client = createClient("http://localhost:8080");
-const  = createRivetKit(client);
+const  = createRivetKit("http://localhost:8080");
 
 interface ChatRoomProps  };
   roomId: string;
@@ -6452,57 +6293,416 @@ Follow the [Railway Quick Start guide](https://docs.railway.com/quick-start) to 
 
 # AI Agents
 
-Build durable assistants that keep memory between conversations, call tools, and react instantly to user input.
+## Challenges of Building AI Agents
 
-**Examples**
-- [AI Agent Starter](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent)
+Common tools: LangChain, OpenAI SDK, custom state management systems, Redis for memory storage
+
+Main pain points:
+- Managing conversation history and agent memory across sessions requires external databases
+- Keeping context and state synchronized while handling multiple concurrent conversations
+- High latency from database round trips to fetch conversation history
+- Complex infrastructure for realtime streaming responses to users
+- Handling tool calls and maintaining agent state during long-running operations
+
+## How Rivet Solves This
+
+Rivet makes building stateful AI agents simple by providing durable actors that keep conversation history and agent state in memory without external databases.
+
+**Persistent Memory**: Each agent actor maintains its own state including conversation history, tool results, and context. State survives restarts and deployments automatically.
+
+```typescript
+const aiAgent = actor(
+  },
+
+  actions: );
+
+      const response = await callLLM(c.state.messages);
+      c.state.messages.push();
+
+      c.broadcast("message", );
+      return response;
+    }
+  }
+});
+```
+
+**Realtime Streaming**: Use WebSocket connections to stream LLM responses in realtime without additional infrastructure. Learn more about [events](/docs/actors/events).
+
+**Tool Integration**: Execute tool calls within the actor context while maintaining state consistency. See [actions](/docs/actors/actions) for more details.
+
+**No Cold Starts**: Agents hibernate when idle and wake instantly when needed, keeping conversation context ready without paying for idle time. Read about [actor lifecycle](/docs/actors/lifecycle).
+
+## Full Example Projects
+## Background Jobs
+
+# Background Jobs
+
+## Challenges of Building Background Job Systems
+
+Common tools: Celery, Bull, Sidekiq, AWS SQS, RabbitMQ, Redis queues, cron jobs
+
+Main pain points:
+- Managing separate job queue infrastructure and worker processes
+- Tracking job state and results across distributed systems
+- Handling job retries, failures, and dead letter queues
+- Coordinating scheduled and recurring jobs with cron syntax
+- Persisting job state and intermediate results during long-running tasks
+
+## How Rivet Solves This
+
+Rivet actors provide built-in job scheduling and execution with automatic state persistence and no external queue infrastructure.
+
+**Self-Contained Job Execution**: Each actor can schedule and execute background tasks with full access to its persistent state.
+
+```typescript
+const jobProcessor = actor( as Record,
+    queue: [] as string[]
+  },
+
+  actions: ;
+      c.state.queue.push(jobId);
+
+      if (delay)  else 
+
+      return jobId;
+    },
+
+    processJob: async (c, jobId: string) => );
+
+      try ;
+        c.broadcast("jobUpdate", );
+      } catch (error) ;
+        c.broadcast("jobUpdate", );
+      }
+    }
+  }
+});
+```
+
+**Built-in Scheduling**: Schedule delayed and recurring jobs using [scheduled actions](/docs/actors/schedule) without cron or external schedulers.
+
+**Durable State**: Job state persists automatically, surviving restarts and failures. See [state management](/docs/actors/state).
+
+**Realtime Progress**: Stream job progress and results to clients using [events](/docs/actors/events).
+
+**No Queue Infrastructure**: Execute jobs directly within actors without Redis, RabbitMQ, or other message queues.
+
+## Full Example Projects
 ## Bots
 
 # Bots
 
-Run bots for Slack, Discord, or autonomous agents that need persistent workers listening, responding, and executing background tasks.
+## Challenges of Building Bots
 
-**Examples**
-- [AI Agent Starter](https://github.com/rivet-dev/rivetkit/tree/main/examples/ai-agent)
-- [Realtime Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
-## Durable Compute
+Common tools: Discord.js, Slack Bolt, Telegraf, traditional web servers with databases, message queues
 
-# Durable Compute
+Main pain points:
+- Managing bot state and conversation context across sessions requires external storage
+- Handling concurrent conversations with multiple users while maintaining per-user state
+- Keeping bots online 24/7 on traditional servers is expensive
+- Complex infrastructure for event-driven responses and background tasks
+- Difficulty maintaining WebSocket connections to chat platforms reliably
 
-Run long-lived workloads that survive restarts, keep state close to users, and recover automatically when nodes shift.
+## How Rivet Solves This
 
-**Examples**
-- [Sync Offline Data](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync)
-- [Tenant Isolation](https://github.com/rivet-dev/rivetkit/tree/main/examples/tenant)
-- [Realtime Counter](https://github.com/rivet-dev/rivetkit/tree/main/examples/counter)
-- [Realtime Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
-- [Collaborative CRDT Docs](https://github.com/rivet-dev/rivetkit/tree/main/examples/crdt)
-- [Multiplayer Game State](https://github.com/rivet-dev/rivetkit/tree/main/examples/game)
-## Per-Tenant Databases
+Rivet provides long-lived actors that maintain persistent connections and state for chat bots without managing infrastructure.
 
-# Per-Tenant Databases
+**Always-On Bot Instances**: Each bot actor stays alive with persistent state, maintaining connections to chat platforms like Discord, Slack, or Telegram. Actors hibernate when idle but wake instantly when messages arrive.
 
-Provision isolated storage per customer while sharing infrastructure, keeping noisy neighbours separated and compliant.
+```typescript
+const discordBot = actor( as Record,
+    userPreferences:  as Record
+  },
 
-**Examples**
-- [Tenant Isolation](https://github.com/rivet-dev/rivetkit/tree/main/examples/tenant)
-- [SQLite Sharding](https://github.com/rivet-dev/rivetkit/tree/main/examples/database)
+  actions: ;
+
+      return response;
+    }
+  }
+});
+```
+
+**Persistent State**: Bot memory, user preferences, and conversation history persist automatically without external databases. See [state management](/docs/actors/state).
+
+**Background Tasks**: Use [scheduled actions](/docs/actors/schedule) to run periodic tasks like reminders, notifications, or cleanup jobs.
+
+**Realtime Events**: Send and receive messages in realtime using WebSocket connections. Learn more about [events](/docs/actors/events).
+
+## Full Example Projects
+## Realtime Docs
+
+# Realtime Docs
+
+## Challenges of Building Realtime Collaborative Documents
+
+Common tools: Yjs, Automerge, operational transforms, WebSocket servers, Redis for pub/sub, database for persistence
+
+Main pain points:
+- Coordinating realtime updates across multiple users requires complex pub/sub infrastructure
+- Persisting document state and CRDT data structures to databases adds latency
+- Managing conflict resolution and synchronization logic is complex
+- Scaling WebSocket connections and state management across servers
+- Handling offline users and reconnection scenarios
+
+## How Rivet Solves This
+
+Rivet provides actors that maintain CRDT document state in memory and broadcast updates in realtime without external infrastructure.
+
+**In-Memory CRDTs**: Store Yjs or Automerge documents directly in actor state for ultra-fast reads and writes with zero database latency.
+
+```typescript
+const collaborativeDoc = actor(,
+
+  actions: );
+    }
+  }
+});
+```
+
+**Built-in Realtime**: WebSocket connections are built into actors, eliminating the need for separate pub/sub systems. See [events](/docs/actors/events).
+
+**Automatic Persistence**: Document state persists automatically without database round trips. Learn about [state management](/docs/actors/state).
+
+**Multi-User Support**: Track connected users and their cursor positions using [connection state](/docs/actors/connections).
+
+## Full Example Projects
+## Per-User Database
+
+# Per-User Database
+
+## Challenges of Building Per-User Databases
+
+Common tools: PostgreSQL with row-level security, MongoDB with tenant isolation, SQLite per-user files, DynamoDB with partition keys
+
+Main pain points:
+- High latency from database round trips for every read/write operation
+- Complex query patterns to ensure tenant isolation and prevent data leaks
+- Scaling challenges when users have large datasets
+- Managing database connections and connection pooling per-tenant
+- Expensive database operations for simple key-value access patterns
+
+## How Rivet Solves This
+
+Rivet actors provide isolated in-memory databases for each user with automatic persistence and zero-latency access.
+
+**Isolated User State**: Each user gets their own actor with completely isolated state, eliminating tenant isolation concerns.
+
+```typescript
+const userDatabase = actor( as Record,
+    settings: ,
+    metadata: 
+  },
+
+  actions: ,
+
+    get: (c, key: string) => ,
+
+    query: (c, filter: (doc: any) => boolean) => ));
+    }
+  }
+});
+```
+
+**Zero-Latency Reads**: State lives in memory on the same machine as compute, making reads instant with no database round trips. See [state management](/docs/actors/state).
+
+**Automatic Persistence**: Data persists automatically without manual save operations or database drivers.
+
+**Built-in SQLite Support**: Use SQLite databases within actors for relational data. See [external SQL](/docs/actors/external-sql) for integration with traditional databases.
+
+**Realtime Updates**: Broadcast data changes to connected clients using [events](/docs/actors/events).
+
+## Full Example Projects
+## Multiplayer Game
+
+# Multiplayer Game
+
+## Challenges of Building Multiplayer Games
+
+Common tools: Unity Netcode, Photon, Colyseus, custom WebSocket servers, Redis for state, game server hosting
+
+Main pain points:
+- Managing game state synchronization across multiple players with low latency
+- Handling player connections, disconnections, and reconnections gracefully
+- Scaling game servers and matchmaking infrastructure
+- Persisting game state between sessions
+- Complex networking code for state replication and conflict resolution
+
+## How Rivet Solves This
+
+Rivet actors provide authoritative game servers with built-in state management and realtime networking.
+
+**Authoritative Game State**: Each game room runs in its own actor with server-authoritative state management.
+
+```typescript
+const gameRoom = actor( as Record,
+    gameState: "waiting" as "waiting" | "playing" | "ended",
+    startTime: 0
+  },
+
+  createConnState: (c, opts, params: ) => (),
+
+  actions: );
+      }
+    },
+
+    startGame: (c) => );
+    }
+  }
+});
+```
+
+**Low-Latency Updates**: Broadcast game state changes in realtime using WebSockets with built-in [events](/docs/actors/events).
+
+**State Persistence**: Game state persists automatically, allowing players to rejoin games after disconnections. Learn about [state management](/docs/actors/state).
+
+**Connection Tracking**: Track connected players and handle disconnections gracefully using [connections](/docs/actors/connections).
+
+**Tick-Based Updates**: Use [scheduled actions](/docs/actors/schedule) for fixed-rate game loops and physics updates.
+
+## Full Example Projects
 ## Rate Limiting
 
 # Rate Limiting
 
-Throttle abusive clients with actors that track counters, rolling windows, and quotas without sharing mutable state.
+## Challenges of Building Rate Limiting
 
-**Examples**
-- [Stateful Rate Limiter](https://github.com/rivet-dev/rivetkit/tree/main/examples/rate)
-## Realtime
+Common tools: Redis with sliding windows, token bucket algorithms, NGINX rate limiting, Kong, custom middleware
 
-# Realtime
+Main pain points:
+- Coordinating rate limits across distributed servers requires shared state
+- High latency from Redis lookups on every request
+- Complex sliding window or token bucket implementations
+- Handling rate limit resets and per-user quotas
+- Managing rate limit state for millions of users
 
-Deliver sub-second updates with actors that push changes over WebSockets or SSE without juggling infrastructure.
+## How Rivet Solves This
 
-**Examples**
-- [Chat Room](https://github.com/rivet-dev/rivetkit/tree/main/examples/chat-room)
-- [Multiplayer Game State](https://github.com/rivet-dev/rivetkit/tree/main/examples/game)
-- [Stream Processing](https://github.com/rivet-dev/rivetkit/tree/main/examples/stream)
-- [Sync Offline Data](https://github.com/rivet-dev/rivetkit/tree/main/examples/sync)
+Rivet actors provide low-latency distributed rate limiting with in-memory counters and automatic persistence.
+
+**Per-User Rate Limiting**: Each user gets their own actor to track request counts and enforce limits with zero-latency access.
+
+```typescript
+const rateLimiter = actor(,
+
+  actions: ;
+      }
+
+      // Add new request
+      c.state.requests.push(now);
+
+      return ;
+    },
+
+    getStatus: (c) => ;
+    }
+  }
+});
+```
+
+**Zero-Latency Checks**: Rate limit counters live in memory, eliminating Redis round trips for every request.
+
+**Automatic Persistence**: Counter state persists automatically without manual Redis operations. See [state management](/docs/actors/state).
+
+**Flexible Algorithms**: Implement sliding windows, token buckets, or custom rate limiting logic directly in actor code.
+
+**Per-User Isolation**: Each user's rate limit is isolated in their own actor, providing natural horizontal scaling.
+
+**Realtime Notifications**: Send rate limit warnings to users via [events](/docs/actors/events).
+
+## Full Example Projects
+## Local-First Sync
+
+# Local-First Sync
+
+## Challenges of Building Local-First Sync
+
+Common tools: ElectricSQL, PowerSync, custom sync protocols, CRDTs, WebSockets, PostgreSQL logical replication
+
+Main pain points:
+- Complex conflict resolution when syncing offline changes to server
+- Managing sync state and tracking changes across devices
+- Handling partial syncs and large datasets efficiently
+- Infrastructure for WebSocket connections and pub/sub for realtime updates
+- Coordinating between client-side databases and server-side storage
+
+## How Rivet Solves This
+
+Rivet actors provide stateful sync coordination with built-in realtime updates and automatic persistence.
+
+**Per-User Sync Actors**: Each user gets a dedicated actor to manage their sync state and coordinate updates across devices.
+
+```typescript
+const userSync = actor( as Record,
+    lastSyncTimestamp: 0,
+    deviceStates:  as Record
+  },
+
+  actions: ;
+
+      // Broadcast to other devices
+      for (const conn of c.conns) );
+        }
+      }
+
+      return ;
+    }
+  },
+
+  createConnState: (c, opts, params: ) => ()
+});
+```
+
+**Automatic State Persistence**: Sync state persists automatically without external databases. See [state management](/docs/actors/state).
+
+**Realtime Cross-Device Sync**: Broadcast updates to all connected devices instantly using [events](/docs/actors/events).
+
+**Connection Tracking**: Monitor online/offline devices using [connection state](/docs/actors/connections).
+
+**Conflict Resolution**: Implement custom merge strategies directly in actor logic with full access to state history.
+
+## Full Example Projects
+## Workflows
+
+# Workflows
+
+## Challenges of Building Workflows
+
+Common tools: Temporal, Cadence, Apache Airflow, AWS Step Functions, custom orchestration systems
+
+Main pain points:
+- Complex infrastructure setup and maintenance for workflow orchestration
+- Managing state across long-running multi-step processes
+- Handling retries, timeouts, and failure recovery across distributed steps
+- Coordinating between different services and maintaining transaction boundaries
+- High operational cost of running dedicated workflow engines
+
+## How Rivet Solves This
+
+Rivet actors provide built-in workflow capabilities with durable execution and automatic state management without external orchestration systems.
+
+**Durable Execution**: Actor actions automatically persist state between steps, surviving restarts and failures without additional infrastructure.
+
+```typescript
+const orderWorkflow = actor(,
+
+  actions: );
+
+      // Step 2: Schedule shipment
+      c.schedule.after(1000 * 60 * 60, "shipOrder"); // 1 hour
+    },
+
+    shipOrder: async (c) => );
+    }
+  }
+});
+```
+
+**Scheduled Steps**: Use [scheduling](/docs/actors/schedule) to delay workflow steps or implement timeouts and reminders.
+
+**State Checkpointing**: State automatically persists after each action, ensuring workflow progress is never lost. Learn about [state management](/docs/actors/state).
+
+**Actor Communication**: Coordinate across services using [actor-to-actor communication](/docs/actors/communicating-between-actors) without message queues.
+
+**Realtime Updates**: Stream workflow progress to clients using [events](/docs/actors/events).
+
+## Full Example Projects

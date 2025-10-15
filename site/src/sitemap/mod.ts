@@ -2,6 +2,7 @@ import apiData from "@/generated/apiPages.json" assert { type: "json" };
 import { deployOptions } from "@/data/deploy-options";
 import type { DeployOption } from "@/data/deploy-options";
 import { integrationGroups } from "@/data/integrations/shared";
+import { useCases } from "@/data/use-cases";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 import {
@@ -29,6 +30,7 @@ import {
 	faNetworkWired,
 	faNodeJs,
 	faReact,
+	faNextjs,
 	faRecycle,
 	faRotate,
 	faRust,
@@ -64,6 +66,8 @@ import {
     faCloud,
     faRailway,
     faLightbulb,
+    faCloudArrowUp,
+    faUpload,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -103,19 +107,6 @@ export const sitemap = [
 						href: "/docs",
 						icon: faSquareInfo,
 					},
-					{
-						title: "Use Cases",
-						icon: faLightbulb,
-						collapsible: true,
-						pages: [
-							{ title: "AI Agents", href: "/docs/use-cases/ai-agents" },
-							{ title: "Realtime", href: "/docs/use-cases/realtime" },
-							{ title: "Durable Compute", href: "/docs/use-cases/durable-compute" },
-							{ title: "Per-Tenant Databases", href: "/docs/use-cases/per-tenant-databases" },
-							{ title: "Rate Limiting", href: "/docs/use-cases/rate-limiting" },
-							{ title: "Bots", href: "/docs/use-cases/bots" },
-						]
-					},
 				]
 			},
 			{
@@ -130,19 +121,40 @@ export const sitemap = [
 				]
 			},
 			{
-				title: "Deploy",
-				pages: deployHosts.map(({ title, href, icon, badge }) => ({
-					title,
-					href,
-					icon,
-					badge,
-				})),
+				title: "Use Cases",
+				pages: [
+					...useCases.slice(0, 3).map(({ title, href, icon }) => ({
+						title,
+						href,
+						icon,
+					})),
+					{
+						title: "More",
+						collapsible: true,
+						pages: useCases.slice(3).map(({ title, href, icon }) => ({
+							title,
+							href,
+							icon,
+						})),
+					},
+				],
 			},
 			{
 				title: "Reference",
 				pages: [
 					{
-						title: "Cloud",
+						title: "Deploy",
+						icon: faUpload,
+						collapsible: true,
+						pages: deployHosts.map(({ title, href, icon, badge }) => ({
+							title,
+							href,
+							icon,
+							badge,
+						})),
+					},
+					{
+						title: "Rivet Cloud",
 						icon: faCloud,
 						collapsible: true,
 						pages: [
@@ -268,7 +280,7 @@ export const sitemap = [
 							{
 								title: "Next.js",
 								href: "/docs/actors/quickstart/next-js",
-								icon: nextjs,
+								icon: faNextjs,
 							},
 							{
 								title: "Cloudflare Workers",
@@ -487,7 +499,7 @@ export const sitemap = [
 					{
 						title: "Next.js",
 						href: "/docs/clients/next-js",
-						icon: nextjs,
+						icon: faNextjs,
 					},
 					{
 						title: "Rust",
