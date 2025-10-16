@@ -20,41 +20,46 @@ Complete example Next.js + RivetKit app.
 - Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
 - A Next.js app integrated with RivetKit
   - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js) to get started
+  - Your project should have the following files:
+    - `src/app/api/rivet/[...all]/route.ts`
+    - `src/rivet/registry.ts`
 
 </Step>
-<Step title="Verify RivetKit integration with Next.js">
-Your project should have the following files:
+<Step title="Configure maxDuration in API route handler">
 
-- `src/app/api/rivet/[...all]/route.ts`
-- `src/rivet/registry.ts`
+Update your Rivet API route handler at `src/app/api/rivet/[...all]/route.ts` to export the `maxDuration` configuration:
 
-If your project is not integrated with RivetKit yet, follow the [Next.js quickstart guide](/docs/actors/quickstart/next-js/) or see the [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js).
+```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}}
+import { toNextHandler } from "@rivetkit/next-js";
+import { registry } from "@/rivet/registry";
+
+// Set based on your Vercel plan:
+// - Hobby: 60
+// - Pro: 300
+// - Enterprise: 900
+export const maxDuration = 60;
+
+export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
+```
+
 </Step>
-<Step title="Setup Project for Vercel">
+<Step title="Configure Vercel settings">
 
-Create or update your `vercel.json`:
+Disable Fluid Compute in your `vercel.json`:
 
 ```json {{"title":"vercel.json"}}
 {
-    // Rivet provides is own intelligent load balancing algorithm
-	"fluid": false,
-    "functions": {
-        "app/api/rivet/**": {
-            // If your Vercel account type is:
-            // - Hobby: Keep maxDuration set to 60
-            // - Pro: Set maxDuration to 300
-            // - Enterprise: Set maxDuration to 900
-            "maxDuration": 60
-        }
-    }
-    // ... rest of vercel.json
+	"fluid": false
+	// ... rest of vercel.json
 }
 ```
+
+Rivet provides its own intelligent load balancing mechanism.
 
 </Step>
 <Step title="Deploy to Vercel">
 
-1. Connect your GitHub account to Vercel
+1. Connect your GitHub project to Vercel
 2. Select your repository containing your Next.js + RivetKit app
 3. Vercel will deploy your app
 
@@ -66,7 +71,8 @@ More information on deployments are available in [Vercel's docs](https://vercel.
 1. Visit the [Rivet dashboard](https://dashboard.rivet.dev)
 2. Navigate to _Connect > Vercel_
 3. Skip to the _Deploy to Vercel_ step
-4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
+4. Input your deployed Vercel site URL
+	- e.g. `https://my-app.vercel.app/api/rivet`
 5. Once it shows as successfully connected, click _Done_
 
 Your Vercel Functions deployment is now connected to Rivet.

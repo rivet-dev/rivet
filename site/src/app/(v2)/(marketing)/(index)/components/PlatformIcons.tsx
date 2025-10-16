@@ -60,49 +60,6 @@ export function PlatformIcons() {
 			tooltip: "Deno",
 		},
 		"SEPARATOR",
-		{
-			href: "/docs/deploy/vercel",
-			src: vercelLogo,
-			alt: "Vercel Functions",
-			tooltip: "Vercel Functions",
-		},
-		{
-			href: "https://railway.com/deploy/rivet",
-			src: railwayLogo,
-			alt: "Railway",
-			tooltip: "Railway",
-		},
-		{
-			href: "/docs/actors/quickstart/cloudflare-workers",
-			src: cloudflareWorkersLogo,
-			alt: "Cloudflare Durable Objects",
-			tooltip: "Cloudflare Durable Objects",
-		},
-		{
-			href: "/docs/deploy/kubernetes",
-			src: kubernetesLogo,
-			alt: "Kubernetes",
-			tooltip: "Kubernetes",
-		},
-		{
-			href: "/docs/deploy/aws-ecs",
-			src: awsLogo,
-			alt: "AWS ECS",
-			tooltip: "AWS ECS",
-		},
-		{
-			href: "/docs/deploy/gcp-cloud-run",
-			src: gcpLogo,
-			alt: "GCP Cloud Run",
-			tooltip: "GCP Cloud Run",
-		},
-		{
-			href: "/docs/deploy/hetzner",
-			src: hetznerLogo,
-			alt: "Hetzner",
-			tooltip: "Hetzner",
-		},
-		"SEPARATOR",
 		//{
 		//  href: "/docs/cloud",
 		//  src: fileSystemLogo,
@@ -181,6 +138,49 @@ export function PlatformIcons() {
 		//  alt: "Vitest",
 		//  tooltip: "Vitest"
 		//}
+		"SEPARATOR",
+		{
+			href: "/docs/deploy/vercel",
+			src: vercelLogo,
+			alt: "Vercel Functions",
+			tooltip: "Vercel Functions",
+		},
+		{
+			href: "https://railway.com/deploy/rivet",
+			src: railwayLogo,
+			alt: "Railway",
+			tooltip: "Railway",
+		},
+		{
+			href: "/docs/actors/quickstart/cloudflare-workers",
+			src: cloudflareWorkersLogo,
+			alt: "Cloudflare Durable Objects",
+			tooltip: "Cloudflare Durable Objects",
+		},
+		{
+			href: "/docs/deploy/kubernetes",
+			src: kubernetesLogo,
+			alt: "Kubernetes",
+			tooltip: "Kubernetes",
+		},
+		{
+			href: "/docs/deploy/aws-ecs",
+			src: awsLogo,
+			alt: "AWS ECS",
+			tooltip: "AWS ECS",
+		},
+		{
+			href: "/docs/deploy/gcp-cloud-run",
+			src: gcpLogo,
+			alt: "GCP Cloud Run",
+			tooltip: "GCP Cloud Run",
+		},
+		{
+			href: "/docs/deploy/hetzner",
+			src: hetznerLogo,
+			alt: "Hetzner",
+			tooltip: "Hetzner",
+		},
 	];
 
 	return (
