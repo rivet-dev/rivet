@@ -6,6 +6,9 @@ export const shouldRetryAllExpect403 = (failureCount: number, error: Error) => {
 			// Don't retry on auth errors, when app is not engine
 			return __APP_TYPE__ !== "engine";
 		}
+		if (error.statusCode === 400) {
+			return false;
+		}
 	}
 
 	if (failureCount >= 3) {

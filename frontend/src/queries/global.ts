@@ -5,6 +5,7 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import { toast } from "@/components";
+import { isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";
 import { Changelog } from "./types";
 
@@ -26,8 +27,12 @@ const mutationCache = new MutationCache({
 		if (mutation.meta?.hideErrorToast) {
 			return;
 		}
+		const description = isRivetApiError(error)
+			? error.body.message
+			: error.message;
+
 		toast.error("Error occurred while performing the operation.", {
-			description: error.message,
+			description,
 		});
 	},
 });

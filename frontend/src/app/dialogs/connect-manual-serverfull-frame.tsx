@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
+import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectRailwayForm from "@/app/forms/connect-manual-serverfull-form";
 import {
@@ -129,9 +130,9 @@ function FormStepper({
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {
 					const runnerConfig = await queryClient.fetchQuery(
-						dataProvider.runnerConfigQueryOptions(
-							values.runnerName,
-						),
+						dataProvider.runnerConfigQueryOptions({
+							name: values.runnerName,
+						}),
 					);
 					existing = runnerConfig?.datacenters || {};
 				} catch {
@@ -156,7 +157,7 @@ function FormStepper({
 			}}
 			content={{
 				"step-1": () => <Step1 />,
-				"step-2": () => <Step2 />,
+				"step-2": () => <Step2 provider={provider} />,
 				"step-3": () => <Step3 />,
 			}}
 		/>
@@ -230,13 +231,56 @@ function Step1() {
 	);
 }
 
-function Step2() {
+function Step2({ provider }: { provider: string }) {
 	return (
 		<>
-			<p>
-				Set the following environment variables in your project
-				settings.
-			</p>
+			{match(provider)
+				.with("aws", () => (
+					<p>
+						<a
+							href="https://www.rivet.dev/docs/deploy/aws-ecs/"
+							className="underline"
+							target="_blank"
+							rel="noopener"
+						>
+							Follow the integration guide here
+						</a>
+						, and make sure to set the following environment
+						variables:
+					</p>
+				))
+				.with("hetzner", () => (
+					<p>
+						<a
+							href="https://www.rivet.dev/docs/deploy/hetzner/"
+							className="underline"
+							target="_blank"
+							rel="noopener"
+						>
+							Follow the integration guide here
+						</a>
+						, and make sure to set the following environment
+						variables:
+					</p>
+				))
+				.with("gcp", () => (
+					<p>
+						<a
+							href="https://www.rivet.dev/docs/deploy/gcp-cloud-run/"
+							className="underline"
+							target="_blank"
+							rel="noopener"
+						>
+							Follow the integration guide here
+						</a>
+						, and make sure to set the following environment
+						variables:
+					</p>
+				))
+				.otherwise(() => (
+					<p>Set the following environment variables.</p>
+				))}
+
 			<EnvVariablesStep />
 		</>
 	);

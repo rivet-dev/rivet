@@ -2,6 +2,7 @@ import { useFormContext } from "react-hook-form";
 import z from "zod";
 import * as ConnectManualServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
+	Code,
 	CodeFrame,
 	CodePreview,
 	FormControl,
@@ -26,7 +27,7 @@ const endpointSchema = z
 
 export const stepper = defineStepper(
 	{
-		id: "step-1",
+		id: "initial-info",
 		title: "Configure",
 		assist: false,
 		next: "Next",
@@ -47,14 +48,21 @@ export const stepper = defineStepper(
 		}),
 	},
 	{
-		id: "step-2",
-		title: "Edit vercel.json",
+		id: "api-route",
+		title: "Configure maxDuration in API route handler",
+		assist: false,
+		schema: z.object({}),
+		next: "Next",
+	},
+	{
+		id: "vercel-settings",
+		title: "Configure Vercel settings",
 		assist: false,
 		next: "Next",
 		schema: z.object({}),
 	},
 	{
-		id: "step-3",
+		id: "deploy",
 		title: "Deploy to Vercel",
 		assist: true,
 		next: "Done",
@@ -126,11 +134,6 @@ const code = ({ plan }: { plan: string }) =>
 	`{
 	"$schema": "https://openapi.vercel.sh/vercel.json",
 	"fluid": false,	// [!code highlight]
-	"functions": {
-		"app/api/rivet/**": {
-			"maxDuration": ${PLAN_TO_MAX_DURATION[plan] || 60},	// [!code highlight]
-		},
-	}
 }`;
 
 export const Json = ({ plan }: { plan: string }) => {
@@ -149,13 +152,42 @@ export const Json = ({ plan }: { plan: string }) => {
 					code={code({ plan })}
 				/>
 			</CodeFrame>
-			<p className="col-span-1 text-sm text-muted-foreground">
-				<b>Max Duration</b> - The maximum execution time of your
-				serverless functions.
-				<br />
-				<b>Disable Fluid Compute</b> - Rivet has its own intelligent
-				load balancing mechanism.
+			<p>Rivet provides its own intelligent load balancing mechanism.</p>
+		</div>
+	);
+};
+
+const integrationCode = ({ plan }: { plan: string }) =>
+	`import { toNextHandler } from "@rivetkit/next-js";
+import { registry } from "@/rivet/registry";
+
+export const maxDuration = ${PLAN_TO_MAX_DURATION[plan] || 60};	// [!code highlight]
+
+export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);`;
+
+export const IntegrationCode = ({ plan }: { plan: string }) => {
+	return (
+		<div className="space-y-2 mt-2">
+			<p>
+				Update your Rivet API route handler to export the{" "}
+				<Code>maxDuration</Code> configuration.
 			</p>
+			<CodeFrame
+				language="typescript"
+				title="src/app/api/rivet/[...all]/route.ts"
+				code={() =>
+					integrationCode({ plan }).replaceAll(
+						"	// [!code highlight]",
+						"",
+					)
+				}
+			>
+				<CodePreview
+					className="w-full min-w-0"
+					language="typescript"
+					code={integrationCode({ plan })}
+				/>
+			</CodeFrame>
 		</div>
 	);
 };

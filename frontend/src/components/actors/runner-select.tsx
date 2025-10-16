@@ -1,14 +1,17 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
 
-interface RunnerSelectProps {
+interface ConnectedRunnerSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
 }
 
-export function RunnerSelect({ onValueChange, value }: RunnerSelectProps) {
+export function ConnectedRunnerSelect({
+	onValueChange,
+	value,
+}: ConnectedRunnerSelectProps) {
 	const {
 		data = [],
 		hasNextPage,
@@ -19,8 +22,6 @@ export function RunnerSelect({ onValueChange, value }: RunnerSelectProps) {
 		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 
-	const [newRunner, setNewRunner] = useState<string | null>(null);
-
 	const builds = useMemo(() => {
 		const runners = data.map((runner) => {
 			return {
@@ -28,25 +29,10 @@ export function RunnerSelect({ onValueChange, value }: RunnerSelectProps) {
 				value: runner,
 			};
 		});
-
-		if (newRunner) {
-			runners.push({
-				label: newRunner,
-				value: newRunner,
-			});
-		}
-
 		return runners;
-	}, [data, newRunner]);
-
-	const handleNewSelect = (value: string) => {
-		setNewRunner(value);
-	};
+	}, [data]);
 
 	const handleValueChange = (value: string) => {
-		if (value !== newRunner) {
-			setNewRunner(null);
-		}
 		onValueChange(value);
 	};
 
@@ -59,8 +45,6 @@ export function RunnerSelect({ onValueChange, value }: RunnerSelectProps) {
 			className="w-full"
 			isLoading={isFetchingNextPage || isLoading}
 			onLoadMore={hasNextPage ? fetchNextPage : undefined}
-			allowCreate
-			onCreateOption={handleNewSelect}
 		/>
 	);
 }

@@ -9,7 +9,7 @@ export const ACTOR_STATUS_LABEL_MAP = {
 	stopped: "Stopped",
 	crashed: "Crashed",
 	sleeping: "Sleeping",
-	pending: "Pending (Allocating)",
+	pending: "Pending",
 } satisfies Record<ActorStatus, string>;
 
 export const ActorStatusLabel = ({ status }: { status?: ActorStatus }) => {

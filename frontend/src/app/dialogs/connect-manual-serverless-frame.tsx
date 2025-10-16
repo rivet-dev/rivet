@@ -117,7 +117,7 @@ function FormStepper({
 				let existing: Record<string, Rivet.RunnerConfig> = {};
 				try {
 					const runnerConfig = await queryClient.fetchQuery(
-						provider.runnerConfigQueryOptions(values.runnerName),
+						provider.runnerConfigQueryOptions({name: values.runnerName}),
 					);
 					existing = runnerConfig?.datacenters || {};
 				} catch {

@@ -33,12 +33,7 @@ export function RegionSelect({
 			: []),
 		...data.map((region) => {
 			return {
-				label:
-					region.name === "default" ? (
-						<ActorRegion regionId={region.id} showLabel />
-					) : (
-						region.name
-					),
+				label: <ActorRegion regionId={region.id} showLabel />,
 				value: region.id,
 				region,
 			};
