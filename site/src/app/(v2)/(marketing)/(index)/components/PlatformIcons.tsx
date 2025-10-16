@@ -85,7 +85,7 @@ export function PlatformIcons() {
 			tooltip: "React (Frontend)",
 		},
 		{
-			href: "/docs/clients/next-js",
+			href: "/docs/actors/quickstart/next-js",
 			src: nextjsLogo,
 			alt: "Next.js",
 			tooltip: "Next.js (Frontend & Backend)",
@@ -140,7 +140,7 @@ export function PlatformIcons() {
 		//}
 		"SEPARATOR",
 		{
-			href: "/docs/deploy/vercel",
+			href: "https://github.com/rivet-dev/rivetkit/tree/67e8e26b1fdb22dcb4997a7f0a1dfb1461d7b3e7/examples/next-js",
 			src: vercelLogo,
 			alt: "Vercel Functions",
 			tooltip: "Vercel Functions",
