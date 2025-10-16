@@ -70,6 +70,10 @@ pub struct ConnectionError {
 }
 
 #[derive(RivetError, Serialize, Deserialize)]
+#[error("guard", "service_unavailable", "Service unavailable.")]
+pub struct ServiceUnavailable;
+
+#[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"guard",
 	"websocket_service_unavailable",
