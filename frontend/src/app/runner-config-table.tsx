@@ -152,7 +152,7 @@ function Row({
 					}
 				/>
 			</TableCell>
-			<TableCell>
+			<TableCell className="text-center">
 				<Regions regions={Object.keys(value.datacenters)} />
 			</TableCell>
 
@@ -226,6 +226,20 @@ function Provider({ metadata }: { metadata: unknown }) {
 				</div>
 			);
 		}
+		if (metadata.provider === "hetzner") {
+			return (
+				<div>
+					<Icon icon={faCogs} className="mr-1" /> Hetzner
+				</div>
+			);
+		}
+		if (metadata.provider === "gcp") {
+			return (
+				<div>
+					<Icon icon={faCog} className="mr-1" /> Google Cloud Run
+				</div>
+			);
+		}
 		return <span>{metadata.provider || "-"}</span>;
 	}
 	return <span>Unknown</span>;
@@ -246,9 +260,9 @@ function Regions({ regions }: { regions: string[] }) {
 		<WithTooltip
 			content={regions
 				.map((region) => REGION_LABEL[region] ?? REGION_LABEL.unknown)
-				.join(", ")}
+				.join(" and ")}
 			trigger={
-				<span className="text-left w-full">
+				<span className="w-full cursor-pointer">
 					{regions.length} regions
 				</span>
 			}

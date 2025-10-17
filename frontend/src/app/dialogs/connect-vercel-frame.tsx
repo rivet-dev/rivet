@@ -1,4 +1,4 @@
-import { faQuestionCircle, faVercel, Icon } from "@rivet-gg/icons";
+import { faVercel, Icon } from "@rivet-gg/icons";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
@@ -8,19 +8,17 @@ import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
 import type z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
-import { HelpDropdown } from "@/app/help-dropdown";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-	Button,
 	type DialogContentProps,
 	Frame,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
-import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 import { queryClient } from "@/queries/global";
+import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
 const { stepper } = ConnectVercelForm;
 
@@ -78,7 +76,9 @@ function FormStepper({
 				spread: 55,
 				origin: { x: 1 },
 			});
-			await queryClient.invalidateQueries(provider.runnerConfigsQueryOptions());
+			await queryClient.invalidateQueries(
+				provider.runnerConfigsQueryOptions(),
+			);
 			onClose?.();
 		},
 	});
@@ -183,7 +183,7 @@ function Step3() {
 			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
-				<ConnectVercelForm.ConnectionCheck />
+				<ConnectVercelForm.ConnectionCheck provider="Vercel" />
 			</div>
 		</>
 	);
