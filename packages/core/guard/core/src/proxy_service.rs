@@ -37,6 +37,7 @@ pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
 const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
+const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
 
 /// Response body type that can handle both streaming and buffered responses
 #[derive(Debug)]
@@ -1799,6 +1800,12 @@ impl ProxyService {
 										})))
 										.await?;
 
+									// Flush to ensure close frame is sent
+									ws_handle.flush().await?;
+
+									// Keep TCP connection open briefly to allow client to process close
+									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+
 									break;
 								}
 								Err(err) => {
@@ -1810,6 +1817,12 @@ impl ProxyService {
 												err_to_close_frame(err),
 											)))
 											.await?;
+
+										// Flush to ensure close frame is sent
+										ws_handle.flush().await?;
+
+										// Keep TCP connection open briefly to allow client to process close
+										tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 
 										break;
 									} else {
@@ -1841,6 +1854,12 @@ impl ProxyService {
 														),
 													)))
 													.await?;
+
+												// Flush to ensure close frame is sent
+												ws_handle.flush().await?;
+
+												// Keep TCP connection open briefly to allow client to process close
+												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 											}
 											Ok(ResolveRouteOutput::Target(_)) => {
 												ws_handle
@@ -1850,6 +1869,13 @@ impl ProxyService {
 														),
 													)))
 													.await?;
+
+												// Flush to ensure close frame is sent
+												ws_handle.flush().await?;
+
+												// Keep TCP connection open briefly to allow client to process close
+												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+
 												break;
 											}
 											Err(err) => {
@@ -1858,6 +1884,13 @@ impl ProxyService {
 														err_to_close_frame(err),
 													)))
 													.await?;
+
+												// Flush to ensure close frame is sent
+												ws_handle.flush().await?;
+
+												// Keep TCP connection open briefly to allow client to process close
+												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+
 												break;
 											}
 										}

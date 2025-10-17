@@ -83,6 +83,19 @@ impl WebSocketHandleInner {
 		}
 	}
 
+	pub async fn flush(&self) -> Result<()> {
+		let mut state = self.state.lock().await;
+		match &mut *state {
+			WebSocketState::Unaccepted { .. } | WebSocketState::Accepting => {
+				bail!("websocket has not been accepted");
+			}
+			WebSocketState::Split { ws_tx } => {
+				ws_tx.flush().await?;
+				Ok(())
+			}
+		}
+	}
+
 	async fn accept_inner(state: &mut WebSocketState) -> Result<WebSocketReceiver> {
 		if !matches!(*state, WebSocketState::Unaccepted { .. }) {
 			bail!("websocket already accepted")
