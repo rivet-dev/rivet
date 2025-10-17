@@ -35,6 +35,8 @@ pub async fn router(
 				"/bump-serverless-autoscaler",
 				post(internal::bump_serverless_autoscaler),
 			)
+			// MARK: Debug
+			.route("/debug/tracing/config", put(internal::set_tracing_config))
 	})
 	.await
 }

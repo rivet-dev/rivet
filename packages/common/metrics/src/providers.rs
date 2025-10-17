@@ -1,7 +1,9 @@
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 
+use std::sync::{Arc, RwLock, OnceLock};
 use opentelemetry::{KeyValue, global};
+use opentelemetry::trace::{SamplingResult, SpanKind};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
 	Resource,
@@ -10,6 +12,65 @@ use opentelemetry_sdk::{
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 };
 use opentelemetry_semantic_conventions::{SCHEMA_URL, attribute::SERVICE_VERSION};
+
+/// Dynamic sampler that can be updated at runtime
+#[derive(Clone, Debug)]
+struct DynamicSampler {
+	ratio: Arc<RwLock<f64>>,
+}
+
+impl DynamicSampler {
+	fn new(ratio: f64) -> Self {
+		Self {
+			ratio: Arc::new(RwLock::new(ratio)),
+		}
+	}
+
+	fn set_ratio(&self, ratio: f64) {
+		if let Ok(mut r) = self.ratio.write() {
+			*r = ratio;
+		}
+	}
+}
+
+impl opentelemetry_sdk::trace::ShouldSample for DynamicSampler {
+	fn should_sample(
+		&self,
+		parent_context: Option<&opentelemetry::Context>,
+		trace_id: opentelemetry::trace::TraceId,
+		_name: &str,
+		_span_kind: &SpanKind,
+		_attributes: &[KeyValue],
+		_links: &[opentelemetry::trace::Link],
+	) -> SamplingResult {
+		let ratio = self.ratio.read().ok().map(|r| *r).unwrap_or(0.001);
+
+		// Use TraceIdRatioBased sampling logic
+		let sampler = Sampler::TraceIdRatioBased(ratio);
+		sampler.should_sample(
+			parent_context,
+			trace_id,
+			_name,
+			_span_kind,
+			_attributes,
+			_links,
+		)
+	}
+}
+
+static SAMPLER: OnceLock<DynamicSampler> = OnceLock::new();
+
+/// Update the sampler ratio at runtime
+pub fn set_sampler_ratio(ratio: f64) -> anyhow::Result<()> {
+	let sampler = SAMPLER
+		.get()
+		.ok_or_else(|| anyhow::anyhow!("sampler not initialized"))?;
+
+	sampler.set_ratio(ratio);
+	tracing::info!(?ratio, "updated sampler ratio");
+
+	Ok(())
+}
 
 fn resource() -> Resource {
 	let mut resource = Resource::builder()
@@ -48,14 +109,20 @@ fn init_tracer_provider() -> SdkTracerProvider {
 		.build()
 		.unwrap();
 
+	// Create dynamic sampler with initial ratio from env
+	let initial_ratio = std::env::var("RIVET_OTEL_SAMPLER_RATIO")
+		.ok()
+		.and_then(|s| s.parse::<f64>().ok())
+		.unwrap_or(0.001);
+
+	let dynamic_sampler = DynamicSampler::new(initial_ratio);
+
+	// Store sampler globally for later updates
+	let _ = SAMPLER.set(dynamic_sampler.clone());
+
 	SdkTracerProvider::builder()
-		// Customize sampling strategy
-		.with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
-			std::env::var("RIVET_OTEL_SAMPLER_RATIO")
-				.ok()
-				.and_then(|s| s.parse::<f64>().ok())
-				.unwrap_or(0.001),
-		))))
+		// Customize sampling strategy with parent-based sampling using our dynamic sampler
+		.with_sampler(Sampler::ParentBased(Box::new(dynamic_sampler)))
 		// If export trace to AWS X-Ray, you can use XrayIdGenerator
 		.with_id_generator(RandomIdGenerator::default())
 		.with_resource(resource())

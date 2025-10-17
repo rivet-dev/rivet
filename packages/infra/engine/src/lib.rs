@@ -28,6 +28,11 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: config::SubCommand,
 	},
+	/// Manage tracing configuration
+	Tracing {
+		#[clap(subcommand)]
+		command: tracing::SubCommand,
+	},
 	/// Allows inspection of UDB data
 	Udb(udb::Opts),
 }
@@ -39,6 +44,7 @@ impl SubCommand {
 			SubCommand::Database { command } => command.execute(config).await,
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
+			SubCommand::Tracing { command } => command.execute(config).await,
 			SubCommand::Udb(opts) => opts.execute(config).await,
 		}
 	}

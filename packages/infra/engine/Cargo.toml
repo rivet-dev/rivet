@@ -27,6 +27,7 @@ rivet-bootstrap.workspace = true
 rivet-cache.workspace = true
 rivet-config.workspace = true
 rivet-guard.workspace = true
+rivet-tracing-reconfigure.workspace = true
 rivet-logs.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true

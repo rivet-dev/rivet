@@ -280,15 +280,15 @@ path = "packages/common/error/core"
 [workspace.dependencies.rivet-error-macros]
 path = "packages/common/error/macros"
 
-[workspace.dependencies.gas]
-package = "gasoline"
-path = "packages/common/gasoline/core"
-
 [workspace.dependencies.gasoline]
 path = "packages/common/gasoline/core"
 
 [workspace.dependencies.gasoline-macros]
 path = "packages/common/gasoline/macros"
+
+[workspace.dependencies.gas]
+package = "gasoline"
+path = "packages/common/gasoline/core"
 
 [workspace.dependencies.rivet-logs]
 path = "packages/common/logs"
@@ -374,6 +374,9 @@ path = "packages/services/epoxy"
 
 [workspace.dependencies.internal]
 path = "packages/services/internal"
+
+[workspace.dependencies.rivet-tracing-reconfigure]
+path = "packages/services/tracing-reconfigure"
 
 [workspace.dependencies.namespace]
 path = "packages/services/namespace"
