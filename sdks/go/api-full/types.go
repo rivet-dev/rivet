@@ -48,6 +48,47 @@ type ActorsListNamesRequest struct {
 	Cursor    *string `json:"-"`
 }
 
+type RunnerConfigsDeleteRequest struct {
+	Namespace string `json:"-"`
+}
+
+type RunnerConfigsListRequest struct {
+	Namespace   string               `json:"-"`
+	Limit       *int                 `json:"-"`
+	Cursor      *string              `json:"-"`
+	Variant     *RunnerConfigVariant `json:"-"`
+	RunnerNames *string              `json:"-"`
+}
+
+type RunnerConfigsRefreshMetadataRequest struct {
+	Namespace string                                  `json:"-"`
+	Body      RunnerConfigsRefreshMetadataRequestBody `json:"-"`
+}
+
+func (r *RunnerConfigsRefreshMetadataRequest) UnmarshalJSON(data []byte) error {
+	var body RunnerConfigsRefreshMetadataRequestBody
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	r.Body = body
+	return nil
+}
+
+func (r *RunnerConfigsRefreshMetadataRequest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Body)
+}
+
+type RunnerConfigsServerlessHealthCheckRequest struct {
+	Namespace string            `json:"-"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Url       string            `json:"url"`
+}
+
+type RunnerConfigsUpsertRequestBody struct {
+	Namespace   string                   `json:"-"`
+	Datacenters map[string]*RunnerConfig `json:"datacenters,omitempty"`
+}
+
 type Actor struct {
 	ActorId             RivetId     `json:"actor_id"`
 	ConnectableTs       *int64      `json:"connectable_ts,omitempty"`
@@ -295,6 +336,40 @@ func (d *Datacenter) String() string {
 	return fmt.Sprintf("%#v", d)
 }
 
+type DatacenterHealth struct {
+	DatacenterLabel int             `json:"datacenter_label"`
+	DatacenterName  string          `json:"datacenter_name"`
+	Error           *string         `json:"error,omitempty"`
+	Response        *HealthResponse `json:"response,omitempty"`
+	RttMs           *float64        `json:"rtt_ms,omitempty"`
+	Status          HealthStatus    `json:"status,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (d *DatacenterHealth) UnmarshalJSON(data []byte) error {
+	type unmarshaler DatacenterHealth
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*d = DatacenterHealth(value)
+	d._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (d *DatacenterHealth) String() string {
+	if len(d._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(d._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(d); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", d)
+}
+
 type DatacentersListResponse struct {
 	Datacenters []*Datacenter `json:"datacenters,omitempty"`
 	Pagination  *Pagination   `json:"pagination,omitempty"`
@@ -323,6 +398,88 @@ func (d *DatacentersListResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", d)
+}
+
+type HealthFanoutResponse struct {
+	Datacenters []*DatacenterHealth `json:"datacenters,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (h *HealthFanoutResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler HealthFanoutResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*h = HealthFanoutResponse(value)
+	h._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (h *HealthFanoutResponse) String() string {
+	if len(h._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(h._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(h); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", h)
+}
+
+type HealthResponse struct {
+	Runtime string `json:"runtime"`
+	Status  string `json:"status"`
+	Version string `json:"version"`
+
+	_rawJSON json.RawMessage
+}
+
+func (h *HealthResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler HealthResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*h = HealthResponse(value)
+	h._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (h *HealthResponse) String() string {
+	if len(h._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(h._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(h); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", h)
+}
+
+type HealthStatus string
+
+const (
+	HealthStatusOk    HealthStatus = "ok"
+	HealthStatusError HealthStatus = "error"
+)
+
+func NewHealthStatusFromString(s string) (HealthStatus, error) {
+	switch s {
+	case "ok":
+		return HealthStatusOk, nil
+	case "error":
+		return HealthStatusError, nil
+	}
+	var t HealthStatus
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (h HealthStatus) Ptr() *HealthStatus {
+	return &h
 }
 
 type Namespace struct {
@@ -791,389 +948,9 @@ func (r *RunnerConfigsListResponseRunnerConfigsValue) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
-type RunnerConfigsServerlessHealthCheckError struct {
-	typeName                                                     string
-	RunnerConfigsServerlessHealthCheckErrorInvalidRequest        *RunnerConfigsServerlessHealthCheckErrorInvalidRequest
-	RunnerConfigsServerlessHealthCheckErrorRequestFailed         *RunnerConfigsServerlessHealthCheckErrorRequestFailed
-	RunnerConfigsServerlessHealthCheckErrorRequestTimedOut       *RunnerConfigsServerlessHealthCheckErrorRequestTimedOut
-	RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus      *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus
-	RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson   *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson
-	RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema
-}
+type RunnerConfigsRefreshMetadataRequestBody = map[string]interface{}
 
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorInvalidRequest(value *RunnerConfigsServerlessHealthCheckErrorInvalidRequest) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorInvalidRequest", RunnerConfigsServerlessHealthCheckErrorInvalidRequest: value}
-}
-
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorRequestFailed(value *RunnerConfigsServerlessHealthCheckErrorRequestFailed) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorRequestFailed", RunnerConfigsServerlessHealthCheckErrorRequestFailed: value}
-}
-
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorRequestTimedOut(value *RunnerConfigsServerlessHealthCheckErrorRequestTimedOut) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorRequestTimedOut", RunnerConfigsServerlessHealthCheckErrorRequestTimedOut: value}
-}
-
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus(value *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorNonSuccessStatus", RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus: value}
-}
-
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson(value *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorInvalidResponseJson", RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson: value}
-}
-
-func NewRunnerConfigsServerlessHealthCheckErrorFromRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema(value *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema) *RunnerConfigsServerlessHealthCheckError {
-	return &RunnerConfigsServerlessHealthCheckError{typeName: "runnerConfigsServerlessHealthCheckErrorInvalidResponseSchema", RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema: value}
-}
-
-func (r *RunnerConfigsServerlessHealthCheckError) UnmarshalJSON(data []byte) error {
-	valueRunnerConfigsServerlessHealthCheckErrorInvalidRequest := new(RunnerConfigsServerlessHealthCheckErrorInvalidRequest)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorInvalidRequest); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorInvalidRequest"
-		r.RunnerConfigsServerlessHealthCheckErrorInvalidRequest = valueRunnerConfigsServerlessHealthCheckErrorInvalidRequest
-		return nil
-	}
-	valueRunnerConfigsServerlessHealthCheckErrorRequestFailed := new(RunnerConfigsServerlessHealthCheckErrorRequestFailed)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorRequestFailed); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorRequestFailed"
-		r.RunnerConfigsServerlessHealthCheckErrorRequestFailed = valueRunnerConfigsServerlessHealthCheckErrorRequestFailed
-		return nil
-	}
-	valueRunnerConfigsServerlessHealthCheckErrorRequestTimedOut := new(RunnerConfigsServerlessHealthCheckErrorRequestTimedOut)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorRequestTimedOut); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorRequestTimedOut"
-		r.RunnerConfigsServerlessHealthCheckErrorRequestTimedOut = valueRunnerConfigsServerlessHealthCheckErrorRequestTimedOut
-		return nil
-	}
-	valueRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus := new(RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorNonSuccessStatus"
-		r.RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus = valueRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus
-		return nil
-	}
-	valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson := new(RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorInvalidResponseJson"
-		r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson = valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson
-		return nil
-	}
-	valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema := new(RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema)
-	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema); err == nil {
-		r.typeName = "runnerConfigsServerlessHealthCheckErrorInvalidResponseSchema"
-		r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema = valueRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema
-		return nil
-	}
-	return fmt.Errorf("%s cannot be deserialized as a %T", data, r)
-}
-
-func (r RunnerConfigsServerlessHealthCheckError) MarshalJSON() ([]byte, error) {
-	switch r.typeName {
-	default:
-		return nil, fmt.Errorf("invalid type %s in %T", r.typeName, r)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidRequest":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorInvalidRequest)
-	case "runnerConfigsServerlessHealthCheckErrorRequestFailed":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorRequestFailed)
-	case "runnerConfigsServerlessHealthCheckErrorRequestTimedOut":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorRequestTimedOut)
-	case "runnerConfigsServerlessHealthCheckErrorNonSuccessStatus":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidResponseJson":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidResponseSchema":
-		return json.Marshal(r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema)
-	}
-}
-
-type RunnerConfigsServerlessHealthCheckErrorVisitor interface {
-	VisitRunnerConfigsServerlessHealthCheckErrorInvalidRequest(*RunnerConfigsServerlessHealthCheckErrorInvalidRequest) error
-	VisitRunnerConfigsServerlessHealthCheckErrorRequestFailed(*RunnerConfigsServerlessHealthCheckErrorRequestFailed) error
-	VisitRunnerConfigsServerlessHealthCheckErrorRequestTimedOut(*RunnerConfigsServerlessHealthCheckErrorRequestTimedOut) error
-	VisitRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus(*RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus) error
-	VisitRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson(*RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson) error
-	VisitRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema(*RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema) error
-}
-
-func (r *RunnerConfigsServerlessHealthCheckError) Accept(visitor RunnerConfigsServerlessHealthCheckErrorVisitor) error {
-	switch r.typeName {
-	default:
-		return fmt.Errorf("invalid type %s in %T", r.typeName, r)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidRequest":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorInvalidRequest(r.RunnerConfigsServerlessHealthCheckErrorInvalidRequest)
-	case "runnerConfigsServerlessHealthCheckErrorRequestFailed":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorRequestFailed(r.RunnerConfigsServerlessHealthCheckErrorRequestFailed)
-	case "runnerConfigsServerlessHealthCheckErrorRequestTimedOut":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorRequestTimedOut(r.RunnerConfigsServerlessHealthCheckErrorRequestTimedOut)
-	case "runnerConfigsServerlessHealthCheckErrorNonSuccessStatus":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorNonSuccessStatus(r.RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidResponseJson":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorInvalidResponseJson(r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson)
-	case "runnerConfigsServerlessHealthCheckErrorInvalidResponseSchema":
-		return visitor.VisitRunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema(r.RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema)
-	}
-}
-
-type RunnerConfigsServerlessHealthCheckErrorInvalidRequest struct {
-	InvalidRequest map[string]interface{} `json:"invalid_request,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidRequest) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorInvalidRequest
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorInvalidRequest(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidRequest) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson struct {
-	InvalidResponseJson *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson `json:"invalid_response_json,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJson) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson struct {
-	Body string `json:"body"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseJsonInvalidResponseJson) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema struct {
-	InvalidResponseSchema *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema `json:"invalid_response_schema,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchema) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema struct {
-	Runtime string `json:"runtime"`
-	Version string `json:"version"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorInvalidResponseSchemaInvalidResponseSchema) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus struct {
-	NonSuccessStatus *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus `json:"non_success_status,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatus) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus struct {
-	Body       string `json:"body"`
-	StatusCode int    `json:"status_code"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorNonSuccessStatusNonSuccessStatus) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorRequestFailed struct {
-	RequestFailed map[string]interface{} `json:"request_failed,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorRequestFailed) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorRequestFailed
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorRequestFailed(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorRequestFailed) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
-
-type RunnerConfigsServerlessHealthCheckErrorRequestTimedOut struct {
-	RequestTimedOut map[string]interface{} `json:"request_timed_out,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorRequestTimedOut) UnmarshalJSON(data []byte) error {
-	type unmarshaler RunnerConfigsServerlessHealthCheckErrorRequestTimedOut
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*r = RunnerConfigsServerlessHealthCheckErrorRequestTimedOut(value)
-	r._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (r *RunnerConfigsServerlessHealthCheckErrorRequestTimedOut) String() string {
-	if len(r._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(r); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", r)
-}
+type RunnerConfigsRefreshMetadataResponse = map[string]interface{}
 
 type RunnerConfigsServerlessHealthCheckResponse struct {
 	typeName                                          string
@@ -1262,7 +1039,7 @@ func (r *RunnerConfigsServerlessHealthCheckResponseFailure) String() string {
 }
 
 type RunnerConfigsServerlessHealthCheckResponseFailureFailure struct {
-	Error *RunnerConfigsServerlessHealthCheckError `json:"error,omitempty"`
+	Error *RunnerConfigsServerlessMetadataError `json:"error,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -1337,6 +1114,390 @@ func (r *RunnerConfigsServerlessHealthCheckResponseSuccessSuccess) UnmarshalJSON
 }
 
 func (r *RunnerConfigsServerlessHealthCheckResponseSuccessSuccess) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataError struct {
+	typeName                                                  string
+	RunnerConfigsServerlessMetadataErrorInvalidRequest        *RunnerConfigsServerlessMetadataErrorInvalidRequest
+	RunnerConfigsServerlessMetadataErrorRequestFailed         *RunnerConfigsServerlessMetadataErrorRequestFailed
+	RunnerConfigsServerlessMetadataErrorRequestTimedOut       *RunnerConfigsServerlessMetadataErrorRequestTimedOut
+	RunnerConfigsServerlessMetadataErrorNonSuccessStatus      *RunnerConfigsServerlessMetadataErrorNonSuccessStatus
+	RunnerConfigsServerlessMetadataErrorInvalidResponseJson   *RunnerConfigsServerlessMetadataErrorInvalidResponseJson
+	RunnerConfigsServerlessMetadataErrorInvalidResponseSchema *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidRequest(value *RunnerConfigsServerlessMetadataErrorInvalidRequest) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorInvalidRequest", RunnerConfigsServerlessMetadataErrorInvalidRequest: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorRequestFailed(value *RunnerConfigsServerlessMetadataErrorRequestFailed) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorRequestFailed", RunnerConfigsServerlessMetadataErrorRequestFailed: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorRequestTimedOut(value *RunnerConfigsServerlessMetadataErrorRequestTimedOut) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorRequestTimedOut", RunnerConfigsServerlessMetadataErrorRequestTimedOut: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorNonSuccessStatus(value *RunnerConfigsServerlessMetadataErrorNonSuccessStatus) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorNonSuccessStatus", RunnerConfigsServerlessMetadataErrorNonSuccessStatus: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidResponseJson(value *RunnerConfigsServerlessMetadataErrorInvalidResponseJson) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorInvalidResponseJson", RunnerConfigsServerlessMetadataErrorInvalidResponseJson: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(value *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorInvalidResponseSchema", RunnerConfigsServerlessMetadataErrorInvalidResponseSchema: value}
+}
+
+func (r *RunnerConfigsServerlessMetadataError) UnmarshalJSON(data []byte) error {
+	valueRunnerConfigsServerlessMetadataErrorInvalidRequest := new(RunnerConfigsServerlessMetadataErrorInvalidRequest)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorInvalidRequest); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorInvalidRequest"
+		r.RunnerConfigsServerlessMetadataErrorInvalidRequest = valueRunnerConfigsServerlessMetadataErrorInvalidRequest
+		return nil
+	}
+	valueRunnerConfigsServerlessMetadataErrorRequestFailed := new(RunnerConfigsServerlessMetadataErrorRequestFailed)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorRequestFailed); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorRequestFailed"
+		r.RunnerConfigsServerlessMetadataErrorRequestFailed = valueRunnerConfigsServerlessMetadataErrorRequestFailed
+		return nil
+	}
+	valueRunnerConfigsServerlessMetadataErrorRequestTimedOut := new(RunnerConfigsServerlessMetadataErrorRequestTimedOut)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorRequestTimedOut); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorRequestTimedOut"
+		r.RunnerConfigsServerlessMetadataErrorRequestTimedOut = valueRunnerConfigsServerlessMetadataErrorRequestTimedOut
+		return nil
+	}
+	valueRunnerConfigsServerlessMetadataErrorNonSuccessStatus := new(RunnerConfigsServerlessMetadataErrorNonSuccessStatus)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorNonSuccessStatus); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorNonSuccessStatus"
+		r.RunnerConfigsServerlessMetadataErrorNonSuccessStatus = valueRunnerConfigsServerlessMetadataErrorNonSuccessStatus
+		return nil
+	}
+	valueRunnerConfigsServerlessMetadataErrorInvalidResponseJson := new(RunnerConfigsServerlessMetadataErrorInvalidResponseJson)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorInvalidResponseJson); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorInvalidResponseJson"
+		r.RunnerConfigsServerlessMetadataErrorInvalidResponseJson = valueRunnerConfigsServerlessMetadataErrorInvalidResponseJson
+		return nil
+	}
+	valueRunnerConfigsServerlessMetadataErrorInvalidResponseSchema := new(RunnerConfigsServerlessMetadataErrorInvalidResponseSchema)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorInvalidResponseSchema); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorInvalidResponseSchema"
+		r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema = valueRunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+		return nil
+	}
+	return fmt.Errorf("%s cannot be deserialized as a %T", data, r)
+}
+
+func (r RunnerConfigsServerlessMetadataError) MarshalJSON() ([]byte, error) {
+	switch r.typeName {
+	default:
+		return nil, fmt.Errorf("invalid type %s in %T", r.typeName, r)
+	case "runnerConfigsServerlessMetadataErrorInvalidRequest":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidRequest)
+	case "runnerConfigsServerlessMetadataErrorRequestFailed":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorRequestFailed)
+	case "runnerConfigsServerlessMetadataErrorRequestTimedOut":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorRequestTimedOut)
+	case "runnerConfigsServerlessMetadataErrorNonSuccessStatus":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorNonSuccessStatus)
+	case "runnerConfigsServerlessMetadataErrorInvalidResponseJson":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidResponseJson)
+	case "runnerConfigsServerlessMetadataErrorInvalidResponseSchema":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema)
+	}
+}
+
+type RunnerConfigsServerlessMetadataErrorVisitor interface {
+	VisitRunnerConfigsServerlessMetadataErrorInvalidRequest(*RunnerConfigsServerlessMetadataErrorInvalidRequest) error
+	VisitRunnerConfigsServerlessMetadataErrorRequestFailed(*RunnerConfigsServerlessMetadataErrorRequestFailed) error
+	VisitRunnerConfigsServerlessMetadataErrorRequestTimedOut(*RunnerConfigsServerlessMetadataErrorRequestTimedOut) error
+	VisitRunnerConfigsServerlessMetadataErrorNonSuccessStatus(*RunnerConfigsServerlessMetadataErrorNonSuccessStatus) error
+	VisitRunnerConfigsServerlessMetadataErrorInvalidResponseJson(*RunnerConfigsServerlessMetadataErrorInvalidResponseJson) error
+	VisitRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(*RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) error
+}
+
+func (r *RunnerConfigsServerlessMetadataError) Accept(visitor RunnerConfigsServerlessMetadataErrorVisitor) error {
+	switch r.typeName {
+	default:
+		return fmt.Errorf("invalid type %s in %T", r.typeName, r)
+	case "runnerConfigsServerlessMetadataErrorInvalidRequest":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidRequest(r.RunnerConfigsServerlessMetadataErrorInvalidRequest)
+	case "runnerConfigsServerlessMetadataErrorRequestFailed":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorRequestFailed(r.RunnerConfigsServerlessMetadataErrorRequestFailed)
+	case "runnerConfigsServerlessMetadataErrorRequestTimedOut":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorRequestTimedOut(r.RunnerConfigsServerlessMetadataErrorRequestTimedOut)
+	case "runnerConfigsServerlessMetadataErrorNonSuccessStatus":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorNonSuccessStatus(r.RunnerConfigsServerlessMetadataErrorNonSuccessStatus)
+	case "runnerConfigsServerlessMetadataErrorInvalidResponseJson":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidResponseJson(r.RunnerConfigsServerlessMetadataErrorInvalidResponseJson)
+	case "runnerConfigsServerlessMetadataErrorInvalidResponseSchema":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema)
+	}
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidRequest struct {
+	InvalidRequest map[string]interface{} `json:"invalid_request,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidRequest(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidRequest) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidResponseJson struct {
+	InvalidResponseJson *RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson `json:"invalid_response_json,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseJson) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidResponseJson
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidResponseJson(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseJson) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson struct {
+	Body string `json:"body"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidResponseSchema struct {
+	InvalidResponseSchema *RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema `json:"invalid_response_schema,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidResponseSchema(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema struct {
+	Runtime string `json:"runtime"`
+	Version string `json:"version"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorNonSuccessStatus struct {
+	NonSuccessStatus *RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus `json:"non_success_status,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorNonSuccessStatus) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorNonSuccessStatus
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorNonSuccessStatus(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorNonSuccessStatus) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus struct {
+	Body       string `json:"body"`
+	StatusCode int    `json:"status_code"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorRequestFailed struct {
+	RequestFailed map[string]interface{} `json:"request_failed,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorRequestFailed) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorRequestFailed
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorRequestFailed(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorRequestFailed) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorRequestTimedOut struct {
+	RequestTimedOut map[string]interface{} `json:"request_timed_out,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorRequestTimedOut) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorRequestTimedOut
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorRequestTimedOut(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorRequestTimedOut) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value

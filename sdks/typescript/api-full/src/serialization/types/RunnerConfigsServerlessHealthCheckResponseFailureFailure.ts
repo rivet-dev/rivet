@@ -5,17 +5,17 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
-import { RunnerConfigsServerlessHealthCheckError } from "./RunnerConfigsServerlessHealthCheckError";
+import { RunnerConfigsServerlessMetadataError } from "./RunnerConfigsServerlessMetadataError";
 
 export const RunnerConfigsServerlessHealthCheckResponseFailureFailure: core.serialization.ObjectSchema<
     serializers.RunnerConfigsServerlessHealthCheckResponseFailureFailure.Raw,
     Rivet.RunnerConfigsServerlessHealthCheckResponseFailureFailure
 > = core.serialization.object({
-    error: RunnerConfigsServerlessHealthCheckError,
+    error: RunnerConfigsServerlessMetadataError,
 });
 
 export declare namespace RunnerConfigsServerlessHealthCheckResponseFailureFailure {
     export interface Raw {
-        error: RunnerConfigsServerlessHealthCheckError.Raw;
+        error: RunnerConfigsServerlessMetadataError.Raw;
     }
 }

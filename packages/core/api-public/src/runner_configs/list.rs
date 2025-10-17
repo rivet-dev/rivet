@@ -52,11 +52,7 @@ pub async fn list(
 }
 
 #[tracing::instrument(skip_all)]
-async fn list_inner(
-	ctx: ApiCtx,
-	path: ListPath,
-	query: ListQuery,
-) -> Result<ListResponse> {
+async fn list_inner(ctx: ApiCtx, path: ListPath, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	let runner_configs = fanout_to_datacenters::<

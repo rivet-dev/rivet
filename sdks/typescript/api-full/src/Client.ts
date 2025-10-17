@@ -8,8 +8,8 @@ import urlJoin from "url-join";
 import * as serializers from "./serialization/index";
 import * as errors from "./errors/index";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
+import { Health } from "./api/resources/health/client/Client";
 import { Namespaces } from "./api/resources/namespaces/client/Client";
-import { RunnerConfigs } from "./api/resources/runnerConfigs/client/Client";
 import { Runners } from "./api/resources/runners/client/Client";
 
 export declare namespace RivetClient {
@@ -35,8 +35,8 @@ export declare namespace RivetClient {
 
 export class RivetClient {
     protected _datacenters: Datacenters | undefined;
+    protected _health: Health | undefined;
     protected _namespaces: Namespaces | undefined;
-    protected _runnerConfigs: RunnerConfigs | undefined;
     protected _runners: Runners | undefined;
 
     constructor(protected readonly _options: RivetClient.Options) {}
@@ -45,12 +45,12 @@ export class RivetClient {
         return (this._datacenters ??= new Datacenters(this._options));
     }
 
-    public get namespaces(): Namespaces {
-        return (this._namespaces ??= new Namespaces(this._options));
+    public get health(): Health {
+        return (this._health ??= new Health(this._options));
     }
 
-    public get runnerConfigs(): RunnerConfigs {
-        return (this._runnerConfigs ??= new RunnerConfigs(this._options));
+    public get namespaces(): Namespaces {
+        return (this._namespaces ??= new Namespaces(this._options));
     }
 
     public get runners(): Runners {
@@ -515,6 +515,395 @@ export class RivetClient {
                 });
             case "timeout":
                 throw new errors.RivetTimeoutError("Timeout exceeded when calling DELETE /actors/{actor_id}.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RunnerConfigsListRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigsList({
+     *         namespace: "namespace"
+     *     })
+     */
+    public async runnerConfigsList(
+        request: Rivet.RunnerConfigsListRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsListResponse> {
+        const { namespace, limit, cursor, variant, runnerNames } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        if (limit != null) {
+            _queryParams["limit"] = limit.toString();
+        }
+
+        if (cursor != null) {
+            _queryParams["cursor"] = cursor;
+        }
+
+        if (variant != null) {
+            _queryParams["variant"] = serializers.RunnerConfigVariant.jsonOrThrow(variant, {
+                unrecognizedObjectKeys: "strip",
+            });
+        }
+
+        if (runnerNames != null) {
+            _queryParams["runner_names"] = runnerNames;
+        }
+
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                "runner-configs",
+            ),
+            method: "GET",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsListResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /runner-configs.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {Rivet.RunnerConfigsServerlessHealthCheckRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigsServerlessHealthCheck({
+     *         namespace: "namespace",
+     *         url: "url"
+     *     })
+     */
+    public async runnerConfigsServerlessHealthCheck(
+        request: Rivet.RunnerConfigsServerlessHealthCheckRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsServerlessHealthCheckResponse> {
+        const { namespace, ..._body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                "runner-configs/serverless-health-check",
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.RunnerConfigsServerlessHealthCheckRequest.jsonOrThrow(_body, {
+                unrecognizedObjectKeys: "strip",
+            }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsServerlessHealthCheckResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /runner-configs/serverless-health-check.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {string} runnerName
+     * @param {Rivet.RunnerConfigsUpsertRequestBody} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigsUpsert("runner_name", {
+     *         namespace: "namespace",
+     *         datacenters: {
+     *             "key": {}
+     *         }
+     *     })
+     */
+    public async runnerConfigsUpsert(
+        runnerName: string,
+        request: Rivet.RunnerConfigsUpsertRequestBody,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsUpsertResponse> {
+        const { namespace, ..._body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `runner-configs/${encodeURIComponent(runnerName)}`,
+            ),
+            method: "PUT",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.RunnerConfigsUpsertRequestBody.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsUpsertResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling PUT /runner-configs/{runner_name}.");
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {string} runnerName
+     * @param {Rivet.RunnerConfigsDeleteRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigsDelete("runner_name", {
+     *         namespace: "namespace"
+     *     })
+     */
+    public async runnerConfigsDelete(
+        runnerName: string,
+        request: Rivet.RunnerConfigsDeleteRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsDeleteResponse> {
+        const { namespace } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `runner-configs/${encodeURIComponent(runnerName)}`,
+            ),
+            method: "DELETE",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsDeleteResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /runner-configs/{runner_name}.",
+                );
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * @param {string} runnerName
+     * @param {Rivet.RunnerConfigsRefreshMetadataRequest} request
+     * @param {RivetClient.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.runnerConfigsRefreshMetadata("runner_name", {
+     *         namespace: "namespace",
+     *         body: {
+     *             "key": "value"
+     *         }
+     *     })
+     */
+    public async runnerConfigsRefreshMetadata(
+        runnerName: string,
+        request: Rivet.RunnerConfigsRefreshMetadataRequest,
+        requestOptions?: RivetClient.RequestOptions,
+    ): Promise<Rivet.RunnerConfigsRefreshMetadataResponse> {
+        const { namespace, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
+        _queryParams["namespace"] = namespace;
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.baseUrl)) ??
+                    (await core.Supplier.get(this._options.environment)),
+                `runner-configs/${encodeURIComponent(runnerName)}/refresh-metadata`,
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.RunnerConfigsRefreshMetadataRequestBody.jsonOrThrow(_body, {
+                unrecognizedObjectKeys: "strip",
+            }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.RunnerConfigsRefreshMetadataResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            throw new errors.RivetError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.body,
+            });
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /runner-configs/{runner_name}/refresh-metadata.",
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

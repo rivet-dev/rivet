@@ -652,7 +652,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequest"
+                "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequestBody"
               }
             }
           },
@@ -1502,7 +1502,7 @@
           }
         }
       },
-      "RunnerConfigsRefreshMetadataRequest": {
+      "RunnerConfigsRefreshMetadataRequestBody": {
         "type": "object",
         "additionalProperties": false
       },
