@@ -324,6 +324,31 @@
         ]
       }
     },
+    "/health/fanout": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health_fanout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthFanoutResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/namespaces": {
       "get": {
         "tags": [

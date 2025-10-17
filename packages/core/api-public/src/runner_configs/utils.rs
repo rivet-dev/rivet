@@ -195,11 +195,8 @@ pub async fn refresh_runner_config_metadata(
 
 					// Write actor names
 					for (name, metadata) in actor_names {
-						let name_key =
-							pegboard::keys::ns::ActorNameKey::new(namespace_id, name.clone());
-
 						tx.write(
-							&name_key,
+							&pegboard::keys::ns::ActorNameKey::new(namespace_id, name.clone()),
 							rivet_data::converted::ActorNameKeyData { metadata },
 						)?;
 					}
