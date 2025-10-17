@@ -263,7 +263,7 @@ export function RouteComponent() {
 									asChild
 								>
 									<a
-										href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Frivetkit%2Ftree%2Fmain%2Fexamples%2Fnext-js&env=NEXT_PUBLIC_RIVET_ENDPOINT%2CNEXT_PUBLIC_RIVET_NAMESPACE%2CNEXT_PUBLIC_RIVET_TOKEN&project-name=rivet-next-js&repository-name=rivet-next-js"
+										href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Ftemplate-vercel&env=NEXT_PUBLIC_RIVET_ENDPOINT,NEXT_PUBLIC_RIVET_TOKEN,NEXT_PUBLIC_RIVET_NAMESPACE&project-name=rivetkit-vercel&repository-name=rivetkit-vercel"
 										target="_blank"
 										rel="noreferrer"
 									>
