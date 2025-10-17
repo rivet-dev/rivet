@@ -1,8 +1,20 @@
-import { faHourglassClock, faPlus, Icon } from "@rivet-gg/icons";
+import {
+	faHourglassClock,
+	faPlus,
+	faSignal4,
+	faSignal5,
+	faSignalAlt,
+	faSignalAlt2,
+	faSignalAlt3,
+	faSignalAlt4,
+	faSignalGood,
+	Icon,
+} from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { formatRelative } from "date-fns";
+import { formatDistance, formatRelative } from "date-fns";
+import { useInterval } from "usehooks-ts";
 import {
 	Button,
 	DiscreteCopyButton,
@@ -40,7 +52,6 @@ export function RunnersTable({
 				<TableRow>
 					<TableHead />
 					<TableHead className="pl-8">ID</TableHead>
-					<TableHead className="pl-8">Key</TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead>Slots</TableHead>
@@ -116,9 +127,6 @@ function RowSkeleton() {
 			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
-			<TableCell>
-				<Skeleton className="w-full h-4" />
-			</TableCell>
 		</TableRow>
 	);
 }
@@ -126,7 +134,7 @@ function RowSkeleton() {
 function Row(runner: Rivet.Runner) {
 	return (
 		<TableRow key={runner.runnerId}>
-			<TableCell>
+			<TableCell className="size-8">
 				<RunnerStatusBadge {...runner} />
 			</TableCell>
 			<TableCell>
@@ -135,16 +143,6 @@ function Row(runner: Rivet.Runner) {
 					trigger={
 						<DiscreteCopyButton value={runner.runnerId}>
 							{runner.runnerId.slice(0, 8)}
-						</DiscreteCopyButton>
-					}
-				/>
-			</TableCell>
-			<TableCell>
-				<WithTooltip
-					content={runner.key}
-					trigger={
-						<DiscreteCopyButton value={runner.key}>
-							{runner.key || "—"}
 						</DiscreteCopyButton>
 					}
 				/>
@@ -160,28 +158,59 @@ function Row(runner: Rivet.Runner) {
 				{runner.remainingSlots}/{runner.totalSlots}
 			</TableCell>
 
-			<TableCell>{formatRelative(runner.createTs, new Date())}</TableCell>
+			<TableCell>
+				<CreateTs createTs={runner.createTs} />
+			</TableCell>
 		</TableRow>
 	);
 }
 
+function CreateTs({ createTs }: { createTs: number }) {
+	return (
+		<WithTooltip
+			content={new Date(createTs).toLocaleString()}
+			trigger={
+				<div>
+					{formatDistance(createTs, new Date(), {
+						addSuffix: true,
+					})}
+				</div>
+			}
+		/>
+	);
+}
+
 function RunnerStatusBadge(runner: Rivet.Runner) {
-	if (runner.drainTs) {
+	if (runner.lastRtt <= 50) {
 		return (
 			<WithTooltip
-				content={`Draining (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
+				content={`${runner.lastRtt}ms`}
 				trigger={
-					<Icon icon={faHourglassClock} className="text-warning" />
+					<div className="text-center relative size-8">
+						<Icon
+							icon={faSignalAlt4}
+							className="text-green-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+					</div>
 				}
 			/>
 		);
 	}
-	if (runner.stopTs) {
+	if (runner.lastRtt > 50 && runner.lastRtt <= 200) {
 		return (
 			<WithTooltip
-				content={`Stopped (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
+				content={`${runner.lastRtt}ms`}
 				trigger={
-					<span className={"size-2 rounded-full, bg-foreground/10"} />
+					<div className="text-center relative size-8">
+						<Icon
+							icon={faSignalAlt4}
+							className="text-muted-foreground/20 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+						<Icon
+							icon={faSignalAlt3}
+							className="text-primary/70 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+						/>
+					</div>
 				}
 			/>
 		);
@@ -189,8 +218,19 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 
 	return (
 		<WithTooltip
-			content={`Running (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
-			trigger={<Ping variant="success" className="relative right-auto" />}
+			content={`${runner.lastRtt}ms`}
+			trigger={
+				<div className="text-center relative size-8">
+					<Icon
+						icon={faSignalAlt}
+						className="text-muted-foreground/20 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+					/>
+					<Icon
+						icon={faSignalAlt2}
+						className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
+					/>
+				</div>
+			}
 		/>
 	);
 }

@@ -67,8 +67,8 @@ export function DocsSheet({
 								className="w-full h-screen border-t"
 								src={
 									path.startsWith("http")
-										? `${path}?utm_source=engine&embed=true`
-										: `https://rivet.gg/${path}?embed=true#${hash}`
+										? `${path}?utm_source=engine`
+										: `https://rivet.gg/${path}#${hash}`
 								}
 								title={title}
 							/>

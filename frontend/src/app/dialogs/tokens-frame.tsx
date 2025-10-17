@@ -1,7 +1,6 @@
-import { faQuestionCircle, faRailway, Icon } from "@rivet-gg/icons";
+import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
 import { HelpDropdown } from "@/app/help-dropdown";
 import {
 	Button,
@@ -11,12 +10,6 @@ import {
 	Label,
 	Skeleton,
 } from "@/components";
-import {
-	useCloudDataProvider,
-	useEngineCompatDataProvider,
-} from "@/components/actors";
-import { defineStepper } from "@/components/ui/stepper";
-import { cloudEnv, engineEnv } from "@/lib/env";
 
 interface TokensFrameContentProps extends DialogContentProps {}
 
@@ -36,7 +29,7 @@ export default function TokensFrameContent({
 				</Frame.Title>
 				<Frame.Description>
 					These tokens are used to authenticate requests to the Rivet
-					Engine API. Keep them secret!
+					API.
 				</Frame.Description>
 			</Frame.Header>
 			<Frame.Content>

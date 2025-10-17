@@ -5,9 +5,7 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
-import { useWatch } from "react-hook-form";
-import type z from "zod";
-import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
+import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import {
 	Accordion,
 	AccordionContent,
@@ -18,17 +16,16 @@ import {
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
-import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
+import { StepperForm } from "../forms/stepper-form";
+import { EnvVariablesStep } from "./connect-railway-frame";
 
 const { stepper } = ConnectVercelForm;
 
-type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
+interface ConnectQuickVercelFrameContentProps extends DialogContentProps {}
 
-interface CreateProjectFrameContentProps extends DialogContentProps {}
-
-export default function CreateProjectFrameContent({
+export default function ConnectQuickVercelFrameContent({
 	onClose,
-}: CreateProjectFrameContentProps) {
+}: ConnectQuickVercelFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().regionsQueryOptions(),
 		pages: Infinity,
@@ -87,8 +84,7 @@ function FormStepper({
 			{...stepper}
 			content={{
 				"initial-info": () => <StepInitialInfo />,
-				"api-route": () => <StepApiRoute />,
-				"vercel-settings": () => <StepVercelSettings />,
+				"env-vars": () => <StepEnvVars />,
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -165,14 +161,16 @@ function StepInitialInfo() {
 	);
 }
 
-function StepApiRoute() {
-	const plan = useWatch<FormValues>({ name: "plan" as const });
-	return <ConnectVercelForm.IntegrationCode plan={plan || "hobby"} />;
-}
-
-function StepVercelSettings() {
-	const plan = useWatch<FormValues>({ name: "plan" as const });
-	return <ConnectVercelForm.Json plan={plan || "hobby"} />;
+function StepEnvVars() {
+	return (
+		<>
+			<p>
+				Set the following environment variables in your Vercel project
+				settings.
+			</p>
+			<EnvVariablesStep />
+		</>
+	);
 }
 
 function StepDeploy() {

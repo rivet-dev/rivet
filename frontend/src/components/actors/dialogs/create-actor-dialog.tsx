@@ -7,6 +7,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { getRandomKey } from "@/lib/words";
 import {
 	DialogDescription,
 	DialogFooter,
@@ -40,15 +41,15 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
 					datacenter: values.datacenter,
-					crashPolicy: values.crashPolicy || CrashPolicy.Destroy,
+					crashPolicy: values.crashPolicy || CrashPolicy.Restart,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
 				onClose?.();
 			}}
 			defaultValues={{
 				name,
-				key: "example-key",
-				crashPolicy: CrashPolicy.Destroy,
+				key: getRandomKey(),
+				crashPolicy: CrashPolicy.Restart,
 			}}
 		>
 			<DialogHeader>
@@ -86,7 +87,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 				</Accordion>
 			</Flex>
 			<DialogFooter>
-				<ActorCreateForm.Submit type="submit">
+				<ActorCreateForm.Submit allowPristine type="submit">
 					Create
 				</ActorCreateForm.Submit>
 			</DialogFooter>

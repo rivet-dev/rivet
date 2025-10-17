@@ -50,6 +50,7 @@ export function ActorBuildsList() {
 
 								search: (old) => ({
 									...old,
+									actorId: undefined,
 									n: [build.name],
 								}),
 							});
@@ -58,7 +59,11 @@ export function ActorBuildsList() {
 					>
 						<Link
 							to="."
-							search={(old) => ({ ...old, n: [build.name] })}
+							search={(old) => ({
+								...old,
+								actorId: undefined,
+								n: [build.name],
+							})}
 						>
 							<span className="text-ellipsis overflow-hidden whitespace-nowrap">
 								{build.name}

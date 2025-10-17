@@ -15,6 +15,7 @@ import {
 	CardTitle,
 	toast,
 } from "@/components";
+import { clerk } from "@/lib/auth";
 
 export const Route = createFileRoute("/onboarding/accept-invitation")({
 	component: RouteComponent,
@@ -22,8 +23,9 @@ export const Route = createFileRoute("/onboarding/accept-invitation")({
 
 function RouteComponent() {
 	const search = Route.useSearch();
+	const { organization } = useOrganization();
 
-	if (search.__clerk_status === "sign_up") {
+	if (search.__clerk_status === "sign_up" && !organization) {
 		// display sign up flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -35,7 +37,7 @@ function RouteComponent() {
 		);
 	}
 
-	if (search.__clerk_status === "sign_in") {
+	if (search.__clerk_status === "sign_in" && !organization) {
 		// complete sign in flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -45,6 +47,11 @@ function RouteComponent() {
 				</div>
 			</div>
 		);
+	}
+
+	if (search.__clerk_status === "sign_in" && organization) {
+		// if we get here, the user is already signed in but maybe not to the right org
+		return <AcceptInvitation ticket={search.__clerk_ticket} />;
 	}
 
 	if (search.__clerk_status === "complete") {
@@ -195,7 +202,6 @@ function OrgSignInFlow({ ticket }: { ticket: string }) {
 }
 
 function CompleteFlow() {
-	const { organization } = useOrganization();
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
 			<div className="flex flex-col items-center gap-6">
@@ -210,11 +216,21 @@ function CompleteFlow() {
 					</CardHeader>
 					<CardFooter>
 						<Button asChild>
-							<Link to="/">Go to {organization?.name}</Link>
+							<Link to="/">Go Home</Link>
 						</Button>
 					</CardFooter>
 				</Card>
 			</div>
 		</div>
 	);
+}
+
+function AcceptInvitation({ ticket }: { ticket: string }) {
+	useEffect(() => {
+		clerk.getFapiClient().request({
+			path: "/tickets/accept",
+			search: { ticket },
+		});
+	}, [ticket]);
+	return <CompleteFlow />;
 }

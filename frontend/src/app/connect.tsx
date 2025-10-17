@@ -1,4 +1,4 @@
-import { faNodeJs, faReact, Icon } from "@rivet-gg/icons";
+import { faNextjs, faNodeJs, faReact, Icon } from "@rivet-gg/icons";
 import { useSearch } from "@tanstack/react-router";
 import type { ComponentProps, Ref } from "react";
 import {
@@ -52,6 +52,19 @@ export function Connect({
 									startIcon={<Icon icon={faReact} />}
 								>
 									React
+								</Button>
+							</DocsSheet>
+
+							<DocsSheet
+								path={docsLinks.gettingStarted.nextjs}
+								title="Next.js Quickstart"
+							>
+								<Button
+									className="flex-1"
+									variant="outline"
+									startIcon={<Icon icon={faNextjs} />}
+								>
+									Next.js
 								</Button>
 							</DocsSheet>
 						</div>

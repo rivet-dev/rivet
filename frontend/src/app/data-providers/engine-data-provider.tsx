@@ -1,6 +1,10 @@
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
 import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+	infiniteQueryOptions,
+	mutationOptions,
+	queryOptions,
+} from "@tanstack/react-query";
 import { getConfig, ls } from "@/components";
 import {
 	type Actor,
@@ -10,6 +14,7 @@ import {
 } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
+import { queryClient } from "@/queries/global";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
 	ActorQueryOptionsSchema,
@@ -505,7 +510,7 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		runnerByNameQueryOptions(opts: { runnerName: string }) {
+		runnerByNameQueryOptions(opts: { runnerName: string | undefined }) {
 			return queryOptions({
 				queryKey: [{ namespace }, "runner", opts.runnerName],
 				enabled: !!opts.runnerName,
@@ -532,7 +537,7 @@ export const createNamespaceContext = ({
 				onSuccess?: (data: Rivet.RunnerConfigsUpsertResponse) => void;
 			} = {},
 		) {
-			return {
+			return mutationOptions({
 				...opts,
 				mutationKey: ["runner-config"],
 				mutationFn: async ({
@@ -552,7 +557,7 @@ export const createNamespaceContext = ({
 				meta: {
 					mightRequireAuth,
 				},
-			};
+			});
 		},
 		deleteRunnerConfigMutationOptions(
 			opts: { onSuccess?: (data: void) => void } = {},
@@ -569,9 +574,11 @@ export const createNamespaceContext = ({
 				},
 			};
 		},
-		runnerConfigsQueryOptions() {
+		runnerConfigsQueryOptions(opts?: {
+			variant?: Rivet.RunnerConfigVariant;
+		}) {
 			return infiniteQueryOptions({
-				queryKey: [{ namespace }, "runners", "configs"],
+				queryKey: [{ namespace }, "runners", "configs", opts],
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const response = await client.runnerConfigs.list(
@@ -579,6 +586,7 @@ export const createNamespaceContext = ({
 							namespace,
 							cursor: pageParam ?? undefined,
 							limit: RECORDS_PER_PAGE,
+							variant: opts?.variant,
 						},
 						{ abortSignal },
 					);
@@ -608,20 +616,24 @@ export const createNamespaceContext = ({
 			});
 		},
 
-		runnerConfigQueryOptions(runnerName: string) {
+		runnerConfigQueryOptions(opts: {
+			name: string | undefined;
+			variant?: Rivet.RunnerConfigVariant;
+		}) {
 			return queryOptions({
-				queryKey: [{ namespace }, "runners", "config", runnerName],
-				enabled: !!runnerName,
+				queryKey: [{ namespace }, "runners", "config", opts],
+				enabled: !!opts.name,
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.runnerConfigs.list(
 						{
 							namespace,
-							runnerNames: runnerName,
+							runnerNames: opts.name,
+							variant: opts.variant,
 						},
 						{ abortSignal },
 					);
 
-					const config = response.runnerConfigs[runnerName];
+					const config = response.runnerConfigs[opts.name!];
 
 					if (!config) {
 						throw new Error("Runner config not found");
