@@ -2,11 +2,13 @@ import {
 	// @ts-expect-error
 	faActors,
 	faMagnifyingGlass,
+	faNextjs,
 	faNodeJs,
 	faQuestionSquare,
 	faReact,
 	faSidebar,
 	faSidebarFlip,
+	faTs,
 	Icon,
 } from "@rivet-gg/icons";
 import {
@@ -27,6 +29,7 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
+import { docsLinks } from "@/content/data";
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
@@ -260,19 +263,19 @@ function EmptyState({ count }: { count: number }) {
 							</SmallText>
 							<div className="flex gap-2">
 								<DocsSheet
-									path={links.gettingStarted.node}
+									path={docsLinks.gettingStarted.js}
 									title="Node.js & Bun Quickstart"
 								>
 									<Button
 										className="flex-1"
 										variant="outline"
-										startIcon={<Icon icon={faNodeJs} />}
+										startIcon={<Icon icon={faTs} />}
 									>
-										Node.js & Bun
+										JavaScript
 									</Button>
 								</DocsSheet>
 								<DocsSheet
-									path={links.gettingStarted.react}
+									path={docsLinks.gettingStarted.react}
 									title="React Quickstart"
 								>
 									<Button
@@ -281,6 +284,19 @@ function EmptyState({ count }: { count: number }) {
 										startIcon={<Icon icon={faReact} />}
 									>
 										React
+									</Button>
+								</DocsSheet>
+
+								<DocsSheet
+									path={docsLinks.gettingStarted.nextjs}
+									title="Next.js Quickstart"
+								>
+									<Button
+										className="flex-1"
+										variant="outline"
+										startIcon={<Icon icon={faNextjs} />}
+									>
+										Next.js
 									</Button>
 								</DocsSheet>
 							</div>

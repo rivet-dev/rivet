@@ -1,4 +1,4 @@
-import { faHetzner, Icon } from "@rivet-gg/icons";
+import { faHetznerH, Icon } from "@rivet-gg/icons";
 import { type DialogContentProps, Frame } from "@/components";
 import ConnectManualServerlfullFrameContent from "./connect-manual-serverfull-frame";
 
@@ -12,7 +12,8 @@ export default function ConnectHetznerFrameContent({
 			<Frame.Header>
 				<Frame.Title className="gap-2 flex items-center">
 					<div>
-						Add <Icon icon={faHetzner} className="ml-0.5" /> Hetzner
+						Add <Icon icon={faHetznerH} className="ml-0.5" />{" "}
+						Hetzner
 					</div>
 				</Frame.Title>
 			</Frame.Header>

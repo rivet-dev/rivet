@@ -38,6 +38,7 @@ function CloudModals() {
 	const CreateProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
+	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
 	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
 	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
@@ -89,6 +90,26 @@ function CloudModals() {
 				}}
 				dialogProps={{
 					open: search.modal === "connect-vercel",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
+			<ConnectQuickVercelDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-q-vercel",
 					// FIXME
 					onOpenChange: (value: any) => {
 						if (!value) {

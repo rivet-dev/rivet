@@ -8,9 +8,10 @@ type RequestOptions = Parameters<typeof createActorInspectorClient>[1];
 export const createDefaultActorContext = (
 	{ hash }: { hash: string } = { hash: `${Date.now()}` },
 ) => ({
-	createActorInspectorFetchConfiguration: (
+	createActorInspectorFetchConfiguration: async (
 		actorId: ActorId | string,
-	): RequestOptions => ({
+		opts: { auth?: boolean } = { auth: true },
+	): Promise<RequestOptions> => ({
 		headers: {
 			"X-RivetKit-Query": JSON.stringify({
 				getForId: { actorId },
@@ -20,10 +21,13 @@ export const createDefaultActorContext = (
 	createActorInspectorUrl(actorId: ActorId | string) {
 		return "http://localhost:6420/registry/actors/inspect";
 	},
-	createActorInspector(actorId: ActorId | string) {
+	async createActorInspector(
+		actorId: ActorId | string,
+		opts: { auth?: boolean } = { auth: true },
+	) {
 		return createActorInspectorClient(
 			this.createActorInspectorUrl(actorId),
-			this.createActorInspectorFetchConfiguration(actorId),
+			await this.createActorInspectorFetchConfiguration(actorId, opts),
 		);
 	},
 	actorPingQueryOptions(
@@ -36,7 +40,7 @@ export const createDefaultActorContext = (
 			...opts,
 			queryKey: [hash, "actor", actorId, "ping"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.ping.$get();
 				if (!response.ok) {
 					throw response;
@@ -55,7 +59,7 @@ export const createDefaultActorContext = (
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "state"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.state.$get();
 
 				if (!response.ok) {
@@ -78,7 +82,7 @@ export const createDefaultActorContext = (
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "connections"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.connections.$get();
 
 				if (!response.ok) {
@@ -97,7 +101,7 @@ export const createDefaultActorContext = (
 			enabled,
 			queryKey: [hash, "actor", actorId, "database"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.db.$get();
 
 				if (!response.ok) {
@@ -146,7 +150,7 @@ export const createDefaultActorContext = (
 			gcTime: 5000,
 			queryKey: [hash, "actor", actorId, "database", table],
 			queryFn: async ({ queryKey: [, , actorId, , table] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.db.$post({
 					json: { query: `SELECT * FROM ${table} LIMIT 500` },
 				});
@@ -167,7 +171,7 @@ export const createDefaultActorContext = (
 			refetchInterval: 1000,
 			queryKey: [hash, "actor", actorId, "events"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.events.$get();
 
 				if (!response.ok) {
@@ -186,7 +190,7 @@ export const createDefaultActorContext = (
 			enabled,
 			queryKey: [hash, "actor", actorId, "rpcs"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.rpcs.$get();
 
 				if (!response.ok) {
@@ -201,7 +205,7 @@ export const createDefaultActorContext = (
 		return {
 			mutationKey: [hash, "actor", actorId, "clear-events"],
 			mutationFn: async () => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				const response = await client.events.clear.$post();
 				if (!response.ok) {
 					throw response;
@@ -215,7 +219,7 @@ export const createDefaultActorContext = (
 		return {
 			mutationKey: [hash, "actor", actorId, "wake-up"],
 			mutationFn: async () => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId);
 				try {
 					await client.ping.$get();
 					return true;
@@ -237,7 +241,9 @@ export const createDefaultActorContext = (
 			gcTime: 0,
 			queryKey: [hash, "actor", actorId, "auto-wake-up"],
 			queryFn: async ({ queryKey: [, , actorId] }) => {
-				const client = this.createActorInspector(actorId);
+				const client = await this.createActorInspector(actorId, {
+					auth: false,
+				});
 				try {
 					await client.ping.$get();
 					return true;

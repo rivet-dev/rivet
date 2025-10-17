@@ -1,9 +1,4 @@
-import {
-	useMutation,
-	usePrefetchInfiniteQuery,
-	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import * as EditRunnerConfigForm from "@/app/forms/edit-runner-config-form";
 import { type DialogContentProps, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -20,13 +15,9 @@ export default function EditRunnerConfigFrameContent({
 	onClose,
 }: EditRunnerConfigFrameContentProps) {
 	const provider = useEngineCompatDataProvider();
-	usePrefetchInfiniteQuery({
-		...provider.runnerConfigsQueryOptions(),
-		pages: Infinity,
-	});
 
 	const { data } = useSuspenseQuery({
-		...provider.runnerConfigQueryOptions(name),
+		...provider.runnerConfigQueryOptions({ name }),
 	});
 
 	const { mutateAsync } = useMutation({
@@ -50,24 +41,32 @@ export default function EditRunnerConfigFrameContent({
 	return (
 		<EditRunnerConfigForm.Form
 			onSubmit={async (values) => {
+				const config = {
+					...(datacenters[dc] || {}),
+					serverless: {
+						...values,
+						headers: Object.fromEntries(values.headers || []),
+					},
+				};
+
+				const otherDcs = Object.entries(datacenters).filter(([k]) => k !== dc).filter(([k, v]) => v.serverless).map(([k, v]) => [k, config]);
+
+				console.log(otherDcs, [dc, config]);
+
 				await mutateAsync({
 					name,
 					config: {
 						...(datacenters || {}),
-						[dc]: {
-							...(datacenters[dc] || {}),
-							serverless: {
-								...values,
-								headers: Object.fromEntries(
-									values.headers || [],
-								),
-							},
-						},
+						[dc]: config,
+						...Object.fromEntries(otherDcs),
 					},
 				});
 
 				await queryClient.invalidateQueries(
 					provider.runnerConfigsQueryOptions(),
+				);
+				await queryClient.invalidateQueries(
+					provider.runnerConfigQueryOptions({ name }),
 				);
 				onClose?.();
 			}}

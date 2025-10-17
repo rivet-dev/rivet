@@ -1,7 +1,8 @@
 export const docsLinks = {
 	gettingStarted: {
-		node: "https://www.rivet.gg/docs/actors/quickstart/backend/",
-		react: "https://www.rivet.gg/docs/actors/quickstart/react/",
+		js: "https://www.rivet.dev/docs/clients/javascript/",
+		react: "https://www.rivet.dev/docs/clients/react/",
+		nextjs: "https://www.rivet.dev/docs/clients/next-js/",
 	},
 	runners: "https://www.rivet.gg/docs/self-hosting/connect-backend",
 };

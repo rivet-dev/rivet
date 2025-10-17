@@ -50,7 +50,6 @@ export const Url = ({ className }: { className?: string }) => {
 					<FormControl className="row-start-2">
 						<Input
 							placeholder="https://your-rivet-runner"
-							maxLength={25}
 							{...field}
 						/>
 					</FormControl>

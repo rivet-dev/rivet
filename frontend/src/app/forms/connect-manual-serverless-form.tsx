@@ -32,7 +32,7 @@ import {
 	Input,
 	Label,
 } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
@@ -131,7 +131,10 @@ export const Datacenters = function Datacenter() {
 								/>
 								<div className="grid gap-2">
 									<Label htmlFor={region.id}>
-										{region.name}
+										<ActorRegion
+											regionId={region.id}
+											showLabel
+										/>
 									</Label>
 								</div>
 							</div>

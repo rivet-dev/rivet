@@ -57,20 +57,22 @@ function PlanCard({
 					))}
 				</ul>
 			</div>
-			{current ? (
-				<Button
-					variant="secondary"
-					className="w-full mt-4"
-					children="Current Plan"
-					{...buttonProps}
-				></Button>
-			) : (
-				<Button
-					className="w-full mt-4"
-					children={<>{custom ? "Contact Us" : "Upgrade"}</>}
-					{...buttonProps}
-				/>
-			)}
+			{!buttonProps?.hidden ? (
+				current ? (
+					<Button
+						variant="secondary"
+						className="w-full mt-4"
+						children="Current Plan"
+						{...buttonProps}
+					></Button>
+				) : (
+					<Button
+						className="w-full mt-4"
+						children={<>{custom ? "Contact Us" : "Upgrade"}</>}
+						{...buttonProps}
+					/>
+				)
+			) : null}
 		</div>
 	);
 }

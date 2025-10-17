@@ -3,7 +3,6 @@ import {
 	createFileRoute,
 	type InferAllContext,
 	notFound,
-	RouteContext,
 	redirect,
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
@@ -19,21 +18,38 @@ export const Route = createFileRoute(
 			throw notFound();
 		}
 
-		const build = await getAnyBuild(context);
+		const isVisible = await shouldDisplayActors(context);
 
-		if (!build) {
+		if (!isVisible) {
 			throw redirect({ from: Route.to, replace: true, to: "./connect" });
 		}
 	},
 });
 
-async function getAnyBuild(context: InferAllContext<typeof Route>) {
+async function shouldDisplayActors(context: InferAllContext<typeof Route>) {
 	try {
-		const result = await context.queryClient.fetchInfiniteQuery(
+		const infiniteBuilds = await context.queryClient.fetchInfiniteQuery(
 			context.dataProvider.buildsQueryOptions(),
 		);
 
-		return result.pages[0].builds[0];
+		const hasBuilds = infiniteBuilds.pages.some(
+			(page) => page.builds.length > 0,
+		);
+
+		const infiniteRunnerConfigs =
+			await context.queryClient.fetchInfiniteQuery(
+				context.dataProvider.runnerConfigsQueryOptions(),
+			);
+
+		const hasRunnerConfigs = infiniteRunnerConfigs.pages.some(
+			(page) => Object.keys(page.runnerConfigs).length > 0,
+		);
+
+		if (!hasBuilds && !hasRunnerConfigs) {
+			return undefined;
+		}
+
+		return true;
 	} catch {
 		return undefined;
 	}

@@ -89,7 +89,7 @@ export default function BillingFrameContent() {
 							) : null}
 							{!billing?.canChangePlan ? (
 								// organization does not have a payment method, ask them to add one
-								<span className="font-medium">
+								<span className="font-bold text-destructive">
 									You cannot change plans until you add a
 									payment method to your organization.
 								</span>
@@ -97,7 +97,11 @@ export default function BillingFrameContent() {
 						</p>
 					</div>
 
-					<BillingDetailsButton variant="secondary">
+					<BillingDetailsButton
+						variant={
+							billing?.canChangePlan ? "secondary" : "default"
+						}
+					>
 						Manage billing details
 					</BillingDetailsButton>
 				</div>
@@ -119,6 +123,7 @@ export default function BillingFrameContent() {
 										isPending,
 									isLoading:
 										variables?.__from === plan && isPending,
+									hidden: config.buttonProps.hidden,
 									onClick: () => {
 										if (billing.futurePlan === plan) {
 											return mutate({
@@ -168,6 +173,7 @@ function getConfig(
 			children: buttonText(plan, billing),
 			variant: buttonVariant(plan, billing),
 			disabled: !billing?.canChangePlan || buttonDisabled(plan, billing),
+			hidden: buttonHidden(plan, billing),
 		},
 	};
 }
@@ -210,6 +216,13 @@ function buttonText(
 		);
 	if (plan === data.activePlan) return "Cancel";
 	return comparePlans(plan, data.futurePlan) > 0 ? "Upgrade" : "Downgrade";
+}
+
+function buttonHidden(
+	plan: Rivet.BillingPlan,
+	data: Rivet.BillingDetailsResponse.Billing,
+) {
+	return plan === data.activePlan && plan === Rivet.BillingPlan.Free;
 }
 
 export function comparePlans(

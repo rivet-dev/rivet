@@ -10,7 +10,7 @@ export const createInspectorActorContext = ({
 	engineToken,
 }: {
 	url: string;
-	token: string;
+	token: string | (() => string) | (() => Promise<string>);
 	engineToken?: string;
 }) => {
 	const def = createDefaultActorContext({
@@ -22,14 +22,22 @@ export const createInspectorActorContext = ({
 	}
 	return {
 		...def,
-		createActorInspectorFetchConfiguration(actorId) {
+		async createActorInspectorFetchConfiguration(actorId, opts) {
 			return {
 				headers: {
 					"x-rivet-actor": actorId,
 					"x-rivet-target": "actor",
 					...(engineToken ? { "x-rivet-token": engineToken } : {}),
-					...(inspectorToken
-						? { authorization: `Bearer ${inspectorToken}` }
+					...(opts?.auth
+						? {
+								...{
+									authorization: `Bearer ${
+										typeof inspectorToken === "string"
+											? inspectorToken
+											: await inspectorToken()
+									}`,
+								},
+							}
 						: {}),
 				},
 			};

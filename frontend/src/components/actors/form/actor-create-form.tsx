@@ -16,12 +16,13 @@ import {
 	FormLabel,
 	FormMessage,
 } from "../../ui/form";
+import { AllRunnerSelect } from "../all-runner-select";
 import { BuildSelect } from "../build-select";
 import { CrashPolicySelect } from "../crash-policy-select";
 import { useEngineCompatDataProvider } from "../data-provider";
 import { CrashPolicy as CrashPolicyEnum } from "../queries";
 import { RegionSelect } from "../region-select";
-import { RunnerSelect } from "../runner-select";
+import { ConnectedRunnerSelect } from "../runner-select";
 
 const jsonValid = z.custom<string>(
 	(value) => {
@@ -168,7 +169,7 @@ export const RunnerNameSelector = () => {
 				<FormItem>
 					<FormLabel>Runner</FormLabel>
 					<FormControl>
-						<RunnerSelect
+						<AllRunnerSelect
 							onValueChange={field.onChange}
 							value={field.value || ""}
 						/>

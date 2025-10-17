@@ -11,6 +11,7 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { useInspectorCredentials } from "@/app/credentials-context";
 import { createInspectorActorContext } from "@/queries/actor-inspector";
+import { queryClient } from "@/queries/global";
 import { DiscreteCopyButton } from "../copy-area";
 import { getConfig } from "../lib/config";
 import { ls } from "../lib/utils";
@@ -135,6 +136,41 @@ function ActorInspectorProvider({
 	);
 }
 
+function useRunner(runnerName: string | undefined) {
+	// check if its running
+	const {
+		data: hasRunner,
+		isLoading,
+		isSuccess,
+	} = useQuery({
+		...useEngineCompatDataProvider().runnerByNameQueryOptions({
+			runnerName,
+		}),
+		enabled: !!runnerName,
+		select: (data) => !!data,
+		retryDelay: 10_000,
+		refetchInterval: 1000,
+	});
+
+	// if not, check if its serverless
+	const { data: hasServerlessRunner, isLoading: isLoadingServerlessRunners } =
+		useQuery({
+			...useEngineCompatDataProvider().runnerConfigQueryOptions({
+				name: runnerName,
+			}),
+			enabled: !isSuccess && !!runnerName,
+			retryDelay: 10_000,
+			refetchInterval: 1000,
+			select: (data) =>
+				Object.values(data.datacenters).some((dc) => dc.serverless),
+		});
+
+	return {
+		hasRunner: hasRunner || hasServerlessRunner,
+		isLoading: isLoading || isLoadingServerlessRunners,
+	};
+}
+
 function useActorRunner({ actorId }: { actorId: ActorId }) {
 	const { data: actor, isLoading } = useSuspenseQuery(
 		useDataProvider().actorQueryOptions(actorId),
@@ -192,16 +228,26 @@ function useEngineToken() {
 function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const { actor, runner, isLoading } = useActorRunner({ actorId });
 	const engineToken = useEngineToken();
+	const provider = useEngineCompatDataProvider();
 
 	const actorContext = useMemo(() => {
 		return engineToken
 			? createInspectorActorContext({
 					url: getConfig().apiUrl,
-					token: (runner?.metadata?.inspectorToken as string) || "",
+					token: async () => {
+						const runner = await queryClient.fetchQuery(
+							provider.runnerByNameQueryOptions({
+								runnerName: actor?.runner || "",
+							}),
+						);
+						return (
+							(runner?.metadata?.inspectorToken as string) || ""
+						);
+					},
 					engineToken,
 				})
 			: null;
-	}, [runner?.metadata?.inspectorToken, engineToken]);
+	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };
 }
@@ -213,18 +259,14 @@ function ActorEngineProvider({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const { actorContext, actor, runner } = useActorEngineContext({
+	const { actorContext, actor } = useActorEngineContext({
 		actorId,
 	});
 
-	if (!runner || !actor.runner) {
+	if (!actor.runner) {
 		return (
 			<InspectorGuardContext.Provider
-				value={
-					<NoRunnerInfo
-						runner={runner?.name || actor.runner || "unknown"}
-					/>
-				}
+				value={<NoRunnerInfo runner={"unknown"} />}
 			>
 				{children}
 			</InspectorGuardContext.Provider>
@@ -238,8 +280,8 @@ function ActorEngineProvider({
 					<Info>
 						<p>Unable to connect to the Actor's Inspector.</p>
 						<p>
-							Check that your application is running and that your
-							network allows connections to the Inspector URL.
+							Your namespace is missing an engine token. Please
+							report this to Rivet support.
 						</p>
 					</Info>
 				}
@@ -270,7 +312,6 @@ function NoRunnerInfo({ runner }: { runner: string }) {
 					<span className="font-mono-console">{runner}</span>
 				</DiscreteCopyButton>
 			</p>
-			<p>Will retry automatically in the background.</p>
 		</Info>
 	);
 }
@@ -298,17 +339,19 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 
 function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 	const actorContext = useActor();
+
 	const { actor, runner } = useActorRunner({ actorId });
+	const { hasRunner } = useRunner(actor.runner);
 
 	useQuery(
 		actorContext.actorAutoWakeUpQueryOptions(actorId, {
-			enabled: !!runner,
+			enabled: hasRunner,
 		}),
 	);
 
-	if (!runner) return <NoRunnerInfo runner={actor.runner || "unknown"} />;
+	if (!hasRunner) return <NoRunnerInfo runner={actor.runner || "unknown"} />;
 
-	if (runner.drainTs)
+	if (runner?.drainTs)
 		return <NoRunnerInfo runner={actor.runner || "unknown"} />;
 
 	return (
@@ -382,6 +425,7 @@ function InspectorGuardInner({
 }) {
 	const { isError } = useQuery({
 		...useActor().actorPingQueryOptions(actorId),
+		retryDelay: 10_000,
 		enabled: true,
 	});
 	if (isError) {
