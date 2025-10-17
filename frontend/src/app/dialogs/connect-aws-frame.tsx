@@ -19,6 +19,7 @@ import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { cn, type DialogContentProps, Frame } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
+import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
 import { EnvVariablesStep } from "./connect-railway-frame";
 

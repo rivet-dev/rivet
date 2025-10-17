@@ -1,5 +1,10 @@
 import { faCopy, faFile, Icon } from "@rivet-gg/icons";
-import { Children, cloneElement, type ReactElement } from "react";
+import {
+	Children,
+	cloneElement,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import { CopyButton } from "./copy-area";
 import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";
@@ -96,6 +101,7 @@ interface CodeFrameProps {
 	language: keyof typeof languageNames;
 	isInGroup?: boolean;
 	code?: () => string | string;
+	footer?: ReactNode;
 	children?: ReactElement;
 }
 export const CodeFrame = ({
@@ -104,6 +110,7 @@ export const CodeFrame = ({
 	language,
 	code,
 	title,
+	footer,
 	isInGroup,
 }: CodeFrameProps) => {
 	return (
@@ -118,6 +125,7 @@ export const CodeFrame = ({
 
 			<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
 				<div className="text-muted-foreground flex items-center gap-1">
+					{footer}
 					{file ? (
 						<>
 							<Icon icon={faFile} className="block" />

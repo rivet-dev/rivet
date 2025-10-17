@@ -141,7 +141,7 @@ function Row({
 				<WithTooltip
 					content={config.serverless?.url || "-"}
 					trigger={
-						<DiscreteCopyButton value={name}>
+						<DiscreteCopyButton value={config.serverless?.url}>
 							<span>
 								{config.serverless?.url &&
 								config.serverless.url.length > 32

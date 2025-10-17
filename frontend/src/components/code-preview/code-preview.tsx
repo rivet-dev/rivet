@@ -57,7 +57,15 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 	);
 
 	if (isLoading) {
-		return <Skeleton className="w-full h-5" />;
+		return (
+			<div className="px-2 flex flex-col gap-0.5">
+				<Skeleton className="w-full h-5" />
+				<Skeleton className="w-full h-5" />
+				<Skeleton className="w-full h-5" />
+				<Skeleton className="w-full h-5" />
+				<Skeleton className="w-full h-5" />
+			</div>
+		);
 	}
 
 	return (

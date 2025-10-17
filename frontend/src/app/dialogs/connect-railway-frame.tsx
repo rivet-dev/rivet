@@ -25,6 +25,8 @@ import {
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { engineEnv } from "@/lib/env";
+import { queryClient } from "@/queries/global";
+import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
 import { StepperForm } from "../forms/stepper-form";
 
 const stepper = defineStepper(
@@ -120,7 +122,9 @@ function FormStepper({
 				origin: { x: 1 },
 			});
 
-						await queryClient.invalidateQueries(provider.runnerConfigsQueryOptions());
+			await queryClient.invalidateQueries(
+				provider.runnerConfigsQueryOptions(),
+			);
 			onClose?.();
 		},
 	});
@@ -128,7 +132,6 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			onSubmit={async ({ values }) => {
-				console.log(values);
 				await mutateAsync({
 					name: values.runnerName,
 					config: {
@@ -328,18 +331,16 @@ function RivetNamespaceEnv() {
 }
 
 function DeployToRailwayButton() {
-	const dataProvider = useEngineCompatDataProvider();
-	const url = useSelectedDatacenter();
-	const { data } = useQuery(dataProvider.engineAdminTokenQueryOptions());
 	const runnerName = useWatch({ name: "runnerName" });
+
+	const url = useRailwayTemplateLink({
+		runnerName: runnerName || "default",
+		datacenter: useWatch({ name: "datacenter" }) || "auto",
+	});
 
 	return (
 		<a
-			href={`https://railway.com/new/template/rivet-cloud-starter?referralCode=RC7bza&utm_medium=integration&utm_source=template&utm_campaign=generic&RIVET_TOKEN=${data || ""}&RIVET_ENDPOINT=${
-				url || ""
-			}&RIVET_NAMESPACE=${
-				dataProvider.engineNamespace || ""
-			}&RIVET_RUNNER=${runnerName || ""}`}
+			href={url}
 			target="_blank"
 			rel="noreferrer"
 			className="inline-block h-10"
@@ -352,13 +353,3 @@ function DeployToRailwayButton() {
 		</a>
 	);
 }
-
-const useSelectedDatacenter = () => {
-	const datacenter = useWatch({ name: "datacenter" });
-
-	const { data } = useQuery(
-		useEngineCompatDataProvider().regionQueryOptions(datacenter || "auto"),
-	);
-
-	return data?.url || engineEnv().VITE_APP_API_URL;
-};

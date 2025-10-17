@@ -20,7 +20,7 @@ import {
 } from "@/components";
 
 export const formSchema = z.object({
-	url: z.string().url().endsWith("/api/rivet"),
+	url: z.string().url(),
 	maxRunners: z.coerce.number().positive(),
 	minRunners: z.coerce.number().min(0),
 	requestLifespan: z.coerce.number().positive(),
