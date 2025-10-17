@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -49,11 +46,10 @@ pub struct CreateQuery {
 )]
 pub async fn create(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<CreateQuery>,
 	Json(body): Json<CreateRequest>,
 ) -> Response {
-	match create_inner(ctx, headers, query, body).await {
+	match create_inner(ctx, query, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -62,7 +58,6 @@ pub async fn create(
 #[tracing::instrument(skip_all)]
 async fn create_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	query: CreateQuery,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
@@ -96,7 +91,6 @@ async fn create_inner(
 			target_dc_label,
 			"/actors",
 			axum::http::Method::POST,
-			headers,
 			Some(&query),
 			Some(&body),
 		)
