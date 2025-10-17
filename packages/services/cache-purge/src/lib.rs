@@ -20,7 +20,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	while let Ok(NextOutput::Message(msg)) = sub.next().await {
 		match serde_json::from_slice::<CachePurgeMessage>(&msg.payload) {
 			Ok(purge_msg) => {
-				tracing::info!(
+				tracing::debug!(
 					base_key = ?purge_msg.base_key,
 					keys_count = purge_msg.keys.len(),
 					"received cache purge request"
