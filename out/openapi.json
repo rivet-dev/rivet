@@ -299,6 +299,31 @@
         ]
       }
     },
+    "/health/fanout": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health_fanout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthFanoutResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/namespaces": {
       "get": {
         "tags": [
@@ -395,7 +420,7 @@
     "/runner-configs": {
       "get": {
         "tags": [
-          "runner_configs"
+          "runner_configs::list"
         ],
         "operationId": "runner_configs_list",
         "parameters": [
@@ -463,7 +488,7 @@
     "/runner-configs/serverless-health-check": {
       "post": {
         "tags": [
-          "runner_configs"
+          "runner_configs::serverless_health_check"
         ],
         "operationId": "runner_configs_serverless_health_check",
         "parameters": [
@@ -508,7 +533,7 @@
     "/runner-configs/{runner_name}": {
       "put": {
         "tags": [
-          "runner_configs"
+          "runner_configs::upsert"
         ],
         "operationId": "runner_configs_upsert",
         "parameters": [
@@ -559,7 +584,7 @@
       },
       "delete": {
         "tags": [
-          "runner_configs"
+          "runner_configs::delete"
         ],
         "operationId": "runner_configs_delete",
         "parameters": [
@@ -587,6 +612,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunnerConfigsDeleteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runner-configs/{runner_name}/refresh-metadata": {
+      "post": {
+        "tags": [
+          "runner_configs::refresh_metadata"
+        ],
+        "operationId": "runner_configs_refresh_metadata",
+        "parameters": [
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataResponse"
                 }
               }
             }
@@ -999,6 +1077,50 @@
         },
         "additionalProperties": false
       },
+      "DatacenterHealth": {
+        "type": "object",
+        "required": [
+          "datacenter_label",
+          "datacenter_name",
+          "status"
+        ],
+        "properties": {
+          "datacenter_label": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "datacenter_name": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "response": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HealthResponse"
+              }
+            ]
+          },
+          "rtt_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          }
+        }
+      },
       "DatacentersListResponse": {
         "type": "object",
         "required": [
@@ -1017,6 +1139,46 @@
           }
         },
         "additionalProperties": false
+      },
+      "HealthFanoutResponse": {
+        "type": "object",
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatacenterHealth"
+            }
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "runtime": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
       },
       "Namespace": {
         "type": "object",
@@ -1340,7 +1502,78 @@
           }
         }
       },
-      "RunnerConfigsServerlessHealthCheckError": {
+      "RunnerConfigsRefreshMetadataRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "RunnerConfigsRefreshMetadataResponse": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "success"
+            ],
+            "properties": {
+              "success": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "failure"
+            ],
+            "properties": {
+              "failure": {
+                "type": "object",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "#/components/schemas/RunnerConfigsServerlessMetadataError"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigsServerlessMetadataError": {
         "oneOf": [
           {
             "type": "object",
@@ -1437,69 +1670,6 @@
                   },
                   "version": {
                     "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      },
-      "RunnerConfigsServerlessHealthCheckRequest": {
-        "type": "object",
-        "required": [
-          "url"
-        ],
-        "properties": {
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "RunnerConfigsServerlessHealthCheckResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "success"
-            ],
-            "properties": {
-              "success": {
-                "type": "object",
-                "required": [
-                  "version"
-                ],
-                "properties": {
-                  "version": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "failure"
-            ],
-            "properties": {
-              "failure": {
-                "type": "object",
-                "required": [
-                  "error"
-                ],
-                "properties": {
-                  "error": {
-                    "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckError"
                   }
                 }
               }

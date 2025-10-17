@@ -3,12 +3,12 @@ use axum::{
 	middleware::{self, Next},
 	response::{IntoResponse, Redirect, Response},
 };
-use reqwest::header::{AUTHORIZATION, HeaderMap};
+use reqwest::header::{HeaderMap, AUTHORIZATION};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{actors, ctx, datacenters, metadata, namespaces, runner_configs, runners, ui};
+use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_configs, runners, ui};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -28,6 +28,7 @@ use crate::{actors, ctx, datacenters, metadata, namespaces, runner_configs, runn
 		runner_configs::serverless_health_check::serverless_health_check,
 		runner_configs::refresh_metadata::refresh_metadata,
 		datacenters::list,
+		health::fanout,
 	),
 	components(
 		schemas(rivet_types::keys::namespace::runner_config::RunnerConfigVariant)
@@ -91,6 +92,8 @@ pub async fn router(
 			.route("/runners/names", axum::routing::get(runners::list_names))
 			// MARK: Datacenters
 			.route("/datacenters", axum::routing::get(datacenters::list))
+			// MARK: Health
+			.route("/health/fanout", axum::routing::get(health::fanout))
 			// MARK: UI
 			.route("/ui", axum::routing::get(ui::serve_index))
 			.route("/ui/", axum::routing::get(ui::serve_index))
