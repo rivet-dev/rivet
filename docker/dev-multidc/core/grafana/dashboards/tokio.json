@@ -993,6 +993,18 @@
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
+			},
+			{
+				"current": {
+					"text": "30",
+					"value": "30"
+				},
+				"hide": 2,
+				"label": "Metric Export Interval (seconds)",
+				"name": "metric_interval",
+				"query": "30",
+				"skipUrlSync": true,
+				"type": "constant"
 			}
 		]
 	},

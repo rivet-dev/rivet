@@ -133,7 +133,7 @@ fn init_tracer_provider() -> SdkTracerProvider {
 fn init_meter_provider() -> SdkMeterProvider {
 	let exporter = opentelemetry_otlp::MetricExporter::builder()
 		.with_tonic()
-		.with_temporality(opentelemetry_sdk::metrics::Temporality::default())
+		.with_temporality(opentelemetry_sdk::metrics::Temporality::Delta)
 		.with_protocol(opentelemetry_otlp::Protocol::Grpc)
 		.with_endpoint(otel_grpc_endpoint())
 		.build()
