@@ -10,13 +10,12 @@ mod errors;
 pub use axum::http::{HeaderMap, Method};
 
 /// Generic function to make raw requests to remote datacenters by label (returns axum Response)
-#[tracing::instrument(skip(ctx, headers, query, body))]
+#[tracing::instrument(skip(ctx, query, body))]
 pub async fn request_remote_datacenter_raw(
 	ctx: &ApiCtx,
 	dc_label: u16,
 	endpoint: &str,
 	method: Method,
-	headers: HeaderMap,
 	query: Option<&impl Serialize>,
 	body: Option<&impl Serialize>,
 ) -> Result<Response> {
@@ -35,7 +34,7 @@ pub async fn request_remote_datacenter_raw(
 
 	tracing::debug!(%method, %url, "sending raw request to remote datacenter");
 
-	let mut request = client.request(method, url).headers(headers);
+	let mut request = client.request(method, url);
 
 	if let Some(b) = body {
 		request = request.json(b);
@@ -51,13 +50,12 @@ pub async fn request_remote_datacenter_raw(
 }
 
 /// Generic function to make requests to a specific datacenter
-#[tracing::instrument(skip(config, headers, query, body))]
+#[tracing::instrument(skip(config, query, body))]
 pub async fn request_remote_datacenter<T>(
 	config: &rivet_config::Config,
 	dc_label: u16,
 	endpoint: &str,
 	method: Method,
-	headers: HeaderMap,
 	query: Option<&impl Serialize>,
 	body: Option<&impl Serialize>,
 ) -> Result<T>
@@ -78,7 +76,7 @@ where
 
 	tracing::debug!(%method, %url, "sending request to remote datacenter");
 
-	let mut request = client.request(method, url).headers(headers);
+	let mut request = client.request(method, url);
 
 	if let Some(b) = body {
 		request = request.json(b);
@@ -95,10 +93,9 @@ where
 
 /// Generic function to fanout requests to all datacenters and aggregate results
 /// Returns aggregated results and errors only if all requests fail
-#[tracing::instrument(skip(ctx, headers, query, local_handler, aggregator))]
+#[tracing::instrument(skip(ctx, query, local_handler, aggregator))]
 pub async fn fanout_to_datacenters<I, Q, F, Fut, A, R>(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	endpoint: &str,
 	query: Q,
 	local_handler: F,
@@ -116,7 +113,6 @@ where
 
 	let results = futures_util::stream::iter(dcs.clone().into_iter().map(|dc| {
 		let ctx = ctx.clone();
-		let headers = headers.clone();
 		let query = query.clone();
 		let endpoint = endpoint.to_string();
 		let local_handler = local_handler.clone();
@@ -134,7 +130,6 @@ where
 						dc.datacenter_label,
 						&endpoint,
 						Method::GET,
-						headers,
 						Some(&query),
 						Option::<&()>::None,
 					)

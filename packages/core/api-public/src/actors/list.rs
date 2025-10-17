@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -68,16 +65,15 @@ pub struct ListResponse {
 )]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<ListQuery>,
 ) -> Response {
-	match list_inner(ctx, headers, query).await {
+	match list_inner(ctx, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
 }
 
-async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	// Parse query
@@ -132,7 +128,6 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 		// Fetch actors
 		let actors = fetch_actors_by_ids(
 			&ctx,
-			headers,
 			actor_ids,
 			query.namespace.clone(),
 			query.include_destroyed,
@@ -181,7 +176,6 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 		// Fetch actors
 		let actors = fetch_actors_by_ids(
 			&ctx,
-			headers,
 			vec![actor_id],
 			query.namespace.clone(),
 			query.include_destroyed,
@@ -226,7 +220,6 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			Vec<rivet_types::actors::Actor>,
 		>(
 			ctx.into(),
-			headers,
 			"/actors",
 			peer_query,
 			|ctx, query| async move { rivet_api_peer::actors::list::list(ctx, (), query).await },

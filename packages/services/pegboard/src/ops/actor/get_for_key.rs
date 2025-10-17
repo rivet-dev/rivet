@@ -73,7 +73,6 @@ pub async fn pegboard_actor_get_for_key(ctx: &OperationCtx, input: &Input) -> Re
 			reservation_id.label(),
 			"/actors",
 			Method::GET,
-			Default::default(), // Empty headers
 			Some(&rivet_api_types::actors::list::ListQuery {
 				namespace: namespace.name.clone(),
 				name: Some(input.name.clone()),

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use futures_util::StreamExt;
 use gas::prelude::*;
-use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
+use rivet_api_util::{Method, request_remote_datacenter};
 
 #[derive(Clone, Debug, Default)]
 pub struct Input {}
@@ -27,7 +27,6 @@ pub async fn bump_serverless_autoscaler_global(ctx: &OperationCtx, input: &Input
 					dc.datacenter_label,
 					"/bump-serverless-autoscaler",
 					Method::POST,
-					HeaderMap::new(),
 					Option::<&()>::None,
 					Option::<&()>::None,
 				)

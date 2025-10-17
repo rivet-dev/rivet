@@ -4,8 +4,8 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use rivet_api_builder::{
-	ApiError,
 	extract::{Extension, Json, Query},
+	ApiError,
 };
 use rivet_types::actors::CrashPolicy;
 use rivet_util::Id;
@@ -159,13 +159,9 @@ async fn get_or_create_inner(
 					?existing_actor_id,
 					"received duplicate key error, returning existing actor id"
 				);
-				let actor = utils::fetch_actor_by_id(
-					&ctx,
-					headers.clone(),
-					existing_actor_id,
-					query.namespace.clone(),
-				)
-				.await?;
+				let actor =
+					utils::fetch_actor_by_id(&ctx, existing_actor_id, query.namespace.clone())
+						.await?;
 				return Ok(GetOrCreateResponse {
 					actor,
 					created: false,

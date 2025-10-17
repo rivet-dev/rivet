@@ -4,7 +4,7 @@ use anyhow::Result;
 use futures_util::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
 use gas::prelude::*;
 use rivet_api_types::{runner_configs::list as runner_configs_list, runners::list as runners_list};
-use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
+use rivet_api_util::{Method, request_remote_datacenter};
 use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
 use serde::de::DeserializeOwned;
 
@@ -103,7 +103,6 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 	let runners_fut =
 		race_request_to_datacenters::<runners_list::ListQuery, runners_list::ListResponse, _>(
 			ctx,
-			Default::default(),
 			"/runners",
 			runners_list::ListQuery {
 				namespace: namespace.name.clone(),
@@ -130,7 +129,6 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 		_,
 	>(
 		ctx,
-		Default::default(),
 		"/runner-configs",
 		runner_configs_list::ListQuery {
 			namespace: namespace.name.clone(),
@@ -166,7 +164,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 /// datacenter that matches `filter`.
 pub async fn race_request_to_datacenters<Q, R, F>(
 	ctx: &OperationCtx,
-	headers: HeaderMap,
 	endpoint: &str,
 	query: Q,
 	filter: F,
@@ -182,7 +179,6 @@ where
 		.iter()
 		.filter(|dc| dc.datacenter_label != ctx.config().dc_label())
 		.map(|dc| {
-			let headers = headers.clone();
 			let query = query.clone();
 			async move {
 				tokio::time::timeout(
@@ -193,7 +189,6 @@ where
 						dc.datacenter_label,
 						&endpoint,
 						Method::GET,
-						headers,
 						Some(&query),
 						Option::<&()>::None,
 					)

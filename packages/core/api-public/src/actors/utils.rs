@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::http::{HeaderMap, Method};
+use axum::http::Method;
 use rivet_api_builder::ApiCtx;
 use rivet_api_util::request_remote_datacenter;
 use rivet_error::RivetError;
@@ -12,7 +12,6 @@ use std::collections::HashMap;
 #[tracing::instrument(skip_all)]
 pub async fn fetch_actor_by_id(
 	ctx: &ApiCtx,
-	headers: HeaderMap,
 	actor_id: Id,
 	namespace: String,
 ) -> Result<Actor> {
@@ -39,7 +38,6 @@ pub async fn fetch_actor_by_id(
 			actor_id.label(),
 			"/actors",
 			Method::GET,
-			headers,
 			Some(&list_query),
 			Option::<&()>::None,
 		)
@@ -59,7 +57,6 @@ pub async fn fetch_actor_by_id(
 #[tracing::instrument(skip_all)]
 pub async fn fetch_actors_by_ids(
 	ctx: &ApiCtx,
-	headers: HeaderMap,
 	actor_ids: Vec<Id>,
 	namespace: String,
 	include_destroyed: Option<bool>,
@@ -81,7 +78,6 @@ pub async fn fetch_actors_by_ids(
 	// Fetch actors in batch from each datacenter
 	let fetch_futures = actors_by_dc.into_iter().map(|(dc_label, dc_actor_ids)| {
 		let ctx = ctx.clone();
-		let headers = headers.clone();
 		let namespace = namespace.clone();
 		let include_destroyed = include_destroyed;
 		let limit = limit;
@@ -116,7 +112,6 @@ pub async fn fetch_actors_by_ids(
 					dc_label,
 					"/actors",
 					Method::GET,
-					headers,
 					Some(&peer_query),
 					Option::<&()>::None,
 				)

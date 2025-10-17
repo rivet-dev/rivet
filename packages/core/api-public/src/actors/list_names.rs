@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -31,10 +28,9 @@ use crate::ctx::ApiCtx;
 #[tracing::instrument(skip_all)]
 pub async fn list_names(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<ListNamesQuery>,
 ) -> Response {
-	match list_names_inner(ctx, headers, query).await {
+	match list_names_inner(ctx, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -43,7 +39,6 @@ pub async fn list_names(
 #[tracing::instrument(skip_all)]
 async fn list_names_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	query: ListNamesQuery,
 ) -> Result<ListNamesResponse> {
 	ctx.auth().await?;
@@ -59,7 +54,6 @@ async fn list_names_inner(
 	let mut all_names =
 		fanout_to_datacenters::<ListNamesResponse, _, _, _, _, Vec<(String, ActorName)>>(
 			ctx.into(),
-			headers,
 			"/actors/names",
 			peer_query,
 			|ctx, query| async move {
