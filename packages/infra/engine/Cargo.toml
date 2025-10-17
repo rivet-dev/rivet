@@ -25,6 +25,7 @@ reqwest.workspace = true
 rivet-api-peer.workspace = true
 rivet-bootstrap.workspace = true
 rivet-cache.workspace = true
+rivet-cache-purge.workspace = true
 rivet-config.workspace = true
 rivet-guard.workspace = true
 rivet-tracing-reconfigure.workspace = true

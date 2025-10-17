@@ -369,6 +369,9 @@ path = "packages/core/workflow-worker"
 [workspace.dependencies.rivet-engine]
 path = "packages/infra/engine"
 
+[workspace.dependencies.rivet-cache-purge]
+path = "packages/services/cache-purge"
+
 [workspace.dependencies.epoxy]
 path = "packages/services/epoxy"
 
