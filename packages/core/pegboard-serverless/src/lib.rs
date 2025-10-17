@@ -19,6 +19,7 @@ use rivet_types::runner_configs::RunnerConfigKind;
 use tokio::{sync::oneshot, task::JoinHandle, time::Duration};
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::*;
+use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
@@ -26,6 +27,8 @@ const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-slots");
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
 const X_RIVET_NAMESPACE_ID: HeaderName = HeaderName::from_static("x-rivet-namespace-id");
+
+const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(10);
 
 struct OutboundConnection {
 	handle: JoinHandle<()>,
@@ -377,12 +380,14 @@ async fn outbound_handler(
 		anyhow::Ok(())
 	};
 
+	let sleep_until_drop = request_lifespan.saturating_sub(DRAIN_GRACE_PERIOD);
 	tokio::select! {
 		res = stream_handler => return res.map_err(Into::into),
-		_ = tokio::time::sleep(request_lifespan) => {}
+		_ = tokio::time::sleep(sleep_until_drop) => {}
 		_ = shutdown_rx => {}
 	}
 
+	// Stop runner
 	draining.store(true, Ordering::SeqCst);
 
 	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
@@ -394,34 +399,56 @@ async fn outbound_handler(
 	}
 
 	// Continue waiting on req while draining
-	while let Some(event) = source.next().await {
-		match event {
-			Ok(sse::Event::Open) => {}
-			Ok(sse::Event::Message(msg)) => {
-				tracing::debug!(%msg.data, "received outbound req message");
+	let wait_for_shutdown_fut = async move {
+		while let Some(event) = source.next().await {
+			match event {
+				Ok(sse::Event::Open) => {}
+				Ok(sse::Event::Message(msg)) => {
+					tracing::debug!(%msg.data, "received outbound req message");
 
-				// If runner_id is none at this point it means we did not send the stopping signal yet, so
-				// send it now
-				if runner_id.is_none() {
-					let data = BASE64.decode(msg.data).context("invalid base64 message")?;
-					let payload =
+					// If runner_id is none at this point it means we did not send the stopping signal yet, so
+					// send it now
+					if runner_id.is_none() {
+						let data = BASE64.decode(msg.data).context("invalid base64 message")?;
+						let payload =
 						protocol::versioned::ToServerlessServer::deserialize_with_embedded_version(
 							&data,
 						)
 						.context("invalid payload")?;
 
-					match payload {
-						protocol::ToServerlessServer::ToServerlessServerInit(init) => {
-							let runner_id =
-								Id::parse(&init.runner_id).context("invalid runner id")?;
-							stop_runner(ctx, runner_id).await?;
+						match payload {
+							protocol::ToServerlessServer::ToServerlessServerInit(init) => {
+								let runner_id_local =
+									Id::parse(&init.runner_id).context("invalid runner id")?;
+								runner_id = Some(runner_id_local);
+								stop_runner(ctx, runner_id_local).await?;
+							}
 						}
 					}
 				}
+				Err(sse::Error::StreamEnded) => break,
+				Err(err) => return Err(err.into()),
 			}
-			Err(sse::Error::StreamEnded) => break,
-			Err(err) => return Err(err.into()),
 		}
+
+		Result::<()>::Ok(())
+	};
+
+	// Wait for runner to shut down
+	tokio::select! {
+		res = wait_for_shutdown_fut => return res.map_err(Into::into),
+		_ = tokio::time::sleep(DRAIN_GRACE_PERIOD) => {
+			tracing::debug!("reached drain grace period before runner shut down")
+		}
+
+	}
+
+	// Close connection
+	//
+	// This will force the runner to stop the request in order to avoid hitting the serverless
+	// timeout threshold
+	if let Some(runner_id) = runner_id {
+		publish_to_client_stop(ctx, runner_id).await?;
 	}
 
 	tracing::debug!("outbound req stopped");
@@ -451,6 +478,25 @@ async fn stop_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	} else {
 		res?;
 	}
+
+	Ok(())
+}
+
+/// Send a stop message to the client.
+///
+/// This will close the runner's WebSocket..
+async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
+	let receiver_subject =
+		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();
+
+	let message_serialized = rivet_runner_protocol::versioned::ToClient::latest(
+		rivet_runner_protocol::ToClient::ToClientClose,
+	)
+	.serialize_with_embedded_version(rivet_runner_protocol::PROTOCOL_VERSION)?;
+
+	ctx.ups()?
+		.publish(&receiver_subject, &message_serialized, PublishOpts::one())
+		.await?;
 
 	Ok(())
 }

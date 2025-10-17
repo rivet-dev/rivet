@@ -14,7 +14,7 @@ pub struct Opts {
 
 	/// Exclude the specified services instead of including them
 	#[arg(long)]
-	exclude_services: bool,
+	except_services: Vec<ServiceKind>,
 }
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
@@ -55,34 +55,37 @@ impl Opts {
 		}
 
 		// Select services to run
-		let services = if self.services.is_empty() {
+		let services = if self.services.is_empty() && self.except_services.is_empty() {
 			// Run all services
 			run_config.services.clone()
+		} else if !self.except_services.is_empty() {
+			// Exclude specified services
+			let except_service_kinds = self
+				.except_services
+				.iter()
+				.map(|x| x.clone().into())
+				.collect::<Vec<rivet_service_manager::ServiceKind>>();
+
+			run_config
+				.services
+				.iter()
+				.filter(|x| !except_service_kinds.iter().any(|y| y.eq(&x.kind)))
+				.cloned()
+				.collect::<Vec<_>>()
 		} else {
-			// Filter services
+			// Include only specified services
 			let service_kinds = self
 				.services
 				.iter()
 				.map(|x| x.clone().into())
 				.collect::<Vec<rivet_service_manager::ServiceKind>>();
 
-			if self.exclude_services {
-				// Exclude specified services
-				run_config
-					.services
-					.iter()
-					.filter(|x| !service_kinds.iter().any(|y| y.eq(&x.kind)))
-					.cloned()
-					.collect::<Vec<_>>()
-			} else {
-				// Include only specified services
-				run_config
-					.services
-					.iter()
-					.filter(|x| service_kinds.iter().any(|y| y.eq(&x.kind)))
-					.cloned()
-					.collect::<Vec<_>>()
-			}
+			run_config
+				.services
+				.iter()
+				.filter(|x| service_kinds.iter().any(|y| y.eq(&x.kind)))
+				.cloned()
+				.collect::<Vec<_>>()
 		};
 
 		// Start server
