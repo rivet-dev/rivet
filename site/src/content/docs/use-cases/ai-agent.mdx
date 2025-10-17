@@ -2,47 +2,64 @@
 
 ## Challenges of Building AI Agents
 
-Common tools: LangChain, OpenAI SDK, custom state management systems, Redis for memory storage
-
 Main pain points:
-- Managing conversation history and agent memory across sessions requires external databases
-- Keeping context and state synchronized while handling multiple concurrent conversations
-- High latency from database round trips to fetch conversation history
-- Complex infrastructure for realtime streaming responses to users
-- Handling tool calls and maintaining agent state during long-running operations
+
+- **Long-running & complex workflows**: Orchestrating multi-step tool calls, handling timeouts, and maintaining state consistency across operations
+- **Fault tolerance & recovery**: Gracefully handling agent failures, network issues, and LLM API errors without losing conversation state
+- **Real-time streaming**: Building infrastructure for streaming responses while handling backpressure and connection management
+- **State persistence & isolation**: Managing conversation history and agent memory per user without complex database setups
+- **Observability & debugging**: Understanding agent decision-making, tracking tool usage, and debugging complex behaviors
 
 ## How Rivet Solves This
 
-Rivet makes building stateful AI agents simple by providing durable actors that keep conversation history and agent state in memory without external databases.
+Rivet provides a complete actor-based runtime designed specifically for stateful AI agents, addressing each challenge:
 
-**Persistent Memory**: Each agent actor maintains its own state including conversation history, tool results, and context. State survives restarts and deployments automatically.
+**Long-running & complex workflows**: Actors naturally handle multi-step operations with built-in state management. Tool calls execute within the actor context, maintaining consistency across all operations. Workflows can span hours or days without losing state.
 
 ```typescript
 const aiAgent = actor({
   state: {
     messages: [] as Array<{role: string, content: string}>,
-    context: {}
+    toolResults: Map<string, any>,
+    workflowStep: string
   },
 
   actions: {
-    chat: async (c, userMessage: string) => {
-      c.state.messages.push({ role: "user", content: userMessage });
+    executeWorkflow: async (c, steps: ToolCall[]) => {
+      for (const step of steps) {
+        c.state.workflowStep = step.id;
+        const result = await executeTool(step);
+        c.state.toolResults.set(step.id, result);
 
-      const response = await callLLM(c.state.messages);
-      c.state.messages.push({ role: "assistant", content: response });
-
-      c.broadcast("message", { role: "assistant", content: response });
-      return response;
+        // State automatically persisted between steps
+        if (result.requiresApproval) {
+          await c.sleep(3600000); // Wait for approval
+        }
+      }
     }
   }
 });
 ```
 
-**Realtime Streaming**: Use WebSocket connections to stream LLM responses in realtime without additional infrastructure. Learn more about [events](/docs/actors/events).
+**Fault tolerance & recovery**: State automatically persists to durable storage. If an agent crashes, it resumes exactly where it left off with full conversation history and context intact. Network failures and LLM API errors don't lose progress.
 
-**Tool Integration**: Execute tool calls within the actor context while maintaining state consistency. See [actions](/docs/actors/actions) for more details.
+**Real-time streaming**: Built-in WebSocket support with automatic connection management. Stream LLM responses directly to clients without building custom infrastructure. Backpressure and reconnection handled automatically. Learn more about [events](/docs/actors/events).
 
-**No Cold Starts**: Agents hibernate when idle and wake instantly when needed, keeping conversation context ready without paying for idle time. Read about [actor lifecycle](/docs/actors/lifecycle).
+```typescript
+// Stream responses directly to connected clients
+c.broadcast("stream", { chunk: responseChunk });
+```
+
+**State persistence & isolation**: Each agent actor is automatically isolated per user/conversation. State persists without external databases - conversation history, tool results, and context are maintained in-actor memory with automatic durability. Read about [actor lifecycle](/docs/actors/lifecycle).
+
+**Observability & debugging**: Full visibility into agent behavior through structured logging, metrics, and state inspection. Track every tool call, decision point, and state change. Debug production issues with complete audit trails.
+
+```typescript
+// Automatic tracing of all actions and state changes
+c.log("Tool executed", { tool: toolName, duration: ms, result });
+```
+
+**Bonus - No cold starts**: Agents hibernate when idle and wake instantly when needed, keeping conversation context ready without paying for idle compute. See [actions](/docs/actors/actions) for more details.
 
 ## Full Example Projects
 
