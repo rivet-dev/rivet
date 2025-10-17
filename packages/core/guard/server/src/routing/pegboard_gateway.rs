@@ -51,7 +51,9 @@ pub async fn route_request(
 		// For HTTP, use the x-rivet-actor header
 		headers
 			.get(X_RIVET_ACTOR)
-			.and_then(|x| x.to_str().ok())
+			.map(|x| x.to_str())
+			.transpose()
+			.context("invalid x-rivet-actor header")?
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
 					header: X_RIVET_ACTOR.to_string(),
@@ -61,7 +63,7 @@ pub async fn route_request(
 	};
 
 	// Find actor to route to
-	let actor_id = Id::parse(actor_id_str)?;
+	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
 
 	// Route to peer dc where the actor lives
 	if actor_id.label() != ctx.config().dc_label() {
@@ -76,12 +78,12 @@ pub async fn route_request(
 			targets: vec![RouteTarget {
 				actor_id: Some(actor_id),
 				host: peer_dc
-					.public_url_host()
-					.context("bad peer dc public url host")?
+					.proxy_url_host()
+					.context("bad peer dc proxy url host")?
 					.to_string(),
 				port: peer_dc
-					.public_url_port()
-					.context("bad peer dc public url port")?,
+					.proxy_url_port()
+					.context("bad peer dc proxy url port")?,
 				path: path.to_owned(),
 			}],
 			timeout: RoutingTimeout {

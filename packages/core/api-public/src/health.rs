@@ -1,5 +1,5 @@
-use anyhow::Result;
-use axum::{Json, extract::Extension, response::IntoResponse};
+use anyhow::{bail, Result};
+use axum::{extract::Extension, response::IntoResponse, Json};
 use futures_util::StreamExt;
 use rivet_api_builder::ApiError;
 use serde::{Deserialize, Serialize};
@@ -87,7 +87,7 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 				}
 			} else {
 				// Remote datacenter - HTTP request
-				match send_health_check(&ctx, &dc).await {
+				match send_health_checks(&ctx, &dc).await {
 					Ok(response) => DatacenterHealth {
 						datacenter_label: dc.datacenter_label,
 						datacenter_name: dc.name.clone(),
@@ -128,30 +128,40 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 }
 
 #[tracing::instrument(skip_all)]
-async fn send_health_check(
+async fn send_health_checks(
 	ctx: &ApiCtx,
 	dc: &rivet_config::config::topology::Datacenter,
 ) -> Result<HealthResponse> {
 	let client = rivet_pools::reqwest::client().await?;
-	let url = dc.peer_url.join("/health")?;
+	let peer_url = dc.peer_url.join("/health")?;
+	let proxy_url = dc.proxy_url().join("/health")?;
 
 	tracing::debug!(
 		?dc.datacenter_label,
-		?url,
-		"sending health check to remote datacenter"
+		?peer_url,
+		?proxy_url,
+		"sending health checks to remote datacenter"
 	);
 
-	let res = client
-		.get(url)
-		.timeout(std::time::Duration::from_secs(5))
-		.send()
-		.await?;
+	let (peer_res, proxy_res) = tokio::try_join!(
+		client
+			.get(peer_url)
+			.timeout(std::time::Duration::from_secs(5))
+			.send(),
+		client
+			.get(proxy_url)
+			.timeout(std::time::Duration::from_secs(5))
+			.send()
+	)?;
 
-	if res.status().is_success() {
-		let response = res.json::<HealthResponse>().await?;
+	if !peer_res.status().is_success() {
+		bail!("Peer health check returned status: {}", peer_res.status())
+	}
+
+	if proxy_res.status().is_success() {
+		let response = proxy_res.json::<HealthResponse>().await?;
 		Ok(response)
 	} else {
-		anyhow::bail!("Health check returned status: {}", res.status())
+		bail!("Proxy health check returned status: {}", proxy_res.status())
 	}
 }
-

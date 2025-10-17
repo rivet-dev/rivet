@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
@@ -943,11 +943,16 @@ impl ProxyService {
 						}
 						Err(err) => {
 							if !err.is_connect() || attempts >= max_attempts {
-								tracing::error!(?err, "Request error after {} attempts", attempts);
-								return Err(errors::UpstreamError(
-									"Failed to connect to runner. Make sure your runners are healthy and do not have any crash logs."
-										.to_string(),
-								)
+								tracing::error!(
+									?err,
+									?target,
+									"Request error after {} attempts",
+									attempts
+								);
+
+								return Err(errors::UpstreamError(format!(
+									"Failed to connect to runner: {err}. Make sure your runners are healthy."
+								))
 								.build());
 							} else {
 								// Request connect error, might retry
@@ -1058,30 +1063,37 @@ impl ProxyService {
 		req_parts: &hyper::http::request::Parts,
 		target: &RouteTarget,
 	) -> Result<hyper::http::request::Builder> {
-		// Build the target URI using the url crate to properly handle IPv6 addresses
-		let mut url = Url::parse("http://example.com")?;
+		let scheme = if target.port == 443 { "https" } else { "http" };
 
-		// Wrap IPv6 addresses in brackets if not already wrapped
+		// Bracket raw IPv6 hosts
 		let host = if target.host.contains(':') && !target.host.starts_with('[') {
 			format!("[{}]", target.host)
 		} else {
 			target.host.clone()
 		};
 
-		url.set_host(Some(&host))
-			.map_err(|_| anyhow!("Failed to set host: {}", host))?;
-		url.set_port(Some(target.port))
-			.map_err(|_| anyhow!("Failed to set port"))?;
-		url.set_path(&target.path);
-		let uri = url.to_string();
+		// Ensure path starts with a leading slash
+		let path = if target.path.starts_with('/') {
+			target.path.clone()
+		} else {
+			format!("/{}", target.path)
+		};
 
+		let url = Url::parse(&format!("{scheme}://{host}:{}{}", target.port, path))
+			.context("invalid scheme/host/port when building URL")?;
+
+		// Build the proxied request
 		let mut builder = hyper::Request::builder()
 			.method(req_parts.method.clone())
-			.uri(&uri);
+			.uri(url.to_string());
 
 		// Add proxy headers
-		let headers = builder.headers_mut().unwrap();
-		add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
+		{
+			let headers = builder
+				.headers_mut()
+				.expect("request builder unexpectedly in error state");
+			add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
+		}
 
 		Ok(builder)
 	}

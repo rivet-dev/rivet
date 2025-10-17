@@ -202,7 +202,7 @@ export class Runner {
 	): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			logger()?.error({ msg: "actor not found", actorId });
+			logger()?.error({ msg: "actor not found for removal", actorId });
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
