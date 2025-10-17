@@ -38,6 +38,7 @@ pub struct UpsertRequest {
 	),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn upsert(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -51,6 +52,7 @@ pub async fn upsert(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn upsert_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

@@ -15,6 +15,7 @@ use crate::ctx::ApiCtx;
     ),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list(Extension(ctx): Extension<ApiCtx>) -> Response {
 	match list_inner(ctx).await {
 		Ok(response) => Json(response).into_response(),

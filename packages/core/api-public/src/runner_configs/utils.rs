@@ -50,6 +50,7 @@ fn truncate_response_body(body: &str) -> String {
 /// Fetches metadata from a serverless runner at the given URL.
 ///
 /// Returns metadata including runtime, version, and actor names if available.
+#[tracing::instrument(skip_all)]
 pub async fn fetch_serverless_runner_metadata(
 	url: String,
 	headers: HashMap<String, String>,
@@ -144,6 +145,7 @@ pub async fn fetch_serverless_runner_metadata(
 }
 
 /// Fetches metadata from the given URL and populates actor names in the database.
+#[tracing::instrument(skip_all)]
 pub async fn refresh_runner_config_metadata(
 	ctx: ApiCtx,
 	namespace_id: Id,

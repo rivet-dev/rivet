@@ -38,6 +38,7 @@ use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_confi
 )]
 pub struct ApiDoc;
 
+#[tracing::instrument(skip_all)]
 pub async fn router(
 	name: &'static str,
 	config: rivet_config::Config,
@@ -114,6 +115,7 @@ pub async fn router(
 
 /// Middleware to wrap ApiCtx with auth handling capabilities and to throw an error if auth was not explicitly
 // handled in an endpoint
+#[tracing::instrument(skip_all)]
 async fn auth_middleware(
 	headers: HeaderMap,
 	mut req: Request,

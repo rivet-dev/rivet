@@ -2,6 +2,7 @@ use rivet_api_builder::{create_router, prelude::*};
 
 use crate::{actors, internal, namespaces, runner_configs, runners};
 
+#[tracing::instrument(skip_all)]
 pub async fn router(
 	name: &'static str,
 	config: rivet_config::Config,

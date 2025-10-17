@@ -48,6 +48,7 @@ pub struct RefreshMetadataResponse {}
 	),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn refresh_metadata(
 	Extension(ctx): Extension<ApiCtx>,
 	Path(path): Path<RefreshMetadataPath>,
@@ -60,6 +61,7 @@ pub async fn refresh_metadata(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn refresh_metadata_inner(
 	ctx: ApiCtx,
 	path: RefreshMetadataPath,

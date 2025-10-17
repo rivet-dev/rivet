@@ -51,6 +51,7 @@ pub enum ServerlessHealthCheckResponse {
 	),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn serverless_health_check(
 	Extension(ctx): Extension<ApiCtx>,
 	Query(query): Query<ServerlessHealthCheckQuery>,

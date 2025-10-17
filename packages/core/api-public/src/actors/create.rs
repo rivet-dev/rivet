@@ -59,6 +59,7 @@ pub async fn create(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn create_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

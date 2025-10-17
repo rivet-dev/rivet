@@ -11,6 +11,7 @@ pub mod runners;
 
 pub use router::router as create_router;
 
+#[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	let host = config.api_peer().host();
 	let port = config.api_peer().port();

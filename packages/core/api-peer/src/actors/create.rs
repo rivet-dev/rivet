@@ -3,6 +3,7 @@ use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::actors::create::{CreateQuery, CreateRequest, CreateResponse};
 
+#[tracing::instrument(skip_all)]
 pub async fn create(
 	ctx: ApiCtx,
 	_path: (),

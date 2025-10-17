@@ -34,6 +34,7 @@ pub struct DeletePath {
         (status = 200, body = DeleteResponse),
     ),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	// Get the actor first to verify it exists
 	let actors_res = ctx

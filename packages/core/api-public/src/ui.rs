@@ -7,6 +7,7 @@ use rivet_api_builder::extract::Path;
 
 static UI_DIR: Dir<'_> = include_dir!("$OUT_DIR/ui");
 
+#[tracing::instrument(skip_all)]
 pub async fn serve_index() -> Response {
 	if let Some(index_file) = UI_DIR.get_file("index.html") {
 		([(header::CONTENT_TYPE, "text/html")], index_file.contents()).into_response()
@@ -15,6 +16,7 @@ pub async fn serve_index() -> Response {
 	}
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn serve_ui(Path(path): Path<String>) -> Response {
 	let file_path = path.trim_start_matches('/');
 
