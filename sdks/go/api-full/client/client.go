@@ -10,8 +10,8 @@ import (
 	sdk "sdk"
 	core "sdk/core"
 	datacenters "sdk/datacenters"
+	health "sdk/health"
 	namespaces "sdk/namespaces"
-	runnerconfigs "sdk/runnerconfigs"
 	runners "sdk/runners"
 )
 
@@ -20,10 +20,10 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Datacenters   *datacenters.Client
-	Namespaces    *namespaces.Client
-	RunnerConfigs *runnerconfigs.Client
-	Runners       *runners.Client
+	Datacenters *datacenters.Client
+	Health      *health.Client
+	Namespaces  *namespaces.Client
+	Runners     *runners.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -32,13 +32,13 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL:       options.BaseURL,
-		caller:        core.NewCaller(options.HTTPClient),
-		header:        options.ToHeader(),
-		Datacenters:   datacenters.NewClient(opts...),
-		Namespaces:    namespaces.NewClient(opts...),
-		RunnerConfigs: runnerconfigs.NewClient(opts...),
-		Runners:       runners.NewClient(opts...),
+		baseURL:     options.BaseURL,
+		caller:      core.NewCaller(options.HTTPClient),
+		header:      options.ToHeader(),
+		Datacenters: datacenters.NewClient(opts...),
+		Health:      health.NewClient(opts...),
+		Namespaces:  namespaces.NewClient(opts...),
+		Runners:     runners.NewClient(opts...),
 	}
 }
 
@@ -273,6 +273,161 @@ func (c *Client) ActorsDelete(ctx context.Context, actorId sdk.RivetId, request 
 			URL:      endpointURL,
 			Method:   http.MethodDelete,
 			Headers:  c.header,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) RunnerConfigsList(ctx context.Context, request *sdk.RunnerConfigsListRequest) (*sdk.RunnerConfigsListResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "runner-configs"
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if request.Limit != nil {
+		queryParams.Add("limit", fmt.Sprintf("%v", *request.Limit))
+	}
+	if request.Cursor != nil {
+		queryParams.Add("cursor", fmt.Sprintf("%v", *request.Cursor))
+	}
+	if request.Variant != nil {
+		queryParams.Add("variant", fmt.Sprintf("%v", *request.Variant))
+	}
+	if request.RunnerNames != nil {
+		queryParams.Add("runner_names", fmt.Sprintf("%v", *request.RunnerNames))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response *sdk.RunnerConfigsListResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodGet,
+			Headers:  c.header,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) RunnerConfigsServerlessHealthCheck(ctx context.Context, request *sdk.RunnerConfigsServerlessHealthCheckRequest) (*sdk.RunnerConfigsServerlessHealthCheckResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := baseURL + "/" + "runner-configs/serverless-health-check"
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response *sdk.RunnerConfigsServerlessHealthCheckResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPost,
+			Headers:  c.header,
+			Request:  request,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) RunnerConfigsUpsert(ctx context.Context, runnerName string, request *sdk.RunnerConfigsUpsertRequestBody) (sdk.RunnerConfigsUpsertResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"runner-configs/%v", runnerName)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response sdk.RunnerConfigsUpsertResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPut,
+			Headers:  c.header,
+			Request:  request,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) RunnerConfigsDelete(ctx context.Context, runnerName string, request *sdk.RunnerConfigsDeleteRequest) (sdk.RunnerConfigsDeleteResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"runner-configs/%v", runnerName)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response sdk.RunnerConfigsDeleteResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodDelete,
+			Headers:  c.header,
+			Response: &response,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *Client) RunnerConfigsRefreshMetadata(ctx context.Context, runnerName string, request *sdk.RunnerConfigsRefreshMetadataRequest) (sdk.RunnerConfigsRefreshMetadataResponse, error) {
+	baseURL := ""
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"runner-configs/%v/refresh-metadata", runnerName)
+
+	queryParams := make(url.Values)
+	queryParams.Add("namespace", fmt.Sprintf("%v", request.Namespace))
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	var response sdk.RunnerConfigsRefreshMetadataResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:      endpointURL,
+			Method:   http.MethodPost,
+			Headers:  c.header,
+			Request:  request,
 			Response: &response,
 		},
 	); err != nil {

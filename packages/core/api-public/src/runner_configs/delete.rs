@@ -35,11 +35,7 @@ pub async fn delete(
 }
 
 #[tracing::instrument(skip_all)]
-async fn delete_inner(
-	ctx: ApiCtx,
-	path: DeletePath,
-	query: DeleteQuery,
-) -> Result<DeleteResponse> {
+async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	ctx.auth().await?;
 
 	for dc in &ctx.config().topology().datacenters {

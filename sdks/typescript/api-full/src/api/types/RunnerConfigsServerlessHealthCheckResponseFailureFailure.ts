@@ -5,5 +5,5 @@
 import * as Rivet from "../index";
 
 export interface RunnerConfigsServerlessHealthCheckResponseFailureFailure {
-    error: Rivet.RunnerConfigsServerlessHealthCheckError;
+    error: Rivet.RunnerConfigsServerlessMetadataError;
 }

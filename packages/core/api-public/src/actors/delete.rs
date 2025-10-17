@@ -59,11 +59,7 @@ pub async fn delete(
 }
 
 #[tracing::instrument(skip_all)]
-async fn delete_inner(
-	ctx: ApiCtx,
-	path: DeletePath,
-	query: DeleteQuery,
-) -> Result<Response> {
+async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<Response> {
 	ctx.auth().await?;
 
 	if path.actor_id.label() == ctx.config().dc_label() {

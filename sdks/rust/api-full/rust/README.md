@@ -32,12 +32,14 @@ Class | Method | HTTP request | Description
 *ActorsListApi* | [**actors_list**](docs/ActorsListApi.md#actors_list) | **GET** /actors |  ## Datacenter Round Trips
 *ActorsListNamesApi* | [**actors_list_names**](docs/ActorsListNamesApi.md#actors_list_names) | **GET** /actors/names | ## Datacenter Round Trips
 *DatacentersApi* | [**datacenters_list**](docs/DatacentersApi.md#datacenters_list) | **GET** /datacenters | 
+*HealthApi* | [**health_fanout**](docs/HealthApi.md#health_fanout) | **GET** /health/fanout | 
 *NamespacesApi* | [**namespaces_create**](docs/NamespacesApi.md#namespaces_create) | **POST** /namespaces | 
 *NamespacesApi* | [**namespaces_list**](docs/NamespacesApi.md#namespaces_list) | **GET** /namespaces | 
-*RunnerConfigsApi* | [**runner_configs_delete**](docs/RunnerConfigsApi.md#runner_configs_delete) | **DELETE** /runner-configs/{runner_name} | 
-*RunnerConfigsApi* | [**runner_configs_list**](docs/RunnerConfigsApi.md#runner_configs_list) | **GET** /runner-configs | 
-*RunnerConfigsApi* | [**runner_configs_serverless_health_check**](docs/RunnerConfigsApi.md#runner_configs_serverless_health_check) | **POST** /runner-configs/serverless-health-check | 
-*RunnerConfigsApi* | [**runner_configs_upsert**](docs/RunnerConfigsApi.md#runner_configs_upsert) | **PUT** /runner-configs/{runner_name} | 
+*RunnerConfigsDeleteApi* | [**runner_configs_delete**](docs/RunnerConfigsDeleteApi.md#runner_configs_delete) | **DELETE** /runner-configs/{runner_name} | 
+*RunnerConfigsListApi* | [**runner_configs_list**](docs/RunnerConfigsListApi.md#runner_configs_list) | **GET** /runner-configs | 
+*RunnerConfigsRefreshMetadataApi* | [**runner_configs_refresh_metadata**](docs/RunnerConfigsRefreshMetadataApi.md#runner_configs_refresh_metadata) | **POST** /runner-configs/{runner_name}/refresh-metadata | 
+*RunnerConfigsServerlessHealthCheckApi* | [**runner_configs_serverless_health_check**](docs/RunnerConfigsServerlessHealthCheckApi.md#runner_configs_serverless_health_check) | **POST** /runner-configs/serverless-health-check | 
+*RunnerConfigsUpsertApi* | [**runner_configs_upsert**](docs/RunnerConfigsUpsertApi.md#runner_configs_upsert) | **PUT** /runner-configs/{runner_name} | 
 *RunnersApi* | [**runners_list**](docs/RunnersApi.md#runners_list) | **GET** /runners | 
 *RunnersApi* | [**runners_list_names**](docs/RunnersApi.md#runners_list_names) | **GET** /runners/names | ## Datacenter Round Trips
 
@@ -54,7 +56,11 @@ Class | Method | HTTP request | Description
  - [ActorsListResponse](docs/ActorsListResponse.md)
  - [CrashPolicy](docs/CrashPolicy.md)
  - [Datacenter](docs/Datacenter.md)
+ - [DatacenterHealth](docs/DatacenterHealth.md)
  - [DatacentersListResponse](docs/DatacentersListResponse.md)
+ - [HealthFanoutResponse](docs/HealthFanoutResponse.md)
+ - [HealthResponse](docs/HealthResponse.md)
+ - [HealthStatus](docs/HealthStatus.md)
  - [Namespace](docs/Namespace.md)
  - [NamespaceListResponse](docs/NamespaceListResponse.md)
  - [NamespacesCreateRequest](docs/NamespacesCreateRequest.md)
@@ -69,22 +75,22 @@ Class | Method | HTTP request | Description
  - [RunnerConfigVariant](docs/RunnerConfigVariant.md)
  - [RunnerConfigsListResponse](docs/RunnerConfigsListResponse.md)
  - [RunnerConfigsListResponseRunnerConfigsValue](docs/RunnerConfigsListResponseRunnerConfigsValue.md)
- - [RunnerConfigsServerlessHealthCheckError](docs/RunnerConfigsServerlessHealthCheckError.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf](docs/RunnerConfigsServerlessHealthCheckErrorOneOf.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf1](docs/RunnerConfigsServerlessHealthCheckErrorOneOf1.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf2](docs/RunnerConfigsServerlessHealthCheckErrorOneOf2.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf3](docs/RunnerConfigsServerlessHealthCheckErrorOneOf3.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf3NonSuccessStatus](docs/RunnerConfigsServerlessHealthCheckErrorOneOf3NonSuccessStatus.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf4](docs/RunnerConfigsServerlessHealthCheckErrorOneOf4.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf4InvalidResponseJson](docs/RunnerConfigsServerlessHealthCheckErrorOneOf4InvalidResponseJson.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf5](docs/RunnerConfigsServerlessHealthCheckErrorOneOf5.md)
- - [RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema](docs/RunnerConfigsServerlessHealthCheckErrorOneOf5InvalidResponseSchema.md)
  - [RunnerConfigsServerlessHealthCheckRequest](docs/RunnerConfigsServerlessHealthCheckRequest.md)
  - [RunnerConfigsServerlessHealthCheckResponse](docs/RunnerConfigsServerlessHealthCheckResponse.md)
  - [RunnerConfigsServerlessHealthCheckResponseOneOf](docs/RunnerConfigsServerlessHealthCheckResponseOneOf.md)
  - [RunnerConfigsServerlessHealthCheckResponseOneOf1](docs/RunnerConfigsServerlessHealthCheckResponseOneOf1.md)
  - [RunnerConfigsServerlessHealthCheckResponseOneOf1Failure](docs/RunnerConfigsServerlessHealthCheckResponseOneOf1Failure.md)
  - [RunnerConfigsServerlessHealthCheckResponseOneOfSuccess](docs/RunnerConfigsServerlessHealthCheckResponseOneOfSuccess.md)
+ - [RunnerConfigsServerlessMetadataError](docs/RunnerConfigsServerlessMetadataError.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf](docs/RunnerConfigsServerlessMetadataErrorOneOf.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf1](docs/RunnerConfigsServerlessMetadataErrorOneOf1.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf2](docs/RunnerConfigsServerlessMetadataErrorOneOf2.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf3](docs/RunnerConfigsServerlessMetadataErrorOneOf3.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf3NonSuccessStatus](docs/RunnerConfigsServerlessMetadataErrorOneOf3NonSuccessStatus.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf4](docs/RunnerConfigsServerlessMetadataErrorOneOf4.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson](docs/RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf5](docs/RunnerConfigsServerlessMetadataErrorOneOf5.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema](docs/RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema.md)
  - [RunnerConfigsUpsertRequestBody](docs/RunnerConfigsUpsertRequestBody.md)
  - [RunnersListNamesResponse](docs/RunnersListNamesResponse.md)
  - [RunnersListResponse](docs/RunnersListResponse.md)

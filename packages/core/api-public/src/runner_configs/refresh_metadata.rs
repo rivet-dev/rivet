@@ -26,7 +26,7 @@ pub struct RefreshMetadataPath {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-#[schema(as = RunnerConfigsRefreshMetadataRequest)]
+#[schema(as = RunnerConfigsRefreshMetadataRequestBody)]
 pub struct RefreshMetadataRequest {}
 
 #[derive(Deserialize, Serialize, ToSchema)]

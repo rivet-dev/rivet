@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunnerConfigsServerlessHealthCheckResponseOneOf1Failure {
     #[serde(rename = "error")]
-    pub error: Box<models::RunnerConfigsServerlessHealthCheckError>,
+    pub error: Box<models::RunnerConfigsServerlessMetadataError>,
 }
 
 impl RunnerConfigsServerlessHealthCheckResponseOneOf1Failure {
-    pub fn new(error: models::RunnerConfigsServerlessHealthCheckError) -> RunnerConfigsServerlessHealthCheckResponseOneOf1Failure {
+    pub fn new(error: models::RunnerConfigsServerlessMetadataError) -> RunnerConfigsServerlessHealthCheckResponseOneOf1Failure {
         RunnerConfigsServerlessHealthCheckResponseOneOf1Failure {
             error: Box::new(error),
         }

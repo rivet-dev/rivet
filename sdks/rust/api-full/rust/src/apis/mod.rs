@@ -117,8 +117,13 @@ pub mod actors_get_or_create_api;
 pub mod actors_list_api;
 pub mod actors_list_names_api;
 pub mod datacenters_api;
+pub mod health_api;
 pub mod namespaces_api;
-pub mod runner_configs_api;
+pub mod runner_configs_delete_api;
+pub mod runner_configs_list_api;
+pub mod runner_configs_refresh_metadata_api;
+pub mod runner_configs_serverless_health_check_api;
+pub mod runner_configs_upsert_api;
 pub mod runners_api;
 
 pub mod configuration;

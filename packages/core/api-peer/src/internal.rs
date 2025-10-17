@@ -98,8 +98,8 @@ pub async fn epoxy_replica_reconfigure(
 	_body: ReplicaReconfigureRequest,
 ) -> Result<ReplicaReconfigureResponse> {
 	ctx.signal(epoxy::workflows::coordinator::ReplicaReconfigure {})
-	.send()
-	.await?;
+		.send()
+		.await?;
 
 	Ok(ReplicaReconfigureResponse {})
 }
