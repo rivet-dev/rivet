@@ -26,8 +26,8 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 		Some(providers) => {
 			let tracer = providers.tracer_provider.tracer("tracing-otel-subscriber");
 
-			let otel_trace_layer =
-				OpenTelemetryLayer::new(tracer).with_filter(build_filter_from_env_var("RUST_TRACE"));
+			let otel_trace_layer = OpenTelemetryLayer::new(tracer)
+				.with_filter(build_filter_from_env_var("RUST_TRACE"));
 
 			let otel_metric_layer = MetricsLayer::new(providers.meter_provider.clone())
 				.with_filter(build_filter_from_env_var("RUST_TRACE"));

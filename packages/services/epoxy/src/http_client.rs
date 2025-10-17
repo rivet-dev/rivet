@@ -5,6 +5,7 @@ use epoxy_protocol::{
 	versioned,
 };
 use futures_util::{StreamExt, stream::FuturesUnordered};
+use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use std::future::Future;
 use vbare::OwnedVersionedData;
@@ -24,6 +25,7 @@ fn find_replica_address(
 		.map(|r| r.api_peer_url.clone())
 }
 
+#[tracing::instrument(skip_all, fields(%from_replica_id, ?replica_ids, ?quorum_type))]
 pub async fn fanout_to_replicas<F, Fut, T>(
 	from_replica_id: ReplicaId,
 	replica_ids: &[ReplicaId],
@@ -93,6 +95,7 @@ where
 	Ok(successful_responses)
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn send_message(
 	ctx: &ApiCtx,
 	config: &protocol::ClusterConfig,
@@ -102,6 +105,7 @@ pub async fn send_message(
 	send_message_to_address(ctx, replica_url, request).await
 }
 
+#[tracing::instrument(skip_all, fields(%replica_url))]
 pub async fn send_message_to_address(
 	ctx: &ApiCtx,
 	replica_url: String,
@@ -116,8 +120,7 @@ pub async fn send_message_to_address(
 			"sending message to replica directly"
 		);
 
-		return crate::replica::message_request::message_request(&ctx, from_replica_id, request)
-			.await;
+		return crate::replica::message_request::message_request(&ctx, request).await;
 	}
 
 	let mut replica_url = url::Url::parse(&replica_url)?;
@@ -139,6 +142,7 @@ pub async fn send_message_to_address(
 		.post(replica_url.to_string())
 		.body(request.serialize()?)
 		.send()
+		.custom_instrument(tracing::info_span!("http_request"))
 		.await;
 
 	let response = match response_result {

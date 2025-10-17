@@ -4,8 +4,8 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use rivet_api_builder::{
-	extract::{Extension, Json, Query},
 	ApiError,
+	extract::{Extension, Json, Query},
 };
 use rivet_types::actors::CrashPolicy;
 use rivet_util::Id;
