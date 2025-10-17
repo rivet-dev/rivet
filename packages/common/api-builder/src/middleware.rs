@@ -200,7 +200,6 @@ pub async fn http_logging_middleware(
 			&[
 				KeyValue::new("method", method_clone.to_string()),
 				KeyValue::new("path", path_clone.clone()),
-				KeyValue::new("watch", "false"),
 			],
 		);
 
@@ -214,7 +213,6 @@ pub async fn http_logging_middleware(
 			&[
 				KeyValue::new("method", method_clone.to_string()),
 				KeyValue::new("path", path_clone.clone()),
-				KeyValue::new("watch", "false"),
 				KeyValue::new("status", status.to_string()),
 				KeyValue::new("error_code", error_code.clone()),
 			],
@@ -226,7 +224,6 @@ pub async fn http_logging_middleware(
 				&[
 					KeyValue::new("method", method_clone.to_string()),
 					KeyValue::new("path", path_clone.clone()),
-					KeyValue::new("watch", "false"),
 					KeyValue::new("status", status.to_string()),
 					KeyValue::new("error_code", error_code),
 				],

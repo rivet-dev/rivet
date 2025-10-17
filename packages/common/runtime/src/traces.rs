@@ -12,7 +12,7 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	let registry = tracing_subscriber::registry();
 
 	// Build and apply otel layers to the registry if otel is enabled
-	let (otel_trace_layer, otel_metric_layer, otel_log_layer) = match otel_providers {
+	let (otel_trace_layer, otel_metric_layer) = match otel_providers {
 		Some(providers) => {
 			let tracer = providers.tracer_provider.tracer("tracing-otel-subscriber");
 
@@ -22,22 +22,17 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 			let otel_metric_layer = MetricsLayer::new(providers.meter_provider.clone())
 				.with_filter(env_filter("RUST_TRACE"));
 
-			let otel_log_layer = OpenTelemetryTracingBridge::new(&providers.logger_provider)
-				.with_filter(env_filter("RUST_LOG"));
-
 			(
 				Some(otel_trace_layer),
 				Some(otel_metric_layer),
-				Some(otel_log_layer),
 			)
 		}
-		None => (None, None, None),
+		None => (None, None),
 	};
 
 	let registry = registry
 		.with(otel_metric_layer)
-		.with(otel_trace_layer)
-		.with(otel_log_layer);
+		.with(otel_trace_layer);
 
 	// Check if tokio console is enabled
 	let enable_tokio_console = std::env::var("TOKIO_CONSOLE_ENABLE").map_or(false, |x| x == "1");
