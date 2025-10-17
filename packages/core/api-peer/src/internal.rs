@@ -12,6 +12,7 @@ pub struct CachePurgeRequest {
 #[derive(Serialize)]
 pub struct CachePurgeResponse {}
 
+#[tracing::instrument(skip_all)]
 pub async fn cache_purge(
 	ctx: ApiCtx,
 	_path: (),
@@ -30,6 +31,7 @@ pub async fn cache_purge(
 #[derive(Serialize)]
 pub struct BumpServerlessAutoscalerResponse {}
 
+#[tracing::instrument(skip_all)]
 pub async fn bump_serverless_autoscaler(
 	ctx: ApiCtx,
 	_path: (),

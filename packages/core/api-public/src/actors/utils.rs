@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 /// Helper function to fetch an actor by ID, automatically routing to the correct datacenter
 /// based on the actor ID's label.
+#[tracing::instrument(skip_all)]
 pub async fn fetch_actor_by_id(
 	ctx: &ApiCtx,
 	headers: HeaderMap,
@@ -55,6 +56,7 @@ pub async fn fetch_actor_by_id(
 
 /// Helper function to fetch multiple actors by their IDs, automatically routing to the correct datacenters
 /// based on each actor ID's label. This function batches requests by datacenter for efficiency.
+#[tracing::instrument(skip_all)]
 pub async fn fetch_actors_by_ids(
 	ctx: &ApiCtx,
 	headers: HeaderMap,
@@ -186,6 +188,7 @@ pub fn extract_duplicate_key_error(err: &anyhow::Error) -> Option<Id> {
 }
 
 /// Determine the datacenter label to create the actor in.
+#[tracing::instrument(skip_all)]
 pub async fn find_dc_for_actor_creation(
 	ctx: &ApiCtx,
 	namespace_id: Id,

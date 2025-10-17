@@ -42,6 +42,7 @@ pub struct RunnerConfigDatacenters {
 	),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -54,6 +55,7 @@ pub async fn list(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn list_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

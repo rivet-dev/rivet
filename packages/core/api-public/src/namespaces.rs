@@ -23,6 +23,7 @@ use crate::ctx::ApiCtx;
     ),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -64,6 +65,7 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
     ),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn create(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -75,6 +77,7 @@ pub async fn create(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn create_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

@@ -13,6 +13,7 @@ use utoipa::{IntoParams, ToSchema};
         (status = 200, body = ListResponse),
     ),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
@@ -76,6 +77,7 @@ pub struct ListNamesResponse {
 	pub pagination: Pagination,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn list_names(
 	ctx: ApiCtx,
 	_path: (),

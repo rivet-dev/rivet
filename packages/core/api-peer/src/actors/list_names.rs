@@ -12,6 +12,7 @@ use rivet_types::actors::ActorName;
         (status = 200, body = ListNamesResponse),
     ),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list_names(
 	ctx: ApiCtx,
 	_path: (),

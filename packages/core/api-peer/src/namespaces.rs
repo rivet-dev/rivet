@@ -6,6 +6,7 @@ use rivet_util::Id;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+#[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	let namespace_ids = query.namespace_ids.as_ref().map(|x| {
 		x.split(',')
@@ -72,6 +73,7 @@ pub struct CreateResponse {
 	pub namespace: rivet_types::namespaces::Namespace,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn create(
 	ctx: ApiCtx,
 	_path: (),

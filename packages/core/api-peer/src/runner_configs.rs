@@ -6,6 +6,7 @@ use rivet_types::keys::namespace::runner_config::RunnerConfigVariant;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+#[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<ListResponse> {
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
@@ -94,6 +95,7 @@ pub struct UpsertRequest(pub rivet_api_types::namespaces::runner_configs::Runner
 #[schema(as = RunnerConfigsUpsertResponse)]
 pub struct UpsertResponse {}
 
+#[tracing::instrument(skip_all)]
 pub async fn upsert(
 	ctx: ApiCtx,
 	path: UpsertPath,
@@ -134,6 +136,7 @@ pub struct DeletePath {
 #[schema(as = RunnerConfigsDeleteResponse)]
 pub struct DeleteResponse {}
 
+#[tracing::instrument(skip_all)]
 pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
