@@ -28,8 +28,7 @@ pub async fn message(ctx: ApiCtx, path: VersionedPath, _query: (), body: Bytes) 
 	);
 
 	// Process message directly using ops
-	let response =
-		crate::replica::message_request::message_request(&ctx, current_replica_id, request).await?;
+	let response = crate::replica::message_request::message_request(&ctx, request).await?;
 
 	versioned::Response::latest(response).serialize(path.version)
 }

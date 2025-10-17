@@ -1,9 +1,8 @@
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 
-use std::sync::{Arc, RwLock, OnceLock};
-use opentelemetry::{KeyValue, global};
 use opentelemetry::trace::{SamplingResult, SpanKind};
+use opentelemetry::{KeyValue, global};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
 	Resource,
@@ -12,6 +11,7 @@ use opentelemetry_sdk::{
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 };
 use opentelemetry_semantic_conventions::{SCHEMA_URL, attribute::SERVICE_VERSION};
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// Dynamic sampler that can be updated at runtime
 #[derive(Clone, Debug)]

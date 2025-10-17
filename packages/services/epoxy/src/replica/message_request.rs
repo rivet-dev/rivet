@@ -8,9 +8,10 @@ use crate::{ops, replica};
 #[tracing::instrument(skip_all)]
 pub async fn message_request(
 	ctx: &ApiCtx,
-	replica_id: ReplicaId,
 	request: protocol::Request,
 ) -> Result<protocol::Response> {
+	let current_replica_id = ctx.config().epoxy_replica_id();
+
 	let kind = match request.kind {
 		protocol::RequestKind::UpdateConfigRequest(req) => {
 			tracing::info!(
@@ -23,7 +24,7 @@ pub async fn message_request(
 			ctx.udb()?
 				.run(|tx| {
 					let req = req.clone();
-					async move { replica::update_config::update_config(&*tx, replica_id, req) }
+					async move { replica::update_config::update_config(&*tx, current_replica_id, req) }
 				})
 				.custom_instrument(tracing::info_span!("update_config_tx"))
 				.await?;
@@ -35,7 +36,7 @@ pub async fn message_request(
 				.udb()?
 				.run(|tx| {
 					let req = req.clone();
-					async move { replica::messages::pre_accept(&*tx, replica_id, req).await }
+					async move { replica::messages::pre_accept(&*tx, current_replica_id, req).await }
 				})
 				.custom_instrument(tracing::info_span!("pre_accept_tx"))
 				.await?;
@@ -46,7 +47,7 @@ pub async fn message_request(
 				.udb()?
 				.run(|tx| {
 					let req = req.clone();
-					async move { replica::messages::accept(&*tx, replica_id, req).await }
+					async move { replica::messages::accept(&*tx, current_replica_id, req).await }
 				})
 				.custom_instrument(tracing::info_span!("accept_tx"))
 				.await?;
@@ -58,7 +59,7 @@ pub async fn message_request(
 				.run(|tx| {
 					let req = req.clone();
 					async move {
-						replica::messages::commit(&*tx, replica_id, req, true).await?;
+						replica::messages::commit(&*tx, current_replica_id, req, true).await?;
 						Result::Ok(())
 					}
 				})
@@ -72,7 +73,7 @@ pub async fn message_request(
 				.udb()?
 				.run(|tx| {
 					let req = req.clone();
-					async move { replica::messages::prepare(&*tx, replica_id, req).await }
+					async move { replica::messages::prepare(&*tx, current_replica_id, req).await }
 				})
 				.custom_instrument(tracing::info_span!("prepare_tx"))
 				.await?;
@@ -84,7 +85,9 @@ pub async fn message_request(
 				.udb()?
 				.run(|tx| {
 					let req = req.clone();
-					async move { replica::messages::download_instances(&*tx, replica_id, req).await }
+					async move {
+						replica::messages::download_instances(&*tx, current_replica_id, req).await
+					}
 				})
 				.custom_instrument(tracing::info_span!("download_instances_tx"))
 				.await?;
@@ -101,9 +104,9 @@ pub async fn message_request(
 		protocol::RequestKind::CoordinatorUpdateReplicaStatusRequest(req) => {
 			// Send signal to coordinator workflow
 			tracing::info!(
-				?replica_id,
-				update_replica_id = ?req.replica_id,
-				update_status = ?req.status,
+				?current_replica_id,
+				update_replica_id=?req.replica_id,
+				update_status=?req.status,
 				"received coordinator update replica status request"
 			);
 
@@ -113,7 +116,7 @@ pub async fn message_request(
 			})
 			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.to_workflow::<crate::workflows::coordinator::Workflow>()
-			.tag("replica", replica_id)
+			.tag("replica", current_replica_id)
 			.send()
 			.await?;
 
@@ -121,17 +124,14 @@ pub async fn message_request(
 		}
 		protocol::RequestKind::BeginLearningRequest(req) => {
 			// Send signal to replica workflow
-			tracing::info!(
-				replica_id = ?replica_id,
-				"received begin learning request"
-			);
+			tracing::info!(?current_replica_id, "received begin learning request");
 
 			ctx.signal(crate::workflows::replica::BeginLearning {
 				config: req.config.clone().into(),
 			})
 			.bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING()
 			.to_workflow::<crate::workflows::replica::Workflow>()
-			.tag("replica", replica_id)
+			.tag("replica", current_replica_id)
 			.send()
 			.await?;
 
@@ -141,7 +141,7 @@ pub async fn message_request(
 			// Handle KV get request
 			let result = ctx
 				.op(ops::kv::get_local::Input {
-					replica_id,
+					replica_id: current_replica_id,
 					key: req.key.clone(),
 				})
 				.await?;

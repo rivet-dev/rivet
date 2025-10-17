@@ -47,6 +47,7 @@ pub async fn bump_serverless_autoscaler(
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SetTracingConfigRequest {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Option<String>>,
@@ -55,6 +56,7 @@ pub struct SetTracingConfigRequest {
 }
 
 #[derive(Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SetTracingConfigResponse {}
 
 #[tracing::instrument(skip_all)]

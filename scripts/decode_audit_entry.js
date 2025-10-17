@@ -13,7 +13,7 @@ const buffer = Buffer.from(hexString, 'hex');
 const version = buffer.readUInt16LE(0);
 const dataBuffer = buffer.slice(2);
 
-console.log('Version:', version);
+console.log('Embedded VBARE Version:', version);
 
 class BareDecoder {
 	constructor(buffer) {
@@ -60,9 +60,17 @@ class BareDecoder {
 		return readFn.call(this);
 	}
 
-	readUnion(variants) {
+	readUnion(variants, tagNames) {
 		const tag = this.readUint();
-		return { tag, value: variants[tag].call(this) };
+		const value = variants[tag].call(this);
+		const result = {
+			tag: tagNames ? tagNames[tag] : tag
+		};
+		// Only include value if it's not void (undefined/null or the string representation)
+		if (value !== undefined && value !== null && value !== 'Any') {
+			result.value = value;
+		}
+		return result;
 	}
 }
 
@@ -70,7 +78,6 @@ class BareDecoder {
 const decoder = new BareDecoder(dataBuffer);
 
 console.log('Decoding audit entry from hex:', hexString);
-console.log('Buffer length:', dataBuffer.length, 'bytes\n');
 
 // Data struct
 const data = {};
@@ -83,7 +90,7 @@ const namespace = decoder.readUnion([
 	() => 'Any',           // 0: Any (void)
 	() => decoder.readData(), // 1: Id
 	() => decoder.readData().toString('utf8') // 2: Name
-]);
+], ['Any', 'Id', 'Name']);
 data.request.namespace = namespace;
 
 // resource: ResourceKind enum
@@ -94,7 +101,7 @@ data.request.resource = resourceKinds[decoder.readEnum()];
 const target = decoder.readUnion([
 	() => 'Any',           // 0: Any (void)
 	() => decoder.readData()  // 1: Id
-]);
+], ['Any', 'Id']);
 data.request.target = target;
 
 // operation: OperationKind enum

@@ -10,11 +10,7 @@ use std::collections::HashMap;
 /// Helper function to fetch an actor by ID, automatically routing to the correct datacenter
 /// based on the actor ID's label.
 #[tracing::instrument(skip_all)]
-pub async fn fetch_actor_by_id(
-	ctx: &ApiCtx,
-	actor_id: Id,
-	namespace: String,
-) -> Result<Actor> {
+pub async fn fetch_actor_by_id(ctx: &ApiCtx, actor_id: Id, namespace: String) -> Result<Actor> {
 	let list_query = rivet_api_types::actors::list::ListQuery {
 		namespace,
 		actor_ids: Some(actor_id.to_string()),
