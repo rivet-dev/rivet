@@ -35,7 +35,10 @@ pub async fn router(
 				"/bump-serverless-autoscaler",
 				post(internal::bump_serverless_autoscaler),
 			)
-			// MARK: Debug
+			.route(
+				"/epoxy/replica-reconfigure",
+				post(internal::epoxy_replica_reconfigure),
+			)
 			.route("/debug/tracing/config", put(internal::set_tracing_config))
 	})
 	.await

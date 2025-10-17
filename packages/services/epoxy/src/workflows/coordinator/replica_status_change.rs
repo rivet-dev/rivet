@@ -37,6 +37,23 @@ pub async fn replica_status_change(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
+pub async fn replica_reconfigure(
+	ctx: &mut WorkflowCtx,
+) -> Result<()> {
+	let notify_out = ctx.activity(NotifyAllReplicasInput {}).await?;
+
+	let replica_id = ctx.config().epoxy_replica_id();
+	ctx.msg(super::ConfigChangeMessage {
+		config: notify_out.config,
+	})
+	.tag("replica", replica_id)
+	.send()
+	.await?;
+
+	Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct UpdateReplicaStatusInput {
 	pub replica_id: protocol::ReplicaId,

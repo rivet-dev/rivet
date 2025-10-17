@@ -11,9 +11,9 @@ pub struct CachePurgeRequest {
 }
 
 #[derive(Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CachePurgeResponse {}
 
-#[tracing::instrument(skip_all)]
 pub async fn cache_purge(
 	ctx: ApiCtx,
 	_path: (),
@@ -30,9 +30,9 @@ pub async fn cache_purge(
 }
 
 #[derive(Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BumpServerlessAutoscalerResponse {}
 
-#[tracing::instrument(skip_all)]
 pub async fn bump_serverless_autoscaler(
 	ctx: ApiCtx,
 	_path: (),
@@ -81,4 +81,25 @@ pub async fn set_tracing_config(
 	);
 
 	Ok(SetTracingConfigResponse {})
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplicaReconfigureRequest {}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplicaReconfigureResponse {}
+
+pub async fn epoxy_replica_reconfigure(
+	ctx: ApiCtx,
+	_path: (),
+	_query: (),
+	_body: ReplicaReconfigureRequest,
+) -> Result<ReplicaReconfigureResponse> {
+	ctx.signal(epoxy::workflows::coordinator::ReplicaReconfigure {})
+	.send()
+	.await?;
+
+	Ok(ReplicaReconfigureResponse {})
 }
