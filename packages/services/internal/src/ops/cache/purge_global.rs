@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use futures_util::StreamExt;
 use gas::prelude::*;
-use rivet_api_util::{HeaderMap, Method, request_remote_datacenter};
+use rivet_api_util::{Method, request_remote_datacenter};
 use rivet_cache::RawCacheKey;
 use serde::Serialize;
 
@@ -35,7 +35,6 @@ pub async fn cache_purge_global(ctx: &OperationCtx, input: &Input) -> Result<()>
 					dc.datacenter_label,
 					"/cache/purge",
 					Method::POST,
-					HeaderMap::new(),
 					Option::<&()>::None,
 					Some(&CachePurgeRequest {
 						base_key: input.base_key,

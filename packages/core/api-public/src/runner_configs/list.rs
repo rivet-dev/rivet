@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -45,11 +42,10 @@ pub struct RunnerConfigDatacenters {
 #[tracing::instrument(skip_all)]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Path(path): Path<ListPath>,
 	Query(query): Query<ListQuery>,
 ) -> Response {
-	match list_inner(ctx, headers, path, query).await {
+	match list_inner(ctx, path, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -58,7 +54,6 @@ pub async fn list(
 #[tracing::instrument(skip_all)]
 async fn list_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	path: ListPath,
 	query: ListQuery,
 ) -> Result<ListResponse> {
@@ -73,7 +68,6 @@ async fn list_inner(
 		HashMap<String, RunnerConfigDatacenters>,
 	>(
 		ctx.clone().into(),
-		headers,
 		"/runner-configs",
 		query.clone(),
 		move |ctx, query| {

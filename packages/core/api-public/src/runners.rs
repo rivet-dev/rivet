@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -27,23 +24,21 @@ use crate::ctx::ApiCtx;
 #[tracing::instrument(skip_all)]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<ListQuery>,
 ) -> Response {
-	match list_inner(ctx, headers, query).await {
+	match list_inner(ctx, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
 }
 
-async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	// Fanout to all datacenters
 	let mut runners =
 		fanout_to_datacenters::<ListResponse, _, _, _, _, Vec<rivet_types::runners::Runner>>(
 			ctx.into(),
-			headers,
 			"/runners",
 			query.clone(),
 			|ctx, query| async move { rivet_api_peer::runners::list(ctx, (), query).await },
@@ -101,10 +96,9 @@ pub struct ListNamesResponse {
 #[tracing::instrument(skip_all)]
 pub async fn list_names(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<ListNamesQuery>,
 ) -> Response {
-	match list_names_inner(ctx, headers, query).await {
+	match list_names_inner(ctx, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -113,7 +107,6 @@ pub async fn list_names(
 #[tracing::instrument(skip_all)]
 async fn list_names_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	query: ListNamesQuery,
 ) -> Result<ListNamesResponse> {
 	ctx.auth().await?;
@@ -135,7 +128,6 @@ async fn list_names_inner(
 		Vec<String>,
 	>(
 		ctx.into(),
-		headers,
 		"/runners/names",
 		peer_query,
 		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },

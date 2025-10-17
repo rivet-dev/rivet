@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -28,11 +25,10 @@ use crate::ctx::ApiCtx;
 #[tracing::instrument(skip_all)]
 pub async fn delete(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Path(path): Path<DeletePath>,
 	Query(query): Query<DeleteQuery>,
 ) -> Response {
-	match delete_inner(ctx, headers, path, query).await {
+	match delete_inner(ctx, path, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -41,7 +37,6 @@ pub async fn delete(
 #[tracing::instrument(skip_all)]
 async fn delete_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	path: DeletePath,
 	query: DeleteQuery,
 ) -> Result<DeleteResponse> {
@@ -65,7 +60,6 @@ async fn delete_inner(
 				dc.datacenter_label,
 				&format!("/runner-configs/{}", path.runner_name),
 				axum::http::Method::DELETE,
-				headers.clone(),
 				Some(&query),
 				Option::<&()>::None,
 			)

@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -41,12 +38,11 @@ pub struct UpsertRequest {
 #[tracing::instrument(skip_all)]
 pub async fn upsert(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Path(path): Path<UpsertPath>,
 	Query(query): Query<UpsertQuery>,
 	Json(body): Json<UpsertRequest>,
 ) -> Response {
-	match upsert_inner(ctx, headers, path, query, body).await {
+	match upsert_inner(ctx, path, query, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -55,7 +51,6 @@ pub async fn upsert(
 #[tracing::instrument(skip_all)]
 async fn upsert_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	path: UpsertPath,
 	query: UpsertQuery,
 	mut body: UpsertRequest,
@@ -99,7 +94,6 @@ async fn upsert_inner(
 					dc.datacenter_label,
 					&format!("/runner-configs/{}", path.runner_name),
 					axum::http::Method::PUT,
-					headers.clone(),
 					Some(&query),
 					Some(&runner_config),
 				)
@@ -123,7 +117,6 @@ async fn upsert_inner(
 					dc.datacenter_label,
 					&format!("/runner-configs/{}", path.runner_name),
 					axum::http::Method::DELETE,
-					headers.clone(),
 					Some(&query),
 					Option::<&()>::None,
 				)

@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -26,16 +23,15 @@ use crate::ctx::ApiCtx;
 #[tracing::instrument(skip_all)]
 pub async fn list(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<ListQuery>,
 ) -> Response {
-	match list_inner(ctx, headers, query).await {
+	match list_inner(ctx, query).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
 }
 
-async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result<ListResponse> {
+async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	if ctx.config().is_leader() {
@@ -47,7 +43,6 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 			leader_dc.datacenter_label,
 			"/namespaces",
 			axum::http::Method::GET,
-			headers,
 			Some(&query),
 			Option::<&()>::None,
 		)
@@ -68,10 +63,9 @@ async fn list_inner(ctx: ApiCtx, headers: HeaderMap, query: ListQuery) -> Result
 #[tracing::instrument(skip_all)]
 pub async fn create(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Json(body): Json<CreateRequest>,
 ) -> Response {
-	match create_inner(ctx, headers, body).await {
+	match create_inner(ctx, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -80,7 +74,6 @@ pub async fn create(
 #[tracing::instrument(skip_all)]
 async fn create_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
 	ctx.auth().await?;
@@ -94,7 +87,6 @@ async fn create_inner(
 			leader_dc.datacenter_label,
 			"/namespaces",
 			axum::http::Method::POST,
-			headers,
 			Option::<&()>::None,
 			Some(&body),
 		)

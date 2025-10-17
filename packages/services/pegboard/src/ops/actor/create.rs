@@ -139,7 +139,6 @@ async fn forward_to_datacenter(
 		datacenter_label,
 		"/actors",
 		Method::POST,
-		Default::default(), // Empty headers
 		Some(&rivet_api_types::actors::create::CreateQuery {
 			namespace: namespace.name.clone(),
 		}),
