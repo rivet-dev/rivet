@@ -6,7 +6,7 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		Service::new("api_peer", ServiceKind::ApiPeer, |config, pools| {
 			Box::pin(rivet_api_peer::start(config, pools))
 		}),
-		Service::new("guard", ServiceKind::Standalone, |config, pools| {
+		Service::new("guard", ServiceKind::ApiPublic, |config, pools| {
 			Box::pin(rivet_guard::start(config, pools))
 		}),
 		Service::new(
