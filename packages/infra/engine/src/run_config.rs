@@ -19,7 +19,8 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		}),
 		Service::new(
 			"pegboard_serverless",
-			ServiceKind::Standalone,
+			// There should only be one of these, since it's auto-scaling requests
+			ServiceKind::Singleton,
 			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
 		),
 		Service::new(
