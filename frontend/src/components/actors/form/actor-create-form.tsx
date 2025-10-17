@@ -1,4 +1,7 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
@@ -212,11 +215,34 @@ export const ActorPreview = () => {
 	);
 };
 
+export const PrefillActorName = () => {
+	const prefilled = useRef(false);
+	const { watch } = useFormContext<FormValues>();
+
+	const { data: name, isSuccess } = useSuspenseInfiniteQuery({
+		...useEngineCompatDataProvider().buildsQueryOptions(),
+		select: (data) => data.pages[0].builds[0].name,
+	});
+
+	const watchedValue = watch("name");
+
+	const { setValue } = useFormContext<FormValues>();
+
+	useEffect(() => {
+		if (name && isSuccess && !watchedValue && !prefilled.current) {
+			setValue("name", name);
+			prefilled.current = true;
+		}
+	}, [name, setValue, isSuccess, watchedValue]);
+
+	return null;
+};
+
 export const PrefillRunnerName = () => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
 
-	const { data = [], isSuccess } = useInfiniteQuery(
+	const { data = [], isSuccess } = useSuspenseInfiniteQuery(
 		useEngineCompatDataProvider().runnerNamesQueryOptions(),
 	);
 
@@ -239,6 +265,33 @@ export const PrefillRunnerName = () => {
 	return null;
 };
 
+export const PrefillDatacenter = () => {
+	const prefilled = useRef(false);
+	const { watch } = useFormContext<FormValues>();
+
+	const { data: datacenter, isSuccess } = useSuspenseInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		select: (data) => {
+			return Object.keys(
+				Object.values(data.pages[0].runnerConfigs)[0].datacenters,
+			)[0];
+		},
+	});
+
+	const watchedValue = watch("datacenter");
+
+	const { setValue } = useFormContext<FormValues>();
+
+	useEffect(() => {
+		if (datacenter && isSuccess && !watchedValue && !prefilled.current) {
+			setValue("datacenter", datacenter);
+			prefilled.current = true;
+		}
+	}, [datacenter, setValue, isSuccess, watchedValue]);
+
+	return null;
+};
+
 export const Datacenter = () => {
 	const { control } = useFormContext<FormValues>();
 
@@ -251,6 +304,7 @@ export const Datacenter = () => {
 					<FormLabel>Datacenter</FormLabel>
 					<FormControl>
 						<RegionSelect
+							showAuto={false}
 							value={field.value}
 							onValueChange={field.onChange}
 						/>

@@ -1,5 +1,7 @@
-import { faHourglassClock, Icon } from "@rivet-gg/icons";
+import { faHourglassClock, faPlus, Icon } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { formatRelative } from "date-fns";
 import {
 	Button,
@@ -15,6 +17,7 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
+import { useEngineCompatDataProvider } from "@/components/actors";
 
 interface RunnersTableProps {
 	isLoading?: boolean;
@@ -46,13 +49,7 @@ export function RunnersTable({
 			</TableHeader>
 			<TableBody>
 				{!isLoading && !isError && runners?.length === 0 ? (
-					<TableRow>
-						<TableCell colSpan={7}>
-							<Text className="text-center">
-								There's no runners matching criteria.
-							</Text>
-						</TableCell>
-					</TableRow>
+					<EmptyState />
 				) : null}
 				{isError ? (
 					<TableRow>
@@ -195,5 +192,65 @@ function RunnerStatusBadge(runner: Rivet.Runner) {
 			content={`Running (last ping ${formatRelative(runner.lastPingTs, new Date())})`}
 			trigger={<Ping variant="success" className="relative right-auto" />}
 		/>
+	);
+}
+
+function EmptyState() {
+	const { data: serverlessConfig } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		select(data) {
+			for (const page of data.pages) {
+				for (const rc of Object.values(page.runnerConfigs)) {
+					for (const [dc, config] of Object.entries(rc.datacenters)) {
+						if (config.serverless) {
+							return config;
+						}
+					}
+				}
+			}
+			return null;
+		},
+	});
+
+	const { data: actorNames } = useInfiniteQuery({
+		...useEngineCompatDataProvider().buildsQueryOptions(),
+		select(data) {
+			return data.pages[0].builds.length > 0;
+		},
+	});
+
+	return (
+		<TableRow>
+			<TableCell colSpan={7}>
+				{serverlessConfig ? (
+					<>
+						<Text className="text-center">
+							Runners will be created when an actor is created.
+						</Text>
+						{actorNames ? (
+							<div className="text-center mt-2">
+								<Button
+									asChild
+									size="sm"
+									startIcon={<Icon icon={faPlus} />}
+								>
+									<Link
+										to="."
+										search={{ modal: "create-actor" }}
+									>
+										Create Actor
+									</Link>
+								</Button>
+							</div>
+						) : null}
+					</>
+				) : (
+					<Text className="text-center">
+						There are no runners connected. You will not be able to
+						run actors until a runner appears here.
+					</Text>
+				)}
+			</TableCell>
+		</TableRow>
 	);
 }
