@@ -38,9 +38,9 @@ pub async fn replica_status_change(
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn replica_reconfigure(
-	ctx: &mut WorkflowCtx,
-) -> Result<()> {
+pub async fn replica_reconfigure(ctx: &mut WorkflowCtx) -> Result<()> {
+	ctx.activity(UpdateReplicaUrlsInput {}).await?;
+
 	let notify_out = ctx.activity(NotifyAllReplicasInput {}).await?;
 
 	let replica_id = ctx.config().epoxy_replica_id();
@@ -104,6 +104,37 @@ pub async fn increment_epoch(ctx: &ActivityCtx, _input: &IncrementEpochInput) ->
 	state.config.epoch += 1;
 
 	tracing::info!(new_epoch = state.config.epoch, "incremented epoch");
+
+	Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct UpdateReplicaUrlsInput {}
+
+#[activity(UpdateReplicaUrls)]
+pub async fn update_replica_urls(ctx: &ActivityCtx, _input: &UpdateReplicaUrlsInput) -> Result<()> {
+	let mut state = ctx.state::<State>()?;
+
+	// Update URLs for all replicas based on topology
+	for replica in state.config.replicas.iter_mut() {
+		let Some(dc) = ctx.config().dc_for_label(replica.replica_id as u16) else {
+			tracing::warn!(
+				replica_id = ?replica.replica_id,
+				"datacenter not found for replica, skipping url update"
+			);
+			continue;
+		};
+
+		replica.api_peer_url = dc.peer_url.to_string();
+		replica.guard_url = dc.public_url.to_string();
+
+		tracing::info!(
+			replica_id = ?replica.replica_id,
+			api_peer_url = ?dc.peer_url,
+			guard_url = ?dc.public_url,
+			"updated replica urls"
+		);
+	}
 
 	Ok(())
 }
