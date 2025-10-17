@@ -4,6 +4,7 @@ mod getter_ctx;
 mod inner;
 mod key;
 mod metrics;
+mod purge;
 mod rate_limit;
 mod req_config;
 
@@ -13,5 +14,6 @@ pub use errors::*;
 pub use getter_ctx::*;
 pub use inner::*;
 pub use key::*;
+pub use purge::*;
 pub use rate_limit::*;
 pub use req_config::*;

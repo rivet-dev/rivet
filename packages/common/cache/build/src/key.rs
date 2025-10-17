@@ -80,6 +80,11 @@ impl_to_string!(i64);
 impl_to_string!(i128);
 impl_to_string!(isize);
 
+/// A cache key that's already formatted and doesn't require escaping.
+///
+/// Unlike other types that implement `CacheKey` (which escape special characters like `:` and `\`),
+/// `RawCacheKey` uses the provided string as-is. This is useful when you already have a properly
+/// formatted cache key string or need to preserve the exact format without transformations.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RawCacheKey(String);
 

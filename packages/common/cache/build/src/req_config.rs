@@ -290,7 +290,29 @@ impl RequestConfig {
 			return Ok(());
 		}
 
-		// Delete keys
+		// Publish cache purge message to all services via UPS
+		if let Some(ups) = &self.cache.ups {
+			let message = CachePurgeMessage {
+				base_key: base_key.to_string(),
+				keys: cache_keys
+					.iter()
+					.map(|k| RawCacheKey::from(k.clone()))
+					.collect(),
+			};
+
+			let payload = serde_json::to_vec(&message)?;
+
+			if let Err(err) = ups
+				.publish(CACHE_PURGE_TOPIC, &payload, universalpubsub::PublishOpts::broadcast())
+				.await
+			{
+				tracing::error!(?err, "failed to publish cache purge message");
+			} else {
+				tracing::debug!(base_key, keys_count = cache_keys.len(), "published cache purge message");
+			}
+		}
+
+		// Delete keys locally
 		match self.cache.driver.delete_keys(base_key, cache_keys).await {
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");

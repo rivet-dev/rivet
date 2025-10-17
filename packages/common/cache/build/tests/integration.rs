@@ -7,7 +7,7 @@ use std::{
 use rand::{Rng, seq::IteratorRandom, thread_rng};
 
 async fn build_in_memory_cache() -> rivet_cache::Cache {
-	rivet_cache::CacheInner::new_in_memory("cache-test".to_owned(), 1000)
+	rivet_cache::CacheInner::new_in_memory("cache-test".to_owned(), 1000, None)
 }
 
 async fn test_multiple_keys(cache: rivet_cache::Cache) {
