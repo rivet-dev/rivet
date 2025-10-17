@@ -28,6 +28,7 @@ async fn proposal() {
 					}),
 				}],
 			},
+			purge_cache: false,
 		})
 		.await
 		.unwrap();

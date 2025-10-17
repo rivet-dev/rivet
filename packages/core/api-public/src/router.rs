@@ -3,12 +3,14 @@ use axum::{
 	middleware::{self, Next},
 	response::{IntoResponse, Redirect, Response},
 };
-use reqwest::header::{HeaderMap, AUTHORIZATION};
+use reqwest::header::{AUTHORIZATION, HeaderMap};
 use rivet_api_builder::{create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
-use crate::{actors, ctx, datacenters, health, metadata, namespaces, runner_configs, runners, ui};
+use crate::{
+	actors, ctx, datacenters, health, metadata, namespaces, runner_configs, runners, ui,
+};
 
 #[derive(OpenApi)]
 #[openapi(

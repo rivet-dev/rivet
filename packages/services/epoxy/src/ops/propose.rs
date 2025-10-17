@@ -24,6 +24,8 @@ pub enum CommandError {
 #[derive(Debug)]
 pub struct Input {
 	pub proposal: protocol::Proposal,
+	/// Only works in non-workflow contexts.
+	pub purge_cache: bool,
 }
 
 #[operation]
@@ -67,10 +69,26 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 
 	match path {
 		Path::PathFast(protocol::PathFast { payload }) => {
-			commit(ctx, &config, replica_id, &quorum_members, payload).await
+			commit(
+				ctx,
+				&config,
+				replica_id,
+				&quorum_members,
+				payload,
+				input.purge_cache,
+			)
+			.await
 		}
 		Path::PathSlow(protocol::PathSlow { payload }) => {
-			run_paxos_accept(ctx, &config, replica_id, &quorum_members, payload).await
+			run_paxos_accept(
+				ctx,
+				&config,
+				replica_id,
+				&quorum_members,
+				payload,
+				input.purge_cache,
+			)
+			.await
 		}
 	}
 }
@@ -82,6 +100,7 @@ pub async fn run_paxos_accept(
 	replica_id: ReplicaId,
 	quorum_members: &[ReplicaId],
 	payload: Payload,
+	purge_cache: bool,
 ) -> Result<ProposalResult> {
 	// Clone payload for use after the closure
 	let payload_for_accepts = payload.clone();
@@ -113,6 +132,7 @@ pub async fn run_paxos_accept(
 			replica_id,
 			&quorum_members,
 			payload_for_accepts,
+			purge_cache,
 		)
 		.await
 	} else {
@@ -127,6 +147,7 @@ pub async fn commit(
 	replica_id: ReplicaId,
 	quorum_members: &[ReplicaId],
 	payload: Payload,
+	purge_cache: bool,
 ) -> Result<ProposalResult> {
 	// Commit locally
 	//
