@@ -18,6 +18,7 @@ rivet-types.workspace = true
 rivet-util.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
+universalpubsub.workspace = true
 vbare.workspace = true
 
 namespace.workspace = true
