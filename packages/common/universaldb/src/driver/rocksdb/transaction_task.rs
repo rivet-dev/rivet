@@ -6,10 +6,12 @@ use rocksdb::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+use super::transaction_conflict_tracker::TransactionConflictTracker;
 use crate::{
 	atomic::apply_atomic_op,
 	error::DatabaseError,
 	key_selector::KeySelector,
+	options::ConflictRangeType,
 	tx_ops::Operation,
 	value::{KeyValue, Slice, Values},
 	versionstamp::substitute_versionstamp_if_incomplete,
@@ -27,19 +29,20 @@ pub enum TransactionCommand {
 		response: oneshot::Sender<Result<Option<Slice>>>,
 	},
 	GetRange {
-		begin_key: Vec<u8>,
+		begin: Vec<u8>,
 		begin_or_equal: bool,
 		begin_offset: i32,
-		end_key: Vec<u8>,
+		end: Vec<u8>,
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
 		reverse: bool,
-		iteration: usize,
 		response: oneshot::Sender<Result<Values>>,
 	},
 	Commit {
+		start_version: u64,
 		operations: Vec<Operation>,
+		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 		response: oneshot::Sender<Result<()>>,
 	},
 	GetEstimatedRangeSize {
@@ -47,20 +50,27 @@ pub enum TransactionCommand {
 		end: Vec<u8>,
 		response: oneshot::Sender<Result<i64>>,
 	},
-	Cancel,
 }
 
+// This task may be used for multiple rocksdb txns, in contrast to how postgres is written. This is solely to
+// save on spawning new tasks.
 pub struct TransactionTask {
 	db: Arc<OptimisticTransactionDB>,
+	txn_conflict_tracker: TransactionConflictTracker,
 	receiver: mpsc::Receiver<TransactionCommand>,
 }
 
 impl TransactionTask {
 	pub fn new(
 		db: Arc<OptimisticTransactionDB>,
+		txn_conflict_tracker: TransactionConflictTracker,
 		receiver: mpsc::Receiver<TransactionCommand>,
 	) -> Self {
-		TransactionTask { db, receiver }
+		TransactionTask {
+			db,
+			txn_conflict_tracker,
+			receiver,
+		}
 	}
 
 	pub async fn run(mut self) {
@@ -80,37 +90,39 @@ impl TransactionTask {
 					let _ = response.send(result);
 				}
 				TransactionCommand::GetRange {
-					begin_key,
+					begin,
 					begin_or_equal,
 					begin_offset,
-					end_key,
+					end,
 					end_or_equal,
 					end_offset,
 					limit,
 					reverse,
-					iteration,
 					response,
 				} => {
 					let result = self
 						.handle_get_range(
-							begin_key,
+							begin,
 							begin_or_equal,
 							begin_offset,
-							end_key,
+							end,
 							end_or_equal,
 							end_offset,
 							limit,
 							reverse,
-							iteration,
 						)
 						.await;
 					let _ = response.send(result);
 				}
 				TransactionCommand::Commit {
+					start_version,
 					operations,
+					conflict_ranges,
 					response,
 				} => {
-					let result = self.handle_commit(operations).await;
+					let result = self
+						.handle_commit(start_version, operations, conflict_ranges)
+						.await;
 					let _ = response.send(result);
 				}
 				TransactionCommand::GetEstimatedRangeSize {
@@ -120,10 +132,6 @@ impl TransactionTask {
 				} => {
 					let result = self.handle_get_estimated_range_size(&begin, &end).await;
 					let _ = response.send(result);
-				}
-				TransactionCommand::Cancel => {
-					// Exit the task
-					break;
 				}
 			}
 		}
@@ -297,7 +305,12 @@ impl TransactionTask {
 		}
 	}
 
-	async fn handle_commit(&mut self, operations: Vec<Operation>) -> Result<()> {
+	async fn handle_commit(
+		&mut self,
+		start_version: u64,
+		operations: Vec<Operation>,
+		conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+	) -> Result<()> {
 		// Create a new transaction for this commit
 		let txn = self.create_transaction();
 
@@ -361,18 +374,25 @@ impl TransactionTask {
 			}
 		}
 
-		// Note: RocksDB doesn't natively support conflict ranges like FoundationDB
-		// We would need to implement custom conflict detection here if needed
-		// For now, we'll rely on OptimisticTransactionDB's built-in conflict detection
+		if self
+			.txn_conflict_tracker
+			.check_and_insert(start_version, conflict_ranges)
+			.await
+		{
+			return Err(DatabaseError::NotCommitted.into());
+		}
 
 		// Commit the transaction (this consumes txn)
 		match txn.commit() {
 			Ok(_) => Ok(()),
 			Err(e) => {
+				// If the txn failed due to a rocksdb error, remove it from the conflict tracker
+				self.txn_conflict_tracker.remove(start_version).await;
+
 				let err_str = e.to_string();
 
 				// Check if this is a conflict error
-				if err_str.contains("conflict") {
+				if err_str.contains("conflict") || err_str.contains("Resource busy") {
 					// Return retryable error
 					Err(DatabaseError::NotCommitted.into())
 				} else {
@@ -384,26 +404,25 @@ impl TransactionTask {
 
 	async fn handle_get_range(
 		&mut self,
-		begin_key: Vec<u8>,
+		begin: Vec<u8>,
 		begin_or_equal: bool,
 		begin_offset: i32,
-		end_key: Vec<u8>,
+		end: Vec<u8>,
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
 		reverse: bool,
-		_iteration: usize,
 	) -> Result<Values> {
 		let txn = self.create_transaction();
 		let read_opts = ReadOptions::default();
 
 		// Resolve the begin selector
 		let resolved_begin =
-			self.resolve_key_selector_for_range(&txn, &begin_key, begin_or_equal, begin_offset)?;
+			self.resolve_key_selector_for_range(&txn, &begin, begin_or_equal, begin_offset)?;
 
 		// Resolve the end selector
 		let resolved_end =
-			self.resolve_key_selector_for_range(&txn, &end_key, end_or_equal, end_offset)?;
+			self.resolve_key_selector_for_range(&txn, &end, end_or_equal, end_offset)?;
 
 		// Now execute the range query with resolved keys
 		let iter = txn.iterator_opt(

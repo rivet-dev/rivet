@@ -1,5 +1,8 @@
 use std::{
-	sync::{Arc, Mutex},
+	sync::{
+		Arc,
+		atomic::{AtomicI32, Ordering},
+	},
 	time::Duration,
 };
 
@@ -23,7 +26,7 @@ const GC_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct PostgresDatabaseDriver {
 	pool: Arc<Pool>,
-	max_retries: Arc<Mutex<i32>>,
+	max_retries: AtomicI32,
 	gc_handle: JoinHandle<()>,
 }
 
@@ -162,7 +165,7 @@ impl PostgresDatabaseDriver {
 
 		Ok(PostgresDatabaseDriver {
 			pool: Arc::new(pool),
-			max_retries: Arc::new(Mutex::new(100)),
+			max_retries: AtomicI32::new(100),
 			gc_handle,
 		})
 	}
@@ -182,7 +185,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 	) -> BoxFut<'a, Result<Erased>> {
 		Box::pin(async move {
 			let mut maybe_committed = MaybeCommitted(false);
-			let max_retries = *self.max_retries.lock().unwrap();
+			let max_retries = self.max_retries.load(Ordering::SeqCst);
 
 			for attempt in 0..max_retries {
 				let tx = self.create_trx()?;
@@ -227,7 +230,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 	fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		match opt {
 			DatabaseOption::TransactionRetryLimit(limit) => {
-				*self.max_retries.lock().unwrap() = limit;
+				self.max_retries.store(limit, Ordering::SeqCst);
 				Ok(())
 			}
 		}
