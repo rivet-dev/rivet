@@ -14,13 +14,17 @@ pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> 
 	ensure!(target == "actor", "wrong target");
 
 	// Find actor to route to
-	let actor_id_str = headers.get(X_RIVET_ACTOR).ok_or_else(|| {
-		crate::errors::MissingHeader {
-			header: X_RIVET_ACTOR.to_string(),
-		}
-		.build()
-	})?;
-	let actor_id = Id::parse(actor_id_str.to_str()?)?;
+	let actor_id_str = headers
+		.get(X_RIVET_ACTOR)
+		.ok_or_else(|| {
+			crate::errors::MissingHeader {
+				header: X_RIVET_ACTOR.to_string(),
+			}
+			.build()
+		})?
+		.to_str()
+		.context("invalid x-rivet-actor header")?;
+	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
 
 	// Create a hash using target, actor_id, and path
 	let mut hasher = DefaultHasher::new();

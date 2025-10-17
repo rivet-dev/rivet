@@ -24,16 +24,12 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
 		),
 		// Core services
-		Service::new(
-			"tracing_reconfigure",
-			ServiceKind::Core,
-			|config, pools| Box::pin(rivet_tracing_reconfigure::start(config, pools)),
-		),
-		Service::new(
-			"cache_purge",
-			ServiceKind::Core,
-			|config, pools| Box::pin(rivet_cache_purge::start(config, pools)),
-		),
+		Service::new("tracing_reconfigure", ServiceKind::Core, |config, pools| {
+			Box::pin(rivet_tracing_reconfigure::start(config, pools))
+		}),
+		Service::new("cache_purge", ServiceKind::Core, |config, pools| {
+			Box::pin(rivet_cache_purge::start(config, pools))
+		}),
 	];
 
 	Ok(RunConfigData { services })

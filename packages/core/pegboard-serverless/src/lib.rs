@@ -28,7 +28,7 @@ const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-s
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
 const X_RIVET_NAMESPACE_ID: HeaderName = HeaderName::from_static("x-rivet-namespace-id");
 
-const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(10);
+const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
 struct OutboundConnection {
 	handle: JoinHandle<()>,
@@ -387,7 +387,6 @@ async fn outbound_handler(
 		_ = shutdown_rx => {}
 	}
 
-	// Stop runner
 	draining.store(true, Ordering::SeqCst);
 
 	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
@@ -395,7 +394,7 @@ async fn outbound_handler(
 		.await?;
 
 	if let Some(runner_id) = runner_id {
-		stop_runner(ctx, runner_id).await?;
+		drain_runner(ctx, runner_id).await?;
 	}
 
 	// Continue waiting on req while draining
@@ -421,7 +420,7 @@ async fn outbound_handler(
 								let runner_id_local =
 									Id::parse(&init.runner_id).context("invalid runner id")?;
 								runner_id = Some(runner_id_local);
-								stop_runner(ctx, runner_id_local).await?;
+								drain_runner(ctx, runner_id_local).await?;
 							}
 						}
 					}
@@ -440,7 +439,6 @@ async fn outbound_handler(
 		_ = tokio::time::sleep(DRAIN_GRACE_PERIOD) => {
 			tracing::debug!("reached drain grace period before runner shut down")
 		}
-
 	}
 
 	// Close connection
@@ -456,7 +454,7 @@ async fn outbound_handler(
 	Ok(())
 }
 
-async fn stop_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
+async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
 		.signal(pegboard::workflows::runner::Forward {
 			inner: protocol::ToServer::ToServerStopping,
@@ -484,7 +482,7 @@ async fn stop_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 
 /// Send a stop message to the client.
 ///
-/// This will close the runner's WebSocket..
+/// This will close the runner's WebSocket.
 async fn publish_to_client_stop(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let receiver_subject =
 		pegboard::pubsub_subjects::RunnerReceiverSubject::new(runner_id).to_string();

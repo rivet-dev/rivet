@@ -61,6 +61,7 @@ impl Default for Topology {
 					crate::defaults::ports::API_PEER
 				))
 				.unwrap(),
+				proxy_url: None,
 				valid_hosts: None,
 			}],
 		}
@@ -77,6 +78,9 @@ pub struct Datacenter {
 	pub public_url: Url,
 	/// URL of the api-peer service
 	pub peer_url: Url,
+	/// URL of the guard service that other datacenters can access privately. Goes to the same place as
+	// public_url.
+	pub proxy_url: Option<Url>,
 	/// List of hosts that are valid to connect to this region with. This is used in regional
 	/// endpoints to validate that incoming requests to this datacenter are going to a
 	/// region-specific domain.
@@ -98,14 +102,18 @@ impl Datacenter {
 		}
 	}
 
-	pub fn public_url_host(&self) -> Result<&str> {
-		self.public_url.host_str().context("no host")
+	pub fn proxy_url(&self) -> &Url {
+		self.proxy_url.as_ref().unwrap_or(&self.public_url)
 	}
 
-	pub fn public_url_port(&self) -> Result<u16> {
-		self.public_url
+	pub fn proxy_url_host(&self) -> Result<&str> {
+		self.proxy_url().host_str().context("no host")
+	}
+
+	pub fn proxy_url_port(&self) -> Result<u16> {
+		self.proxy_url()
 			.port()
-			.or_else(|| match self.public_url.scheme() {
+			.or_else(|| match self.proxy_url().scheme() {
 				"http" => Some(80),
 				"https" => Some(443),
 				_ => None,

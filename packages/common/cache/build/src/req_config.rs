@@ -303,12 +303,20 @@ impl RequestConfig {
 			let payload = serde_json::to_vec(&message)?;
 
 			if let Err(err) = ups
-				.publish(CACHE_PURGE_TOPIC, &payload, universalpubsub::PublishOpts::broadcast())
+				.publish(
+					CACHE_PURGE_TOPIC,
+					&payload,
+					universalpubsub::PublishOpts::broadcast(),
+				)
 				.await
 			{
 				tracing::error!(?err, "failed to publish cache purge message");
 			} else {
-				tracing::debug!(base_key, keys_count = cache_keys.len(), "published cache purge message");
+				tracing::debug!(
+					base_key,
+					keys_count = cache_keys.len(),
+					"published cache purge message"
+				);
 			}
 		}
 
