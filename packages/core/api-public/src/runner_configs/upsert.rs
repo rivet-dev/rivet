@@ -125,18 +125,18 @@ async fn upsert_inner(
 		}
 	}
 
+	// Resolve namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
 	// Update runner metadata
 	//
 	// This allows us to populate the actor names immediately upon configuring a serverless runner
 	if let Some((url, metadata_headers)) = serverless_config {
-		// Resolve namespace
-		let namespace = ctx
-			.op(namespace::ops::resolve_for_name_global::Input {
-				name: query.namespace.clone(),
-			})
-			.await?
-			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
 		if let Err(err) = utils::refresh_runner_config_metadata(
 			ctx.clone(),
 			namespace.namespace_id,
@@ -149,6 +149,16 @@ async fn upsert_inner(
 			tracing::warn!(?err, runner_name = ?path.runner_name, "failed to refresh runner config metadata");
 		}
 	}
+
+	// Purge cache
+	ctx.cache()
+		.clone()
+		.request()
+		.purge(
+			"namespace.runner_config.get",
+			vec![(namespace.namespace_id, path.runner_name.clone())],
+		)
+		.await?;
 
 	Ok(UpsertResponse {})
 }
