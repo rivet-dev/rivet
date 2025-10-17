@@ -1,2583 +1,2563 @@
 {
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 1,
-  "id": 3,
-  "links": [],
-  "panels": [
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "{{workflow_name}}",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_active'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Running Workflows",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "workflow_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\workflow_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "{{workflow_name}}",
-          "meta": {},
-          "pluginVersion": "4.10.2",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_sleeping'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Sleeping Workflows",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "workflow_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\workflow_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "{{workflow_name}}",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Dead Workflows",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "workflow_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\workflow_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "({{workflow_name}}) {{error_code}}",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name, error_code\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Dead Workflow Errors",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "workflow_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\workflow_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": false,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "__auto",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    count(*) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_worker_last_ping'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Active Workers",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "datacenter_id",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\datacenter_id"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 5,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "instant": false,
-          "legendFormat": "{{signal_name}}",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['signal_name'] as signal_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_signal_pending'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, signal_name\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Pending Signals",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "signal_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\signal_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "id": 10,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size",
-            "value": ""
-          },
-          "yBuckets": {
-            "mode": "size",
-            "scale": {
-              "log": 2,
-              "type": "log"
-            },
-            "value": ""
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "hide": false,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_recv_lag'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Signal Receive Lag",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
-      "id": 11,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n  MetricName = 'rivet_gasoline_signal_pull_duration'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY\n  Time, le\nORDER BY\n  Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Pull Signals Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 0.1,
-            "axisSoftMin": 0,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 32
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": false,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "instant": false,
-          "legendFormat": "{{worker_instance_id}}",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Last Pull Workflows Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "worker_instance_id",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\worker_instance_id"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "axisSoftMax": 0.1,
-            "axisSoftMin": 0,
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 32
-      },
-      "id": 14,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": false,
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "instant": false,
-          "legendFormat": "{{worker_instance_id}}",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Last Pull Workflows History Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "worker_instance_id",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\worker_instance_id"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 40
-      },
-      "id": 23,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Pull Workflows Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 40
-      },
-      "id": 24,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_history_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Pull Workflows History Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 48
-      },
-      "id": 16,
-      "panels": [],
-      "title": "Steps",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 49
-      },
-      "id": 12,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_activity_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Activity Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 49
-      },
-      "id": 9,
-      "interval": "15s",
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Mean",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "legendFormat": "{{activity_name}}: {{error_code}}",
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['activity_name'] as activity_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_gasoline_activity_errors'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, activity_name, error_code\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Activity Error Rate",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "activity_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\activity_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 58
-      },
-      "id": 21,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Loop Upsert Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ev/s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 58
-      },
-      "id": 25,
-      "interval": "15s",
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "sortBy": "Mean",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "legendFormat": "{{workflow_name}}",
-          "range": true,
-          "rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Count) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND Attributes['workflow_name'] LIKE '${workflow_name:regex}'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
-          "refId": "A"
-        }
-      ],
-      "title": "Loop Events Per Second",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "workflow_name",
-            "emptyValue": "zero",
-            "rowField": "time",
-            "valueField": "value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "time\\workflow_name"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 67
-      },
-      "id": 17,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_message_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Message Send Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 67
-      },
-      "id": 20,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Signal Send Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 76
-      },
-      "id": 22,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_find_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Find Workflows Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 76
-      },
-      "id": 19,
-      "interval": "15s",
-      "options": {
-        "calculate": false,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 0,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdBu",
-          "steps": 64
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": true
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "max": "60",
-          "min": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "11.5.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorMode": "code",
-          "editorType": "sql",
-          "format": 1,
-          "meta": {},
-          "pluginVersion": "4.10.1",
-          "queryType": "table",
-          "rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_workflow_dispatch_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-          "refId": "A"
-        }
-      ],
-      "title": "Sub Workflow Dispatch Duration",
-      "transformations": [
-        {
-          "id": "groupingToMatrix",
-          "options": {
-            "columnField": "le",
-            "emptyValue": "zero",
-            "rowField": "Time",
-            "valueField": "count"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "time",
-                "targetField": "Time\\le"
-              }
-            ],
-            "fields": {}
-          }
-        }
-      ],
-      "type": "heatmap"
-    }
-  ],
-  "preload": false,
-  "refresh": "5s",
-  "schemaVersion": 40,
-  "tags": [],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "clickhouse"
-        },
-        "definition": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
-        "includeAll": true,
-        "label": "Cluster ID",
-        "multi": true,
-        "name": "cluster_id",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "rawSql": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
-          "refId": "ClickHouseVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "clickhouse"
-        },
-        "definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
-        "includeAll": true,
-        "label": "Datacenter ID",
-        "multi": true,
-        "name": "datacenter_id",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "rawSql": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
-          "refId": "ClickHouseVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "clickhouse"
-        },
-        "definition": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
-        "includeAll": true,
-        "label": "Workflow Name",
-        "multi": true,
-        "name": "workflow_name",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "rawSql": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
-          "refId": "ClickHouseVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-5m",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "",
-  "title": "Gasoline",
-  "uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
-  "version": 1,
-  "weekStart": ""
+	"annotations": {
+		"list": [
+			{
+				"builtIn": 1,
+				"datasource": {
+					"type": "grafana",
+					"uid": "-- Grafana --"
+				},
+				"enable": true,
+				"hide": true,
+				"iconColor": "rgba(0, 211, 255, 1)",
+				"name": "Annotations & Alerts",
+				"type": "dashboard"
+			}
+		]
+	},
+	"editable": true,
+	"fiscalYearStartMonth": 0,
+	"graphTooltip": 1,
+	"id": 3,
+	"links": [],
+	"panels": [
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 0
+			},
+			"id": 5,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_active'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Running Workflows",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "workflow_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\workflow_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 0
+			},
+			"id": 3,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"meta": {},
+					"pluginVersion": "4.10.2",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_sleeping'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Sleeping Workflows",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "workflow_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\workflow_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 8
+			},
+			"id": 1,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "{{workflow_name}}",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Dead Workflows",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "workflow_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\workflow_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"description": "",
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 8
+			},
+			"id": 6,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "({{workflow_name}}) {{error_code}}",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name, error_code\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Dead Workflow Errors",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "workflow_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\workflow_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 16
+			},
+			"id": 2,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": false,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "__auto",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    count(*) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_worker_last_ping'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Active Workers",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "datacenter_id",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\datacenter_id"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 5,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 16
+			},
+			"id": 4,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"legendFormat": "{{signal_name}}",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['signal_name'] as signal_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_signal_pending'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, signal_name\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Pending Signals",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "signal_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\signal_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 24
+			},
+			"id": 10,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size",
+						"value": ""
+					},
+					"yBuckets": {
+						"mode": "size",
+						"scale": {
+							"log": 2,
+							"type": "log"
+						},
+						"value": ""
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"hide": false,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_recv_lag'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Signal Receive Lag",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 24
+			},
+			"id": 11,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n  MetricName = 'rivet_gasoline_signal_pull_duration'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY\n  Time, le\nORDER BY\n  Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Pull Signals Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 0.1,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "s"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 32
+			},
+			"id": 13,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": false,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"instant": false,
+					"legendFormat": "{{worker_instance_id}}",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Last Pull Workflows Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "worker_instance_id",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\worker_instance_id"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMax": 0.1,
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "s"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 32
+			},
+			"id": 14,
+			"options": {
+				"legend": {
+					"calcs": ["lastNotNull"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": false,
+					"sortBy": "Last *",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"instant": false,
+					"legendFormat": "{{worker_instance_id}}",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Last Pull Workflows History Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "worker_instance_id",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\worker_instance_id"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 40
+			},
+			"id": 23,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Pull Workflows Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 40
+			},
+			"id": 24,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_history_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Pull Workflows History Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"collapsed": false,
+			"gridPos": {
+				"h": 1,
+				"w": 24,
+				"x": 0,
+				"y": 48
+			},
+			"id": 16,
+			"panels": [],
+			"title": "Steps",
+			"type": "row"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 49
+			},
+			"id": 12,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_activity_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Activity Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "reqps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 49
+			},
+			"id": 9,
+			"interval": "15s",
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"legendFormat": "{{activity_name}}: {{error_code}}",
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['activity_name'] as activity_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_gasoline_activity_errors'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, activity_name, error_code\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Activity Error Rate",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "activity_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\activity_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 58
+			},
+			"id": 21,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Loop Upsert Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green"
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "ev/s"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 58
+			},
+			"id": 25,
+			"interval": "15s",
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Count) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND Attributes['workflow_name'] LIKE '${workflow_name:regex}'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"refId": "A"
+				}
+			],
+			"title": "Loop Events Per Second",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "workflow_name",
+						"emptyValue": "zero",
+						"rowField": "time",
+						"valueField": "value"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "time\\workflow_name"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 67
+			},
+			"id": 17,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_message_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Message Send Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 67
+			},
+			"id": 20,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Signal Send Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 76
+			},
+			"id": 22,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_find_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Find Workflows Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 76
+			},
+			"id": 19,
+			"interval": "15s",
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"meta": {},
+					"pluginVersion": "4.10.1",
+					"queryType": "table",
+					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_workflow_dispatch_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"refId": "A"
+				}
+			],
+			"title": "Sub Workflow Dispatch Duration",
+			"transformations": [
+				{
+					"id": "groupingToMatrix",
+					"options": {
+						"columnField": "le",
+						"emptyValue": "zero",
+						"rowField": "Time",
+						"valueField": "count"
+					}
+				},
+				{
+					"id": "convertFieldType",
+					"options": {
+						"conversions": [
+							{
+								"destinationType": "time",
+								"targetField": "Time\\le"
+							}
+						],
+						"fields": {}
+					}
+				}
+			],
+			"type": "heatmap"
+		}
+	],
+	"preload": false,
+	"refresh": "5s",
+	"schemaVersion": 40,
+	"tags": [],
+	"templating": {
+		"list": [
+			{
+				"current": {
+					"text": ["All"],
+					"value": ["$__all"]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
+				"includeAll": true,
+				"label": "Cluster ID",
+				"multi": true,
+				"name": "cluster_id",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"rawSql": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
+					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"sort": 1,
+				"type": "query"
+			},
+			{
+				"current": {
+					"text": ["All"],
+					"value": ["$__all"]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
+				"includeAll": true,
+				"label": "Datacenter ID",
+				"multi": true,
+				"name": "datacenter_id",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"rawSql": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
+					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"sort": 1,
+				"type": "query"
+			},
+			{
+				"current": {
+					"text": ["All"],
+					"value": ["$__all"]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
+				"includeAll": true,
+				"label": "Workflow Name",
+				"multi": true,
+				"name": "workflow_name",
+				"options": [],
+				"query": {
+					"qryType": 1,
+					"rawSql": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
+					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
+				},
+				"refresh": 1,
+				"regex": "",
+				"type": "query"
+			},
+			{
+				"current": {
+					"text": "30",
+					"value": "30"
+				},
+				"hide": 2,
+				"label": "Metric Export Interval (seconds)",
+				"name": "metric_interval",
+				"query": "30",
+				"skipUrlSync": true,
+				"type": "constant"
+			}
+		]
+	},
+	"time": {
+		"from": "now-5m",
+		"to": "now"
+	},
+	"timepicker": {},
+	"timezone": "",
+	"title": "Gasoline",
+	"uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
+	"version": 1,
+	"weekStart": ""
 }
