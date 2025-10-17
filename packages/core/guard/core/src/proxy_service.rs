@@ -945,7 +945,7 @@ impl ProxyService {
 							if !err.is_connect() || attempts >= max_attempts {
 								tracing::error!(?err, "Request error after {} attempts", attempts);
 								return Err(errors::UpstreamError(
-									"failed to connect to runner. Make sure your runners are healthy and the provided runner address is reachable by Rivet."
+									"Failed to connect to runner. Make sure your runners are healthy and do not have any crash logs."
 										.to_string(),
 								)
 								.build());

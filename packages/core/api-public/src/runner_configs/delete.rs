@@ -67,5 +67,23 @@ async fn delete_inner(
 		}
 	}
 
+	// Resolve namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
+	// Purge cache
+	ctx.cache()
+		.clone()
+		.request()
+		.purge(
+			"namespace.runner_config.get",
+			vec![(namespace.namespace_id, path.runner_name.clone())],
+		)
+		.await?;
+
 	Ok(DeleteResponse {})
 }
