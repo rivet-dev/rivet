@@ -5,6 +5,8 @@ use tokio::sync::{Notify, OnceCell};
 mod metrics;
 mod traces;
 
+pub use traces::reload_log_filter;
+
 static SHUTDOWN: OnceCell<Arc<Notify>> = OnceCell::const_new();
 
 /// Returns `None` if the runtime was shut down manually.

@@ -22,6 +22,9 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
 		),
+		Service::new("tracing_reconfigure", ServiceKind::Standalone, |config, pools| {
+			Box::pin(rivet_tracing_reconfigure::start(config, pools))
+		}),
 	];
 
 	Ok(RunConfigData { services })

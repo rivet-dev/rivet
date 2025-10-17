@@ -2,13 +2,23 @@
 
 use console_subscriber;
 use opentelemetry::trace::TracerProvider;
-use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use rivet_metrics::OtelProviderGuard;
+use std::sync::OnceLock;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
-use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, reload, util::SubscriberInitExt};
+
+type ReloadHandle = reload::Handle<EnvFilter, tracing_subscriber::Registry>;
+
+static RELOAD_HANDLE: OnceLock<ReloadHandle> = OnceLock::new();
 
 /// Initialize tracing-subscriber
 pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
+	// Create reloadable env filter for RUST_LOG
+	let (reload_layer, reload_handle) = reload::Layer::new(build_filter_from_env_var("RUST_LOG"));
+
+	// Store handle globally for later reloading
+	let _ = RELOAD_HANDLE.set(reload_handle);
+
 	let registry = tracing_subscriber::registry();
 
 	// Build and apply otel layers to the registry if otel is enabled
@@ -17,10 +27,10 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 			let tracer = providers.tracer_provider.tracer("tracing-otel-subscriber");
 
 			let otel_trace_layer =
-				OpenTelemetryLayer::new(tracer).with_filter(env_filter("RUST_TRACE"));
+				OpenTelemetryLayer::new(tracer).with_filter(build_filter_from_env_var("RUST_TRACE"));
 
 			let otel_metric_layer = MetricsLayer::new(providers.meter_provider.clone())
-				.with_filter(env_filter("RUST_TRACE"));
+				.with_filter(build_filter_from_env_var("RUST_TRACE"));
 
 			(
 				Some(otel_trace_layer),
@@ -31,6 +41,7 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	};
 
 	let registry = registry
+		.with(reload_layer)
 		.with(otel_metric_layer)
 		.with(otel_trace_layer);
 
@@ -61,28 +72,50 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 				.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
 				.with_module_path(std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"))
 				.with_ansi_color(std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"))
-				.layer()
-				.with_filter(env_filter("RUST_LOG")),
+				.layer(),
 		)
 		.init()
 }
 
-fn env_filter(env_var: &str) -> EnvFilter {
-	// Create env filter
+/// Build an EnvFilter from a filter specification string
+fn build_filter_from_spec(filter_spec: &str) -> anyhow::Result<EnvFilter> {
+	// Create env filter with defaults
 	let mut env_filter = EnvFilter::default()
 		// Default filter
-		.add_directive("info".parse().unwrap())
+		.add_directive("info".parse()?)
 		// Disable verbose logs
-		.add_directive("tokio_cron_scheduler=warn".parse().unwrap())
-		.add_directive("tokio=warn".parse().unwrap())
-		.add_directive("hyper=warn".parse().unwrap())
-		.add_directive("h2=warn".parse().unwrap());
+		.add_directive("tokio_cron_scheduler=warn".parse()?)
+		.add_directive("tokio=warn".parse()?)
+		.add_directive("hyper=warn".parse()?)
+		.add_directive("h2=warn".parse()?);
 
-	if let Ok(filter) = std::env::var(env_var) {
-		for s in filter.split(',').filter(|x| !x.is_empty()) {
-			env_filter = env_filter.add_directive(s.parse().expect("invalid env filter"));
-		}
+	// Add user-provided directives
+	for s in filter_spec.split(',').filter(|x| !x.is_empty()) {
+		env_filter = env_filter.add_directive(s.parse()?);
 	}
 
-	env_filter
+	Ok(env_filter)
+}
+
+/// Build an EnvFilter by reading from an environment variable
+fn build_filter_from_env_var(env_var_name: &str) -> EnvFilter {
+	let filter_spec = std::env::var(env_var_name).unwrap_or_default();
+	build_filter_from_spec(&filter_spec).expect("invalid env filter")
+}
+
+/// Reload the log filter with a new specification
+pub fn reload_log_filter(filter_spec: &str) -> anyhow::Result<()> {
+	let handle = RELOAD_HANDLE
+		.get()
+		.ok_or_else(|| anyhow::anyhow!("reload handle not initialized"))?;
+
+	// Build the new filter
+	let env_filter = build_filter_from_spec(filter_spec)?;
+
+	// Reload the filter
+	handle.reload(env_filter)?;
+
+	tracing::info!(?filter_spec, "reloaded log filter");
+
+	Ok(())
 }
