@@ -109,7 +109,7 @@ async fn tick(
 		let runner_config = runner_configs.iter().find(|rc| rc.namespace_id == *ns_id);
 
 		let Some(runner_config) = runner_config else {
-			tracing::warn!(
+			tracing::debug!(
 				?ns_id,
 				?runner_name,
 				"runner config not found, likely deleted"

@@ -24,7 +24,6 @@ opentelemetry-stdout.workspace = true
 opentelemetry_sdk.workspace = true
 tracing-opentelemetry.workspace = true
 rivet-env.workspace = true
-opentelemetry-appender-tracing.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
