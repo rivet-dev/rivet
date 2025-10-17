@@ -4212,7 +4212,25 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "universalpubsub",
  "uuid",
+]
+
+[[package]]
+name = "rivet-cache-purge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "gasoline",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-pools",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "universalpubsub",
 ]
 
 [[package]]
@@ -4290,6 +4308,7 @@ dependencies = [
  "rivet-api-public",
  "rivet-bootstrap",
  "rivet-cache",
+ "rivet-cache-purge",
  "rivet-config",
  "rivet-guard",
  "rivet-logs",

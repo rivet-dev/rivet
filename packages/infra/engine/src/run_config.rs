@@ -23,10 +23,16 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Singleton,
 			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
 		),
+		// Core services
 		Service::new(
 			"tracing_reconfigure",
-			ServiceKind::Standalone,
+			ServiceKind::Core,
 			|config, pools| Box::pin(rivet_tracing_reconfigure::start(config, pools)),
+		),
+		Service::new(
+			"cache_purge",
+			ServiceKind::Core,
+			|config, pools| Box::pin(rivet_cache_purge::start(config, pools)),
 		),
 	];
 
