@@ -79,9 +79,15 @@ pub async fn epoxy_explicit_prepare(
 	let result = match analyze_prepare_responses(&highest_ballot_responses, instance) {
 		PrepareDecision::Commit(payload) => {
 			// EPaxos Step 29: Run Commit phase
-			let result =
-				crate::ops::propose::commit(ctx, &config, replica_id, &quorum_members, payload)
-					.await?;
+			let result = crate::ops::propose::commit(
+				ctx,
+				&config,
+				replica_id,
+				&quorum_members,
+				payload,
+				false,
+			)
+			.await?;
 			convert_proposal_result(result)
 		}
 		PrepareDecision::Accept(payload) => {
@@ -92,6 +98,7 @@ pub async fn epoxy_explicit_prepare(
 				replica_id,
 				&quorum_members,
 				payload,
+				false,
 			)
 			.await?;
 			convert_proposal_result(result)
@@ -324,7 +331,12 @@ async fn restart_phase1(
 	);
 
 	// Call the propose operation to restart consensus from Phase 1
-	let result = ctx.op(crate::ops::propose::Input { proposal }).await?;
+	let result = ctx
+		.op(crate::ops::propose::Input {
+			proposal,
+			purge_cache: false,
+		})
+		.await?;
 
 	// Convert ProposalResult to ExplicitPrepareResult
 	match result {

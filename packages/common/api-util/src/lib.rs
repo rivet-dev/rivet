@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use axum::{body::Body, response::Response};
 use futures_util::StreamExt;
 use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 
 mod errors;
