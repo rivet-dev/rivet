@@ -321,6 +321,31 @@ impl RequestConfig {
 		}
 
 		// Delete keys locally
+		let raw_keys = cache_keys
+			.into_iter()
+			.map(RawCacheKey::from)
+			.collect::<Vec<_>>();
+		self.purge_local(base_key, raw_keys).await
+	}
+
+	/// Purges keys from the local cache without publishing to NATS.
+	/// This is used by the cache-purge service to avoid recursive publishing.
+	#[tracing::instrument(err, skip(keys))]
+	pub async fn purge_local(
+		self,
+		base_key: impl AsRef<str> + Debug,
+		keys: Vec<RawCacheKey>,
+	) -> Result<()> {
+		let base_key = base_key.as_ref();
+
+		if keys.is_empty() {
+			return Ok(());
+		}
+
+		// Convert RawCacheKey to String for driver
+		let cache_keys = keys.into_iter().map(|k| k.cache_key()).collect::<Vec<_>>();
+
+		// Delete keys locally
 		match self.cache.driver.delete_keys(base_key, cache_keys).await {
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
