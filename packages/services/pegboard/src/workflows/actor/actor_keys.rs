@@ -203,6 +203,7 @@ pub async fn propose(ctx: &ActivityCtx, input: &ProposeInput) -> Result<Proposal
 					}),
 				}],
 			},
+			purge_cache: false,
 		})
 		.await?;
 

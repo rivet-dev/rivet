@@ -14,6 +14,7 @@ pub async fn execute_command(
 			proposal: protocol::Proposal {
 				commands: vec![protocol::Command { kind: command }],
 			},
+			purge_cache: false,
 		})
 		.await?;
 

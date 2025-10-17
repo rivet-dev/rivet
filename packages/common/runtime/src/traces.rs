@@ -32,10 +32,7 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 			let otel_metric_layer = MetricsLayer::new(providers.meter_provider.clone())
 				.with_filter(build_filter_from_env_var("RUST_TRACE"));
 
-			(
-				Some(otel_trace_layer),
-				Some(otel_metric_layer),
-			)
+			(Some(otel_trace_layer), Some(otel_metric_layer))
 		}
 		None => (None, None),
 	};
