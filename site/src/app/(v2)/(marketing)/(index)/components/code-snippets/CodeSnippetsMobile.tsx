@@ -108,7 +108,7 @@ function ExampleListItem({ example, icon, isExpanded, onToggle }: ExampleListIte
 					</div>
 
 					{/* GitHub button - only shown when expanded */}
-					<div className="p-3 border-t border-white/15 bg-white/[0.02]">
+					{/* <div className="p-3 border-t border-white/15 bg-white/[0.02]">
 						<button
 							onClick={handleOpenGithub}
 							className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white/80 hover:text-white hover:bg-white/8 border border-white/15 hover:border-white/25 rounded-md transition-all duration-200"
@@ -116,7 +116,7 @@ function ExampleListItem({ example, icon, isExpanded, onToggle }: ExampleListIte
 							<Icon icon={faGithub} className="w-3.5 h-3.5" />
 							View on GitHub
 						</button>
-					</div>
+					</div> */}
 				</div>
 			)}
 		</div>

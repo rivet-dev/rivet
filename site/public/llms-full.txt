@@ -4400,24 +4400,31 @@ Complete example Next.js + RivetKit app.
 - Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a self-hosted [Rivet Engine](/docs/general/self-hosting)
 - A Next.js app integrated with RivetKit
   - See the [Next.js quickstart](/docs/actors/quickstart/next-js/) or [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js) to get started
+  - Your project should have the following files:
+    - `src/app/api/rivet/[...all]/route.ts`
+    - `src/rivet/registry.ts`
 
-Your project should have the following files:
+Update your Rivet API route handler at `src/app/api/rivet/[...all]/route.ts` to the `maxDuration` configuration:
 
-- `src/app/api/rivet/[...all]/route.ts`
-- `src/rivet/registry.ts`
+```ts }
+// Set based on your Vercel plan:
+// - Hobby: 60
+// - Pro: 300
+// - Enterprise: 900
+const maxDuration = 60;
 
-If your project is not integrated with RivetKit yet, follow the [Next.js quickstart guide](/docs/actors/quickstart/next-js/) or see the [Next.js example](https://github.com/rivet-dev/rivetkit/tree/main/examples/next-js).
+const  = toNextHandler(registry);
+```
 
-Create or update your `vercel.json`:
+Disable Fluid Compute in your `vercel.json`:
 
 ```json }
 
-    }
-    // ... rest of vercel.json
-}
 ```
 
-1. Connect your GitHub account to Vercel
+Rivet provides its own intelligent load balancing mechanism.
+
+1. Connect your GitHub project to Vercel
 2. Select your repository containing your Next.js + RivetKit app
 3. Vercel will deploy your app
 
@@ -4426,7 +4433,8 @@ More information on deployments are available in [Vercel's docs](https://vercel.
 1. Visit the [Rivet dashboard](https://dashboard.rivet.dev)
 2. Navigate to _Connect > Vercel_
 3. Skip to the _Deploy to Vercel_ step
-4. Input your deployed Vercel site URL (e.g. `https://my-app.vercel.app/api/rivet`)
+4. Input your deployed Vercel site URL
+	- e.g. `https://my-app.vercel.app/api/rivet`
 5. Once it shows as successfully connected, click _Done_
 
 Your Vercel Functions deployment is now connected to Rivet.

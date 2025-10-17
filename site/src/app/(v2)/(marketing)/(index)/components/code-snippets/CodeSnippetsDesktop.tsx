@@ -300,7 +300,7 @@ function BottomBar({ activeExample }: BottomBarProps) {
 
 	return (
 		<div className="flex items-center justify-start">
-			<BottomBarButton onClick={handleOpenGithub} icon={faGithub}>
+			{/* <BottomBarButton onClick={handleOpenGithub} icon={faGithub}>
 				View on GitHub
 			</BottomBarButton>
 			<BottomBarButton onClick={handleDownloadZip} icon={faFileZip}>
@@ -308,7 +308,7 @@ function BottomBar({ activeExample }: BottomBarProps) {
 			</BottomBarButton>
 			<BottomBarButton onClick={handleOpenStackBlitz} icon={faBolt}>
 				Open in StackBlitz
-			</BottomBarButton>
+			</BottomBarButton> */}
 		</div>
 	);
 }
@@ -483,7 +483,7 @@ export default function CodeSnippetsDesktop({
 			</div>
 
 			{/* Bottom bar - outside the inner rect */}
-			<BottomBar activeExample={activeExample} />
+			{/* <BottomBar activeExample={activeExample} /> */}
 		</div>
 	);
 }

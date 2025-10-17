@@ -44,19 +44,19 @@ export function PlatformIcons() {
 		{
 			href: "/docs/actors/quickstart/backend",
 			src: nodejsLogo,
-			alt: "Node.js",
+			alt: "Node.js (Backend)",
 			tooltip: "Node.js",
 		},
 		{
 			href: "/docs/actors/quickstart/backend",
 			src: bunLogo,
-			alt: "Bun",
+			alt: "Bun (Backend)",
 			tooltip: "Bun",
 		},
 		{
 			href: "/docs/actors/quickstart/backend",
 			src: denoLogo,
-			alt: "Deno",
+			alt: "Deno (Backend)",
 			tooltip: "Deno",
 		},
 		"SEPARATOR",
