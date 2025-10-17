@@ -2,6 +2,7 @@ import {
 	useMutation,
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
+	useSuspenseQuery,
 } from "@tanstack/react-query";
 import * as EditRunnerConfigForm from "@/app/forms/edit-runner-config-form";
 import { type DialogContentProps, Frame } from "@/components";
@@ -24,8 +25,8 @@ export default function EditRunnerConfigFrameContent({
 		pages: Infinity,
 	});
 
-	const { data } = useSuspenseInfiniteQuery({
-		...provider.runnerConfigsQueryOptions(),
+	const { data } = useSuspenseQuery({
+		...provider.runnerConfigQueryOptions(name),
 	});
 
 	const { mutateAsync } = useMutation({
@@ -35,7 +36,7 @@ export default function EditRunnerConfigFrameContent({
 		},
 	});
 
-	const datacenters = data.find(([id]) => id === name)?.[1].datacenters;
+	const datacenters = data.datacenters;
 	const config = datacenters?.[dc].serverless;
 
 	if (!config) {
@@ -52,8 +53,9 @@ export default function EditRunnerConfigFrameContent({
 				await mutateAsync({
 					name,
 					config: {
-						...datacenters,
+						...(datacenters || {}),
 						[dc]: {
+							...(datacenters[dc] || {}),
 							serverless: {
 								...values,
 								headers: Object.fromEntries(
