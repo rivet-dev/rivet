@@ -4115,6 +4115,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "universalpubsub",
  "utoipa",
  "uuid",
 ]
@@ -4310,6 +4311,7 @@ dependencies = [
  "rivet-telemetry",
  "rivet-term",
  "rivet-test-deps",
+ "rivet-tracing-reconfigure",
  "rivet-util",
  "rivet-workflow-worker",
  "rstest",
@@ -4536,6 +4538,7 @@ dependencies = [
 name = "rivet-runtime"
 version = "25.7.3"
 dependencies = [
+ "anyhow",
  "console-subscriber",
  "lazy_static",
  "opentelemetry",
@@ -4626,6 +4629,24 @@ dependencies = [
  "tokio-postgres",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "rivet-tracing-reconfigure"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "gasoline",
+ "rivet-config",
+ "rivet-metrics",
+ "rivet-pools",
+ "rivet-runtime",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "universalpubsub",
 ]
 
 [[package]]
