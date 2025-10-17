@@ -49,6 +49,7 @@ pub struct DeleteResponse {}
     ),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn delete(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -61,6 +62,7 @@ pub async fn delete(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn delete_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

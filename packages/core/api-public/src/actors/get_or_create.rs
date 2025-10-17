@@ -87,6 +87,7 @@ pub async fn get_or_create(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn get_or_create_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

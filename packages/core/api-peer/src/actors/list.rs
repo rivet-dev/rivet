@@ -11,6 +11,7 @@ use rivet_api_types::{actors::list::*, pagination::Pagination};
         (status = 200, body = ListResponse),
     ),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListResponse> {
 	let key = query.key;
 	let actor_ids = query.actor_ids.as_ref().map(|x| {

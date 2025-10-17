@@ -28,6 +28,7 @@ use crate::ctx::ApiCtx;
     ),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn list_names(
 	Extension(ctx): Extension<ApiCtx>,
 	headers: HeaderMap,
@@ -39,6 +40,7 @@ pub async fn list_names(
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn list_names_inner(
 	ctx: ApiCtx,
 	headers: HeaderMap,

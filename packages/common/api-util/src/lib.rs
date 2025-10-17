@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use axum::{body::Body, response::Response};
 use futures_util::StreamExt;
 use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
 mod errors;
@@ -10,6 +10,7 @@ mod errors;
 pub use axum::http::{HeaderMap, Method};
 
 /// Generic function to make raw requests to remote datacenters by label (returns axum Response)
+#[tracing::instrument(skip(ctx, headers, query, body))]
 pub async fn request_remote_datacenter_raw(
 	ctx: &ApiCtx,
 	dc_label: u16,
@@ -32,6 +33,8 @@ pub async fn request_remote_datacenter_raw(
 		url.set_query(Some(&serde_html_form::to_string(q)?));
 	}
 
+	tracing::debug!(%method, %url, "sending raw request to remote datacenter");
+
 	let mut request = client.request(method, url).headers(headers);
 
 	if let Some(b) = body {
@@ -48,6 +51,7 @@ pub async fn request_remote_datacenter_raw(
 }
 
 /// Generic function to make requests to a specific datacenter
+#[tracing::instrument(skip(config, headers, query, body))]
 pub async fn request_remote_datacenter<T>(
 	config: &rivet_config::Config,
 	dc_label: u16,
@@ -72,6 +76,8 @@ where
 		url.set_query(Some(&serde_html_form::to_string(q)?));
 	}
 
+	tracing::debug!(%method, %url, "sending request to remote datacenter");
+
 	let mut request = client.request(method, url).headers(headers);
 
 	if let Some(b) = body {
@@ -89,6 +95,7 @@ where
 
 /// Generic function to fanout requests to all datacenters and aggregate results
 /// Returns aggregated results and errors only if all requests fail
+#[tracing::instrument(skip(ctx, headers, query, local_handler, aggregator))]
 pub async fn fanout_to_datacenters<I, Q, F, Fut, A, R>(
 	ctx: ApiCtx,
 	headers: HeaderMap,
@@ -164,6 +171,7 @@ where
 	Ok(aggregated)
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn reqwest_to_axum_response(reqwest_response: reqwest::Response) -> Result<Response> {
 	let status = reqwest_response.status();
 	let headers = reqwest_response.headers().clone();
@@ -178,6 +186,7 @@ pub async fn reqwest_to_axum_response(reqwest_response: reqwest::Response) -> Re
 	Ok(response)
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn parse_response<T: DeserializeOwned>(reqwest_response: reqwest::Response) -> Result<T> {
 	let status = reqwest_response.status();
 	let response_text = reqwest_response.text().await?;

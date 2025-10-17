@@ -47,6 +47,7 @@ pub struct HealthResponse {
 	),
 	security(("bearer_auth" = [])),
 )]
+#[tracing::instrument(skip_all)]
 pub async fn fanout(Extension(ctx): Extension<ApiCtx>) -> impl IntoResponse {
 	match fanout_inner(ctx).await {
 		Ok(response) => Json(response).into_response(),
@@ -126,6 +127,7 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 	})
 }
 
+#[tracing::instrument(skip_all)]
 async fn send_health_check(
 	ctx: &ApiCtx,
 	dc: &rivet_config::config::topology::Datacenter,
