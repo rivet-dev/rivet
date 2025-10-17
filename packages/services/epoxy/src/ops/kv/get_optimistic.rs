@@ -86,9 +86,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
 	let config = ctx
-		.op(crate::ops::read_cluster_config::Input {
-			replica_id: input.replica_id,
-		})
+		.op(crate::ops::read_cluster_config::Input {})
 		.await?
 		.config;
 

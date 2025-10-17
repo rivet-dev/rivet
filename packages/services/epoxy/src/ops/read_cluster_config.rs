@@ -5,9 +5,7 @@ use gas::prelude::*;
 use crate::utils;
 
 #[derive(Debug)]
-pub struct Input {
-	pub replica_id: ReplicaId,
-}
+pub struct Input {}
 
 #[derive(Debug)]
 pub struct Output {
@@ -18,10 +16,7 @@ pub struct Output {
 pub async fn epoxy_read_cluster_config(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let config = ctx
 		.udb()?
-		.run(|tx| {
-			let replica_id = input.replica_id;
-			async move { utils::read_config(&tx, replica_id).await }
-		})
+		.run(|tx| async move { utils::read_config(&tx, ctx.config().epoxy_replica_id()).await })
 		.custom_instrument(tracing::info_span!("read_cluster_config_tx"))
 		.await?;
 
