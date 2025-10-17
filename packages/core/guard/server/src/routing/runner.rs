@@ -12,12 +12,14 @@ pub async fn route_request(
 	ctx: &StandaloneCtx,
 	target: &str,
 	host: &str,
-	_path: &str,
+	path: &str,
 	headers: &hyper::HeaderMap,
 ) -> Result<Option<RoutingOutput>> {
 	if target != "runner" {
 		return Ok(None);
 	}
+
+	tracing::debug!(?host, path, "routing to runner");
 
 	// Validate that the host is valid for the current datacenter
 	let current_dc = ctx.config().topology().current_dc()?;
@@ -43,11 +45,15 @@ pub async fn route_request(
 		.build());
 	}
 
+	tracing::debug!(datacenter = ?current_dc.name, "validated host for datacenter");
+
 	let is_websocket = headers
 		.get("upgrade")
 		.and_then(|v| v.to_str().ok())
 		.map(|v| v.eq_ignore_ascii_case("websocket"))
 		.unwrap_or(false);
+
+	tracing::debug!(is_websocket, "connection type");
 
 	// Check auth (if enabled)
 	if let Some(auth) = &ctx.config().auth {
@@ -84,6 +90,8 @@ pub async fn route_request(
 		if token != auth.admin_token.read() {
 			return Err(rivet_api_builder::ApiForbidden.build());
 		}
+
+		tracing::debug!("authenticated runner connection");
 	}
 
 	let tunnel = pegboard_runner::PegboardRunnerWsCustomServe::new(ctx.clone());
