@@ -37,6 +37,9 @@ pub async fn epoxy_coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<
 				Main::ReplicaStatusChange(sig) => {
 					replica_status_change::replica_status_change(ctx, sig).await?;
 				}
+				Main::ReplicaReconfigure(_) => {
+					replica_status_change::replica_reconfigure(ctx).await?;
+				}
 			}
 
 			Ok(Loop::<()>::Continue)
@@ -81,7 +84,11 @@ pub struct ReplicaStatusChange {
 	pub status: types::ReplicaStatus,
 }
 
+#[signal("epoxy_coordinator_replica_reconfigure")]
+pub struct ReplicaReconfigure {}
+
 join_signal!(Main {
 	Reconfigure,
 	ReplicaStatusChange,
+	ReplicaReconfigure,
 });
