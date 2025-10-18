@@ -123,9 +123,9 @@ function FormStepper({
 			defaultValues={{
 				plan: "hobby",
 				runnerName: "default",
-				slotsPerRunner: 25,
+				slotsPerRunner: 1,
 				minRunners: 1,
-				maxRunners: 1000,
+				maxRunners: 10_000,
 				runnerMargin: 0,
 				headers: [],
 				success: false,

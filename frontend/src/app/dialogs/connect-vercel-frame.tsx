@@ -88,7 +88,6 @@ function FormStepper({
 			content={{
 				"initial-info": () => <StepInitialInfo />,
 				"api-route": () => <StepApiRoute />,
-				"vercel-settings": () => <StepVercelSettings />,
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -127,9 +126,9 @@ function FormStepper({
 			defaultValues={{
 				plan: "hobby",
 				runnerName: "default",
-				slotsPerRunner: 25,
+				slotsPerRunner: 1,
 				minRunners: 1,
-				maxRunners: 1000,
+				maxRunners: 10_000,
 				runnerMargin: 0,
 				headers: [],
 				success: false,
@@ -168,11 +167,6 @@ function StepInitialInfo() {
 function StepApiRoute() {
 	const plan = useWatch<FormValues>({ name: "plan" as const });
 	return <ConnectVercelForm.IntegrationCode plan={plan || "hobby"} />;
-}
-
-function StepVercelSettings() {
-	const plan = useWatch<FormValues>({ name: "plan" as const });
-	return <ConnectVercelForm.Json plan={plan || "hobby"} />;
 }
 
 function StepDeploy() {

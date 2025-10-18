@@ -55,13 +55,6 @@ export const stepper = defineStepper(
 		next: "Next",
 	},
 	{
-		id: "vercel-settings",
-		title: "Configure Vercel settings",
-		assist: false,
-		next: "Next",
-		schema: z.object({}),
-	},
-	{
 		id: "deploy",
 		title: "Deploy to Vercel",
 		assist: true,
@@ -125,36 +118,9 @@ export const RunnerMargin = ConnectManualServerlessForm.RunnerMargin;
 export const Headers = ConnectManualServerlessForm.Headers;
 
 export const PLAN_TO_MAX_DURATION: Record<string, number> = {
-	hobby: 60,
-	pro: 300,
-	enterprise: 900,
-};
-
-const code = ({ plan }: { plan: string }) =>
-	`{
-	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"fluid": false,	// [!code highlight]
-}`;
-
-export const Json = ({ plan }: { plan: string }) => {
-	return (
-		<div className="space-y-2 mt-2">
-			<CodeFrame
-				language="json"
-				title="vercel.json"
-				code={() =>
-					code({ plan }).replaceAll("	// [!code highlight]", "")
-				}
-			>
-				<CodePreview
-					className="w-full min-w-0"
-					language="json"
-					code={code({ plan })}
-				/>
-			</CodeFrame>
-			<p>Rivet provides its own intelligent load balancing mechanism.</p>
-		</div>
-	);
+	hobby: 300,
+	pro: 800,
+	enterprise: 800,
 };
 
 const integrationCode = ({ plan }: { plan: string }) =>
