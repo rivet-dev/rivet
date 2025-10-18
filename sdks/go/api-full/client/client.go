@@ -350,7 +350,7 @@ func (c *Client) RunnerConfigsServerlessHealthCheck(ctx context.Context, request
 	return response, nil
 }
 
-func (c *Client) RunnerConfigsUpsert(ctx context.Context, runnerName string, request *sdk.RunnerConfigsUpsertRequestBody) (sdk.RunnerConfigsUpsertResponse, error) {
+func (c *Client) RunnerConfigsUpsert(ctx context.Context, runnerName string, request *sdk.RunnerConfigsUpsertRequestBody) (*sdk.RunnerConfigsUpsertResponse, error) {
 	baseURL := ""
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -363,7 +363,7 @@ func (c *Client) RunnerConfigsUpsert(ctx context.Context, runnerName string, req
 		endpointURL += "?" + queryParams.Encode()
 	}
 
-	var response sdk.RunnerConfigsUpsertResponse
+	var response *sdk.RunnerConfigsUpsertResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

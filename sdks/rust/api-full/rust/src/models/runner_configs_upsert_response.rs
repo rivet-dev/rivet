@@ -12,21 +12,15 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct HealthResponse {
-    #[serde(rename = "runtime")]
-    pub runtime: String,
-    #[serde(rename = "status")]
-    pub status: String,
-    #[serde(rename = "version")]
-    pub version: String,
+pub struct RunnerConfigsUpsertResponse {
+    #[serde(rename = "endpoint_config_changed")]
+    pub endpoint_config_changed: bool,
 }
 
-impl HealthResponse {
-    pub fn new(runtime: String, status: String, version: String) -> HealthResponse {
-        HealthResponse {
-            runtime,
-            status,
-            version,
+impl RunnerConfigsUpsertResponse {
+    pub fn new(endpoint_config_changed: bool) -> RunnerConfigsUpsertResponse {
+        RunnerConfigsUpsertResponse {
+            endpoint_config_changed,
         }
     }
 }

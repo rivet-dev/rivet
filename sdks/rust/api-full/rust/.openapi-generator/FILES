@@ -62,6 +62,7 @@ docs/RunnerConfigsServerlessMetadataErrorOneOf5.md
 docs/RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema.md
 docs/RunnerConfigsUpsertApi.md
 docs/RunnerConfigsUpsertRequestBody.md
+docs/RunnerConfigsUpsertResponse.md
 docs/RunnersApi.md
 docs/RunnersListNamesResponse.md
 docs/RunnersListResponse.md
@@ -130,5 +131,6 @@ src/models/runner_configs_serverless_metadata_error_one_of_4_invalid_response_js
 src/models/runner_configs_serverless_metadata_error_one_of_5.rs
 src/models/runner_configs_serverless_metadata_error_one_of_5_invalid_response_schema.rs
 src/models/runner_configs_upsert_request_body.rs
+src/models/runner_configs_upsert_response.rs
 src/models/runners_list_names_response.rs
 src/models/runners_list_response.rs

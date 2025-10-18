@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## runner_configs_upsert
 
-> serde_json::Value runner_configs_upsert(runner_name, namespace, runner_configs_upsert_request_body)
+> models::RunnerConfigsUpsertResponse runner_configs_upsert(runner_name, namespace, runner_configs_upsert_request_body)
 
 
 ### Parameters
@@ -24,7 +24,7 @@ Name | Type | Description  | Required | Notes
 
 ### Return type
 
-[**serde_json::Value**](serde_json::Value.md)
+[**models::RunnerConfigsUpsertResponse**](RunnerConfigsUpsertResponse.md)
 
 ### Authorization
 
