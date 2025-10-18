@@ -223,7 +223,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 
 			let (operations, conflict_ranges) = self.operations.consume();
 
-			// We have operations but no transaction - create one just for commit
 			let tx_sender = self.ensure_transaction().await?;
 
 			// Send commit command
@@ -250,8 +249,8 @@ impl TransactionDriver for PostgresTransactionDriver {
 		self.operations.clear_all();
 		self.committed.store(false, Ordering::SeqCst);
 
-		// Note: We can't reset the transaction once it's created
-		// The transaction task will continue running
+		// Replace tx sender to get a new txn version
+		self.tx_sender = OnceCell::new();
 	}
 
 	fn cancel(&self) {

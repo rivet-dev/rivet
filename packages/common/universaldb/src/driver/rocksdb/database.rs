@@ -1,6 +1,10 @@
 use std::{
 	path::PathBuf,
-	sync::{Arc, Mutex},
+	sync::{
+		Arc,
+		atomic::{AtomicI32, Ordering},
+	},
+	time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -14,12 +18,16 @@ use crate::{
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
-use super::{conflict_range_tracker::ConflictRangeTracker, transaction::RocksDbTransactionDriver};
+use super::{
+	transaction::RocksDbTransactionDriver, transaction_conflict_tracker::TransactionConflictTracker,
+};
+
+const TXN_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct RocksDbDatabaseDriver {
 	db: Arc<OptimisticTransactionDB>,
-	max_retries: Arc<Mutex<i32>>,
-	conflict_tracker: ConflictRangeTracker,
+	max_retries: AtomicI32,
+	txn_conflict_tracker: TransactionConflictTracker,
 }
 
 impl RocksDbDatabaseDriver {
@@ -42,8 +50,8 @@ impl RocksDbDatabaseDriver {
 
 		Ok(RocksDbDatabaseDriver {
 			db: Arc::new(db),
-			max_retries: Arc::new(Mutex::new(100)),
-			conflict_tracker: ConflictRangeTracker::new(),
+			max_retries: AtomicI32::new(100),
+			txn_conflict_tracker: TransactionConflictTracker::new(),
 		})
 	}
 }
@@ -52,7 +60,7 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 	fn create_trx(&self) -> Result<Transaction> {
 		Ok(Transaction::new(Arc::new(RocksDbTransactionDriver::new(
 			self.db.clone(),
-			self.conflict_tracker.clone(),
+			self.txn_conflict_tracker.clone(),
 		))))
 	}
 
@@ -62,7 +70,7 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 	) -> BoxFut<'a, Result<Erased>> {
 		Box::pin(async move {
 			let mut maybe_committed = MaybeCommitted(false);
-			let max_retries = *self.max_retries.lock().unwrap();
+			let max_retries = self.max_retries.load(Ordering::SeqCst);
 
 			for attempt in 0..max_retries {
 				let tx = self.create_trx()?;
@@ -70,13 +78,15 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 				retryable.maybe_committed = maybe_committed;
 
 				// Execute transaction
-				let error = match closure(retryable.clone()).await {
-					Ok(res) => match retryable.inner.driver.commit_ref().await {
-						Ok(_) => return Ok(res),
-						Err(e) => e,
-					},
-					Err(e) => e,
-				};
+				let error =
+					match tokio::time::timeout(TXN_TIMEOUT, closure(retryable.clone())).await {
+						Ok(Ok(res)) => match retryable.inner.driver.commit_ref().await {
+							Ok(_) => return Ok(res),
+							Err(e) => e,
+						},
+						Ok(Err(e)) => e,
+						Err(_) => anyhow::Error::from(DatabaseError::TransactionTooOld),
+					};
 
 				let chain = error
 					.chain()
@@ -105,7 +115,7 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 	fn set_option(&self, opt: DatabaseOption) -> Result<()> {
 		match opt {
 			DatabaseOption::TransactionRetryLimit(limit) => {
-				*self.max_retries.lock().unwrap() = limit;
+				self.max_retries.store(limit, Ordering::SeqCst);
 				Ok(())
 			}
 		}
