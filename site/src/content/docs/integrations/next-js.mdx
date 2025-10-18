@@ -57,6 +57,8 @@ export const registry = setup({
 import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 
+export const maxDuration = 300;
+
 // Export the Next.js handler for the API routes
 export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(registry);
 ```
@@ -83,6 +85,8 @@ const counter = actor({
 const registry = setup({
 	use: { counter },
 });
+
+export const maxDuration = 300;
 
 export const { GET, POST, HEAD, PATCH, OPTIONS } = toNextHandler(registry);
 ```
