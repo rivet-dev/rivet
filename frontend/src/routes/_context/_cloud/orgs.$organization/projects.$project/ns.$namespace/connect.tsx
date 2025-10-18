@@ -446,14 +446,12 @@ function usePublishableToken() {
 	const dataProvider = useEngineCompatDataProvider();
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
-			return useSuspenseQuery(
-				dataProvider.publishableTokenQueryOptions(),
-			).data;
+			return useSuspenseQuery(dataProvider.publishableTokenQueryOptions())
+				.data;
 		})
 		.with("engine", () => {
-			return useSuspenseQuery(
-				dataProvider.engineAdminTokenQueryOptions(),
-			).data;
+			return useSuspenseQuery(dataProvider.engineAdminTokenQueryOptions())
+				.data;
 		})
 		.otherwise(() => {
 			throw new Error("Not in a valid context");
@@ -485,11 +483,7 @@ function ConnectYourFrontend() {
 	});
 
 	// Check if Vercel is connected
-	const hasVercel = configs?.pages.some((page) =>
-		Object.values(page.runnerConfigs).some(
-			(config) => config.metadata?.provider === "vercel"
-		)
-	);
+	const hasVercel = hasProvider(configs, ["vercel", "next-js"]);
 
 	const nextJsTab = (
 		<CodeFrame
@@ -503,10 +497,7 @@ function ConnectYourFrontend() {
 				>
 					<span className="cursor-pointer hover:underline">
 						See Next.js Documentation{" "}
-						<Icon
-							icon={faChevronRight}
-							className="text-xs"
-						/>
+						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
 				</DocsSheet>
 			}
@@ -530,10 +521,7 @@ function ConnectYourFrontend() {
 				>
 					<span className="cursor-pointer hover:underline">
 						See React Documentation{" "}
-						<Icon
-							icon={faChevronRight}
-							className="text-xs"
-						/>
+						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
 				</DocsSheet>
 			}
@@ -557,10 +545,7 @@ function ConnectYourFrontend() {
 				>
 					<span className="cursor-pointer hover:underline">
 						See JavaScript Documentation{" "}
-						<Icon
-							icon={faChevronRight}
-							className="text-xs"
-						/>
+						<Icon icon={faChevronRight} className="text-xs" />
 					</span>
 				</DocsSheet>
 			}
@@ -586,22 +571,33 @@ function ConnectYourFrontend() {
 			</p>
 			<div>
 				<CodeGroup>
-					{hasVercel ? (
-						<>
-							{nextJsTab}
-							{reactTab}
-							{javascriptTab}
-						</>
-					) : (
-						<>
-							{javascriptTab}
-							{reactTab}
-							{nextJsTab}
-						</>
-					)}
+					{hasVercel
+						? [nextJsTab, reactTab, javascriptTab]
+						: [javascriptTab, reactTab, nextJsTab]}
 				</CodeGroup>
 			</div>
 		</div>
+	);
+}
+
+type RunnerConfig = [
+	string,
+	{
+		datacenters: Record<string, { metadata?: { provider?: string } }>;
+	},
+];
+
+function hasProvider(
+	configs: RunnerConfig[] | undefined,
+	providers: string[],
+): boolean {
+	if (!configs) return false;
+	return configs.some(([, config]) =>
+		Object.values(config.datacenters).some(
+			(datacenter) =>
+				datacenter.metadata?.provider &&
+				providers.includes(datacenter.metadata.provider),
+		),
 	);
 }
 
@@ -779,10 +775,7 @@ function OneClickDeployRailwayButton() {
 			startIcon={<Icon icon={faRailway} />}
 			asChild
 		>
-			<RouterLink
-				to="."
-				search={{ modal: "connect-q-railway" }}
-			>
+			<RouterLink to="." search={{ modal: "connect-q-railway" }}>
 				Railway
 			</RouterLink>
 		</Button>
