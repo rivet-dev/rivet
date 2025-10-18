@@ -4404,26 +4404,6 @@ Complete example Next.js + RivetKit app.
     - `src/app/api/rivet/[...all]/route.ts`
     - `src/rivet/registry.ts`
 
-Update your Rivet API route handler at `src/app/api/rivet/[...all]/route.ts` to the `maxDuration` configuration:
-
-```ts }
-// Set based on your Vercel plan:
-// - Hobby: 60
-// - Pro: 300
-// - Enterprise: 900
-const maxDuration = 60;
-
-const  = toNextHandler(registry);
-```
-
-Disable Fluid Compute in your `vercel.json`:
-
-```json }
-
-```
-
-Rivet provides its own intelligent load balancing mechanism.
-
 1. Connect your GitHub project to Vercel
 2. Select your repository containing your Next.js + RivetKit app
 3. Vercel will deploy your app
