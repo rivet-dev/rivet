@@ -1,6 +1,7 @@
 import {
 	faCog,
 	faCogs,
+	faNextjs,
 	faRailway,
 	faTrash,
 	faVercel,
@@ -216,6 +217,13 @@ function Provider({ metadata }: { metadata: unknown }) {
 			return (
 				<div>
 					<Icon icon={faVercel} className="mr-1" /> Vercel
+				</div>
+			);
+		}
+		if (metadata.provider === "next-js") {
+			return (
+				<div>
+					<Icon icon={faNextjs} className="mr-1" /> Next.js
 				</div>
 			);
 		}
