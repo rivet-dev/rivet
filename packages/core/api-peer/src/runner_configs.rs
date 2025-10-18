@@ -93,7 +93,9 @@ pub struct UpsertRequest(pub rivet_api_types::namespaces::runner_configs::Runner
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[schema(as = RunnerConfigsUpsertResponse)]
-pub struct UpsertResponse {}
+pub struct UpsertResponse {
+	pub endpoint_config_changed: bool,
+}
 
 #[tracing::instrument(skip_all)]
 pub async fn upsert(
@@ -109,14 +111,17 @@ pub async fn upsert(
 		.await?
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
-	ctx.op(namespace::ops::runner_config::upsert::Input {
-		namespace_id: namespace.namespace_id,
-		name: path.runner_name,
-		config: body.0.into(),
-	})
-	.await?;
+	let endpoint_config_changed = ctx
+		.op(namespace::ops::runner_config::upsert::Input {
+			namespace_id: namespace.namespace_id,
+			name: path.runner_name,
+			config: body.0.into(),
+		})
+		.await?;
 
-	Ok(UpsertResponse {})
+	Ok(UpsertResponse {
+		endpoint_config_changed,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, IntoParams)]

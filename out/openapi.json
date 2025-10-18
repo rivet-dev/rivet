@@ -1696,7 +1696,15 @@
         "additionalProperties": false
       },
       "RunnerConfigsUpsertResponse": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "endpoint_config_changed"
+        ],
+        "properties": {
+          "endpoint_config_changed": {
+            "type": "boolean"
+          }
+        }
       },
       "RunnersListNamesResponse": {
         "type": "object",
