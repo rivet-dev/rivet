@@ -25,24 +25,6 @@ Complete example Next.js + RivetKit app.
     - `src/rivet/registry.ts`
 
 </Step>
-<Step title="Configure maxDuration in API route handler">
-
-Update your Rivet API route handler at `src/app/api/rivet/[...all]/route.ts` to export the `maxDuration` configuration:
-
-```ts {{"title":"src/app/api/rivet/[...all]/route.ts"}}
-import { toNextHandler } from "@rivetkit/next-js";
-import { registry } from "@/rivet/registry";
-
-// Set based on your Vercel plan:
-// - Hobby: 60
-// - Pro: 300
-// - Enterprise: 900
-export const maxDuration = 60;
-
-export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
-```
-
-</Step>
 <Step title="Deploy to Vercel">
 
 1. Connect your GitHub project to Vercel
@@ -66,3 +48,4 @@ Your Vercel Functions deployment is now connected to Rivet.
 </Step>
 
 </Steps>
+
