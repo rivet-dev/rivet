@@ -16,7 +16,7 @@ use crate::types;
 
 #[tracing::instrument(skip_all)]
 pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Result<()> {
-	// Wait for cooridinator to send begin learning signal
+	// Wait for coordinator to send begin learning signal
 	let begin_learning = ctx.listen::<super::BeginLearning>().await?;
 
 	// TODO: Paralellize replicas

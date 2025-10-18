@@ -6,9 +6,8 @@ use gas::prelude::*;
 use rivet_metrics::KeyValue;
 use rivet_runner_protocol as protocol;
 use rivet_types::{
-	actors::CrashPolicy,
-	keys::namespace::runner_config::RunnerConfigVariant,
-	runner_configs::{RunnerConfig, RunnerConfigKind},
+	actors::CrashPolicy, keys::namespace::runner_config::RunnerConfigVariant,
+	runner_configs::RunnerConfigKind,
 };
 use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};

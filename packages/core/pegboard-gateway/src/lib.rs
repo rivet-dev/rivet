@@ -6,8 +6,11 @@ use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode, header::HeaderName};
 use rivet_guard_core::{
-	WebSocketHandle, custom_serve::CustomServeTrait, errors::WebSocketServiceUnavailable,
-	proxy_service::ResponseBody, request_context::RequestContext,
+	WebSocketHandle,
+	custom_serve::CustomServeTrait,
+	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
+	proxy_service::ResponseBody,
+	request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
@@ -122,20 +125,20 @@ impl CustomServeTrait for PegboardGateway {
 					},
 					TunnelMessageData::Timeout => {
 						tracing::warn!("tunnel message timeout");
-						return Err(WebSocketServiceUnavailable.build());
+						return Err(ServiceUnavailable.build());
 					}
 				}
 			}
 
 			tracing::warn!("received no message response");
-			Err(WebSocketServiceUnavailable.build())
+			Err(ServiceUnavailable.build())
 		};
 		let response_start = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
 			.await
 			.map_err(|_| {
 				tracing::warn!("timed out waiting for tunnel ack");
 
-				WebSocketServiceUnavailable.build()
+				ServiceUnavailable.build()
 			})??;
 		tracing::debug!("response handler task ended");
 
