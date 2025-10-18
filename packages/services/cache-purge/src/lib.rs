@@ -26,11 +26,11 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 					"received cache purge request"
 				);
 
-				// Purge the cache locally
+				// Purge the cache locally without publishing to NATS again
 				if let Err(err) = cache
 					.clone()
 					.request()
-					.purge(&purge_msg.base_key, purge_msg.keys)
+					.purge_local(&purge_msg.base_key, purge_msg.keys)
 					.await
 				{
 					tracing::error!(?err, base_key = ?purge_msg.base_key, "failed to purge cache");
