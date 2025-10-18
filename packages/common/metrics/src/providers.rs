@@ -72,7 +72,7 @@ pub fn set_sampler_ratio(ratio: f64) -> anyhow::Result<()> {
 }
 
 fn resource() -> Resource {
-	let mut resource = Resource::builder()
+	let resource = Resource::builder()
 		.with_service_name(rivet_env::service_name())
 		.with_schema_url(
 			[KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION"))],

@@ -17,12 +17,12 @@ use crate::{
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
 	tx_ops::TransactionOperations,
-	utils::{IsolationLevel, end_of_key_range},
+	utils::IsolationLevel,
 	value::{Slice, Value, Values},
 };
 
 use super::{
-	conflict_range_tracker::{ConflictRangeTracker, TransactionId},
+	transaction_conflict_tracker::TransactionConflictTracker,
 	transaction_task::{TransactionCommand, TransactionTask},
 };
 
@@ -31,26 +31,24 @@ pub struct RocksDbTransactionDriver {
 	operations: TransactionOperations,
 	committed: AtomicBool,
 	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
-	conflict_tracker: ConflictRangeTracker,
-	tx_id: TransactionId,
-}
-
-impl Drop for RocksDbTransactionDriver {
-	fn drop(&mut self) {
-		// Release all conflict ranges when the transaction is dropped
-		self.conflict_tracker.release_transaction(self.tx_id);
-	}
+	txn_conflict_tracker: TransactionConflictTracker,
+	start_version: u64,
 }
 
 impl RocksDbTransactionDriver {
-	pub fn new(db: Arc<OptimisticTransactionDB>, conflict_tracker: ConflictRangeTracker) -> Self {
+	pub fn new(
+		db: Arc<OptimisticTransactionDB>,
+		txn_conflict_tracker: TransactionConflictTracker,
+	) -> Self {
+		let start_version = txn_conflict_tracker.next_global_version();
+
 		RocksDbTransactionDriver {
 			db,
 			operations: TransactionOperations::default(),
 			committed: AtomicBool::new(false),
 			tx_sender: OnceCell::new(),
-			conflict_tracker,
-			tx_id: TransactionId::new(),
+			txn_conflict_tracker,
+			start_version,
 		}
 	}
 
@@ -61,7 +59,11 @@ impl RocksDbTransactionDriver {
 				let (sender, receiver) = mpsc::channel(100);
 
 				// Spawn the transaction task
-				let task = TransactionTask::new(self.db.clone(), receiver);
+				let task = TransactionTask::new(
+					self.db.clone(),
+					self.txn_conflict_tracker.clone(),
+					receiver,
+				);
 				tokio::spawn(task.run());
 
 				anyhow::Ok(sender)
@@ -82,36 +84,26 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		isolation_level: IsolationLevel,
 	) -> Pin<Box<dyn Future<Output = Result<Option<Slice>>> + Send + 'a>> {
 		let key = key.to_vec();
+
 		Box::pin(async move {
 			self.operations
 				.get_with_callback(&key, isolation_level, || async {
-					if let IsolationLevel::Serializable = isolation_level {
-						self.conflict_tracker.add_range(
-							self.tx_id,
-							&key,
-							&end_of_key_range(&key),
-							false, // is_write = false for reads
-						)?;
-					}
-
 					let tx_sender = self.ensure_transaction().await?;
 
 					// Send query command
 					let (response_tx, response_rx) = oneshot::channel();
 					tx_sender
 						.send(TransactionCommand::Get {
-							key: key.to_vec(),
+							key: key.clone(),
 							response: response_tx,
 						})
 						.await
-						.context("failed to send transaction command")?;
+						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
-					let value = response_rx
+					response_rx
 						.await
-						.context("failed to receive transaction response")??;
-
-					Ok(value)
+						.context("failed to receive rocksdb response")?
 				})
 				.await
 		})
@@ -131,15 +123,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 
 			self.operations
 				.get_key(&selector, isolation_level, || async {
-					if let IsolationLevel::Serializable = isolation_level {
-						self.conflict_tracker.add_range(
-							self.tx_id,
-							&key,
-							&end_of_key_range(&key),
-							false, // is_write = false for reads
-						)?;
-					}
-
 					let tx_sender = self.ensure_transaction().await?;
 
 					// Send query command
@@ -152,12 +135,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							response: response_tx,
 						})
 						.await
-						.context("failed to send commit command")?;
+						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
 					let result_key = response_rx
 						.await
-						.context("failed to receive key selector response")??;
+						.context("failed to receive rocksdb key selector response")??;
 
 					// Return the key if found, or empty vector if not
 					Ok(result_key.unwrap_or_else(Slice::new))
@@ -169,55 +152,46 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	fn get_range<'a>(
 		&'a self,
 		opt: &RangeOption<'a>,
-		iteration: usize,
+		_iteration: usize,
 		isolation_level: IsolationLevel,
 	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>> {
-		// Extract fields from RangeOption for the async closure
 		let opt = opt.clone();
-		let begin_selector = opt.begin.clone();
-		let end_selector = opt.end.clone();
-		let limit = opt.limit;
-		let reverse = opt.reverse;
 
 		Box::pin(async move {
+			let begin = opt.begin.key().to_vec();
+			let begin_or_equal = opt.begin.or_equal();
+			let begin_offset = opt.begin.offset();
+			let end = opt.end.key().to_vec();
+			let end_or_equal = opt.end.or_equal();
+			let end_offset = opt.end.offset();
+			let limit = opt.limit;
+			let reverse = opt.reverse;
+
 			self.operations
 				.get_range(&opt, isolation_level, || async {
-					if let IsolationLevel::Serializable = isolation_level {
-						// Add read conflict range for this range (using raw keys, conservative)
-						self.conflict_tracker.add_range(
-							self.tx_id,
-							begin_selector.key(),
-							end_selector.key(),
-							false, // is_write = false for reads
-						)?;
-					}
-
 					let tx_sender = self.ensure_transaction().await?;
 
-					// Send query command with selector info
+					// Send query command
 					let (response_tx, response_rx) = oneshot::channel();
 					tx_sender
 						.send(TransactionCommand::GetRange {
-							begin_key: begin_selector.key().to_vec(),
-							begin_or_equal: begin_selector.or_equal(),
-							begin_offset: begin_selector.offset(),
-							end_key: end_selector.key().to_vec(),
-							end_or_equal: end_selector.or_equal(),
-							end_offset: end_selector.offset(),
+							begin: begin.clone(),
+							begin_or_equal,
+							begin_offset,
+							end: end.clone(),
+							end_or_equal,
+							end_offset,
 							limit,
 							reverse,
-							iteration,
 							response: response_tx,
 						})
 						.await
-						.context("failed to send transaction command")?;
+						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
-					let values = response_rx
+					response_rx
 						.await
-						.context("failed to receive range response")??;
-
-					Ok(values)
+						.context("failed to receive rocksdb range response")?
 				})
 				.await
 		})
@@ -245,35 +219,14 @@ impl TransactionDriver for RocksDbTransactionDriver {
 	}
 
 	fn set(&self, key: &[u8], value: &[u8]) {
-		// Add write conflict range for this range
-		let _ = self.conflict_tracker.add_range(
-			self.tx_id,
-			key,
-			&end_of_key_range(&key),
-			true, // is_write = true for writes
-		);
-
 		self.operations.set(key, value);
 	}
 
 	fn clear(&self, key: &[u8]) {
-		// Add write conflict range for this range
-		let _ = self.conflict_tracker.add_range(
-			self.tx_id,
-			key,
-			&end_of_key_range(&key),
-			true, // is_write = true for writes
-		);
-
 		self.operations.clear(key);
 	}
 
 	fn clear_range(&self, begin: &[u8], end: &[u8]) {
-		// Add write conflict range for this range
-		let _ = self.conflict_tracker.add_range(
-			self.tx_id, begin, end, true, // is_write = true for writes
-		);
-
 		self.operations.clear_range(begin, end);
 	}
 
@@ -284,55 +237,43 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			}
 			self.committed.store(true, Ordering::SeqCst);
 
-			let (operations, _conflict_ranges) = self.operations.consume();
+			let (operations, conflict_ranges) = self.operations.consume();
 
-			// Get the transaction sender
 			let tx_sender = self.ensure_transaction().await?;
 
-			// Send commit command with operations and conflict ranges
+			// Send commit command
 			let (response_tx, response_rx) = oneshot::channel();
 			tx_sender
 				.send(TransactionCommand::Commit {
+					start_version: self.start_version,
 					operations,
+					conflict_ranges,
 					response: response_tx,
 				})
 				.await
-				.context("failed to send commit command")?;
+				.context("failed to send rocksdb transaction command")?;
 
-			// Wait for response
-			let result = response_rx
+			// Wait for commit response
+			response_rx
 				.await
-				.context("failed to receive commit response")?;
+				.context("failed to receive rocksdb commit response")??;
 
-			// Release conflict ranges after successful commit
-			if result.is_ok() {
-				self.conflict_tracker.release_transaction(self.tx_id);
-			}
-
-			result
+			Ok(())
 		})
 	}
 
 	fn reset(&mut self) {
-		// Release any existing conflict ranges
-		self.conflict_tracker.release_transaction(self.tx_id);
-
-		// Generate a new transaction ID for the reset transaction
-		self.tx_id = TransactionId::new();
-
 		self.operations.clear_all();
-		// Clear the transaction senders to reset connections
-		self.tx_sender = OnceCell::new();
+		self.committed.store(false, Ordering::SeqCst);
+
+		self.start_version = self.txn_conflict_tracker.next_global_version();
 	}
 
 	fn cancel(&self) {
-		// Release all conflict ranges for this transaction
-		self.conflict_tracker.release_transaction(self.tx_id);
+		self.operations.clear_all();
+		self.committed.store(true, Ordering::SeqCst); // Prevent future commits
 
-		// Send cancel command to both transaction tasks if they exist
-		if let Some(tx_sender) = self.tx_sender.get() {
-			let _ = tx_sender.try_send(TransactionCommand::Cancel);
-		}
+		// Tx sender will be stopped back when dropped
 	}
 
 	fn add_conflict_range(
@@ -341,14 +282,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 		end: &[u8],
 		conflict_type: ConflictRangeType,
 	) -> Result<()> {
-		let is_write = match conflict_type {
-			ConflictRangeType::Write => true,
-			ConflictRangeType::Read => false,
-		};
-
-		self.conflict_tracker
-			.add_range(self.tx_id, begin, end, is_write)?;
-
 		self.operations
 			.add_conflict_range(begin, end, conflict_type);
 
@@ -375,12 +308,12 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					response: response_tx,
 				})
 				.await
-				.context("failed to send commit command")?;
+				.context("failed to send rocksdb command")?;
 
 			// Wait for response
 			let size = response_rx
 				.await
-				.context("failed to receive size response")??;
+				.context("failed to receive rocksdb size response")??;
 
 			Ok(size)
 		})
@@ -393,32 +326,29 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			}
 			self.committed.store(true, Ordering::SeqCst);
 
-			let (operations, _conflict_ranges) = self.operations.consume();
+			let (operations, conflict_ranges) = self.operations.consume();
 
-			// Get the transaction sender
+			// We have operations but no transaction - create one just for commit
 			let tx_sender = self.ensure_transaction().await?;
 
-			// Send commit command with operations
+			// Send commit command
 			let (response_tx, response_rx) = oneshot::channel();
 			tx_sender
 				.send(TransactionCommand::Commit {
+					start_version: self.start_version,
 					operations,
+					conflict_ranges,
 					response: response_tx,
 				})
 				.await
-				.context("failed to send commit command")?;
+				.context("failed to send rocksdb transaction command")?;
 
-			// Wait for response
-			let result = response_rx
+			// Wait for commit response
+			response_rx
 				.await
-				.context("failed to receive commit response")?;
+				.context("failed to receive rocksdb commit response")??;
 
-			// Release conflict ranges after successful commit
-			if result.is_ok() {
-				self.conflict_tracker.release_transaction(self.tx_id);
-			}
-
-			result.map(|_| ())
+			Ok(())
 		})
 	}
 }
