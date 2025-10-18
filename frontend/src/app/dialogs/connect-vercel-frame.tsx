@@ -29,6 +29,8 @@ const { stepper } = ConnectVercelForm;
 
 type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
+export const VERCEL_SERVERLESS_MAX_DURATION = 300;
+
 interface CreateProjectFrameContentProps extends DialogContentProps { }
 
 function usePublishableToken() {
@@ -162,10 +164,7 @@ function FormStepper({
 						maxRunners: values.maxRunners,
 						slotsPerRunner: values.slotsPerRunner,
 						runnersMargin: values.runnerMargin,
-						requestLifespan:
-							ConnectVercelForm.PLAN_TO_MAX_DURATION[
-							values.plan
-							] - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
+						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
 						headers: Object.fromEntries(
 							values.headers.map(([key, value]) => [key, value]),
 						),

@@ -578,7 +578,12 @@ export const createNamespaceContext = ({
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return infiniteQueryOptions({
-				queryKey: [{ namespace }, "runners", "configs", opts],
+				queryKey: [
+					{ namespace },
+					"runners",
+					"configs",
+					{ variant: opts?.variant },
+				],
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const response = await client.runnerConfigs.list(
@@ -621,7 +626,12 @@ export const createNamespaceContext = ({
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return queryOptions({
-				queryKey: [{ namespace }, "runners", "config", opts],
+				queryKey: [
+					{ namespace },
+					"runners",
+					"config",
+					{ name: opts.name, variant: opts.variant },
+				],
 				enabled: !!opts.name,
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.runnerConfigs.list(

@@ -71,6 +71,19 @@ export const stepper = defineStepper(
 		schema: z.object({
 			success: z.boolean().refine((val) => val, "Connection failed"),
 			endpoint: endpointSchema,
+			runnerName: z.string().min(1, "Runner name is required"),
+			datacenters: z
+				.record(z.boolean())
+				.refine(
+					(data) => Object.values(data).some(Boolean),
+					"At least one datacenter must be selected",
+				),
+			headers: z.array(z.tuple([z.string(), z.string()])).default([]),
+			slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
+			maxRunners: z.coerce.number().min(1, "Must be at least 1"),
+			minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
+			runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
+			plan: z.string().min(1, "Please select a Vercel plan"),
 		}),
 	},
 );

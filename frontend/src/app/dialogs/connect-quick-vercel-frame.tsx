@@ -18,6 +18,7 @@ import {
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
+import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 import { EnvVariablesStep } from "./connect-railway-frame";
 
 const { stepper } = ConnectVercelForm;
@@ -98,7 +99,7 @@ function FormStepper({
 						maxRunners: values.maxRunners,
 						slotsPerRunner: values.slotsPerRunner,
 						runnersMargin: values.runnerMargin,
-						requestLifespan: 295, // 5 minutes minus buffer
+						requestLifespan: VERCEL_SERVERLESS_MAX_DURATION - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
 						headers: Object.fromEntries(
 							values.headers.map(([key, value]) => [key, value]),
 						),
