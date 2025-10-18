@@ -1,4 +1,4 @@
-import { faCopy, faFile, Icon } from "@rivet-gg/icons";
+import { faCopy, faFile, Icon, type IconProp } from "@rivet-gg/icons";
 import {
 	Children,
 	cloneElement,
@@ -40,6 +40,7 @@ interface CodeGroupProps {
 	children: ReactElement<{
 		language?: keyof typeof languageNames;
 		title?: string;
+		icon?: IconProp;
 		isInGroup?: boolean;
 	}>[];
 }
@@ -69,11 +70,22 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 									value={idx}
 									className="data-[state=active]:!text-white"
 								>
-									{child.props.title ||
+									{child.props.icon ? (
+										<>
+											<Icon icon={child.props.icon} className="mr-1.5" />
+											{child.props.title ||
+												languageNames[
+													child.props.language || "bash"
+												] ||
+												"Code"}
+										</>
+									) : (
+										child.props.title ||
 										languageNames[
 											child.props.language || "bash"
 										] ||
-										"Code"}
+										"Code"
+									)}
 								</TabsTrigger>
 							);
 						})}
@@ -98,6 +110,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 interface CodeFrameProps {
 	file?: string;
 	title?: string;
+	icon?: IconProp;
 	language: keyof typeof languageNames;
 	isInGroup?: boolean;
 	code?: () => string | string;

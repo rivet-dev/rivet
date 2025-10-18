@@ -17,6 +17,9 @@ export const useDialog = {
 	ConnectRailway: createDialogHook(
 		() => import("@/app/dialogs/connect-railway-frame"),
 	),
+	ConnectQuickRailway: createDialogHook(
+		() => import("@/app/dialogs/connect-quick-railway-frame"),
+	),
 	ConnectManual: createDialogHook(
 		() => import("@/app/dialogs/connect-manual-frame"),
 	),

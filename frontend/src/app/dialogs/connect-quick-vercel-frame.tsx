@@ -12,6 +12,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 	type DialogContentProps,
+	ExternalLinkCard,
 	Frame,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
@@ -84,7 +85,6 @@ function FormStepper({
 			{...stepper}
 			content={{
 				"initial-info": () => <StepInitialInfo />,
-				"env-vars": () => <StepEnvVars />,
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -98,10 +98,7 @@ function FormStepper({
 						maxRunners: values.maxRunners,
 						slotsPerRunner: values.slotsPerRunner,
 						runnersMargin: values.runnerMargin,
-						requestLifespan:
-							ConnectVercelForm.PLAN_TO_MAX_DURATION[
-								values.plan
-							] - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
+						requestLifespan: 295, // 5 minutes minus buffer
 						headers: Object.fromEntries(
 							values.headers.map(([key, value]) => [key, value]),
 						),
@@ -121,7 +118,6 @@ function FormStepper({
 				});
 			}}
 			defaultValues={{
-				plan: "hobby",
 				runnerName: "default",
 				slotsPerRunner: 1,
 				minRunners: 1,
@@ -140,35 +136,22 @@ function FormStepper({
 function StepInitialInfo() {
 	return (
 		<>
-			<ConnectVercelForm.Plan />
-			<Accordion type="single" collapsible>
-				<AccordionItem value="item-1">
-					<AccordionTrigger className="text-sm">
-						Advanced options
-					</AccordionTrigger>
-					<AccordionContent className="space-y-4 px-1 pt-2">
-						<ConnectVercelForm.RunnerName />
-						<ConnectVercelForm.Datacenters />
-						<ConnectVercelForm.Headers />
-						<ConnectVercelForm.SlotsPerRunner />
-						<ConnectVercelForm.MinRunners />
-						<ConnectVercelForm.MaxRunners />
-						<ConnectVercelForm.RunnerMargin />
-					</AccordionContent>
-				</AccordionItem>
-			</Accordion>
-		</>
-	);
-}
-
-function StepEnvVars() {
-	return (
-		<>
-			<p>
-				Set the following environment variables in your Vercel project
-				settings.
-			</p>
-			<EnvVariablesStep />
+			<div className="space-y-4">
+				<p>
+					Deploy the Rivet Vercel template to get started quickly.
+				</p>
+				<ExternalLinkCard
+					href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Ftemplate-vercel&env=NEXT_PUBLIC_RIVET_ENDPOINT,NEXT_PUBLIC_RIVET_TOKEN,NEXT_PUBLIC_RIVET_NAMESPACE&project-name=rivetkit-vercel&repository-name=rivetkit-vercel"
+					icon={faVercel}
+					title="Deploy Template to Vercel"
+				/>
+			</div>
+			<div className="space-y-4">
+				<p>
+					Set the following environment variables:
+				</p>
+				<EnvVariablesStep />
+			</div>
 		</>
 	);
 }
@@ -176,21 +159,26 @@ function StepEnvVars() {
 function StepDeploy() {
 	return (
 		<>
-			<p>
-				<a
-					href="https://vercel.com/docs/deployments"
-					target="_blank"
-					rel="noreferrer"
-					className=" underline"
-				>
-					Deploy your project to Vercel using your preferred method
-				</a>
-				. After deployment, return here to add the endpoint.
-			</p>
 			<div className="mt-2">
 				<ConnectVercelForm.Endpoint />
-				<ConnectVercelForm.ConnectionCheck provider="Vercel" />
+				<Accordion type="single" collapsible>
+					<AccordionItem value="item-1">
+						<AccordionTrigger className="text-sm">
+							Advanced
+						</AccordionTrigger>
+						<AccordionContent className="space-y-4 px-1 pt-2">
+							<ConnectVercelForm.RunnerName />
+							<ConnectVercelForm.Datacenters />
+							<ConnectVercelForm.Headers />
+							<ConnectVercelForm.SlotsPerRunner />
+							<ConnectVercelForm.MinRunners />
+							<ConnectVercelForm.MaxRunners />
+							<ConnectVercelForm.RunnerMargin />
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
 			</div>
+			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
 		</>
 	);
 }

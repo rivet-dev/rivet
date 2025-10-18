@@ -185,8 +185,8 @@ export function EnvVariablesStep() {
 						<p>Value</p>
 					</Label>
 					<RivetEndpointEnv />
-					<RivetTokenEnv />
 					<RivetNamespaceEnv />
+					<RivetTokenEnv />
 					<RivetRunnerEnv />
 				</div>
 				<div className="mt-2 flex justify-end">

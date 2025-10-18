@@ -3,9 +3,12 @@ import {
 	useMutation,
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
+	useSuspenseQuery,
 } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
+import { match } from "ts-pattern";
 import type z from "zod";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import {
@@ -15,8 +18,10 @@ import {
 	AccordionTrigger,
 	type DialogContentProps,
 	Frame,
+	getConfig,
 } from "@/components";
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
 
@@ -24,7 +29,58 @@ const { stepper } = ConnectVercelForm;
 
 type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
-interface CreateProjectFrameContentProps extends DialogContentProps {}
+interface CreateProjectFrameContentProps extends DialogContentProps { }
+
+function usePublishableToken() {
+	return match(__APP_TYPE__)
+		.with("cloud", () => {
+			const routeContext = useRouteContext({
+				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
+				select: (ctx) => ctx.dataProvider,
+			});
+			return useSuspenseQuery(
+				routeContext.publishableTokenQueryOptions(),
+			).data;
+		})
+		.with("engine", () => {
+			return useSuspenseQuery(
+				useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
+			).data;
+		})
+		.otherwise(() => {
+			throw new Error("Not in a valid context");
+		});
+}
+
+const useEndpoint = () => {
+	return match(__APP_TYPE__)
+		.with("cloud", () => {
+			return cloudEnv().VITE_APP_API_URL;
+		})
+		.with("engine", () => {
+			return getConfig().apiUrl;
+		})
+		.otherwise(() => {
+			throw new Error("Not in a valid context");
+		});
+};
+
+const useNamespace = () => {
+	return match(__APP_TYPE__)
+		.with("cloud", () => {
+			const routeContext = useRouteContext({
+				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
+				select: (ctx) => ctx.dataProvider.engineNamespace,
+			});
+			return routeContext;
+		})
+		.with("engine", () => {
+			return "default";
+		})
+		.otherwise(() => {
+			throw new Error("Not in a valid context");
+		});
+};
 
 export default function CreateProjectFrameContent({
 	onClose,
@@ -63,6 +119,10 @@ function FormStepper({
 	datacenters: Region[];
 }) {
 	const provider = useEngineCompatDataProvider();
+	const token = usePublishableToken();
+	const endpoint = useEndpoint();
+	const namespace = useNamespace();
+
 	const { mutateAsync } = useMutation({
 		...provider.upsertRunnerConfigMutationOptions(),
 		onSuccess: async () => {
@@ -86,8 +146,9 @@ function FormStepper({
 		<StepperForm
 			{...stepper}
 			content={{
-				"initial-info": () => <StepInitialInfo />,
+				// "initial-info": () => <StepInitialInfo />,
 				"api-route": () => <StepApiRoute />,
+				frontend: () => <StepFrontend token={token} endpoint={endpoint} namespace={namespace} />,
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -103,7 +164,7 @@ function FormStepper({
 						runnersMargin: values.runnerMargin,
 						requestLifespan:
 							ConnectVercelForm.PLAN_TO_MAX_DURATION[
-								values.plan
+							values.plan
 							] - 5, // Subtract 5s to ensure we don't hit Vercel's timeout
 						headers: Object.fromEntries(
 							values.headers.map(([key, value]) => [key, value]),
@@ -140,53 +201,85 @@ function FormStepper({
 	);
 }
 
-function StepInitialInfo() {
-	return (
-		<>
-			<ConnectVercelForm.Plan />
-			<Accordion type="single" collapsible>
-				<AccordionItem value="item-1">
-					<AccordionTrigger className="text-sm">
-						Advanced options
-					</AccordionTrigger>
-					<AccordionContent className="space-y-4 px-1 pt-2">
-						<ConnectVercelForm.RunnerName />
-						<ConnectVercelForm.Datacenters />
-						<ConnectVercelForm.Headers />
-						<ConnectVercelForm.SlotsPerRunner />
-						<ConnectVercelForm.MinRunners />
-						<ConnectVercelForm.MaxRunners />
-						<ConnectVercelForm.RunnerMargin />
-					</AccordionContent>
-				</AccordionItem>
-			</Accordion>
-		</>
-	);
-}
+// function StepInitialInfo() {
+// 	return (
+// 		<>
+// 			<ConnectVercelForm.Plan />
+// 			<Accordion type="single" collapsible>
+// 				<AccordionItem value="item-1">
+// 					<AccordionTrigger className="text-sm">
+// 						Advanced
+// 					</AccordionTrigger>
+// 					<AccordionContent className="space-y-4 px-1 pt-2">
+// 						<ConnectVercelForm.RunnerName />
+// 						<ConnectVercelForm.Datacenters />
+// 						<ConnectVercelForm.Headers />
+// 						<ConnectVercelForm.SlotsPerRunner />
+// 						<ConnectVercelForm.MinRunners />
+// 						<ConnectVercelForm.MaxRunners />
+// 						<ConnectVercelForm.RunnerMargin />
+// 					</AccordionContent>
+// 				</AccordionItem>
+// 			</Accordion>
+// 		</>
+// 	);
+// }
 
 function StepApiRoute() {
 	const plan = useWatch<FormValues>({ name: "plan" as const });
 	return <ConnectVercelForm.IntegrationCode plan={plan || "hobby"} />;
 }
 
+function StepFrontend({
+	token,
+	endpoint,
+	namespace,
+}: {
+	token: string;
+	endpoint: string;
+	namespace: string;
+}) {
+	return <ConnectVercelForm.FrontendIntegrationCode token={token} endpoint={endpoint} namespace={namespace} />;
+}
+
 function StepDeploy() {
 	return (
 		<>
 			<p>
+				Deploy your code to Vercel and paste your deployment's endpoint:
+			</p>
+			<div className="mt-2">
+				<ConnectVercelForm.Endpoint />
+				<Accordion type="single" collapsible>
+					<AccordionItem value="item-1">
+						<AccordionTrigger className="text-sm">
+							Advanced
+						</AccordionTrigger>
+						<AccordionContent className="space-y-4 px-1 pt-2">
+							<ConnectVercelForm.RunnerName />
+							<ConnectVercelForm.Datacenters />
+							<ConnectVercelForm.Headers />
+							<ConnectVercelForm.SlotsPerRunner />
+							<ConnectVercelForm.MinRunners />
+							<ConnectVercelForm.MaxRunners />
+							<ConnectVercelForm.RunnerMargin />
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
+			</div>
+			<ConnectVercelForm.ConnectionCheck provider="Vercel" />
+			<p className="text-muted-foreground text-sm">
+				Need help deploying? See{" "}
 				<a
 					href="https://vercel.com/docs/deployments"
 					target="_blank"
 					rel="noreferrer"
-					className=" underline"
+					className="underline"
 				>
-					Deploy your project to Vercel using your preferred method
+					Vercel's deployment documentation
 				</a>
-				. After deployment, return here to add the endpoint.
+				.
 			</p>
-			<div className="mt-2">
-				<ConnectVercelForm.Endpoint />
-				<ConnectVercelForm.ConnectionCheck provider="Vercel" />
-			</div>
 		</>
 	);
 }

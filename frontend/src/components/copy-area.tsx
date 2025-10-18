@@ -189,7 +189,7 @@ export function DiscreteInput({
 				type={finalShow ? "text" : "password"}
 				readOnly
 				value={value}
-				className={cn("font-mono", !show ? "pr-16" : "pr-8")}
+				className={cn("font-mono truncate", !show ? "pr-16" : "pr-8")}
 			/>
 			<div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-50 flex gap-1">
 				<ClickToCopy value={value}>

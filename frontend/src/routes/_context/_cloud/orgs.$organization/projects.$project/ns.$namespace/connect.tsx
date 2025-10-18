@@ -116,9 +116,84 @@ export function RouteComponent() {
 
 	if (!hasConfigs) {
 		return (
-			<div className="bg-card h-full border my-2 mr-2 px-4 py-4 rounded-lg flex flex-col items-center justify-safe-center overflow-auto @container">
+			<div className="h-full border my-2 mr-2 px-4 py-4 rounded-lg flex flex-col items-center justify-safe-center overflow-auto @container">
 				<div className="grid grid-cols-1 @7xl:grid-cols-2 gap-8 justify-safe-center">
-					<div className="max-w-3xl w-full border rounded-lg">
+					<div className="max-w-3xl border rounded-lg w-full bg-card">
+						<div className="mt-2 flex justify-between items-center px-6 py-4 sticky top-0">
+							<H2>Create New Project</H2>
+						</div>
+						<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
+							Start a new RivetKit project with Rivet Cloud. Use
+							one of our templates to get started quickly.
+						</p>
+
+						<hr className="mb-4" />
+						<div className="p-4 px-6">
+							<H3>1-Click Deploy From Template</H3>
+							<div className="grid grid-cols-2 @4xl:grid-cols-3 gap-2 my-4">
+								<Button
+									size="lg"
+									variant="outline"
+									className="min-w-48 h-auto min-h-28 text-xl"
+									startIcon={<Icon icon={faVercel} />}
+									asChild
+								>
+									<RouterLink
+										to="."
+										search={{ modal: "connect-q-vercel" }}
+									>
+										Vercel
+									</RouterLink>
+								</Button>
+								<OneClickDeployRailwayButton />
+							</div>
+						</div>
+						<div className="px-6 mb-8">
+							<H3>Quickstart Guides</H3>
+							<div className="grid grid-cols-2 @4xl:grid-cols-3 gap-2 my-4">
+								<DocsSheet
+									path="/docs/actors/quickstart/backend"
+									title={"JavaScript Quickstart"}
+								>
+									<Button
+										size="lg"
+										variant="outline"
+										className="min-w-48 h-auto min-h-28 text-xl"
+										startIcon={<Icon icon={faNodeJs} />}
+									>
+										Node.js & Bun
+									</Button>
+								</DocsSheet>
+								<DocsSheet
+									path="/docs/actors/quickstart/react"
+									title={"React Quickstart"}
+								>
+									<Button
+										size="lg"
+										variant="outline"
+										className="min-w-48 h-auto min-h-28 text-xl"
+										startIcon={<Icon icon={faReact} />}
+									>
+										React
+									</Button>
+								</DocsSheet>
+								<DocsSheet
+									path="/docs/actors/quickstart/next-js"
+									title={"Next.js Quickstart"}
+								>
+									<Button
+										size="lg"
+										variant="outline"
+										className="min-w-48 h-auto min-h-28 text-xl"
+										startIcon={<Icon icon={faNextjs} />}
+									>
+										Next.js
+									</Button>
+								</DocsSheet>
+							</div>
+						</div>
+					</div>
+					<div className="max-w-3xl w-full border rounded-lg bg-card">
 						<div className="mt-2 flex justify-between items-center px-6 py-4">
 							<H2>Connect Existing Project</H2>
 							<div className="flex gap-4">
@@ -234,90 +309,6 @@ export function RouteComponent() {
 							</div>
 						</div>
 					</div>
-					<div className="max-w-3xl border rounded-lg w-full">
-						<div className="mt-2 flex justify-between items-center px-6 py-4 sticky top-0">
-							<H2>Connect New Project</H2>
-						</div>
-						<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
-							Start a new RivetKit project with Rivet Cloud. Use
-							one of our templates to get started quickly.
-						</p>
-
-						<hr className="mb-4" />
-						<div className="p-4 px-6">
-							<H3>1-Click Deploy From Template</H3>
-							<div className="grid grid-cols-2 @4xl:grid-cols-3 gap-2 my-4">
-								<Button
-									size="lg"
-									variant="outline"
-									className="min-w-48 h-auto min-h-28 text-xl"
-									startIcon={<Icon icon={faVercel} />}
-									onClick={() => {
-										navigate({
-											to: ".",
-											search: {
-												modal: "connect-q-vercel",
-											},
-										});
-									}}
-									asChild
-								>
-									<a
-										href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Ftemplate-vercel&env=NEXT_PUBLIC_RIVET_ENDPOINT,NEXT_PUBLIC_RIVET_TOKEN,NEXT_PUBLIC_RIVET_NAMESPACE&project-name=rivetkit-vercel&repository-name=rivetkit-vercel"
-										target="_blank"
-										rel="noreferrer"
-									>
-										Vercel
-									</a>
-								</Button>
-								<OneClickDeployRailwayButton />
-							</div>
-						</div>
-						<div className="px-6 mb-8">
-							<H3>Quickstart Guides</H3>
-							<div className="grid grid-cols-2 @4xl:grid-cols-3 gap-2 my-4">
-								<DocsSheet
-									path="/docs/actors/quickstart/backend"
-									title={"JavaScript Quickstart"}
-								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faNodeJs} />}
-									>
-										Node.js & Bun
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path="/docs/actors/quickstart/react"
-									title={"React Quickstart"}
-								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faReact} />}
-									>
-										React
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path="/docs/actors/quickstart/next-js"
-									title={"Next.js Quickstart"}
-								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faNextjs} />}
-									>
-										Next.js
-									</Button>
-								</DocsSheet>
-							</div>
-						</div>
-					</div>
 				</div>
 			</div>
 		);
@@ -382,7 +373,7 @@ function Providers() {
 	});
 
 	return (
-		<div className="p-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
+		<div className="p-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
 			<div className="flex gap-2 items-center mb-2">
 				<H3>Providers</H3>
 
@@ -428,7 +419,7 @@ function Runners() {
 	});
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg bg-muted/10">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Runners</H3>
 			</div>
@@ -490,8 +481,105 @@ function ConnectYourFrontend() {
 		select: (ctx) => ctx.dataProvider.engineNamespace,
 	});
 
+	const { data: configs } = useInfiniteQuery({
+		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		refetchInterval: 5000,
+	});
+
+	// Check if Vercel is connected
+	const hasVercel = configs?.pages.some((page) =>
+		Object.values(page.runnerConfigs).some(
+			(config) => config.metadata?.provider === "vercel"
+		)
+	);
+
+	const nextJsTab = (
+		<CodeFrame
+			language="typescript"
+			title="Next.js"
+			icon={faNextjs}
+			footer={
+				<DocsSheet
+					path={"/docs/actors/quickstart/next-js"}
+					title={"Next.js Quickstart"}
+				>
+					<span className="cursor-pointer hover:underline">
+						See Next.js Documentation{" "}
+						<Icon
+							icon={faChevronRight}
+							className="text-xs"
+						/>
+					</span>
+				</DocsSheet>
+			}
+		>
+			<CodePreview
+				code={nextJsCode({ token, endpoint, namespace })}
+				language="typescript"
+			/>
+		</CodeFrame>
+	);
+
+	const reactTab = (
+		<CodeFrame
+			language="typescript"
+			title="React"
+			icon={faReact}
+			footer={
+				<DocsSheet
+					path={"/docs/actors/quickstart/react"}
+					title={"React Quickstart"}
+				>
+					<span className="cursor-pointer hover:underline">
+						See React Documentation{" "}
+						<Icon
+							icon={faChevronRight}
+							className="text-xs"
+						/>
+					</span>
+				</DocsSheet>
+			}
+		>
+			<CodePreview
+				code={reactCode({ token, endpoint, namespace })}
+				language="typescript"
+			/>
+		</CodeFrame>
+	);
+
+	const javascriptTab = (
+		<CodeFrame
+			language="typescript"
+			title="JavaScript"
+			icon={faNodeJs}
+			footer={
+				<DocsSheet
+					path={"/docs/actors/quickstart/backend"}
+					title={"JavaScript Quickstart"}
+				>
+					<span className="cursor-pointer hover:underline">
+						See JavaScript Documentation{" "}
+						<Icon
+							icon={faChevronRight}
+							className="text-xs"
+						/>
+					</span>
+				</DocsSheet>
+			}
+		>
+			<CodePreview
+				code={javascriptCode({
+					token,
+					endpoint,
+					namespace,
+				})}
+				language="typescript"
+			/>
+		</CodeFrame>
+	);
+
 	return (
-		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
+		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg bg-muted/10">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Connect Your Frontend</H3>
 			</div>
@@ -500,81 +588,19 @@ function ConnectYourFrontend() {
 			</p>
 			<div>
 				<CodeGroup>
-					<CodeFrame
-						language="typescript"
-						title="JavaScript"
-						footer={
-							<DocsSheet
-								path={"/docs/actors/quickstart/backend"}
-								title={"JavaScript Quickstart"}
-							>
-								<span className="cursor-pointer hover:underline">
-									See JavaScript Documentation{" "}
-									<Icon
-										icon={faChevronRight}
-										className="text-xs"
-									/>
-								</span>
-							</DocsSheet>
-						}
-					>
-						<CodePreview
-							code={javascriptCode({
-								token,
-								endpoint,
-								namespace,
-							})}
-							language="typescript"
-						/>
-					</CodeFrame>
-
-					<CodeFrame
-						language="typescript"
-						title="React"
-						footer={
-							<DocsSheet
-								path={"/docs/actors/quickstart/react"}
-								title={"React Quickstart"}
-							>
-								<span className="cursor-pointer hover:underline">
-									See React Documentation{" "}
-									<Icon
-										icon={faChevronRight}
-										className="text-xs"
-									/>
-								</span>
-							</DocsSheet>
-						}
-					>
-						<CodePreview
-							code={reactCode({ token, endpoint, namespace })}
-							language="typescript"
-						/>
-					</CodeFrame>
-
-					<CodeFrame
-						language="typescript"
-						title="Next.js"
-						footer={
-							<DocsSheet
-								path={"/docs/actors/quickstart/next-js"}
-								title={"Next.js Quickstart"}
-							>
-								<span className="cursor-pointer hover:underline">
-									See Next.js Documentation{" "}
-									<Icon
-										icon={faChevronRight}
-										className="text-xs"
-									/>
-								</span>
-							</DocsSheet>
-						}
-					>
-						<CodePreview
-							code={nextJsCode({ token, endpoint, namespace })}
-							language="typescript"
-						/>
-					</CodeFrame>
+					{hasVercel ? (
+						<>
+							{nextJsTab}
+							{reactTab}
+							{javascriptTab}
+						</>
+					) : (
+						<>
+							{javascriptTab}
+							{reactTab}
+							{nextJsTab}
+						</>
+					)}
 				</CodeGroup>
 			</div>
 		</div>
@@ -624,16 +650,15 @@ const nextJsCode = ({
 	endpoint: string;
 	namespace: string;
 }) => `"use client";
-import { createClient, createRivetKit } from "@rivetkit/next-js/client";
+import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
 
-const client = createClient<typeof registry>({
+export const { useActor } = createRivetKit<typeof registry>({
 	endpoint: "${engineEnv().VITE_APP_API_URL}",
 	namespace: "${namespace}",
 	token: "${token}",
 });
-
-export const { useActor } = createRivetKit(client);`;
+`;
 
 function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = Route.useNavigate();
@@ -748,11 +773,6 @@ function DataLoadingPlaceholder() {
 }
 
 function OneClickDeployRailwayButton() {
-	const url = useRailwayTemplateLink({
-		runnerName: "rivet-cloud-starter",
-		datacenter: "us-east-1",
-	});
-
 	return (
 		<Button
 			size="lg"
@@ -761,9 +781,12 @@ function OneClickDeployRailwayButton() {
 			startIcon={<Icon icon={faRailway} />}
 			asChild
 		>
-			<a href={url} target="_blank" rel="noreferrer">
+			<RouterLink
+				to="."
+				search={{ modal: "connect-q-railway" }}
+			>
 				Railway
-			</a>
+			</RouterLink>
 		</Button>
 	);
 }

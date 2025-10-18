@@ -440,14 +440,15 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 
 	const enabled = !!endpoint && endpointSchema.safeParse(endpoint).success;
 
-	const [debounced] = useDebounceValue(endpoint, 300);
+	const [debouncedEndpoint] = useDebounceValue(endpoint, 300);
+	const [debouncedHeaders] = useDebounceValue(headers, 300);
 
 	const { isSuccess, data, isError, isRefetchError, isLoadingError, error } =
 		useQuery({
 			...dataProvider.runnerHealthCheckQueryOptions({
-				runnerUrl: debounced,
+				runnerUrl: debouncedEndpoint,
 				headers: Object.fromEntries(
-					headers.filter(([k, v]) => k && v).map(([k, v]) => [k, v]),
+					debouncedHeaders.filter(([k, v]) => k && v).map(([k, v]) => [k, v]),
 				),
 			}),
 			enabled,
