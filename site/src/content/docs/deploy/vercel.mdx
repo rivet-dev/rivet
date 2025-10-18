@@ -43,20 +43,6 @@ export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
 ```
 
 </Step>
-<Step title="Configure Vercel settings">
-
-Disable Fluid Compute in your `vercel.json`:
-
-```json {{"title":"vercel.json"}}
-{
-	"fluid": false
-	// ... rest of vercel.json
-}
-```
-
-Rivet provides its own intelligent load balancing mechanism.
-
-</Step>
 <Step title="Deploy to Vercel">
 
 1. Connect your GitHub project to Vercel
