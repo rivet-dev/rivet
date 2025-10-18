@@ -90,6 +90,8 @@ pub mod runner_configs_serverless_metadata_error_one_of_5_invalid_response_schem
 pub use self::runner_configs_serverless_metadata_error_one_of_5_invalid_response_schema::RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema;
 pub mod runner_configs_upsert_request_body;
 pub use self::runner_configs_upsert_request_body::RunnerConfigsUpsertRequestBody;
+pub mod runner_configs_upsert_response;
+pub use self::runner_configs_upsert_response::RunnerConfigsUpsertResponse;
 pub mod runners_list_names_response;
 pub use self::runners_list_names_response::RunnersListNamesResponse;
 pub mod runners_list_response;

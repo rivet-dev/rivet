@@ -6,11 +6,15 @@ import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
 
-export const RunnerConfigsUpsertResponse: core.serialization.Schema<
+export const RunnerConfigsUpsertResponse: core.serialization.ObjectSchema<
     serializers.RunnerConfigsUpsertResponse.Raw,
     Rivet.RunnerConfigsUpsertResponse
-> = core.serialization.record(core.serialization.string(), core.serialization.unknown());
+> = core.serialization.object({
+    endpointConfigChanged: core.serialization.property("endpoint_config_changed", core.serialization.boolean()),
+});
 
 export declare namespace RunnerConfigsUpsertResponse {
-    export type Raw = Record<string, unknown>;
+    export interface Raw {
+        endpoint_config_changed: boolean;
+    }
 }

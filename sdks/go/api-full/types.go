@@ -1509,7 +1509,34 @@ func (r *RunnerConfigsServerlessMetadataErrorRequestTimedOut) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
-type RunnerConfigsUpsertResponse = map[string]interface{}
+type RunnerConfigsUpsertResponse struct {
+	EndpointConfigChanged bool `json:"endpoint_config_changed"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsUpsertResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsUpsertResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsUpsertResponse(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsUpsertResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
 
 type RunnersListNamesResponse struct {
 	Names      []string    `json:"names,omitempty"`
