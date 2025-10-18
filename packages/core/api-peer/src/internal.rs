@@ -97,9 +97,13 @@ pub async fn epoxy_replica_reconfigure(
 	_query: (),
 	_body: ReplicaReconfigureRequest,
 ) -> Result<ReplicaReconfigureResponse> {
-	ctx.signal(epoxy::workflows::coordinator::ReplicaReconfigure {})
-		.send()
-		.await?;
+	if ctx.config().is_leader() {
+		ctx.signal(epoxy::workflows::coordinator::ReplicaReconfigure {})
+			.to_workflow::<epoxy::workflows::coordinator::Workflow>()
+			.tag("replica", ctx.config().epoxy_replica_id())
+			.send()
+			.await?;
+	}
 
 	Ok(ReplicaReconfigureResponse {})
 }

@@ -5,7 +5,7 @@ use futures_util::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered}
 use gas::prelude::*;
 use rivet_api_types::{runner_configs::list as runner_configs_list, runners::list as runners_list};
 use rivet_api_util::{Method, request_remote_datacenter};
-use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
+use rivet_types::runner_configs::RunnerConfigKind;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
