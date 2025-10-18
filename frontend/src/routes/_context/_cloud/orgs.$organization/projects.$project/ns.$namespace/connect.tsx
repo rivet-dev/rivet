@@ -443,17 +443,16 @@ function Runners() {
 }
 
 function usePublishableToken() {
+	const dataProvider = useEngineCompatDataProvider();
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
 			return useSuspenseQuery(
-				Route.useRouteContext({
-					select: (ctx) => ctx.dataProvider,
-				}).publishableTokenQueryOptions(),
+				dataProvider.publishableTokenQueryOptions(),
 			).data;
 		})
 		.with("engine", () => {
 			return useSuspenseQuery(
-				useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
+				dataProvider.engineAdminTokenQueryOptions(),
 			).data;
 		})
 		.otherwise(() => {
@@ -477,12 +476,11 @@ const useEndpoint = () => {
 function ConnectYourFrontend() {
 	const token = usePublishableToken();
 	const endpoint = useEndpoint();
-	const namespace = Route.useRouteContext({
-		select: (ctx) => ctx.dataProvider.engineNamespace,
-	});
+	const dataProvider = useEngineCompatDataProvider();
+	const namespace = dataProvider.engineNamespace;
 
 	const { data: configs } = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		...dataProvider.runnerConfigsQueryOptions(),
 		refetchInterval: 5000,
 	});
 
