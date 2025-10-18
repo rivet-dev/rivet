@@ -12,22 +12,49 @@ pub struct Input {
 }
 
 #[operation]
-pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<()> {
-	ctx.udb()?
+pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<bool> {
+	let endpoint_config_changed = ctx
+		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let runner_config_key =
 				keys::runner_config::DataKey::new(input.namespace_id, input.name.clone());
 
-			// Delete previous index
-			if let Some(existing_config) = tx.read_opt(&runner_config_key, Serializable).await? {
+			// Check if config changed (for serverless, compare URL and headers)
+			let endpoint_config_changed = if let Some(existing_config) =
+				tx.read_opt(&runner_config_key, Serializable).await?
+			{
+				// Delete previous index
 				tx.delete(&keys::runner_config::ByVariantKey::new(
 					input.namespace_id,
 					runner_config_variant(&existing_config),
 					input.name.clone(),
 				));
-			}
+
+				// Check if serverless endpoint config changed
+				match (&existing_config.kind, &input.config.kind) {
+					(
+						RunnerConfigKind::Serverless {
+							url: old_url,
+							headers: old_headers,
+							..
+						},
+						RunnerConfigKind::Serverless {
+							url: new_url,
+							headers: new_headers,
+							..
+						},
+					) => old_url != new_url || old_headers != new_headers,
+					_ => {
+						// Config type changed or is not serverless
+						true
+					}
+				}
+			} else {
+				// New config
+				true
+			};
 
 			// Write new config
 			tx.write(&runner_config_key, input.config.clone())?;
@@ -104,7 +131,7 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 				}
 			}
 
-			Ok(Ok(()))
+			Ok(Ok(endpoint_config_changed))
 		})
 		.custom_instrument(tracing::info_span!("runner_config_upsert_tx"))
 		.await?
@@ -117,5 +144,5 @@ pub async fn namespace_runner_config_upsert(ctx: &OperationCtx, input: &Input) -
 			.await?;
 	}
 
-	Ok(())
+	Ok(endpoint_config_changed)
 }

@@ -59,11 +59,19 @@ async fn upsert_inner(
 
 	tracing::debug!(runner_name = ?path.runner_name, datacenters_count = body.datacenters.len(), "starting upsert");
 
+	// Resolve namespace
+	let namespace = ctx
+		.op(namespace::ops::resolve_for_name_global::Input {
+			name: query.namespace.clone(),
+		})
+		.await?
+		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+
 	// Store serverless config before processing (since we'll remove from body.datacenters)
 	let serverless_config = body
 		.datacenters
 		.iter()
-		.filter_map(|(dc_name, runner_config)| {
+		.filter_map(|(_dc_name, runner_config)| {
 			if let rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Serverless {
 				url,
 				headers,
@@ -78,16 +86,17 @@ async fn upsert_inner(
 		.next();
 
 	// Apply config
+	let mut any_endpoint_config_changed = false;
 	for dc in &ctx.config().topology().datacenters {
 		if let Some(runner_config) = body.datacenters.remove(&dc.name) {
-			if ctx.config().dc_label() == dc.datacenter_label {
+			let response = if ctx.config().dc_label() == dc.datacenter_label {
 				rivet_api_peer::runner_configs::upsert(
 					ctx.clone().into(),
 					path.clone(),
 					query.clone(),
 					rivet_api_peer::runner_configs::UpsertRequest(runner_config),
 				)
-				.await?;
+				.await?
 			} else {
 				request_remote_datacenter::<UpsertResponse>(
 					ctx.config(),
@@ -97,7 +106,11 @@ async fn upsert_inner(
 					Some(&query),
 					Some(&runner_config),
 				)
-				.await?;
+				.await?
+			};
+
+			if response.endpoint_config_changed {
+				any_endpoint_config_changed = true;
 			}
 		} else {
 			if ctx.config().dc_label() == dc.datacenter_label {
@@ -125,28 +138,25 @@ async fn upsert_inner(
 		}
 	}
 
-	// Resolve namespace
-	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
-			name: query.namespace.clone(),
-		})
-		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
-
 	// Update runner metadata
 	//
 	// This allows us to populate the actor names immediately upon configuring a serverless runner
 	if let Some((url, metadata_headers)) = serverless_config {
-		if let Err(err) = utils::refresh_runner_config_metadata(
-			ctx.clone(),
-			namespace.namespace_id,
-			path.runner_name.clone(),
-			url,
-			metadata_headers,
-		)
-		.await
-		{
-			tracing::warn!(?err, runner_name = ?path.runner_name, "failed to refresh runner config metadata");
+		if any_endpoint_config_changed {
+			tracing::debug!("endpoint config changed, refreshing metadata");
+			if let Err(err) = utils::refresh_runner_config_metadata(
+				ctx.clone(),
+				namespace.namespace_id,
+				path.runner_name.clone(),
+				url,
+				metadata_headers,
+			)
+			.await
+			{
+				tracing::warn!(?err, runner_name = ?path.runner_name, "failed to refresh runner config metadata");
+			}
+		} else {
+			tracing::debug!("endpoint config unchanged, skipping metadata refresh");
 		}
 	}
 
@@ -160,5 +170,7 @@ async fn upsert_inner(
 		)
 		.await?;
 
-	Ok(UpsertResponse {})
+	Ok(UpsertResponse {
+		endpoint_config_changed: any_endpoint_config_changed,
+	})
 }
