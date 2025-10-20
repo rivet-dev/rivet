@@ -8,10 +8,11 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { getConfig } from "@/components/lib/config";
+import { match } from "ts-pattern";
+import { useInspectorCredentials } from "@/app/credentials-context";
 import { assertNonNullable, ls } from "../../lib/utils";
 import { useActor } from "../actor-queries-context";
-import { useDataProvider } from "../data-provider";
+import { useDataProvider, useEngineCompatDataProvider } from "../data-provider";
 import { ActorFeature, type ActorId } from "../queries";
 import { ActorWorkerContainer } from "./actor-worker-container";
 
@@ -25,6 +26,23 @@ export const useActorWorker = () => {
 	return value;
 };
 
+const useInspectorToken = (runnerName: string) => {
+	return match(__APP_TYPE__)
+		.with("inspector", () => {
+			return useInspectorCredentials().credentials?.token;
+		})
+		.otherwise(() => {
+			const provider = useEngineCompatDataProvider();
+			const { data } = useQuery(
+				provider.runnerByNameQueryOptions({
+					runnerName,
+				}),
+			);
+
+			return (data?.metadata?.inspectorToken as string) || "";
+		});
+};
+
 interface ActorWorkerContextProviderProps {
 	actorId: ActorId;
 	children: ReactNode;
@@ -33,6 +51,9 @@ export const ActorWorkerContextProvider = ({
 	children,
 	actorId,
 }: ActorWorkerContextProviderProps) => {
+	const dataProvider = useDataProvider();
+	const engineToken = dataProvider.engineToken;
+	const namespace = dataProvider.engineNamespace;
 	const {
 		data: {
 			features,
@@ -41,8 +62,11 @@ export const ActorWorkerContextProvider = ({
 			destroyedAt,
 			startedAt,
 			sleepingAt,
+			runner,
 		} = {},
-	} = useQuery(useDataProvider().actorWorkerQueryOptions(actorId));
+	} = useQuery(dataProvider.actorWorkerQueryOptions(actorId));
+	const inspectorToken = useInspectorToken(runner || "");
+
 	const enabled =
 		(features?.includes(ActorFeature.Console) &&
 			!destroyedAt &&
@@ -69,8 +93,11 @@ export const ActorWorkerContextProvider = ({
 				endpoint,
 				name,
 				signal: ctrl.signal,
-				rpcs,
-				engineToken: ls.engineCredentials.get(getConfig().apiUrl) || "",
+				rpcs: rpcs ?? [],
+				engineToken,
+				runnerName: runner,
+				namespace,
+				inspectorToken,
 			});
 		}
 
@@ -78,7 +105,17 @@ export const ActorWorkerContextProvider = ({
 			ctrl.abort();
 			container.terminate();
 		};
-	}, [actorId, enabled, rpcs, name, endpoint]);
+	}, [
+		actorId,
+		enabled,
+		rpcs,
+		name,
+		endpoint,
+		engineToken,
+		inspectorToken,
+		namespace,
+		runner,
+	]);
 
 	return (
 		<ActorWorkerContext.Provider value={container}>

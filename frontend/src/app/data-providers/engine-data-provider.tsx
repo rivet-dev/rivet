@@ -49,9 +49,9 @@ export function createClient(
 		environment: "",
 		...opts,
 		fetcher: async (args) => {
-			Object.keys(args.headers).forEach((key) => {
+			Object.keys(args.headers || {}).forEach((key) => {
 				if (key.toLowerCase().startsWith("x-fern-")) {
-					delete args.headers[key];
+					delete args.headers?.[key];
 				}
 			});
 			return await fetcher(args);
@@ -60,13 +60,14 @@ export function createClient(
 }
 
 export const createGlobalContext = (opts: {
-	engineToken: (() => string) | string;
+	engineToken: (() => string) | string | (() => Promise<string>);
 }) => {
 	const client = createClient(engineEnv().VITE_APP_API_URL, {
 		token: opts.engineToken,
 	});
 	return {
 		client,
+		...opts,
 		namespacesQueryOptions() {
 			return infiniteQueryOptions({
 				queryKey: ["namespaces"] as any,
@@ -138,6 +139,7 @@ export const createNamespaceContext = ({
 	const def = createDefaultGlobalContext();
 	const dataProvider = {
 		...def,
+		endpoint: engineEnv().VITE_APP_API_URL,
 		features: {
 			canCreateActors: true,
 			canDeleteActors: true,
@@ -190,7 +192,7 @@ export const createNamespaceContext = ({
 			return queryOptions({
 				...def.regionQueryOptions(regionId),
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.regionQueryOptions(regionId).queryKey,
 				],
 				queryFn: async ({ client }) => {
@@ -426,6 +428,7 @@ export const createNamespaceContext = ({
 
 	return {
 		engineNamespace: namespace,
+		engineToken: parent.engineToken,
 		...dataProvider,
 		runnersQueryOptions() {
 			return infiniteQueryOptions({

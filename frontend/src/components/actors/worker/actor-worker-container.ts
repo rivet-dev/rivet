@@ -33,42 +33,38 @@ export type ContainerState = {
 	commands: ReplCommand[];
 };
 
+interface Meta {
+	actorId: string;
+	rpcs: string[];
+	endpoint?: string;
+	name?: string;
+	engineToken?: string | (() => Promise<string>) | (() => string);
+	runnerName?: string;
+	namespace?: string;
+	inspectorToken?: string;
+}
+
 export class ActorWorkerContainer {
 	#state: ContainerState = {
 		status: { type: "unknown" },
 		commands: [],
 	};
 
-	#meta: {
-		actorId: string;
-		rpcs: string[];
-		endpoint?: string;
-		name?: string;
-		engineToken?: string;
-	} | null = null;
+	#meta: Meta | null = null;
 
 	#listeners: (() => void)[] = [];
 	#worker: Worker | undefined;
 
 	//
 	async init({
-		actorId,
 		signal,
-		rpcs = [],
-		endpoint,
-		name,
-		engineToken,
+		...meta
 	}: {
-		actorId: string;
 		signal: AbortSignal;
-		rpcs?: string[];
-		endpoint?: string;
-		name?: string;
-		engineToken?: string;
-	}) {
+	} & Meta) {
 		this.terminate();
 
-		this.#meta = { actorId, rpcs, endpoint, name, engineToken };
+		this.#meta = { ...meta };
 		this.#state.status = { type: "pending" };
 		this.#update();
 		try {
@@ -81,12 +77,12 @@ export class ActorWorkerContainer {
 
 			// If we reached this point, the actor is supported
 			// check if we still operate on the same actor
-			if (this.#meta.actorId !== actorId) {
+			if (this.#meta.actorId !== meta.actorId) {
 				// if not, we don't need to do anything
 				return null;
 			}
 
-			const worker = new ActorWorker({ name: `actor-${actorId}` });
+			const worker = new ActorWorker({ name: `actor-${meta.actorId}` });
 			signal.throwIfAborted();
 			// now worker needs to check if the actor is supported
 			this.#setupWorker(worker);
@@ -123,7 +119,7 @@ export class ActorWorkerContainer {
 		this.#update();
 	}
 
-	#setupWorker(worker: Worker) {
+	async #setupWorker(worker: Worker) {
 		this.#worker = worker;
 		this.#worker.addEventListener("message", (event) => {
 			try {
@@ -145,7 +141,13 @@ export class ActorWorkerContainer {
 			id: this.#meta?.actorId ?? "",
 			endpoint: this.#meta?.endpoint ?? "",
 			name: this.#meta?.name ?? "",
-			engineToken: this.#meta?.engineToken ?? "",
+			engineToken:
+				typeof this.#meta?.engineToken === "function"
+					? await this.#meta?.engineToken()
+					: this.#meta?.engineToken,
+			namespace: this.#meta?.namespace,
+			runnerName: this.#meta?.runnerName,
+			inspectorToken: this.#meta?.inspectorToken,
 		} satisfies InitMessage);
 	}
 
@@ -238,9 +240,9 @@ export class ActorWorkerContainer {
 		}
 
 		if (msg.type === "error") {
+			console.error("Actor Worker Error", msg);
 			if (!msg.id) {
 				this.#state.status = { type: "error", error: msg.data };
-				console.error("Actor Worker Error", msg.data);
 				this.#update();
 				return;
 			}
