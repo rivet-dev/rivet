@@ -1,8 +1,8 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { applyPatch, compare } from "fast-json-patch";
+import { compare } from "fast-json-patch";
 import { useCallback, useEffect, useMemo } from "react";
-import type { ActorId, Patch, RecordedRealtimeEvent } from "rivetkit/inspector";
+import type { ActorId, RecordedRealtimeEvent } from "rivetkit/inspector";
 import { useActor } from "../actor-queries-context";
 import { useAsyncMemo } from "@/components/hooks/use-async-memo";
 
@@ -59,12 +59,15 @@ export const useActorStatePatchMutation = (
 			if (!response.ok) {
 				throw response;
 			}
-			return await response.json();
+			return (await response.json()) as {
+				state: unknown;
+				enabled: boolean;
+			};
 		},
 		onSuccess: (data) => {
 			queryClient.setQueryData(
 				queries.actorStateQueryOptions(actorId).queryKey,
-				() => ({ enabled: true, state: data }),
+				() => ({ enabled: true, state: data.state }),
 			);
 		},
 		...options,
