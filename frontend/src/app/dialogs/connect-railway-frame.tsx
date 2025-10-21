@@ -177,8 +177,8 @@ export function EnvVariablesStep() {
 						<p>Value</p>
 					</Label>
 					<RivetEndpointEnv />
-					<RivetTokenEnv />
 					<RivetNamespaceEnv />
+					<RivetTokenEnv />
 					<RivetRunnerEnv />
 				</div>
 				<div className="mt-2 flex justify-end">
@@ -220,7 +220,7 @@ function Step1() {
 			<Accordion type="single" collapsible>
 				<AccordionItem value="item-1">
 					<AccordionTrigger className="text-sm">
-						Advanced options
+						Advanced
 					</AccordionTrigger>
 					<AccordionContent className="space-y-4 px-1 pt-2">
 						<ConnectRailwayForm.RunnerName />
@@ -259,7 +259,7 @@ function RivetRunnerEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="RIVET_RUNNER"
+				value="NEXT_PUBLIC_RIVET_RUNNER"
 				show
 			/>
 			<DiscreteInput
@@ -279,7 +279,7 @@ function RivetTokenEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="RIVET_TOKEN"
+				value="NEXT_PUBLIC_RIVET_TOKEN"
 				show
 			/>
 			{isLoading ? (
@@ -288,6 +288,7 @@ function RivetTokenEnv() {
 				<DiscreteInput
 					aria-label="environment variable value"
 					value={(data as string) || ""}
+					show
 				/>
 			)}
 		</>
@@ -300,7 +301,7 @@ function RivetEndpointEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="RIVET_ENDPOINT"
+				value="NEXT_PUBLIC_RIVET_ENDPOINT"
 				show
 			/>
 			<DiscreteInput
@@ -318,7 +319,7 @@ function RivetNamespaceEnv() {
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value="RIVET_NAMESPACE"
+				value="NEXT_PUBLIC_RIVET_NAMESPACE"
 				show
 			/>
 			<DiscreteInput

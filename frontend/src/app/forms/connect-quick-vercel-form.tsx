@@ -17,7 +17,6 @@ export const stepper = defineStepper(
 		assist: false,
 		next: "Next",
 		schema: z.object({
-			plan: z.string().min(1, "Please select a Vercel plan"),
 			runnerName: z.string().min(1, "Runner name is required"),
 			datacenters: z
 				.record(z.boolean())
@@ -33,15 +32,8 @@ export const stepper = defineStepper(
 		}),
 	},
 	{
-		id: "env-vars",
-		title: "Configure Environment Variables",
-		assist: false,
-		next: "Next",
-		schema: z.object({}),
-	},
-	{
 		id: "deploy",
-		title: "Deploy to Vercel",
+		title: "Configure Vercel endpoint",
 		assist: true,
 		next: "Done",
 		schema: z.object({
@@ -51,9 +43,6 @@ export const stepper = defineStepper(
 	},
 );
 
-export const PLAN_TO_MAX_DURATION = ConnectVercelForm.PLAN_TO_MAX_DURATION;
-
-export const Plan = ConnectVercelForm.Plan;
 export const RunnerName = ConnectVercelForm.RunnerName;
 
 export const Datacenters = ConnectVercelForm.Datacenters;
