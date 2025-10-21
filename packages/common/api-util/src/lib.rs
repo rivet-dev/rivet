@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use axum::{body::Body, response::Response};
 use futures_util::StreamExt;
-use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse};
+use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse, X_RIVET_RAY_ID};
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 
@@ -43,7 +43,7 @@ pub async fn request_remote_datacenter_raw(
 	let res = request
 		.send()
 		.await
-		.context("failed sending request to remote dc")?;
+		.context("failed parsing response from remote dc")?;
 	reqwest_to_axum_response(res)
 		.await
 		.context("failed parsing response from remote dc")
@@ -85,7 +85,7 @@ where
 	let res = request
 		.send()
 		.await
-		.context("failed sending request to remote dc")?;
+		.context("failed parsing response from remote dc")?;
 	parse_response::<T>(res)
 		.await
 		.context("failed parsing response from remote dc")
@@ -159,7 +159,7 @@ where
 	// Error only if all requests failed
 	if result_count == errors.len() {
 		if let Some(res) = errors.into_iter().next() {
-			return Err(res).context("all datacenter requests failed");
+			return Err(res).with_context(|| "all datacenter requests failed");
 		}
 	}
 
@@ -184,15 +184,25 @@ pub async fn reqwest_to_axum_response(reqwest_response: reqwest::Response) -> Re
 #[tracing::instrument(skip_all)]
 pub async fn parse_response<T: DeserializeOwned>(reqwest_response: reqwest::Response) -> Result<T> {
 	let status = reqwest_response.status();
+	let headers = reqwest_response.headers();
+	let ray_id = headers
+		.get(X_RIVET_RAY_ID)
+		.and_then(|v| v.to_str().ok())
+		.map(|x| x.to_string());
 	let response_text = reqwest_response.text().await?;
 
 	if status.is_success() {
 		serde_json::from_str::<T>(&response_text).map_err(Into::into)
 	} else {
-		Err(RawErrorResponse(
+		let error = RawErrorResponse(
 			status,
 			serde_json::from_str::<ErrorResponse>(&response_text)?,
-		)
-		.into())
+		);
+
+		if let Some(ray_id) = ray_id {
+			Err(error).with_context(|| format!("remote request failed (ray_id: {ray_id})"))
+		} else {
+			Err(error.into())
+		}
 	}
 }

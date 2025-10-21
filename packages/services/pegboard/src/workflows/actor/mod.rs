@@ -301,44 +301,48 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									..
 								}) => match intent {
 									protocol::ActorIntent::ActorIntentSleep => {
-										state.gc_timeout_ts =
-											Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
-										state.sleeping = true;
+										if let Some(runner_workflow_id) = state.runner_workflow_id {
+											state.gc_timeout_ts =
+												Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
+											state.sleeping = true;
 
-										ctx.activity(runtime::SetSleepingInput {
-											actor_id: input.actor_id,
-										})
-										.await?;
+											ctx.activity(runtime::SetSleepingInput {
+												actor_id: input.actor_id,
+											})
+											.await?;
 
-										// Send signal to kill actor now that we know it will be sleeping
-										destroy::kill(
-											ctx,
-											input.actor_id,
-											state.generation,
-											state.runner_workflow_id.context(
-												"should have runner_workflow_id set if sleeping",
-											)?,
-										)
-										.await?;
+											// Send signal to kill actor now that we know it will be sleeping
+											destroy::kill(
+												ctx,
+												input.actor_id,
+												state.generation,
+												runner_workflow_id,
+											)
+											.await?;
+										} else {
+											tracing::warn!("actor not allocated, ignoring sleep intent");
+										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
-										state.gc_timeout_ts =
-											Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
+										if let Some(runner_workflow_id) = state.runner_workflow_id {
+											state.gc_timeout_ts =
+												Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
 
-										ctx.activity(runtime::SetNotConnectableInput {
-											actor_id: input.actor_id,
-										})
-										.await?;
+											ctx.activity(runtime::SetNotConnectableInput {
+												actor_id: input.actor_id,
+											})
+											.await?;
 
-										destroy::kill(
-											ctx,
-											input.actor_id,
-											state.generation,
-											state.runner_workflow_id.context(
-												"should have runner_workflow_id set if stopping",
-											)?,
-										)
-										.await?;
+											destroy::kill(
+												ctx,
+												input.actor_id,
+												state.generation,
+												runner_workflow_id,
+											)
+											.await?;
+										} else {
+											tracing::warn!("actor not allocated, ignoring stop intent");
+										}
 									}
 								},
 								protocol::Event::EventActorStateUpdate(
@@ -347,21 +351,23 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									},
 								) => match actor_state {
 									protocol::ActorState::ActorStateRunning => {
-										state.gc_timeout_ts = None;
+										if let Some(runner_id) = state.runner_id {
+											state.gc_timeout_ts = None;
 
-										ctx.activity(runtime::SetStartedInput {
-											actor_id: input.actor_id,
-										})
-										.await?;
+											ctx.activity(runtime::SetStartedInput {
+												actor_id: input.actor_id,
+											})
+											.await?;
 
-										ctx.msg(Ready {
-											runner_id: state
-												.runner_id
-												.context("should have runner_id set if running")?,
-										})
-										.tag("actor_id", input.actor_id)
-										.send()
-										.await?;
+											ctx.msg(Ready {
+												runner_id,
+											})
+											.tag("actor_id", input.actor_id)
+											.send()
+											.await?;
+										} else {
+											tracing::warn!("actor not allocated, ignoring running event");
+										}
 									}
 									protocol::ActorState::ActorStateStopped(
 										protocol::ActorStateStopped { code, .. },

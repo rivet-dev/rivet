@@ -566,7 +566,7 @@ export class Runner {
 
 			this.#config.onDisconnected();
 
-			if (ev.reason.toString() == "ws.eviction") {
+			if (ev.reason.toString().startsWith("ws.eviction")) {
 				logger()?.info("runner evicted");
 
 				await this.shutdown(true);
