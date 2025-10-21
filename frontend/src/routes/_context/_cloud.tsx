@@ -40,6 +40,7 @@ function CloudModals() {
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
+	const ConnectQuickRailwayDialog = useDialog.ConnectQuickRailway.Dialog;
 	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
 	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
 	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
@@ -124,6 +125,26 @@ function CloudModals() {
 					},
 				}}
 			/>
+		<ConnectQuickRailwayDialog
+			dialogContentProps={{
+				className: "max-w-xl",
+			}}
+			dialogProps={{
+				open: search.modal === "connect-q-railway",
+				// FIXME
+				onOpenChange: (value: any) => {
+					if (!value) {
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				},
+			}}
+		/>
 			<ConnectRailwayDialog
 				dialogContentProps={{
 					className: "max-w-xl",

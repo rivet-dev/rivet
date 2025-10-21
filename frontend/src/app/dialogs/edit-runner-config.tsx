@@ -49,7 +49,10 @@ export default function EditRunnerConfigFrameContent({
 					},
 				};
 
-				const otherDcs = Object.entries(datacenters).filter(([k]) => k !== dc).filter(([k, v]) => v.serverless).map(([k, v]) => [k, config]);
+				const otherDcs = Object.entries(datacenters)
+					.filter(([k]) => k !== dc)
+					.filter(([k, v]) => v.serverless)
+					.map(([k, v]) => [k, config]);
 
 				console.log(otherDcs, [dc, config]);
 

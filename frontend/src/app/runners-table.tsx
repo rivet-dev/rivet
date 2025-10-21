@@ -1,24 +1,18 @@
 import {
-	faHourglassClock,
 	faPlus,
-	faSignal4,
-	faSignal5,
 	faSignalAlt,
 	faSignalAlt2,
 	faSignalAlt3,
 	faSignalAlt4,
-	faSignalGood,
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { formatDistance, formatRelative } from "date-fns";
-import { useInterval } from "usehooks-ts";
+import { formatDistance } from "date-fns";
 import {
 	Button,
 	DiscreteCopyButton,
-	Ping,
 	Skeleton,
 	Table,
 	TableBody,

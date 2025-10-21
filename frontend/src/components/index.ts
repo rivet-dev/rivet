@@ -12,6 +12,7 @@ export * from "./datepicker";
 export * from "./docs-card";
 export * from "./docs-sheet";
 export * from "./external-card";
+export * from "./external-link-card";
 export * from "./fullscreen-loading";
 export * from "./hooks";
 export * from "./lib/config";

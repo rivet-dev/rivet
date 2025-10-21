@@ -31,7 +31,7 @@ export function Connect({
 					<div className="flex-1 flex flex-col gap-2 mt-4">
 						<div className="flex flex-row justify-stretch items-center gap-2">
 							<DocsSheet
-								path={docsLinks.gettingStarted.node}
+								path={docsLinks.gettingStarted.js}
 								title="Node.js & Bun Quickstart"
 							>
 								<Button
