@@ -105,7 +105,7 @@ export function StudioSection() {
 						{/* Visit the Studio link */}
 						<div className="mt-3">
 							<a
-								href="https://inspector.rivet.dev"
+								href="https://inspect.rivet.dev"
 								className="inline-flex items-center gap-2 text-white hover:text-white/80 transition-colors group/link"
 								target="_blank"
 								rel="noopener noreferrer"
