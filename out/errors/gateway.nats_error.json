@@ -1,5 +1,0 @@
-{
-  "code": "nats_error",
-  "group": "gateway",
-  "message": "NATS communication error"
-}

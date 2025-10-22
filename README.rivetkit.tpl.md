@@ -40,7 +40,7 @@ Public-facing projects:
 - **RivetKit** (you are here): Lightweight TypeScript library for building Rivet Actors
 - **[Rivet Engine](https://github.com/rivet-gg/rivet)** : Engine that powers Rivet Actors at scale — completely optional
 - **[Rivet Studio](https://github.com/rivet-gg/rivet/tree/main/frontend/apps/studio)**: Like Postman, but for Rivet Actors
-- **[Rivet Documentation](https://github.com/rivet-gg/rivet/tree/main/site/src/content/docs)**
+- **[Rivet Documentation](https://github.com/rivet-gg/rivet/tree/main/website/src/content/docs)**
 
 ## Get Started
 

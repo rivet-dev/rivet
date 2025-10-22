@@ -1,5 +1,0 @@
-{
-  "code": "new_runner_connected",
-  "group": "ws",
-  "message": "New runner connected, closing old connection."
-}
