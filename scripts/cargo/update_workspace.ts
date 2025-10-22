@@ -10,26 +10,16 @@ async function updateCargoToml() {
 	const workspaceTomlPath = join(rootDir, "Cargo.toml");
 	const workspaceTomlContent = await Deno.readTextFile(workspaceTomlPath);
 	const workspaceToml = parse(workspaceTomlContent);
-	let oss = await exists(join(rootDir, "oss"));
 
 	const entries = async function* () {
-		for await (const entry of walk(join(rootDir, "packages"), {
+		// Yield from engine/packages/* (1 level deep)
+		for await (const entry of walk(join(rootDir, "engine", "packages"), {
 			includeDirs: false,
 			exts: ["toml"],
 			skip: [/node_modules/],
 		})) {
-			if (entry.path.endsWith("Cargo.toml")) yield entry;
-		}
-
-	// Yield from SDKs
-		for await (const entry of walk(join(rootDir, "sdks", "rust"), {
-			includeDirs: false,
-			exts: ["toml"],
-			skip: [/node_modules/],
-		})) {
-			// Only include Cargo.toml files that are directly in a subdirectory of sdks/rust
 			if (entry.path.endsWith("Cargo.toml")) {
-				const relativePath = relative(join(rootDir, "sdks", "rust"), entry.path);
+				const relativePath = relative(join(rootDir, "engine", "packages"), entry.path);
 				const pathParts = relativePath.split("/");
 				if (pathParts.length === 2) {  // Directly in a subdirectory
 					yield entry;
@@ -37,13 +27,21 @@ async function updateCargoToml() {
 			}
 		}
 
-		// Yield from OSS
-		if (oss) {
-			for await (const entry of walk(join(rootDir, "oss", "packages"), {
+		// Yield from engine/sdks/rust/* (1 level deep) if it exists
+		const sdksRustDir = join(rootDir, "engine", "sdks", "rust");
+		if (await exists(sdksRustDir)) {
+			for await (const entry of walk(sdksRustDir, {
 				includeDirs: false,
 				exts: ["toml"],
+				skip: [/node_modules/],
 			})) {
-				if (entry.path.endsWith("Cargo.toml")) yield entry;
+				if (entry.path.endsWith("Cargo.toml")) {
+					const relativePath = relative(sdksRustDir, entry.path);
+					const pathParts = relativePath.split("/");
+					if (pathParts.length === 2) {  // Directly in a subdirectory
+						yield entry;
+					}
+				}
 			}
 		}
 	}();
@@ -76,6 +74,7 @@ async function updateCargoToml() {
 	const newDependencies: Record<string, any> = {};
 	const packageAliases: Record<string, string[]> = {
 		"rivet-util": ["util"],
+		"gasoline": ["gas"],
 	};
 	for (const packagePath of members) {
 		const packageTomlPath = join(rootDir, packagePath, "Cargo.toml");
