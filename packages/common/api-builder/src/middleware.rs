@@ -8,6 +8,7 @@ use axum::{
 	middleware::Next,
 	response::Response,
 };
+use hyper::header::HeaderName;
 use opentelemetry::trace::TraceContextExt;
 use rivet_metrics::KeyValue;
 use tower_http::trace::TraceLayer;
@@ -15,6 +16,8 @@ use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::{ErrorExt, RequestIds, metrics};
+
+pub const X_RIVET_RAY_ID: HeaderName = HeaderName::from_static("x-rivet-ray-id");
 
 // TODO: Remove this since this is duplicate logs & traces, but this is just to see what Axum adds
 // natively vs our logging. We can add this once we're satisfied with our own logging.
@@ -46,11 +49,14 @@ pub async fn http_logging_middleware(
 		.span_context()
 		.clone();
 
-	// Generate request IDs
-	let request_ids = RequestIds::new(config.dc_label());
-
-	// Add request IDs to request extensions so they can be accessed by handlers
-	req.extensions_mut().insert(request_ids);
+	// Add request IDs to request extensions if not already added by guard so they can be accessed by handlers
+	let request_ids = if let Some(request_ids) = req.extensions().get::<RequestIds>() {
+		*request_ids
+	} else {
+		let request_ids = RequestIds::new(config.dc_label());
+		req.extensions_mut().insert(request_ids);
+		request_ids
+	};
 
 	// Create span for this request
 	let req_span = tracing::info_span!(
@@ -118,7 +124,7 @@ pub async fn http_logging_middleware(
 
 		// Add ray_id to response headers
 		if let Ok(ray_id_value) = request_ids.ray_id.to_string().parse() {
-			response.headers_mut().insert("rvt-ray-id", ray_id_value);
+			response.headers_mut().insert(X_RIVET_RAY_ID, ray_id_value);
 		}
 
 		let status = response.status();
@@ -175,8 +181,6 @@ pub async fn http_logging_middleware(
 		let duration = start.elapsed().as_secs_f64();
 
 		tracing::debug!(
-			ray_id = %request_ids.ray_id,
-			req_id = %request_ids.req_id,
 			%remote_addr,
 			%method,
 			%uri,

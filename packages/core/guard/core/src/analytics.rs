@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 // Properties not currently collected but should be added in future iterations:
 // - client_ssl_cipher: Requires TLS connection introspection
@@ -18,7 +17,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GuardHttpRequest {
-	pub request_id: Uuid,
+	// TODO:
+	// pub request_id: Id,
+	// pub ray_id: Id,
 	pub client_ip: String,
 	pub client_request_body_bytes: u64,
 	pub client_request_host: String,
@@ -31,9 +32,6 @@ pub struct GuardHttpRequest {
 	pub client_request_user_agent: String,
 	pub client_src_port: u16,
 	pub client_x_requested_with: String,
-	pub guard_datacenter_id: Uuid,
-	pub guard_cluster_id: Uuid,
-	pub guard_server_id: Uuid,
 	pub guard_end_timestamp: u64,
 	pub guard_response_body_bytes: u64,
 	pub guard_response_content_type: String,

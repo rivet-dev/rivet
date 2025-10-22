@@ -12,7 +12,8 @@ axum-extra.workspace = true
 gas.workspace = true
 chrono.workspace = true
 http.workspace = true
-hyper = { workspace = true, features = ["full"] }
+# TODO: Make this use workspace version
+hyper = { version = "1.6.0", features = ["full"] }
 lazy_static.workspace = true
 opentelemetry.workspace = true
 rivet-cache.workspace = true
