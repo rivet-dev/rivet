@@ -24,6 +24,7 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.14.0",
 		"@rivetkit/react": "workspace:*",
 		"hono": "^4.7.0",
 		"react": "^18.2.0",

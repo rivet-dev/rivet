@@ -121,7 +121,7 @@ function testWebSocket(actorId: string): Promise<void> {
 
 		ws.addEventListener("error", (error) => {
 			clearTimeout(timeout);
-			reject(new Error(`WebSocket error: ${error.message}`));
+			reject(new Error(`WebSocket error: ${(error as any)?.message || "Unknown error"}`));
 		});
 
 		ws.addEventListener("close", () => {

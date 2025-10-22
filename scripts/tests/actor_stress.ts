@@ -19,6 +19,11 @@ async function actorLoop(workerId: number): Promise<void> {
 		try {
 			const actorResponse = await createActor("default", "test-runner");
 			actorId = actorResponse.actor.actor_id;
+
+			if (!actorId) {
+				throw new Error("Failed to get actor ID");
+			}
+
 			activeActors.add(actorId);
 
 			const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
