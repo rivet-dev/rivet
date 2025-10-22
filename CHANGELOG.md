@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.8.1](https://github.com/rivet-dev/engine/compare/v25.8.0...v25.8.1) (2025-10-22)
+
+
+### Features
+
+* **engine:** add RocksDB engine run script ([#3220](https://github.com/rivet-dev/engine/issues/3220)) ([1d59170](https://github.com/rivet-dev/engine/commit/1d5917072a20bd45a30694b4f1864b71a8a74b52))
+* **guard:** support routing via x_rivet_* query params ([#3238](https://github.com/rivet-dev/engine/issues/3238)) ([61ba55a](https://github.com/rivet-dev/engine/commit/61ba55ab4a304f0bc4a1a02ae01c2441f1133cac))
+
+
+### Bug Fixes
+
+* **cache:** fix recursive cache purges ([#3221](https://github.com/rivet-dev/engine/issues/3221)) ([2b53da9](https://github.com/rivet-dev/engine/commit/2b53da90ce5a73c666250e70a3c99828e7e70232))
+* fix epoxy replica ids ([#3223](https://github.com/rivet-dev/engine/issues/3223)) ([eef5ea6](https://github.com/rivet-dev/engine/commit/eef5ea65a927159dbd774cfe2160d5540def0656))
+* **guard, pb:** add top level ray id, fix actor wf error handling ([#3236](https://github.com/rivet-dev/engine/issues/3236)) ([df52371](https://github.com/rivet-dev/engine/commit/df52371bfedb017216a5bcfd41716e1348b97652))
+* metadata auth ([#3224](https://github.com/rivet-dev/engine/issues/3224)) ([62152a5](https://github.com/rivet-dev/engine/commit/62152a5540f31a5506d15e2defce28d32fc1bccf))
+* **site:** 404 for inspector ([#3231](https://github.com/rivet-dev/engine/issues/3231)) ([647eda9](https://github.com/rivet-dev/engine/commit/647eda9d03f41354a398b6f4a71a2d6006b4f6dd))
+* **udb:** fix rocksdb conflict tracker ([#3225](https://github.com/rivet-dev/engine/issues/3225)) ([1fd5f93](https://github.com/rivet-dev/engine/commit/1fd5f938419a85125a47cf4d0e7ab0defbf32c9a))
+
+
+### Chores
+
+* **frontend:** cloud hotfix ([#3222](https://github.com/rivet-dev/engine/issues/3222)) ([ca4eed0](https://github.com/rivet-dev/engine/commit/ca4eed0ea8ce4a5d289cb217a468c7ffabc69cd8))
+* merge rivetkit ([#3240](https://github.com/rivet-dev/engine/issues/3240)) ([c99f4ad](https://github.com/rivet-dev/engine/commit/c99f4ad309964710755a0ce35d110947fc25d7e1))
+* **pegboard:** only refresh serverless runner metadata when new or udpated endpoint ([#3227](https://github.com/rivet-dev/engine/issues/3227)) ([2d8e465](https://github.com/rivet-dev/engine/commit/2d8e465b64d519163a085eb8750a826d4391abf7))
+* re-enable fluid compute ([2aa6a51](https://github.com/rivet-dev/engine/commit/2aa6a51232f66a64943847730fecd136002cbb52))
+* release 25.8.1 ([681962c](https://github.com/rivet-dev/engine/commit/681962c08920d1e0f6192e0edaf47655fe72f93b))
+* **release:** update version to 25.8.1 ([217a43d](https://github.com/rivet-dev/engine/commit/217a43d4e354a38a4fcb2bcb094dfa2b39b17381))
+* remove timeout config ([a321360](https://github.com/rivet-dev/engine/commit/a321360608d34ffb4e5693f80d49b41e237b14ca))
+* reorg in prep for merging rivetkit in to monorepo ([#3239](https://github.com/rivet-dev/engine/issues/3239)) ([6c92532](https://github.com/rivet-dev/engine/commit/6c92532ef88e965a5c6699a30fada52c805ef945))
+* **site:** fix timeout in next examples ([f8e7b2a](https://github.com/rivet-dev/engine/commit/f8e7b2a7cea5faabb1673edbe335d0c8eb03d07c))
+* **site:** how we built vercle functions blog ([#3228](https://github.com/rivet-dev/engine/issues/3228)) ([f7badf7](https://github.com/rivet-dev/engine/commit/f7badf7f4c9bb180719fe6ff66809aa0152a4649))
+* **site:** tweak launch post ([ae290d1](https://github.com/rivet-dev/engine/commit/ae290d19fbc5e8f1c5ba84deadfced22e673f851))
+* **site:** vercel support ([#3190](https://github.com/rivet-dev/engine/issues/3190)) ([32a716f](https://github.com/rivet-dev/engine/commit/32a716f31edddfc02fffabca3fa60205bee57021))
+* **site:** weekly changelog ([#3233](https://github.com/rivet-dev/engine/issues/3233)) ([2ef8f3f](https://github.com/rivet-dev/engine/commit/2ef8f3ff999d893d1d8e4811a649197f67294a78))
+
 ## [25.8.0](https://github.com/rivet-dev/engine/compare/v25.7.3...v25.8.0) (2025-10-17)
 
 
