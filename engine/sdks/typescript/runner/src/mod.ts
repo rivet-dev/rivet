@@ -246,7 +246,7 @@ export class Runner {
 		if (this.#started) throw new Error("Cannot call runner.start twice");
 		this.#started = true;
 
-		logger()?.info({ msg: "starting runner", runnerId: this.runnerId });
+		logger()?.info({ msg: "starting runner" });
 
 		this.#tunnel.start();
 
@@ -266,12 +266,21 @@ export class Runner {
 				logger()?.debug("received SIGINT");
 				this.shutdown(false, true);
 			});
+
+			logger()?.debug({
+				msg: "added SIGTERM listeners",
+			});
 		}
+
+		logger()?.debug({
+			msg: "current listeners",
+			listeners: process.listeners("SIGINT"),
+		});
 	}
 
 	// MARK: Shutdown
 	async shutdown(immediate: boolean, exit: boolean = false) {
-		logger()?.info({ msg: "starting shutdown...", runnerId: this.runnerId, immediate });
+		logger()?.info({ msg: "starting shutdown", runnerId: this.runnerId, immediate });
 		this.#shutdown = true;
 
 		// Clear reconnect timeout
@@ -418,7 +427,7 @@ export class Runner {
 		this.#pegboardWebSocket = ws;
 
 		ws.addEventListener("open", () => {
-			logger()?.info({ msg: "Connected", runnerId: this.runnerId });
+			logger()?.info({ msg: "Connected" });
 
 			// Reset reconnect attempt counter on successful connection
 			this.#reconnectAttempt = 0;
