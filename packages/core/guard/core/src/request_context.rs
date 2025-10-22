@@ -1,7 +1,8 @@
 use std::{net::IpAddr, time::SystemTime};
 
-use anyhow::*;
-use uuid::Uuid;
+use anyhow::Result;
+use rivet_api_builder::RequestIds;
+use rivet_util::Id;
 
 use crate::analytics::GuardHttpRequest;
 
@@ -23,7 +24,9 @@ use crate::analytics::GuardHttpRequest;
 #[derive(Clone)]
 pub struct RequestContext {
 	// Request tracking data
-	pub request_id: Uuid,
+	// TODO:
+	// pub request_id: Id,
+	// pub ray_id: Id,
 	pub client_ip: Option<IpAddr>,
 	pub client_request_body_bytes: Option<u64>,
 	pub client_request_host: Option<String>,
@@ -38,9 +41,9 @@ pub struct RequestContext {
 	pub client_x_requested_with: Option<String>,
 
 	// Guard tracking data
-	pub guard_datacenter_id: Option<Uuid>,
-	pub guard_cluster_id: Option<Uuid>,
-	pub guard_server_id: Option<Uuid>,
+	// pub guard_datacenter_id: Option<Uuid>,
+	// pub guard_cluster_id: Option<Uuid>,
+	// pub guard_server_id: Option<Uuid>,
 	pub guard_end_timestamp: Option<SystemTime>,
 	pub guard_response_body_bytes: Option<u64>,
 	pub guard_response_content_type: Option<String>,
@@ -53,23 +56,18 @@ pub struct RequestContext {
 	pub service_response_http_expires: Option<String>,
 	pub service_response_http_last_modified: Option<String>,
 	pub service_response_status: Option<u16>,
-	pub service_actor_id: Option<rivet_util::Id>,
+	pub service_actor_id: Option<Id>,
 
 	// ClickHouse inserter handle
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 }
 
 impl RequestContext {
-	pub fn new(clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>) -> Self {
-		Self::new_with_request_id(Uuid::new_v4(), clickhouse_inserter)
-	}
-
-	pub fn new_with_request_id(
-		request_id: Uuid,
+	pub fn new(
 		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
+		_request_ids: RequestIds,
 	) -> Self {
 		Self {
-			request_id,
 			client_ip: None,
 			client_request_body_bytes: None,
 			client_request_host: None,
@@ -82,9 +80,6 @@ impl RequestContext {
 			client_request_user_agent: None,
 			client_src_port: None,
 			client_x_requested_with: None,
-			guard_datacenter_id: None,
-			guard_cluster_id: None,
-			guard_server_id: None,
 			guard_end_timestamp: None,
 			guard_response_body_bytes: None,
 			guard_response_content_type: None,
@@ -138,7 +133,6 @@ impl RequestContext {
 
 		// Build the analytics event inline with defaults for missing values
 		let analytics_event = GuardHttpRequest {
-			request_id: self.request_id,
 			client_ip,
 			client_request_body_bytes: self.client_request_body_bytes.unwrap_or_default(),
 			client_request_host: self.client_request_host.clone().unwrap_or_default(),
@@ -151,9 +145,6 @@ impl RequestContext {
 			client_request_user_agent: self.client_request_user_agent.clone().unwrap_or_default(),
 			client_src_port: self.client_src_port.unwrap_or_default(),
 			client_x_requested_with: self.client_x_requested_with.clone().unwrap_or_default(),
-			guard_datacenter_id: self.guard_datacenter_id.unwrap_or_default(),
-			guard_cluster_id: self.guard_cluster_id.unwrap_or_default(),
-			guard_server_id: self.guard_server_id.unwrap_or_default(),
 			guard_end_timestamp,
 			guard_response_body_bytes: self.guard_response_body_bytes.unwrap_or_default(),
 			guard_response_content_type: self

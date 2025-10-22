@@ -6,7 +6,7 @@ use std::{
 	},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::{StreamExt, TryStreamExt};
@@ -182,7 +182,8 @@ async fn tick_runner_config(
 		runners_margin,
 	} = &runner_config.config.kind
 	else {
-		bail!("runner config should not be in the serverless subspace (wrong config kind)");
+		tracing::debug!("not serverless config");
+		return Ok(());
 	};
 
 	let curr = outbound_connections

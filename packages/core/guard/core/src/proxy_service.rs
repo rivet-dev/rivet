@@ -8,6 +8,7 @@ use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
 use rand;
 use rivet_api_builder::{ErrorResponse, RawErrorResponse};
+use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
 use rivet_error::{INTERNAL_ERROR, RivetError};
 use rivet_metrics::KeyValue;
 use rivet_util::Id;
@@ -325,7 +326,7 @@ impl InFlightCounter {
 
 // State shared across all request handlers
 pub struct ProxyState {
-	_config: rivet_config::Config, // Unused but kept for potential future use
+	config: rivet_config::Config,
 	routing_fn: RoutingFn,
 	cache_key_fn: CacheKeyFn,
 	middleware_fn: MiddlewareFn,
@@ -346,7 +347,7 @@ impl ProxyState {
 		clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
 	) -> Self {
 		Self {
-			_config: config,
+			config,
 			routing_fn,
 			cache_key_fn,
 			middleware_fn,
@@ -1126,6 +1127,7 @@ impl ProxyService {
 
 		// Capture headers before request is consumed
 		let req_headers = req.headers().clone();
+		let ray_id = req.extensions().get::<RequestIds>().map(|x| x.ray_id);
 
 		// Get middleware config for this actor if it exists
 		let middleware_config = match &actor_id {
@@ -1370,6 +1372,7 @@ impl ProxyService {
 								match client_sink
 									.send(to_hyper_close(Some(err_to_close_frame(
 										errors::RetryAttemptsExceeded { attempts }.build(),
+										ray_id,
 									))))
 									.await
 								{
@@ -1444,6 +1447,7 @@ impl ProxyService {
 									let _ = client_ws
 										.close(Some(err_to_close_frame(
 											errors::WebSocketTargetChanged.build(),
+											ray_id,
 										)))
 										.await;
 									return;
@@ -1826,7 +1830,7 @@ impl ProxyService {
 										// Close WebSocket with error
 										ws_handle
 											.accept_and_send(to_hyper_close(Some(
-												err_to_close_frame(err),
+												err_to_close_frame(err, ray_id),
 											)))
 											.await?;
 
@@ -1878,6 +1882,7 @@ impl ProxyService {
 													.accept_and_send(to_hyper_close(Some(
 														err_to_close_frame(
 															errors::WebSocketTargetChanged.build(),
+															ray_id,
 														),
 													)))
 													.await?;
@@ -1893,7 +1898,7 @@ impl ProxyService {
 											Err(err) => {
 												ws_handle
 													.accept_and_send(to_hyper_close(Some(
-														err_to_close_frame(err),
+														err_to_close_frame(err, ray_id),
 													)))
 													.await?;
 
@@ -1942,14 +1947,23 @@ impl ProxyService {
 
 impl ProxyService {
 	// Process an individual request
-	#[tracing::instrument(skip_all)]
-	pub async fn process(&self, req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
+	#[tracing::instrument(name = "guard_request", skip_all)]
+	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
 		let start_time = Instant::now();
 
+		let request_ids = RequestIds::new(self.state.config.dc_label());
+		req.extensions_mut().insert(request_ids);
+
 		// Create request context for analytics tracking
-		let mut request_context = RequestContext::new(self.state.clickhouse_inserter.clone());
+		let mut request_context =
+			RequestContext::new(self.state.clickhouse_inserter.clone(), request_ids);
 
 		// Extract request information for logging and analytics before consuming the request
+		let incoming_ray_id = req
+			.headers()
+			.get(X_RIVET_RAY_ID)
+			.and_then(|h| h.to_str().ok())
+			.and_then(|id| Id::parse(id).ok());
 		let host = req
 			.headers()
 			.get(hyper::header::HOST)
@@ -2006,7 +2020,9 @@ impl ProxyService {
 
 		// Debug log request information with structured fields (Apache-like access log)
 		tracing::debug!(
-			request_id = %request_context.request_id,
+			?incoming_ray_id,
+			ray_id=?request_ids.ray_id,
+			req_id=?request_ids.req_id,
 			method = %method,
 			path = %path,
 			host = %host,
@@ -2033,7 +2049,7 @@ impl ProxyService {
 		let mock_req = mock_req_builder.body(())?;
 
 		// Process the request
-		let res = match self
+		let mut res = match self
 			.handle_request(req, start_time, &mut request_context)
 			.await
 		{
@@ -2056,7 +2072,7 @@ impl ProxyService {
 
 							tokio::spawn(async move {
 								let ws_handle = WebSocketHandle::new(client_ws);
-								let frame = err_to_close_frame(err);
+								let frame = err_to_close_frame(err, Some(request_ids.ray_id));
 
 								// Manual conversion to handle different tungstenite versions
 								let code_num: u16 = frame.code.into();
@@ -2127,6 +2143,25 @@ impl ProxyService {
 			tracing::debug!("returned non-101 response to websocket");
 		}
 
+		// Add ray_id to response headers
+		if let Ok(ray_id_value) = request_ids.ray_id.to_string().parse() {
+			if let Some(existing_ray_id_value) = res
+				.headers()
+				.get(X_RIVET_RAY_ID)
+				.and_then(|h| h.to_str().ok())
+			{
+				if ray_id_value != existing_ray_id_value {
+					tracing::warn!(
+						expected_ray_id=%request_ids.ray_id,
+						received_ray_id=%existing_ray_id_value,
+						"downstream service set ray id header to a different value",
+					);
+				}
+			}
+
+			res.headers_mut().insert(X_RIVET_RAY_ID, ray_id_value);
+		}
+
 		let status = res.status().as_u16();
 
 		// Update request context with response details
@@ -2178,7 +2213,9 @@ impl ProxyService {
 
 		// Log information about the completed request
 		tracing::debug!(
-			request_id = %request_context.request_id,
+			?incoming_ray_id,
+			ray_id=?request_ids.ray_id,
+			req_id=?request_ids.req_id,
 			method = %method,
 			path = %path,
 			host = %host,
@@ -2301,6 +2338,7 @@ fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
 				("guard", "retry_attempts_exceeded") => StatusCode::BAD_GATEWAY,
 				("guard", "actor_not_found") => StatusCode::NOT_FOUND,
 				("guard", "actor_destroyed") => StatusCode::NOT_FOUND,
+				("guard", "service_unavailable") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "actor_ready_timeout") => StatusCode::SERVICE_UNAVAILABLE,
 				("guard", "no_route") => StatusCode::NOT_FOUND,
 				_ => StatusCode::BAD_REQUEST,
@@ -2357,7 +2395,7 @@ fn str_to_close_frame(err: &str) -> CloseFrame {
 	}
 }
 
-fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {
+fn err_to_close_frame(err: anyhow::Error, ray_id: Option<Id>) -> CloseFrame {
 	let rivet_err = err
 		.chain()
 		.find_map(|x| x.downcast_ref::<RivetError>())
@@ -2369,13 +2407,14 @@ fn err_to_close_frame(err: anyhow::Error) -> CloseFrame {
 		_ => CloseCode::Error,
 	};
 
+	let reason = if let Some(ray_id) = ray_id {
+		format!("{}.{}#{}", rivet_err.group(), rivet_err.code(), ray_id)
+	} else {
+		format!("{}.{}", rivet_err.group(), rivet_err.code())
+	};
+
 	// NOTE: reason cannot be more than 123 bytes as per the WS protocol
-	let reason = rivet_util::safe_slice(
-		&format!("{}.{}", rivet_err.group(), rivet_err.code()),
-		0,
-		123,
-	)
-	.into();
+	let reason = rivet_util::safe_slice(&reason, 0, 123).into();
 
 	CloseFrame { code, reason }
 }
