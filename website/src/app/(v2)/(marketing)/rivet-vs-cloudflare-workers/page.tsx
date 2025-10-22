@@ -407,7 +407,7 @@ const ComparisonTable = () => {
 						text: "Durable Objects for stateful workloads",
 					},
 					importance:
-						"Actor model enables scalable stateful applications with state persistence, hibernation, and realtime",
+						"Actor model enables scalable stateful applications with state realtime, persistence, and realtime",
 				},
 				{
 					feature: "KV Persistence",

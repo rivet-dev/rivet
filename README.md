@@ -83,7 +83,7 @@ The fastest way to deploy Rivet is to use [**Rivet Cloud**](https://dashboard.ri
 
 ### Self-Hosting
 
-**You do not need Rivet Engine to get started with Rivet.**
+_You do not need Rivet Engine to get started with Rivet._
 
 View more options & deployment guides in the [**self-hosting documentation**](https://www.rivet.dev/docs/self-hosting/).
 
@@ -101,14 +101,13 @@ curl -o rivet-engine "https://releases.rivet.gg/engine/latest/rivet-engine-x86_6
 curl -o rivet-engine "https://releases.rivet.gg/engine/latest/rivet-engine-x86_64-unknown-linux-musl" && chmod +x rivet-engine && ./rivet-engine start
 
 # Windows (x86_64)
-```powershell
 curl.exe -o rivet-engine.exe "https://releases.rivet.gg/engine/latest/rivet-engine-x86_64-pc-windows-gnu.exe"
 .\rivet-engine.exe start
 ```
 
 ## Runs Anywhere
 
-Deploy Rivet Actors anywhere - from serverless platforms to your own infrastructure with Rivet's flexible runtime options. Don't see what you need? [Add your own](https://www.rivet.dev/docs/cloud).
+Deploy Rivet Actors anywhere - from serverless platforms to your own infrastructure with Rivet's flexible runtime options.
 
 ### Storage
 - [Rivet Cloud](https://www.rivet.dev/docs/cloud) *(1-Click Deploy)*

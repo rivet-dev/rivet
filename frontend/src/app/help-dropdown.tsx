@@ -25,7 +25,7 @@ export const HelpDropdown = ({ children }: { children: ReactNode }) => {
 					indicator={<Icon icon={faGithub} />}
 					onSelect={() => {
 						window.open(
-							"https://github.com/rivet-dev/engine/issues",
+							"https://github.com/rivet-dev/rivet/issues",
 							"_blank",
 						);
 					}}
