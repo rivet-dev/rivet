@@ -1,5 +1,5 @@
-import type { ReleaseOpts } from "./main";
 import { $ } from "execa";
+import type { ReleaseOpts } from "./main";
 
 export async function validateGit(_opts: ReleaseOpts) {
 	// Validate there's no uncommitted changes

@@ -1,10 +1,10 @@
-import * as protocol from "@rivetkit/engine-runner-protocol";
-import type { RequestId, MessageId } from "@rivetkit/engine-runner-protocol";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
-import type { Runner, ActorInstance } from "./mod";
+import type * as protocol from "@rivetkit/engine-runner-protocol";
+import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "./log";
+import type { ActorInstance, Runner } from "./mod";
 import { unreachable } from "./utils";
+import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds

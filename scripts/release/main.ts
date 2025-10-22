@@ -1,16 +1,16 @@
 #!/usr/bin/env tsx
 
-import * as path from "node:path";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import * as url from "node:url";
-import minimist from "minimist";
 import { $ } from "execa";
+import minimist from "minimist";
+import { updateArtifacts } from "./artifacts";
+import { tagDocker } from "./docker";
+import { validateGit } from "./git";
+import { configureReleasePlease } from "./release_please";
 import { publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
-import { configureReleasePlease } from "./release_please";
-import { validateGit } from "./git";
-import { tagDocker } from "./docker";
-import { updateArtifacts } from "./artifacts";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
@@ -27,7 +27,10 @@ function assertEquals<T>(actual: T, expected: T, message?: string): void {
 	}
 }
 
-function assertExists<T>(value: T | null | undefined, message?: string): asserts value is T {
+function assertExists<T>(
+	value: T | null | undefined,
+	message?: string,
+): asserts value is T {
 	if (value === null || value === undefined) {
 		throw new Error(message || "Value does not exist");
 	}
@@ -64,9 +67,9 @@ async function main() {
 			"mergeRelease",
 
 			// Batch steps
-			"setupLocal",  // Makes changes to repo & pushes it (we can't push commits from CI that can trigger Release Please & other CI actions)
-			"setupCi",  // Publishes packages (has access to NPM creds)
-			"completeCi",  // Tags binaries & Docker as latest (has access to Docker & S3 creds)
+			"setupLocal", // Makes changes to repo & pushes it (we can't push commits from CI that can trigger Release Please & other CI actions)
+			"setupCi", // Publishes packages (has access to NPM creds)
+			"completeCi", // Tags binaries & Docker as latest (has access to Docker & S3 creds)
 		],
 		string: ["version", "commit"],
 		default: {
@@ -125,11 +128,16 @@ async function main() {
 		assert(!args.noValidateGit, "cannot commit without git validation");
 		console.log("==> Committing Changes");
 		await $`git add .`;
-		await $({ shell: true })`git commit --allow-empty -m "chore(release): update version to ${opts.version}"`;
+		await $({
+			shell: true,
+		})`git commit --allow-empty -m "chore(release): update version to ${opts.version}"`;
 	}
 
 	if (args.configureReleasePlease || args.setupLocal) {
-		assert(!args.noValidateGit, "cannot configure release please without git validation");
+		assert(
+			!args.noValidateGit,
+			"cannot configure release please without git validation",
+		);
 		console.log("==> Configuring Release Please");
 		await configureReleasePlease(opts);
 	}
@@ -170,4 +178,3 @@ main().catch((err) => {
 	console.error(err);
 	process.exit(1);
 });
-

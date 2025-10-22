@@ -1,0 +1,18 @@
+# File System Driver Schema (v1)
+
+# MARK: Actor State
+# Represents the persisted state for an actor on disk.
+type ActorState struct {
+	actorId: str
+	name: str
+	key: list<str>
+	persistedData: data
+	createdAt: u64
+}
+
+# MARK: Actor Alarm
+type ActorAlarm struct {
+	actorId: str
+	timestamp: uint
+}
+

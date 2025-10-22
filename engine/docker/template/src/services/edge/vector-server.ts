@@ -1,55 +1,55 @@
-import { TemplateContext } from "../../context";
 import * as yaml from "js-yaml";
+import type { TemplateContext } from "../../context";
 
-export function generateDatacenterVectorServer(context: TemplateContext, dcId: string) {
-	const clickhouseHost = context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
+export function generateDatacenterVectorServer(
+	context: TemplateContext,
+	dcId: string,
+) {
+	const clickhouseHost =
+		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
 	const vectorConfig = {
 		api: {
 			enabled: true,
-			address: "0.0.0.0:8686"
+			address: "0.0.0.0:8686",
 		},
 		sources: {
 			vector: {
 				type: "vector",
 				address: "0.0.0.0:6000",
-				version: "2"
+				version: "2",
 			},
 			tcp_json: {
 				type: "socket",
 				mode: "tcp",
 				address: "0.0.0.0:6100",
 				decoding: {
-					codec: "json"
-				}
+					codec: "json",
+				},
 			},
 			http_json: {
 				type: "http_server",
 				address: "0.0.0.0:6200",
-				encoding: "json"
+				encoding: "json",
 			},
 			vector_metrics: {
-				type: "internal_metrics"
+				type: "internal_metrics",
 			},
 			vector_logs: {
-				type: "internal_logs"
-			}
+				type: "internal_logs",
+			},
 		},
 		transforms: {
 			clickhouse_dynamic_events_filter: {
 				type: "filter",
-				inputs: [
-					"vector"
-				],
+				inputs: ["vector"],
 				condition: {
 					type: "vrl",
-					source: `.source == "clickhouse"`
-				}
+					source: `.source == "clickhouse"`,
+				},
 			},
 			clickhouse_dynamic_events_transform: {
 				type: "remap",
-				inputs: [
-					"clickhouse_dynamic_events_filter"
-				],
+				inputs: ["clickhouse_dynamic_events_filter"],
 				source: `# Extract and store metadata
 __database = .database
 __table = .table
@@ -65,8 +65,8 @@ __columns = .columns
 	
 # Merge in the column data that should be inserted
 . = merge!(., __columns)
-`
-			}
+`,
+			},
 		},
 		sinks: {
 			clickhouse_dynamic_events: {
@@ -79,21 +79,21 @@ __columns = .columns
 				auth: {
 					strategy: "basic",
 					user: "system",
-					password: "default"
+					password: "default",
 				},
 				batch: {
 					max_events: 1000,
-					timeout_secs: 10
-				}
+					timeout_secs: 10,
+				},
 			},
 			console_vector_logs: {
 				type: "console",
 				inputs: ["vector_logs"],
 				encoding: {
-					codec: "json"
-				}
-			}
-		}
+					codec: "json",
+				},
+			},
+		},
 	};
 
 	const yamlContent = `# Vector Server (Aggregator) Configuration
@@ -102,5 +102,10 @@ __columns = .columns
 
 ${yaml.dump(vectorConfig)}`;
 
-	context.writeDatacenterServiceFile("vector-server", dcId, "vector.yaml", yamlContent);
+	context.writeDatacenterServiceFile(
+		"vector-server",
+		dcId,
+		"vector.yaml",
+		yamlContent,
+	);
 }

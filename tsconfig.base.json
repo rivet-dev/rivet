@@ -1,14 +1,14 @@
 {
-  "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": false,
-    "allowSyntheticDefaultImports": true,
-    "stripInternal": true,
-    "moduleResolution": "bundler",
-    "lib": ["ESNext"],
-    "types": ["node"]
-  }
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": true,
+		"stripInternal": true,
+		"moduleResolution": "bundler",
+		"lib": ["ESNext"],
+		"types": ["node"]
+	}
 }

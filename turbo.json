@@ -12,7 +12,8 @@
 				"tsup.config.ts",
 				"package.json"
 			],
-			"outputs": ["dist/**"]
+			"outputs": ["dist/**"],
+			"env": ["FAST_BUILD"]
 		},
 		"check-types": {
 			"inputs": [
@@ -23,6 +24,12 @@
 				"package.json"
 			],
 			"dependsOn": ["^build"]
+		},
+		"dev": {
+			// Both builds & checks types for this repo and all dependencies
+			//
+			// Build after checking types since check types will return errors faster
+			"dependsOn": ["^check-types", "check-types", "build"]
 		},
 		"test": {
 			"inputs": ["src/**", "tests/**", "package.json"],

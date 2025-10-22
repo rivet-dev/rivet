@@ -1,4 +1,4 @@
-import { TemplateContext } from "../../context";
+import type { TemplateContext } from "../../context";
 
 export function generateCoreClickhouse(context: TemplateContext) {
 	// ClickHouse configuration
@@ -210,6 +210,14 @@ SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1;
 
 	context.writeCoreServiceFile("clickhouse", "config.xml", configXml);
 	context.writeCoreServiceFile("clickhouse", "users.xml", usersXml);
-	context.writeCoreServiceFile("clickhouse", "client-config.xml", clientConfigXml);
-	context.writeCoreServiceFile("clickhouse", "init/01-create-otel-table.sql", initSql);
+	context.writeCoreServiceFile(
+		"clickhouse",
+		"client-config.xml",
+		clientConfigXml,
+	);
+	context.writeCoreServiceFile(
+		"clickhouse",
+		"init/01-create-otel-table.sql",
+		initSql,
+	);
 }

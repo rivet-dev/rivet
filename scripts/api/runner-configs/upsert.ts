@@ -7,10 +7,14 @@ const rl = readline.createInterface({
 	output: process.stdout,
 });
 
-async function ask(question: string, options: { default?: string; allowEmpty?: boolean } = {}) {
-	const suffix = options.default !== undefined && options.default !== ""
-		? ` (default: ${options.default})`
-		: "";
+async function ask(
+	question: string,
+	options: { default?: string; allowEmpty?: boolean } = {},
+) {
+	const suffix =
+		options.default !== undefined && options.default !== ""
+			? ` (default: ${options.default})`
+			: "";
 	const answer = (await rl.question(`${question}${suffix}: `)).trim();
 	if (answer === "" && options.default !== undefined) {
 		return options.default;
@@ -22,7 +26,9 @@ async function ask(question: string, options: { default?: string; allowEmpty?: b
 }
 
 async function askNumber(question: string, defaultValue: number) {
-	const answer = (await rl.question(`${question} (default: ${defaultValue}): `)).trim();
+	const answer = (
+		await rl.question(`${question} (default: ${defaultValue}): `)
+	).trim();
 	if (answer === "") {
 		return defaultValue;
 	}
@@ -45,16 +51,23 @@ function parseJson(input: string, context: string) {
 	}
 }
 
-function ensureStringRecord(value: unknown, context: string): Record<string, string> {
+function ensureStringRecord(
+	value: unknown,
+	context: string,
+): Record<string, string> {
 	if (value === null || typeof value !== "object" || Array.isArray(value)) {
-		console.error(`Error: ${context} must be a JSON object with string values`);
+		console.error(
+			`Error: ${context} must be a JSON object with string values`,
+		);
 		rl.close();
 		process.exit(1);
 	}
 	const record: Record<string, string> = {};
 	for (const [key, val] of Object.entries(value)) {
 		if (typeof val !== "string") {
-			console.error(`Error: ${context} value for key "${key}" must be a string`);
+			console.error(
+				`Error: ${context} value for key "${key}" must be a string`,
+			);
 			rl.close();
 			process.exit(1);
 		}
@@ -64,8 +77,7 @@ function ensureStringRecord(value: unknown, context: string): Record<string, str
 }
 
 const rivetToken =
-	process.env.RIVET_TOKEN ||
-	(await ask("Rivet token", { default: "dev" }));
+	process.env.RIVET_TOKEN || (await ask("Rivet token", { default: "dev" }));
 
 const endpoint =
 	process.env.RIVET_ENDPOINT ||
@@ -73,17 +85,23 @@ const endpoint =
 const namespace = await ask("Namespace", { default: "default" });
 const datacenter = await ask("Datacenter", { default: "default" });
 const runnerName = await ask("Runner name", { default: "serverless" });
-const runnerType = (await ask("Runner config type (normal/serverless)", {
-	default: "serverless",
-})).toLowerCase();
+const runnerType = (
+	await ask("Runner config type (normal/serverless)", {
+		default: "serverless",
+	})
+).toLowerCase();
 
 if (runnerType !== "normal" && runnerType !== "serverless") {
-	console.error("Error: runner config type must be either 'normal' or 'serverless'");
+	console.error(
+		"Error: runner config type must be either 'normal' or 'serverless'",
+	);
 	rl.close();
 	process.exit(1);
 }
 
-const metadataInput = await ask("Metadata JSON (optional)", { allowEmpty: true });
+const metadataInput = await ask("Metadata JSON (optional)", {
+	allowEmpty: true,
+});
 let metadata: unknown;
 if (metadataInput) {
 	metadata = parseJson(metadataInput, "metadata");
@@ -100,9 +118,17 @@ if (runnerType === "normal") {
 	const serverlessUrl = await ask("Serverless URL", {
 		default: "http://localhost:3000/api/rivet/start",
 	});
-	const headersInput = await ask("Serverless headers JSON", { default: "{}" });
-	const headers = ensureStringRecord(parseJson(headersInput, "headers"), "headers");
-	const requestLifespan = await askNumber("Request lifespan (seconds)", 15 * 60);
+	const headersInput = await ask("Serverless headers JSON", {
+		default: "{}",
+	});
+	const headers = ensureStringRecord(
+		parseJson(headersInput, "headers"),
+		"headers",
+	);
+	const requestLifespan = await askNumber(
+		"Request lifespan (seconds)",
+		15 * 60,
+	);
 	const slotsPerRunner = await askNumber("Slots per runner", 100);
 	const minRunners = await askNumber("Min runners", 1);
 	const maxRunners = await askNumber("Max runners", 3);

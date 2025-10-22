@@ -1,5 +1,5 @@
 {
-  "code": "connection_closed",
-  "group": "ws",
-  "message": "Normal connection close."
+	"code": "connection_closed",
+	"group": "ws",
+	"message": "Normal connection close."
 }

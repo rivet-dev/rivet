@@ -1,8 +1,12 @@
 pre-commit:
   parallel: true
   commands:
-    fmt:
+    cargo-fmt:
       run: cargo fmt --all
+      tags: formatting
+      stage_fixed: true
+    biome-fmt:
+      run: pnpm fmt
       tags: formatting
       stage_fixed: true
 

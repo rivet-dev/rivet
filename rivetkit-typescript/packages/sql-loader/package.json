@@ -1,0 +1,33 @@
+{
+	"name": "@rivetkit/sql-loader",
+	"version": "2.0.20",
+	"description": "SQL file loader and migration utilities for RivetKit",
+	"license": "Apache-2.0",
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs"
+	],
+	"type": "module",
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"default": "./dist/register.js"
+			},
+			"require": {
+				"default": "./dist/register.cjs"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsup src/hook.ts src/register.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.5",
+		"tsup": "^8.5.0"
+	}
+}

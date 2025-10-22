@@ -1,0 +1,215 @@
+{
+	"name": "rivetkit",
+	"version": "2.0.20",
+	"description": "Lightweight libraries for building stateful actors on edge platforms",
+	"license": "Apache-2.0",
+	"keywords": [
+		"rivetkit",
+		"stateful",
+		"serverless",
+		"actors",
+		"agents",
+		"realtime",
+		"websocket",
+		"actors",
+		"framework"
+	],
+	"files": [
+		"dist",
+		"src",
+		"deno.json",
+		"bun.json",
+		"package.json"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/tsup/mod.d.ts",
+				"default": "./dist/tsup/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/mod.d.cts",
+				"default": "./dist/tsup/mod.cjs"
+			}
+		},
+		"./client": {
+			"import": {
+				"types": "./dist/tsup/client/mod.d.ts",
+				"default": "./dist/tsup/client/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/client/mod.d.cts",
+				"default": "./dist/tsup/client/mod.cjs"
+			}
+		},
+		"./log": {
+			"import": {
+				"types": "./dist/tsup/common/log.d.ts",
+				"default": "./dist/tsup/common/log.js"
+			},
+			"require": {
+				"types": "./dist/tsup/common/log.d.cts",
+				"default": "./dist/tsup/common/log.cjs"
+			}
+		},
+		"./errors": {
+			"import": {
+				"types": "./dist/tsup/actor/errors.d.ts",
+				"default": "./dist/tsup/actor/errors.js"
+			},
+			"require": {
+				"types": "./dist/tsup/actor/errors.d.cts",
+				"default": "./dist/tsup/actor/errors.cjs"
+			}
+		},
+		"./utils": {
+			"import": {
+				"types": "./dist/tsup/utils.d.ts",
+				"default": "./dist/tsup/utils.js"
+			},
+			"require": {
+				"types": "./dist/tsup/utils.d.cts",
+				"default": "./dist/tsup/utils.cjs"
+			}
+		},
+		"./driver-helpers": {
+			"import": {
+				"types": "./dist/tsup/driver-helpers/mod.d.ts",
+				"default": "./dist/tsup/driver-helpers/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/driver-helpers/mod.d.cts",
+				"default": "./dist/tsup/driver-helpers/mod.cjs"
+			}
+		},
+		"./driver-helpers/websocket": {
+			"import": {
+				"types": "./dist/tsup/common/websocket.d.ts",
+				"default": "./dist/tsup/common/websocket.js"
+			},
+			"require": {
+				"types": "./dist/tsup/common/websocket.d.cts",
+				"default": "./dist/tsup/common/websocket.cjs"
+			}
+		},
+		"./driver-test-suite": {
+			"import": {
+				"types": "./dist/tsup/driver-test-suite/mod.d.ts",
+				"default": "./dist/tsup/driver-test-suite/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/driver-test-suite/mod.d.cts",
+				"default": "./dist/tsup/driver-test-suite/mod.cjs"
+			}
+		},
+		"./topologies/coordinate": {
+			"import": {
+				"types": "./dist/tsup/topologies/coordinate/mod.d.ts",
+				"default": "./dist/tsup/topologies/coordinate/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/topologies/coordinate/mod.d.cts",
+				"default": "./dist/tsup/topologies/coordinate/mod.cjs"
+			}
+		},
+		"./topologies/partition": {
+			"import": {
+				"types": "./dist/tsup/topologies/partition/mod.d.ts",
+				"default": "./dist/tsup/topologies/partition/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/topologies/partition/mod.d.cts",
+				"default": "./dist/tsup/topologies/partition/mod.cjs"
+			}
+		},
+		"./test": {
+			"import": {
+				"types": "./dist/tsup/test/mod.d.ts",
+				"default": "./dist/tsup/test/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/test/mod.d.cts",
+				"default": "./dist/tsup/test/mod.cjs"
+			}
+		},
+		"./inspector": {
+			"import": {
+				"types": "./dist/tsup/inspector/mod.d.ts",
+				"default": "./dist/tsup/inspector/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/inspector/mod.d.cts",
+				"default": "./dist/tsup/inspector/mod.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"sideEffects": [
+		"./dist/tsup/chunk-*.js",
+		"./dist/tsup/chunk-*.cjs"
+	],
+	"scripts": {
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts",
+		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"dump-openapi": "tsx scripts/dump-openapi.ts"
+	},
+	"dependencies": {
+		"@bare-ts/lib": "~0.3.0",
+		"@hono/standard-validator": "^0.1.3",
+		"@hono/zod-openapi": "^0.19.10",
+		"@rivetkit/engine-runner": "workspace:*",
+		"@rivetkit/fast-json-patch": "^3.1.2",
+		"cbor-x": "^1.6.0",
+		"hono": "^4.7.0",
+		"invariant": "^2.2.4",
+		"nanoevents": "^9.1.0",
+		"on-change": "^5.0.1",
+		"p-retry": "^6.2.1",
+		"pino": "^9.5.0",
+		"zod": "^3.25.76"
+	},
+	"devDependencies": {
+		"@bare-ts/tools": "^0.13.0",
+		"@hono/node-server": "^1.18.2",
+		"@hono/node-ws": "^1.1.1",
+		"@types/invariant": "^2",
+		"@types/node": "^22.13.1",
+		"@types/ws": "^8",
+		"@vitest/ui": "3.1.1",
+		"bundle-require": "^5.1.0",
+		"commander": "^12.1.0",
+		"eventsource": "^4.0.0",
+		"tsup": "^8.4.0",
+		"tsx": "^4.19.4",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1",
+		"ws": "^8.18.1"
+	},
+	"peerDependencies": {
+		"@hono/node-server": "^1.14.0",
+		"@hono/node-ws": "^1.1.1",
+		"eventsource": "^4.0.0",
+		"ws": "^8.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@hono/node-server": {
+			"optional": true
+		},
+		"@hono/node-ws": {
+			"optional": true
+		},
+		"eventsource": {
+			"optional": true
+		},
+		"ws": {
+			"optional": true
+		}
+	},
+	"stableVersion": "0.8.0"
+}

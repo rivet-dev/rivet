@@ -1,7 +1,7 @@
-import type { ReleaseOpts } from "./main";
 import { $ } from "execa";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import type { ReleaseOpts } from "./main";
 
 async function npmVersionExists(
 	packageName: string,
@@ -45,7 +45,9 @@ export async function publishSdk(opts: ReleaseOpts) {
 	for (const path of packagePaths) {
 		// Read package.json to get the name
 		const packageJsonPath = join(path, "package.json");
-		const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
+		const packageJson = JSON.parse(
+			await readFile(packageJsonPath, "utf-8"),
+		);
 		const name = packageJson.name;
 
 		// Check if version already exists

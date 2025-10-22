@@ -2,21 +2,20 @@
 
 import * as fs from "fs";
 import * as path from "path";
-
+import { TEMPLATES, type TemplateConfig } from "./config";
+import { TemplateContext } from "./context";
+import { generateDockerCompose } from "./docker-compose";
+import { generateGitAttributes } from "./git";
+import { generateReadme } from "./readme";
 import { generateCoreClickhouse } from "./services/core/clickhouse";
-import { generateDatacenterVectorServer } from "./services/edge/vector-server";
-import { generateDatacenterOtelCollectorServer } from "./services/edge/otel-collector-server";
 import { generateCoreGrafana } from "./services/core/grafana";
-import { generateDatacenterVectorClient } from "./services/edge/vector-client";
 import { generateDatacenterOtelCollectorClient } from "./services/edge/otel-collector-client";
+import { generateDatacenterOtelCollectorServer } from "./services/edge/otel-collector-server";
 import { generateDatacenterPostgres } from "./services/edge/postgres";
 import { generateDatacenterRivetEngine } from "./services/edge/rivet-engine";
 import { generateRunner } from "./services/edge/runner";
-import { generateDockerCompose } from "./docker-compose";
-import { generateReadme } from "./readme";
-import { generateGitAttributes } from "./git";
-import { TEMPLATES, type TemplateConfig } from "./config";
-import { TemplateContext } from "./context";
+import { generateDatacenterVectorClient } from "./services/edge/vector-client";
+import { generateDatacenterVectorServer } from "./services/edge/vector-server";
 
 function generateTemplate(templateName: string, config: TemplateConfig) {
 	const outputDir = path.join(__dirname, "../../", templateName);

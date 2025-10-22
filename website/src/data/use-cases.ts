@@ -1,13 +1,13 @@
 import {
-	faRobot,
-	faUserRobot,
-	faFilePen,
-	faDiagramNext,
-	faRotate,
-	faDatabase,
-	faGamepad,
 	faClock,
+	faDatabase,
+	faDiagramNext,
+	faFilePen,
+	faGamepad,
 	faGaugeHigh,
+	faRobot,
+	faRotate,
+	faUserRobot,
 } from "@rivet-gg/icons";
 
 export interface UseCase {
@@ -22,19 +22,22 @@ export const useCases: UseCase[] = [
 		title: "AI Agent",
 		href: "/docs/use-cases/ai-agent",
 		icon: faRobot,
-		description: "Build durable AI assistants with persistent memory and realtime streaming",
+		description:
+			"Build durable AI assistants with persistent memory and realtime streaming",
 	},
 	{
 		title: "Realtime Docs",
 		href: "/docs/use-cases/crdt",
 		icon: faFilePen,
-		description: "Collaborative documents with CRDTs and realtime synchronization",
+		description:
+			"Collaborative documents with CRDTs and realtime synchronization",
 	},
 	{
 		title: "Workflows",
 		href: "/docs/use-cases/workflows",
 		icon: faDiagramNext,
-		description: "Durable multi-step workflows with automatic state management",
+		description:
+			"Durable multi-step workflows with automatic state management",
 	},
 	{
 		title: "Local-First Sync",
@@ -52,19 +55,22 @@ export const useCases: UseCase[] = [
 		title: "Per-User Database",
 		href: "/docs/use-cases/database",
 		icon: faDatabase,
-		description: "Isolated data stores for each user with zero-latency access",
+		description:
+			"Isolated data stores for each user with zero-latency access",
 	},
 	{
 		title: "Multiplayer Game",
 		href: "/docs/use-cases/game",
 		icon: faGamepad,
-		description: "Authoritative game servers with realtime state synchronization",
+		description:
+			"Authoritative game servers with realtime state synchronization",
 	},
 	{
 		title: "Background Jobs",
 		href: "/docs/use-cases/background-jobs",
 		icon: faClock,
-		description: "Scheduled and recurring jobs without external queue infrastructure",
+		description:
+			"Scheduled and recurring jobs without external queue infrastructure",
 	},
 	{
 		title: "Rate Limiting",

@@ -21,15 +21,12 @@ const namespace =
 
 rl.close();
 
-const response = await fetch(
-	`${endpoint}/runners?namespace=${namespace}`,
-	{
-		method: "GET",
-		headers: {
-			Authorization: `Bearer ${rivetToken}`,
-		},
+const response = await fetch(`${endpoint}/runners?namespace=${namespace}`, {
+	method: "GET",
+	headers: {
+		Authorization: `Bearer ${rivetToken}`,
 	},
-);
+});
 
 if (!response.ok) {
 	console.error(`Error: ${response.status} ${response.statusText}`);

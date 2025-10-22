@@ -3,5 +3,5 @@
  */
 
 export interface Pagination {
-    cursor?: string;
+	cursor?: string;
 }

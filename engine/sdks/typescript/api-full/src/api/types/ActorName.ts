@@ -3,5 +3,5 @@
  */
 
 export interface ActorName {
-    metadata: Record<string, unknown>;
+	metadata: Record<string, unknown>;
 }

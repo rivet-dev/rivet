@@ -1,9 +1,5 @@
 import { fail, sleep } from "k6";
-import {
-	createActor,
-	destroyActor,
-	waitForHealth,
-} from "./actor.ts";
+import { createActor, destroyActor, waitForHealth } from "./actor.ts";
 import { CONFIG } from "./config.ts";
 
 export const options = {
@@ -27,19 +23,22 @@ export default function () {
 
 	let actorId: string | undefined;
 	try {
-		let start = Date.now();
+		const start = Date.now();
 		console.log("creating actor");
 
 		// Create actor
 		const { actor } = createActor(CONFIG);
 		actorId = actor.actor_id;
 
-		let created = Date.now();
+		const created = Date.now();
 		console.log(`created actor ${actorId} ${created - start}ms`);
 
 		// Wait for health check if not disabled
 		if (!CONFIG.disableHealthcheck) {
-			const isHealthy = waitForHealth(`${CONFIG.rivetEndpoint}/ping`, actorId);
+			const isHealthy = waitForHealth(
+				`${CONFIG.rivetEndpoint}/ping`,
+				actorId,
+			);
 			if (!isHealthy) fail("actor did not become healthy");
 		}
 

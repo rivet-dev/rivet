@@ -28,7 +28,7 @@ export function waitForHealth(url: string, actorId: string): boolean {
 			headers: {
 				"x-rivet-target": "actor",
 				"x-rivet-actor": actorId,
-			}
+			},
 		});
 		if (response.status === 200) {
 			console.debug("health check passed");

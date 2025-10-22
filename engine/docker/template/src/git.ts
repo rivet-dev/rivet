@@ -1,4 +1,4 @@
-import { TemplateContext } from "./context";
+import type { TemplateContext } from "./context";
 
 export function generateGitAttributes(context: TemplateContext) {
 	const gitAttributesContent = `. linguist-generated=true
@@ -6,4 +6,3 @@ export function generateGitAttributes(context: TemplateContext) {
 
 	context.writeFile(".gitattributes", gitAttributesContent);
 }
-

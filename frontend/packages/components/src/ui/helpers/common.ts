@@ -4,39 +4,39 @@ import {
 	omitDisplayProps,
 } from "./display";
 import {
-	type HeightUtilitiesProps,
 	getHeightClass,
+	type HeightUtilitiesProps,
 	omitHeightProps,
 } from "./height";
 import {
-	type MarginUtilitiesProps,
 	getMarginClass,
+	type MarginUtilitiesProps,
 	omitMarginProps,
 } from "./margin";
 import {
-	type MinHeightUtilitiesProps,
 	getMinHeightClass,
+	type MinHeightUtilitiesProps,
 	omitMinHeightProps,
 } from "./min-height";
 import {
-	type MinWidthUtilitiesProps,
 	getMinWidthClass,
+	type MinWidthUtilitiesProps,
 	omitMinWidthProps,
 } from "./min-width";
 import {
-	type PaddingUtilitiesProps,
 	getPaddingClass,
 	omitPaddingProps,
+	type PaddingUtilitiesProps,
 } from "./padding";
 import {
-	type TextAlignUtilitiesProps,
 	getTextAlignClass,
 	omitTextAlignProps,
+	type TextAlignUtilitiesProps,
 } from "./text-align";
 import {
-	type WidthUtilitiesProps,
 	getWidthClass,
 	omitWidthProps,
+	type WidthUtilitiesProps,
 } from "./width";
 
 export interface CommonHelperProps

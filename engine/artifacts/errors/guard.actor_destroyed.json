@@ -1,5 +1,5 @@
 {
-  "code": "actor_destroyed",
-  "group": "guard",
-  "message": "Actor destroyed."
+	"code": "actor_destroyed",
+	"group": "guard",
+	"message": "Actor destroyed."
 }

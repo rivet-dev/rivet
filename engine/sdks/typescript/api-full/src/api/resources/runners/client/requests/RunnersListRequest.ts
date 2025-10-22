@@ -9,10 +9,10 @@
  *     }
  */
 export interface RunnersListRequest {
-    namespace: string;
-    name?: string;
-    runnerIds?: string;
-    includeStopped?: boolean;
-    limit?: number;
-    cursor?: string;
+	namespace: string;
+	name?: string;
+	runnerIds?: string;
+	includeStopped?: boolean;
+	limit?: number;
+	cursor?: string;
 }

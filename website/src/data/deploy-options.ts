@@ -1,13 +1,13 @@
 import {
-	faVercel,
-	faRailway,
-	faDocker,
-	faGoogleCloud,
 	faAws,
 	faCloudflare,
-	faServer,
+	faDocker,
+	faGoogleCloud,
 	faHetzner,
 	faKubernetes,
+	faRailway,
+	faServer,
+	faVercel,
 } from "@rivet-gg/icons";
 
 export interface DeployOption {
