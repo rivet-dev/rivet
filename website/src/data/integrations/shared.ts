@@ -16,7 +16,8 @@ export const integrationGroups: IntegrationGroup[] = [
 			{
 				title: "Hono",
 				href: "/docs/integrations/hono",
-				description: "Lightweight and fast web framework for modern JavaScript",
+				description:
+					"Lightweight and fast web framework for modern JavaScript",
 			},
 			{
 				title: "Express",

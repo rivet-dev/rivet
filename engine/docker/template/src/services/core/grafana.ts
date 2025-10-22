@@ -1,10 +1,11 @@
-import { TemplateContext } from "../../context";
 import * as fs from "fs";
-import * as path from "path";
 import * as yaml from "js-yaml";
+import * as path from "path";
+import type { TemplateContext } from "../../context";
 
 export function generateCoreGrafana(context: TemplateContext) {
-	const clickhouseHost = context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
+	const clickhouseHost =
+		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
 	// Grafana configuration
 	const grafanaIni = `[server]
 http_port = 3000
@@ -32,7 +33,7 @@ default_home_dashboard_path = /var/lib/grafana/dashboards/api.json
 				type: "grafana-clickhouse-datasource",
 				access: "proxy",
 				secureJsonData: {
-					password: "default"
+					password: "default",
 				},
 				jsonData: {
 					version: "2.0.0",
@@ -50,17 +51,17 @@ default_home_dashboard_path = /var/lib/grafana/dashboards/api.json
 						defaultTable: "otel_logs",
 						timeColumn: "TimestampTime",
 						messageColumn: "Body",
-						levelColumn: "SeverityText"
+						levelColumn: "SeverityText",
 					},
 					traces: {
 						otelEnabled: true,
 						otelVersion: "1.2.9",
 						defaultDatabase: "otel",
-						defaultTable: "otel_traces"
-					}
-				}
-			}
-		]
+						defaultTable: "otel_traces",
+					},
+				},
+			},
+		],
 	};
 
 	// Dashboard provisioning configuration
@@ -75,25 +76,40 @@ default_home_dashboard_path = /var/lib/grafana/dashboards/api.json
 				disableDeletion: false,
 				updateIntervalSeconds: 10,
 				options: {
-					path: "/var/lib/grafana/dashboards"
-				}
-			}
-		]
+					path: "/var/lib/grafana/dashboards",
+				},
+			},
+		],
 	};
 
 	// Write configuration files
 	context.writeCoreServiceFile("grafana", "grafana.ini", grafanaIni);
-	context.writeCoreServiceFile("grafana", "provisioning/datasources/datasources.yaml", yaml.dump(datasourcesConfig));
-	context.writeCoreServiceFile("grafana", "provisioning/dashboards/dashboards.yaml", yaml.dump(dashboardsConfig));
+	context.writeCoreServiceFile(
+		"grafana",
+		"provisioning/datasources/datasources.yaml",
+		yaml.dump(datasourcesConfig),
+	);
+	context.writeCoreServiceFile(
+		"grafana",
+		"provisioning/dashboards/dashboards.yaml",
+		yaml.dump(dashboardsConfig),
+	);
 
 	// Copy all dashboard files from the template directory
 	const dashboardsDir = path.join(__dirname, "../../../grafana-dashboards");
 	const dashboardFiles = fs.readdirSync(dashboardsDir);
 
-	dashboardFiles.forEach(file => {
-		if (file.endsWith('.json')) {
-			const dashboardContent = fs.readFileSync(path.join(dashboardsDir, file), "utf-8");
-			context.writeCoreServiceFile("grafana", `dashboards/${file}`, dashboardContent);
+	dashboardFiles.forEach((file) => {
+		if (file.endsWith(".json")) {
+			const dashboardContent = fs.readFileSync(
+				path.join(dashboardsDir, file),
+				"utf-8",
+			);
+			context.writeCoreServiceFile(
+				"grafana",
+				`dashboards/${file}`,
+				dashboardContent,
+			);
 		}
 	});
 }

@@ -1,7 +1,7 @@
 import twContainerQueries from "@tailwindcss/container-queries";
 import twTypography from "@tailwindcss/typography";
-import twAnmiate from "tailwindcss-animate";
 import type { Config } from "tailwindcss/types/config";
+import twAnmiate from "tailwindcss-animate";
 import * as styleHelpers from "./ui/helpers/index";
 
 const safelistMap: Array<[string, readonly string[], { useDash?: boolean }]> = [

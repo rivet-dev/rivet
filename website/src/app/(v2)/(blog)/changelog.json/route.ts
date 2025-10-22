@@ -1,5 +1,5 @@
-import { loadArticles } from "@/lib/article";
 import { NextResponse } from "next/server";
+import { loadArticles } from "@/lib/article";
 
 export const dynamic = "force-static";
 

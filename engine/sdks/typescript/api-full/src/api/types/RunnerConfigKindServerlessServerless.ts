@@ -3,12 +3,12 @@
  */
 
 export interface RunnerConfigKindServerlessServerless {
-    headers?: Record<string, string>;
-    maxRunners: number;
-    minRunners?: number;
-    /** Seconds. */
-    requestLifespan: number;
-    runnersMargin?: number;
-    slotsPerRunner: number;
-    url: string;
+	headers?: Record<string, string>;
+	maxRunners: number;
+	minRunners?: number;
+	/** Seconds. */
+	requestLifespan: number;
+	runnersMargin?: number;
+	slotsPerRunner: number;
+	url: string;
 }

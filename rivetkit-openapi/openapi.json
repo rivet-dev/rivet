@@ -1,0 +1,336 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "2.0.20",
+    "title": "RivetKit API"
+  },
+  "components": {
+    "schemas": {},
+    "parameters": {}
+  },
+  "paths": {
+    "/actors": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "name",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "actor_ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "key",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "actors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "actor_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "namespace_id": {
+                            "type": "string"
+                          },
+                          "runner_name_selector": {
+                            "type": "string"
+                          },
+                          "create_ts": {
+                            "type": "number"
+                          },
+                          "connectable_ts": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "destroy_ts": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "sleep_ts": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "start_ts": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "actor_id",
+                          "name",
+                          "key",
+                          "namespace_id",
+                          "runner_name_selector",
+                          "create_ts"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "actors"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User error"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      },
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "datacenter": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "runner_name_selector": {
+                    "type": "string"
+                  },
+                  "crash_policy": {
+                    "type": "string"
+                  },
+                  "input": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "name",
+                  "key",
+                  "runner_name_selector",
+                  "crash_policy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "actor_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "namespace_id": {
+                          "type": "string"
+                        },
+                        "runner_name_selector": {
+                          "type": "string"
+                        },
+                        "create_ts": {
+                          "type": "number"
+                        },
+                        "connectable_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "destroy_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "sleep_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "start_ts": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "actor_id",
+                        "name",
+                        "key",
+                        "namespace_id",
+                        "runner_name_selector",
+                        "create_ts"
+                      ]
+                    },
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "actor",
+                    "created"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User error"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "datacenter": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "runner_name_selector": {
+                    "type": "string"
+                  },
+                  "crash_policy": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "input": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "name",
+                  "runner_name_selector",
+                  "crash_policy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "actor_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "namespace_id": {
+                          "type": "string"
+                        },
+                        "runner_name_selector": {
+                          "type": "string"
+                        },
+                        "create_ts": {
+                          "type": "number"
+                        },
+                        "connectable_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "destroy_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "sleep_ts": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "start_ts": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "actor_id",
+                        "name",
+                        "key",
+                        "namespace_id",
+                        "runner_name_selector",
+                        "create_ts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "actor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User error"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    }
+  }
+}

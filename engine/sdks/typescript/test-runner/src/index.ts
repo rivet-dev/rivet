@@ -1,17 +1,16 @@
-import { Runner } from "@rivetkit/engine-runner";
-import type { RunnerConfig, ActorConfig } from "@rivetkit/engine-runner";
-import WebSocket from "ws";
 import { serve } from "@hono/node-server";
-import { streamSSE } from "hono/streaming";
+import type { ActorConfig, RunnerConfig } from "@rivetkit/engine-runner";
+import { Runner } from "@rivetkit/engine-runner";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import pino from "pino";
+import type WebSocket from "ws";
 
 const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	? Number(process.env.INTERNAL_SERVER_PORT)
 	: 5051;
 const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
-const RIVET_RUNNER_NAME =
-	process.env.RIVET_RUNNER_NAME ?? "test-runner";
+const RIVET_RUNNER_NAME = process.env.RIVET_RUNNER_NAME ?? "test-runner";
 const RIVET_RUNNER_KEY =
 	process.env.RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
@@ -25,10 +24,10 @@ const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
 const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER == undefined;
 const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER == undefined;
 
-let runnerStarted = Promise.withResolvers();
-let runnerStopped = Promise.withResolvers();
-let websocketOpen = Promise.withResolvers();
-let websocketClosed = Promise.withResolvers();
+const runnerStarted = Promise.withResolvers();
+const runnerStopped = Promise.withResolvers();
+const websocketOpen = Promise.withResolvers();
+const websocketClosed = Promise.withResolvers();
 let runner: Runner | null = null;
 const actorWebSockets = new Map<string, WebSocket>();
 
@@ -41,9 +40,9 @@ app.get("/wait-ready", async (c) => {
 });
 
 app.get("/has-actor", async (c) => {
-	let actorIdQuery = c.req.query("actor");
-	let generationQuery = c.req.query("generation");
-	let generation = generationQuery ? Number(generationQuery) : undefined;
+	const actorIdQuery = c.req.query("actor");
+	const generationQuery = c.req.query("generation");
+	const generation = generationQuery ? Number(generationQuery) : undefined;
 
 	if (!actorIdQuery || !runner?.hasActor(actorIdQuery, generation)) {
 		return c.text("", 404);
@@ -71,7 +70,9 @@ if (AUTOSTART_SERVER) {
 		fetch: app.fetch,
 		port: INTERNAL_SERVER_PORT,
 	});
-	console.log(`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`);
+	console.log(
+		`Internal HTTP server listening on port ${INTERNAL_SERVER_PORT}`,
+	);
 }
 
 if (AUTOSTART_RUNNER) runner = await startRunner();
@@ -92,7 +93,7 @@ async function startRunner(): Promise<Runner> {
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -158,7 +159,7 @@ async function startRunner(): Promise<Runner> {
 		},
 	};
 
-	let runner = new Runner(config);
+	const runner = new Runner(config);
 
 	// Start runner
 	await runner.start();

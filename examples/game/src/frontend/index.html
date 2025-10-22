@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Game - RivetKit</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #333;
+            margin: 0;
+        }
+        .header p {
+            color: #666;
+            margin: 10px 0;
+        }
+        .game-area {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .game-canvas {
+            border: 3px solid #333;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .controls p {
+            margin: 5px 0;
+            font-size: 16px;
+            color: #555;
+        }
+        .info-box {
+            background-color: #e8f4f8;
+            border: 1px solid #b8d4da;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #2c5aa0;
+        }
+        .info-box p {
+            margin: 0;
+            color: #555;
+            line-height: 1.5;
+        }
+        .player-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+        .legend-color.you {
+            background-color: #4287f5;
+        }
+        .legend-color.other {
+            background-color: #888;
+        }
+        .connection-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .connection-status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .connection-status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+</body>
+</html>

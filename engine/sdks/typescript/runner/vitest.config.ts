@@ -1,6 +1,6 @@
 import { resolve } from "path";
 import { defineConfig } from "vitest/config";
-import defaultConfig from "../../../vitest.base.ts";
+import defaultConfig from "../../../../vitest.base.ts";
 
 export default defineConfig({
 	...defaultConfig,
@@ -14,4 +14,3 @@ export default defineConfig({
 		include: ["tests/**/*.test.ts"],
 	},
 });
-

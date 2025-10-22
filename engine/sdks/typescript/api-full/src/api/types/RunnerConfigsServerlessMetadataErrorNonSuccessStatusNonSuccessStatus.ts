@@ -3,6 +3,6 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorNonSuccessStatusNonSuccessStatus {
-    body: string;
-    statusCode: number;
+	body: string;
+	statusCode: number;
 }

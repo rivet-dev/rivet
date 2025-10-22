@@ -1,0 +1,44 @@
+[project]
+name = "rivetkit-client"
+version = "0.9.0-rc.1"
+authors = [
+  { name="Rivet Gaming, LLC", email="developer@rivet.dev" },
+]
+description = "Python client for RivetKit - the Stateful Serverless Framework for building AI agents, realtime apps, and game servers"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/rivet-dev/rivetkit"
+Issues = "https://github.com/rivet-dev/rivetkit/issues"
+
+[project.optional-dependencies]
+tests = [
+    "asyncio==3.4.3",
+    "iniconfig==2.1.0",
+    "packaging==24.2",
+    "pluggy==1.5.0",
+    "pytest==8.3.5",
+    "pytest-aio==1.9.0",
+]
+
+
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+log_cli = true
+log_level = "DEBUG"

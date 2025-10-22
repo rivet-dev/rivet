@@ -1,5 +1,5 @@
-import { TemplateContext } from "../../context";
 import * as yaml from "js-yaml";
+import type { TemplateContext } from "../../context";
 
 export function generateDatacenterOtelCollectorClient(
 	context: TemplateContext,

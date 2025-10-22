@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Dashboard - RivetKit</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .header h1 {
+            color: #333;
+            margin: 0;
+        }
+        .header p {
+            color: #666;
+            margin: 10px 0;
+        }
+        .login-section {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .login-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .login-section p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .login-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .login-button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 200px;
+        }
+        .login-button.admin {
+            background-color: #dc3545;
+            color: white;
+        }
+        .login-button.admin:hover {
+            background-color: #c82333;
+        }
+        .login-button.member {
+            background-color: #007bff;
+            color: white;
+        }
+        .login-button.member:hover {
+            background-color: #0056b3;
+        }
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .user-info .user-details {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .user-badge.admin {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .user-badge.member {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .logout-button {
+            padding: 8px 16px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .logout-button:hover {
+            background-color: #5a6268;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .data-table th {
+            background-color: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+            color: #495057;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .data-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        .role-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .role-badge.admin {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .role-badge.member {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-badge.paid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-badge.unpaid {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .error-message {
+            padding: 15px;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 6px;
+            color: #721c24;
+            margin-bottom: 20px;
+        }
+        .error-message h4 {
+            margin: 0 0 10px 0;
+            color: #721c24;
+        }
+        .info-box {
+            background-color: #e8f4f8;
+            border: 1px solid #b8d4da;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #2c5aa0;
+        }
+        .info-box p {
+            margin: 0;
+            color: #555;
+            line-height: 1.5;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        .organization-header {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .organization-header h2 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .organization-header p {
+            margin: 0;
+            color: #666;
+        }
+        @media (max-width: 768px) {
+            .login-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            .user-info {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            .data-table {
+                font-size: 14px;
+            }
+            .data-table th,
+            .data-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+</body>
+</html>

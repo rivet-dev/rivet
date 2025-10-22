@@ -74,8 +74,7 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 	if (isCustom) {
 		if (hasFaToken) {
 			const iconNames = icons.map(({ icon }) => icon);
-			const exp = iconNames
-				.join(", ");
+			const exp = iconNames.join(", ");
 			indexJsSource += `export { ${exp} } from "${pkg}";\n`;
 		} else {
 			const iconNames = icons.map(({ icon }) => icon);

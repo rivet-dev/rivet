@@ -1,0 +1,47 @@
+{
+	"name": "@rivetkit/framework-base",
+	"version": "2.0.20",
+	"description": "Base framework utilities for RivetKit client integrations",
+	"license": "Apache-2.0",
+	"keywords": [
+		"rivetkit",
+		"framework",
+		"base",
+		"utilities",
+		"integration"
+	],
+	"sideEffects": false,
+	"type": "module",
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		}
+	},
+	"scripts": {
+		"dev": "vite build --watch",
+		"build": "tsc && vite build",
+		"check-types": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"typescript": "^5.5.2",
+		"vite": "^6.3.5",
+		"vite-plugin-dts": "^4.5.4",
+		"vitest": "^3.1.1"
+	},
+	"stableVersion": "0.8.0",
+	"dependencies": {
+		"rivetkit": "workspace:*",
+		"@tanstack/store": "^0.7.1"
+	}
+}

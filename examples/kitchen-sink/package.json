@@ -1,0 +1,29 @@
+{
+	"name": "example-kitchen-sink",
+	"private": true,
+	"version": "2.0.20",
+	"type": "module",
+	"scripts": {
+		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+		"dev:backend": "tsx --watch src/backend/server.ts",
+		"dev:frontend": "vite",
+		"build": "tsc && vite build",
+		"preview": "vite preview",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@rivetkit/react": "workspace:*",
+		"rivetkit": "workspace:*",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0"
+	},
+	"devDependencies": {
+		"@types/react": "^18.2.66",
+		"@types/react-dom": "^18.2.22",
+		"@vitejs/plugin-react": "^4.2.1",
+		"concurrently": "^8.2.2",
+		"tsx": "^4.7.1",
+		"typescript": "^5.2.2",
+		"vite": "^5.2.0"
+	}
+}

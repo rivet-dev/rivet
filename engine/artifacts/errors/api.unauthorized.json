@@ -1,5 +1,5 @@
 {
-  "code": "unauthorized",
-  "group": "api",
-  "message": "Authentication required"
+	"code": "unauthorized",
+	"group": "api",
+	"message": "Authentication required"
 }

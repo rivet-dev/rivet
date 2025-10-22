@@ -16,7 +16,9 @@ export class TemplateContext {
 	}
 
 	getDatacenter(dcId: string) {
-		const datacenter = this.config.datacenters.find((dc) => dc.name === dcId);
+		const datacenter = this.config.datacenters.find(
+			(dc) => dc.name === dcId,
+		);
 		if (!datacenter)
 			throw new Error(`Datacenter ${dcId} not found in configuration`);
 		return datacenter;
@@ -76,7 +78,11 @@ export class TemplateContext {
 		content: string,
 		nodeIndex?: number,
 	) {
-		const basePath = this.getDatacenterServicePath(service, dcId, nodeIndex);
+		const basePath = this.getDatacenterServicePath(
+			service,
+			dcId,
+			nodeIndex,
+		);
 		const filePath = `${basePath}/${fileName}`;
 		this.writeFile(filePath, content);
 	}
@@ -87,7 +93,11 @@ export class TemplateContext {
 		fileName: string,
 		nodeIndex?: number,
 	) {
-		const basePath = this.getDatacenterServicePath(service, dcId, nodeIndex);
+		const basePath = this.getDatacenterServicePath(
+			service,
+			dcId,
+			nodeIndex,
+		);
 		const filePath = `${basePath}/${fileName}`;
 		const fullPath = path.join(this.outputDir, filePath);
 

@@ -1,6 +1,12 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, RIVET_TOKEN, RIVET_NAMESPACE, createActor, destroyActor } from "./utils";
+import {
+	createActor,
+	destroyActor,
+	RIVET_ENDPOINT,
+	RIVET_NAMESPACE,
+	RIVET_TOKEN,
+} from "./utils";
 
 async function main() {
 	let actorId;
@@ -60,7 +66,12 @@ function testWebSocket(actorId: string): Promise<void> {
 
 		console.log(`Connecting WebSocket to: ${wsUrl}`);
 
-		const protocols = ["rivet", "rivet_target.actor", `rivet_actor.${actorId}`, `rivet_token.${RIVET_TOKEN}`];
+		const protocols = [
+			"rivet",
+			"rivet_target.actor",
+			`rivet_actor.${actorId}`,
+			`rivet_token.${RIVET_TOKEN}`,
+		];
 		const ws = new WebSocket(wsUrl, protocols);
 
 		let pingReceived = false;

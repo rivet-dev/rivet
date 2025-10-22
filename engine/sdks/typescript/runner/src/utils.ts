@@ -20,7 +20,7 @@ export function calculateBackoff(
 		jitter = true,
 	} = options;
 
-	let delay = Math.min(initialDelay * Math.pow(multiplier, attempt), maxDelay);
+	let delay = Math.min(initialDelay * multiplier ** attempt, maxDelay);
 
 	if (jitter) {
 		// Add random jitter between 0% and 25% of the delay

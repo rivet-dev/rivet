@@ -22,7 +22,7 @@
 		"@sentry/vite-plugin": "^2.23.1"
 	},
 	"resolutions": {
-		"rivetkit": "https://pkg.pr.new/rivet-dev/rivetkit@1296",
+		"rivetkit": "workspace:*",
 		"@clerk/shared": "3.27.1"
 	}
 }

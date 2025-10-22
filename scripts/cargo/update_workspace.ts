@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-write
 
-import { parse, stringify } from "@std/toml";
-import { walk, exists } from "@std/fs";
+import { exists, walk } from "@std/fs";
 import { join, relative } from "@std/path";
+import { parse, stringify } from "@std/toml";
 
 const rootDir = join(import.meta.dirname, "../..");
 
@@ -11,7 +11,7 @@ async function updateCargoToml() {
 	const workspaceTomlContent = await Deno.readTextFile(workspaceTomlPath);
 	const workspaceToml = parse(workspaceTomlContent);
 
-	const entries = async function* () {
+	const entries = (async function* () {
 		// Yield from engine/packages/* (1 level deep)
 		for await (const entry of walk(join(rootDir, "engine", "packages"), {
 			includeDirs: false,
@@ -19,9 +19,13 @@ async function updateCargoToml() {
 			skip: [/node_modules/],
 		})) {
 			if (entry.path.endsWith("Cargo.toml")) {
-				const relativePath = relative(join(rootDir, "engine", "packages"), entry.path);
+				const relativePath = relative(
+					join(rootDir, "engine", "packages"),
+					entry.path,
+				);
 				const pathParts = relativePath.split("/");
-				if (pathParts.length === 2) {  // Directly in a subdirectory
+				if (pathParts.length === 2) {
+					// Directly in a subdirectory
 					yield entry;
 				}
 			}
@@ -38,19 +42,18 @@ async function updateCargoToml() {
 				if (entry.path.endsWith("Cargo.toml")) {
 					const relativePath = relative(sdksRustDir, entry.path);
 					const pathParts = relativePath.split("/");
-					if (pathParts.length === 2) {  // Directly in a subdirectory
+					if (pathParts.length === 2) {
+						// Directly in a subdirectory
 						yield entry;
 					}
 				}
 			}
 		}
-	}();
+	})();
 
 	// Find all workspace members
 	const members: string[] = [];
-	for await (
-		const entry of entries
-	) {
+	for await (const entry of entries) {
 		const packagePath = relative(
 			rootDir,
 			entry.path.replace(/\/Cargo\.toml$/, ""),
@@ -74,7 +77,7 @@ async function updateCargoToml() {
 	const newDependencies: Record<string, any> = {};
 	const packageAliases: Record<string, string[]> = {
 		"rivet-util": ["util"],
-		"gasoline": ["gas"],
+		gasoline: ["gas"],
 	};
 	for (const packagePath of members) {
 		const packageTomlPath = join(rootDir, packagePath, "Cargo.toml");

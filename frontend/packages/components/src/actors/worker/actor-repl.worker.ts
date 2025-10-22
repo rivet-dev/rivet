@@ -4,14 +4,13 @@ import {
 	ToClientSchema,
 	type ToServer,
 } from "actor-core/inspector/protocol/actor";
+import type { Request, ResponseOk } from "actor-core/protocol/http";
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
-
-import type { Request, ResponseOk } from "actor-core/protocol/http";
 import {
-	type HighlighterCore,
 	createHighlighterCore,
 	createOnigurumaEngine,
+	type HighlighterCore,
 } from "shiki";
 import { endWithSlash } from "../../lib/utils";
 import {

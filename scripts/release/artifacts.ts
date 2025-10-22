@@ -1,7 +1,7 @@
-import type { ReleaseOpts } from "./main";
-import { $ } from "execa";
-import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { $ } from "execa";
+import type { ReleaseOpts } from "./main";
 
 function assert(condition: any, message?: string): asserts condition {
 	if (!condition) {

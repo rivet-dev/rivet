@@ -3,23 +3,26 @@ import { createIdentitySchemaCreator } from "../../utils/createIdentitySchemaCre
 import { getErrorMessageForIncorrectType } from "../../utils/getErrorMessageForIncorrectType";
 
 export const string = createIdentitySchemaCreator<string>(
-    SchemaType.STRING,
-    (value, { breadcrumbsPrefix = [] } = {}) => {
-        if (typeof value === "string") {
-            return {
-                ok: true,
-                value,
-            };
-        } else {
-            return {
-                ok: false,
-                errors: [
-                    {
-                        path: breadcrumbsPrefix,
-                        message: getErrorMessageForIncorrectType(value, "string"),
-                    },
-                ],
-            };
-        }
-    },
+	SchemaType.STRING,
+	(value, { breadcrumbsPrefix = [] } = {}) => {
+		if (typeof value === "string") {
+			return {
+				ok: true,
+				value,
+			};
+		} else {
+			return {
+				ok: false,
+				errors: [
+					{
+						path: breadcrumbsPrefix,
+						message: getErrorMessageForIncorrectType(
+							value,
+							"string",
+						),
+					},
+				],
+			};
+		}
+	},
 );

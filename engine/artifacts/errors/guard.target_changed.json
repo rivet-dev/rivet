@@ -1,5 +1,5 @@
 {
-  "code": "target_changed",
-  "group": "guard",
-  "message": "WebSocket target changed, retry not possible."
+	"code": "target_changed",
+	"group": "guard",
+	"message": "WebSocket target changed, retry not possible."
 }
