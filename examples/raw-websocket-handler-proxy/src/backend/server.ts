@@ -1,6 +1,8 @@
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
+import type { Context } from "hono";
 import { Hono } from "hono";
+import type { WSContext } from "hono/ws";
 import { registry } from "./registry.js";
 
 const { client } = registry.start({
@@ -16,7 +18,7 @@ const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 // Forward WebSocket connections to actor's WebSocket handler
 app.get(
 	"/ws/:name",
-	upgradeWebSocket(async (c) => {
+	upgradeWebSocket(async (c: Context) => {
 		const name = c.req.param("name");
 
 		// Connect to actor WebSocket
@@ -24,7 +26,7 @@ app.get(
 		const actorWs = await actor.websocket("/");
 
 		return {
-			onOpen: async (_evt, ws) => {
+			onOpen: async (_evt: Event, ws: WSContext) => {
 				// Bridge actor WebSocket to client WebSocket
 				actorWs.addEventListener("message", (event: MessageEvent) => {
 					ws.send(event.data);
@@ -34,7 +36,7 @@ app.get(
 					ws.close();
 				});
 			},
-			onMessage: (evt) => {
+			onMessage: (evt: MessageEvent) => {
 				// Forward message to actor WebSocket
 				if (actorWs && typeof evt.data === "string") {
 					actorWs.send(evt.data);

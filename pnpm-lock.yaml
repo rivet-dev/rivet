@@ -272,6 +272,9 @@ importers:
 
   examples/better-auth-external-db:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.0
+        version: 1.19.1(hono@4.9.8)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -783,6 +786,9 @@ importers:
 
   examples/hono:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.0
+        version: 1.19.1(hono@4.9.8)
       hono:
         specifier: ^4.7.0
         version: 4.9.8
@@ -845,6 +851,9 @@ importers:
 
   examples/hono-react:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.0
+        version: 1.19.1(hono@4.9.8)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -1002,6 +1011,9 @@ importers:
 
   examples/raw-fetch-handler:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.0
+        version: 1.19.1(hono@4.9.8)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -1094,6 +1106,12 @@ importers:
 
   examples/raw-websocket-handler-proxy:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.0
+        version: 1.19.1(hono@4.9.8)
+      '@hono/node-ws':
+        specifier: ^1.1.1
+        version: 1.2.0(@hono/node-server@1.19.1(hono@4.9.8))(hono@4.9.8)
       hono:
         specifier: ^4.7.0
         version: 4.9.8
@@ -1106,6 +1124,9 @@ importers:
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
+      ws:
+        specifier: ^8.18.0
+        version: 8.18.3
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -1116,6 +1137,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.5
         version: 18.3.7(@types/react@18.3.24)
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.1(@types/node@22.18.1)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
@@ -2001,8 +2025,8 @@ importers:
   rivetkit-typescript/packages/cloudflare-workers:
     dependencies:
       hono:
-        specifier: 4.8.3
-        version: 4.8.3
+        specifier: ^4.7.0
+        version: 4.9.8
       invariant:
         specifier: ^2.2.4
         version: 2.2.4
@@ -9337,10 +9361,6 @@ packages:
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
-
-  hono@4.8.3:
-    resolution: {integrity: sha512-jYZ6ZtfWjzBdh8H/0CIFfCBHaFL75k+KMzaM177hrWWm2TWL39YMYaJgB74uK/niRc866NMlH9B8uCvIo284WQ==}
-    engines: {node: '>=16.9.0'}
 
   hono@4.9.8:
     resolution: {integrity: sha512-JW8Bb4RFWD9iOKxg5PbUarBYGM99IcxFl2FPBo2gSJO11jjUDqlP1Bmfyqt8Z/dGhIQ63PMA9LdcLefXyIasyg==}
@@ -21494,8 +21514,6 @@ snapshots:
   hoist-non-react-statics@3.3.2:
     dependencies:
       react-is: 16.13.1
-
-  hono@4.8.3: {}
 
   hono@4.9.8: {}
 

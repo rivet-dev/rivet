@@ -74,7 +74,6 @@ function evaluateRuntime(): Runtime {
 	 */
 	const isWebWorker =
 		typeof self === "object" &&
-		// @ts-expect-error
 		typeof self?.importScripts === "function" &&
 		(self.constructor?.name === "DedicatedWorkerGlobalScope" ||
 			self.constructor?.name === "ServiceWorkerGlobalScope" ||

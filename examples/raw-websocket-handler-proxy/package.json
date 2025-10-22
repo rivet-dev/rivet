@@ -18,15 +18,19 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.14.0",
+		"@hono/node-ws": "^1.1.1",
 		"rivetkit": "workspace:*",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
-		"hono": "^4.7.0"
+		"hono": "^4.7.0",
+		"ws": "^8.18.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
 		"@types/react": "^18.3.16",
 		"@types/react-dom": "^18.3.5",
+		"@types/ws": "^8.5.10",
 		"@vitejs/plugin-react": "^4.3.4",
 		"concurrently": "^9.1.0",
 		"tsx": "^4.19.2",
