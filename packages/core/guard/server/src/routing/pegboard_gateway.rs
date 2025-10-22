@@ -22,13 +22,14 @@ pub async fn route_request(
 	path: &str,
 	headers: &hyper::HeaderMap,
 	is_websocket: bool,
+	query_params: &std::collections::HashMap<String, String>,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "actor" {
 		return Ok(None);
 	}
 
-	// Extract actor ID from WebSocket protocol or HTTP header
+	// Extract actor ID from WebSocket protocol, HTTP header, or query param
 	let actor_id_str = if is_websocket {
 		// For WebSocket, parse the sec-websocket-protocol header
 		headers
@@ -41,22 +42,26 @@ pub async fn route_request(
 					.map(|p| p.trim())
 					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
 			})
+			// Fallback to query parameter if protocol not provided
+			.or_else(|| query_params.get("x_rivet_actor").map(|s| s.as_str()))
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
-					header: "`rivet_actor.*` protocol in sec-websocket-protocol".to_string(),
+					header: "`rivet_actor.*` protocol in sec-websocket-protocol or x_rivet_actor query parameter".to_string(),
 				}
 				.build()
 			})?
 	} else {
-		// For HTTP, use the x-rivet-actor header
+		// For HTTP, use the x-rivet-actor header, fallback to query param
 		headers
 			.get(X_RIVET_ACTOR)
 			.map(|x| x.to_str())
 			.transpose()
 			.context("invalid x-rivet-actor header")?
+			// Fallback to query parameter if header not provided
+			.or_else(|| query_params.get("x_rivet_actor").map(|s| s.as_str()))
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
-					header: X_RIVET_ACTOR.to_string(),
+					header: format!("{} header or x_rivet_actor query parameter", X_RIVET_ACTOR),
 				}
 				.build()
 			})?

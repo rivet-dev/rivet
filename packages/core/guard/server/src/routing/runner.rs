@@ -14,6 +14,7 @@ pub async fn route_request(
 	host: &str,
 	path: &str,
 	headers: &hyper::HeaderMap,
+	query_params: &std::collections::HashMap<String, String>,
 ) -> Result<Option<RoutingOutput>> {
 	if target != "runner" {
 		return Ok(None);
@@ -57,7 +58,7 @@ pub async fn route_request(
 
 	// Check auth (if enabled)
 	if let Some(auth) = &ctx.config().auth {
-		// Extract token
+		// Extract token from protocol, header, or query param
 		let token = if is_websocket {
 			headers
 				.get(SEC_WEBSOCKET_PROTOCOL)
@@ -68,9 +69,11 @@ pub async fn route_request(
 						.map(|p| p.trim())
 						.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
 				})
+				// Fallback to query parameter if protocol not provided
+				.or_else(|| query_params.get("x_rivet_token").map(|s| s.as_str()))
 				.ok_or_else(|| {
 					crate::errors::MissingHeader {
-						header: "`rivet_token.*` protocol in sec-websocket-protocol".to_string(),
+						header: "`rivet_token.*` protocol in sec-websocket-protocol or x_rivet_token query parameter".to_string(),
 					}
 					.build()
 				})?
@@ -78,9 +81,14 @@ pub async fn route_request(
 			headers
 				.get(X_RIVET_TOKEN)
 				.and_then(|x| x.to_str().ok())
+				// Fallback to query parameter if header not provided
+				.or_else(|| query_params.get("x_rivet_token").map(|s| s.as_str()))
 				.ok_or_else(|| {
 					crate::errors::MissingHeader {
-						header: X_RIVET_TOKEN.to_string(),
+						header: format!(
+							"{} header or x_rivet_token query parameter",
+							X_RIVET_TOKEN
+						),
 					}
 					.build()
 				})?
