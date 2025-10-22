@@ -35,6 +35,9 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 
 					tracing::debug!("Routing request for hostname: {host}, path: {path}");
 
+					// Parse query parameters
+					let query_params = parse_query_params(path);
+
 					// Check if this is a WebSocket upgrade request
 					let is_websocket = headers
 						.get("upgrade")
@@ -42,7 +45,7 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						.map(|v| v.eq_ignore_ascii_case("websocket"))
 						.unwrap_or(false);
 
-					// Extract target from WebSocket protocol or HTTP header
+					// Extract target from WebSocket protocol, HTTP header, or query param
 					let target = if is_websocket {
 						// For WebSocket, parse the sec-websocket-protocol header
 						headers
@@ -55,15 +58,21 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 									.map(|p| p.trim())
 									.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
 							})
+							// Fallback to query parameter if protocol not provided
+							.or_else(|| query_params.get("x_rivet_target").map(|s| s.as_str()))
 					} else {
-						// For HTTP, use the x-rivet-target header
-						headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
+						// For HTTP, use the x-rivet-target header, fallback to query param
+						headers
+							.get(X_RIVET_TARGET)
+							.and_then(|x| x.to_str().ok())
+							.or_else(|| query_params.get("x_rivet_target").map(|s| s.as_str()))
 					};
 
 					// Read target
 					if let Some(target) = target {
 						if let Some(routing_output) =
-							runner::route_request(&ctx, target, host, path, headers).await?
+							runner::route_request(&ctx, target, host, path, headers, &query_params)
+								.await?
 						{
 							return Ok(routing_output);
 						}
@@ -76,6 +85,7 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 							path,
 							headers,
 							is_websocket,
+							&query_params,
 						)
 						.await?
 						{
@@ -108,4 +118,20 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 			)
 		},
 	)
+}
+
+/// Parse query parameters from a path string
+fn parse_query_params(path: &str) -> std::collections::HashMap<String, String> {
+	let mut params = std::collections::HashMap::new();
+
+	if let Some(query_start) = path.find('?') {
+		// Strip fragment if present
+		let query = &path[query_start + 1..].split('#').next().unwrap_or("");
+		// Use url::form_urlencoded to properly decode query parameters
+		for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
+			params.insert(key.into_owned(), value.into_owned());
+		}
+	}
+
+	params
 }
