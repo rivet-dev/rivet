@@ -46,10 +46,10 @@ frontend/node_modules/
 frontend/.tanstack
 
 # Site
-site/out/
-site/.next/
-site/src/generated/
-site/public/docs/
-site/public/llms-full.txt
-site/public/llms.txt
-site/.playwright-mcp/
+website/out/
+website/.next/
+website/src/generated/
+website/public/docs/
+website/public/llms-full.txt
+website/public/llms.txt
+website/.playwright-mcp/

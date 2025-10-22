@@ -1,7 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["packages/common/api-builder","packages/common/api-types","packages/common/api-util","packages/common/cache/build","packages/common/cache/result","packages/common/clickhouse-inserter","packages/common/clickhouse-user-query","packages/common/config","packages/common/env","packages/common/error/core","packages/common/error/macros","packages/common/gasoline/core","packages/common/gasoline/macros","packages/common/logs","packages/common/metrics","packages/common/pools","packages/common/runtime","packages/common/service-manager","packages/common/telemetry","packages/common/test-deps","packages/common/test-deps-docker","packages/common/types","packages/common/universaldb","packages/common/universalpubsub","packages/common/util/core","packages/common/util/id","packages/core/actor-kv","packages/core/api-peer","packages/core/api-public","packages/core/bootstrap","packages/core/dump-openapi","packages/core/guard/core","packages/core/guard/server","packages/core/pegboard-gateway","packages/core/pegboard-runner","packages/core/pegboard-serverless","packages/core/workflow-worker","packages/infra/engine","packages/services/epoxy","packages/services/internal","packages/services/namespace","packages/services/pegboard","sdks/rust/api-full","sdks/rust/data","sdks/rust/epoxy-protocol","sdks/rust/runner-protocol","sdks/rust/ups-protocol"]
+members = ["engine/packages/actor-kv","engine/packages/api-builder","engine/packages/api-peer","engine/packages/api-public","engine/packages/api-types","engine/packages/api-util","engine/packages/bootstrap","engine/packages/cache","engine/packages/cache-purge","engine/packages/cache-result","engine/packages/clickhouse-inserter","engine/packages/clickhouse-user-query","engine/packages/config","engine/packages/dump-openapi","engine/packages/engine","engine/packages/env","engine/packages/epoxy","engine/packages/error","engine/packages/error-macros","engine/packages/gasoline","engine/packages/gasoline-macros","engine/packages/guard","engine/packages/guard-core","engine/packages/internal","engine/packages/logs","engine/packages/metrics","engine/packages/namespace","engine/packages/pegboard","engine/packages/pegboard-gateway","engine/packages/pegboard-runner","engine/packages/pegboard-serverless","engine/packages/pools","engine/packages/runtime","engine/packages/service-manager","engine/packages/telemetry","engine/packages/test-deps","engine/packages/test-deps-docker","engine/packages/tracing-reconfigure","engine/packages/types","engine/packages/universaldb","engine/packages/universalpubsub","engine/packages/util","engine/packages/util-id","engine/packages/workflow-worker","engine/sdks/rust/api-full","engine/sdks/rust/data","engine/sdks/rust/epoxy-protocol","engine/sdks/rust/runner-protocol","engine/sdks/rust/ups-protocol"]
 
 [workspace.package]
 version = "25.8.1"
@@ -247,166 +247,166 @@ version = "0.3"
 default-features = false
 features = ["ansi","fmt","json","env-filter"]
 
-[workspace.dependencies.rivet-api-builder]
-path = "packages/common/api-builder"
-
-[workspace.dependencies.rivet-api-types]
-path = "packages/common/api-types"
-
-[workspace.dependencies.rivet-api-util]
-path = "packages/common/api-util"
-
-[workspace.dependencies.rivet-cache]
-path = "packages/common/cache/build"
-
-[workspace.dependencies.rivet-cache-result]
-path = "packages/common/cache/result"
-
-[workspace.dependencies.clickhouse-inserter]
-path = "packages/common/clickhouse-inserter"
-
-[workspace.dependencies.clickhouse-user-query]
-path = "packages/common/clickhouse-user-query"
-
-[workspace.dependencies.rivet-config]
-path = "packages/common/config"
-
-[workspace.dependencies.rivet-env]
-path = "packages/common/env"
-
-[workspace.dependencies.rivet-error]
-path = "packages/common/error/core"
-
-[workspace.dependencies.rivet-error-macros]
-path = "packages/common/error/macros"
-
-[workspace.dependencies.gasoline]
-path = "packages/common/gasoline/core"
-
-[workspace.dependencies.gasoline-macros]
-path = "packages/common/gasoline/macros"
-
-[workspace.dependencies.gas]
-package = "gasoline"
-path = "packages/common/gasoline/core"
-
-[workspace.dependencies.rivet-logs]
-path = "packages/common/logs"
-
-[workspace.dependencies.rivet-metrics]
-path = "packages/common/metrics"
-
-[workspace.dependencies.rivet-pools]
-path = "packages/common/pools"
-
-[workspace.dependencies.rivet-runtime]
-path = "packages/common/runtime"
-
-[workspace.dependencies.rivet-service-manager]
-path = "packages/common/service-manager"
-
-[workspace.dependencies.rivet-telemetry]
-path = "packages/common/telemetry"
-
-[workspace.dependencies.rivet-test-deps]
-path = "packages/common/test-deps"
-
-[workspace.dependencies.rivet-test-deps-docker]
-path = "packages/common/test-deps-docker"
-
-[workspace.dependencies.rivet-types]
-path = "packages/common/types"
-
-[workspace.dependencies.universaldb]
-path = "packages/common/universaldb"
-
-[workspace.dependencies.universalpubsub]
-path = "packages/common/universalpubsub"
-
-[workspace.dependencies.rivet-util]
-path = "packages/common/util/core"
-
-[workspace.dependencies.util]
-package = "rivet-util"
-path = "packages/common/util/core"
-
-[workspace.dependencies.rivet-util-id]
-path = "packages/common/util/id"
-
-[workspace.dependencies.pegboard-actor-kv]
-path = "packages/core/actor-kv"
-
-[workspace.dependencies.rivet-api-peer]
-path = "packages/core/api-peer"
-
-[workspace.dependencies.rivet-api-public]
-path = "packages/core/api-public"
-
-[workspace.dependencies.rivet-bootstrap]
-path = "packages/core/bootstrap"
-
-[workspace.dependencies.rivet-dump-openapi]
-path = "packages/core/dump-openapi"
-
-[workspace.dependencies.rivet-guard-core]
-path = "packages/core/guard/core"
-
-[workspace.dependencies.rivet-guard]
-path = "packages/core/guard/server"
-
-[workspace.dependencies.pegboard-gateway]
-path = "packages/core/pegboard-gateway"
-
-[workspace.dependencies.pegboard-runner]
-path = "packages/core/pegboard-runner"
-
-[workspace.dependencies.pegboard-serverless]
-path = "packages/core/pegboard-serverless"
-
-[workspace.dependencies.rivet-workflow-worker]
-path = "packages/core/workflow-worker"
-
-[workspace.dependencies.rivet-engine]
-path = "packages/infra/engine"
-
-[workspace.dependencies.rivet-cache-purge]
-path = "packages/services/cache-purge"
-
-[workspace.dependencies.epoxy]
-path = "packages/services/epoxy"
-
-[workspace.dependencies.internal]
-path = "packages/services/internal"
-
-[workspace.dependencies.rivet-tracing-reconfigure]
-path = "packages/services/tracing-reconfigure"
-
-[workspace.dependencies.namespace]
-path = "packages/services/namespace"
-
-[workspace.dependencies.pegboard]
-path = "packages/services/pegboard"
-
-[workspace.dependencies.rivet-api-full]
-path = "sdks/rust/api-full"
-
-[workspace.dependencies.rivet-data]
-path = "sdks/rust/data"
-
-[workspace.dependencies.epoxy-protocol]
-path = "sdks/rust/epoxy-protocol"
-
-[workspace.dependencies.rivet-runner-protocol]
-path = "sdks/rust/runner-protocol"
-
-[workspace.dependencies.rivet-ups-protocol]
-path = "sdks/rust/ups-protocol"
-
 [workspace.dependencies.vbare]
 version = "0.0.2"
 
 [workspace.dependencies.vbare-compiler]
 version = "0.0.2"
+
+[workspace.dependencies.pegboard-actor-kv]
+path = "engine/packages/actor-kv"
+
+[workspace.dependencies.rivet-api-builder]
+path = "engine/packages/api-builder"
+
+[workspace.dependencies.rivet-api-peer]
+path = "engine/packages/api-peer"
+
+[workspace.dependencies.rivet-api-public]
+path = "engine/packages/api-public"
+
+[workspace.dependencies.rivet-api-types]
+path = "engine/packages/api-types"
+
+[workspace.dependencies.rivet-api-util]
+path = "engine/packages/api-util"
+
+[workspace.dependencies.rivet-bootstrap]
+path = "engine/packages/bootstrap"
+
+[workspace.dependencies.rivet-cache]
+path = "engine/packages/cache"
+
+[workspace.dependencies.rivet-cache-purge]
+path = "engine/packages/cache-purge"
+
+[workspace.dependencies.rivet-cache-result]
+path = "engine/packages/cache-result"
+
+[workspace.dependencies.clickhouse-inserter]
+path = "engine/packages/clickhouse-inserter"
+
+[workspace.dependencies.clickhouse-user-query]
+path = "engine/packages/clickhouse-user-query"
+
+[workspace.dependencies.rivet-config]
+path = "engine/packages/config"
+
+[workspace.dependencies.rivet-dump-openapi]
+path = "engine/packages/dump-openapi"
+
+[workspace.dependencies.rivet-engine]
+path = "engine/packages/engine"
+
+[workspace.dependencies.rivet-env]
+path = "engine/packages/env"
+
+[workspace.dependencies.epoxy]
+path = "engine/packages/epoxy"
+
+[workspace.dependencies.rivet-error]
+path = "engine/packages/error"
+
+[workspace.dependencies.rivet-error-macros]
+path = "engine/packages/error-macros"
+
+[workspace.dependencies.gasoline]
+path = "engine/packages/gasoline"
+
+[workspace.dependencies.gas]
+package = "gasoline"
+path = "engine/packages/gasoline"
+
+[workspace.dependencies.gasoline-macros]
+path = "engine/packages/gasoline-macros"
+
+[workspace.dependencies.rivet-guard]
+path = "engine/packages/guard"
+
+[workspace.dependencies.rivet-guard-core]
+path = "engine/packages/guard-core"
+
+[workspace.dependencies.internal]
+path = "engine/packages/internal"
+
+[workspace.dependencies.rivet-logs]
+path = "engine/packages/logs"
+
+[workspace.dependencies.rivet-metrics]
+path = "engine/packages/metrics"
+
+[workspace.dependencies.namespace]
+path = "engine/packages/namespace"
+
+[workspace.dependencies.pegboard]
+path = "engine/packages/pegboard"
+
+[workspace.dependencies.pegboard-gateway]
+path = "engine/packages/pegboard-gateway"
+
+[workspace.dependencies.pegboard-runner]
+path = "engine/packages/pegboard-runner"
+
+[workspace.dependencies.pegboard-serverless]
+path = "engine/packages/pegboard-serverless"
+
+[workspace.dependencies.rivet-pools]
+path = "engine/packages/pools"
+
+[workspace.dependencies.rivet-runtime]
+path = "engine/packages/runtime"
+
+[workspace.dependencies.rivet-service-manager]
+path = "engine/packages/service-manager"
+
+[workspace.dependencies.rivet-telemetry]
+path = "engine/packages/telemetry"
+
+[workspace.dependencies.rivet-test-deps]
+path = "engine/packages/test-deps"
+
+[workspace.dependencies.rivet-test-deps-docker]
+path = "engine/packages/test-deps-docker"
+
+[workspace.dependencies.rivet-tracing-reconfigure]
+path = "engine/packages/tracing-reconfigure"
+
+[workspace.dependencies.rivet-types]
+path = "engine/packages/types"
+
+[workspace.dependencies.universaldb]
+path = "engine/packages/universaldb"
+
+[workspace.dependencies.universalpubsub]
+path = "engine/packages/universalpubsub"
+
+[workspace.dependencies.rivet-util]
+path = "engine/packages/util"
+
+[workspace.dependencies.util]
+package = "rivet-util"
+path = "engine/packages/util"
+
+[workspace.dependencies.rivet-util-id]
+path = "engine/packages/util-id"
+
+[workspace.dependencies.rivet-workflow-worker]
+path = "engine/packages/workflow-worker"
+
+[workspace.dependencies.rivet-api-full]
+path = "engine/sdks/rust/api-full"
+
+[workspace.dependencies.rivet-data]
+path = "engine/sdks/rust/data"
+
+[workspace.dependencies.epoxy-protocol]
+path = "engine/sdks/rust/epoxy-protocol"
+
+[workspace.dependencies.rivet-runner-protocol]
+path = "engine/sdks/rust/runner-protocol"
+
+[workspace.dependencies.rivet-ups-protocol]
+path = "engine/sdks/rust/ups-protocol"
 
 [profile.dev]
 overflow-checks = false

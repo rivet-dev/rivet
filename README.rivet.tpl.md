@@ -36,7 +36,7 @@ Public-facing projects:
 - **[RivetKit](https://github.com/rivet-dev/rivetkit)**: Lightweight TypeScript library for building Rivet Actors — works with Redis or Rivet Engine
 - **[Rivet Inspector](/frontend/apps/studio)**: Like Postman, but for Rivet Actors
 - **[Rivet Hub](/frontend/apps/hub)**: UI for Rivet Engine
-- **[Rivet Documentation](/site/src/content/docs)**
+- **[Rivet Documentation](/website/src/content/docs)**
 
 Projects powering Rivet Engine:
 
