@@ -10,18 +10,19 @@
 **/Cargo.lock linguist-generated=true
 
 # Prevent from counting in the language statistics
-out/** linguist-generated=true
-sdks/** linguist-generated=true
-sdks/schema/** linguist-generated=false
+engine/artifacts/** linguist-generated=true
+engine/sdks/** linguist-generated=true
+engine/sdks/schema/** linguist-generated=false
 
-site/public/llms.txt linguist-generated=true
-site/public/llms-full.txt linguist-generated=true
-site/public/docs/**/*.md linguist-generated=true
+website/public/llms.txt linguist-generated=true
+website/public/llms-full.txt linguist-generated=true
+website/public/docs/**/*.md linguist-generated=true
 **/Cargo.lock linguist-generated=true
 
 # I refuse to admit there's more TypeScript than Rust in the codebase
-site/**/*.ts linguist-generated=true
-site/**/*.tsx linguist-generated=true
-site/**/*.js linguist-generated=true
-site/**/*.jsx linguist-generated=true
+website/**/*.ts linguist-generated=true
+website/**/*.tsx linguist-generated=true
+website/**/*.js linguist-generated=true
+website/**/*.jsx linguist-generated=true
+examples/**/* linguist-generated=true
 
