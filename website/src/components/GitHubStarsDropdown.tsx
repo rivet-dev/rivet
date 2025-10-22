@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@rivet-gg/components";
-import { Icon, faArrowRight, faGithub } from "@rivet-gg/icons";
+import { Icon, faGithub } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 
 interface GitHubStarsDropdownProps
@@ -26,11 +26,6 @@ export function GitHubStarsDropdown({
 		stars: 0,
 		loading: true,
 	});
-	const [rivetKitStars, setRivetKitStars] = useState<RepoData>({
-		stars: 0,
-		loading: true,
-	});
-	const [isOpen, setIsOpen] = useState(false);
 
 	const fetchStars = async (
 		repo: string,
@@ -69,77 +64,21 @@ export function GitHubStarsDropdown({
 	};
 
 	useEffect(() => {
-		fetchStars("rivet-dev/engine", setRivetStars);
-		fetchStars("rivet-dev/rivetkit", setRivetKitStars);
+		fetchStars("rivet-dev/rivet", setRivetStars);
 	}, []);
 
-	const totalStars = rivetStars.stars + rivetKitStars.stars;
-	const isLoading = rivetStars.loading || rivetKitStars.loading;
-
 	return (
-		<div
-			className={cn("relative", className)}
-			onMouseEnter={() => setIsOpen(true)}
-			onMouseLeave={() => setIsOpen(false)}
+		<a
+			href="https://github.com/rivet-dev/rivet"
+			target="_blank"
+			rel="noreferrer"
+			className={cn("flex items-center gap-2 transition-colors", className)}
 			{...props}
 		>
-			<button
-				className="flex items-center gap-2 transition-colors"
-				aria-expanded={isOpen}
-				aria-haspopup="true"
-			>
-				<Icon icon={faGithub} />
-				<span className="hidden md:inline">
-					{isLoading ? "GitHub" : `${formatNumber(totalStars)} stars`}
-				</span>
-			</button>
-
-			{isOpen && (
-				<div className="absolute right-0 top-full pt-1 w-48 z-50">
-					<div className="rounded-md border border-white/10 bg-background/95 backdrop-blur-sm shadow-lg">
-						<div className="py-1">
-							<a
-								href="https://github.com/rivet-dev/rivetkit"
-								target="_blank"
-								rel="noreferrer"
-								className="group flex items-center justify-between px-4 py-2 text-sm text-white/90 hover:bg-white/5 hover:text-white transition-colors"
-							>
-								<div className="flex flex-col items-start">
-									<span>Rivet Actors</span>
-									<span className="text-white/70 text-xs">
-										{rivetKitStars.loading
-											? "..."
-											: `${formatNumber(rivetKitStars.stars)} stars`}
-									</span>
-								</div>
-								<Icon
-									icon={faArrowRight}
-									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
-								/>
-							</a>
-							<a
-								href="https://github.com/rivet-dev/engine"
-								target="_blank"
-								rel="noreferrer"
-								className="group flex items-center justify-between px-4 py-2 text-sm text-white/90 hover:bg-white/5 hover:text-white transition-colors"
-							>
-								<div className="flex flex-col items-start">
-									<span>Rivet Cloud</span>
-									<span className="text-white/70 text-xs">
-										{rivetStars.loading
-											? "..."
-											: `${formatNumber(rivetStars.stars)} stars`}
-									</span>
-								</div>
-								<Icon
-									icon={faArrowRight}
-									className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
-								/>
-							</a>
-						</div>
-					</div>
-				</div>
-			)}
-		</div>
+			<Icon icon={faGithub} />
+			<span className="hidden md:inline">
+				{rivetStars.loading ? "GitHub" : `${formatNumber(rivetStars.stars)} stars`}
+			</span>
+		</a>
 	);
 }

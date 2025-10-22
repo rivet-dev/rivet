@@ -51,7 +51,7 @@ export const HeaderPopupProductMenu = () => {
 				className="col-start-3 h-full justify-start"
 				startIcon={<Icon icon={faCodeBranch} />}
 			>
-				<Link href="https://github.com/rivet-dev/engine" target="_blank">
+				<Link href="https://github.com/rivet-dev/rivet" target="_blank">
 					Community Edition
 				</Link>
 			</Button>

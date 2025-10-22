@@ -45,8 +45,8 @@ export function HeroSection() {
 							<span className="ttext-white/90">long-lived processes</span>.
 							<br />
 							Like Lambda — but with{" "}
-							<span className="text-white/90">persistence</span>,{" "}
-							<span className="text-white/90">realtime</span>, and{" "}
+							<span className="text-white/90">realtime</span>,{" "}
+							<span className="text-white/90">persistence</span>, and{" "}
 							<span className="text-white/90">hibernation</span>.
 							<br />
 							Easily{" "}
