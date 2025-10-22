@@ -1,4 +1,4 @@
-import { TemplateContext } from "../../context";
+import type { TemplateContext } from "../../context";
 
 export function generateDatacenterPostgres(
 	context: TemplateContext,

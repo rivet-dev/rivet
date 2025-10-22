@@ -1,5 +1,5 @@
 {
-  "code": "test_error",
-  "group": "test",
-  "message": "Test error"
+	"code": "test_error",
+	"group": "test",
+	"message": "Test error"
 }

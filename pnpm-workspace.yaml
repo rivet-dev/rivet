@@ -1,26 +1,31 @@
 packages:
-  - docker/template
+  - engine/docker/template
+  - engine/sdks/typescript/api-full
+  - engine/sdks/typescript/runner
+  - engine/sdks/typescript/runner-protocol
+  - engine/sdks/typescript/test-runner
+  - examples/*
   - frontend
-  - scripts/tests
-  - scripts/release
-  - sdks/typescript/api-full
-  - sdks/typescript/runner
-  - sdks/typescript/runner-protocol
-  - sdks/typescript/test-runner
-  - site
   - frontend/packages/components/
   - frontend/packages/icons/
+  - rivetkit-typescript/packages/*
+  - scripts/release
+  - scripts/tests
+  - website
 
 ignoredBuiltDependencies:
   - '@clerk/shared'
   - '@parcel/watcher'
   - '@sentry/cli'
   - browser-tabs-lock
-  - cbor-extract
   - core-js
-  - lefthook
-  - sharp
 
 onlyBuiltDependencies:
+  - '@biomejs/biome'
   - '@rivet-gg/icons'
+  - better-sqlite3
+  - cbor-extract
   - esbuild
+  - lefthook
+  - sharp
+  - workerd

@@ -1,27 +1,27 @@
 import {
-	faFilePen,
-	faRobot,
-	faMessage,
-	faDatabase,
-	faGaugeHigh,
-	faWaveSine,
-	faGamepad,
-	faRotate,
-	faBuilding,
-	faCode,
-	faNpm,
-	faFlask,
 	faBeaker,
-	faReact,
 	faBracketsCurly,
-	faJs,
-	faFile,
+	faBuilding,
 	faClock,
-	faUserRobot,
+	faCode,
+	faDatabase,
 	faDiagramNext,
+	faFile,
+	faFilePen,
+	faFlask,
+	faGamepad,
+	faGaugeHigh,
+	faJs,
+	faMessage,
+	faNpm,
+	faReact,
+	faRobot,
+	faRotate,
+	faUserRobot,
+	faWaveSine,
 } from "@rivet-gg/icons";
-import { examples } from "@/data/examples/examples";
 import JSZip from "jszip";
+import { examples } from "@/data/examples/examples";
 
 export const EXAMPLE_ICON_MAP: Record<string, any> = {
 	"ai-agent": faRobot,
@@ -39,7 +39,10 @@ export const EXAMPLE_ICON_MAP: Record<string, any> = {
 };
 
 // Shared functionality for example actions
-export const createExampleActions = (exampleId: string, exampleFiles?: Record<string, string>) => {
+export const createExampleActions = (
+	exampleId: string,
+	exampleFiles?: Record<string, string>,
+) => {
 	const handleOpenGithub = () => {
 		window.open(
 			`https://github.com/rivet-dev/rivetkit/tree/main/examples/${exampleId}`,

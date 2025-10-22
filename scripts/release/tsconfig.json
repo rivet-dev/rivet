@@ -1,5 +1,5 @@
 {
-	"extends": "../../tsconfig.base.json",
+	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
 		"types": ["node"],
 		"paths": {
@@ -7,7 +7,5 @@
 		}
 	},
 	"include": ["**/*.ts"],
-	"exclude": [
-		"node_modules"
-	]
+	"exclude": ["node_modules"]
 }

@@ -7,8 +7,8 @@
  *     {}
  */
 export interface NamespacesListRequest {
-    limit?: number;
-    cursor?: string;
-    name?: string;
-    namespaceIds?: string;
+	limit?: number;
+	cursor?: string;
+	name?: string;
+	namespaceIds?: string;
 }

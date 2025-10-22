@@ -1,0 +1,304 @@
+import * as cbor from "cbor-x";
+import { z } from "zod";
+import type { AnyDatabaseProvider } from "@/actor/database";
+import * as errors from "@/actor/errors";
+import {
+	CachedSerializer,
+	type Encoding,
+	type InputData,
+} from "@/actor/protocol/serde";
+import { deconstructError } from "@/common/utils";
+import type * as protocol from "@/schemas/client-protocol/mod";
+import {
+	TO_CLIENT_VERSIONED,
+	TO_SERVER_VERSIONED,
+} from "@/schemas/client-protocol/versioned";
+import { deserializeWithEncoding } from "@/serde";
+import { assertUnreachable, bufferToArrayBuffer } from "../../utils";
+import { ActionContext } from "../action";
+import type { Conn } from "../conn";
+import type { ActorInstance } from "../instance";
+
+export const TransportSchema = z.enum(["websocket", "sse"]);
+
+/**
+ * Transport mechanism used to communicate between client & actor.
+ */
+export type Transport = z.infer<typeof TransportSchema>;
+
+interface MessageEventOpts {
+	encoding: Encoding;
+	maxIncomingMessageSize: number;
+}
+
+function getValueLength(value: InputData): number {
+	if (typeof value === "string") {
+		return value.length;
+	} else if (value instanceof Blob) {
+		return value.size;
+	} else if (
+		value instanceof ArrayBuffer ||
+		value instanceof SharedArrayBuffer ||
+		value instanceof Uint8Array
+	) {
+		return value.byteLength;
+	} else {
+		assertUnreachable(value);
+	}
+}
+
+export async function inputDataToBuffer(
+	data: InputData,
+): Promise<Uint8Array | string> {
+	if (typeof data === "string") {
+		return data;
+	} else if (data instanceof Blob) {
+		const arrayBuffer = await data.arrayBuffer();
+		return new Uint8Array(arrayBuffer);
+	} else if (data instanceof Uint8Array) {
+		return data;
+	} else if (
+		data instanceof ArrayBuffer ||
+		data instanceof SharedArrayBuffer
+	) {
+		return new Uint8Array(data);
+	} else {
+		throw new errors.MalformedMessage();
+	}
+}
+
+export async function parseMessage(
+	value: InputData,
+	opts: MessageEventOpts,
+): Promise<protocol.ToServer> {
+	// Validate value length
+	const length = getValueLength(value);
+	if (length > opts.maxIncomingMessageSize) {
+		throw new errors.MessageTooLong();
+	}
+
+	// Convert value
+	let buffer = await inputDataToBuffer(value);
+
+	// HACK: For some reason, the output buffer needs to be cloned when using BARE encoding
+	//
+	// THis is likely because the input data is of type `Buffer` and there is an inconsistency in implementation that I am not aware of
+	if (buffer instanceof Buffer) {
+		buffer = new Uint8Array(buffer);
+	}
+
+	// Deserialize message
+	return deserializeWithEncoding(opts.encoding, buffer, TO_SERVER_VERSIONED);
+}
+
+export interface ProcessMessageHandler<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+> {
+	onExecuteAction?: (
+		ctx: ActionContext<S, CP, CS, V, I, DB>,
+		name: string,
+		args: unknown[],
+	) => Promise<unknown>;
+	onSubscribe?: (
+		eventName: string,
+		conn: Conn<S, CP, CS, V, I, DB>,
+	) => Promise<void>;
+	onUnsubscribe?: (
+		eventName: string,
+		conn: Conn<S, CP, CS, V, I, DB>,
+	) => Promise<void>;
+}
+
+export async function processMessage<
+	S,
+	CP,
+	CS,
+	V,
+	I,
+	DB extends AnyDatabaseProvider,
+>(
+	message: protocol.ToServer,
+	actor: ActorInstance<S, CP, CS, V, I, DB>,
+	conn: Conn<S, CP, CS, V, I, DB>,
+	handler: ProcessMessageHandler<S, CP, CS, V, I, DB>,
+) {
+	let actionId: bigint | undefined;
+	let actionName: string | undefined;
+
+	try {
+		if (message.body.tag === "ActionRequest") {
+			// Action request
+
+			if (handler.onExecuteAction === undefined) {
+				throw new errors.Unsupported("Action");
+			}
+
+			const { id, name, args: argsRaw } = message.body.val;
+			actionId = id;
+			actionName = name;
+			const args = cbor.decode(new Uint8Array(argsRaw));
+
+			actor.rLog.debug({
+				msg: "processing action request",
+				actionId: id,
+				actionName: name,
+			});
+
+			const ctx = new ActionContext<S, CP, CS, V, I, DB>(
+				actor.actorContext,
+				conn,
+			);
+
+			// Process the action request and wait for the result
+			// This will wait for async actions to complete
+			const output = await handler.onExecuteAction(ctx, name, args);
+
+			actor.rLog.debug({
+				msg: "sending action response",
+				actionId: id,
+				actionName: name,
+				outputType: typeof output,
+				isPromise: output instanceof Promise,
+			});
+
+			// Send the response back to the client
+			conn._sendMessage(
+				new CachedSerializer<protocol.ToClient>(
+					{
+						body: {
+							tag: "ActionResponse",
+							val: {
+								id: id,
+								output: bufferToArrayBuffer(
+									cbor.encode(output),
+								),
+							},
+						},
+					},
+					TO_CLIENT_VERSIONED,
+				),
+			);
+
+			actor.rLog.debug({ msg: "action response sent", id, name: name });
+		} else if (message.body.tag === "SubscriptionRequest") {
+			// Subscription request
+
+			if (
+				handler.onSubscribe === undefined ||
+				handler.onUnsubscribe === undefined
+			) {
+				throw new errors.Unsupported("Subscriptions");
+			}
+
+			const { eventName, subscribe } = message.body.val;
+			actor.rLog.debug({
+				msg: "processing subscription request",
+				eventName,
+				subscribe,
+			});
+
+			if (subscribe) {
+				await handler.onSubscribe(eventName, conn);
+			} else {
+				await handler.onUnsubscribe(eventName, conn);
+			}
+
+			actor.rLog.debug({
+				msg: "subscription request completed",
+				eventName,
+				subscribe,
+			});
+		} else {
+			assertUnreachable(message.body);
+		}
+	} catch (error) {
+		const { group, code, message, metadata } = deconstructError(
+			error,
+			actor.rLog,
+			{
+				connectionId: conn.id,
+				actionId,
+				actionName,
+			},
+		);
+
+		actor.rLog.debug({
+			msg: "sending error response",
+			actionId,
+			actionName,
+			code,
+			message,
+		});
+
+		// Build response
+		conn._sendMessage(
+			new CachedSerializer<protocol.ToClient>(
+				{
+					body: {
+						tag: "Error",
+						val: {
+							group,
+							code,
+							message,
+							metadata: bufferToArrayBuffer(
+								cbor.encode(metadata),
+							),
+							actionId: actionId ?? null,
+						},
+					},
+				},
+				TO_CLIENT_VERSIONED,
+			),
+		);
+
+		actor.rLog.debug({ msg: "error response sent", actionId, actionName });
+	}
+}
+
+///**
+// * Use `CachedSerializer` if serializing the same data repeatedly.
+// */
+//export function serialize<T>(value: T, encoding: Encoding): OutputData {
+//	if (encoding === "json") {
+//		return JSON.stringify(value);
+//	} else if (encoding === "cbor") {
+//		// TODO: Remove this hack, but cbor-x can't handle anything extra in data structures
+//		const cleanValue = JSON.parse(JSON.stringify(value));
+//		return cbor.encode(cleanValue);
+//	} else {
+//		assertUnreachable(encoding);
+//	}
+//}
+//
+//export async function deserialize(data: InputData, encoding: Encoding) {
+//	if (encoding === "json") {
+//		if (typeof data !== "string") {
+//			actor.rLog.warn("received non-string for json parse");
+//			throw new errors.MalformedMessage();
+//		} else {
+//			return JSON.parse(data);
+//		}
+//	} else if (encoding === "cbor") {
+//		if (data instanceof Blob) {
+//			const arrayBuffer = await data.arrayBuffer();
+//			return cbor.decode(new Uint8Array(arrayBuffer));
+//		} else if (data instanceof Uint8Array) {
+//			return cbor.decode(data);
+//		} else if (
+//			data instanceof ArrayBuffer ||
+//			data instanceof SharedArrayBuffer
+//		) {
+//			return cbor.decode(new Uint8Array(data));
+//		} else {
+//			actor.rLog.warn("received non-binary type for cbor parse");
+//			throw new errors.MalformedMessage();
+//		}
+//	} else {
+//		assertUnreachable(encoding);
+//	}
+//}

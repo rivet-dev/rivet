@@ -1,0 +1,20 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"resolveJsonModule": true,
+		"paths": {
+			"@/*": ["./src/*"],
+			// Used for test fixtures
+			"rivetkit": ["./src/mod.ts"],
+			"rivetkit/utils": ["./src/utils.ts"]
+		}
+	},
+	"include": [
+		"src/**/*",
+		"tests/**/*",
+		"scripts/**/*",
+		"fixtures/driver-test-suite/**/*",
+		"dist/schemas/**/*"
+	]
+}

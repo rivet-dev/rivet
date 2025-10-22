@@ -1,15 +1,15 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, createActor, destroyActor } from "./utils";
+import { createActor, destroyActor, RIVET_ENDPOINT } from "./utils";
 
 const PARALLEL_WORKERS = 20;
 const TEST_DURATION_MS = 15000;
 
-let activeActors: Set<string> = new Set();
+const activeActors: Set<string> = new Set();
 let shouldExit = false;
 let completedLoops = 0;
 let totalLoopDuration = 0;
-let startTime = Date.now();
+const startTime = Date.now();
 
 async function actorLoop(workerId: number): Promise<void> {
 	while (!shouldExit) {
@@ -39,7 +39,6 @@ async function actorLoop(workerId: number): Promise<void> {
 			const loopDuration = Date.now() - loopStart;
 			completedLoops++;
 			totalLoopDuration += loopDuration;
-
 		} catch (error) {
 			console.error(`Worker ${workerId} error:`, error);
 			if (actorId) {
@@ -55,14 +54,15 @@ async function actorLoop(workerId: number): Promise<void> {
 function printProgress() {
 	const elapsed = (Date.now() - startTime) / 1000;
 	const actorsPerSecond = completedLoops / elapsed;
-	const avgLoopDuration = completedLoops > 0 ? totalLoopDuration / completedLoops : 0;
+	const avgLoopDuration =
+		completedLoops > 0 ? totalLoopDuration / completedLoops : 0;
 
 	process.stdout.write(
 		`\rElapsed: ${elapsed.toFixed(1)}s | ` +
-		`Completed: ${completedLoops} | ` +
-		`Actors/sec: ${actorsPerSecond.toFixed(2)} | ` +
-		`Avg loop: ${avgLoopDuration.toFixed(0)}ms | ` +
-		`Active: ${activeActors.size}`
+			`Completed: ${completedLoops} | ` +
+			`Actors/sec: ${actorsPerSecond.toFixed(2)} | ` +
+			`Avg loop: ${avgLoopDuration.toFixed(0)}ms | ` +
+			`Active: ${activeActors.size}`,
 	);
 }
 
@@ -85,7 +85,9 @@ async function cleanup() {
 
 async function main() {
 	console.log(`Starting actor stress test...`);
-	console.log(`Running ${PARALLEL_WORKERS} workers for ${TEST_DURATION_MS / 1000} seconds\n`);
+	console.log(
+		`Running ${PARALLEL_WORKERS} workers for ${TEST_DURATION_MS / 1000} seconds\n`,
+	);
 
 	process.on("SIGINT", async () => {
 		console.log("\nReceived SIGINT");
@@ -101,21 +103,29 @@ async function main() {
 
 	const progressInterval = setInterval(printProgress, 100);
 
-	const workers = Array.from({ length: PARALLEL_WORKERS }, (_, i) => actorLoop(i));
+	const workers = Array.from({ length: PARALLEL_WORKERS }, (_, i) =>
+		actorLoop(i),
+	);
 
 	setTimeout(async () => {
 		shouldExit = true;
 		clearInterval(progressInterval);
 		printProgress();
-		console.log("\n\nTest duration complete, waiting for workers to finish...");
+		console.log(
+			"\n\nTest duration complete, waiting for workers to finish...",
+		);
 		await Promise.all(workers);
 
 		const elapsed = (Date.now() - startTime) / 1000;
 		console.log("\n=== Final Results ===");
 		console.log(`Total runtime: ${elapsed.toFixed(2)}s`);
 		console.log(`Total completed loops: ${completedLoops}`);
-		console.log(`Average actors/second: ${(completedLoops / elapsed).toFixed(2)}`);
-		console.log(`Average loop duration: ${(totalLoopDuration / completedLoops).toFixed(0)}ms`);
+		console.log(
+			`Average actors/second: ${(completedLoops / elapsed).toFixed(2)}`,
+		);
+		console.log(
+			`Average loop duration: ${(totalLoopDuration / completedLoops).toFixed(0)}ms`,
+		);
 
 		process.exit(0);
 	}, TEST_DURATION_MS);

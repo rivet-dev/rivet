@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { cloudApi } from "@/lib/cloud-api/client";
 import type {
 	CloudBootstrapResponse,
 	CloudNamespace,
 	CloudNamespaceToken,
 	CloudProject,
 } from "@/lib/cloud-api/types";
-import { cloudApi } from "@/lib/cloud-api/client";
 
 interface AutofillState {
 	// Data
@@ -56,10 +56,7 @@ export const useAutofillStore = create<AutofillState>()(
 
 					// Auto-select first project if available and no selection exists
 					const state = get();
-					if (
-						data.projects.length > 0 &&
-						!state.selectedProjectId
-					) {
+					if (data.projects.length > 0 && !state.selectedProjectId) {
 						await get().selectProject(data.projects[0].id);
 					}
 				} catch (error) {

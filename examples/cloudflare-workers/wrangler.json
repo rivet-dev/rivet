@@ -1,0 +1,30 @@
+{
+	"name": "rivetkit-cloudflare-workers-example",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-20",
+	"compatibility_flags": ["nodejs_compat"],
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["ActorHandler"]
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ACTOR_DO",
+				"class_name": "ActorHandler"
+			}
+		]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "ACTOR_KV",
+			"id": "example_namespace",
+			"preview_id": "example_namespace_preview"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

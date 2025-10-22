@@ -18,7 +18,7 @@ export class WebSocketTunnelAdapter {
 	#url = "";
 	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
 	#closeCallback: (code?: number, reason?: string) => void;
-	
+
 	// Event buffering for events fired before listeners are attached
 	#bufferedEvents: Array<{
 		type: string;
@@ -28,7 +28,7 @@ export class WebSocketTunnelAdapter {
 	constructor(
 		webSocketId: string,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
-		closeCallback: (code?: number, reason?: string) => void
+		closeCallback: (code?: number, reason?: string) => void,
 	) {
 		this.#webSocketId = webSocketId;
 		this.#sendCallback = sendCallback;
@@ -48,7 +48,11 @@ export class WebSocketTunnelAdapter {
 	}
 
 	set binaryType(value: string) {
-		if (value === "nodebuffer" || value === "arraybuffer" || value === "blob") {
+		if (
+			value === "nodebuffer" ||
+			value === "arraybuffer" ||
+			value === "blob"
+		) {
 			this.#binaryType = value;
 		}
 	}
@@ -114,7 +118,8 @@ export class WebSocketTunnelAdapter {
 	}
 
 	send(data: string | ArrayBuffer | ArrayBufferView | Blob | Buffer): void {
-		if (this.#readyState !== 1) { // OPEN
+		if (this.#readyState !== 1) {
+			// OPEN
 			throw new Error("WebSocket is not open");
 		}
 
@@ -133,29 +138,43 @@ export class WebSocketTunnelAdapter {
 			// Check if it's a SharedArrayBuffer
 			if (view.buffer instanceof SharedArrayBuffer) {
 				// Copy SharedArrayBuffer to regular ArrayBuffer
-				const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-				messageData = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as unknown as ArrayBuffer;
+				const bytes = new Uint8Array(
+					view.buffer,
+					view.byteOffset,
+					view.byteLength,
+				);
+				messageData = bytes.buffer.slice(
+					bytes.byteOffset,
+					bytes.byteOffset + bytes.byteLength,
+				) as unknown as ArrayBuffer;
 			} else {
 				messageData = view.buffer.slice(
 					view.byteOffset,
-					view.byteOffset + view.byteLength
+					view.byteOffset + view.byteLength,
 				) as ArrayBuffer;
 			}
 		} else if (data instanceof Blob) {
 			throw new Error("Blob sending not implemented in tunnel adapter");
-		} else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(data)) {
+		} else if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
 			isBinary = true;
 			// Convert Buffer to ArrayBuffer
 			const buf = data as Buffer;
 			// Check if it's a SharedArrayBuffer
 			if (buf.buffer instanceof SharedArrayBuffer) {
 				// Copy SharedArrayBuffer to regular ArrayBuffer
-				const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-				messageData = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as unknown as ArrayBuffer;
+				const bytes = new Uint8Array(
+					buf.buffer,
+					buf.byteOffset,
+					buf.byteLength,
+				);
+				messageData = bytes.buffer.slice(
+					bytes.byteOffset,
+					bytes.byteOffset + bytes.byteLength,
+				) as unknown as ArrayBuffer;
 			} else {
 				messageData = buf.buffer.slice(
 					buf.byteOffset,
-					buf.byteOffset + buf.byteLength
+					buf.byteOffset + buf.byteLength,
 				) as ArrayBuffer;
 			}
 		} else {
@@ -169,7 +188,7 @@ export class WebSocketTunnelAdapter {
 	close(code?: number, reason?: string): void {
 		if (
 			this.#readyState === 2 || // CLOSING
-			this.#readyState === 3    // CLOSED
+			this.#readyState === 3 // CLOSED
 		) {
 			return;
 		}
@@ -181,7 +200,7 @@ export class WebSocketTunnelAdapter {
 
 		// Update state and fire event
 		this.#readyState = 3; // CLOSED
-		
+
 		const closeEvent = {
 			wasClean: true,
 			code: code || 1000,
@@ -189,14 +208,14 @@ export class WebSocketTunnelAdapter {
 			type: "close",
 			target: this,
 		};
-		
+
 		this.#fireEvent("close", closeEvent);
 	}
 
 	addEventListener(
 		type: string,
 		listener: (event: any) => void,
-		options?: boolean | any
+		options?: boolean | any,
 	): void {
 		if (typeof listener === "function") {
 			let listeners = this.#eventListeners.get(type);
@@ -214,7 +233,7 @@ export class WebSocketTunnelAdapter {
 	removeEventListener(
 		type: string,
 		listener: (event: any) => void,
-		options?: boolean | any
+		options?: boolean | any,
 	): void {
 		if (typeof listener === "function") {
 			const listeners = this.#eventListeners.get(type);
@@ -237,12 +256,16 @@ export class WebSocketTunnelAdapter {
 		if (listeners && listeners.size > 0) {
 			hasListeners = true;
 			for (const listener of listeners) {
-					try {
-						listener.call(this, event);
-					} catch (error) {
-						logger()?.error({ msg: "error in websocket event listener", error, type });
-					}
+				try {
+					listener.call(this, event);
+				} catch (error) {
+					logger()?.error({
+						msg: "error in websocket event listener",
+						error,
+						type,
+					});
 				}
+			}
 		}
 
 		// Call the onX property if set
@@ -253,7 +276,10 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onopen.call(this, event);
 					} catch (error) {
-						logger()?.error({ msg: "error in onopen handler", error });
+						logger()?.error({
+							msg: "error in onopen handler",
+							error,
+						});
 					}
 				}
 				break;
@@ -263,7 +289,10 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onclose.call(this, event);
 					} catch (error) {
-						logger()?.error({ msg: "error in onclose handler", error });
+						logger()?.error({
+							msg: "error in onclose handler",
+							error,
+						});
 					}
 				}
 				break;
@@ -273,7 +302,10 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onerror.call(this, event);
 					} catch (error) {
-						logger()?.error({ msg: "error in onerror handler", error });
+						logger()?.error({
+							msg: "error in onerror handler",
+							error,
+						});
 					}
 				}
 				break;
@@ -283,7 +315,10 @@ export class WebSocketTunnelAdapter {
 					try {
 						this.#onmessage.call(this, event);
 					} catch (error) {
-						logger()?.error({ msg: "error in onmessage handler", error });
+						logger()?.error({
+							msg: "error in onmessage handler",
+							error,
+						});
 					}
 				}
 				break;
@@ -297,10 +332,10 @@ export class WebSocketTunnelAdapter {
 
 	#flushBufferedEvents(type: string): void {
 		const eventsToFlush = this.#bufferedEvents.filter(
-			(buffered) => buffered.type === type
+			(buffered) => buffered.type === type,
 		);
 		this.#bufferedEvents = this.#bufferedEvents.filter(
-			(buffered) => buffered.type !== type
+			(buffered) => buffered.type !== type,
 		);
 
 		for (const { event } of eventsToFlush) {
@@ -327,7 +362,10 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onopen.call(this, event);
 						} catch (error) {
-							logger()?.error({ msg: "error in onopen handler", error });
+							logger()?.error({
+								msg: "error in onopen handler",
+								error,
+							});
 						}
 					}
 					break;
@@ -336,7 +374,10 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onclose.call(this, event);
 						} catch (error) {
-							logger()?.error({ msg: "error in onclose handler", error });
+							logger()?.error({
+								msg: "error in onclose handler",
+								error,
+							});
 						}
 					}
 					break;
@@ -345,7 +386,10 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onerror.call(this, event);
 						} catch (error) {
-							logger()?.error({ msg: "error in onerror handler", error });
+							logger()?.error({
+								msg: "error in onerror handler",
+								error,
+							});
 						}
 					}
 					break;
@@ -354,7 +398,10 @@ export class WebSocketTunnelAdapter {
 						try {
 							this.#onmessage.call(this, event);
 						} catch (error) {
-							logger()?.error({ msg: "error in onmessage handler", error });
+							logger()?.error({
+								msg: "error in onmessage handler",
+								error,
+							});
 						}
 					}
 					break;
@@ -364,27 +411,29 @@ export class WebSocketTunnelAdapter {
 
 	// Internal methods called by the Tunnel class
 	_handleOpen(): void {
-		if (this.#readyState !== 0) { // CONNECTING
+		if (this.#readyState !== 0) {
+			// CONNECTING
 			return;
 		}
 
 		this.#readyState = 1; // OPEN
-		
+
 		const event = {
 			type: "open",
 			target: this,
 		};
-		
+
 		this.#fireEvent("open", event);
 	}
 
 	_handleMessage(data: string | Uint8Array, isBinary: boolean): void {
-		if (this.#readyState !== 1) { // OPEN
+		if (this.#readyState !== 1) {
+			// OPEN
 			return;
 		}
 
 		let messageData: any;
-		
+
 		if (isBinary) {
 			// Handle binary data based on binaryType
 			if (this.#binaryType === "nodebuffer") {
@@ -395,14 +444,16 @@ export class WebSocketTunnelAdapter {
 				if (data instanceof Uint8Array) {
 					messageData = data.buffer.slice(
 						data.byteOffset,
-						data.byteOffset + data.byteLength
+						data.byteOffset + data.byteLength,
 					);
 				} else {
 					messageData = data;
 				}
 			} else {
 				// Blob type - not commonly used in Node.js
-				throw new Error("Blob binaryType not supported in tunnel adapter");
+				throw new Error(
+					"Blob binaryType not supported in tunnel adapter",
+				);
 			}
 		} else {
 			messageData = data;
@@ -418,7 +469,8 @@ export class WebSocketTunnelAdapter {
 	}
 
 	_handleClose(code?: number, reason?: string): void {
-		if (this.#readyState === 3) { // CLOSED
+		if (this.#readyState === 3) {
+			// CLOSED
 			return;
 		}
 
@@ -472,7 +524,7 @@ export class WebSocketTunnelAdapter {
 		// Immediate close without close frame
 		this.#readyState = 3; // CLOSED
 		this.#closeCallback(1006, "Abnormal Closure");
-		
+
 		const event = {
 			wasClean: false,
 			code: 1006,
@@ -480,7 +532,7 @@ export class WebSocketTunnelAdapter {
 			type: "close",
 			target: this,
 		};
-		
+
 		this.#fireEvent("close", event);
 	}
 }

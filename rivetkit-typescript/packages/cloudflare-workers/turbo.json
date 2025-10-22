@@ -1,0 +1,11 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"test": {
+			"inputs": ["src/**", "tests/**", "package.json"],
+			// Also build this package, since the tests depend on the output scripts
+			"dependsOn": ["^build", "check-types", "build"]
+		}
+	}
+}

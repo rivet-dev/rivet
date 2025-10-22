@@ -1,11 +1,11 @@
-import type WebSocket from "ws";
-import { importWebSocket } from "./websocket.js";
 import * as protocol from "@rivetkit/engine-runner-protocol";
-import { unreachable, calculateBackoff } from "./utils";
-import { Tunnel } from "./tunnel";
-import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 import type { Logger } from "pino";
-import { setLogger, logger } from "./log.js";
+import type WebSocket from "ws";
+import { logger, setLogger } from "./log.js";
+import { Tunnel } from "./tunnel";
+import { calculateBackoff, unreachable } from "./utils";
+import { importWebSocket } from "./websocket.js";
+import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 1;
@@ -1288,7 +1288,7 @@ export class Runner {
 	getServerlessInitPacket(): string | undefined {
 		if (!this.runnerId) return undefined;
 
-		let data = protocol.encodeToServerlessServer({
+		const data = protocol.encodeToServerlessServer({
 			tag: "ToServerlessServerInit",
 			val: {
 				runnerId: this.runnerId,

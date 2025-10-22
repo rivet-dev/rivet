@@ -1,4 +1,4 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"]
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"]
 }

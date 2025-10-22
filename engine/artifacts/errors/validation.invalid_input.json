@@ -1,5 +1,5 @@
 {
-  "code": "invalid_input",
-  "group": "validation",
-  "message": "Invalid input provided"
+	"code": "invalid_input",
+	"group": "validation",
+	"message": "Invalid input provided"
 }

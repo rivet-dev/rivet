@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+.pnpm-debug.log*
+
+# Build outputs
+dist
+.turbo
+
+# Environment variables
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Database
+*.sqlite
+*.db
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

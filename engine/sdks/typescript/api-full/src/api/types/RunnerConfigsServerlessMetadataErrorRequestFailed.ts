@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorRequestFailed {
-    requestFailed: Record<string, unknown>;
+	requestFailed: Record<string, unknown>;
 }

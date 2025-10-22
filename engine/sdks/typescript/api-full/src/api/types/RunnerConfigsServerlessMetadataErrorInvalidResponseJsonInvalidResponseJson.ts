@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson {
-    body: string;
+	body: string;
 }

@@ -1,5 +1,5 @@
 {
-  "code": "forbidden",
-  "group": "api",
-  "message": "Access denied"
+	"code": "forbidden",
+	"group": "api",
+	"message": "Access denied"
 }

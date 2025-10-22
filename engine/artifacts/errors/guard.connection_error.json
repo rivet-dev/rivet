@@ -1,5 +1,5 @@
 {
-  "code": "connection_error",
-  "group": "guard",
-  "message": "Connection error: {error_message}."
+	"code": "connection_error",
+	"group": "guard",
+	"message": "Connection error: {error_message}."
 }

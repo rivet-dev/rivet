@@ -1,8 +1,8 @@
-import type { ReleaseOpts } from "./main";
-import { glob } from "glob";
-import { $ } from "execa";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { $ } from "execa";
+import { glob } from "glob";
+import type { ReleaseOpts } from "./main";
 
 function assert(condition: any, message?: string): asserts condition {
 	if (!condition) {
@@ -51,7 +51,7 @@ export async function updateVersion(opts: ReleaseOpts) {
 		const paths = await glob(globPath, { cwd: opts.root });
 		assert(paths.length > 0, `no paths matched: ${globPath}`);
 		for (const path of paths) {
-			const file = await fs.readFile(path, 'utf-8');
+			const file = await fs.readFile(path, "utf-8");
 			assert(find.test(file), `file does not match ${find}: ${path}`);
 			const newFile = file.replace(find, replace);
 			await fs.writeFile(path, newFile);

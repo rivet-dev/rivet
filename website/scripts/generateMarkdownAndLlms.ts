@@ -27,7 +27,11 @@ async function getAllDocsFiles(dir: string, basePath = ""): Promise<string[]> {
 	return files;
 }
 
-function extractFrontmatter(content: string): { title?: string; description?: string; content: string } {
+function extractFrontmatter(content: string): {
+	title?: string;
+	description?: string;
+	content: string;
+} {
 	const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
 	if (!frontmatterMatch) {
 		return { content };
@@ -35,22 +39,26 @@ function extractFrontmatter(content: string): { title?: string; description?: st
 
 	const [, frontmatter, bodyContent] = frontmatterMatch;
 	const title = frontmatter.match(/^title:\s*["']?([^"'\n]+)["']?$/m)?.[1];
-	const description = frontmatter.match(/^description:\s*["']?([^"'\n]+)["']?$/m)?.[1];
-	
+	const description = frontmatter.match(
+		/^description:\s*["']?([^"'\n]+)["']?$/m,
+	)?.[1];
+
 	return { title, description, content: bodyContent };
 }
 
 function stripContentBeforeFirstH1(content: string, filePath: string): string {
 	// Find the first h1 heading using regex
 	const h1Match = content.match(/^#\s+(.+)$/m);
-	
+
 	if (!h1Match) {
-		throw new Error(`No h1 heading found in ${filePath}. All markdown files must have an h1 heading.`);
+		throw new Error(
+			`No h1 heading found in ${filePath}. All markdown files must have an h1 heading.`,
+		);
 	}
-	
+
 	// Get the index where the h1 starts
 	const h1Index = h1Match.index!;
-	
+
 	// Return content starting from the h1
 	return content.substring(h1Index);
 }
@@ -85,7 +93,9 @@ async function extractContentFromMdx(filePath: string): Promise<DocsPage> {
 
 	// Extract h1 title from content if frontmatter title is not available
 	const h1TitleMatch = cleanContent.match(/^#\s+(.+)$/m);
-	const finalTitle = title || (h1TitleMatch ? h1TitleMatch[1] : path.basename(filePath, ".mdx"));
+	const finalTitle =
+		title ||
+		(h1TitleMatch ? h1TitleMatch[1] : path.basename(filePath, ".mdx"));
 
 	return {
 		title: finalTitle,
@@ -105,9 +115,13 @@ async function ensureDirectoryExists(dirPath: string) {
 
 async function writeMarkdownFile(page: DocsPage, outputDir: string) {
 	// Special case: root index.mdx should write to parent as docs.md
-	const outputPath = page.path === "index.mdx"
-		? path.join(path.dirname(outputDir), path.basename(outputDir) + ".md")
-		: path.join(outputDir, `${page.cleanPath}.md`);
+	const outputPath =
+		page.path === "index.mdx"
+			? path.join(
+					path.dirname(outputDir),
+					path.basename(outputDir) + ".md",
+				)
+			: path.join(outputDir, `${page.cleanPath}.md`);
 	const outputDirPath = path.dirname(outputPath);
 
 	// Ensure the directory exists
@@ -120,7 +134,7 @@ async function writeMarkdownFile(page: DocsPage, outputDir: string) {
 async function getAllBlogPosts(): Promise<string[]> {
 	const postsDir = path.join(process.cwd(), "src/posts");
 	const posts: string[] = [];
-	
+
 	try {
 		const entries = await fs.readdir(postsDir, { withFileTypes: true });
 		for (const entry of entries) {
@@ -137,14 +151,14 @@ async function getAllBlogPosts(): Promise<string[]> {
 	} catch {
 		// Posts directory might not exist
 	}
-	
+
 	return posts.sort();
 }
 
 async function getAllGuides(): Promise<string[]> {
 	const guidesDir = path.join(process.cwd(), "src/content/guides");
 	const guides: string[] = [];
-	
+
 	try {
 		const entries = await fs.readdir(guidesDir, { withFileTypes: true });
 		for (const entry of entries) {
@@ -156,7 +170,7 @@ async function getAllGuides(): Promise<string[]> {
 	} catch {
 		// Guides directory might not exist
 	}
-	
+
 	return guides.sort();
 }
 
@@ -165,10 +179,13 @@ async function initializeTypesenseClient() {
 	const typesensePort = process.env.TYPESENSE_PORT || 443;
 	const typesenseProtocol = process.env.TYPESENSE_PROTOCOL || "https";
 	const typesenseApiKey = process.env.TYPESENSE_API_KEY;
-	const typesenseCollectionName = process.env.TYPESENSE_COLLECTION_NAME || "rivet-docs";
+	const typesenseCollectionName =
+		process.env.TYPESENSE_COLLECTION_NAME || "rivet-docs";
 
 	if (!typesenseHost || !typesenseApiKey) {
-		console.log("Typesense credentials not provided, skipping search indexing");
+		console.log(
+			"Typesense credentials not provided, skipping search indexing",
+		);
 		return null;
 	}
 
@@ -187,7 +204,10 @@ async function initializeTypesenseClient() {
 	return { client, collectionName: typesenseCollectionName };
 }
 
-async function setupTypesenseCollection(client: Typesense.Client, collectionName: string) {
+async function setupTypesenseCollection(
+	client: Typesense.Client,
+	collectionName: string,
+) {
 	const schema = {
 		name: collectionName,
 		fields: [
@@ -221,7 +241,11 @@ async function setupTypesenseCollection(client: Typesense.Client, collectionName
 	}
 }
 
-async function indexDocumentsToTypesense(client: Typesense.Client, collectionName: string, pages: DocsPage[]) {
+async function indexDocumentsToTypesense(
+	client: Typesense.Client,
+	collectionName: string,
+	pages: DocsPage[],
+) {
 	if (!client) return;
 
 	const siteUrl = "https://rivet.dev";
@@ -239,10 +263,18 @@ async function indexDocumentsToTypesense(client: Typesense.Client, collectionNam
 	try {
 		// Clear existing documents first
 		try {
-			await client.collections(collectionName).documents().delete({ filter_by: "id:*" });
-			console.log(`Cleared existing documents from collection: ${collectionName}`);
+			await client
+				.collections(collectionName)
+				.documents()
+				.delete({ filter_by: "id:*" });
+			console.log(
+				`Cleared existing documents from collection: ${collectionName}`,
+			);
 		} catch (error) {
-			console.log("No existing documents to clear or error clearing:", error);
+			console.log(
+				"No existing documents to clear or error clearing:",
+				error,
+			);
 		}
 
 		// Import new documents
@@ -265,7 +297,9 @@ async function generateMarkdownAndLlms() {
 		} catch (error) {
 			console.error(`\nFATAL ERROR: Failed to process ${file}`);
 			console.error(error.message);
-			console.error("\nAll markdown files must have an h1 heading. Please add an h1 heading to this file and try again.");
+			console.error(
+				"\nAll markdown files must have an h1 heading. Please add an h1 heading to this file and try again.",
+			);
 			process.exit(1);
 		}
 	}
@@ -289,16 +323,18 @@ async function generateMarkdownAndLlms() {
 	// Get blog posts and guides
 	const blogPosts = await getAllBlogPosts();
 	const guides = await getAllGuides();
-	
+
 	// Generate llms.txt (URL index version)
 	const siteUrl = "https://rivet.dev";
 	const docsUrls = pages
 		.map((page) => `${siteUrl}/docs/${page.cleanPath}`)
-		.filter((url) => !url.includes('/docs/cloud'));
+		.filter((url) => !url.includes("/docs/cloud"));
 	const blogUrls = blogPosts.map((post) => `${siteUrl}/blog/${post}`);
-	const changelogUrls = blogPosts.map((post) => `${siteUrl}/changelog/${post}`);
+	const changelogUrls = blogPosts.map(
+		(post) => `${siteUrl}/changelog/${post}`,
+	);
 	const guideUrls = guides.map((guide) => `${siteUrl}/guides/${guide}`);
-	
+
 	// Add other known URLs from the site
 	const otherUrls = [
 		`${siteUrl}`,
@@ -318,39 +354,64 @@ async function generateMarkdownAndLlms() {
 		`${siteUrl}/acceptable-use`,
 		`${siteUrl}/privacy`,
 	];
-	
+
 	// Combine all URLs and sort them
-	const allUrls = [...otherUrls, ...docsUrls, ...blogUrls, ...changelogUrls, ...guideUrls].sort();
-	
-	const llmsTxtContent = [
-		"# Rivet Documentation Index",
-		"",
-		...allUrls,
-	].join("\n");
+	const allUrls = [
+		...otherUrls,
+		...docsUrls,
+		...blogUrls,
+		...changelogUrls,
+		...guideUrls,
+	].sort();
+
+	const llmsTxtContent = ["# Rivet Documentation Index", "", ...allUrls].join(
+		"\n",
+	);
 
 	// Generate llms-full.txt (complete version)
-	const filteredPagesForLlmsFull = pages.filter((page) => !page.cleanPath.startsWith('cloud'));
+	const filteredPagesForLlmsFull = pages.filter(
+		(page) => !page.cleanPath.startsWith("cloud"),
+	);
 	const llmsFullTxtContent = [
 		"# Rivet Documentation - Complete",
 		"",
 		"This file contains the complete documentation for Rivet, an open-source alternative to Durable Objects.",
 		"",
-		...filteredPagesForLlmsFull.map((page) => `## ${page.title}\n\n${page.content}`),
+		...filteredPagesForLlmsFull.map(
+			(page) => `## ${page.title}\n\n${page.content}`,
+		),
 	].join("\n");
 
 	// Write LLM files to public directory
-	await fs.writeFile(path.join(process.cwd(), "public/llms.txt"), llmsTxtContent);
-	await fs.writeFile(path.join(process.cwd(), "public/llms-full.txt"), llmsFullTxtContent);
+	await fs.writeFile(
+		path.join(process.cwd(), "public/llms.txt"),
+		llmsTxtContent,
+	);
+	await fs.writeFile(
+		path.join(process.cwd(), "public/llms-full.txt"),
+		llmsFullTxtContent,
+	);
 
 	// Index documents to Typesense if configured
 	if (typesenseConfig) {
-		await setupTypesenseCollection(typesenseConfig.client, typesenseConfig.collectionName);
-		await indexDocumentsToTypesense(typesenseConfig.client, typesenseConfig.collectionName, pages);
+		await setupTypesenseCollection(
+			typesenseConfig.client,
+			typesenseConfig.collectionName,
+		);
+		await indexDocumentsToTypesense(
+			typesenseConfig.client,
+			typesenseConfig.collectionName,
+			pages,
+		);
 	}
 
-	console.log(`Generated llms.txt with ${allUrls.length} URLs (${pages.length} docs, ${blogPosts.length} blog posts, ${guides.length} guides)`);
+	console.log(
+		`Generated llms.txt with ${allUrls.length} URLs (${pages.length} docs, ${blogPosts.length} blog posts, ${guides.length} guides)`,
+	);
 	console.log(`Generated llms-full.txt with ${pages.length} pages`);
-	console.log(`Generated ${pages.length} individual markdown files in public/docs/`);
+	console.log(
+		`Generated ${pages.length} individual markdown files in public/docs/`,
+	);
 }
 
 if (require.main === module) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { RIVET_ENDPOINT, destroyActor } from "./utils";
+import { destroyActor, RIVET_ENDPOINT } from "./utils";
 
 // Extended version that supports datacenter selection
 async function createActorInDc(
@@ -44,7 +44,7 @@ async function testActorInDc(dc: string) {
 		const actorResponse = await createActorInDc(
 			"default",
 			"test-runner",
-			dc
+			dc,
 		);
 		console.log(`Actor created in ${dc}:`, actorResponse.actor);
 

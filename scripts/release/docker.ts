@@ -3,20 +3,33 @@ import { $ } from "execa";
 const REPOS = [
 	{ name: "rivetkit/engine", prefix: "slim", main: true },
 	{ name: "rivetkit/engine", prefix: "full" },
-]
+];
 
-export async function tagDocker(opts: { version: string; commit: string; latest: boolean }) {
+export async function tagDocker(opts: {
+	version: string;
+	commit: string;
+	latest: boolean;
+}) {
 	for (const { name, prefix, main } of REPOS) {
 		// Check image exists
 		console.log(`==> Pulling: ${name}:${prefix}-${opts.commit}`);
 		try {
-			await $({ stdout: 'ignore', stderr: 'ignore' })`docker pull --platform amd64 ${name}:${prefix}-${opts.commit}`;
+			await $({
+				stdout: "ignore",
+				stderr: "ignore",
+			})`docker pull --platform amd64 ${name}:${prefix}-${opts.commit}`;
 		} catch (error) {
-			throw new Error(`Image ${name}:${prefix}-${opts.commit} does not exist on Docker Hub.`);
+			throw new Error(
+				`Image ${name}:${prefix}-${opts.commit} does not exist on Docker Hub.`,
+			);
 		}
 
 		// Tag with version
-		await tag(name, `${prefix}-${opts.commit}`, `${prefix}-${opts.version}`);
+		await tag(
+			name,
+			`${prefix}-${opts.commit}`,
+			`${prefix}-${opts.version}`,
+		);
 		if (main) {
 			await tag(name, `${prefix}-${opts.commit}`, opts.version);
 		}

@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorInvalidRequest {
-    invalidRequest: Record<string, unknown>;
+	invalidRequest: Record<string, unknown>;
 }

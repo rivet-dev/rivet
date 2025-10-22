@@ -1,0 +1,21 @@
+packages:
+  - docker/template
+  - sdks/typescript/api-full
+  - sdks/typescript/runner
+  - sdks/typescript/runner-protocol
+  - sdks/typescript/test-runner
+  - tests/load
+
+ignoredBuiltDependencies:
+  - '@clerk/shared'
+  - '@parcel/watcher'
+  - '@sentry/cli'
+  - browser-tabs-lock
+  - cbor-extract
+  - core-js
+  - lefthook
+  - sharp
+
+onlyBuiltDependencies:
+  - '@rivet-gg/icons'
+  - esbuild

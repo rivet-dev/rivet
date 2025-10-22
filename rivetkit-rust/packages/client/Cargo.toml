@@ -1,0 +1,31 @@
+[package]
+name = "rivetkit-client"
+version = "0.9.0-rc.2"
+description = "Rust client for RivetKit - the Stateful Serverless Framework for building AI agents, realtime apps, and game servers"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.dev>"]
+license = "Apache-2.0"
+homepage = "https://rivetkit.org"
+repository = "https://github.com/rivet-dev/rivetkit"
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22.1"
+eventsource-client = "0.14.0"
+futures-util = "0.3.31"
+reqwest = { version = "0.12.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_cbor = "0.11.2"
+serde_json = "1.0"
+tokio =  { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.26.1", features = ["native-tls", "handshake"] }
+tracing = "0.1.41"
+tungstenite = "0.26.2"
+urlencoding = "2.1.3"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "std", "registry"]}
+tempfile = "3.10.1"
+tokio-test = "0.4.3"
+fs_extra = "1.3.0"
+portpicker = "0.1.1"

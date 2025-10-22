@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 
 import {
-	getOrCreateActorById,
-	listActors,
 	destroyActor,
 	generateRandomKey,
+	getOrCreateActorById,
+	listActors,
 } from "./utils";
 
 const COUNT = 50;
@@ -27,7 +27,7 @@ async function main() {
 			`Creating ${COUNT} ${PARALLEL ? "parallel" : "serial"} get-or-create calls with shared key...`,
 		);
 		let completedCount = 0;
-		
+
 		let results;
 		if (PARALLEL) {
 			const promises = Array.from({ length: COUNT }, (_, index) =>
@@ -61,8 +61,10 @@ async function main() {
 				results.push({ index, response });
 			}
 		}
-		
-		console.log(`✓ Completed all ${COUNT} ${PARALLEL ? "parallel" : "serial"} calls`);
+
+		console.log(
+			`✓ Completed all ${COUNT} ${PARALLEL ? "parallel" : "serial"} calls`,
+		);
 
 		// Extract all actor IDs and verify they're all the same
 		const actorIds = results.map((result) => result.response.actor_id);

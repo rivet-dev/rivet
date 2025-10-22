@@ -21,7 +21,9 @@ class CloudApiClient {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Failed to fetch bootstrap data: ${response.statusText}`);
+			throw new Error(
+				`Failed to fetch bootstrap data: ${response.statusText}`,
+			);
 		}
 
 		return response.json();
@@ -36,7 +38,9 @@ class CloudApiClient {
 		);
 
 		if (!response.ok) {
-			throw new Error(`Failed to fetch namespaces: ${response.statusText}`);
+			throw new Error(
+				`Failed to fetch namespaces: ${response.statusText}`,
+			);
 		}
 
 		return response.json();
@@ -54,7 +58,9 @@ class CloudApiClient {
 		);
 
 		if (!response.ok) {
-			throw new Error(`Failed to fetch namespace token: ${response.statusText}`);
+			throw new Error(
+				`Failed to fetch namespace token: ${response.statusText}`,
+			);
 		}
 
 		return response.json();

@@ -1,5 +1,5 @@
 {
-  "code": "leader_forwarding_failed",
-  "group": "kv",
-  "message": "Failed to forward request to leader."
+	"code": "leader_forwarding_failed",
+	"group": "kv",
+	"message": "Failed to forward request to leader."
 }
