@@ -1994,7 +1994,7 @@ Learn more about [actor lifecycle](/docs/actors/lifecycle).
 
 Rivet provides end-to-end TypeScript safety between clients and actors:
 
-```typescript Actor
+```typescript }
 const userManager = actor( as Record },
   
   actions: ;
@@ -2006,7 +2006,7 @@ const userManager = actor( as Record },
 });
 ```
 
-```typescript Client
+```typescript }
 const manager = client.userManager.getOrCreate(["default"]);
 
 const user = await manager.createUser("Alice");

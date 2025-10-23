@@ -53,3 +53,4 @@ website/public/docs/
 website/public/llms-full.txt
 website/public/llms.txt
 website/.playwright-mcp/
+.vercel
