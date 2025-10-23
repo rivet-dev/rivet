@@ -2,17 +2,18 @@
 	"$schema": "https://biomejs.dev/schemas/2.1.1/schema.json",
 	"files": {
 		"includes": [
+			"**/*.js",
 			"**/*.json",
 			"**/*.ts",
-			"**/*.js",
-			"!examples/snippets",
-			"!rivetkit-openapi/openapi.json",
 			"!engine/artifacts",
-			"!website",
-			"!scripts",
-			"!frontend",
+			"!engine/sdks",
 			"!engine/sdks/typescript/api-full",
 			"!engine/sdks/typescript/runner-protocol"
+			"!examples/snippets",
+			"!frontend",
+			"!rivetkit-openapi/openapi.json",
+			"!scripts",
+			"!website"
 		],
 		"ignoreUnknown": true
 	},
