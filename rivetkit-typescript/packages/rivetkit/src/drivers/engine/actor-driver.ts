@@ -63,8 +63,8 @@ export class EngineActorDriver implements ActorDriver {
 	#version: number = 1; // Version for the runner protocol
 	#alarmTimeout?: LongTimeoutHandle;
 
-	#runnerStarted: PromiseWithResolvers<undefined> = Promise.withResolvers();
-	#runnerStopped: PromiseWithResolvers<undefined> = Promise.withResolvers();
+	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
+	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
 
 	constructor(
 		registryConfig: RegistryConfig,
