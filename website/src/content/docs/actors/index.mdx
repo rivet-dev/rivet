@@ -166,7 +166,7 @@ Rivet provides end-to-end TypeScript safety between clients and actors:
 
 <CodeGroup>
 
-```typescript Actor
+```typescript {{"title":"Actor"}}
 const userManager = actor({
   state: { users: {} as Record<string, {name: string}> },
   
@@ -182,7 +182,7 @@ const userManager = actor({
 });
 ```
 
-```typescript Client
+```typescript {{"title":"Client"}}
 const manager = client.userManager.getOrCreate(["default"]);
 
 const user = await manager.createUser("Alice");
