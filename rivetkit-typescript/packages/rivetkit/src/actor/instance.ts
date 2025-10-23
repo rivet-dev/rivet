@@ -1842,6 +1842,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#rLog.info({ msg: "actor stopping" });
 
+		if (this.#sleepTimeout) {
+			clearTimeout(this.#sleepTimeout);
+			this.#sleepTimeout = undefined;
+		}
+
 		// Abort any listeners waiting for shutdown
 		try {
 			this.#abortController.abort();

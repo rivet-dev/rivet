@@ -17,6 +17,6 @@ export const ServerlessStartHeadersSchema = z.object({
 		required_error: "x-rivet-runner-name header is required",
 	}),
 	namespace: z.string({
-		required_error: "x-rivet-namespace-id header is required",
+		required_error: "x-rivet-namespace-name header is required",
 	}),
 });

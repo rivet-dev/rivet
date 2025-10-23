@@ -247,9 +247,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									})
 									.await?;
 
-								// Set all remaining actors to lost immediately and send stop commands to the
-								// runner. We do both so that the actor's reschedule immediately and the runner is
-								// informed that the actors should be stopped (if it is still connected)
+								// Set all remaining actors to lost immediately
 								if !actors.is_empty() {
 									for (actor_id, generation) in &actors {
 										ctx.signal(crate::workflows::actor::Lost {
@@ -261,39 +259,6 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 										.send()
 										.await?;
 									}
-
-									let commands = actors
-										.into_iter()
-										.map(|(actor_id, generation)| {
-											protocol::Command::CommandStopActor(
-												protocol::CommandStopActor {
-													actor_id: actor_id.to_string(),
-													generation,
-												},
-											)
-										})
-										.collect::<Vec<_>>();
-
-									let index = ctx
-										.activity(InsertCommandsInput {
-											commands: commands.clone(),
-										})
-										.await?;
-
-									ctx.activity(SendMessageToRunnerInput {
-										runner_id: input.runner_id,
-										message: protocol::ToClient::ToClientCommands(
-											commands
-												.into_iter()
-												.enumerate()
-												.map(|(i, cmd)| protocol::CommandWrapper {
-													index: index + i as i64,
-													inner: cmd,
-												})
-												.collect(),
-										),
-									})
-									.await?;
 								}
 							}
 						}

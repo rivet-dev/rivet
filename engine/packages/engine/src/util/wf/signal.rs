@@ -54,10 +54,6 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 				);
 			}
 
-			if let Some(workflow_id) = &signal.workflow_id {
-				println!("  {} {}", style("to workflow id").bold(), workflow_id,);
-			}
-
 			if let Some(workflow_id) = signal.workflow_id {
 				println!("  {} {}", style("to workflow id").bold(), workflow_id);
 			}
