@@ -29,15 +29,17 @@ pub struct PegboardGateway {
 	shared_state: SharedState,
 	runner_id: Id,
 	actor_id: Id,
+	path: String,
 }
 
 impl PegboardGateway {
-	#[tracing::instrument(skip_all, fields(?actor_id, ?runner_id))]
-	pub fn new(shared_state: SharedState, runner_id: Id, actor_id: Id) -> Self {
+	#[tracing::instrument(skip_all, fields(?actor_id, ?runner_id, ?path))]
+	pub fn new(shared_state: SharedState, runner_id: Id, actor_id: Id, path: String) -> Self {
 		Self {
 			shared_state,
 			runner_id,
 			actor_id,
+			path,
 		}
 	}
 }
@@ -50,14 +52,8 @@ impl CustomServeTrait for PegboardGateway {
 		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
-		// Extract actor ID for the message (HTTP requests use x-rivet-actor header)
-		let actor_id = req
-			.headers()
-			.get("x-rivet-actor")
-			.context("missing x-rivet-actor header")?
-			.to_str()
-			.context("invalid x-rivet-actor header")?
-			.to_string();
+		// Use the actor ID from the gateway instance
+		let actor_id = self.actor_id.to_string();
 
 		// Extract request parts
 		let mut headers = HashableMap::new();
@@ -69,10 +65,6 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Extract method and path before consuming the request
 		let method = req.method().to_string();
-		let path = req
-			.uri()
-			.path_and_query()
-			.map_or_else(|| "/".to_string(), |x| x.to_string());
 
 		let body_bytes = req
 			.into_body()
@@ -96,7 +88,7 @@ impl CustomServeTrait for PegboardGateway {
 			protocol::ToClientRequestStart {
 				actor_id: actor_id.clone(),
 				method,
-				path,
+				path: self.path.clone(),
 				headers,
 				body: if body_bytes.is_empty() {
 					None
@@ -163,22 +155,11 @@ impl CustomServeTrait for PegboardGateway {
 		&self,
 		client_ws: WebSocketHandle,
 		headers: &hyper::HeaderMap,
-		path: &str,
+		_path: &str,
 		_request_context: &mut RequestContext,
 	) -> Result<()> {
-		// Extract actor ID from WebSocket protocol
-		let actor_id = headers
-			.get(SEC_WEBSOCKET_PROTOCOL)
-			.and_then(|protocols| protocols.to_str().ok())
-			.and_then(|protocols| {
-				// Parse protocols to find actor.{id}
-				protocols
-					.split(',')
-					.map(|p| p.trim())
-					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
-			})
-			.context("missing actor protocol in sec-websocket-protocol")?
-			.to_string();
+		// Use the actor ID from the gateway instance
+		let actor_id = self.actor_id.to_string();
 
 		// Extract headers
 		let mut request_headers = HashableMap::new();
@@ -202,7 +183,7 @@ impl CustomServeTrait for PegboardGateway {
 		let open_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(
 			protocol::ToClientWebSocketOpen {
 				actor_id: actor_id.clone(),
-				path: path.to_string(),
+				path: self.path.clone(),
 				headers: request_headers,
 			},
 		);

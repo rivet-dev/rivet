@@ -4,6 +4,7 @@ import { MissingActorHeader, WebSocketsNotEnabled } from "@/actor/errors";
 import type { Encoding, Transport } from "@/client/mod";
 import {
 	HEADER_RIVET_ACTOR,
+	HEADER_RIVET_NAMESPACE,
 	HEADER_RIVET_TARGET,
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_ID,
@@ -11,6 +12,7 @@ import {
 	WS_PROTOCOL_CONN_TOKEN,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_TARGET,
+	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
 import { deconstructError, noopNext } from "@/common/utils";
 import type { UniversalWebSocket, UpgradeWebSocketArgs } from "@/mod";
@@ -19,10 +21,123 @@ import { promiseWithResolvers, stringifyError } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
 
+interface ActorPathInfo {
+	actorId: string;
+	token?: string;
+	remainingPath: string;
+}
+
+/**
+ * Handle path-based WebSocket routing
+ */
+async function handleWebSocketGatewayPathBased(
+	runConfig: RunnerConfig,
+	managerDriver: ManagerDriver,
+	c: HonoContext,
+	actorPathInfo: ActorPathInfo,
+): Promise<Response> {
+	const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
+	if (!upgradeWebSocket) {
+		throw new WebSocketsNotEnabled();
+	}
+
+	// NOTE: Token validation implemented in EE
+
+	// Parse additional configuration from Sec-WebSocket-Protocol header
+	const protocols = c.req.header("sec-websocket-protocol");
+	let encodingRaw: string | undefined;
+	let connParamsRaw: string | undefined;
+	let connIdRaw: string | undefined;
+	let connTokenRaw: string | undefined;
+
+	if (protocols) {
+		const protocolList = protocols.split(",").map((p) => p.trim());
+		for (const protocol of protocolList) {
+			if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
+				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
+			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
+				connParamsRaw = decodeURIComponent(
+					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
+				);
+			} else if (protocol.startsWith(WS_PROTOCOL_CONN_ID)) {
+				connIdRaw = protocol.substring(WS_PROTOCOL_CONN_ID.length);
+			} else if (protocol.startsWith(WS_PROTOCOL_CONN_TOKEN)) {
+				connTokenRaw = protocol.substring(
+					WS_PROTOCOL_CONN_TOKEN.length,
+				);
+			}
+		}
+	}
+
+	logger().debug({
+		msg: "proxying websocket to actor via path-based routing",
+		actorId: actorPathInfo.actorId,
+		path: actorPathInfo.remainingPath,
+		encoding: encodingRaw,
+	});
+
+	const encoding = encodingRaw || "json";
+	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
+
+	return await managerDriver.proxyWebSocket(
+		c,
+		actorPathInfo.remainingPath,
+		actorPathInfo.actorId,
+		encoding as any, // Will be validated by driver
+		connParams,
+		connIdRaw,
+		connTokenRaw,
+	);
+}
+
+/**
+ * Handle path-based HTTP routing
+ */
+async function handleHttpGatewayPathBased(
+	managerDriver: ManagerDriver,
+	c: HonoContext,
+	actorPathInfo: ActorPathInfo,
+): Promise<Response> {
+	// NOTE: Token validation implemented in EE
+
+	logger().debug({
+		msg: "proxying request to actor via path-based routing",
+		actorId: actorPathInfo.actorId,
+		path: actorPathInfo.remainingPath,
+		method: c.req.method,
+	});
+
+	// Preserve all headers
+	const proxyHeaders = new Headers(c.req.raw.headers);
+
+	// Build the proxy request with the actor URL format
+	const proxyUrl = new URL(`http://actor${actorPathInfo.remainingPath}`);
+
+	const proxyRequest = new Request(proxyUrl, {
+		method: c.req.raw.method,
+		headers: proxyHeaders,
+		body: c.req.raw.body,
+		signal: c.req.raw.signal,
+		duplex: "half",
+	} as RequestInit);
+
+	return await managerDriver.proxyRequest(
+		c,
+		proxyRequest,
+		actorPathInfo.actorId,
+	);
+}
+
 /**
  * Provides an endpoint to connect to individual actors.
  *
- * Routes requests based on the Upgrade header:
+ * Routes requests using either path-based routing or header-based routing:
+ *
+ * Path-based routing (checked first):
+ * - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
+ * - /gateway/actors/{actor_id}/route/{...path}
+ *
+ * Header-based routing (fallback):
  * - WebSocket requests: Uses sec-websocket-protocol for routing (target.actor, actor.{id})
  * - HTTP requests: Uses x-rivet-target and x-rivet-actor headers for routing
  */
@@ -47,6 +162,40 @@ export async function actorGateway(
 		}
 	}
 
+	// Include query string if present (needed for parseActorPath to preserve query params)
+	const pathWithQuery = c.req.url.includes("?")
+		? strippedPath + c.req.url.substring(c.req.url.indexOf("?"))
+		: strippedPath;
+
+	// First, check if this is an actor path-based route
+	const actorPathInfo = parseActorPath(pathWithQuery);
+	if (actorPathInfo) {
+		logger().debug({
+			msg: "routing using path-based actor routing",
+			actorPathInfo,
+		});
+
+		// Check if this is a WebSocket upgrade request
+		const isWebSocket = c.req.header("upgrade") === "websocket";
+
+		if (isWebSocket) {
+			return await handleWebSocketGatewayPathBased(
+				runConfig,
+				managerDriver,
+				c,
+				actorPathInfo,
+			);
+		}
+
+		// Handle regular HTTP requests
+		return await handleHttpGatewayPathBased(
+			managerDriver,
+			c,
+			actorPathInfo,
+		);
+	}
+
+	// Fallback to header-based routing
 	// Check if this is a WebSocket upgrade request
 	if (c.req.header("upgrade") === "websocket") {
 		return await handleWebSocketGateway(
@@ -186,6 +335,113 @@ async function handleHttpGateway(
 	} as RequestInit);
 
 	return await managerDriver.proxyRequest(c, proxyRequest, actorId);
+}
+
+/**
+ * Parse actor routing information from path
+ * Matches patterns:
+ * - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
+ * - /gateway/actors/{actor_id}/route/{...path}
+ */
+export function parseActorPath(path: string): ActorPathInfo | null {
+	// Find query string position (everything from ? onwards, but before fragment)
+	const queryPos = path.indexOf("?");
+	const fragmentPos = path.indexOf("#");
+
+	// Extract query string (excluding fragment)
+	let queryString = "";
+	if (queryPos !== -1) {
+		if (fragmentPos !== -1 && queryPos < fragmentPos) {
+			queryString = path.slice(queryPos, fragmentPos);
+		} else {
+			queryString = path.slice(queryPos);
+		}
+	}
+
+	// Extract base path (before query and fragment)
+	let basePath = path;
+	if (queryPos !== -1) {
+		basePath = path.slice(0, queryPos);
+	} else if (fragmentPos !== -1) {
+		basePath = path.slice(0, fragmentPos);
+	}
+
+	// Check for double slashes (invalid path)
+	if (basePath.includes("//")) {
+		return null;
+	}
+
+	// Split the path into segments
+	const segments = basePath.split("/").filter((s) => s.length > 0);
+
+	// Check minimum required segments: gateway, actors, {actor_id}, route
+	if (segments.length < 4) {
+		return null;
+	}
+
+	// Verify the fixed segments
+	if (segments[0] !== "gateway" || segments[1] !== "actors") {
+		return null;
+	}
+
+	// Check for empty actor_id
+	if (segments[2].length === 0) {
+		return null;
+	}
+
+	const actorId = segments[2];
+
+	// Check for token or direct route
+	let token: string | undefined;
+	let remainingPathStartIdx: number;
+
+	if (
+		segments.length >= 6 &&
+		segments[3] === "tokens" &&
+		segments[5] === "route"
+	) {
+		// Pattern with token: /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
+		// Check for empty token
+		if (segments[4].length === 0) {
+			return null;
+		}
+		token = segments[4];
+		remainingPathStartIdx = 6;
+	} else if (segments.length >= 4 && segments[3] === "route") {
+		// Pattern without token: /gateway/actors/{actor_id}/route/{...path}
+		token = undefined;
+		remainingPathStartIdx = 4;
+	} else {
+		return null;
+	}
+
+	// Calculate the position in the original path where remaining path starts
+	let prefixLen = 0;
+	for (let i = 0; i < remainingPathStartIdx; i++) {
+		prefixLen += 1 + segments[i].length; // +1 for the slash
+	}
+
+	// Extract the remaining path preserving trailing slashes
+	let remainingBase: string;
+	if (prefixLen < basePath.length) {
+		remainingBase = basePath.slice(prefixLen);
+	} else {
+		remainingBase = "/";
+	}
+
+	// Ensure remaining path starts with /
+	let remainingPath: string;
+	if (remainingBase.length === 0 || !remainingBase.startsWith("/")) {
+		remainingPath = `/${remainingBase}${queryString}`;
+	} else {
+		remainingPath = `${remainingBase}${queryString}`;
+	}
+
+	return {
+		actorId,
+		token,
+		remainingPath,
+	};
 }
 
 /**
