@@ -89,6 +89,7 @@ pub async fn fetch_serverless_runner_metadata(
 		.headers(header_map)
 		.timeout(Duration::from_secs(10))
 		.send()
+		.custom_instrument(tracing::info_span!("fetch_metadata_request"))
 		.await
 		.map_err(|err| {
 			if err.is_timeout() {
