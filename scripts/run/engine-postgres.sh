@@ -11,8 +11,21 @@ fi
 
 if ! nc -z localhost 5432 >/dev/null 2>&1; then
   echo "Postgres is not reachable at localhost:5432."
-  echo "Hint: run scripts/dev/run-postgres.sh to start the local Postgres container."
-  exit 1
+  echo "Starting postgres container..."
+  "${SCRIPT_DIR}/postgres.sh"
+
+  echo "Waiting for postgres to be ready..."
+  for i in {1..30}; do
+    if nc -z localhost 5432 >/dev/null 2>&1; then
+      echo "Postgres is ready!"
+      break
+    fi
+    if [ $i -eq 30 ]; then
+      echo "error: postgres did not become ready in time"
+      exit 1
+    fi
+    sleep 1
+  done
 fi
 
 cd "${REPO_ROOT}"

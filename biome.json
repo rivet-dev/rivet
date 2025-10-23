@@ -8,8 +8,7 @@
 			"!engine/artifacts",
 			"!engine/sdks",
 			"!engine/sdks/typescript/api-full",
-			"!engine/sdks/typescript/runner-protocol"
-			"!examples/snippets",
+			"!engine/sdks/typescript/runner-protocol",
 			"!frontend",
 			"!rivetkit-openapi/openapi.json",
 			"!scripts",
