@@ -1,9 +1,7 @@
 import {
-	// @ts-expect-error
 	faActors,
 	faMagnifyingGlass,
 	faNextjs,
-	faNodeJs,
 	faQuestionSquare,
 	faReact,
 	faSidebar,
@@ -230,7 +228,7 @@ function EmptyState({ count }: { count: number }) {
 		navigate({
 			to: ".",
 			search: (prev) => ({
-				...remove(prev),
+				...remove(prev || {}),
 			}),
 		});
 	};
@@ -331,8 +329,8 @@ function useFiltersChangeCallback(): OnFiltersChange {
 				navigate({
 					to: ".",
 					search: (old) => {
-						const filters = pick(old);
-						const prev = remove(old);
+						const filters = pick(old || {});
+						const prev = remove(old || {});
 
 						return {
 							...prev,
@@ -348,7 +346,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 				navigate({
 					to: ".",
 					search: (value) => ({
-						...remove(value),
+						...remove(value || {}),
 						...Object.fromEntries(
 							Object.entries(fnOrValue).filter(
 								([, filter]) => filter.value.length > 0,

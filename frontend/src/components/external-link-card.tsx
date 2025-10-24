@@ -1,8 +1,8 @@
-import { faChevronRight, Icon, type IconDefinition } from "@rivet-gg/icons";
+import { faChevronRight, Icon, IconProp } from "@rivet-gg/icons";
 
 interface ExternalLinkCardProps {
 	href: string;
-	icon: IconDefinition;
+	icon: IconProp;
 	title: string;
 	description?: string;
 }

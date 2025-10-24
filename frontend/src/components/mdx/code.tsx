@@ -38,10 +38,10 @@ const languageNames: Record<string, string> = {
 
 interface CodeGroupProps {
 	className?: string;
-	children: ReactElement[];
+	children: ReactElement<any>[];
 }
 
-const getChildIdx = (child: ReactElement) =>
+const getChildIdx = (child: ReactElement<any>) =>
 	child.props?.file || child.props?.title || child.props?.language || "code";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {
@@ -144,7 +144,7 @@ export const pre = ({
 			<div className="bg-background text-wrap p-2 text-sm">
 				<ScrollArea className="w-full">
 					{children
-						? cloneElement(children as ReactElement, {
+						? cloneElement(children as ReactElement<any>, {
 								escaped: true,
 							})
 						: null}
