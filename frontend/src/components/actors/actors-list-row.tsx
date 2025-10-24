@@ -90,7 +90,7 @@ function Id({ actorId }: { actorId: ActorId }) {
 	const showIds = useSearch({
 		strict: false,
 		select: (search) =>
-			(pick(search).showIds as FilterValue)?.value?.includes("1"),
+			(pick(search || {}).showIds as FilterValue)?.value?.includes("1"),
 	});
 
 	if (!showIds) {

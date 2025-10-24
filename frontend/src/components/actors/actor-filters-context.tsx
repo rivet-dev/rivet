@@ -87,7 +87,7 @@ export const useFilters = (
 	const { pick } = useActorsFilters();
 	return useSearch({
 		strict: false,
-		select: (state) => fn(pick(state)),
+		select: (state) => fn(pick(state || {})),
 	}) as Record<string, FilterValue | undefined>;
 };
 

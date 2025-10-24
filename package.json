@@ -23,6 +23,8 @@
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",
+		"@types/react": "^19",
+		"@types/react-dom": "^19",
 		"@clerk/shared": "3.27.1"
 	}
 }

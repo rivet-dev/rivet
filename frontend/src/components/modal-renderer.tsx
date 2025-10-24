@@ -1,6 +1,8 @@
 "use client";
 import { useDialog } from "@/app/use-dialog";
 import { modalActions, useOpenModal } from "@/stores/modal-store";
+import { DialogContent, DialogProps } from "./ui/dialog";
+import { ComponentProps, ComponentType } from "react";
 
 export function ModalRenderer() {
 	const openModal = useOpenModal();
@@ -41,5 +43,8 @@ function getDialogComponent(dialogKey: string) {
 	}
 
 	// Access the Dialog component from the hook
-	return dialog.Dialog;
+	return dialog.Dialog as ComponentType<{
+		dialogProps?: DialogProps;
+		dialogContentProps?: ComponentProps<typeof DialogContent>;
+	}>;
 }
