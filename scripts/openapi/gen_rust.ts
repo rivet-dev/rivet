@@ -4,8 +4,8 @@ import { assert } from "@std/assert";
 
 const FERN_GROUP = Deno.env.get("FERN_GROUP");
 if (!FERN_GROUP) throw "Missing FERN_GROUP";
-const OPENAPI_PATH = `out/openapi.json`;
-const GEN_PATH_RUST = `sdks/rust/api-${FERN_GROUP}/rust`;
+const OPENAPI_PATH = `engine/artifacts/openapi.json`;
+const GEN_PATH_RUST = `engine/sdks/rust/api-${FERN_GROUP}/rust`;
 
 async function generateRustSdk() {
 	console.log("Running OpenAPI generator");

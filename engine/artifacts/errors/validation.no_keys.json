@@ -1,5 +1,5 @@
 {
-	"code": "no_keys",
-	"group": "validation",
-	"message": "No keys provided. At least one key is required."
+  "code": "no_keys",
+  "group": "validation",
+  "message": "No keys provided. At least one key is required."
 }

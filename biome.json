@@ -7,11 +7,12 @@
 			"**/*.js",
 			"!examples/snippets",
 			"!rivetkit-openapi/openapi.json",
-			"!packages/engine/artifacts",
+			"!engine/artifacts",
 			"!website",
 			"!scripts",
 			"!frontend",
-			"!engine/sdks"
+			"!engine/sdks/typescript/api-full",
+			"!engine/sdks/typescript/runner-protocol"
 		],
 		"ignoreUnknown": true
 	},

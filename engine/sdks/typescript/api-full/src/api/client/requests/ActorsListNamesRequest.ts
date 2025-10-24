@@ -9,7 +9,7 @@
  *     }
  */
 export interface ActorsListNamesRequest {
-	namespace: string;
-	limit?: number;
-	cursor?: string;
+    namespace: string;
+    limit?: number;
+    cursor?: string;
 }

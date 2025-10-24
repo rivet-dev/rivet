@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorRequestTimedOut {
-	requestTimedOut: Record<string, unknown>;
+    requestTimedOut: Record<string, unknown>;
 }

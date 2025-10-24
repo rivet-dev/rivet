@@ -492,7 +492,7 @@ export class Runner {
 			if (message.tag === "ToClientInit") {
 				const init = message.val;
 
-				if (this.runnerId != init.runnerId) {
+				if (this.runnerId !== init.runnerId) {
 					this.runnerId = init.runnerId;
 
 					// Clear history if runner id changed

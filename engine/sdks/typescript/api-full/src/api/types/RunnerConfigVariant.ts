@@ -4,6 +4,6 @@
 
 export type RunnerConfigVariant = "serverless" | "normal";
 export const RunnerConfigVariant = {
-	Serverless: "serverless",
-	Normal: "normal",
+    Serverless: "serverless",
+    Normal: "normal",
 } as const;
