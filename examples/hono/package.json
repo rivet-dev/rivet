@@ -9,6 +9,7 @@
 		"client": "tsx scripts/client.ts"
 	},
 	"devDependencies": {
+		"@hono/node-server": "^1.19.1",
 		"@types/node": "^22.13.9",
 		"rivetkit": "workspace:*",
 		"tsx": "^3.12.7",

@@ -35,7 +35,15 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 
 	// Destroy actor
 	if let (Some(runner_workflow_id), true) = (res.runner_workflow_id, &input.kill) {
-		kill(ctx, input.actor_id, input.generation, runner_workflow_id).await?;
+		ctx.signal(crate::workflows::runner::Command {
+			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+				actor_id: input.actor_id.to_string(),
+				generation: input.generation,
+			}),
+		})
+		.to_workflow_id(runner_workflow_id)
+		.send()
+		.await?;
 	}
 
 	// If a slot was allocated at the time of actor destruction then bump the serverless autoscaler so it can scale down
@@ -271,25 +279,6 @@ pub(crate) async fn clear_slot(
 			MutationType::Add,
 		);
 	}
-
-	Ok(())
-}
-
-pub(crate) async fn kill(
-	ctx: &mut WorkflowCtx,
-	actor_id: Id,
-	generation: u32,
-	runner_workflow_id: Id,
-) -> Result<()> {
-	ctx.signal(crate::workflows::runner::Command {
-		inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-			actor_id: actor_id.to_string(),
-			generation,
-		}),
-	})
-	.to_workflow_id(runner_workflow_id)
-	.send()
-	.await?;
 
 	Ok(())
 }

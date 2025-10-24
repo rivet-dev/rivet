@@ -11,7 +11,7 @@
 		"@hono/node-server": "^1.19.1",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
-		"hono": "^4.0.0",
+		"hono": "^4.7.0",
 		"pino": "^9.9.5",
 		"ws": "^8.18.3"
 	},

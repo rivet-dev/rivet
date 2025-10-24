@@ -11,7 +11,7 @@ async function generateRustSdk() {
 	console.log("Running OpenAPI generator");
 
 	// Delete existing directories
-	await Deno.remove(GEN_PATH_RUST, { recursive: true }).catch(() => {});
+	await Deno.remove(GEN_PATH_RUST, { recursive: true }).catch(() => { });
 
 	const dockerCmd = new Deno.Command("docker", {
 		args: [

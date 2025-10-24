@@ -34,6 +34,38 @@ export async function createActor(
 	return response.json();
 }
 
+export async function getOrCreateActor(
+	namespaceName: string,
+	runnerNameSelector: string,
+	key?: string,
+): Promise<any> {
+	const response = await fetch(
+		`${RIVET_ENDPOINT}/actors?namespace=${namespaceName}`,
+		{
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${RIVET_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				name: "thingy",
+				key: key ?? crypto.randomUUID(),
+				input: btoa("hello"),
+				runner_name_selector: runnerNameSelector,
+				crash_policy: "sleep",
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		throw new Error(
+			`Failed to create actor: ${response.status} ${response.statusText}\n${await response.text()}`,
+		);
+	}
+
+	return response.json();
+}
+
 export async function destroyActor(
 	namespaceName: string,
 	actorId: string,

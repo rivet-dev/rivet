@@ -166,7 +166,7 @@ function addServerlessRoutes(
 			token: c.req.header("x-rivet-token") ?? undefined,
 			totalSlots: c.req.header("x-rivet-total-slots"),
 			runnerName: c.req.header("x-rivet-runner-name"),
-			namespace: c.req.header("x-rivet-namespace-id"),
+			namespace: c.req.header("x-rivet-namespace-name"),
 		});
 		if (!parseResult.success) {
 			throw new InvalidRequest(
