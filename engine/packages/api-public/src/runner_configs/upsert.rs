@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use axum::response::{IntoResponse, Response};
+use futures_util::{StreamExt, TryStreamExt};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -85,58 +86,75 @@ async fn upsert_inner(
 		})
 		.next();
 
-	// Apply config
-	let mut any_endpoint_config_changed = false;
-	for dc in &ctx.config().topology().datacenters {
-		if let Some(runner_config) = body.datacenters.remove(&dc.name) {
-			let response = if ctx.config().dc_label() == dc.datacenter_label {
-				rivet_api_peer::runner_configs::upsert(
-					ctx.clone().into(),
-					path.clone(),
-					query.clone(),
-					rivet_api_peer::runner_configs::UpsertRequest(runner_config),
-				)
-				.await?
-			} else {
-				request_remote_datacenter::<UpsertResponse>(
-					ctx.config(),
-					dc.datacenter_label,
-					&format!("/runner-configs/{}", path.runner_name),
-					axum::http::Method::PUT,
-					Some(&query),
-					Some(&runner_config),
-				)
-				.await?
-			};
+	let dcs = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.map(|dc| (dc.clone(), body.datacenters.remove(&dc.name)))
+		.collect::<Vec<_>>();
+	let any_endpoint_config_changed = futures_util::stream::iter(dcs)
+		.map(|(dc, runner_config)| {
+			let ctx = ctx.clone();
+			let query = query.clone();
+			let path = path.clone();
+			async move {
+				if let Some(runner_config) = runner_config {
+					let response = if ctx.config().dc_label() == dc.datacenter_label {
+						rivet_api_peer::runner_configs::upsert(
+							ctx.clone().into(),
+							path.clone(),
+							query.clone(),
+							rivet_api_peer::runner_configs::UpsertRequest(runner_config),
+						)
+						.await?
+					} else {
+						request_remote_datacenter::<UpsertResponse>(
+							ctx.config(),
+							dc.datacenter_label,
+							&format!("/runner-configs/{}", path.runner_name),
+							axum::http::Method::PUT,
+							Some(&query),
+							Some(&runner_config),
+						)
+						.await?
+					};
 
-			if response.endpoint_config_changed {
-				any_endpoint_config_changed = true;
+					anyhow::Ok(response.endpoint_config_changed)
+				} else {
+					if ctx.config().dc_label() == dc.datacenter_label {
+						rivet_api_peer::runner_configs::delete(
+							ctx.clone().into(),
+							DeletePath {
+								runner_name: path.runner_name.clone(),
+							},
+							DeleteQuery {
+								namespace: query.namespace.clone(),
+							},
+						)
+						.await?;
+					} else {
+						request_remote_datacenter::<DeleteResponse>(
+							ctx.config(),
+							dc.datacenter_label,
+							&format!("/runner-configs/{}", path.runner_name),
+							axum::http::Method::DELETE,
+							Some(&query),
+							Option::<&()>::None,
+						)
+						.await?;
+					}
+
+					Ok(false)
+				}
 			}
-		} else {
-			if ctx.config().dc_label() == dc.datacenter_label {
-				rivet_api_peer::runner_configs::delete(
-					ctx.clone().into(),
-					DeletePath {
-						runner_name: path.runner_name.clone(),
-					},
-					DeleteQuery {
-						namespace: query.namespace.clone(),
-					},
-				)
-				.await?;
-			} else {
-				request_remote_datacenter::<DeleteResponse>(
-					ctx.config(),
-					dc.datacenter_label,
-					&format!("/runner-configs/{}", path.runner_name),
-					axum::http::Method::DELETE,
-					Some(&query),
-					Option::<&()>::None,
-				)
-				.await?;
-			}
-		}
-	}
+		})
+		.buffer_unordered(16)
+		.try_collect::<Vec<_>>()
+		// NOTE: We must error when any peer request fails, not all
+		.await?
+		.into_iter()
+		.any(|endpoint_config_changed| endpoint_config_changed);
 
 	// Update runner metadata
 	//

@@ -109,38 +109,39 @@ where
 	A: Fn(u16, I, &mut R),
 	R: Default + Send + 'static,
 {
-	let dcs = &ctx.config().topology().datacenters;
+	let dcs = ctx.config().topology().datacenters.clone();
 
-	let results = futures_util::stream::iter(dcs.clone().into_iter().map(|dc| {
-		let ctx = ctx.clone();
-		let query = query.clone();
-		let endpoint = endpoint.to_string();
-		let local_handler = local_handler.clone();
+	let results = futures_util::stream::iter(dcs)
+		.map(|dc| {
+			let ctx = ctx.clone();
+			let query = query.clone();
+			let endpoint = endpoint.to_string();
+			let local_handler = local_handler.clone();
 
-		async move {
-			if dc.datacenter_label == ctx.config().dc_label() {
-				// Local datacenter - use direct API call
-				(dc.datacenter_label, local_handler(ctx, query).await)
-			} else {
-				// Remote datacenter - HTTP request
-				(
-					dc.datacenter_label,
-					request_remote_datacenter::<I>(
-						ctx.config(),
+			async move {
+				if dc.datacenter_label == ctx.config().dc_label() {
+					// Local datacenter - use direct API call
+					(dc.datacenter_label, local_handler(ctx, query).await)
+				} else {
+					// Remote datacenter - HTTP request
+					(
 						dc.datacenter_label,
-						&endpoint,
-						Method::GET,
-						Some(&query),
-						Option::<&()>::None,
+						request_remote_datacenter::<I>(
+							ctx.config(),
+							dc.datacenter_label,
+							&endpoint,
+							Method::GET,
+							Some(&query),
+							Option::<&()>::None,
+						)
+						.await,
 					)
-					.await,
-				)
+				}
 			}
-		}
-	}))
-	.buffer_unordered(16)
-	.collect::<Vec<_>>()
-	.await;
+		})
+		.buffer_unordered(16)
+		.collect::<Vec<_>>()
+		.await;
 
 	// Aggregate results
 	let result_count = results.len();
@@ -159,7 +160,7 @@ where
 	// Error only if all requests failed
 	if result_count == errors.len() {
 		if let Some(res) = errors.into_iter().next() {
-			return Err(res).with_context(|| "all datacenter requests failed");
+			return Err(res).context("all datacenter requests failed");
 		}
 	}
 

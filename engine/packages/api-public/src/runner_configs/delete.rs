@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::response::{IntoResponse, Response};
+use futures_util::{StreamExt, TryStreamExt};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Path, Query},
@@ -38,30 +39,43 @@ pub async fn delete(
 async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result<DeleteResponse> {
 	ctx.auth().await?;
 
-	for dc in &ctx.config().topology().datacenters {
-		if ctx.config().dc_label() == dc.datacenter_label {
-			rivet_api_peer::runner_configs::delete(
-				ctx.clone().into(),
-				DeletePath {
-					runner_name: path.runner_name.clone(),
-				},
-				DeleteQuery {
-					namespace: query.namespace.clone(),
-				},
-			)
-			.await?;
-		} else {
-			request_remote_datacenter::<DeleteResponse>(
-				ctx.config(),
-				dc.datacenter_label,
-				&format!("/runner-configs/{}", path.runner_name),
-				axum::http::Method::DELETE,
-				Some(&query),
-				Option::<&()>::None,
-			)
-			.await?;
-		}
-	}
+	let dcs = ctx.config().topology().datacenters.clone();
+	futures_util::stream::iter(dcs)
+		.map(|dc| {
+			let ctx = ctx.clone();
+			let query = query.clone();
+			let path = path.clone();
+			async move {
+				if ctx.config().dc_label() == dc.datacenter_label {
+					rivet_api_peer::runner_configs::delete(
+						ctx.clone().into(),
+						DeletePath {
+							runner_name: path.runner_name.clone(),
+						},
+						DeleteQuery {
+							namespace: query.namespace.clone(),
+						},
+					)
+					.await?;
+				} else {
+					request_remote_datacenter::<DeleteResponse>(
+						ctx.config(),
+						dc.datacenter_label,
+						&format!("/runner-configs/{}", path.runner_name),
+						axum::http::Method::DELETE,
+						Some(&query),
+						Option::<&()>::None,
+					)
+					.await?;
+				}
+
+				anyhow::Ok(())
+			}
+		})
+		.buffer_unordered(16)
+		.try_collect::<Vec<_>>()
+		// NOTE: We must error when any peer request fails, not all
+		.await?;
 
 	// Resolve namespace
 	let namespace = ctx
