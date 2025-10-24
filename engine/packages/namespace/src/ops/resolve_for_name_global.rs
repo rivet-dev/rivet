@@ -35,6 +35,7 @@ pub async fn namespace_resolve_for_name_global(
 							.get(url)
 							.query(&[("name", &input.name)])
 							.send()
+							.custom_instrument(tracing::info_span!("namespaces_http_request"))
 							.await?;
 
 						let res = rivet_api_util::parse_response::<

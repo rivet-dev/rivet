@@ -124,14 +124,14 @@ pub async fn upsert(
 	})
 }
 
-#[derive(Debug, Serialize, Deserialize, IntoParams)]
+#[derive(Debug, Serialize, Clone, Deserialize, IntoParams)]
 #[serde(deny_unknown_fields)]
 #[into_params(parameter_in = Query)]
 pub struct DeleteQuery {
 	pub namespace: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct DeletePath {
 	pub runner_name: String,
