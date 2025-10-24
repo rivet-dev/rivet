@@ -422,17 +422,22 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async serverlessHandleStart(c: HonoContext): Promise<Response> {
-		await this.#runnerStarted.promise;
-
 		return streamSSE(c, async (stream) => {
-			stream.onAbort(() => this.shutdown(true));
+			// NOTE: onAbort does not work reliably
+			stream.onAbort(() => {});
+			c.req.raw.signal.addEventListener("abort", () => {
+				logger().debug("SSE aborted, shutting down runner");
+				this.shutdown(true);
+			});
+
+			await this.#runnerStarted.promise;
 
 			// Runner id should be set if the runner started
 			const payload = this.#runner.getServerlessInitPacket();
 			invariant(payload, "runnerId not set");
 			await stream.writeSSE({ data: payload });
 
-			return this.#runnerStopped.promise;
+			await this.#runnerStopped.promise;
 		});
 	}
 }

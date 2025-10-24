@@ -26,7 +26,7 @@ const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint")
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_TOTAL_SLOTS: HeaderName = HeaderName::from_static("x-rivet-total-slots");
 const X_RIVET_RUNNER_NAME: HeaderName = HeaderName::from_static("x-rivet-runner-name");
-const X_RIVET_NAMESPACE_ID: HeaderName = HeaderName::from_static("x-rivet-namespace-id");
+const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 
 const DRAIN_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
@@ -109,7 +109,9 @@ async fn tick(
 
 	// Process each runner config with error handling
 	for (ns_id, runner_name, desired_slots) in &serverless_data {
-		let runner_config = runner_configs.iter().find(|rc| rc.namespace_id == *ns_id);
+		let runner_config = runner_configs
+			.iter()
+			.find(|rc| rc.namespace_id == *ns_id && &rc.name == runner_name);
 
 		let Some(runner_config) = runner_config else {
 			tracing::debug!(
@@ -225,7 +227,7 @@ async fn tick_runner_config(
 
 		for conn in draining_connections {
 			if conn.shutdown_tx.send(()).is_err() {
-				tracing::warn!(
+				tracing::debug!(
 					"serverless connection shutdown channel dropped, likely already stopped"
 				);
 			}
@@ -307,8 +309,6 @@ async fn outbound_handler(
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
-	tracing::debug!(%url, "sending outbound req");
-
 	let current_dc = ctx.config().topology().current_dc()?;
 
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
@@ -341,12 +341,21 @@ async fn outbound_handler(
 				HeaderValue::try_from(slots_per_runner)?,
 			),
 			(X_RIVET_RUNNER_NAME, HeaderValue::try_from(runner_name)?),
-			(X_RIVET_NAMESPACE_ID, HeaderValue::try_from(namespace_name)?),
+			(
+				X_RIVET_NAMESPACE_NAME,
+				HeaderValue::try_from(namespace_name.clone())?,
+			),
+			// Deprecated
+			(
+				HeaderName::from_static("x-rivet-namespace-id"),
+				HeaderValue::try_from(namespace_name)?,
+			),
 		])
 		.chain(token)
 		.collect();
 
 	let endpoint_url = format!("{}/start", url.trim_end_matches('/'));
+	tracing::debug!(%endpoint_url, "sending outbound req");
 	let req = client.get(endpoint_url).headers(headers);
 
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;

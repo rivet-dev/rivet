@@ -118,9 +118,18 @@ export async function sendHttpRequest<
 			const textResponse = new TextDecoder("utf-8", {
 				fatal: false,
 			}).decode(bufferResponse);
-			throw new HttpRequestError(
-				`${response.statusText} (${response.status}):\n${textResponse}`,
-			);
+
+			const rayId = response.headers.get("x-rivet-ray-id");
+
+			if (rayId) {
+				throw new HttpRequestError(
+					`${response.statusText} (${response.status}) (Ray ID: ${rayId}):\n${textResponse}`,
+				);
+			} else {
+				throw new HttpRequestError(
+					`${response.statusText} (${response.status}):\n${textResponse}`,
+				);
+			}
 		}
 
 		// Decode metadata based on encoding - only binary encodings have CBOR-encoded metadata

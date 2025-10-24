@@ -101,6 +101,9 @@ pub async fn route_request(
 	let mut ready_sub = ctx
 		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
 		.await?;
+	let mut stopped_sub = ctx
+		.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id))
+		.await?;
 	let mut fail_sub = ctx
 		.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id))
 		.await?;
@@ -122,6 +125,8 @@ pub async fn route_request(
 
 	// Wake actor if sleeping
 	if actor.sleeping {
+		tracing::debug!(?actor_id, "actor sleeping, waking");
+
 		ctx.signal(pegboard::workflows::actor::Wake {})
 			.to_workflow_id(actor.workflow_id)
 			.send()
@@ -133,20 +138,51 @@ pub async fn route_request(
 	} else {
 		tracing::debug!(?actor_id, "waiting for actor to become ready");
 
+		let mut wake_retries = 0;
+
 		// Wait for ready, fail, or destroy
-		tokio::select! {
-			res = ready_sub.next() => { res?.runner_id },
-			res = fail_sub.next() => {
-				let msg = res?;
-				return Err(msg.error.clone().build());
-			}
-			res = destroy_sub.next() => {
-				res?;
-				return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
-			}
-			// Ready timeout
-			_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
-				return Err(errors::ActorReadyTimeout { actor_id }.build());
+		loop {
+			tokio::select! {
+				res = ready_sub.next() => break res?.runner_id,
+				res = stopped_sub.next() => {
+					res?;
+
+					// Attempt to rewake once
+					if wake_retries < 3 {
+						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to beocme ready, attempting rewake");
+						wake_retries += 1;
+
+						let res = ctx.signal(pegboard::workflows::actor::Wake {})
+							.to_workflow_id(actor.workflow_id)
+							.send()
+							.await;
+
+						if let Some(WorkflowError::WorkflowNotFound) = res
+							.as_ref()
+							.err()
+							.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+						{
+							tracing::warn!(
+								?actor_id,
+								"actor workflow not found for rewake"
+							);
+						} else {
+							res?;
+						}
+					}
+				}
+				res = fail_sub.next() => {
+					let msg = res?;
+					return Err(msg.error.clone().build());
+				}
+				res = destroy_sub.next() => {
+					res?;
+					return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
+				}
+				// Ready timeout
+				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+					return Err(errors::ActorReadyTimeout { actor_id }.build());
+				}
 			}
 		}
 	};

@@ -12,6 +12,7 @@ const PROTOCOL_VERSION: number = 1;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
+const SIGNAL_HANDLERS: (() => void)[] = [];
 
 export interface ActorInstance {
 	actorId: string;
@@ -44,8 +45,8 @@ export interface RunnerConfig {
 	onConnected: () => void;
 	onDisconnected: () => void;
 	onShutdown: () => void;
-	fetch: (actorId: string, request: Request) => Promise<Response>;
-	websocket?: (actorId: string, ws: any, request: Request) => Promise<void>;
+	fetch: (runner: Runner, actorId: string, request: Request) => Promise<Response>;
+	websocket?: (runner: Runner, actorId: string, ws: any, request: Request) => Promise<void>;
 	onActorStart: (
 		actorId: string,
 		generation: number,
@@ -107,13 +108,11 @@ export class Runner {
 	#kvCleanupInterval?: NodeJS.Timeout;
 
 	// Tunnel for HTTP/WebSocket forwarding
-	#tunnel: Tunnel;
+	#tunnel: Tunnel | undefined;
 
 	constructor(config: RunnerConfig) {
 		this.#config = config;
 		if (this.#config.logger) setLogger(this.#config.logger);
-
-		this.#tunnel = new Tunnel(this);
 
 		// Start cleaning up old unsent KV requests every 15 seconds
 		this.#kvCleanupInterval = setInterval(() => {
@@ -134,11 +133,21 @@ export class Runner {
 	}
 
 	async stopActor(actorId: string, generation?: number) {
+		const actor = this.getActor(actorId, generation);
+		if (!actor) return;
+
+		this.#sendActorIntent(actorId, actor.generation, "stop");
+
+		// NOTE: We do NOT remove the actor from this.#actors here
+		// The server will send a StopActor command if it wants to fully stop
+	}
+
+	async forceStopActor(actorId: string, generation?: number) {
 		const actor = this.#removeActor(actorId, generation);
 		if (!actor) return;
 
 		// Unregister actor from tunnel
-		this.#tunnel.unregisterActor(actor);
+		this.#tunnel?.unregisterActor(actor);
 
 		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
 		try {
@@ -167,7 +176,7 @@ export class Runner {
 
 		const actorIds = Array.from(this.#actors.keys());
 		for (const actorId of actorIds) {
-			this.stopActor(actorId);
+			this.forceStopActor(actorId);
 		}
 	}
 
@@ -248,6 +257,7 @@ export class Runner {
 
 		logger()?.info({ msg: "starting runner" });
 
+		this.#tunnel = new Tunnel(this);
 		this.#tunnel.start();
 
 		try {
@@ -258,29 +268,41 @@ export class Runner {
 		}
 
 		if (!this.#config.noAutoShutdown) {
-			process.on("SIGTERM", () => {
-				logger()?.debug("received SIGTERM");
-				this.shutdown(false, true);
-			});
-			process.on("SIGINT", () => {
-				logger()?.debug("received SIGINT");
-				this.shutdown(false, true);
-			});
+			if (!SIGNAL_HANDLERS.length) {
+				process.on("SIGTERM", () => {
+					logger()?.debug("received SIGTERM");
 
-			logger()?.debug({
-				msg: "added SIGTERM listeners",
+					for (let handler of SIGNAL_HANDLERS) {
+						handler();
+					}
+
+					process.exit(0);
+				});
+				process.on("SIGINT", () => {
+					logger()?.debug("received SIGINT");
+
+					for (let handler of SIGNAL_HANDLERS) {
+						handler();
+					}
+
+					process.exit(0);
+				});
+
+				logger()?.debug({
+					msg: "added SIGTERM listeners",
+				});
+			}
+
+			SIGNAL_HANDLERS.push(() => {
+				let weak = new WeakRef(this);
+				weak.deref()?.shutdown(false, false)
 			});
 		}
-
-		logger()?.debug({
-			msg: "current listeners",
-			listeners: process.listeners("SIGINT"),
-		});
 	}
 
 	// MARK: Shutdown
 	async shutdown(immediate: boolean, exit: boolean = false) {
-		logger()?.info({ msg: "starting shutdown", runnerId: this.runnerId, immediate });
+		logger()?.info({ msg: "starting shutdown", runnerId: this.runnerId, immediate, exit });
 		this.#shutdown = true;
 
 		// Clear reconnect timeout
@@ -399,7 +421,7 @@ export class Runner {
 		// Close tunnel
 		if (this.#tunnel) {
 			this.#tunnel.shutdown();
-			logger()?.info({ msg: "tunnel shutdown completed", runnerId: this.runnerId });
+			this.#tunnel = undefined;
 		}
 
 		if (exit) process.exit(0);
@@ -553,7 +575,7 @@ export class Runner {
 			} else if (message.tag === "ToClientTunnelMessage") {
 				this.#tunnel?.handleTunnelMessage(message.val);
 			} else if (message.tag === "ToClientClose") {
-				this.#tunnel.shutdown();
+				this.#tunnel?.shutdown();
 				ws.close(1000, "manual closure");
 			} else {
 				unreachable(message);
@@ -739,7 +761,7 @@ export class Runner {
 
 				// TODO: Mark as crashed
 				// Send stopped state update if start failed
-				this.stopActor(actorId, generation);
+				this.forceStopActor(actorId, generation);
 			});
 	}
 
@@ -750,7 +772,7 @@ export class Runner {
 		const actorId = stopCommand.actorId;
 		const generation = stopCommand.generation;
 
-		this.stopActor(actorId, generation);
+		this.forceStopActor(actorId, generation);
 	}
 
 	#sendActorIntent(
