@@ -336,8 +336,8 @@ export class Tunnel {
 							existing.actorId = req.actorId;
 						} else {
 							this.#actorPendingRequests.set(requestIdStr, {
-								resolve: () => { },
-								reject: () => { },
+								resolve: () => {},
+								reject: () => {},
 								streamController: controller,
 								actorId: req.actorId,
 							});
@@ -506,7 +506,7 @@ export class Tunnel {
 					const dataBuffer =
 						typeof data === "string"
 							? (new TextEncoder().encode(data)
-								.buffer as ArrayBuffer)
+									.buffer as ArrayBuffer)
 							: data;
 
 					this.#sendMessage(requestId, {
