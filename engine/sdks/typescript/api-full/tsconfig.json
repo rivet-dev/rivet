@@ -18,6 +18,7 @@
 			"@rivetkit/engine-api": ["."]
 		}
 	},
+	"ts-expect-error-comments": false,
 	"include": ["src"],
 	"exclude": []
 }

@@ -9,11 +9,11 @@
  *     }
  */
 export interface ActorsListRequest {
-	namespace: string;
-	name?: string;
-	key?: string;
-	actorIds?: string;
-	includeDestroyed?: boolean;
-	limit?: number;
-	cursor?: string;
+    namespace: string;
+    name?: string;
+    key?: string;
+    actorIds?: string;
+    includeDestroyed?: boolean;
+    limit?: number;
+    cursor?: string;
 }
