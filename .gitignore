@@ -10,6 +10,9 @@ lib/**/Cargo.lock
 # Turborepo
 **/.turbo
 
+# Cloudflare
+.wrangler/
+
 # Node.js and pnpm
 node_modules/
 npm-debug.log*

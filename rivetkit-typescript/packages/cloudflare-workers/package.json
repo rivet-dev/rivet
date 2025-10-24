@@ -50,7 +50,7 @@
 	"dependencies": {
 		"invariant": "^2.2.4",
 		"zod": "^3.25.76",
-		"hono": "4.8.3",
+		"hono": "^4.7.0",
 		"rivetkit": "workspace:*"
 	},
 	"stableVersion": "0.8.0"
