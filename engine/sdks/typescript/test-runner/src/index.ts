@@ -21,8 +21,8 @@ const RIVET_RUNNER_TOTAL_SLOTS = process.env.RIVET_RUNNER_TOTAL_SLOTS
 	: 100;
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
-const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER == undefined;
-const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER == undefined;
+const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER === undefined;
+const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER === undefined;
 
 const runnerStarted = Promise.withResolvers();
 const runnerStopped = Promise.withResolvers();

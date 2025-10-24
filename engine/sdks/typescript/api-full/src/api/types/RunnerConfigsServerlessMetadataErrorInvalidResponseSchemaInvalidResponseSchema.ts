@@ -3,6 +3,6 @@
  */
 
 export interface RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema {
-	runtime: string;
-	version: string;
+    runtime: string;
+    version: string;
 }

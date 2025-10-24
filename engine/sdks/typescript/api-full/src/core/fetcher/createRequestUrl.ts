@@ -1,13 +1,10 @@
 import qs from "qs";
 
 export function createRequestUrl(
-	baseUrl: string,
-	queryParameters?: Record<
-		string,
-		string | string[] | object | object[] | null
-	>,
+    baseUrl: string,
+    queryParameters?: Record<string, string | string[] | object | object[] | null>,
 ): string {
-	return Object.keys(queryParameters ?? {}).length > 0
-		? `${baseUrl}?${qs.stringify(queryParameters, { arrayFormat: "repeat" })}`
-		: baseUrl;
+    return Object.keys(queryParameters ?? {}).length > 0
+        ? `${baseUrl}?${qs.stringify(queryParameters, { arrayFormat: "repeat" })}`
+        : baseUrl;
 }
