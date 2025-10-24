@@ -2001,8 +2001,8 @@ importers:
   rivetkit-typescript/packages/cloudflare-workers:
     dependencies:
       hono:
-        specifier: 4.8.3
-        version: 4.8.3
+        specifier: ^4.7.0
+        version: 4.9.8
       invariant:
         specifier: ^2.2.4
         version: 2.2.4
@@ -9337,10 +9337,6 @@ packages:
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
-
-  hono@4.8.3:
-    resolution: {integrity: sha512-jYZ6ZtfWjzBdh8H/0CIFfCBHaFL75k+KMzaM177hrWWm2TWL39YMYaJgB74uK/niRc866NMlH9B8uCvIo284WQ==}
-    engines: {node: '>=16.9.0'}
 
   hono@4.9.8:
     resolution: {integrity: sha512-JW8Bb4RFWD9iOKxg5PbUarBYGM99IcxFl2FPBo2gSJO11jjUDqlP1Bmfyqt8Z/dGhIQ63PMA9LdcLefXyIasyg==}
@@ -21494,8 +21490,6 @@ snapshots:
   hoist-non-react-statics@3.3.2:
     dependencies:
       react-is: 16.13.1
-
-  hono@4.8.3: {}
 
   hono@4.9.8: {}
 
