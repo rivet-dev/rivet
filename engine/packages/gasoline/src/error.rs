@@ -28,8 +28,8 @@ pub enum WorkflowError {
 	#[error("workflow not found")]
 	WorkflowNotFound,
 
-	#[error("workflow stopped")]
-	WorkflowStopped,
+	#[error("workflow evicted")]
+	WorkflowEvicted,
 
 	#[error("history diverged: {0}")]
 	HistoryDiverged(String),
@@ -180,7 +180,7 @@ pub enum WorkflowError {
 
 impl WorkflowError {
 	pub(crate) fn wake_immediate(&self) -> bool {
-		matches!(self, WorkflowError::WorkflowStopped)
+		matches!(self, WorkflowError::WorkflowEvicted)
 	}
 
 	/// Returns the next deadline for a workflow to be woken up again based on the error.
@@ -225,7 +225,7 @@ impl WorkflowError {
 			| WorkflowError::NoSignalFoundAndSleep(_, _)
 			| WorkflowError::SubWorkflowIncomplete(_)
 			| WorkflowError::Sleep(_)
-			| WorkflowError::WorkflowStopped => true,
+			| WorkflowError::WorkflowEvicted => true,
 			_ => false,
 		}
 	}

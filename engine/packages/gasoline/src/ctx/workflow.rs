@@ -536,7 +536,7 @@ impl WorkflowCtx {
 
 	pub(crate) fn check_stop(&self) -> WorkflowResult<()> {
 		if self.stop.has_changed().unwrap_or(true) {
-			Err(WorkflowError::WorkflowStopped)
+			Err(WorkflowError::WorkflowEvicted)
 		} else {
 			Ok(())
 		}
@@ -546,7 +546,7 @@ impl WorkflowCtx {
 		// We have to clone here because this function can't have a mutable reference to self. The state of
 		// the stop channel doesn't matter because it only ever receives one message
 		let _ = self.stop.clone().changed().await;
-		Err(WorkflowError::WorkflowStopped)
+		Err(WorkflowError::WorkflowEvicted)
 	}
 }
 
