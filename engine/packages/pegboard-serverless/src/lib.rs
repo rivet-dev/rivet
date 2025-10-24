@@ -217,6 +217,8 @@ async fn tick_runner_config(
 	let drain_count = curr.len().saturating_sub(desired_count);
 	let start_count = desired_count.saturating_sub(curr.len());
 
+	tracing::debug!(%namespace_name, %runner_name, %desired_count, %drain_count, %start_count, "scaling");
+
 	if drain_count != 0 {
 		// TODO: Implement smart logic of draining runners with the lowest allocated actors
 		let draining_connections = curr.split_off(desired_count);
@@ -305,6 +307,8 @@ async fn outbound_handler(
 	shutdown_rx: oneshot::Receiver<()>,
 	draining: Arc<AtomicBool>,
 ) -> Result<()> {
+	tracing::debug!(%url, "sending outbound req");
+
 	let current_dc = ctx.config().topology().current_dc()?;
 
 	let client = rivet_pools::reqwest::client_no_timeout().await?;
