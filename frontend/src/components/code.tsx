@@ -42,10 +42,11 @@ interface CodeGroupProps {
 		title?: string;
 		icon?: IconProp;
 		isInGroup?: boolean;
+		file?: string;
 	}>[];
 }
 
-const getChildIdx = (child: ReactElement) =>
+const getChildIdx = (child: CodeGroupProps['children'][number]) =>
 	child.props?.file || child.props?.title || child.props?.language || "code";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {

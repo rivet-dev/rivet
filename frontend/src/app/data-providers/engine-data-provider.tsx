@@ -3,7 +3,10 @@ import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
 	mutationOptions,
+	QueryKey,
+	QueryOptions,
 	queryOptions,
+	UseQueryOptions,
 } from "@tanstack/react-query";
 import { getConfig, ls } from "@/components";
 import {
@@ -17,6 +20,7 @@ import { convertStringToId } from "@/lib/utils";
 import { queryClient } from "@/queries/global";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
+	ActorQueryOptions,
 	ActorQueryOptionsSchema,
 	createDefaultGlobalContext,
 	type DefaultDataProvider,
@@ -127,9 +131,8 @@ export const createGlobalContext = (opts: {
 
 export const createNamespaceContext = ({
 	namespace,
-	namespaceId,
 	client,
-}: { namespace: string; namespaceId: string } & ReturnType<
+}: { namespace: string; } & ReturnType<
 	typeof createGlobalContext
 >) => {
 	const def = createDefaultGlobalContext();
@@ -143,7 +146,7 @@ export const createNamespaceContext = ({
 			return queryOptions({
 				...def.statusQueryOptions(),
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.statusQueryOptions().queryKey,
 				],
 				enabled: true,
@@ -162,9 +165,9 @@ export const createNamespaceContext = ({
 				...def.regionsQueryOptions(),
 				enabled: true,
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.regionsQueryOptions().queryKey,
-				],
+				] as QueryKey,
 				queryFn: async () => {
 					const data = await client.datacenters.list();
 					return {
@@ -212,11 +215,11 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		actorQueryOptions(actorId) {
+		actorQueryOptions(actorId: ActorId) {
 			return queryOptions({
 				...def.actorQueryOptions(actorId),
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.actorQueryOptions(actorId).queryKey,
 				],
 				enabled: true,
@@ -239,11 +242,11 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		actorsQueryOptions(opts) {
+		actorsQueryOptions(opts: ActorQueryOptions) {
 			return infiniteQueryOptions({
 				...def.actorsQueryOptions(opts),
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.actorsQueryOptions(opts).queryKey,
 				],
 				enabled: true,
@@ -318,7 +321,7 @@ export const createNamespaceContext = ({
 			return infiniteQueryOptions({
 				...def.buildsQueryOptions(),
 				queryKey: [
-					{ namespace, namespaceId },
+					{ namespace },
 					...def.buildsQueryOptions().queryKey,
 				],
 				enabled: true,
@@ -356,7 +359,7 @@ export const createNamespaceContext = ({
 			});
 		},
 		createActorMutationOptions() {
-			return {
+			return mutationOptions({
 				...def.createActorMutationOptions(),
 				mutationKey: [namespace, "actors"],
 				mutationFn: async (data) => {
@@ -378,10 +381,10 @@ export const createNamespaceContext = ({
 				meta: {
 					mightRequireAuth,
 				},
-			};
+			});
 		},
-		actorDestroyMutationOptions(actorId) {
-			return {
+		actorDestroyMutationOptions(actorId: ActorId) {
+			return mutationOptions({
 				...def.actorDestroyMutationOptions(actorId),
 				throwOnError: noThrow,
 				retry: shouldRetryAllExpect403,
@@ -391,14 +394,14 @@ export const createNamespaceContext = ({
 				mutationFn: async () => {
 					await client.actorsDelete(actorId, { namespace });
 				},
-			};
+			});
 		},
 		runnerHealthCheckQueryOptions(opts: {
 			runnerUrl: string;
 			headers: Record<string, string>;
 		}) {
 			return queryOptions({
-				queryKey: ["runner", "healthcheck", opts],
+				queryKey: ["runner", "healthcheck", opts] as QueryKey,
 				enabled: !!opts.runnerUrl,
 				queryFn: async ({ signal: abortSignal }) => {
 					const res =
@@ -426,7 +429,7 @@ export const createNamespaceContext = ({
 		...dataProvider,
 		runnersQueryOptions() {
 			return infiniteQueryOptions({
-				queryKey: [{ namespace }, "runners"],
+				queryKey: [{ namespace }, "runners"] as QueryKey,
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ pageParam, signal: abortSignal }) => {
 					const data = await client.runners.list(
@@ -454,7 +457,7 @@ export const createNamespaceContext = ({
 		},
 		runnerNamesQueryOptions() {
 			return infiniteQueryOptions({
-				queryKey: [{ namespace }, "runner", "names"],
+				queryKey: [{ namespace }, "runner", "names"] as QueryKey,
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const data = await client.runners.listNames(
@@ -485,7 +488,7 @@ export const createNamespaceContext = ({
 		},
 		runnerQueryOptions(opts: { namespace: string; runnerId: string }) {
 			return queryOptions({
-				queryKey: [opts.namespace, "runner", opts.runnerId],
+				queryKey: [opts.namespace, "runner", opts.runnerId] as QueryKey,
 				enabled: !!opts.runnerId,
 				queryFn: async ({ signal: abortSignal }) => {
 					const data = await client.runners.list(
@@ -512,7 +515,7 @@ export const createNamespaceContext = ({
 		},
 		runnerByNameQueryOptions(opts: { runnerName: string | undefined }) {
 			return queryOptions({
-				queryKey: [{ namespace }, "runner", opts.runnerName],
+				queryKey: [{ namespace }, "runner", opts.runnerName] as QueryKey,
 				enabled: !!opts.runnerName,
 				queryFn: async ({ signal: abortSignal }) => {
 					const data = await client.runners.list(
@@ -539,7 +542,7 @@ export const createNamespaceContext = ({
 		) {
 			return mutationOptions({
 				...opts,
-				mutationKey: ["runner-config"],
+				mutationKey: ["runner-config"]  as QueryKey,
 				mutationFn: async ({
 					name,
 					config,
@@ -562,9 +565,9 @@ export const createNamespaceContext = ({
 		deleteRunnerConfigMutationOptions(
 			opts: { onSuccess?: (data: void) => void } = {},
 		) {
-			return {
+			return mutationOptions({
 				...opts,
-				mutationKey: ["runner-config", "delete"],
+				mutationKey: ["runner-config", "delete"] as QueryKey,
 				mutationFn: async (name: string) => {
 					await client.runnerConfigs.delete(name, { namespace });
 				},
@@ -572,18 +575,13 @@ export const createNamespaceContext = ({
 				meta: {
 					mightRequireAuth,
 				},
-			};
+			});
 		},
 		runnerConfigsQueryOptions(opts?: {
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return infiniteQueryOptions({
-				queryKey: [
-					{ namespace },
-					"runners",
-					"configs",
-					{ variant: opts?.variant },
-				],
+				queryKey: [{ namespace }, "runners", "configs", opts] as QueryKey,
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const response = await client.runnerConfigs.list(
@@ -626,12 +624,7 @@ export const createNamespaceContext = ({
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return queryOptions({
-				queryKey: [
-					{ namespace },
-					"runners",
-					"config",
-					{ name: opts.name, variant: opts.variant },
-				],
+				queryKey: [{ namespace }, "runners", "config", opts] as QueryKey,
 				enabled: !!opts.name,
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.runnerConfigs.list(
@@ -657,11 +650,11 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		engineAdminTokenQueryOptions() {
+		engineAdminTokenQueryOptions(): UseQueryOptions<string> {
 			return queryOptions({
 				staleTime: 1000,
 				gcTime: 1000,
-				queryKey: [{ namespace }, "tokens", "engine-admin"],
+				queryKey: [{ namespace }, "tokens", "engine-admin"] as QueryKey,
 				queryFn: async () => {
 					return ls.engineCredentials.get(getConfig().apiUrl) || "";
 				},

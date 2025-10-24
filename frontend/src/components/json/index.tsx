@@ -23,6 +23,7 @@ import {
 import { CopyButton } from "../copy-area";
 import { Checkbox } from "../ui/checkbox";
 import { WithTooltip } from "../ui/tooltip";
+import { cn } from "../lib/utils";
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -482,7 +483,7 @@ function ObjectValue({
 								level={level}
 								editablePropertyName={!isArray(value)}
 								key={key}
-								value={value[key]}
+								value={value[key as keyof typeof value]}
 								property={key}
 								path={childrenPath}
 							/>
@@ -621,6 +622,7 @@ function Editable({
 	value,
 	path,
 	children,
+	className,
 	showIcon = true,
 	as = "input",
 	onChange,
@@ -630,12 +632,13 @@ function Editable({
 	value: string;
 	children: React.ReactNode;
 	path: string;
+	className?: string;
 	as?: "input" | "textarea";
 	onChange?: (newValue: string) => void;
 	onDelete?: () => void;
 }) {
 	const [isEditing, setIsEditing] = useState(false);
-	const ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+	const ref = useRef<HTMLInputElement | null>(null);
 
 	function edit() {
 		const alreadyEditing = ref.current?.querySelector(
@@ -661,7 +664,7 @@ function Editable({
 	}, [isEditing]);
 
 	if (isEditing) {
-		const Comp = as;
+		const Comp = as as 'input';
 		return (
 			<Comp
 				ref={ref}
@@ -679,7 +682,7 @@ function Editable({
 				}}
 				name={path}
 				defaultValue={value}
-				className="bg-transparent field-sizing-content font-mono-console text-foreground outline-none focus:ring-0 w-full focus:border-0 focus:ring focus:ring-1 focus:ring-primary/40 rounded-sm border-primary selection-primary"
+				className={cn("bg-transparent field-sizing-content font-mono-console text-foreground outline-none focus:ring-0 w-full focus:border-0 focus:ring focus:ring-1 focus:ring-primary/40 rounded-sm border-primary selection-primary", className)}
 			/>
 		);
 	}
@@ -759,7 +762,7 @@ function Editable({
 }
 
 function useClickOutside(
-	ref: React.RefObject<HTMLElement>,
+	ref: React.RefObject<HTMLElement | null>,
 	callback: () => void,
 ) {
 	const callbackRef = useRef(callback);

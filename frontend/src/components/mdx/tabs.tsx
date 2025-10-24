@@ -17,7 +17,7 @@ export const Tab = ({
 	return <RivetTabsContent value={title}>{children}</RivetTabsContent>;
 };
 
-export const Tabs = ({ children }: { children: React.ReactElement }) => {
+export const Tabs = ({ children }: { children: React.ReactElement<any> }) => {
 	const titles = Children.map(children, (child) => child.props.title);
 	return (
 		<RivetTabs defaultValue={titles[0]}>
