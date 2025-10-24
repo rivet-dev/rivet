@@ -43,9 +43,9 @@ esac
 
 # Build docker image with target stage (if specified)
 if [ -n "$TARGET_STAGE" ]; then
-  DOCKER_BUILDKIT=1 docker build --target $TARGET_STAGE -f docker/engine/$DOCKERFILE -t rivet-engine-builder-$TARGET .
+  DOCKER_BUILDKIT=1 docker build --target $TARGET_STAGE -f engine/docker/engine/$DOCKERFILE -t rivet-engine-builder-$TARGET .
 else
-  DOCKER_BUILDKIT=1 docker build -f docker/engine/$DOCKERFILE -t rivet-engine-builder-$TARGET .
+  DOCKER_BUILDKIT=1 docker build -f engine/docker/engine/$DOCKERFILE -t rivet-engine-builder-$TARGET .
 fi
 
 # Extract binary

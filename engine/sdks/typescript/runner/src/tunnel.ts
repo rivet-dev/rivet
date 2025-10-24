@@ -210,7 +210,11 @@ export class Tunnel {
 			return new Response("Actor not found", { status: 404 });
 		}
 
-		const fetchHandler = this.#runner.config.fetch(this.#runner, actorId, request);
+		const fetchHandler = this.#runner.config.fetch(
+			this.#runner,
+			actorId,
+			request,
+		);
 
 		if (!fetchHandler) {
 			return new Response("Not Implemented", { status: 501 });
@@ -307,8 +311,8 @@ export class Tunnel {
 							existing.actorId = req.actorId;
 						} else {
 							this.#actorPendingRequests.set(requestIdStr, {
-								resolve: () => { },
-								reject: () => { },
+								resolve: () => {},
+								reject: () => {},
 								streamController: controller,
 								actorId: req.actorId,
 							});
@@ -475,7 +479,7 @@ export class Tunnel {
 					const dataBuffer =
 						typeof data === "string"
 							? (new TextEncoder().encode(data)
-								.buffer as ArrayBuffer)
+									.buffer as ArrayBuffer)
 							: data;
 
 					this.#sendMessage(requestId, {
@@ -539,7 +543,12 @@ export class Tunnel {
 			});
 
 			// Call websocket handler
-			await websocketHandler(this.#runner, open.actorId, adapter, request);
+			await websocketHandler(
+				this.#runner,
+				open.actorId,
+				adapter,
+				request,
+			);
 		} catch (error) {
 			logger()?.error({ msg: "error handling websocket open", error });
 			// Send close on error

@@ -25,7 +25,9 @@ export function getPinoLevel(logLevel?: Level): LevelWithSilent {
 		return configuredLogLevel;
 	}
 
-	return (process.env["LOG_LEVEL"] || "warn").toString().toLowerCase() as LevelWithSilent;
+	return (process.env["LOG_LEVEL"] || "warn")
+		.toString()
+		.toLowerCase() as LevelWithSilent;
 }
 
 export function getIncludeTarget(): boolean {
@@ -88,9 +90,7 @@ function customWrite(level: string, o: any) {
 /**
  * Configure the default logger with optional log level.
  */
-export async function configureDefaultLogger(
-	logLevel?: Level,
-): Promise<void> {
+export async function configureDefaultLogger(logLevel?: Level): Promise<void> {
 	// Store the configured log level
 	if (logLevel) {
 		configuredLogLevel = logLevel;
