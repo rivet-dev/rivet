@@ -1,5 +1,29 @@
 # MARK: Docker-specific
 .git/
+.gitignore
+.gitattributes
+.dockerignore
+**/Dockerfile*
+**/docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE*
+
+# Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # MARK: Copied from .gitignore
 **/.DS_Store

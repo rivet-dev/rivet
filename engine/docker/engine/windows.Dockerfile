@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.10.0
 FROM rust:1.88.0
 
 ARG BUILD_FRONTEND=true
@@ -60,13 +60,12 @@ COPY . .
 
 # Build frontend
 RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
-        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
-        (cd frontend && pnpm install && \
+        pnpm install && \
         if [ -n "$VITE_APP_API_URL" ]; then \
-            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
         else \
-            pnpm run build:engine; \
-        fi); \
+            npx turbo build:engine -F @rivetkit/engine-frontend; \
+        fi; \
     fi
 
 # Build for Windows

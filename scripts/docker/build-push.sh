@@ -13,7 +13,7 @@ IMAGE_REPO=$1
 shift
 TAGS=("$@")
 
-DOCKERFILE=${DOCKERFILE:-docker/universal/Dockerfile}
+DOCKERFILE=${DOCKERFILE:-engine/docker/universal/Dockerfile}
 TARGET=${TARGET:-engine-full}
 CONTEXT=${CONTEXT:-.}
 

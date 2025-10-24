@@ -1,9 +1,9 @@
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
-import { execSync } from "child_process";
 import dotenv from "dotenv";
 import { FreestyleSandboxes } from "freestyle-sandboxes";
 import { prepareDirForDeploymentSync } from "freestyle-sandboxes/utils";
-import { readFileSync } from "fs";
 
 dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
 

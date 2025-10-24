@@ -45,8 +45,17 @@ export interface RunnerConfig {
 	onConnected: () => void;
 	onDisconnected: () => void;
 	onShutdown: () => void;
-	fetch: (runner: Runner, actorId: string, request: Request) => Promise<Response>;
-	websocket?: (runner: Runner, actorId: string, ws: any, request: Request) => Promise<void>;
+	fetch: (
+		runner: Runner,
+		actorId: string,
+		request: Request,
+	) => Promise<Response>;
+	websocket?: (
+		runner: Runner,
+		actorId: string,
+		ws: any,
+		request: Request,
+	) => Promise<void>;
 	onActorStart: (
 		actorId: string,
 		generation: number,
@@ -183,7 +192,11 @@ export class Runner {
 	getActor(actorId: string, generation?: number): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			logger()?.error({ msg: "actor not found", runnerId: this.runnerId, actorId });
+			logger()?.error({
+				msg: "actor not found",
+				runnerId: this.runnerId,
+				actorId,
+			});
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
@@ -214,7 +227,11 @@ export class Runner {
 	): ActorInstance | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
-			logger()?.error({ msg: "actor not found for removal", runnerId: this.runnerId, actorId });
+			logger()?.error({
+				msg: "actor not found for removal",
+				runnerId: this.runnerId,
+				actorId,
+			});
 			return undefined;
 		}
 		if (generation !== undefined && actor.generation !== generation) {
@@ -272,7 +289,7 @@ export class Runner {
 				process.on("SIGTERM", () => {
 					logger()?.debug("received SIGTERM");
 
-					for (let handler of SIGNAL_HANDLERS) {
+					for (const handler of SIGNAL_HANDLERS) {
 						handler();
 					}
 
@@ -281,7 +298,7 @@ export class Runner {
 				process.on("SIGINT", () => {
 					logger()?.debug("received SIGINT");
 
-					for (let handler of SIGNAL_HANDLERS) {
+					for (const handler of SIGNAL_HANDLERS) {
 						handler();
 					}
 
@@ -294,15 +311,20 @@ export class Runner {
 			}
 
 			SIGNAL_HANDLERS.push(() => {
-				let weak = new WeakRef(this);
-				weak.deref()?.shutdown(false, false)
+				const weak = new WeakRef(this);
+				weak.deref()?.shutdown(false, false);
 			});
 		}
 	}
 
 	// MARK: Shutdown
 	async shutdown(immediate: boolean, exit: boolean = false) {
-		logger()?.info({ msg: "starting shutdown", runnerId: this.runnerId, immediate, exit });
+		logger()?.info({
+			msg: "starting shutdown",
+			runnerId: this.runnerId,
+			immediate,
+			exit,
+		});
 		this.#shutdown = true;
 
 		// Clear reconnect timeout
@@ -395,12 +417,18 @@ export class Runner {
 
 					// TODO: Wait for all actors to stop before closing ws
 
-					logger()?.info({ msg: "closing WebSocket", runnerId: this.runnerId });
+					logger()?.info({
+						msg: "closing WebSocket",
+						runnerId: this.runnerId,
+					});
 					pegboardWebSocket.close(1000, "Stopping");
 
 					await closePromise;
 
-					logger()?.info({ msg: "websocket shutdown completed", runnerId: this.runnerId });
+					logger()?.info({
+						msg: "websocket shutdown completed",
+						runnerId: this.runnerId,
+					});
 				} catch (error) {
 					logger()?.error({
 						msg: "error during websocket shutdown:",
@@ -506,7 +534,10 @@ export class Runner {
 					});
 				} else {
 					clearInterval(pingLoop);
-					logger()?.info({ msg: "WebSocket not open, stopping ping loop", runnerId: this.runnerId });
+					logger()?.info({
+						msg: "WebSocket not open, stopping ping loop",
+						runnerId: this.runnerId,
+					});
 				}
 			}, pingInterval);
 			this.#pingLoop = pingLoop;
@@ -518,7 +549,10 @@ export class Runner {
 					this.#sendCommandAcknowledgment();
 				} else {
 					clearInterval(ackLoop);
-					logger()?.info({ msg: "WebSocket not open, stopping ack loop", runnerId: this.runnerId });
+					logger()?.info({
+						msg: "WebSocket not open, stopping ack loop",
+						runnerId: this.runnerId,
+					});
 				}
 			}, ackInterval);
 			this.#ackInterval = ackLoop;
@@ -583,7 +617,10 @@ export class Runner {
 		});
 
 		ws.addEventListener("error", (ev) => {
-			logger()?.error({ msg: `WebSocket error: ${ev.error}`, runnerId: this.runnerId });
+			logger()?.error({
+				msg: `WebSocket error: ${ev.error}`,
+				runnerId: this.runnerId,
+			});
 
 			if (!this.#shutdown) {
 				// Start runner lost timeout if we have a threshold and are not shutting down
@@ -618,7 +655,10 @@ export class Runner {
 			this.#config.onDisconnected();
 
 			if (ev.reason.toString().startsWith("ws.eviction")) {
-				logger()?.info({ msg: "runner evicted", runnerId: this.runnerId });
+				logger()?.info({
+					msg: "runner evicted",
+					runnerId: this.runnerId,
+				});
 
 				await this.shutdown(true);
 			}
@@ -666,7 +706,11 @@ export class Runner {
 		});
 
 		for (const commandWrapper of commands) {
-			logger()?.info({ msg: "received command", runnerId: this.runnerId, commandWrapper });
+			logger()?.info({
+				msg: "received command",
+				runnerId: this.runnerId,
+				commandWrapper,
+			});
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
@@ -781,7 +825,10 @@ export class Runner {
 		intentType: "sleep" | "stop",
 	) {
 		if (this.#shutdown) {
-			logger()?.warn({ msg: "Runner is shut down, cannot send actor intent", runnerId: this.runnerId });
+			logger()?.warn({
+				msg: "Runner is shut down, cannot send actor intent",
+				runnerId: this.runnerId,
+			});
 			return;
 		}
 		let actorIntent: protocol.ActorIntent;
@@ -1363,7 +1410,10 @@ export class Runner {
 
 	#scheduleReconnect() {
 		if (this.#shutdown) {
-			logger()?.debug({ msg: "Runner is shut down, not attempting reconnect", runnerId: this.runnerId });
+			logger()?.debug({
+				msg: "Runner is shut down, not attempting reconnect",
+				runnerId: this.runnerId,
+			});
 			return;
 		}
 

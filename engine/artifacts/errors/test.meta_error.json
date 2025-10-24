@@ -1,5 +1,5 @@
 {
-	"code": "meta_error",
-	"group": "test",
-	"message": "Default message"
+  "code": "meta_error",
+  "group": "test",
+  "message": "Default message"
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'fs';
-import { join } from 'path';
+import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { EXAMPLE_METADATA } from './examplesData.mjs';
 
 const REPO_URL = 'https://github.com/rivet-dev/rivetkit.git';

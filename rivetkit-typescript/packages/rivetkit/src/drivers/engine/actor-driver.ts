@@ -303,7 +303,11 @@ export class EngineActorDriver implements ActorDriver {
 		logger().debug({ msg: "runner actor stopped", actorId });
 	}
 
-	async #runnerFetch(actorId: string, request: Request): Promise<Response> {
+	async #runnerFetch(
+		runner: Runner,
+		actorId: string,
+		request: Request,
+	): Promise<Response> {
 		logger().debug({
 			msg: "runner fetch",
 			actorId,
@@ -314,6 +318,7 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async #runnerWebSocket(
+		runner: Runner,
 		actorId: string,
 		websocketRaw: any,
 		request: Request,

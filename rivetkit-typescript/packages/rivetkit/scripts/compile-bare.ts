@@ -1,9 +1,9 @@
 #!/usr/bin/env -S tsx
 
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { type Config, transform } from "@bare-ts/tools";
 import { Command } from "commander";
-import * as fs from "fs/promises";
-import * as path from "path";
 
 const program = new Command();
 

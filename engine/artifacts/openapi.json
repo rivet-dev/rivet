@@ -1,1564 +1,1760 @@
 {
-	"openapi": "3.1.0",
-	"info": {
-		"title": "rivet-api-public",
-		"description": "",
-		"contact": {
-			"name": "Rivet Gaming, LLC",
-			"email": "developer@rivet.gg"
-		},
-		"license": {
-			"name": "Apache-2.0",
-			"identifier": "Apache-2.0"
-		},
-		"version": "25.8.1"
-	},
-	"paths": {
-		"/actors": {
-			"get": {
-				"tags": ["actors::list"],
-				"summary": " ## Datacenter Round Trips",
-				"description": " **If key is some & `include_destroyed` is false**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (multiple DCs based on actor IDs)\n\n\tThis path is optimized because we can read the actor IDs fro the key directly from Epoxy with\n\tstale consistency to determine which datacenter the actor lives in. Under most circumstances,\n\tthis means we don't need to fan out to all datacenters (like normal list does).\n\n\tThe reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If\n\t`include_destroyed` is true, we show all previous iterations of actors with the same key.\n\n **Otherwise**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (fanout)\n\n ## Optimized Alternative Routes",
-				"operationId": "actors_list",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "name",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "key",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "actor_ids",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "include_destroyed",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "boolean"
-						}
-					},
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ActorsListResponse"
-								}
-							}
-						}
-					}
-				}
-			},
-			"put": {
-				"tags": ["actors::get_or_create"],
-				"summary": "## Datacenter Round Trips",
-				"description": "**If actor exists**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- GET /actors/{}\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.\n\n## Optimized Alternative Routes",
-				"operationId": "actors_get_or_create",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/ActorsGetOrCreateRequest"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ActorsGetOrCreateResponse"
-								}
-							}
-						}
-					}
-				}
-			},
-			"post": {
-				"tags": ["actors::create"],
-				"summary": "## Datacenter Round Trips",
-				"description": "**If actor is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.",
-				"operationId": "actors_create",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/ActorsCreateRequest"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ActorsCreateResponse"
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"/actors/names": {
-			"get": {
-				"tags": ["actors::list_names"],
-				"summary": "## Datacenter Round Trips",
-				"description": "2 round trips:\n- GET /actors/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
-				"operationId": "actors_list_names",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ActorsListNamesResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/actors/{actor_id}": {
-			"delete": {
-				"tags": ["actors::delete"],
-				"summary": "## Datacenter Round Trips",
-				"description": "2 round trip:\n- DELETE /actors/{}\n- [api-peer] namespace::ops::resolve_for_name_global",
-				"operationId": "actors_delete",
-				"parameters": [
-					{
-						"name": "actor_id",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"$ref": "#/components/schemas/RivetId"
-						}
-					},
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ActorsDeleteResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/datacenters": {
-			"get": {
-				"tags": ["datacenters"],
-				"operationId": "datacenters_list",
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/DatacentersListResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/health/fanout": {
-			"get": {
-				"tags": ["health"],
-				"operationId": "health_fanout",
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/HealthFanoutResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/namespaces": {
-			"get": {
-				"tags": ["namespaces"],
-				"operationId": "namespaces_list",
-				"parameters": [
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "name",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "namespace_ids",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/NamespaceListResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			},
-			"post": {
-				"tags": ["namespaces"],
-				"operationId": "namespaces_create",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/NamespacesCreateRequest"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/NamespacesCreateResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runner-configs": {
-			"get": {
-				"tags": ["runner_configs::list"],
-				"operationId": "runner_configs_list",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "variant",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"$ref": "#/components/schemas/RunnerConfigVariant"
-						}
-					},
-					{
-						"name": "runner_names",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnerConfigsListResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runner-configs/serverless-health-check": {
-			"post": {
-				"tags": ["runner_configs::serverless_health_check"],
-				"operationId": "runner_configs_serverless_health_check",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckRequest"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runner-configs/{runner_name}": {
-			"put": {
-				"tags": ["runner_configs::upsert"],
-				"operationId": "runner_configs_upsert",
-				"parameters": [
-					{
-						"name": "runner_name",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/RunnerConfigsUpsertRequestBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnerConfigsUpsertResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			},
-			"delete": {
-				"tags": ["runner_configs::delete"],
-				"operationId": "runner_configs_delete",
-				"parameters": [
-					{
-						"name": "runner_name",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnerConfigsDeleteResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runner-configs/{runner_name}/refresh-metadata": {
-			"post": {
-				"tags": ["runner_configs::refresh_metadata"],
-				"operationId": "runner_configs_refresh_metadata",
-				"parameters": [
-					{
-						"name": "runner_name",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequestBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnerConfigsRefreshMetadataResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runners": {
-			"get": {
-				"tags": ["runners"],
-				"operationId": "runners_list",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "name",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "runner_ids",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "include_stopped",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "boolean"
-						}
-					},
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnersListResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		},
-		"/runners/names": {
-			"get": {
-				"tags": ["runners"],
-				"summary": "## Datacenter Round Trips",
-				"description": "2 round trips:\n- GET /runners/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
-				"operationId": "runners_list_names",
-				"parameters": [
-					{
-						"name": "namespace",
-						"in": "query",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "limit",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 0
-						}
-					},
-					{
-						"name": "cursor",
-						"in": "query",
-						"required": false,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/RunnersListNamesResponse"
-								}
-							}
-						}
-					}
-				},
-				"security": [
-					{
-						"bearer_auth": []
-					}
-				]
-			}
-		}
-	},
-	"components": {
-		"schemas": {
-			"Actor": {
-				"type": "object",
-				"required": [
-					"actor_id",
-					"name",
-					"namespace_id",
-					"datacenter",
-					"runner_name_selector",
-					"crash_policy",
-					"create_ts"
-				],
-				"properties": {
-					"actor_id": {
-						"$ref": "#/components/schemas/RivetId"
-					},
-					"connectable_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"crash_policy": {
-						"$ref": "#/components/schemas/CrashPolicy"
-					},
-					"create_ts": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"datacenter": {
-						"type": "string"
-					},
-					"destroy_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"key": {
-						"type": ["string", "null"]
-					},
-					"name": {
-						"type": "string"
-					},
-					"namespace_id": {
-						"$ref": "#/components/schemas/RivetId"
-					},
-					"pending_allocation_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"runner_name_selector": {
-						"type": "string"
-					},
-					"sleep_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"start_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					}
-				}
-			},
-			"ActorName": {
-				"type": "object",
-				"required": ["metadata"],
-				"properties": {
-					"metadata": {
-						"type": "object",
-						"additionalProperties": {},
-						"propertyNames": {
-							"type": "string"
-						}
-					}
-				}
-			},
-			"ActorsCreateRequest": {
-				"type": "object",
-				"required": ["name", "runner_name_selector", "crash_policy"],
-				"properties": {
-					"crash_policy": {
-						"$ref": "#/components/schemas/CrashPolicy"
-					},
-					"datacenter": {
-						"type": ["string", "null"]
-					},
-					"input": {
-						"type": ["string", "null"]
-					},
-					"key": {
-						"type": ["string", "null"]
-					},
-					"name": {
-						"type": "string"
-					},
-					"runner_name_selector": {
-						"type": "string"
-					}
-				},
-				"additionalProperties": false
-			},
-			"ActorsCreateResponse": {
-				"type": "object",
-				"required": ["actor"],
-				"properties": {
-					"actor": {
-						"$ref": "#/components/schemas/Actor"
-					}
-				},
-				"additionalProperties": false
-			},
-			"ActorsDeleteResponse": {
-				"type": "object"
-			},
-			"ActorsGetOrCreateRequest": {
-				"type": "object",
-				"required": [
-					"name",
-					"key",
-					"runner_name_selector",
-					"crash_policy"
-				],
-				"properties": {
-					"crash_policy": {
-						"$ref": "#/components/schemas/CrashPolicy"
-					},
-					"datacenter": {
-						"type": ["string", "null"]
-					},
-					"input": {
-						"type": ["string", "null"]
-					},
-					"key": {
-						"type": "string"
-					},
-					"name": {
-						"type": "string"
-					},
-					"runner_name_selector": {
-						"type": "string"
-					}
-				},
-				"additionalProperties": false
-			},
-			"ActorsGetOrCreateResponse": {
-				"type": "object",
-				"required": ["actor", "created"],
-				"properties": {
-					"actor": {
-						"$ref": "#/components/schemas/Actor"
-					},
-					"created": {
-						"type": "boolean"
-					}
-				}
-			},
-			"ActorsListNamesResponse": {
-				"type": "object",
-				"required": ["names", "pagination"],
-				"properties": {
-					"names": {
-						"type": "object",
-						"additionalProperties": {
-							"$ref": "#/components/schemas/ActorName"
-						},
-						"propertyNames": {
-							"type": "string"
-						}
-					},
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					}
-				},
-				"additionalProperties": false
-			},
-			"ActorsListResponse": {
-				"type": "object",
-				"required": ["actors", "pagination"],
-				"properties": {
-					"actors": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/Actor"
-						}
-					},
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					}
-				},
-				"additionalProperties": false
-			},
-			"CrashPolicy": {
-				"type": "string",
-				"enum": ["restart", "sleep", "destroy"]
-			},
-			"Datacenter": {
-				"type": "object",
-				"required": ["label", "name", "url"],
-				"properties": {
-					"label": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					},
-					"name": {
-						"type": "string"
-					},
-					"url": {
-						"type": "string"
-					}
-				},
-				"additionalProperties": false
-			},
-			"DatacenterHealth": {
-				"type": "object",
-				"required": ["datacenter_label", "datacenter_name", "status"],
-				"properties": {
-					"datacenter_label": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					},
-					"datacenter_name": {
-						"type": "string"
-					},
-					"error": {
-						"type": ["string", "null"]
-					},
-					"response": {
-						"oneOf": [
-							{
-								"type": "null"
-							},
-							{
-								"$ref": "#/components/schemas/HealthResponse"
-							}
-						]
-					},
-					"rtt_ms": {
-						"type": ["number", "null"],
-						"format": "double"
-					},
-					"status": {
-						"$ref": "#/components/schemas/HealthStatus"
-					}
-				}
-			},
-			"DatacentersListResponse": {
-				"type": "object",
-				"required": ["datacenters", "pagination"],
-				"properties": {
-					"datacenters": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/Datacenter"
-						}
-					},
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					}
-				},
-				"additionalProperties": false
-			},
-			"HealthFanoutResponse": {
-				"type": "object",
-				"required": ["datacenters"],
-				"properties": {
-					"datacenters": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/DatacenterHealth"
-						}
-					}
-				}
-			},
-			"HealthResponse": {
-				"type": "object",
-				"required": ["runtime", "status", "version"],
-				"properties": {
-					"runtime": {
-						"type": "string"
-					},
-					"status": {
-						"type": "string"
-					},
-					"version": {
-						"type": "string"
-					}
-				}
-			},
-			"HealthStatus": {
-				"type": "string",
-				"enum": ["ok", "error"]
-			},
-			"Namespace": {
-				"type": "object",
-				"required": [
-					"namespace_id",
-					"name",
-					"display_name",
-					"create_ts"
-				],
-				"properties": {
-					"create_ts": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"display_name": {
-						"type": "string"
-					},
-					"name": {
-						"type": "string"
-					},
-					"namespace_id": {
-						"$ref": "#/components/schemas/RivetId"
-					}
-				}
-			},
-			"NamespaceListResponse": {
-				"type": "object",
-				"required": ["namespaces", "pagination"],
-				"properties": {
-					"namespaces": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/Namespace"
-						}
-					},
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					}
-				},
-				"additionalProperties": false
-			},
-			"NamespacesCreateRequest": {
-				"type": "object",
-				"required": ["name", "display_name"],
-				"properties": {
-					"display_name": {
-						"type": "string"
-					},
-					"name": {
-						"type": "string"
-					}
-				},
-				"additionalProperties": false
-			},
-			"NamespacesCreateResponse": {
-				"type": "object",
-				"required": ["namespace"],
-				"properties": {
-					"namespace": {
-						"$ref": "#/components/schemas/Namespace"
-					}
-				},
-				"additionalProperties": false
-			},
-			"Pagination": {
-				"type": "object",
-				"properties": {
-					"cursor": {
-						"type": ["string", "null"]
-					}
-				},
-				"additionalProperties": false
-			},
-			"RivetId": {
-				"type": "string"
-			},
-			"Runner": {
-				"type": "object",
-				"required": [
-					"runner_id",
-					"namespace_id",
-					"datacenter",
-					"name",
-					"key",
-					"version",
-					"total_slots",
-					"remaining_slots",
-					"create_ts",
-					"last_ping_ts",
-					"last_rtt"
-				],
-				"properties": {
-					"create_ts": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"datacenter": {
-						"type": "string"
-					},
-					"drain_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"key": {
-						"type": "string"
-					},
-					"last_connected_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"last_ping_ts": {
-						"type": "integer",
-						"format": "int64"
-					},
-					"last_rtt": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					},
-					"metadata": {
-						"type": ["object", "null"],
-						"additionalProperties": {},
-						"propertyNames": {
-							"type": "string"
-						}
-					},
-					"name": {
-						"type": "string"
-					},
-					"namespace_id": {
-						"$ref": "#/components/schemas/RivetId"
-					},
-					"remaining_slots": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					},
-					"runner_id": {
-						"$ref": "#/components/schemas/RivetId"
-					},
-					"stop_ts": {
-						"type": ["integer", "null"],
-						"format": "int64"
-					},
-					"total_slots": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					},
-					"version": {
-						"type": "integer",
-						"format": "int32",
-						"minimum": 0
-					}
-				},
-				"additionalProperties": false
-			},
-			"RunnerConfig": {
-				"allOf": [
-					{
-						"$ref": "#/components/schemas/RunnerConfigKind"
-					},
-					{
-						"type": "object",
-						"properties": {
-							"metadata": {}
-						}
-					}
-				]
-			},
-			"RunnerConfigKind": {
-				"oneOf": [
-					{
-						"type": "object",
-						"required": ["normal"],
-						"properties": {
-							"normal": {
-								"type": "object"
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["serverless"],
-						"properties": {
-							"serverless": {
-								"type": "object",
-								"required": [
-									"url",
-									"request_lifespan",
-									"slots_per_runner",
-									"max_runners"
-								],
-								"properties": {
-									"headers": {
-										"type": ["object", "null"],
-										"additionalProperties": {
-											"type": "string"
-										},
-										"propertyNames": {
-											"type": "string"
-										}
-									},
-									"max_runners": {
-										"type": "integer",
-										"format": "int32",
-										"minimum": 0
-									},
-									"min_runners": {
-										"type": ["integer", "null"],
-										"format": "int32",
-										"minimum": 0
-									},
-									"request_lifespan": {
-										"type": "integer",
-										"format": "int32",
-										"description": "Seconds.",
-										"minimum": 0
-									},
-									"runners_margin": {
-										"type": ["integer", "null"],
-										"format": "int32",
-										"minimum": 0
-									},
-									"slots_per_runner": {
-										"type": "integer",
-										"format": "int32",
-										"minimum": 0
-									},
-									"url": {
-										"type": "string"
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			"RunnerConfigVariant": {
-				"type": "string",
-				"enum": ["serverless", "normal"]
-			},
-			"RunnerConfigsDeleteResponse": {
-				"type": "object"
-			},
-			"RunnerConfigsListResponse": {
-				"type": "object",
-				"required": ["runner_configs", "pagination"],
-				"properties": {
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					},
-					"runner_configs": {
-						"type": "object",
-						"additionalProperties": {
-							"$ref": "#/components/schemas/RunnerConfigsListResponseRunnerConfigsValue"
-						},
-						"propertyNames": {
-							"type": "string"
-						}
-					}
-				},
-				"additionalProperties": false
-			},
-			"RunnerConfigsListResponseRunnerConfigsValue": {
-				"type": "object",
-				"required": ["datacenters"],
-				"properties": {
-					"datacenters": {
-						"type": "object",
-						"additionalProperties": {
-							"$ref": "#/components/schemas/RunnerConfig"
-						},
-						"propertyNames": {
-							"type": "string"
-						}
-					}
-				}
-			},
-			"RunnerConfigsRefreshMetadataRequestBody": {
-				"type": "object",
-				"additionalProperties": false
-			},
-			"RunnerConfigsRefreshMetadataResponse": {
-				"type": "object",
-				"additionalProperties": false
-			},
-			"RunnerConfigsServerlessHealthCheckRequest": {
-				"type": "object",
-				"required": ["url"],
-				"properties": {
-					"headers": {
-						"type": "object",
-						"additionalProperties": {
-							"type": "string"
-						},
-						"propertyNames": {
-							"type": "string"
-						}
-					},
-					"url": {
-						"type": "string"
-					}
-				},
-				"additionalProperties": false
-			},
-			"RunnerConfigsServerlessHealthCheckResponse": {
-				"oneOf": [
-					{
-						"type": "object",
-						"required": ["success"],
-						"properties": {
-							"success": {
-								"type": "object",
-								"required": ["version"],
-								"properties": {
-									"version": {
-										"type": "string"
-									}
-								}
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["failure"],
-						"properties": {
-							"failure": {
-								"type": "object",
-								"required": ["error"],
-								"properties": {
-									"error": {
-										"$ref": "#/components/schemas/RunnerConfigsServerlessMetadataError"
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			"RunnerConfigsServerlessMetadataError": {
-				"oneOf": [
-					{
-						"type": "object",
-						"required": ["invalid_request"],
-						"properties": {
-							"invalid_request": {
-								"type": "object"
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["request_failed"],
-						"properties": {
-							"request_failed": {
-								"type": "object"
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["request_timed_out"],
-						"properties": {
-							"request_timed_out": {
-								"type": "object"
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["non_success_status"],
-						"properties": {
-							"non_success_status": {
-								"type": "object",
-								"required": ["status_code", "body"],
-								"properties": {
-									"body": {
-										"type": "string"
-									},
-									"status_code": {
-										"type": "integer",
-										"format": "int32",
-										"minimum": 0
-									}
-								}
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["invalid_response_json"],
-						"properties": {
-							"invalid_response_json": {
-								"type": "object",
-								"required": ["body"],
-								"properties": {
-									"body": {
-										"type": "string"
-									}
-								}
-							}
-						}
-					},
-					{
-						"type": "object",
-						"required": ["invalid_response_schema"],
-						"properties": {
-							"invalid_response_schema": {
-								"type": "object",
-								"required": ["runtime", "version"],
-								"properties": {
-									"runtime": {
-										"type": "string"
-									},
-									"version": {
-										"type": "string"
-									}
-								}
-							}
-						}
-					}
-				]
-			},
-			"RunnerConfigsUpsertRequestBody": {
-				"type": "object",
-				"required": ["datacenters"],
-				"properties": {
-					"datacenters": {
-						"type": "object",
-						"additionalProperties": {
-							"$ref": "#/components/schemas/RunnerConfig"
-						},
-						"propertyNames": {
-							"type": "string"
-						}
-					}
-				},
-				"additionalProperties": false
-			},
-			"RunnerConfigsUpsertResponse": {
-				"type": "object",
-				"required": ["endpoint_config_changed"],
-				"properties": {
-					"endpoint_config_changed": {
-						"type": "boolean"
-					}
-				}
-			},
-			"RunnersListNamesResponse": {
-				"type": "object",
-				"required": ["names", "pagination"],
-				"properties": {
-					"names": {
-						"type": "array",
-						"items": {
-							"type": "string"
-						}
-					},
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					}
-				},
-				"additionalProperties": false
-			},
-			"RunnersListResponse": {
-				"type": "object",
-				"required": ["runners", "pagination"],
-				"properties": {
-					"pagination": {
-						"$ref": "#/components/schemas/Pagination"
-					},
-					"runners": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/Runner"
-						}
-					}
-				},
-				"additionalProperties": false
-			}
-		},
-		"securitySchemes": {
-			"bearer_auth": {
-				"type": "http",
-				"scheme": "bearer"
-			}
-		}
-	},
-	"security": [
-		{
-			"bearer_auth": []
-		}
-	]
+  "openapi": "3.1.0",
+  "info": {
+    "title": "rivet-api-public",
+    "description": "",
+    "contact": {
+      "name": "Rivet Gaming, LLC",
+      "email": "developer@rivet.gg"
+    },
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "version": "25.8.1"
+  },
+  "paths": {
+    "/actors": {
+      "get": {
+        "tags": [
+          "actors::list"
+        ],
+        "summary": " ## Datacenter Round Trips",
+        "description": " **If key is some & `include_destroyed` is false**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (multiple DCs based on actor IDs)\n\n\tThis path is optimized because we can read the actor IDs fro the key directly from Epoxy with\n\tstale consistency to determine which datacenter the actor lives in. Under most circumstances,\n\tthis means we don't need to fan out to all datacenters (like normal list does).\n\n\tThe reason `include_destroyed` has to be false is Epoxy only stores currently active actors. If\n\t`include_destroyed` is true, we show all previous iterations of actors with the same key.\n\n **Otherwise**\n\n 2 round trips:\n - namespace::ops::resolve_for_name_global\n - GET /actors (fanout)\n\n ## Optimized Alternative Routes",
+        "operationId": "actors_list",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_destroyed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "actors::get_or_create"
+        ],
+        "summary": "## Datacenter Round Trips",
+        "description": "**If actor exists**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- GET /actors/{}\n\n**If actor does not exist and is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor does not exist and is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.\n\n## Optimized Alternative Routes",
+        "operationId": "actors_get_or_create",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsGetOrCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsGetOrCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "actors::create"
+        ],
+        "summary": "## Datacenter Round Trips",
+        "description": "**If actor is created in the current datacenter:**\n\n2 round trips:\n- namespace::ops::resolve_for_name_global\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\n**If actor is created in a different datacenter:**\n\n3 round trips:\n- namespace::ops::resolve_for_name_global\n- POST /actors to remote datacenter\n- [pegboard::workflows::actor] Create actor workflow (includes Epoxy key allocation)\n\nactor::get will always be in the same datacenter.",
+        "operationId": "actors_create",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorsCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actors/names": {
+      "get": {
+        "tags": [
+          "actors::list_names"
+        ],
+        "summary": "## Datacenter Round Trips",
+        "description": "2 round trips:\n- GET /actors/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
+        "operationId": "actors_list_names",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsListNamesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/actors/{actor_id}": {
+      "delete": {
+        "tags": [
+          "actors::delete"
+        ],
+        "summary": "## Datacenter Round Trips",
+        "description": "2 round trip:\n- DELETE /actors/{}\n- [api-peer] namespace::ops::resolve_for_name_global",
+        "operationId": "actors_delete",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsDeleteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/datacenters": {
+      "get": {
+        "tags": [
+          "datacenters"
+        ],
+        "operationId": "datacenters_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatacentersListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/health/fanout": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health_fanout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthFanoutResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/namespaces": {
+      "get": {
+        "tags": [
+          "namespaces"
+        ],
+        "operationId": "namespaces_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "namespaces"
+        ],
+        "operationId": "namespaces_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NamespacesCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespacesCreateResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runner-configs": {
+      "get": {
+        "tags": [
+          "runner_configs::list"
+        ],
+        "operationId": "runner_configs_list",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RunnerConfigVariant"
+            }
+          },
+          {
+            "name": "runner_names",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runner-configs/serverless-health-check": {
+      "post": {
+        "tags": [
+          "runner_configs::serverless_health_check"
+        ],
+        "operationId": "runner_configs_serverless_health_check",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsServerlessHealthCheckResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runner-configs/{runner_name}": {
+      "put": {
+        "tags": [
+          "runner_configs::upsert"
+        ],
+        "operationId": "runner_configs_upsert",
+        "parameters": [
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerConfigsUpsertRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsUpsertResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "runner_configs::delete"
+        ],
+        "operationId": "runner_configs_delete",
+        "parameters": [
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsDeleteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runner-configs/{runner_name}/refresh-metadata": {
+      "post": {
+        "tags": [
+          "runner_configs::refresh_metadata"
+        ],
+        "operationId": "runner_configs_refresh_metadata",
+        "parameters": [
+          {
+            "name": "runner_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerConfigsRefreshMetadataResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runners": {
+      "get": {
+        "tags": [
+          "runners"
+        ],
+        "operationId": "runners_list",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runner_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_stopped",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnersListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/runners/names": {
+      "get": {
+        "tags": [
+          "runners"
+        ],
+        "summary": "## Datacenter Round Trips",
+        "description": "2 round trips:\n- GET /runners/names (fanout)\n- [api-peer] namespace::ops::resolve_for_name_global",
+        "operationId": "runners_list_names",
+        "parameters": [
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnersListNamesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Actor": {
+        "type": "object",
+        "required": [
+          "actor_id",
+          "name",
+          "namespace_id",
+          "datacenter",
+          "runner_name_selector",
+          "crash_policy",
+          "create_ts"
+        ],
+        "properties": {
+          "actor_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "connectable_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "crash_policy": {
+            "$ref": "#/components/schemas/CrashPolicy"
+          },
+          "create_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "datacenter": {
+            "type": "string"
+          },
+          "destroy_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "pending_allocation_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "runner_name_selector": {
+            "type": "string"
+          },
+          "sleep_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "start_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ActorName": {
+        "type": "object",
+        "required": [
+          "metadata"
+        ],
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActorsCreateRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "runner_name_selector",
+          "crash_policy"
+        ],
+        "properties": {
+          "crash_policy": {
+            "$ref": "#/components/schemas/CrashPolicy"
+          },
+          "datacenter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "runner_name_selector": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActorsCreateResponse": {
+        "type": "object",
+        "required": [
+          "actor"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActorsDeleteResponse": {
+        "type": "object"
+      },
+      "ActorsGetOrCreateRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "key",
+          "runner_name_selector",
+          "crash_policy"
+        ],
+        "properties": {
+          "crash_policy": {
+            "$ref": "#/components/schemas/CrashPolicy"
+          },
+          "datacenter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runner_name_selector": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActorsGetOrCreateResponse": {
+        "type": "object",
+        "required": [
+          "actor",
+          "created"
+        ],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "created": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ActorsListNamesResponse": {
+        "type": "object",
+        "required": [
+          "names",
+          "pagination"
+        ],
+        "properties": {
+          "names": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ActorName"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActorsListResponse": {
+        "type": "object",
+        "required": [
+          "actors",
+          "pagination"
+        ],
+        "properties": {
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Actor"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CrashPolicy": {
+        "type": "string",
+        "enum": [
+          "restart",
+          "sleep",
+          "destroy"
+        ]
+      },
+      "Datacenter": {
+        "type": "object",
+        "required": [
+          "label",
+          "name",
+          "url"
+        ],
+        "properties": {
+          "label": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatacenterHealth": {
+        "type": "object",
+        "required": [
+          "datacenter_label",
+          "datacenter_name",
+          "status"
+        ],
+        "properties": {
+          "datacenter_label": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "datacenter_name": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "response": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HealthResponse"
+              }
+            ]
+          },
+          "rtt_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          }
+        }
+      },
+      "DatacentersListResponse": {
+        "type": "object",
+        "required": [
+          "datacenters",
+          "pagination"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Datacenter"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "HealthFanoutResponse": {
+        "type": "object",
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatacenterHealth"
+            }
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "runtime": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "Namespace": {
+        "type": "object",
+        "required": [
+          "namespace_id",
+          "name",
+          "display_name",
+          "create_ts"
+        ],
+        "properties": {
+          "create_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          }
+        }
+      },
+      "NamespaceListResponse": {
+        "type": "object",
+        "required": [
+          "namespaces",
+          "pagination"
+        ],
+        "properties": {
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Namespace"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NamespacesCreateRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NamespacesCreateResponse": {
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/Namespace"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "RivetId": {
+        "type": "string"
+      },
+      "Runner": {
+        "type": "object",
+        "required": [
+          "runner_id",
+          "namespace_id",
+          "datacenter",
+          "name",
+          "key",
+          "version",
+          "total_slots",
+          "remaining_slots",
+          "create_ts",
+          "last_ping_ts",
+          "last_rtt"
+        ],
+        "properties": {
+          "create_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "datacenter": {
+            "type": "string"
+          },
+          "drain_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "key": {
+            "type": "string"
+          },
+          "last_connected_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "last_ping_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_rtt": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "remaining_slots": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "runner_id": {
+            "$ref": "#/components/schemas/RivetId"
+          },
+          "stop_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "total_slots": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfig": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RunnerConfigKind"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {}
+            }
+          }
+        ]
+      },
+      "RunnerConfigKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "normal"
+            ],
+            "properties": {
+              "normal": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "serverless"
+            ],
+            "properties": {
+              "serverless": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "request_lifespan",
+                  "slots_per_runner",
+                  "max_runners"
+                ],
+                "properties": {
+                  "headers": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "propertyNames": {
+                      "type": "string"
+                    }
+                  },
+                  "max_runners": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "min_runners": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "request_lifespan": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "runners_margin": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "slots_per_runner": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigVariant": {
+        "type": "string",
+        "enum": [
+          "serverless",
+          "normal"
+        ]
+      },
+      "RunnerConfigsDeleteResponse": {
+        "type": "object"
+      },
+      "RunnerConfigsListResponse": {
+        "type": "object",
+        "required": [
+          "runner_configs",
+          "pagination"
+        ],
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "runner_configs": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfigsListResponseRunnerConfigsValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsListResponseRunnerConfigsValue": {
+        "type": "object",
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfig"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RunnerConfigsRefreshMetadataRequestBody": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "RunnerConfigsRefreshMetadataResponse": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsServerlessHealthCheckResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "success"
+            ],
+            "properties": {
+              "success": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "failure"
+            ],
+            "properties": {
+              "failure": {
+                "type": "object",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "#/components/schemas/RunnerConfigsServerlessMetadataError"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigsServerlessMetadataError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "invalid_request"
+            ],
+            "properties": {
+              "invalid_request": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_failed"
+            ],
+            "properties": {
+              "request_failed": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "request_timed_out"
+            ],
+            "properties": {
+              "request_timed_out": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "non_success_status"
+            ],
+            "properties": {
+              "non_success_status": {
+                "type": "object",
+                "required": [
+                  "status_code",
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "status_code": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "invalid_response_json"
+            ],
+            "properties": {
+              "invalid_response_json": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "invalid_response_schema"
+            ],
+            "properties": {
+              "invalid_response_schema": {
+                "type": "object",
+                "required": [
+                  "runtime",
+                  "version"
+                ],
+                "properties": {
+                  "runtime": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunnerConfigsUpsertRequestBody": {
+        "type": "object",
+        "required": [
+          "datacenters"
+        ],
+        "properties": {
+          "datacenters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RunnerConfig"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnerConfigsUpsertResponse": {
+        "type": "object",
+        "required": [
+          "endpoint_config_changed"
+        ],
+        "properties": {
+          "endpoint_config_changed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RunnersListNamesResponse": {
+        "type": "object",
+        "required": [
+          "names",
+          "pagination"
+        ],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunnersListResponse": {
+        "type": "object",
+        "required": [
+          "runners",
+          "pagination"
+        ],
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "runners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Runner"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearer_auth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer_auth": []
+    }
+  ]
 }
