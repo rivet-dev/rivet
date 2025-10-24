@@ -179,6 +179,14 @@ async function callAction({ name, args }: { name: string; args: unknown[] }) {
 
 	const url = new URL(`inspect`, init.endpoint).href;
 
+	const additionalHeaders = match(__APP_TYPE__)
+				.with("engine", () => {
+					return init?.engineToken
+						? { "X-Rivet-Token": init.engineToken || "" }
+						: {} as Record<string, string>
+				})
+				.otherwise(() => ({}));
+
 	// we need to build this from scratch because we don't have access to
 	// createInspectorActorContext in the worker
 	// and we want to avoid bundling the entire RivetKit here, issues with @react-refresh
@@ -192,14 +200,7 @@ async function callAction({ name, args }: { name: string; args: unknown[] }) {
 			"X-RivetKit-Query": JSON.stringify({
 				getForId: { actorId: init.id },
 			}),
-
-			...match(__APP_TYPE__)
-				.with("engine", () => {
-					return init?.engineToken
-						? { "X-Rivet-Token": init.engineToken }
-						: {};
-				})
-				.otherwise(() => ({})),
+			...additionalHeaders,
 		},
 	});
 

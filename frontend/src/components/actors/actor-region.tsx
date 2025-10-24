@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Flex, WithTooltip } from "@/components";
 import {
 	getRegionKey,
+	getRegionLabel,
 	REGION_LABEL,
 	RegionIcon,
 } from "../matchmaker/lobby-region";
@@ -34,8 +35,8 @@ export function ActorRegion({
 				<RegionIcon region={regionKey} className="w-4 min-w-4" />
 				<span data-slot="label">
 					{showLabel === "abbreviated"
-						? regionKey.toUpperCase()
-						: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}
+						? regionKey?.toUpperCase()
+						: getRegionLabel(regionKey)}
 				</span>
 			</Flex>
 		);
@@ -43,7 +44,7 @@ export function ActorRegion({
 
 	return (
 		<WithTooltip
-			content={REGION_LABEL[regionKey] ?? REGION_LABEL.unknown}
+			content={getRegionLabel(regionKey)}
 			trigger={
 				<Flex
 					gap="2"

@@ -28,3 +28,9 @@ declare const Plain: {
 	// This will redact sensitive information such as customer details
 	exportDebugLogs(): any[];
 };
+
+
+declare module '*.module.css' {
+  const classes: { [key: string]: string };
+  export default classes;
+}

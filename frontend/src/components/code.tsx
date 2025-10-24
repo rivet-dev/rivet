@@ -116,7 +116,7 @@ interface CodeFrameProps {
 	isInGroup?: boolean;
 	code?: () => string | string;
 	footer?: ReactNode;
-	children?: ReactElement;
+	children?: ReactElement<any>;
 }
 export const CodeFrame = ({
 	children,

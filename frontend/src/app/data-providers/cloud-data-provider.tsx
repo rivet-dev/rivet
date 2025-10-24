@@ -1,7 +1,7 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { fetcher } from "@rivetkit/engine-api-full/core";
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, QueryKey, queryOptions, UseQueryOptions } from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -19,13 +19,17 @@ function createClient({ clerk }: { clerk: Clerk }) {
 		token: async () => {
 			return (await clerk.session?.getToken()) || "";
 		},
+		// @ts-expect-error
 		fetcher: async (args) => {
-			Object.keys(args.headers).forEach((key) => {
+			Object.keys(args.headers || {}).forEach((key) => {
 				if (key.toLowerCase().startsWith("x-fern-")) {
-					delete args.headers[key];
+					delete args.headers?.[key];
 				}
 			});
-			return await fetcher(args);
+			return await fetcher(
+				// @ts-expect-error
+				args
+			);
 		},
 	});
 }
@@ -207,7 +211,6 @@ export const createOrganizationContext = ({
 				mutationKey: ["projects"],
 				mutationFn: async (data: {
 					displayName: string;
-					nameId: string;
 				}) => {
 					const response = await client.projects.create({
 						displayName: data.displayName,
@@ -350,7 +353,6 @@ export const createNamespaceContext = ({
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,
-			namespaceId: engineNamespaceId,
 			engineToken: token,
 			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
 				token,

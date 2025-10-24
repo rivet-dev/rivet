@@ -139,7 +139,7 @@ const Sidebar = ({
 	ref,
 	...props
 }: {
-	ref?: RefObject<ImperativePanelHandle>;
+	ref?: RefObject<ImperativePanelHandle | null>;
 } & ComponentProps<typeof ResizablePanel>) => {
 	const sidebarMinWidth = useContext(SidebarDimensionsContext);
 	return (

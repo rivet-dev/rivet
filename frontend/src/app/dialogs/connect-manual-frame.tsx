@@ -33,7 +33,9 @@ export default function CreateProjectFrameContent({
 						type="single"
 						className="border rounded-md gap-0"
 						value={mode}
-						onValueChange={setMode}
+						onValueChange={(mode) => {
+							setMode(mode === "serverfull" ? "serverless" : "serverfull");
+						}}
 					>
 						<ToggleGroupItem
 							value="serverless"

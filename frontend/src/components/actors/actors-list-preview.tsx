@@ -17,7 +17,7 @@ interface ActorsListPreviewProps {
 
 export const ActorsListPreview = memo(
 	({ children, showDetails }: ActorsListPreviewProps) => {
-		const detailsColRef = useRef<ImperativePanelHandle>(null);
+		const detailsColRef = useRef<ImperativePanelHandle | null>(null);
 
 		const { isSidebarCollapsed } = useRootLayout();
 		const [isDetailsColCollapsed, setIsDetailsColCollapsed] =
