@@ -1,13 +1,16 @@
-import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { pipeline } from "node:stream/promises";
 import {
 	ensureDirectoryExists,
 	getStoragePath,
 } from "@/drivers/file-system/utils";
+import {
+	getNodeChildProcess,
+	getNodeCrypto,
+	getNodeFs,
+	getNodeFsSync,
+	getNodePath,
+	getNodeStream,
+	importNodeDependencies,
+} from "@/utils/node";
 import { logger } from "./log";
 
 export const ENGINE_PORT = 6420;
@@ -23,10 +26,15 @@ interface EnsureEngineProcessOptions {
 export async function ensureEngineProcess(
 	options: EnsureEngineProcessOptions,
 ): Promise<void> {
+	// Import Node.js dependencies first
+	await importNodeDependencies();
+
 	logger().debug({
 		msg: "ensuring engine process",
 		version: options.version,
 	});
+
+	const path = getNodePath();
 	const storageRoot = getStoragePath();
 	const binDir = path.join(storageRoot, "bin");
 	const varDir = path.join(storageRoot, "var");
@@ -61,7 +69,6 @@ export async function ensureEngineProcess(
 			);
 		}
 	}
-
 	// Create log file streams with timestamp in the filename
 	const timestamp = new Date()
 		.toISOString()
@@ -70,8 +77,13 @@ export async function ensureEngineProcess(
 	const stdoutLogPath = path.join(logsDir, `engine-${timestamp}-stdout.log`);
 	const stderrLogPath = path.join(logsDir, `engine-${timestamp}-stderr.log`);
 
-	const stdoutStream = createWriteStream(stdoutLogPath, { flags: "a" });
-	const stderrStream = createWriteStream(stderrLogPath, { flags: "a" });
+	const fsSync = getNodeFsSync();
+	const stdoutStream = fsSync.createWriteStream(stdoutLogPath, {
+		flags: "a",
+	});
+	const stderrStream = fsSync.createWriteStream(stderrLogPath, {
+		flags: "a",
+	});
 
 	logger().debug({
 		msg: "creating engine log files",
@@ -79,7 +91,8 @@ export async function ensureEngineProcess(
 		stderr: stderrLogPath,
 	});
 
-	const child = spawn(binaryPath, ["start"], {
+	const childProcess = getNodeChildProcess();
+	const child = childProcess.spawn(binaryPath, ["start"], {
 		cwd: path.dirname(binaryPath),
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
@@ -98,7 +111,6 @@ export async function ensureEngineProcess(
 	if (child.stderr) {
 		child.stderr.pipe(stderrStream);
 	}
-
 	logger().debug({
 		msg: "spawned engine process",
 		pid: child.pid,
@@ -175,7 +187,8 @@ async function downloadEngineBinaryIfNeeded(
 	}
 
 	// Generate unique temp file name to prevent parallel download conflicts
-	const tempPath = `${binaryPath}.${randomUUID()}.tmp`;
+	const crypto = getNodeCrypto();
+	const tempPath = `${binaryPath}.${crypto.randomUUID()}.tmp`;
 	const startTime = Date.now();
 
 	logger().debug({
@@ -193,12 +206,18 @@ async function downloadEngineBinaryIfNeeded(
 	}, 5000);
 
 	try {
-		await pipeline(response.body, createWriteStream(tempPath));
+		const stream = getNodeStream();
+		const fsSync = getNodeFsSync();
+		await stream.pipeline(
+			response.body,
+			fsSync.createWriteStream(tempPath),
+		);
 
 		// Clear the slow download warning
 		clearTimeout(slowDownloadWarning);
 
 		// Get file size to verify download
+		const fs = getNodeFs();
 		const stats = await fs.stat(tempPath);
 		const downloadDuration = Date.now() - startTime;
 
@@ -232,6 +251,7 @@ async function downloadEngineBinaryIfNeeded(
 			support: "https://rivet.dev/discord",
 		});
 		try {
+			const fs = getNodeFs();
 			await fs.unlink(tempPath);
 		} catch (unlinkError) {
 			// Ignore errors when cleaning up (file may not exist)
@@ -239,7 +259,7 @@ async function downloadEngineBinaryIfNeeded(
 		throw error;
 	}
 }
-
+//
 function resolveTargetTriplet(): { targetTriplet: string; extension: string } {
 	return resolveTargetTripletFor(process.platform, process.arch);
 }
@@ -279,7 +299,6 @@ export function resolveTargetTripletFor(
 		`unsupported platform for rivet engine binary: ${platform}/${arch}`,
 	);
 }
-
 async function isEngineRunning(): Promise<boolean> {
 	// Check if the engine is running on the port
 	return await checkIfEngineAlreadyRunningOnPort(ENGINE_PORT);
@@ -328,9 +347,9 @@ async function checkIfEngineAlreadyRunningOnPort(
 	// Port responded but not with OK status
 	return false;
 }
-
 async function fileExists(filePath: string): Promise<boolean> {
 	try {
+		const fs = getNodeFs();
 		await fs.access(filePath);
 		return true;
 	} catch {
