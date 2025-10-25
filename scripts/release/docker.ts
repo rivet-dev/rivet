@@ -11,41 +11,45 @@ export async function tagDocker(opts: {
 	latest: boolean;
 }) {
 	for (const { name, prefix, main } of REPOS) {
-		// Check image exists
-		console.log(`==> Pulling: ${name}:${prefix}-${opts.commit}`);
+		// Check both architecture images exist using manifest inspect
+		console.log(`==> Checking images exist: ${name}:${prefix}-${opts.commit}-{amd64,arm64}`);
 		try {
-			await $({
-				stdout: "ignore",
-				stderr: "ignore",
-			})`docker pull --platform amd64 ${name}:${prefix}-${opts.commit}`;
+			console.log(`==> Inspecting ${name}:${prefix}-${opts.commit}-amd64`);
+			await $`docker manifest inspect ${name}:${prefix}-${opts.commit}-amd64`;
+			console.log(`==> Inspecting ${name}:${prefix}-${opts.commit}-arm64`);
+			await $`docker manifest inspect ${name}:${prefix}-${opts.commit}-arm64`;
+			console.log(`==> Both images exist`);
 		} catch (error) {
+			console.error(`==> Error inspecting images:`, error);
 			throw new Error(
-				`Image ${name}:${prefix}-${opts.commit} does not exist on Docker Hub.`,
+				`Images ${name}:${prefix}-${opts.commit}-{amd64,arm64} do not exist on Docker Hub. Error: ${error}`,
 			);
 		}
 
-		// Tag with version
-		await tag(
+		// Create and push manifest with version
+		await createManifest(
 			name,
 			`${prefix}-${opts.commit}`,
 			`${prefix}-${opts.version}`,
 		);
 		if (main) {
-			await tag(name, `${prefix}-${opts.commit}`, opts.version);
+			await createManifest(name, `${prefix}-${opts.commit}`, opts.version);
 		}
 
-		// Tag with latest
+		// Create and push manifest with latest
 		if (opts.latest) {
-			await tag(name, `${prefix}-${opts.commit}`, `${prefix}-latest`);
+			await createManifest(name, `${prefix}-${opts.commit}`, `${prefix}-latest`);
 			if (main) {
-				await tag(name, `${prefix}-${opts.commit}`, "latest");
+				await createManifest(name, `${prefix}-${opts.commit}`, "latest");
 			}
 		}
 	}
 }
 
-async function tag(image: string, from: string, to: string) {
-	console.log(`==> Tagging: ${image}:${from} -> ${image}:${to}`);
-	await $`docker tag ${image}:${from} ${image}:${to}`;
-	await $`docker push ${image}:${to}`;
+async function createManifest(image: string, from: string, to: string) {
+	console.log(`==> Creating manifest: ${image}:${to} from ${image}:${from}-{amd64,arm64}`);
+
+	// Use buildx imagetools to create and push multi-arch manifest
+	// This works with manifest lists as inputs (unlike docker manifest create)
+	await $`docker buildx imagetools create --tag ${image}:${to} ${image}:${from}-amd64 ${image}:${from}-arm64`;
 }
