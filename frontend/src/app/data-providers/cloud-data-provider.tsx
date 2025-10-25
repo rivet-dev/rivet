@@ -1,7 +1,7 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, QueryKey, QueryOptions, queryOptions, UseQueryOptions } from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -360,7 +360,7 @@ export const createNamespaceContext = ({
 		currentNamespaceAccessTokenQueryOptions() {
 			return parent.accessTokenQueryOptions({ namespace });
 		},
-		engineAdminTokenQueryOptions() {
+		engineAdminTokenQueryOptions(): UseQueryOptions<string> {
 			return queryOptions({
 				staleTime: 5 * 60 * 1000, // 5 minutes
 				gcTime: 5 * 60 * 1000, // 5 minutes
@@ -372,7 +372,7 @@ export const createNamespaceContext = ({
 					},
 					"tokens",
 					"engine-admin",
-				],
+				] as QueryKey,
 				queryFn: async () => {
 					const f = parent.client.namespaces.createSecretToken(
 						parent.project,

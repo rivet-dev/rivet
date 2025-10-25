@@ -4,6 +4,7 @@ import { applyPatch, compare } from "fast-json-patch";
 import { useCallback, useEffect, useMemo } from "react";
 import type { ActorId, Patch, RecordedRealtimeEvent } from "rivetkit/inspector";
 import { useActor } from "../actor-queries-context";
+import { useAsyncMemo } from "@/components/hooks/use-async-memo";
 
 export const useActorClearEventsMutation = (
 	actorId: ActorId,
@@ -31,7 +32,7 @@ export const useActorStatePatchMutation = (
 	const queries = useActor();
 	return useMutation({
 		mutationFn: async (data: any) => {
-			const client = queries.createActorInspector(actorId);
+			const client = await queries.createActorInspector(actorId);
 
 			const oldStateQuery = queryClient.getQueryData(
 				queries.actorStateQueryOptions(actorId).queryKey,
@@ -84,25 +85,28 @@ const getHeaders = (
 function useStream<T = unknown>(
 	actorId: ActorId,
 	onMessage: (data: T) => void,
-	url: string,
+	url: string | null | undefined,
 	opts: { enabled: boolean } = { enabled: true },
 ) {
 	const stableOnMessage = useCallback(onMessage, []);
 	const queries = useActor();
 
 	useEffect(() => {
+		
 		const controller = new AbortController();
-
-		if (!opts.enabled) {
+		if (!opts.enabled || !url) {
 			controller.abort();
 			return () => controller.abort();
 		}
 
 		async function establishConnection() {
+			if(!url){
+				return;
+			}
 			fetchEventSource(url, {
 				signal: controller.signal,
 				headers: await getHeaders(
-					queries.createActorInspectorFetchConfiguration(actorId)
+					(await queries.createActorInspectorFetchConfiguration(actorId))
 						?.headers || {},
 				),
 				onmessage: (event) => {
@@ -142,9 +146,9 @@ export const useActorStateStream = (
 			},
 			[queryClient, actorId, queries],
 		),
-		useMemo(
-			() =>
-				queries.createActorInspector(actorId).state.stream.$url().href,
+		useAsyncMemo(
+			async () =>
+				(await queries.createActorInspector(actorId)).state.stream.$url().href,
 			[actorId, queries],
 		),
 		opts,
@@ -166,9 +170,9 @@ export const useActorConnectionsStream = (actorId: ActorId) => {
 			},
 			[queryClient, actorId, queries],
 		),
-		useMemo(
-			() =>
-				queries.createActorInspector(actorId).connections.stream.$url()
+		useAsyncMemo(
+			async () =>
+				(await queries.createActorInspector(actorId)).connections.stream.$url()
 					.href,
 			[actorId, queries],
 		),
@@ -195,9 +199,9 @@ export const useActorEventsStream = (
 			},
 			[queryClient, actorId, queries],
 		),
-		useMemo(
-			() =>
-				queries.createActorInspector(actorId).events.stream.$url().href,
+		useAsyncMemo(
+			async () =>
+				(await queries.createActorInspector(actorId)).events.stream.$url().href,
 			[actorId, queries],
 		),
 		opts,

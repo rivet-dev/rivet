@@ -71,13 +71,14 @@ export const Route = createFileRoute("/_context")({
 			.with({ __type: "cloud" }, () => async () => {
 				await waitForClerk(route.context.clerk);
 
+
 				if (
-					route.location.search.__clerk_ticket &&
-					route.location.search.__clerk_status
+					route.search.__clerk_ticket &&
+					route.search.__clerk_status
 				) {
 					throw redirect({
 						to: "/onboarding/accept-invitation",
-						search: { ...route.location.search },
+						search: { ...route.search },
 					});
 				}
 
@@ -114,7 +115,6 @@ function Modals() {
 	return (
 		<>
 			<CreateActorDialog
-				namespace={params.namespace || ""}
 				dialogProps={{
 					open: search.modal === "create-actor",
 					onOpenChange: (value) => {
