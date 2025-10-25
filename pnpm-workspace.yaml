@@ -1,4 +1,5 @@
 packages:
+  - engine
   - engine/docker/template
   - engine/sdks/typescript/api-full
   - engine/sdks/typescript/runner
