@@ -1,9 +1,11 @@
-import * as crypto from "node:crypto";
-import * as fsSync from "node:fs";
-import * as fs from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
 import type { ActorKey } from "@/actor/mod";
+import {
+	getNodeCrypto,
+	getNodeFs,
+	getNodeFsSync,
+	getNodeOs,
+	getNodePath,
+} from "@/utils/node";
 
 /**
  * Generate a deterministic actor ID from name and key
@@ -13,6 +15,7 @@ export function generateActorId(name: string, key: ActorKey): string {
 	const jsonString = JSON.stringify([name, key]);
 
 	// Hash to ensure safe file system names
+	const crypto = getNodeCrypto();
 	const hash = crypto
 		.createHash("sha256")
 		.update(jsonString)
@@ -26,6 +29,7 @@ export function generateActorId(name: string, key: ActorKey): string {
  * Create a hash for a path, normalizing it first
  */
 function createHashForPath(dirPath: string): string {
+	const path = getNodePath();
 	// Normalize the path first
 	const normalizedPath = path.normalize(dirPath);
 
@@ -33,6 +37,7 @@ function createHashForPath(dirPath: string): string {
 	const lastComponent = path.basename(normalizedPath);
 
 	// Create SHA-256 hash
+	const crypto = getNodeCrypto();
 	const hash = crypto
 		.createHash("sha256")
 		.update(normalizedPath)
@@ -49,6 +54,7 @@ export function getStoragePath(customPath?: string): string {
 	const dataPath = getDataPath("rivetkit");
 	const pathToHash = customPath || process.cwd();
 	const dirHash = createHashForPath(pathToHash);
+	const path = getNodePath();
 	return path.join(dataPath, dirHash);
 }
 
@@ -57,6 +63,7 @@ export function getStoragePath(customPath?: string): string {
  */
 export async function pathExists(path: string): Promise<boolean> {
 	try {
+		const fs = getNodeFs();
 		await fs.access(path);
 		return true;
 	} catch {
@@ -71,6 +78,7 @@ export async function ensureDirectoryExists(
 	directoryPath: string,
 ): Promise<void> {
 	if (!(await pathExists(directoryPath))) {
+		const fs = getNodeFs();
 		await fs.mkdir(directoryPath, { recursive: true });
 	}
 }
@@ -80,6 +88,7 @@ export async function ensureDirectoryExists(
  * All other operations use the async version
  */
 export function ensureDirectoryExistsSync(directoryPath: string): void {
+	const fsSync = getNodeFsSync();
 	if (!fsSync.existsSync(directoryPath)) {
 		fsSync.mkdirSync(directoryPath, { recursive: true });
 	}
@@ -90,7 +99,9 @@ export function ensureDirectoryExistsSync(directoryPath: string): void {
  */
 function getDataPath(appName: string): string {
 	const platform = process.platform;
+	const os = getNodeOs();
 	const homeDir = os.homedir();
+	const path = getNodePath();
 
 	switch (platform) {
 		case "win32":

@@ -1,4 +1,5 @@
 import type { DriverConfig } from "@/registry/run-config";
+import { importNodeDependencies } from "@/utils/node";
 import { FileSystemActorDriver } from "./actor";
 import { FileSystemGlobalState } from "./global-state";
 import { FileSystemManagerDriver } from "./manager";
@@ -8,10 +9,13 @@ export { FileSystemGlobalState } from "./global-state";
 export { FileSystemManagerDriver } from "./manager";
 export { getStoragePath } from "./utils";
 
-export function createFileSystemOrMemoryDriver(
+export async function createFileSystemOrMemoryDriver(
 	persist: boolean = true,
 	customPath?: string,
-): DriverConfig {
+): Promise<DriverConfig> {
+	// Import Node.js dependencies before creating the state
+	await importNodeDependencies();
+
 	const state = new FileSystemGlobalState(persist, customPath);
 	const driverConfig: DriverConfig = {
 		name: persist ? "file-system" : "memory",
@@ -44,10 +48,12 @@ export function createFileSystemOrMemoryDriver(
 	return driverConfig;
 }
 
-export function createFileSystemDriver(opts?: { path?: string }): DriverConfig {
+export async function createFileSystemDriver(opts?: {
+	path?: string;
+}): Promise<DriverConfig> {
 	return createFileSystemOrMemoryDriver(true, opts?.path);
 }
 
-export function createMemoryDriver(): DriverConfig {
+export async function createMemoryDriver(): Promise<DriverConfig> {
 	return createFileSystemOrMemoryDriver(false);
 }
