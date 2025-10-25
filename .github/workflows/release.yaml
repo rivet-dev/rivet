@@ -254,7 +254,7 @@ jobs:
           npm install -g tsx
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi --noValidateGit
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi --noValidateGit
           fi
