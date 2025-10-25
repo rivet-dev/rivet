@@ -15,5 +15,5 @@
 		},
 		"plugins": [{ "name": "typescript-plugin-css-modules" }]
 	},
-	"include": ["src", "vite.inspector.config.ts", "vite.engine.config.ts"]
+	"include": ["src", "./vite-env.d.ts", "./vite.inspector.config.ts", "./vite.engine.config.ts"]
 }

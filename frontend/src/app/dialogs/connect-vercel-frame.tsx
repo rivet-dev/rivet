@@ -20,7 +20,7 @@ import {
 	Frame,
 	getConfig,
 } from "@/components";
-import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import { type Region, useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
@@ -36,17 +36,13 @@ interface CreateProjectFrameContentProps extends DialogContentProps { }
 function usePublishableToken() {
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
-			const routeContext = useRouteContext({
-				from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
-				select: (ctx) => ctx.dataProvider,
-			});
 			return useSuspenseQuery(
-				routeContext.publishableTokenQueryOptions(),
+				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
 			).data;
 		})
 		.with("engine", () => {
 			return useSuspenseQuery(
-				useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
+				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
 			).data;
 		})
 		.otherwise(() => {
@@ -225,7 +221,7 @@ function FormStepper({
 // }
 
 function StepApiRoute() {
-	const plan = useWatch<FormValues>({ name: "plan" as const });
+	const plan = useWatch({ name: "plan" });
 	return <ConnectVercelForm.IntegrationCode plan={plan || "hobby"} />;
 }
 

@@ -213,7 +213,7 @@ function EventContainer({
 	ref,
 	children,
 }: {
-	ref: React.RefObject<HTMLDivElement>;
+	ref: React.RefObject<HTMLDivElement | null>;
 	children: React.ReactNode;
 }) {
 	return (

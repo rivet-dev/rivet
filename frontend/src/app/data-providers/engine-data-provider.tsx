@@ -1,10 +1,9 @@
 import { type Rivet, RivetClient } from "@rivetkit/engine-api-full";
-import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
+import { fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
 	mutationOptions,
 	QueryKey,
-	QueryOptions,
 	queryOptions,
 	UseQueryOptions,
 } from "@tanstack/react-query";
@@ -17,15 +16,14 @@ import {
 } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
-import { queryClient } from "@/queries/global";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
 	ActorQueryOptions,
 	ActorQueryOptionsSchema,
 	createDefaultGlobalContext,
-	type DefaultDataProvider,
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
+import z from "zod";
 
 const mightRequireAuth = __APP_TYPE__ === "engine";
 
@@ -133,6 +131,7 @@ export const createGlobalContext = (opts: {
 export const createNamespaceContext = ({
 	namespace,
 	client,
+	...parent
 }: { namespace: string; } & ReturnType<
 	typeof createGlobalContext
 >) => {
@@ -407,7 +406,7 @@ export const createNamespaceContext = ({
 				enabled: !!opts.runnerUrl,
 				queryFn: async ({ signal: abortSignal }) => {
 					const res =
-						await client.runnerConfigs.serverlessHealthCheck(
+						await client.runnerConfigsServerlessHealthCheck(
 							{
 								url: opts.runnerUrl,
 								headers: opts.headers,
@@ -553,7 +552,7 @@ export const createNamespaceContext = ({
 					name: string;
 					config: Record<string, Rivet.RunnerConfig>;
 				}) => {
-					const response = await client.runnerConfigs.upsert(name, {
+					const response = await client.runnerConfigsUpsert(name, {
 						namespace,
 						datacenters: config,
 					});
@@ -572,7 +571,7 @@ export const createNamespaceContext = ({
 				...opts,
 				mutationKey: ["runner-config", "delete"] as QueryKey,
 				mutationFn: async (name: string) => {
-					await client.runnerConfigs.delete(name, { namespace });
+					await client.runnerConfigsDelete(name, { namespace });
 				},
 				retry: shouldRetryAllExpect403,
 				meta: {
@@ -587,7 +586,7 @@ export const createNamespaceContext = ({
 				queryKey: [{ namespace }, "runners", "configs", opts] as QueryKey,
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
-					const response = await client.runnerConfigs.list(
+					const response = await client.runnerConfigsList(
 						{
 							namespace,
 							cursor: pageParam ?? undefined,
@@ -630,7 +629,7 @@ export const createNamespaceContext = ({
 				queryKey: [{ namespace }, "runners", "config", opts] as QueryKey,
 				enabled: !!opts.name,
 				queryFn: async ({ signal: abortSignal }) => {
-					const response = await client.runnerConfigs.list(
+					const response = await client.runnerConfigsList(
 						{
 							namespace,
 							runnerNames: opts.name,
@@ -653,13 +652,13 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		engineAdminTokenQueryOptions(): UseQueryOptions<string> {
+		engineAdminTokenQueryOptions() {
 			return queryOptions({
 				staleTime: 1000,
 				gcTime: 1000,
 				queryKey: [{ namespace }, "tokens", "engine-admin"] as QueryKey,
 				queryFn: async () => {
-					return ls.engineCredentials.get(getConfig().apiUrl) || "";
+					return (ls.engineCredentials.get(getConfig().apiUrl) || "") as string;
 				},
 				meta: {
 					mightRequireAuth,
@@ -698,4 +697,29 @@ function transformActor(a: Rivet.Actor): Actor {
 			ActorFeature.EventsMonitoring,
 		],
 	};
+}
+
+type RunnerConfig = [
+	string,
+	{
+		datacenters: Record<string, { metadata?: { provider?: string } }>;
+	},
+];
+
+export function hasMetadataProvider(metadata: unknown): metadata is { provider?: string } {
+	return z.object({ provider: z.string().optional() }).safeParse(metadata).success;
+}
+
+export function hasProvider(
+	configs: [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][] | undefined,
+	providers: string[],
+): boolean {
+	if (!configs) return false;
+	return configs.some(([, config]) =>
+		Object.values(config.datacenters).some(
+			(datacenter) =>
+				datacenter.metadata && hasMetadataProvider(datacenter.metadata) && datacenter.metadata.provider &&
+				providers.includes(datacenter.metadata.provider),
+		),
+	);
 }

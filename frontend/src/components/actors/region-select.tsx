@@ -5,7 +5,7 @@ import { useDataProvider } from "./data-provider";
 
 interface RegionSelectProps {
 	onValueChange: (value: string) => void;
-	value: string;
+	value: string | undefined;
 	showAuto?: boolean;
 }
 

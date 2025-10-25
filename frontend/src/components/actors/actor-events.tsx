@@ -166,13 +166,14 @@ ActorEvents.Skeleton = () => {
 };
 
 function useScrollToBottom(
-	ref: React.RefObject<HTMLDivElement>,
+	ref: React.RefObject<HTMLDivElement | null>,
 	deps: unknown[],
 ) {
 	const [settings] = useActorDetailsSettings();
 	const follow = useRef(true);
 	const shouldFollow = () => settings.autoFollowLogs && follow.current;
 	useResizeObserver({
+		// @ts-expect-error -- TS2322 -- Type 'HTMLDivElement' is not assignable to type 'Element | null'.
 		ref,
 		onResize: () => {
 			if (shouldFollow()) {

@@ -4,7 +4,7 @@ import { assertNonNullable } from "../lib/utils";
 import type { ImperativePanelHandle } from "../ui/resizable";
 
 export interface ActorsLayoutContextValue {
-	detailsRef: RefObject<ImperativePanelHandle>;
+	detailsRef: RefObject<ImperativePanelHandle | null>;
 	isDetailsColCollapsed: boolean;
 }
 

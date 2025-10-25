@@ -64,6 +64,12 @@ export const useEngineDataProvider = () => {
 	}).dataProvider;
 };
 
+export const useEngineNamespaceDataProvider = () => {
+	return useRouteContext({
+		from: "/_context/_engine/ns/$namespace",
+	}).dataProvider;
+}
+
 export const useInspectorDataProvider = () => {
 	const context = useRouteContext({
 		from: "/_context",
@@ -90,6 +96,12 @@ export const useCloudDataProvider = ({
 		from,
 	}).dataProvider;
 };
+
+export const useCloudNamespaceDataProvider = () => {
+	return useRouteContext({
+		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
+	}).dataProvider;
+}
 
 export const useEngineCompatDataProvider = () => {
 	return useRouteContext({

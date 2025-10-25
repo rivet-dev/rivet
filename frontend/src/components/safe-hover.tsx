@@ -1,6 +1,6 @@
 import { Slot } from "@radix-ui/react-slot";
 import { type MouseEventHandler, useCallback } from "react";
-import * as styles from "./styles/safe-hover.module.css";
+import styles from "./styles/safe-hover.module.css";
 
 export function SafeHover({
 	children,

@@ -106,6 +106,10 @@ export const REGION_LABEL: Record<string, string> = {
 	"ap-southeast-1": "Singapore",
 };
 
+export function getRegionLabel(regionId: string | undefined) {
+	return regionId ? REGION_LABEL[regionId] ?? REGION_LABEL.unknown : REGION_LABEL.unknown;
+}
+
 export function getRegionKey(regionNameId: string | undefined) {
 	return regionNameId;
 }

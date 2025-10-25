@@ -31,13 +31,13 @@ interface ComboboxDefaultProps {
 
 interface ComboboxSingleProps {
 	multiple?: false;
-	value: string;
+	value: string | undefined;
 	onValueChange: (value: string) => void;
 }
 
 interface ComboboxMultipleProps {
 	multiple: true;
-	value: string[];
+	value: string[] | undefined;
 	onValueChange: (value: string[]) => void;
 }
 

@@ -26,7 +26,7 @@ export const formSchema = z.object({
 	requestLifespan: z.coerce.number().positive(),
 	runnersMargin: z.coerce.number().min(0),
 	slotsPerRunner: z.coerce.number().positive(),
-	headers: z.array(z.string()).default([]),
+	headers: z.array(z.array(z.string())).default([]),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -179,8 +179,8 @@ export const SlotsPerRunner = ({ className }: { className?: string }) => {
 };
 
 export const Headers = function Headers() {
-	const { control, setValue } = useFormContext();
-	const { fields, append, remove } = useFieldArray<FormValues>({
+	const { control, setValue, watch } = useFormContext();
+	const { fields, append, remove } = useFieldArray({
 		name: "headers",
 		control,
 	});
@@ -226,7 +226,7 @@ col-span-full flex-1"
 									<Input
 										placeholder="Enter a value"
 										className="w-full"
-										value={field[0]}
+										value={watch(`headers.${index}.0`)}
 										onChange={(e) => {
 											setValue(
 												`headers.${index}.0`,
@@ -258,7 +258,7 @@ col-span-full flex-1"
 									<Input
 										placeholder="Enter a value"
 										className="w-full"
-										value={field[1]}
+										value={watch(`headers.${index}.1`)}
 										onChange={(e) => {
 											setValue(
 												`headers.${index}.1`,
