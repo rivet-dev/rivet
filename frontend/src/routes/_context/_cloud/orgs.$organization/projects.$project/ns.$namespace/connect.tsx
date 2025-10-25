@@ -347,14 +347,6 @@ export function RouteComponent() {
 					<Providers />
 					<Runners />
 				</div>
-
-				<hr className="mb-6" />
-
-				<div className="px-4">
-					<ConnectYourFrontend />
-					<Providers />
-					<Runners />
-				</div>
 			</div>
 		</div>
 	);

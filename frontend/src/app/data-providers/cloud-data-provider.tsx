@@ -1,7 +1,7 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
-import { type FetchFunction, fetcher } from "@rivetkit/engine-api-full/core";
-import { infiniteQueryOptions, QueryKey, QueryOptions, queryOptions, UseQueryOptions } from "@tanstack/react-query";
+import { fetcher } from "@rivetkit/engine-api-full/core";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -339,19 +339,21 @@ export const createNamespaceContext = ({
 } & ReturnType<typeof createProjectContext> &
 	ReturnType<typeof createOrganizationContext> &
 	ReturnType<typeof createGlobalContext>) => {
+	const token = async () => {
+		const response = await queryClient.fetchQuery(
+			parent.accessTokenQueryOptions({ namespace }),
+		);
+
+		return response.token;
+	};
 	return {
 		...createEngineNamespaceContext({
 			...parent,
 			namespace: engineNamespaceName,
 			namespaceId: engineNamespaceId,
+			engineToken: token,
 			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
-				token: async () => {
-					const response = await queryClient.fetchQuery(
-						parent.accessTokenQueryOptions({ namespace }),
-					);
-
-					return response.token;
-				},
+				token,
 			}),
 		}),
 		namespaceQueryOptions() {

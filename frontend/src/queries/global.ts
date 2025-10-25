@@ -24,6 +24,7 @@ const queryCache = new QueryCache({
 
 const mutationCache = new MutationCache({
 	onError(error, variables, context, mutation) {
+		console.error(error);
 		if (mutation.meta?.hideErrorToast) {
 			return;
 		}
