@@ -5,6 +5,8 @@ import {
 	faFilePen,
 	faGamepad,
 	faGaugeHigh,
+	faGlobe,
+	faNetworkWired,
 	faRobot,
 	faRotate,
 	faUserRobot,
@@ -52,7 +54,7 @@ export const useCases: UseCase[] = [
 		description: "Discord, Slack, or autonomous bots with persistent state",
 	},
 	{
-		title: "Per-User Database",
+		title: "Per-Tenant Databases",
 		href: "/docs/use-cases/database",
 		icon: faDatabase,
 		description:
@@ -77,5 +79,26 @@ export const useCases: UseCase[] = [
 		href: "/docs/use-cases/rate",
 		icon: faGaugeHigh,
 		description: "Distributed rate limiting with in-memory counters",
+	},
+	{
+		title: "Geo-Distributed Database",
+		href: "/docs/general/edge",
+		icon: faGlobe,
+		description:
+			"Store data close to users globally with automatic edge distribution",
+	},
+	{
+		title: "Agent Orchestration & MCP",
+		href: "/docs/use-cases/ai-agent",
+		icon: faRobot,
+		description:
+			"Build AI agents with Model Context Protocol and persistent state",
+	},
+	{
+		title: "Multiplayer Apps",
+		href: "/docs/use-cases/game",
+		icon: faNetworkWired,
+		description:
+			"Build realtime multiplayer applications with authoritative state",
 	},
 ];
