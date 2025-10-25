@@ -88,7 +88,7 @@ export function CollapsibleSidebarItem({
 			<button
 				type="button"
 				className={cn(
-					"flex w-full appearance-none items-center justify-between border-l-2 border-l-border py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 data-[active]:text-foreground data-[active]:border-l-orange-500",
+					"flex w-full appearance-none items-center justify-between border-l-2 border-l-border py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 data-[active]:text-foreground data-[active]:border-l-orange-500",
 					getPaddingClass(level),
 				)}
 				data-active={isCurrent ? true : undefined}
