@@ -58,7 +58,9 @@ export class Registry<A extends RegistryActors> {
 	/**
 	 * Runs the registry for a server.
 	 */
-	public start(inputConfig?: RunnerConfigInput): ServerOutput<this> {
+	public async start(
+		inputConfig?: RunnerConfigInput,
+	): Promise<ServerOutput<this>> {
 		const config = RunnerConfigSchema.parse(inputConfig);
 
 		// Validate autoConfigureServerless is only used with serverless runner
@@ -72,7 +74,7 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		// Promise for any async operations we need to wait to complete
-		const readyPromises = [];
+		const readyPromises: Promise<unknown>[] = [];
 
 		// Disable health check if using serverless
 		//
@@ -135,7 +137,7 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		// Choose the driver based on configuration
-		const driver = chooseDefaultDriver(config);
+		const driver = await chooseDefaultDriver(config);
 
 		// Set defaults based on the driver
 		if (driver.name === "engine") {
@@ -209,6 +211,23 @@ export class Registry<A extends RegistryActors> {
 			console.log();
 		}
 
+		const { router: hono } = createManagerRouter(
+			this.#config,
+			config,
+			managerDriver,
+			driver,
+			client,
+		);
+
+		// Start server
+		if (!config.disableDefaultServer) {
+			const serverPromise = (async () => {
+				const out = await crossPlatformServe(config, hono, undefined);
+				upgradeWebSocket = out.upgradeWebSocket;
+			})();
+			readyPromises.push(serverPromise);
+		}
+
 		// HACK: We need to find a better way to let the driver itself decide when to start the actor driver
 		// Create runner
 		//
@@ -228,22 +247,6 @@ export class Registry<A extends RegistryActors> {
 			Promise.all(readyPromises).then(async () => {
 				await configureServerlessRunner(config);
 			});
-		}
-
-		const { router: hono } = createManagerRouter(
-			this.#config,
-			config,
-			managerDriver,
-			driver,
-			client,
-		);
-
-		// Start server
-		if (!config.disableDefaultServer) {
-			(async () => {
-				const out = await crossPlatformServe(config, hono, undefined);
-				upgradeWebSocket = out.upgradeWebSocket;
-			})();
 		}
 
 		return {
