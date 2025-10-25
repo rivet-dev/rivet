@@ -2,26 +2,18 @@ import type { Clerk } from "@clerk/clerk-js";
 import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { createRouter, Link, RouterProvider } from "@tanstack/react-router";
+import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { Suspense } from "react";
 import {
-	Button,
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
 	ConfigProvider,
 	FullscreenLoading,
 	getConfig,
-	H2,
 	ThirdPartyProviders,
 	Toaster,
 	TooltipProvider,
 } from "@/components";
 import { NotFoundCard } from "./app/not-found-card";
 import { RouteLayout } from "./app/route-layout";
-import { RootLayout } from "./components/layout";
 import { clerk } from "./lib/auth";
 import { queryClient } from "./queries/global";
 import { routeTree } from "./routeTree.gen";

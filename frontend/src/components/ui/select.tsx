@@ -5,7 +5,6 @@ import {
 	faCheck,
 	faChevronDown,
 	faChevronUp,
-	// @ts-expect-error
 	faSelect,
 	Icon,
 } from "@rivet-gg/icons";

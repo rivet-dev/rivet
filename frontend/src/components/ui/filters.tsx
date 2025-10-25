@@ -1318,7 +1318,7 @@ export const FilterValueSchema = z
 	})
 	.optional();
 
-export type FilterValue = z.infer<typeof FilterValueSchema>;
+export type FilterValue = Exclude<z.infer<typeof FilterValueSchema>, undefined>;
 
 export function createFiltersSchema(definitions: FilterDefinitions) {
 	const filters: Record<string, z.ZodTypeAny> = {};

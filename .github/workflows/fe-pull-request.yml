@@ -4,7 +4,8 @@ on:
   pull_request:
     paths:
       - frontend/**
-      - sdks/typescript/runner/**
+      - engine/sdks/typescript/**
+      - rivetkit-typescript/**
 
 jobs:
   quality:
@@ -16,3 +17,19 @@ jobs:
           version: latest
       - name: Run Biome
         run: biome check . --reporter=github
+        working-directory: ./frontend
+  tsc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install Dependencies
+        run: pnpm install 
+        working-directory: ./frontend
+      - name: Run TypeScript Compiler
+        run: pnpm ts-check
+        working-directory: ./frontend

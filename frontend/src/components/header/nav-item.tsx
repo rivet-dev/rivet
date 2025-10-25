@@ -1,5 +1,5 @@
 import { Slot } from "@radix-ui/react-slot";
-import type { PropsWithChildren } from "react";
+import type { JSX, PropsWithChildren } from "react";
 import { cn } from "../lib/utils";
 
 interface NavItemProps extends PropsWithChildren<JSX.IntrinsicElements["a"]> {

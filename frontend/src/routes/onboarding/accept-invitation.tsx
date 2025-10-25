@@ -16,16 +16,24 @@ import {
 	toast,
 } from "@/components";
 import { clerk } from "@/lib/auth";
+import { zodValidator } from "@tanstack/zod-adapter";
+import z from "zod";
 
 export const Route = createFileRoute("/onboarding/accept-invitation")({
 	component: RouteComponent,
+	validateSearch: zodValidator(
+		z.object({
+			__clerk_ticket: z.string().optional(),
+			__clerk_status: z.string().optional(),
+		}).optional(),
+	),
 });
 
 function RouteComponent() {
 	const search = Route.useSearch();
 	const { organization } = useOrganization();
 
-	if (search.__clerk_status === "sign_up" && !organization) {
+	if (search?.__clerk_status === "sign_up" && search.__clerk_ticket && !organization) {
 		// display sign up flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -37,7 +45,7 @@ function RouteComponent() {
 		);
 	}
 
-	if (search.__clerk_status === "sign_in" && !organization) {
+	if (search?.__clerk_status === "sign_in" && search.__clerk_ticket && !organization) {
 		// complete sign in flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -49,12 +57,12 @@ function RouteComponent() {
 		);
 	}
 
-	if (search.__clerk_status === "sign_in" && organization) {
+	if (search?.__clerk_status === "sign_in"&& search.__clerk_ticket && organization) {
 		// if we get here, the user is already signed in but maybe not to the right org
 		return <AcceptInvitation ticket={search.__clerk_ticket} />;
 	}
 
-	if (search.__clerk_status === "complete") {
+	if (search?.__clerk_status === "complete") {
 		// if we get here, the user is already signed in
 		return <CompleteFlow />;
 	}

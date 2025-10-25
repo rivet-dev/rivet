@@ -132,7 +132,9 @@ export class EngineActorDriver implements ActorDriver {
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 			},
+			// @ts-expect-error
 			fetch: this.#runnerFetch.bind(this),
+			// @ts-expect-error
 			websocket: this.#runnerWebSocket.bind(this),
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),

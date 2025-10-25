@@ -32,8 +32,8 @@ interface VirtualScrollAreaProps<TItem extends Record<string, any>>
 	getRowData: (index: number) => TItem;
 	className?: string;
 	row: FunctionComponent<TItem>;
-	virtualizerRef?: RefObject<Virtualizer<HTMLDivElement, Element>>;
-	viewportRef?: RefObject<HTMLDivElement>;
+	virtualizerRef?: RefObject<Virtualizer<HTMLDivElement, Element> | null>;
+	viewportRef?: RefObject<HTMLDivElement | null>;
 	scrollerProps?: ComponentPropsWithoutRef<"div">;
 	children?: ReactNode;
 }

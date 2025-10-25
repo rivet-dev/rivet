@@ -50,8 +50,8 @@ export interface ButtonProps
 		React.ComponentPropsWithoutRef<"button"> {
 	asChild?: boolean;
 	isLoading?: boolean;
-	startIcon?: React.ReactElement;
-	endIcon?: React.ReactElement;
+	startIcon?: React.ReactElement<any>;
+	endIcon?: React.ReactElement<any>;
 	onClick?: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
 }
 

@@ -1,7 +1,10 @@
 import {
 	infiniteQueryOptions,
+	mutationOptions,
 	type MutationOptions,
+	QueryKey,
 	queryOptions,
+	UseInfiniteQueryOptions,
 } from "@tanstack/react-query";
 import type {
 	ActorId,
@@ -73,7 +76,7 @@ const defaultContext = {
 	},
 	actorsQueryOptions(opts: ActorQueryOptions) {
 		return infiniteQueryOptions({
-			queryKey: ["actors", opts],
+			queryKey: ["actors", opts] as QueryKey,
 			initialPageParam: undefined as string | undefined,
 			enabled: false,
 			refetchInterval: 2000,
@@ -101,7 +104,7 @@ const defaultContext = {
 
 	buildsQueryOptions() {
 		return infiniteQueryOptions({
-			queryKey: ["actors", "builds"],
+			queryKey: ["actors", "builds"] as QueryKey,
 			enabled: false,
 			initialPageParam: undefined as string | undefined,
 			refetchInterval: 2000,
@@ -159,7 +162,7 @@ const defaultContext = {
 			queryFn: async () => {
 				return {} as Actor;
 			},
-			queryKey: ["actor", actorId],
+			queryKey: ["actor", actorId] as QueryKey,
 		});
 	},
 
@@ -217,7 +220,7 @@ const defaultContext = {
 	},
 	actorBuildQueryOptions(actorId: ActorId) {
 		return queryOptions({
-			queryKey: ["actor", actorId, "build"],
+			queryKey: ["actor", actorId, "build"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
 				return {} as Build;
@@ -227,7 +230,7 @@ const defaultContext = {
 	},
 	actorMetricsQueryOptions(actorId: ActorId) {
 		return queryOptions({
-			queryKey: ["actor", actorId, "metrics"],
+			queryKey: ["actor", actorId, "metrics"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
 				return {} as ActorMetrics;
@@ -249,7 +252,7 @@ const defaultContext = {
 	},
 	actorDestroyMutationOptions(actorId: ActorId) {
 		return {
-			mutationKey: ["actor", actorId, "destroy"],
+			mutationKey: ["actor", actorId, "destroy"] as QueryKey,
 			mutationFn: async () => {
 				return;
 			},
@@ -267,7 +270,7 @@ const defaultContext = {
 	},
 	actorLogsQueryOptions(actorId: ActorId) {
 		return infiniteQueryOptions({
-			queryKey: ["actor", actorId, "logs"],
+			queryKey: ["actor", actorId, "logs"] as QueryKey,
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
@@ -316,7 +319,7 @@ const defaultContext = {
 	// #endregion
 	regionsQueryOptions() {
 		return infiniteQueryOptions({
-			queryKey: ["actor", "regions"],
+			queryKey: ["actor", "regions"] as QueryKey,
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
@@ -328,7 +331,7 @@ const defaultContext = {
 	},
 	regionQueryOptions(regionId: string | undefined) {
 		return queryOptions({
-			queryKey: ["actor", "region", regionId],
+			queryKey: ["actor", "region", regionId] as QueryKey,
 			enabled: !!regionId,
 			queryFn: async () => {
 				throw new Error("Not implemented");
@@ -338,7 +341,7 @@ const defaultContext = {
 	},
 	statusQueryOptions() {
 		return queryOptions({
-			queryKey: ["status"],
+			queryKey: ["status"] as QueryKey,
 			refetchInterval: 1000,
 			enabled: false,
 			retry: 0,
@@ -349,8 +352,8 @@ const defaultContext = {
 		});
 	},
 	createActorMutationOptions() {
-		return {
-			mutationKey: ["createActor"],
+		return mutationOptions({
+			mutationKey: ["createActor"] as QueryKey,
 			mutationFn: async (_: CreateActor) => {
 				throw new Error("Not implemented");
 				return "";
@@ -365,7 +368,7 @@ const defaultContext = {
 					},
 				});
 			},
-		};
+		});
 	},
 };
 
