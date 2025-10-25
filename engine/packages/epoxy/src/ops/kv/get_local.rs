@@ -30,15 +30,12 @@ pub async fn epoxy_kv_get_local(ctx: &OperationCtx, input: &Input) -> Result<Out
 			let packed_key = packed_key.clone();
 			let kv_key = kv_key.clone();
 			async move {
-				(async move {
-					let value = tx.get(&packed_key, Serializable).await?;
-					if let Some(v) = value {
-						Ok(Some(kv_key.deserialize(&v)?))
-					} else {
-						Ok(None)
-					}
-				})
-				.await
+				let value = tx.get(&packed_key, Serializable).await?;
+				if let Some(v) = value {
+					Ok(Some(kv_key.deserialize(&v)?))
+				} else {
+					Ok(None)
+				}
 			}
 		})
 		.custom_instrument(tracing::info_span!("get_local_tx"))

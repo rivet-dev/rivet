@@ -292,10 +292,9 @@ impl PubSubDriver for PostgresDriver {
 				// Try to LISTEN if client is available, but don't fail if disconnected
 				// The reconnection logic will handle re-subscribing
 				if let Some(client) = self.client.lock().await.clone() {
-					let span = tracing::trace_span!("pg_listen");
 					match client
 						.execute(&format!("LISTEN \"{hashed}\""), &[])
-						.instrument(span)
+						.instrument(tracing::trace_span!("pg_listen"))
 						.await
 					{
 						Result::Ok(_) => {
@@ -368,10 +367,9 @@ impl PubSubDriver for PostgresDriver {
 					match conn.execute("SELECT 1", &[]).await {
 						Result::Ok(_) => {
 							// Connection is good, use it for NOTIFY
-							let span = tracing::trace_span!("pg_notify");
 							match conn
 								.execute(&format!("NOTIFY \"{hashed}\", '{encoded}'"), &[])
-								.instrument(span)
+								.instrument(tracing::trace_span!("pg_notify"))
 								.await
 							{
 								Result::Ok(_) => return Ok(()),

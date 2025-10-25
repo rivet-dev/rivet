@@ -28,6 +28,7 @@ use tokio_tungstenite::tungstenite::{
 };
 use tracing::Instrument;
 use url::Url;
+use uuid::Uuid;
 
 use crate::{
 	WebSocketHandle, custom_serve::CustomServeTrait, errors, metrics,
@@ -1171,7 +1172,7 @@ impl ProxyService {
 		}
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
-		tracing::debug!("Upgrading client connection to WebSocket");
+		tracing::debug!(%req_path, "Upgrading client connection to WebSocket");
 		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
 			Ok(x) => {
 				tracing::debug!("Client WebSocket upgrade successful");
@@ -1782,18 +1783,20 @@ impl ProxyService {
 			}
 			ResolveRouteOutput::Response(_) => unreachable!(),
 			ResolveRouteOutput::CustomServe(mut handlers) => {
-				tracing::debug!("Spawning task to handle WebSocket communication");
+				tracing::debug!(%req_path, "Spawning task to handle WebSocket communication");
 				let mut request_context = request_context.clone();
 				let req_headers = req_headers.clone();
 				let req_path = req_path.clone();
 				let req_host = req_host.clone();
 
-				// TODO: Handle errors here, the error message is lost
 				tokio::spawn(
 					async move {
+						let request_id = Uuid::new_v4();
 						let mut attempts = 0u32;
 
-						let ws_handle = WebSocketHandle::new(client_ws);
+						let ws_handle = WebSocketHandle::new(client_ws)
+							.await
+							.context("failed initiating websocket handle")?;
 
 						loop {
 							match handlers
@@ -1802,6 +1805,7 @@ impl ProxyService {
 									&req_headers,
 									&req_path,
 									&mut request_context,
+									request_id,
 								)
 								.await
 							{
@@ -1825,13 +1829,17 @@ impl ProxyService {
 									break;
 								}
 								Err(err) => {
+									tracing::debug!(?err, "websocket handler error");
+
 									attempts += 1;
 									if attempts > max_attempts || !is_retryable_ws_error(&err) {
+										tracing::debug!(?attempts, "WebSocket failed to reconnect");
+
 										// Close WebSocket with error
 										ws_handle
-											.accept_and_send(to_hyper_close(Some(
-												err_to_close_frame(err, ray_id),
-											)))
+											.send(to_hyper_close(Some(err_to_close_frame(
+												err, ray_id,
+											))))
 											.await?;
 
 										// Flush to ensure close frame is sent
@@ -1846,6 +1854,13 @@ impl ProxyService {
 											attempts,
 											initial_interval,
 										);
+										let backoff = Duration::from_millis(100);
+
+										tracing::debug!(
+											?backoff,
+											"WebSocket attempt {attempts} failed (service unavailable)"
+										);
+
 										tokio::time::sleep(backoff).await;
 
 										match state
@@ -1864,11 +1879,9 @@ impl ProxyService {
 											}
 											Ok(ResolveRouteOutput::Response(response)) => {
 												ws_handle
-													.accept_and_send(to_hyper_close(Some(
-														str_to_close_frame(
-															response.message.as_ref(),
-														),
-													)))
+													.send(to_hyper_close(Some(str_to_close_frame(
+														response.message.as_ref(),
+													))))
 													.await?;
 
 												// Flush to ensure close frame is sent
@@ -1879,12 +1892,10 @@ impl ProxyService {
 											}
 											Ok(ResolveRouteOutput::Target(_)) => {
 												ws_handle
-													.accept_and_send(to_hyper_close(Some(
-														err_to_close_frame(
-															errors::WebSocketTargetChanged.build(),
-															ray_id,
-														),
-													)))
+													.send(to_hyper_close(Some(err_to_close_frame(
+														errors::WebSocketTargetChanged.build(),
+														ray_id,
+													))))
 													.await?;
 
 												// Flush to ensure close frame is sent
@@ -1897,9 +1908,9 @@ impl ProxyService {
 											}
 											Err(err) => {
 												ws_handle
-													.accept_and_send(to_hyper_close(Some(
-														err_to_close_frame(err, ray_id),
-													)))
+													.send(to_hyper_close(Some(err_to_close_frame(
+														err, ray_id,
+													))))
 													.await?;
 
 												// Flush to ensure close frame is sent
@@ -1947,12 +1958,16 @@ impl ProxyService {
 
 impl ProxyService {
 	// Process an individual request
-	#[tracing::instrument(name = "guard_request", skip_all)]
+	#[tracing::instrument(name = "guard_request", skip_all, fields(ray_id, req_id))]
 	pub async fn process(&self, mut req: Request<BodyIncoming>) -> Result<Response<ResponseBody>> {
 		let start_time = Instant::now();
 
 		let request_ids = RequestIds::new(self.state.config.dc_label());
 		req.extensions_mut().insert(request_ids);
+
+		tracing::Span::current()
+			.record("req_id", request_ids.req_id.to_string())
+			.record("ray_id", request_ids.ray_id.to_string());
 
 		// Create request context for analytics tracking
 		let mut request_context =
@@ -2063,35 +2078,50 @@ impl ProxyService {
 
 				// If we receive an error during a websocket request, we attempt to open the websocket anyway
 				// so we can send the error via websocket instead of http. Most websocket clients don't handle
-				// HTTP errors in a meaningful way for the user resulting in unhelpful errors
+				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
 				if is_websocket {
 					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
 					match hyper_tungstenite::upgrade(mock_req, None) {
 						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
-							tokio::spawn(async move {
-								let ws_handle = WebSocketHandle::new(client_ws);
-								let frame = err_to_close_frame(err, Some(request_ids.ray_id));
+							tokio::spawn(
+								async move {
+									let ws_handle = match WebSocketHandle::new(client_ws).await {
+										Ok(ws_handle) => ws_handle,
+										Err(err) => {
+											tracing::debug!(
+												?err,
+												"failed initiating websocket handle for error proxy"
+											);
+											return;
+										}
+									};
+									let frame = err_to_close_frame(err, Some(request_ids.ray_id));
 
-								// Manual conversion to handle different tungstenite versions
-								let code_num: u16 = frame.code.into();
-								let reason = frame.reason.clone();
+									// Manual conversion to handle different tungstenite versions
+									let code_num: u16 = frame.code.into();
+									let reason = frame.reason.clone();
 
-								if let Err(err) = ws_handle
-									.accept_and_send(
-										tokio_tungstenite::tungstenite::Message::Close(Some(
+									if let Err(err) = ws_handle
+										.send(tokio_tungstenite::tungstenite::Message::Close(Some(
 											tokio_tungstenite::tungstenite::protocol::CloseFrame {
 												code: code_num.into(),
 												reason,
 											},
-										)),
-									)
-									.await
-								{
-									tracing::debug!(?err, "failed sending error proxy");
+										)))
+										.await
+									{
+										tracing::debug!(
+											?err,
+											"failed sending websocket error proxy"
+										);
+									}
 								}
-							});
+								.instrument(
+									tracing::info_span!("ws_error_proxy_task", ?request_ids.ray_id),
+								),
+							);
 
 							// Return the response that will upgrade the client connection
 							// For proper WebSocket handshaking, we need to preserve the original response

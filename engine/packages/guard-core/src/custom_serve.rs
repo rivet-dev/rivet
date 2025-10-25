@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
+use uuid::Uuid;
 
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;
@@ -25,5 +26,7 @@ pub trait CustomServeTrait: Send + Sync {
 		headers: &hyper::HeaderMap,
 		path: &str,
 		request_context: &mut RequestContext,
+		// Identifies the websocket across retries.
+		unique_request_id: Uuid,
 	) -> Result<()>;
 }

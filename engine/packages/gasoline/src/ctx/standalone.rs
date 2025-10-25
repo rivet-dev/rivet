@@ -46,9 +46,9 @@ impl StandaloneCtx {
 	) -> WorkflowResult<Self> {
 		let ts = rivet_util::timestamp::now();
 
-		let span = tracing::Span::current();
-		span.record("req_id", req_id.to_string());
-		span.record("ray_id", ray_id.to_string());
+		tracing::Span::current()
+			.record("req_id", req_id.to_string())
+			.record("ray_id", ray_id.to_string());
 
 		let msg_ctx = MessageCtx::new(&config, &pools, &cache, ray_id)?;
 

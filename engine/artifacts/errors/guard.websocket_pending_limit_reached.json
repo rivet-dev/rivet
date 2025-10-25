@@ -1,0 +1,5 @@
+{
+	"code": "websocket_pending_limit_reached",
+	"group": "guard",
+	"message": "Reached limit on pending websocket messages, aborting connection."
+}
