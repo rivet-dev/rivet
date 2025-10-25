@@ -1,11 +1,11 @@
 import { serve } from "@hono/node-server";
 import type { ActorConfig, RunnerConfig } from "@rivetkit/engine-runner";
 import { Runner } from "@rivetkit/engine-runner";
-import { Hono, type Context as HonoContext, Next } from "hono";
+import { Hono, type Context as HonoContext, type Next } from "hono";
 import { streamSSE } from "hono/streaming";
-import { getLogger } from "./log"
-import { type Logger } from "pino";
+import type { Logger } from "pino";
 import type WebSocket from "ws";
+import { getLogger } from "./log";
 
 const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	? Number(process.env.INTERNAL_SERVER_PORT)
@@ -106,35 +106,43 @@ if (AUTOSTART_SERVER) {
 	);
 }
 
-if (AUTOSTART_RUNNER) [runner, runnerStarted, runnerStopped] = await startRunner();
+if (AUTOSTART_RUNNER)
+	[runner, runnerStarted, runnerStopped] = await startRunner();
 
 async function autoConfigureServerless() {
-	let res = await fetch(`http://127.0.0.1:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`, {
-		method: "PUT",
-		headers: {
-			"Authorization": `Bearer ${RIVET_TOKEN}`,
-			"Content-Type": "application/json",
+	const res = await fetch(
+		`http://127.0.0.1:6420/runner-configs/${RIVET_RUNNER_NAME}?namespace=${RIVET_NAMESPACE}`,
+		{
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${RIVET_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				datacenters: {
+					default: {
+						serverless: {
+							url: `http://localhost:${INTERNAL_SERVER_PORT}`,
+							max_runners: 10,
+							slots_per_runner: 1,
+							request_lifespan: 15,
+						},
+					},
+				},
+			}),
 		},
-		body: JSON.stringify({
-			datacenters: {
-				default: {
-					serverless: {
-						url: `http://localhost:${INTERNAL_SERVER_PORT}`,
-						max_runners: 10,
-						slots_per_runner: 1,
-						request_lifespan: 15,
-					}
-				}
-			}
-		}),
-	});
+	);
 
 	if (!res.ok) {
-		throw new Error(`request failed: ${res.statusText} (${res.status}):\n${await res.text()}`);
+		throw new Error(
+			`request failed: ${res.statusText} (${res.status}):\n${await res.text()}`,
+		);
 	}
 }
 
-async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, PromiseWithResolvers<unknown>]> {
+async function startRunner(): Promise<
+	[Runner, PromiseWithResolvers<unknown>, PromiseWithResolvers<unknown>]
+> {
 	getLogger().info("Starting runner");
 
 	const runnerStarted = Promise.withResolvers();
@@ -153,7 +161,7 @@ async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, Pr
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -177,7 +185,7 @@ async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, Pr
 			} else if (url.pathname === "/sleep") {
 				runner.sleepActor(actorId);
 
-				return new Response('ok', {
+				return new Response("ok", {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
 				});
@@ -199,7 +207,12 @@ async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, Pr
 				`Actor ${_actorId} stopped (generation ${_generation})`,
 			);
 		},
-		websocket: async (_runner: Runner, actorId: string, ws: WebSocket, request: Request) => {
+		websocket: async (
+			_runner: Runner,
+			actorId: string,
+			ws: WebSocket,
+			request: Request,
+		) => {
 			getLogger().info(`WebSocket connected for actor ${actorId}`);
 			actorWebSockets.set(actorId, ws);
 
@@ -207,7 +220,8 @@ async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, Pr
 			ws.addEventListener("message", (event) => {
 				const data = event.data;
 				getLogger().info({
-					msg: `WebSocket message from actor ${actorId}`, data
+					msg: `WebSocket message from actor ${actorId}`,
+					data,
 				});
 				ws.send(`Echo: ${data}`);
 			});
@@ -218,7 +232,10 @@ async function startRunner(): Promise<[Runner, PromiseWithResolvers<unknown>, Pr
 			});
 
 			ws.addEventListener("error", (error) => {
-				getLogger().error({ msg: `WebSocket error for actor ${actorId}:`, error });
+				getLogger().error({
+					msg: `WebSocket error for actor ${actorId}:`,
+					error,
+				});
 			});
 		},
 	};

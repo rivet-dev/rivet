@@ -2,7 +2,7 @@
 // import engineStyles from '../src/lib/engineStyles.json' assert { type: 'json' };
 import { slugifyWithCounter } from "@sindresorhus/slugify";
 import glob from "fast-glob";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { toString } from "mdast-util-to-string";
 import { remark } from "remark";
 import { visit } from "unist-util-visit";

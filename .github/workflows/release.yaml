@@ -83,17 +83,25 @@ jobs:
             target: x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
+          # TODO: Add back when working
+          # - platform: linux
+          #   runner: depot-ubuntu-24.04-arm-4
+          #   target: aarch64-unknown-linux-musl
+          #   binary_ext: ""
+          #   arch: aarch64
           - platform: windows
             runner: depot-ubuntu-24.04-4
             target: x86_64-pc-windows-gnu
             binary_ext: ".exe"
             arch: x86_64
           - platform: macos
+            # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-4
             target: x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
           - platform: macos
+            # Use Linux instead of macOS builders since macOS does not support Docker
             runner: depot-ubuntu-24.04-4
             target: aarch64-apple-darwin
             binary_ext: ""
@@ -111,9 +119,9 @@ jobs:
         run: |
           # Use Docker BuildKit
           export DOCKER_BUILDKIT=1
-          
+
           # Build the binary using our Dockerfile
-          docker/engine/build.sh ${{ matrix.target }}
+          engine/docker/engine/build.sh ${{ matrix.target }}
           
           # Make sure dist directory exists and binary is there
           ls -la dist/
@@ -153,15 +161,12 @@ jobs:
     strategy:
       matrix:
         include:
-          # TODO(RVT-4479): Add back ARM builder once manifest generation fixed
-          # - platform: linux/arm64
-          #   runner: depot-ubuntu-24.04-4
-          #   arch_suffix: -arm64
+          - platform: linux/arm64
+            runner: depot-ubuntu-24.04-arm-4
+            arch_suffix: -arm64
           - platform: linux/x86_64
             runner: depot-ubuntu-24.04-4
-            # TODO: Replace with appropriate arch_suffix when needed
-            # arch_suffix: -amd64
-            arch_suffix: ''
+            arch_suffix: -amd64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Setup Docker on macOS
@@ -188,7 +193,7 @@ jobs:
           context: .
           push: true
           tags: rivetkit/engine:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
+          file: engine/docker/universal/Dockerfile
           target: engine-full
           platforms: ${{ matrix.platform }}
           build-args: |
@@ -205,7 +210,7 @@ jobs:
           context: .
           push: true
           tags: rivetkit/engine:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
+          file: engine/docker/universal/Dockerfile
           target: engine-slim
           platforms: ${{ matrix.platform }}
           build-args: |
