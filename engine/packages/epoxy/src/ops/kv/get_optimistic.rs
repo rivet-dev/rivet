@@ -52,29 +52,26 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 			let kv_key = kv_key.clone();
 			let cache_key = cache_key.clone();
 			async move {
-				(async move {
-					let (value, cache_value) = tokio::try_join!(
-						async {
-							let v = tx.get(&packed_key, Serializable).await?;
-							if let Some(ref bytes) = v {
-								Ok(Some(kv_key.deserialize(bytes)?))
-							} else {
-								Ok(None)
-							}
-						},
-						async {
-							let v = tx.get(&packed_cache_key, Serializable).await?;
-							if let Some(ref bytes) = v {
-								Ok(Some(cache_key.deserialize(bytes)?))
-							} else {
-								Ok(None)
-							}
+				let (value, cache_value) = tokio::try_join!(
+					async {
+						let v = tx.get(&packed_key, Serializable).await?;
+						if let Some(ref bytes) = v {
+							Ok(Some(kv_key.deserialize(bytes)?))
+						} else {
+							Ok(None)
 						}
-					)?;
+					},
+					async {
+						let v = tx.get(&packed_cache_key, Serializable).await?;
+						if let Some(ref bytes) = v {
+							Ok(Some(cache_key.deserialize(bytes)?))
+						} else {
+							Ok(None)
+						}
+					}
+				)?;
 
-					Ok(value.or(cache_value))
-				})
-				.await
+				Ok(value.or(cache_value))
 			}
 		})
 		.custom_instrument(tracing::info_span!("get_optimistic_tx"))
@@ -134,13 +131,11 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 					let packed_cache_key = packed_cache_key.clone();
 					let cache_key = cache_key.clone();
 					let value_to_cache = value.clone();
+
 					async move {
-						(async move {
-							let serialized = cache_key.serialize(value_to_cache)?;
-							tx.set(&packed_cache_key, &serialized);
-							Ok(())
-						})
-						.await
+						let serialized = cache_key.serialize(value_to_cache)?;
+						tx.set(&packed_cache_key, &serialized);
+						Ok(())
 					}
 				})
 				.custom_instrument(tracing::info_span!("cache_value_tx"))

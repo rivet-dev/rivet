@@ -42,7 +42,7 @@ pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 				// This will remove gateway_reply_to from the message since it does not need to be sent to the
 				// client
 				if let Some(reply_to) = tunnel_msg.gateway_reply_to.take() {
-					tracing::debug!(?tunnel_msg.request_id, ?reply_to, "creating active request");
+					tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), ?reply_to, "creating active request");
 					let mut active_requests = conn.tunnel_active_requests.lock().await;
 					active_requests.insert(
 						tunnel_msg.request_id,
@@ -55,7 +55,7 @@ pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 				match tunnel_msg.message_kind {
 					// If terminal, remove active request tracking
 					protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(_) => {
-						tracing::debug!(?tunnel_msg.request_id, "removing active conn due to close message");
+						tracing::debug!(request_id=?Uuid::from_bytes(tunnel_msg.request_id), "removing active conn due to close message");
 						let mut active_requests = conn.tunnel_active_requests.lock().await;
 						active_requests.remove(&tunnel_msg.request_id);
 					}

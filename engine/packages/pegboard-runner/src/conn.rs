@@ -4,7 +4,7 @@ use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
-use rivet_guard_core::{WebSocketHandle, websocket_handle::WebSocketReceiver};
+use rivet_guard_core::WebSocketHandle;
 use rivet_runner_protocol as protocol;
 use rivet_runner_protocol::*;
 use std::{
@@ -42,7 +42,6 @@ pub struct Conn {
 pub async fn init_conn(
 	ctx: &StandaloneCtx,
 	ws_handle: WebSocketHandle,
-	ws_rx: &mut WebSocketReceiver,
 	UrlData {
 		protocol_version,
 		namespace,
@@ -58,6 +57,9 @@ pub async fn init_conn(
 		.with_context(|| format!("namespace not found: {}", namespace_name))?;
 
 	tracing::debug!("new runner connection");
+
+	let ws_rx = ws_handle.recv();
+	let mut ws_rx = ws_rx.lock().await;
 
 	// Receive init packet
 	let (runner_id, workflow_id) = if let Some(msg) =

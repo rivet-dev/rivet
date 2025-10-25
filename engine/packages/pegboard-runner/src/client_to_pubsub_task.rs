@@ -8,14 +8,22 @@ use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
+use tokio::sync::Mutex;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::conn::Conn;
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
-pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>, mut ws_rx: WebSocketReceiver) -> Result<()> {
+pub async fn task(
+	ctx: StandaloneCtx,
+	conn: Arc<Conn>,
+	ws_rx: Arc<Mutex<WebSocketReceiver>>,
+) -> Result<()> {
 	tracing::debug!("starting WebSocket to pubsub forwarding task");
+
+	let mut ws_rx = ws_rx.lock().await;
+
 	while let Some(msg) = ws_rx.try_next().await? {
 		match msg {
 			WsMessage::Binary(data) => {

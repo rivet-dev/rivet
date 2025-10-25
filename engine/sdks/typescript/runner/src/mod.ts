@@ -155,9 +155,6 @@ export class Runner {
 		const actor = this.#removeActor(actorId, generation);
 		if (!actor) return;
 
-		// Unregister actor from tunnel
-		this.#tunnel?.unregisterActor(actor);
-
 		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
 		try {
 			await this.#config.onActorStop(actorId, actor.generation);
@@ -246,23 +243,8 @@ export class Runner {
 
 		this.#actors.delete(actorId);
 
-		// Close all WebSocket connections for this actor
-		const actorWebSockets = this.#actorWebSockets.get(actorId);
-		if (actorWebSockets) {
-			for (const ws of actorWebSockets) {
-				try {
-					ws.close(1000, "Actor stopped");
-				} catch (err) {
-					logger()?.error({
-						msg: "error closing websocket for actor",
-						runnerId: this.runnerId,
-						actorId,
-						err,
-					});
-				}
-			}
-			this.#actorWebSockets.delete(actorId);
-		}
+		// Unregister actor from tunnel
+		this.#tunnel?.unregisterActor(actor);
 
 		return actor;
 	}
@@ -1376,12 +1358,22 @@ export class Runner {
 			return;
 		}
 
+		logger()?.debug({
+			msg: "------------ SEND",
+		});
+
 		const encoded = protocol.encodeToServer(message);
 		if (
 			this.#pegboardWebSocket &&
 			this.#pegboardWebSocket.readyState === 1
 		) {
+			logger()?.debug({
+				msg: "------------ SEND 2",
+			});
 			this.#pegboardWebSocket.send(encoded);
+			logger()?.debug({
+				msg: "------------ SEND 3",
+			});
 		} else {
 			logger()?.error({
 				msg: "WebSocket not available or not open for sending data",

@@ -1,6 +1,6 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4, stringify as uuidstringify } from "uuid";
 import { logger } from "./log";
 import type { ActorInstance, Runner } from "./mod";
 import { unreachable } from "./utils";
@@ -95,6 +95,13 @@ export class Tunnel {
 	}
 
 	#sendAck(requestId: RequestId, messageId: MessageId) {
+		logger()?.debug({
+			msg: "------------ tunnel ws ready",
+			ready: this.#runner.__webSocketReady(),
+			requestId: uuidstringify(new Uint8Array(requestId)),
+			messageId: uuidstringify(new Uint8Array(messageId)),
+		});
+
 		if (!this.#runner.__webSocketReady()) {
 			return;
 		}
@@ -107,6 +114,12 @@ export class Tunnel {
 				messageKind: { tag: "TunnelAck", val: null },
 			},
 		};
+
+		logger()?.debug({
+			msg: "ack tunnel msg",
+			requestId: uuidstringify(new Uint8Array(requestId)),
+			messageId: uuidstringify(new Uint8Array(messageId)),
+		});
 
 		this.#runner.__sendToServer(message);
 	}
@@ -224,6 +237,13 @@ export class Tunnel {
 	}
 
 	async handleTunnelMessage(message: protocol.ToClientTunnelMessage) {
+		logger()?.debug({
+			msg: "tunnel msg",
+			requestId: uuidstringify(new Uint8Array(message.requestId)),
+			messageId: uuidstringify(new Uint8Array(message.messageId)),
+			message: message.messageKind,
+		});
+
 		if (message.messageKind.tag === "TunnelAck") {
 			// Mark pending message as acknowledged and remove it
 			const msgIdStr = bufferToString(message.messageId);
@@ -232,36 +252,55 @@ export class Tunnel {
 				this.#pendingTunnelMessages.delete(msgIdStr);
 			}
 		} else {
-			this.#sendAck(message.requestId, message.messageId);
 			switch (message.messageKind.tag) {
 				case "ToClientRequestStart":
+					this.#sendAck(message.requestId, message.messageId);
+
 					await this.#handleRequestStart(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
 				case "ToClientRequestChunk":
+					this.#sendAck(message.requestId, message.messageId);
+
 					await this.#handleRequestChunk(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
 				case "ToClientRequestAbort":
+					this.#sendAck(message.requestId, message.messageId);
+
 					await this.#handleRequestAbort(message.requestId);
 					break;
 				case "ToClientWebSocketOpen":
+					this.#sendAck(message.requestId, message.messageId);
+
 					await this.#handleWebSocketOpen(
 						message.requestId,
 						message.messageKind.val,
 					);
 					break;
 				case "ToClientWebSocketMessage":
-					await this.#handleWebSocketMessage(
+					let unhandled = await this.#handleWebSocketMessage(
 						message.requestId,
 						message.messageKind.val,
 					);
+					logger()?.debug({
+						msg: "------------ unhandled",
+						unhandled,
+						requestId: uuidstringify(new Uint8Array(message.requestId)),
+						messageId: uuidstringify(new Uint8Array(message.messageId)),
+					});
+
+					if (!unhandled) {
+						this.#sendAck(message.requestId, message.messageId);
+					}
 					break;
 				case "ToClientWebSocketClose":
+					this.#sendAck(message.requestId, message.messageId);
+
 					await this.#handleWebSocketClose(
 						message.requestId,
 						message.messageKind.val,
@@ -569,10 +608,16 @@ export class Tunnel {
 		}
 	}
 
+	/// Returns false if the message was sent off
 	async #handleWebSocketMessage(
 		requestId: ArrayBuffer,
 		msg: protocol.ToServerWebSocketMessage,
-	) {
+	): Promise<boolean> {
+		logger()?.debug({
+			msg: "adapter handle msg",
+			requestId: uuidstringify(new Uint8Array(requestId)),
+		});
+
 		const webSocketId = bufferToString(requestId);
 		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
@@ -580,7 +625,9 @@ export class Tunnel {
 				? new Uint8Array(msg.data)
 				: new TextDecoder().decode(new Uint8Array(msg.data));
 
-			adapter._handleMessage(data, msg.binary);
+			return adapter._handleMessage(data, msg.binary);
+		} else {
+			return true;
 		}
 	}
 

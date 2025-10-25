@@ -61,6 +61,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		_headers: &hyper::HeaderMap,
 		path: &str,
 		_request_context: &mut RequestContext,
+		_unique_request_id: Uuid,
 	) -> Result<()> {
 		// Get UPS
 		let ups = self.ctx.ups().context("failed to get UPS instance")?;
@@ -73,14 +74,8 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 
 		tracing::debug!(?path, "tunnel ws connection established");
 
-		// Accept WS
-		let mut ws_rx = ws_handle
-			.accept()
-			.await
-			.context("failed to accept WebSocket connection")?;
-
 		// Create connection
-		let conn = conn::init_conn(&self.ctx, ws_handle.clone(), &mut ws_rx, url_data)
+		let conn = conn::init_conn(&self.ctx, ws_handle.clone(), url_data)
 			.await
 			.context("failed to initialize runner connection")?;
 
@@ -101,7 +96,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let mut client_to_pubsub = tokio::spawn(client_to_pubsub_task::task(
 			self.ctx.clone(),
 			conn.clone(),
-			ws_rx,
+			ws_handle.recv(),
 		));
 
 		// Update pings

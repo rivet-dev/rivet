@@ -383,7 +383,7 @@ async fn outbound_handler(
 					}
 				}
 				Err(sse::Error::StreamEnded) => {
-					tracing::debug!("outbound req stopped early");
+					tracing::debug!(?runner_id, "outbound req stopped early");
 
 					return Ok(());
 				}
@@ -417,7 +417,7 @@ async fn outbound_handler(
 			match event {
 				Ok(sse::Event::Open) => {}
 				Ok(sse::Event::Message(msg)) => {
-					tracing::debug!(%msg.data, "received outbound req message");
+					tracing::debug!(%msg.data, ?runner_id, "received outbound req message");
 
 					// If runner_id is none at this point it means we did not send the stopping signal yet, so
 					// send it now
@@ -451,7 +451,7 @@ async fn outbound_handler(
 	tokio::select! {
 		res = wait_for_shutdown_fut => return res.map_err(Into::into),
 		_ = tokio::time::sleep(DRAIN_GRACE_PERIOD) => {
-			tracing::debug!("reached drain grace period before runner shut down")
+			tracing::debug!(?runner_id, "reached drain grace period before runner shut down")
 		}
 	}
 
@@ -463,7 +463,7 @@ async fn outbound_handler(
 		publish_to_client_stop(ctx, runner_id).await?;
 	}
 
-	tracing::debug!("outbound req stopped");
+	tracing::debug!(?runner_id, "outbound req stopped");
 
 	Ok(())
 }
