@@ -324,10 +324,8 @@ export class EngineActorDriver implements ActorDriver {
 
 		const url = new URL(request.url);
 
-		// Parse configuration from Sec-WebSocket-Protocol header
+		// Parse configuration from Sec-WebSocket-Protocol header (optional for path-based routing)
 		const protocols = request.headers.get("sec-websocket-protocol");
-		if (protocols === null)
-			throw new Error(`Missing sec-websocket-protocol header`);
 
 		let encodingRaw: string | undefined;
 		let connParamsRaw: string | undefined;

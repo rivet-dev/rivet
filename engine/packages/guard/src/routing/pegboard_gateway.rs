@@ -10,9 +10,30 @@ use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
+pub const X_RIVET_AMESPACE: HeaderName = HeaderName::from_static("x-rivet-namespace");
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
+const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
-/// Route requests to actor services based on hostname and path
+/// Route requests to actor services using path-based routing
+#[tracing::instrument(skip_all)]
+pub async fn route_request_path_based(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	actor_id_str: &str,
+	_token: Option<&str>,
+	path: &str,
+	_headers: &hyper::HeaderMap,
+	_is_websocket: bool,
+) -> Result<Option<RoutingOutput>> {
+	// NOTE: Token validation implemented in EE
+
+	// Parse actor ID
+	let actor_id = Id::parse(actor_id_str).context("invalid actor id in path")?;
+
+	route_request_inner(ctx, shared_state, actor_id, path).await
+}
+
+/// Route requests to actor services based on headers
 #[tracing::instrument(skip_all)]
 pub async fn route_request(
 	ctx: &StandaloneCtx,
@@ -22,14 +43,13 @@ pub async fn route_request(
 	path: &str,
 	headers: &hyper::HeaderMap,
 	is_websocket: bool,
-	query_params: &std::collections::HashMap<String, String>,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "actor" {
 		return Ok(None);
 	}
 
-	// Extract actor ID from WebSocket protocol, HTTP header, or query param
+	// Extract actor ID from WebSocket protocol or HTTP header
 	let actor_id_str = if is_websocket {
 		// For WebSocket, parse the sec-websocket-protocol header
 		headers
@@ -42,26 +62,22 @@ pub async fn route_request(
 					.map(|p| p.trim())
 					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
 			})
-			// Fallback to query parameter if protocol not provided
-			.or_else(|| query_params.get("x_rivet_actor").map(|s| s.as_str()))
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
-					header: "`rivet_actor.*` protocol in sec-websocket-protocol or x_rivet_actor query parameter".to_string(),
+					header: "`rivet_actor.*` protocol in sec-websocket-protocol".to_string(),
 				}
 				.build()
 			})?
 	} else {
-		// For HTTP, use the x-rivet-actor header, fallback to query param
+		// For HTTP, use the x-rivet-actor header
 		headers
 			.get(X_RIVET_ACTOR)
 			.map(|x| x.to_str())
 			.transpose()
 			.context("invalid x-rivet-actor header")?
-			// Fallback to query parameter if header not provided
-			.or_else(|| query_params.get("x_rivet_actor").map(|s| s.as_str()))
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
-					header: format!("{} header or x_rivet_actor query parameter", X_RIVET_ACTOR),
+					header: X_RIVET_ACTOR.to_string(),
 				}
 				.build()
 			})?
@@ -70,6 +86,15 @@ pub async fn route_request(
 	// Find actor to route to
 	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
 
+	route_request_inner(ctx, shared_state, actor_id, path).await
+}
+
+async fn route_request_inner(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	actor_id: Id,
+	path: &str,
+) -> Result<Option<RoutingOutput>> {
 	// Route to peer dc where the actor lives
 	if actor_id.label() != ctx.config().dc_label() {
 		tracing::debug!(peer_dc_label=?actor_id.label(), "re-routing actor to peer dc");
@@ -189,11 +214,12 @@ pub async fn route_request(
 
 	tracing::debug!(?actor_id, ?runner_id, "actor ready");
 
-	// Return pegboard-gateway instance
+	// Return pegboard-gateway instance with path
 	let gateway = pegboard_gateway::PegboardGateway::new(
 		shared_state.pegboard_gateway.clone(),
 		runner_id,
 		actor_id,
+		path.to_string(),
 	);
 	Ok(Some(RoutingOutput::CustomServe(std::sync::Arc::new(
 		gateway,
