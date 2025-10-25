@@ -311,6 +311,7 @@ const defaultContext = {
 				destroyedAt: data.destroyedAt
 					? new Date(data.destroyedAt)
 					: null,
+				runner: data.runner ?? undefined,
 				sleepingAt: data.sleepingAt ? new Date(data.sleepingAt) : null,
 				startedAt: data.startedAt ? new Date(data.startedAt) : null,
 			}),

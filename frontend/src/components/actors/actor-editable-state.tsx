@@ -14,11 +14,7 @@ import {
 	JsonCode,
 } from "@/components/code-mirror";
 import { ActorStateChangeIndicator } from "./actor-state-change-indicator";
-import {
-	type ActorId,
-	useActorStatePatchMutation,
-	useActorStateStream,
-} from "./queries";
+import { type ActorId, useActorStatePatchMutation } from "./queries";
 
 const isValidJson = (json: string | null): json is string => {
 	if (!json) return false;
@@ -50,7 +46,7 @@ export function ActorEditableState({
 
 	const isValid = isValidJson(value) ? JSON.parse(value) : false;
 
-	const { mutate, isPending } = useActorStatePatchMutation(actorId);
+	const { mutateAsync, isPending } = useActorStatePatchMutation(actorId);
 
 	// useActorStateStream(actorId);
 
@@ -88,8 +84,8 @@ export function ActorEditableState({
 								variant="outline"
 								isLoading={isPending}
 								disabled={!isValid || !isEditing}
-								onClick={() => {
-									mutate(JSON.parse(value || ""));
+								onClick={async () => {
+									await mutateAsync(JSON.parse(value || ""));
 									setIsEditing(false);
 									setValue(null);
 								}}

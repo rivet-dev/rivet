@@ -10,10 +10,15 @@ const CodeMessageSchema = z.object({
 const InitMessageSchema = z.object({
 	type: z.literal("init"),
 	rpcs: z.array(z.string()).optional(),
-	engineToken: z.string().optional(),
 	endpoint: z.string(),
 	name: z.string(),
 	id: z.string(),
+
+	// engine related
+	engineToken: z.string().optional(),
+	namespace: z.string().optional(),
+	runnerName: z.string().optional(),
+	inspectorToken: z.string().optional(),
 });
 
 export const MessageSchema = z.discriminatedUnion("type", [

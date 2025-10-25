@@ -1,11 +1,12 @@
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
-import { createClient } from "rivetkit/client";
+import { createActorInspectorClient } from "rivetkit/inspector";
 import {
 	createHighlighterCore,
 	createOnigurumaEngine,
 	type HighlighterCore,
 } from "shiki";
+import { match } from "ts-pattern";
 import {
 	type InitMessage,
 	MessageSchema,
@@ -113,12 +114,7 @@ addEventListener("message", async (event) => {
 	}
 
 	if (data.type === "init") {
-		init = {
-			rpcs: data.rpcs ?? [],
-			endpoint: data.endpoint,
-			name: data.name,
-			id: data.id,
-		};
+		init = structuredClone(data);
 		respond({
 			type: "ready",
 		});
@@ -181,9 +177,43 @@ function respond(msg: Response) {
 async function callAction({ name, args }: { name: string; args: unknown[] }) {
 	if (!init) throw new Error("Actor not initialized");
 
-	const client = createClient({
-		endpoint: init.endpoint,
-		token: init.engineToken,
-	}).getForId(init.name, init.id);
-	return await client.action({ name, args });
+	const url = new URL(`inspect`, init.endpoint).href;
+
+	// we need to build this from scratch because we don't have access to
+	// createInspectorActorContext in the worker
+	// and we want to avoid bundling the entire RivetKit here, issues with @react-refresh
+	const client = createActorInspectorClient(url, {
+		headers: {
+			Authorization: init.inspectorToken
+				? `Bearer ${init.inspectorToken}`
+				: "",
+			"x-rivet-target": "actor",
+			"x-rivet-actor": init.id,
+			"X-RivetKit-Query": JSON.stringify({
+				getForId: { actorId: init.id },
+			}),
+
+			...match(__APP_TYPE__)
+				.with("engine", () => {
+					return init?.engineToken
+						? { "X-Rivet-Token": init.engineToken }
+						: {};
+				})
+				.otherwise(() => ({})),
+		},
+	});
+
+	const response = await client.action.$post({
+		json: { name, params: args },
+	});
+
+	if (!response.ok) {
+		try {
+			return await response.json();
+		} catch {
+			return await response.text();
+		}
+	}
+
+	return (await response.json()).result;
 }
