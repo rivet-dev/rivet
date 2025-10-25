@@ -348,7 +348,7 @@ async function checkPythonEnvironment() {
 async function getCurrentVersion(): Promise<string> {
 	// Get version from the main package
 	const { stdout } =
-		await $`cat packages/rivetkit/package.json | jq -r '.version'`;
+		await $`cat rivetkit-typescript/packages/rivetkit/package.json | jq -r '.version'`;
 	const version = stdout.trim();
 	return version;
 }
