@@ -17,7 +17,10 @@ import { RunnerConfigSchema } from "@/registry/run-config";
 import { ConfigSchema, type InputConfig } from "./config";
 import { logger } from "./log";
 
-function serve(registry: Registry<any>, inputConfig?: InputConfig): ServerType {
+async function serve(
+	registry: Registry<any>,
+	inputConfig?: InputConfig,
+): Promise<ServerType> {
 	// Configure default configuration
 	inputConfig ??= {};
 
@@ -30,7 +33,8 @@ function serve(registry: Registry<any>, inputConfig?: InputConfig): ServerType {
 
 	// Create router
 	const runConfig = RunnerConfigSchema.parse(inputConfig);
-	const driver = inputConfig.driver ?? createFileSystemOrMemoryDriver(false);
+	const driver =
+		inputConfig.driver ?? (await createFileSystemOrMemoryDriver(false));
 	const managerDriver = driver.manager(registry.config, config);
 	const client = createClientWithDriver(
 		managerDriver,
@@ -92,7 +96,7 @@ export async function setupTest<A extends Registry<any>>(
 
 	// Start server with a random port
 	const port = await getPort();
-	const server = serve(registry, { port });
+	const server = await serve(registry, { port });
 	c.onTestFinished(
 		async () =>
 			await new Promise((resolve) => server.close(() => resolve())),

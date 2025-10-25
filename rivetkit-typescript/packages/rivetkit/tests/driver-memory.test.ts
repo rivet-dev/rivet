@@ -14,7 +14,7 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async () => {
 				return {
-					driver: createFileSystemOrMemoryDriver(false),
+					driver: await createFileSystemOrMemoryDriver(false),
 				};
 			},
 		);

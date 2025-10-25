@@ -41,5 +41,56 @@
 				"noExplicitAny": "off"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": [
+				"rivetkit-typescript/packages/rivetkit/src/**/*",
+				"!rivetkit-typescript/packages/rivetkit/src/test/**/*"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"node:crypto": "Use '@/utils/node' getNodeCrypto() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:fs": "Use '@/utils/node' getNodeFsSync() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:fs/promises": "Use '@/utils/node' getNodeFs() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:path": "Use '@/utils/node' getNodePath() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:os": "Use '@/utils/node' getNodeOs() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:child_process": "Use '@/utils/node' getNodeChildProcess() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:stream": "Use '@/utils/node' getNodeStream() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:net": "Use '@/utils/node' instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"node:url": "Use '@/utils/node' instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"crypto": "Use '@/utils/node' getNodeCrypto() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"fs": "Use '@/utils/node' getNodeFsSync() or getNodeFs() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"fs/promises": "Use '@/utils/node' getNodeFs() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"path": "Use '@/utils/node' getNodePath() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"os": "Use '@/utils/node' getNodeOs() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"child_process": "Use '@/utils/node' getNodeChildProcess() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"stream": "Use '@/utils/node' getNodeStream() instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"net": "Use '@/utils/node' instead. Direct Node.js imports are only allowed in src/utils/node.ts",
+									"url": "Use '@/utils/node' instead. Direct Node.js imports are only allowed in src/utils/node.ts"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"rivetkit-typescript/packages/rivetkit/src/utils/node.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": "off"
+					}
+				}
+			}
+		}
+	]
 }

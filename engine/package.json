@@ -1,28 +1,11 @@
 {
 	"name": "@rivetkit/engine",
-	"private": true,
+	"version": "1.0.0",
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
 	"packageManager": "pnpm@10.13.1",
-	"scripts": {
-		"start": "npx turbo watch build",
-		"build": "npx turbo build",
-		"test": "npx turbo test",
-		"test:watch": "npx turbo watch test",
-		"check-types": "npx turbo check-types",
-		"fmt": "pnpm biome check --write --diagnostic-level=error ."
-	},
-	"devDependencies": {
-		"@bare-ts/tools": "0.15.0",
-		"@biomejs/biome": "^2.2.3",
-		"lefthook": "^1.12.4",
-		"tsup": "^8.5.0",
-		"turbo": "^2.5.6",
-		"typescript": "^5.9.2"
-	},
 	"dependencies": {
-		"@sentry/vite-plugin": "^2.23.1"
-	},
-	"resolutions": {
-		"rivetkit": "workspace:*",
-		"@clerk/shared": "3.27.1"
+		"@vbare/compiler": "^0.0.3"
 	}
 }

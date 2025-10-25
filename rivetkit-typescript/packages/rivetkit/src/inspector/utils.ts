@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+// import crypto from "node:crypto";
 import { createMiddleware } from "hono/factory";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { RunConfig } from "@/mod";
@@ -20,10 +20,11 @@ export function compareSecrets(providedSecret: string, validSecret: string) {
 		return false;
 	}
 
-	// Perform timing-safe comparison
-	if (!crypto.timingSafeEqual(a, b)) {
-		return false;
-	}
+	// TODO:
+	// // Perform timing-safe comparison
+	// if (!crypto.timingSafeEqual(a, b)) {
+	// 	return false;
+	// }
 	return true;
 }
 

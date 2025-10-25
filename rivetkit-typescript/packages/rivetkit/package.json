@@ -155,6 +155,10 @@
 		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/topologies/coordinate/mod.ts src/topologies/partition/mod.ts src/utils.ts src/driver-helpers/mod.ts src/driver-test-suite/mod.ts src/test/mod.ts src/inspector/mod.ts",
 		"build:schema": "./scripts/compile-bare.ts compile schemas/client-protocol/v1.bare -o dist/schemas/client-protocol/v1.ts && ./scripts/compile-bare.ts compile schemas/file-system-driver/v1.bare -o dist/schemas/file-system-driver/v1.ts && ./scripts/compile-bare.ts compile schemas/actor-persist/v1.bare -o dist/schemas/actor-persist/v1.ts",
 		"check-types": "tsc --noEmit",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format .",
+		"format:write": "biome format --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"dump-openapi": "tsx scripts/dump-openapi.ts"
@@ -176,6 +180,7 @@
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "^0.13.0",
+		"@biomejs/biome": "^2.2.3",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
 		"@types/invariant": "^2",

@@ -35,6 +35,12 @@ importers:
         specifier: ^5.9.2
         version: 5.9.2
 
+  engine:
+    dependencies:
+      '@vbare/compiler':
+        specifier: ^0.0.3
+        version: 0.0.3(@bare-ts/lib@0.4.0)
+
   engine/docker/template:
     dependencies:
       '@types/js-yaml':
@@ -891,9 +897,6 @@ importers:
         specifier: ^4.7.0
         version: 4.9.8
     devDependencies:
-      '@hono/node-server':
-        specifier: ^1.19.1
-        version: 1.19.1(hono@4.9.8)
       '@types/node':
         specifier: ^22.13.9
         version: 22.18.1
@@ -1969,7 +1972,7 @@ importers:
         version: 3.13.12(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -2332,6 +2335,9 @@ importers:
       '@bare-ts/tools':
         specifier: ^0.13.0
         version: 0.13.0(@bare-ts/lib@0.3.0)
+      '@biomejs/biome':
+        specifier: ^2.2.3
+        version: 2.2.3
       '@hono/node-server':
         specifier: ^1.18.2
         version: 1.19.1(hono@4.9.8)
@@ -2437,13 +2443,13 @@ importers:
         version: 6.0.1
       '@mdx-js/loader':
         specifier: ^3.1.1
-        version: 3.1.1(webpack@5.101.3(esbuild@0.25.9))
+        version: 3.1.1(webpack@5.101.3)
       '@mdx-js/react':
         specifier: ^3.1.1
         version: 3.1.1(@types/react@19.2.2)(react@19.1.1)
       '@next/mdx':
         specifier: ^15.5.2
-        version: 15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9)))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))
+        version: 15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))
       '@next/third-parties':
         specifier: latest
         version: 16.0.0(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)
@@ -2633,7 +2639,7 @@ importers:
         version: 13.0.2(eslint@8.26.0)(typescript@5.9.2)
       file-loader:
         specifier: ^6.2.0
-        version: 6.2.0(webpack@5.101.3(esbuild@0.25.9))
+        version: 6.2.0(webpack@5.101.3)
       prettier:
         specifier: ^2.8.8
         version: 2.8.8
@@ -3238,6 +3244,13 @@ packages:
   '@bare-ts/tools@0.15.0':
     resolution: {integrity: sha512-YMDrsZjyzW0rFMya0CgNDwR8O0rH1QdbZG1jZblwvt0dCCxbAseapnc3BZ5h1/bkJ9mYdPTedge0S7UaQzZKmg==}
     engines: {node: '>=16.9.0'}
+    hasBin: true
+    peerDependencies:
+      '@bare-ts/lib': '>=0.3.0 <=0.4.0'
+
+  '@bare-ts/tools@0.16.1':
+    resolution: {integrity: sha512-eKXTnVqzuKDxr1ozKsFSZfM1wcN4g/iMRnG9GB2fA8oyUcHxwokJC50CANfuSLe6rLnjhZ8Ave1Y2TnZqUqGcQ==}
+    engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
       '@bare-ts/lib': '>=0.3.0 <=0.4.0'
@@ -6948,6 +6961,11 @@ packages:
     resolution: {integrity: sha512-TQMCz2pFJMfpNxmSfX1VSfTjwUIFx/mL+p1bnfM1xjjdla7Z+KnGMW/EhFbpckp3LyWAH4PgOsMwOMnIN+MBFg==}
     peerDependencies:
       '@urql/core': ^5.0.0
+
+  '@vbare/compiler@0.0.3':
+    resolution: {integrity: sha512-Dhz0iwYjIhyGAPsNpiqDmDqgwLXfEonjFJLVQ0m/s4Tt9CsTjY0WV3KiQtJi5BdPt9481HR+0uwExH36FuuR2A==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -14327,6 +14345,10 @@ snapshots:
       '@bare-ts/lib': 0.4.0
       commander: 11.1.0
 
+  '@bare-ts/tools@0.16.1(@bare-ts/lib@0.4.0)':
+    dependencies:
+      '@bare-ts/lib': 0.4.0
+
   '@base-org/account@2.0.1(@types/react@18.3.24)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.5.0(react@19.1.1))(zod@3.25.76)':
     dependencies:
       '@noble/hashes': 1.4.0
@@ -16049,12 +16071,12 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.2': {}
 
-  '@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9))':
+  '@mdx-js/loader@3.1.1(webpack@5.101.3)':
     dependencies:
       '@mdx-js/mdx': 3.1.1
       source-map: 0.7.6
     optionalDependencies:
-      webpack: 5.101.3(esbuild@0.25.9)
+      webpack: 5.101.3
     transitivePeerDependencies:
       - supports-color
 
@@ -16232,11 +16254,11 @@ snapshots:
     dependencies:
       glob: 7.1.7
 
-  '@next/mdx@15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9)))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))':
+  '@next/mdx@15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))':
     dependencies:
       source-map: 0.7.6
     optionalDependencies:
-      '@mdx-js/loader': 3.1.1(webpack@5.101.3(esbuild@0.25.9))
+      '@mdx-js/loader': 3.1.1(webpack@5.101.3)
       '@mdx-js/react': 3.1.1(@types/react@19.2.2)(react@19.1.1)
 
   '@next/swc-darwin-arm64@15.4.5':
@@ -18452,16 +18474,6 @@ snapshots:
       '@codemirror/state': 6.5.2
       '@codemirror/view': 6.38.2
 
-  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
-    dependencies:
-      '@codemirror/autocomplete': 6.19.0
-      '@codemirror/commands': 6.9.0
-      '@codemirror/language': 6.11.3
-      '@codemirror/lint': 6.9.0
-      '@codemirror/search': 6.5.11
-      '@codemirror/state': 6.5.2
-      '@codemirror/view': 6.38.2
-
   '@uiw/codemirror-theme-github@4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
     dependencies:
       '@uiw/codemirror-themes': 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -18523,6 +18535,13 @@ snapshots:
     dependencies:
       '@urql/core': 5.2.0
       wonka: 6.3.5
+
+  '@vbare/compiler@0.0.3(@bare-ts/lib@0.4.0)':
+    dependencies:
+      '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.4.0)
+      commander: 11.1.0
+    transitivePeerDependencies:
+      - '@bare-ts/lib'
 
   '@vitejs/plugin-react@4.7.0(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))':
     dependencies:
@@ -20523,7 +20542,7 @@ snapshots:
       eslint: 8.26.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.26.0)
       eslint-plugin-react: 7.37.5(eslint@8.26.0)
       eslint-plugin-react-hooks: 4.6.2(eslint@8.26.0)
@@ -20545,7 +20564,7 @@ snapshots:
     dependencies:
       debug: 4.4.1
       eslint: 8.26.0
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
       glob: 7.2.3
       is-glob: 4.0.3
       resolve: 1.22.10
@@ -20564,7 +20583,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -21063,11 +21082,11 @@ snapshots:
     dependencies:
       flat-cache: 3.2.0
 
-  file-loader@6.2.0(webpack@5.101.3(esbuild@0.25.9)):
+  file-loader@6.2.0(webpack@5.101.3):
     dependencies:
       loader-utils: 2.0.4
       schema-utils: 3.3.0
-      webpack: 5.101.3(esbuild@0.25.9)
+      webpack: 5.101.3
 
   file-saver@2.0.5: {}
 
@@ -25577,6 +25596,16 @@ snapshots:
       webpack: 5.101.3(esbuild@0.25.9)
     optionalDependencies:
       esbuild: 0.25.9
+    optional: true
+
+  terser-webpack-plugin@5.3.14(webpack@5.101.3):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.3
+      serialize-javascript: 6.0.2
+      terser: 5.44.0
+      webpack: 5.101.3
 
   terser@5.44.0:
     dependencies:
@@ -26689,6 +26718,38 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
+  webpack@5.101.3:
+    dependencies:
+      '@types/eslint-scope': 3.7.7
+      '@types/estree': 1.0.8
+      '@types/json-schema': 7.0.15
+      '@webassemblyjs/ast': 1.14.1
+      '@webassemblyjs/wasm-edit': 1.14.1
+      '@webassemblyjs/wasm-parser': 1.14.1
+      acorn: 8.15.0
+      acorn-import-phases: 1.0.4(acorn@8.15.0)
+      browserslist: 4.26.3
+      chrome-trace-event: 1.0.4
+      enhanced-resolve: 5.18.3
+      es-module-lexer: 1.7.0
+      eslint-scope: 5.1.1
+      events: 3.3.0
+      glob-to-regexp: 0.4.1
+      graceful-fs: 4.2.11
+      json-parse-even-better-errors: 2.3.1
+      loader-runner: 4.3.1
+      mime-types: 2.1.35
+      neo-async: 2.6.2
+      schema-utils: 4.3.3
+      tapable: 2.3.0
+      terser-webpack-plugin: 5.3.14(webpack@5.101.3)
+      watchpack: 2.4.4
+      webpack-sources: 3.3.3
+    transitivePeerDependencies:
+      - '@swc/core'
+      - esbuild
+      - uglify-js
+
   webpack@5.101.3(esbuild@0.25.9):
     dependencies:
       '@types/eslint-scope': 3.7.7
@@ -26720,6 +26781,7 @@ snapshots:
       - '@swc/core'
       - esbuild
       - uglify-js
+    optional: true
 
   whatwg-fetch@3.6.20: {}
 

@@ -13,14 +13,14 @@ import {
 import { type RunnerConfig, RunnerConfigSchema } from "@/registry/run-config";
 import { VERSION } from "@/utils";
 
-function main() {
+async function main() {
 	const registryConfig: RegistryConfig = RegistryConfigSchema.parse({
 		use: {},
 	});
 	const registry = setup(registryConfig);
 
 	const driverConfig: RunnerConfig = RunnerConfigSchema.parse({
-		driver: createFileSystemOrMemoryDriver(false),
+		driver: await createFileSystemOrMemoryDriver(false),
 		getUpgradeWebSocket: () => () => unimplemented(),
 		inspector: {
 			enabled: false,
@@ -70,7 +70,7 @@ function main() {
 		"rivetkit-openapi",
 		"openapi.json",
 	);
-	fs.writeFile(outputPath, JSON.stringify(openApiDoc, null, 2));
+	await fs.writeFile(outputPath, JSON.stringify(openApiDoc, null, 2));
 	console.log("Dumped OpenAPI to", outputPath);
 }
 
