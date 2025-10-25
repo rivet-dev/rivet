@@ -23,6 +23,7 @@ export const HEADER_RIVET_TOKEN = "x-rivet-token";
 // MARK: Manager Gateway Headers
 export const HEADER_RIVET_TARGET = "x-rivet-target";
 export const HEADER_RIVET_ACTOR = "x-rivet-actor";
+export const HEADER_RIVET_NAMESPACE = "x-rivet-namespace";
 
 // MARK: WebSocket Protocol Prefixes
 /** Some servers (such as node-ws & Cloudflare) require explicitly match a certain WebSocket protocol. This gives us a static protocol to match against. */
@@ -55,5 +56,6 @@ export const ALLOWED_PUBLIC_HEADERS = [
 	HEADER_CONN_TOKEN,
 	HEADER_RIVET_TARGET,
 	HEADER_RIVET_ACTOR,
+	HEADER_RIVET_NAMESPACE,
 	HEADER_RIVET_TOKEN,
 ];

@@ -17,6 +17,13 @@ pub(crate) const SEC_WEBSOCKET_PROTOCOL: HeaderName =
 	HeaderName::from_static("sec-websocket-protocol");
 pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
 
+#[derive(Debug, Clone)]
+pub struct ActorPathInfo {
+	pub actor_id: String,
+	pub token: Option<String>,
+	pub remaining_path: String,
+}
+
 /// Creates the main routing function that handles all incoming requests
 #[tracing::instrument(skip_all)]
 pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) -> RoutingFn {
@@ -35,9 +42,6 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 
 					tracing::debug!("Routing request for hostname: {host}, path: {path}");
 
-					// Parse query parameters
-					let query_params = parse_query_params(path);
-
 					// Check if this is a WebSocket upgrade request
 					let is_websocket = headers
 						.get("upgrade")
@@ -45,7 +49,28 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						.map(|v| v.eq_ignore_ascii_case("websocket"))
 						.unwrap_or(false);
 
-					// Extract target from WebSocket protocol, HTTP header, or query param
+					// First, check if this is an actor path-based route
+					if let Some(actor_path_info) = parse_actor_path(path) {
+						tracing::debug!(?actor_path_info, "routing using path-based actor routing");
+
+						// Route to pegboard gateway with the extracted information
+						if let Some(routing_output) = pegboard_gateway::route_request_path_based(
+							&ctx,
+							&shared_state,
+							&actor_path_info.actor_id,
+							actor_path_info.token.as_deref(),
+							&actor_path_info.remaining_path,
+							headers,
+							is_websocket,
+						)
+						.await?
+						{
+							return Ok(routing_output);
+						}
+					}
+
+					// Fallback to header-based routing
+					// Extract target from WebSocket protocol or HTTP header
 					let target = if is_websocket {
 						// For WebSocket, parse the sec-websocket-protocol header
 						headers
@@ -58,21 +83,15 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 									.map(|p| p.trim())
 									.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
 							})
-							// Fallback to query parameter if protocol not provided
-							.or_else(|| query_params.get("x_rivet_target").map(|s| s.as_str()))
 					} else {
-						// For HTTP, use the x-rivet-target header, fallback to query param
-						headers
-							.get(X_RIVET_TARGET)
-							.and_then(|x| x.to_str().ok())
-							.or_else(|| query_params.get("x_rivet_target").map(|s| s.as_str()))
+						// For HTTP, use the x-rivet-target header
+						headers.get(X_RIVET_TARGET).and_then(|x| x.to_str().ok())
 					};
 
 					// Read target
 					if let Some(target) = target {
 						if let Some(routing_output) =
-							runner::route_request(&ctx, target, host, path, headers, &query_params)
-								.await?
+							runner::route_request(&ctx, target, host, path, headers).await?
 						{
 							return Ok(routing_output);
 						}
@@ -85,7 +104,6 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 							path,
 							headers,
 							is_websocket,
-							&query_params,
 						)
 						.await?
 						{
@@ -120,18 +138,98 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 	)
 }
 
-/// Parse query parameters from a path string
-fn parse_query_params(path: &str) -> std::collections::HashMap<String, String> {
-	let mut params = std::collections::HashMap::new();
+/// Parse actor routing information from path
+/// Matches patterns:
+/// - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
+/// - /gateway/actors/{actor_id}/route/{...path}
+pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
+	// Find query string position (everything from ? onwards, but before fragment)
+	let query_pos = path.find('?');
+	let fragment_pos = path.find('#');
 
-	if let Some(query_start) = path.find('?') {
-		// Strip fragment if present
-		let query = &path[query_start + 1..].split('#').next().unwrap_or("");
-		// Use url::form_urlencoded to properly decode query parameters
-		for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
-			params.insert(key.into_owned(), value.into_owned());
-		}
+	// Extract query string (excluding fragment)
+	let query_string = match (query_pos, fragment_pos) {
+		(Some(q), Some(f)) if q < f => &path[q..f],
+		(Some(q), None) => &path[q..],
+		_ => "",
+	};
+
+	// Extract base path (before query and fragment)
+	let base_path = match query_pos {
+		Some(pos) => &path[..pos],
+		None => match fragment_pos {
+			Some(pos) => &path[..pos],
+			None => path,
+		},
+	};
+
+	// Check for double slashes (invalid path)
+	if base_path.contains("//") {
+		return None;
 	}
 
-	params
+	// Split the path into segments
+	let segments: Vec<&str> = base_path.split('/').filter(|s| !s.is_empty()).collect();
+
+	// Check minimum required segments: gateway, actors, {actor_id}, route
+	if segments.len() < 4 {
+		return None;
+	}
+
+	// Verify the fixed segments
+	if segments[0] != "gateway" || segments[1] != "actors" {
+		return None;
+	}
+
+	// Check for empty actor_id
+	if segments[2].is_empty() {
+		return None;
+	}
+
+	let actor_id = segments[2].to_string();
+
+	// Check for token or direct route
+	let (token, remaining_path_start_idx) =
+		if segments.len() >= 6 && segments[3] == "tokens" && segments[5] == "route" {
+			// Pattern with token: /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
+			// Check for empty token
+			if segments[4].is_empty() {
+				return None;
+			}
+			(Some(segments[4].to_string()), 6)
+		} else if segments.len() >= 4 && segments[3] == "route" {
+			// Pattern without token: /gateway/actors/{actor_id}/route/{...path}
+			(None, 4)
+		} else {
+			return None;
+		};
+
+	// Calculate the position in the original path where remaining path starts
+	let mut prefix_len = 0;
+	for (i, segment) in segments.iter().enumerate() {
+		if i >= remaining_path_start_idx {
+			break;
+		}
+		prefix_len += 1 + segment.len(); // +1 for the slash
+	}
+
+	// Extract the remaining path preserving trailing slashes
+	let remaining_base = if prefix_len < base_path.len() {
+		&base_path[prefix_len..]
+	} else {
+		"/"
+	};
+
+	// Ensure remaining path starts with /
+	let remaining_path = if remaining_base.is_empty() || !remaining_base.starts_with('/') {
+		format!("/{}{}", remaining_base, query_string)
+	} else {
+		format!("{}{}", remaining_base, query_string)
+	};
+
+	Some(ActorPathInfo {
+		actor_id,
+		token,
+		remaining_path,
+	})
 }
