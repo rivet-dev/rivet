@@ -354,14 +354,11 @@ export function generateDockerCompose(context: TemplateContext) {
 	// If host networking is requested, set network_mode for all services
 	if (context.config.networkMode === "host") {
 		for (const svc of Object.values(dockerComposeConfig.services)) {
-			// @ts-expect-error - mutate dynamic service objects
 			svc.network_mode = "host";
 			// Remove networks field as it's incompatible with host networking
-			// @ts-expect-error
 			if (svc.networks) delete svc.networks;
 			// Remove ports since published ports are ignored with host networking
 			// and produce warnings in Docker Compose output.
-			// @ts-expect-error
 			if (svc.ports) delete svc.ports;
 		}
 	}

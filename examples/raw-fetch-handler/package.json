@@ -13,6 +13,7 @@
 		"test": "vitest"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.14.0",
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"hono": "^4.6.18",

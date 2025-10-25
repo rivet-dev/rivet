@@ -26,6 +26,7 @@
 		"vitest": "^3.1.1"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.14.0",
 		"@rivetkit/react": "workspace:*",
 		"@types/better-sqlite3": "^7.6.13",
 		"better-auth": "^1.0.1",

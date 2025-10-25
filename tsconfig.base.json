@@ -8,6 +8,7 @@
 		"allowSyntheticDefaultImports": true,
 		"stripInternal": true,
 		"moduleResolution": "bundler",
+		"downlevelIteration": true,
 		"lib": ["ESNext"],
 		"types": ["node"]
 	}
