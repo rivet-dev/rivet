@@ -45,9 +45,11 @@ import {
 	H3,
 	Skeleton,
 } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import { useCloudDataProvider, useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
 import { cloudEnv, engineEnv } from "@/lib/env";
 import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
+import z from "zod";
+import { hasProvider } from "@/app/data-providers/engine-data-provider";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -435,14 +437,13 @@ function Runners() {
 }
 
 function usePublishableToken() {
-	const dataProvider = useEngineCompatDataProvider();
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
-			return useSuspenseQuery(dataProvider.publishableTokenQueryOptions())
+			return useSuspenseQuery(useCloudNamespaceDataProvider().publishableTokenQueryOptions())
 				.data;
 		})
 		.with("engine", () => {
-			return useSuspenseQuery(dataProvider.engineAdminTokenQueryOptions())
+			return useSuspenseQuery(useEngineNamespaceDataProvider().engineAdminTokenQueryOptions())
 				.data;
 		})
 		.otherwise(() => {
@@ -569,27 +570,6 @@ function ConnectYourFrontend() {
 				</CodeGroup>
 			</div>
 		</div>
-	);
-}
-
-type RunnerConfig = [
-	string,
-	{
-		datacenters: Record<string, { metadata?: { provider?: string } }>;
-	},
-];
-
-function hasProvider(
-	configs: RunnerConfig[] | undefined,
-	providers: string[],
-): boolean {
-	if (!configs) return false;
-	return configs.some(([, config]) =>
-		Object.values(config.datacenters).some(
-			(datacenter) =>
-				datacenter.metadata?.provider &&
-				providers.includes(datacenter.metadata.provider),
-		),
 	);
 }
 

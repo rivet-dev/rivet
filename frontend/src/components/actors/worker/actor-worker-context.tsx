@@ -51,7 +51,7 @@ export const ActorWorkerContextProvider = ({
 	children,
 	actorId,
 }: ActorWorkerContextProviderProps) => {
-	const dataProvider = useDataProvider();
+	const dataProvider = useEngineCompatDataProvider();
 	const engineToken = dataProvider.engineToken;
 	const namespace = dataProvider.engineNamespace;
 	const {

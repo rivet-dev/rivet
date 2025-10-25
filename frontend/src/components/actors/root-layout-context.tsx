@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo } from "react";
 import { assertNonNullable, type ImperativePanelHandle } from "@/components";
 
 export interface RootLayoutContextValue {
-	sidebarRef: RefObject<ImperativePanelHandle>;
+	sidebarRef: RefObject<ImperativePanelHandle | null>;
 	isSidebarCollapsed: boolean;
 }
 

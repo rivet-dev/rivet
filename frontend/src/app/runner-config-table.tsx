@@ -24,6 +24,7 @@ import {
 } from "@/components";
 import { ActorRegion } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
+import { hasMetadataProvider } from "./data-providers/engine-data-provider";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
@@ -142,7 +143,7 @@ function Row({
 				<WithTooltip
 					content={config.serverless?.url || "-"}
 					trigger={
-						<DiscreteCopyButton value={config.serverless?.url}>
+						<DiscreteCopyButton value={config.serverless?.url || ""}>
 							<span>
 								{config.serverless?.url &&
 								config.serverless.url.length > 32
@@ -159,7 +160,7 @@ function Row({
 
 			<TableCell>
 				<div className="flex gap-2 justify-end">
-					{config.serverless ? (
+					{config.serverless && hasMetadataProvider(config.metadata) ? (
 						<WithTooltip
 							content="Edit provider settings"
 							trigger={

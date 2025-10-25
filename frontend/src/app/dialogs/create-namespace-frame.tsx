@@ -84,7 +84,6 @@ export default function CreateNamespacesFrameContent() {
 			onSubmit={async (values) => {
 				await mutateAsync({
 					displayName: values.name,
-					name: values.slug || convertStringToId(values.name),
 				});
 			}}
 			defaultValues={{ name: "", slug: "" }}
