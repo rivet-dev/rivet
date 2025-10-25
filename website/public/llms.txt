@@ -79,7 +79,6 @@ https://rivet.dev/docs/actors/schedule
 https://rivet.dev/docs/actors/sharing-and-joining-state
 https://rivet.dev/docs/actors/state
 https://rivet.dev/docs/actors/testing
-https://rivet.dev/docs/api
 https://rivet.dev/docs/clients/javascript
 https://rivet.dev/docs/clients/next-js
 https://rivet.dev/docs/clients/openapi

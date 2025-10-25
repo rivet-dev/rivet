@@ -1,12 +1,14 @@
 import { HeroBackground } from "./components/HeroBackground";
 import { HeroSection } from "./sections/HeroSection";
+import { UseCases } from "./sections/UseCases";
+import { PlatformSection } from "./sections/PlatformSection";
 import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
 import { FeaturesSection } from "./sections/FeaturesSection";
 import { TechSection } from "./sections/TechSection";
+import { DeploymentOptionsSection } from "./sections/DeploymentOptionsSection";
 import { StudioSection } from "./sections/StudioSection";
 import { CommunitySection } from "./sections/CommunitySection";
 import { CTASection } from "./sections/CTASection";
-import { PlatformIcons } from "./components/PlatformIcons";
 
 export default function IndexPage() {
 	return (
@@ -19,16 +21,28 @@ export default function IndexPage() {
 			<main className="min-h-screen w-full max-w-[1500px] mx-auto px-4 md:px-8">
 				<HeroSection />
 
-				<div className="pb-24 sm:pb-32">
+				<div className="pb-8 sm:pb-12">
+					<PlatformSection />
+				</div>
+
+				<div className="pb-16 sm:pb-20">
+					<UseCases />
+				</div>
+
+				<div className="py-24 sm:py-32">
 					<CodeSnippetsSection />
 				</div>
 
-				<div className="py-24 sm:py-32">
+				{/*<div className="py-24 sm:py-32">
 					<FeaturesSection />
-				</div>
+				</div>*/}
 
 				<div className="py-24 sm:py-32">
 					<TechSection />
+				</div>
+
+				<div className="py-24 sm:py-32">
+					<DeploymentOptionsSection />
 				</div>
 
 				<div className="py-40 sm:py-48">
