@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.10.0
 FROM rust:1.88.0 AS base
 
 ARG BUILD_FRONTEND=true
@@ -16,16 +16,17 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     ca-certificates \
     g++ \
-    g++-multilib \
     git-lfs \
-    curl && \
+    curl \
+    linux-libc-dev \
+    xz-utils && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     corepack enable && \
     rm -rf /var/lib/apt/lists/* && \
-    wget -q https://github.com/cross-tools/musl-cross/releases/download/20250815/aarch64-unknown-linux-musl.tar.xz && \
-    tar -xzf aarch64-unknown-linux-musl.tgz -C /opt/ && \
-    rm aarch64-unknown-linux-musl.tgz
+    wget -q https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    tar -xzf aarch64-linux-musl-cross.tgz -C /opt/ && \
+    rm aarch64-linux-musl-cross.tgz
 
 # Disable interactive prompt
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -34,13 +35,13 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN rustup target add aarch64-unknown-linux-musl
 
 # Set environment variables
-ENV PATH="/opt/aarch64-unknown-linux-musl/bin:$PATH" \
+ENV PATH="/opt/aarch64-linux-musl-cross/bin:$PATH" \
     LIBCLANG_PATH=/usr/lib/llvm-14/lib \
     CLANG_PATH=/usr/bin/clang-14 \
-    CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc \
-    CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++ \
-    AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar \
-    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc \
+    CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc \
+    CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++ \
+    AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc \
     CARGO_INCREMENTAL=0 \
     RUSTFLAGS="--cfg tokio_unstable -C target-feature=+crt-static -C link-arg=-static-libgcc" \
     CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -56,9 +57,11 @@ ENV SSL_VER=1.1.1w
 RUN wget https://www.openssl.org/source/openssl-$SSL_VER.tar.gz \
     && tar -xzf openssl-$SSL_VER.tar.gz \
     && cd openssl-$SSL_VER \
-    && ./Configure no-shared no-async --prefix=/musl-aarch64 --openssldir=/musl-aarch64/ssl linux-aarch64 \
-    && make -j$(nproc) \
-    && make install_sw \
+    && CC=aarch64-linux-musl-gcc \
+       ./Configure no-shared no-async no-tests --prefix=/musl-aarch64 --openssldir=/musl-aarch64/ssl linux-aarch64 \
+    && make -j$(nproc) build_libs \
+    && make install_dev \
+    && mkdir -p /musl-aarch64/ssl \
     && cd .. \
     && rm -rf openssl-$SSL_VER*
 
@@ -66,6 +69,7 @@ RUN wget https://www.openssl.org/source/openssl-$SSL_VER.tar.gz \
 ENV OPENSSL_DIR=/musl-aarch64 \
     OPENSSL_INCLUDE_DIR=/musl-aarch64/include \
     OPENSSL_LIB_DIR=/musl-aarch64/lib \
+    OPENSSL_STATIC=1 \
     PKG_CONFIG_ALLOW_CROSS=1
 
 # Copy the source code
@@ -73,13 +77,12 @@ COPY . .
 
 # Build frontend
 RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
-        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
-        (cd frontend && pnpm install && \
+        pnpm install && \
         if [ -n "$VITE_APP_API_URL" ]; then \
-            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
         else \
-            pnpm run build:engine; \
-        fi); \
+            npx turbo build:engine -F @rivetkit/engine-frontend; \
+        fi; \
     fi
 
 # Build for Linux with musl (static binary) - aarch64

@@ -31,7 +31,8 @@
 		"rules": {
 			"recommended": true,
 			"style": {
-				"noUselessElse": "off"
+				"noUselessElse": "off",
+				"useNodejsImportProtocol": "error"
 			},
 			"correctness": {
 				"noUnusedImports": "warn"

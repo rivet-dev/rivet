@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { EXAMPLE_METADATA } from './examplesData.mjs';
 
 const RIVET_TEMPLATE_PATH = join(process.cwd(), '..', 'README.rivet.tpl.md');

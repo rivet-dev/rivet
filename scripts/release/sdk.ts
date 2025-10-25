@@ -1,6 +1,6 @@
 import { $ } from "execa";
-import { readFile } from "fs/promises";
-import { join } from "path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { ReleaseOpts } from "./main";
 
 async function npmVersionExists(
@@ -37,9 +37,9 @@ async function npmVersionExists(
 
 export async function publishSdk(opts: ReleaseOpts) {
 	const packagePaths = [
-		`${opts.root}/sdks/typescript/runner`,
-		`${opts.root}/sdks/typescript/runner-protocol`,
-		`${opts.root}/sdks/typescript/api-full`,
+		`${opts.root}/engine/sdks/typescript/runner`,
+		`${opts.root}/engine/sdks/typescript/runner-protocol`,
+		`${opts.root}/engine/sdks/typescript/api-full`,
 	];
 
 	for (const path of packagePaths) {
@@ -70,6 +70,6 @@ export async function publishSdk(opts: ReleaseOpts) {
 
 		await $({
 			stdio: "inherit",
-		})`pnpm --filter ${name} publish --access public --tag ${tag}`;
+		})`pnpm --filter ${name} publish --access public --tag ${tag} --no-git-checks`;
 	}
 }

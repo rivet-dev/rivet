@@ -2,7 +2,7 @@
 
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM --platform=linux/amd64 rust:1.88.0-bookworm AS builder
+FROM rust:1.88.0-bookworm AS builder
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -49,13 +49,12 @@ COPY . .
 
 # Build frontend
 RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
-        (cd sdks/typescript/api-full && pnpm install && pnpm run build) && \
-        (cd frontend && pnpm install && \
+        pnpm install && \
         if [ -n "$VITE_APP_API_URL" ]; then \
-            VITE_APP_API_URL="${VITE_APP_API_URL}" pnpm run build:engine; \
+            VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
         else \
-            pnpm run build:engine; \
-        fi); \
+            npx turbo build:engine -F @rivetkit/engine-frontend; \
+        fi; \
     fi
 
 # Build and copy all binaries from target directory into an empty image (it is not
@@ -76,7 +75,7 @@ RUN \
     cp target/$CARGO_BUILD_MODE/rivet-engine /app/dist/
 
 # MARK: Engine (full, base)
-FROM --platform=linux/amd64 debian:12.9-slim AS engine-full-base
+FROM debian:12.9-slim AS engine-full-base
 
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
@@ -99,7 +98,7 @@ RUN apt-get update -y && \
     fi
 
 # MARK: Engine (Full)
-FROM --platform=linux/amd64 engine-full-base AS engine-full
+FROM engine-full-base AS engine-full
 
 LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
@@ -109,7 +108,7 @@ ENTRYPOINT ["/usr/bin/rivet-engine"]
 CMD ["start"]
 
 # MARK: Engine (Slim)
-FROM --platform=linux/amd64 debian:12.9-slim AS engine-slim
+FROM debian:12.9-slim AS engine-slim
 
 LABEL org.opencontainers.image.source=https://github.com/rivet-gg/rivet
 
