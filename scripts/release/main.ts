@@ -1,13 +1,18 @@
 #!/usr/bin/env tsx
 
-import * as fs from "node:fs";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as url from "node:url";
 import { $ } from "execa";
-import minimist from "minimist";
+import { program } from "commander";
+import * as semver from "semver";
 import { updateArtifacts } from "./artifacts";
 import { tagDocker } from "./docker";
-import { validateGit } from "./git";
+import {
+	createAndPushTag,
+	createGitHubRelease,
+	validateGit,
+} from "./git";
 import { configureReleasePlease } from "./release_please";
 import { publishSdk } from "./sdk";
 import { updateVersion } from "./update_version";
@@ -44,106 +49,249 @@ export interface ReleaseOpts {
 	commit: string;
 }
 
+async function getCurrentVersion(): Promise<string> {
+	// Get version from the main rivetkit package
+	const packageJsonPath = path.resolve(
+		ROOT_DIR,
+		"rivetkit-typescript/packages/rivetkit/package.json",
+	);
+	const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
+	return packageJson.version;
+}
+
+async function runTypeCheck(opts: ReleaseOpts) {
+	console.log("Checking types...");
+	try {
+		// --force to skip cache in case of Turborepo bugs
+		await $({ cwd: opts.root })`pnpm check-types --force`;
+		console.log("✅ Type check passed");
+	} catch (err) {
+		console.error("❌ Type check failed");
+		throw err;
+	}
+}
+
+async function getVersionFromArgs(opts: {
+	version?: string;
+	major?: boolean;
+	minor?: boolean;
+	patch?: boolean;
+}): Promise<string> {
+	// Check if explicit version is provided via --version flag
+	if (opts.version) {
+		return opts.version;
+	}
+
+	// Check for version bump flags
+	if (!opts.major && !opts.minor && !opts.patch) {
+		throw new Error(
+			"Must provide either --version, --major, --minor, or --patch",
+		);
+	}
+
+	// Get current version and calculate new one
+	const currentVersion = await getCurrentVersion();
+	console.log(`Current version: ${currentVersion}`);
+
+	let newVersion: string | null = null;
+
+	if (opts.major) {
+		newVersion = semver.inc(currentVersion, "major");
+	} else if (opts.minor) {
+		newVersion = semver.inc(currentVersion, "minor");
+	} else if (opts.patch) {
+		newVersion = semver.inc(currentVersion, "patch");
+	}
+
+	if (!newVersion) {
+		throw new Error("Failed to calculate new version");
+	}
+
+	return newVersion;
+}
+
+// Available steps
+const STEPS = [
+	"update-version",
+	"generate-fern",
+	"git-commit",
+	"configure-release-please",
+	"git-push",
+	"run-type-check",
+	"publish-sdk",
+	"tag-docker",
+	"update-artifacts",
+	"push-tag",
+	"create-github-release",
+	"merge-release",
+] as const;
+
+const BATCH_STEPS = [
+	"setup-local",
+	"setup-ci",
+	"complete-ci",
+] as const;
+
+type Step = (typeof STEPS)[number];
+type BatchStep = (typeof BATCH_STEPS)[number];
+
+// Map batch steps to individual steps
+const BATCH_STEP_MAP: Record<BatchStep, Step[]> = {
+	"setup-local": [
+		"update-version",
+		"generate-fern",
+		"git-commit",
+		"configure-release-please",
+		"git-push",
+	],
+	"setup-ci": ["run-type-check"],
+	"complete-ci": [
+		"publish-sdk",
+		"tag-docker",
+		"update-artifacts",
+		"push-tag",
+		"create-github-release",
+	],
+};
+
 async function main() {
-	// Parse args:
-	// - latest = tag version as the latest version
-	// - noValidateGit = used for testing without using the main branch
-	// - setup & complete = run all pre-build or post-build steps, used in CI for batch jbos
-	const args = minimist(process.argv.slice(2), {
-		boolean: [
-			// Config
-			"latest",
-			"noValidateGit",
+	// Setup commander
+	program
+		.name("release")
+		.description("Release a new version of Rivet")
+		.option("--major", "Bump major version")
+		.option("--minor", "Bump minor version")
+		.option("--patch", "Bump patch version")
+		.option("--version <version>", "Set specific version")
+		.option("--commit <commit>", "Commit to publish release for")
+		.option("--latest", "Tag version as the latest version", true)
+		.option("--no-latest", "Do not tag version as the latest version")
+		.option("--no-validate-git", "Skip git validation (for testing)")
+		.option(
+			"--steps <steps>",
+			`Run specific steps (comma-separated). Available: ${STEPS.join(", ")}`,
+		)
+		.option(
+			"--batch-steps <steps>",
+			`Run batch steps (comma-separated). Available: ${BATCH_STEPS.join(", ")}`,
+		)
+		.parse();
 
-			// Granular steps
-			"updateVersion",
-			"generateFern",
-			"gitCommit",
-			"configureReleasePlease",
-			"gitPush",
-			"publishSdk",
-			"tagDocker",
-			"updateArtifacts",
-			"mergeRelease",
+	const opts = program.opts();
 
-			// Batch steps
-			"setupLocal", // Makes changes to repo & pushes it (we can't push commits from CI that can trigger Release Please & other CI actions)
-			"setupCi", // Publishes packages (has access to NPM creds)
-			"completeCi", // Tags binaries & Docker as latest (has access to Docker & S3 creds)
-		],
-		string: ["version", "commit"],
-		default: {
-			latest: true,
-		},
+	// Parse steps from flags
+	const requestedSteps = new Set<Step>();
+
+	// Add steps from --steps flag
+	if (opts.steps) {
+		const steps = opts.steps.split(",").map((s: string) => s.trim());
+		for (const step of steps) {
+			if (!STEPS.includes(step as Step)) {
+				throw new Error(
+					`Invalid step: ${step}. Available steps: ${STEPS.join(", ")}`,
+				);
+			}
+			requestedSteps.add(step as Step);
+		}
+	}
+
+	// Add steps from --batch-steps flag
+	if (opts.batchSteps) {
+		const batchSteps = opts.batchSteps
+			.split(",")
+			.map((s: string) => s.trim());
+		for (const batchStep of batchSteps) {
+			if (!BATCH_STEPS.includes(batchStep as BatchStep)) {
+				throw new Error(
+					`Invalid batch step: ${batchStep}. Available batch steps: ${BATCH_STEPS.join(", ")}`,
+				);
+			}
+			const steps = BATCH_STEP_MAP[batchStep as BatchStep];
+			for (const step of steps) {
+				requestedSteps.add(step);
+			}
+		}
+	}
+
+	// Helper function to check if a step should run
+	const shouldRunStep = (step: Step): boolean => {
+		return requestedSteps.has(step);
+	};
+
+	// Get version from arguments or calculate based on flags
+	const version = await getVersionFromArgs({
+		version: opts.version,
+		major: opts.major,
+		minor: opts.minor,
+		patch: opts.patch,
 	});
-	assertExists(args.version);
 
 	assert(
 		/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/.test(
-			args.version,
+			version,
 		),
 		"version must be a valid semantic version",
 	);
 
 	// Setup opts
 	let commit: string;
-	if (args.commit) {
+	if (opts.commit) {
 		// Manually override commit
-		commit = args.commit;
+		commit = opts.commit;
 	} else {
 		// Read commit
 		const result = await $`git rev-parse HEAD`;
 		commit = result.stdout.trim();
 	}
 
-	const opts: ReleaseOpts = {
+	const releaseOpts: ReleaseOpts = {
 		root: ROOT_DIR,
-		version: args.version,
-		latest: args.latest,
+		version: version,
+		latest: opts.latest,
 		commit,
 	};
 
-	if (opts.commit.length == 40) {
-		opts.commit = opts.commit.slice(0, 7);
+	if (releaseOpts.commit.length == 40) {
+		releaseOpts.commit = releaseOpts.commit.slice(0, 7);
 	}
 
-	assertEquals(opts.commit.length, 7, "must use 8 char short commit");
+	assertEquals(releaseOpts.commit.length, 7, "must use 8 char short commit");
 
-	if (!args.noValidateGit && !args.setupCi) {
-		// HACK: Skip setupCi because for some reason there's changes in the setup step but only in GitHub Actions
-		await validateGit(opts);
+	if (opts.validateGit && !shouldRunStep("run-type-check")) {
+		// HACK: Skip setup-ci because for some reason there's changes in the setup step but only in GitHub Actions
+		await validateGit(releaseOpts);
 	}
 
-	if (args.updateVersion || args.setupLocal) {
+	if (shouldRunStep("update-version")) {
 		console.log("==> Updating Version");
-		await updateVersion(opts);
+		await updateVersion(releaseOpts);
 	}
 
-	if (args.generateFern || args.setupLocal) {
+	if (shouldRunStep("generate-fern")) {
 		console.log("==> Generating Fern");
 		await $`./scripts/fern/gen.sh`;
 	}
 
-	if (args.gitCommit || args.setupLocal) {
-		assert(!args.noValidateGit, "cannot commit without git validation");
+	if (shouldRunStep("git-commit")) {
+		assert(opts.validateGit, "cannot commit without git validation");
 		console.log("==> Committing Changes");
 		await $`git add .`;
 		await $({
 			shell: true,
-		})`git commit --allow-empty -m "chore(release): update version to ${opts.version}"`;
+		})`git commit --allow-empty -m "chore(release): update version to ${releaseOpts.version}"`;
 	}
 
-	if (args.configureReleasePlease || args.setupLocal) {
+	if (shouldRunStep("configure-release-please")) {
 		assert(
-			!args.noValidateGit,
+			opts.validateGit,
 			"cannot configure release please without git validation",
 		);
 		console.log("==> Configuring Release Please");
-		await configureReleasePlease(opts);
+		await configureReleasePlease(releaseOpts);
 	}
 
-	if (args.gitPush || args.setupLocal) {
-		assert(!args.noValidateGit, "cannot push without git validation");
+	if (shouldRunStep("git-push")) {
+		assert(opts.validateGit, "cannot push without git validation");
 		console.log("==> Pushing Commits");
 		const branchResult = await $`git rev-parse --abbrev-ref HEAD`;
 		const branch = branchResult.stdout.trim();
@@ -156,19 +304,34 @@ async function main() {
 		}
 	}
 
-	if (args.publishSdk || args.setupCi) {
+	if (shouldRunStep("run-type-check")) {
+		console.log("==> Running Type Check");
+		await runTypeCheck(releaseOpts);
+	}
+
+	if (shouldRunStep("publish-sdk")) {
 		console.log("==> Publishing SDKs");
-		await publishSdk(opts);
+		await publishSdk(releaseOpts);
 	}
 
-	if (args.tagDocker || args.completeCi) {
+	if (shouldRunStep("tag-docker")) {
 		console.log("==> Tagging Docker");
-		await tagDocker(opts);
+		await tagDocker(releaseOpts);
 	}
 
-	if (args.updateArtifacts || args.completeCi) {
+	if (shouldRunStep("update-artifacts")) {
 		console.log("==> Updating Artifacts");
-		await updateArtifacts(opts);
+		await updateArtifacts(releaseOpts);
+	}
+
+	if (shouldRunStep("push-tag")) {
+		console.log("==> Pushing Tag");
+		await createAndPushTag(releaseOpts);
+	}
+
+	if (shouldRunStep("create-github-release")) {
+		console.log("==> Creating GitHub Release");
+		await createGitHubRelease(releaseOpts);
 	}
 
 	console.log("==> Complete");
