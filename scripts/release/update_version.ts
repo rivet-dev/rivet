@@ -28,6 +28,11 @@ export async function updateVersion(opts: ReleaseOpts) {
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
 		},
+		{
+			path: "rivetkit-typescript/packages/*/package.json",
+			find: /"version": ".*"/,
+			replace: `"version": "${opts.version}"`,
+		},
 		// TODO: Update docs with pinned version
 		// {
 		// 	path: "site/src/content/docs/cloud/install.mdx",
