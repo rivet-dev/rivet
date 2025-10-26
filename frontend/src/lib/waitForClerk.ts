@@ -35,10 +35,10 @@ function identify(clerk: Clerk) {
 		email: clerk.user?.primaryEmailAddress?.emailAddress,
 	});
 
-	if (typeof Plain !== "undefined") {
-		Plain?.setCustomerDetails({
-			clerkId: clerk.user?.id,
-			email: clerk.user?.primaryEmailAddress?.emailAddress,
-		});
-	}
+	// if (typeof Plain !== "undefined") {
+	// 	Plain?.setCustomerDetails({
+	// 		clerkId: clerk.user?.id,
+	// 		email: clerk.user?.primaryEmailAddress?.emailAddress,
+	// 	});
+	// }
 }

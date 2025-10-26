@@ -20,6 +20,8 @@ export default defineConfig((config) => {
     Plain.init({
       appId: 'liveChatApp_01K5D3WHR3CGKA56RPRMBB7FX0',
 	  hideLauncher: true,
+	  theme: 'dark',
+	  primaryColor: '#FF4F00',
     });
   };
   script.src = 'https://chat.cdn-plain.com/index.js';
