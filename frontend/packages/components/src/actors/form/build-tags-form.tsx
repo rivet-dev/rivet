@@ -1,4 +1,4 @@
-import { Icon, faTrash } from "@rivet-gg/icons";
+import { faTrash, Icon } from "@rivet-gg/icons";
 import {
 	type UseFormReturn,
 	useFieldArray,

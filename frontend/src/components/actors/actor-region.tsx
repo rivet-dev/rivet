@@ -3,7 +3,6 @@ import { Flex, WithTooltip } from "@/components";
 import {
 	getRegionKey,
 	getRegionLabel,
-	REGION_LABEL,
 	RegionIcon,
 } from "../matchmaker/lobby-region";
 import { useDataProvider } from "./data-provider";

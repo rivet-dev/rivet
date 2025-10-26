@@ -1,5 +1,4 @@
-import { faSpinnerThird } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Flex } from "./flex";
 
 export function DialogActivityIndicator() {

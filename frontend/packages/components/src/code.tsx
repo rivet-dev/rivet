@@ -1,5 +1,5 @@
-import { Icon, faCopy, faFile } from "@rivet-gg/icons";
-import { Children, type ReactElement, cloneElement } from "react";
+import { faCopy, faFile, Icon } from "@rivet-gg/icons";
+import { Children, cloneElement, type ReactElement } from "react";
 import { CopyButton } from "./copy-area";
 import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";

@@ -3,7 +3,7 @@
 import { faCircleExclamation, Icon } from "@rivet-gg/icons";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
-export function ActorsActorError({ error }: ErrorComponentProps) {
+export function ActorsActorError(_props: ErrorComponentProps) {
 	// if (isRivetError(error) || error instanceof RivetError) {
 	// 	return (
 	// 		<div className="flex-1 h-full min-h-0 overflow-auto flex flex-col">

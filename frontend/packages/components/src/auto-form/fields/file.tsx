@@ -1,5 +1,5 @@
 "use client";
-import { Icon, faTrash } from "@rivet-gg/icons";
+import { faTrash, Icon } from "@rivet-gg/icons";
 import { type ChangeEvent, useState } from "react";
 import { FormControl, FormItem, FormMessage } from "../../ui/form";
 import { Input } from "../../ui/input";

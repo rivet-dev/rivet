@@ -18,8 +18,8 @@ import {
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
-import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 import { EnvVariablesStep } from "./connect-railway-frame";
+import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
 
@@ -138,9 +138,7 @@ function StepInitialInfo() {
 	return (
 		<>
 			<div className="space-y-4">
-				<p>
-					Deploy the Rivet Vercel template to get started quickly.
-				</p>
+				<p>Deploy the Rivet Vercel template to get started quickly.</p>
 				<ExternalLinkCard
 					href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Ftemplate-vercel&env=NEXT_PUBLIC_RIVET_ENDPOINT,NEXT_PUBLIC_RIVET_TOKEN,NEXT_PUBLIC_RIVET_NAMESPACE&project-name=rivetkit-vercel&repository-name=rivetkit-vercel"
 					icon={faVercel}
@@ -148,9 +146,7 @@ function StepInitialInfo() {
 				/>
 			</div>
 			<div className="space-y-4">
-				<p>
-					Set the following environment variables:
-				</p>
+				<p>Set the following environment variables:</p>
 				<EnvVariablesStep />
 			</div>
 		</>

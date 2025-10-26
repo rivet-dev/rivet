@@ -23,7 +23,7 @@ import { useActorDetailsSettings } from "./actor-details-settings";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorEventsList } from "./actor-events-list";
 import { useActor } from "./actor-queries-context";
-import { type ActorId, useActorEventsStream } from "./queries";
+import type { ActorId } from "./queries";
 
 export type EventsTypeFilter = "action" | "subscription" | "broadcast" | "send";
 
@@ -209,6 +209,7 @@ function useScrollToBottom(
 		return () => {
 			cancelAnimationFrame(rafId);
 		};
+		// biome-ignore lint/correctness/useExhaustiveDependencies: its intended to only trigger on data change
 	}, deps);
 
 	return { onScroll };

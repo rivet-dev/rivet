@@ -1,8 +1,8 @@
 "use client";
 import {
-	LazyMotion,
 	animate,
 	domAnimation,
+	LazyMotion,
 	motion,
 	useMotionValue,
 	useTransform,

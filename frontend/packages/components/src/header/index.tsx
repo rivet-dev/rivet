@@ -1,5 +1,4 @@
-import { faBars } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faBars, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { AssetImage } from "../asset-image";
 import { cn } from "../lib/utils";
@@ -80,13 +79,13 @@ export function Header({
 								</span>
 							</Button>
 						</SheetTrigger>
-						<SheetContent side="left" className="overflow-auto p-0 [&>button]:fixed [&>button]:left-[calc(100vw-4rem)] [&>button]:top-4 [&>button]:bg-background/80 [&>button]:backdrop-blur [&>button]:border [&>button]:border-border/50 [&>button]:shadow-lg">
+						<SheetContent
+							side="left"
+							className="overflow-auto p-0 [&>button]:fixed [&>button]:left-[calc(100vw-4rem)] [&>button]:top-4 [&>button]:bg-background/80 [&>button]:backdrop-blur [&>button]:border [&>button]:border-border/50 [&>button]:shadow-lg"
+						>
 							<nav className="min-h-full text-lg font-medium h-full max-w-full">
 								<div className="flex flex-col min-h-full">
-									<a
-										href="/"
-										className="hidden"
-									>
+									<a href="/" className="hidden">
 										{logo}
 									</a>
 									<div className="flex flex-1 flex-col px-4 py-4 gap-2">

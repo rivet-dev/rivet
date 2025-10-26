@@ -3,7 +3,7 @@ import { LiveBadge, ScrollArea } from "@/components";
 import { useActor } from "./actor-queries-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
-import { type ActorId, useActorConnectionsStream } from "./queries";
+import type { ActorId } from "./queries";
 
 interface ActorConnectionsTabProps {
 	actorId: ActorId;

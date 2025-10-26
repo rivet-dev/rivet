@@ -3,6 +3,9 @@ import {
 	Checkbox,
 	CommandGroup,
 	CommandItem,
+	cn,
+	createFiltersPicker,
+	createFiltersSchema,
 	DocsSheet,
 	FilterCreator,
 	type FilterDefinitions,
@@ -12,12 +15,8 @@ import {
 	ScrollArea,
 	ShimmerLine,
 	SmallText,
-	cn,
-	createFiltersPicker,
-	createFiltersSchema,
 } from "@rivet-gg/components";
 import {
-	Icon,
 	faActors,
 	faCalendarCircleMinus,
 	faCalendarCirclePlus,
@@ -29,6 +28,7 @@ import {
 	faSignalBars,
 	faTag,
 	faTs,
+	Icon,
 } from "@rivet-gg/icons";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -37,10 +37,10 @@ import {
 	actorFiltersAtom,
 	actorFiltersCountAtom,
 	actorRegionsAtom,
-	actorTagsAtom,
 	actorsAtomsAtom,
 	actorsPaginationAtom,
 	actorsQueryAtom,
+	actorTagsAtom,
 	filteredActorsCountAtom,
 } from "./actor-context";
 import { ActorStatus } from "./actor-status";

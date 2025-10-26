@@ -1,8 +1,8 @@
 "use client";
 
-import type * as React from "react";
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
-import { Icon, faCheck, faChevronRight, faCircle } from "@rivet-gg/icons";
+import { faCheck, faChevronRight, faCircle, Icon } from "@rivet-gg/icons";
+import type * as React from "react";
 import { cn } from "../lib/utils";
 
 function ContextMenu({

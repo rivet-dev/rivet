@@ -1,7 +1,6 @@
 import { faExternalLink, faPlus, faRefresh, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
-import { match } from "ts-pattern";
 import {
 	Button,
 	DiscreteCopyButton,

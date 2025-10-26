@@ -7,7 +7,6 @@ import {
 import { match } from "ts-pattern";
 import * as CreateNamespaceForm from "@/app/forms/create-namespace-form";
 import { Flex, Frame } from "@/components";
-import { convertStringToId } from "@/lib/utils";
 
 const useDataProvider = () => {
 	return match(__APP_TYPE__)

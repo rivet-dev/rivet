@@ -1,7 +1,5 @@
+import { faCalendar, Icon } from "@rivet-gg/icons";
 import { format } from "date-fns";
-
-import { faCalendar } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { forwardRef } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "./button";

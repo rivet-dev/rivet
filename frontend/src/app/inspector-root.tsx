@@ -31,6 +31,7 @@ export function InspectorRoot() {
 	const [credentials, setCredentials] = useState<null | {
 		url: string;
 		token: string;
+		// biome-ignore lint/style/noNonNullAssertion: at this point, we know these are defined
 	}>(alreadyConnected ? { url: search.u!, token: search.t! } : null);
 
 	const formRef = useRef<HTMLFormElement>(null);
@@ -39,7 +40,7 @@ export function InspectorRoot() {
 		if (search.t) {
 			formRef.current?.requestSubmit();
 		}
-	}, []);
+	}, [search.t]);
 
 	const ctxValue = useMemo(() => {
 		return { credentials, setCredentials };

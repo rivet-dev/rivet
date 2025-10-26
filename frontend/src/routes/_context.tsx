@@ -71,7 +71,6 @@ export const Route = createFileRoute("/_context")({
 			.with({ __type: "cloud" }, () => async () => {
 				await waitForClerk(route.context.clerk);
 
-
 				if (
 					route.search.__clerk_ticket &&
 					route.search.__clerk_status
@@ -107,7 +106,7 @@ function RouteComponent() {
 function Modals() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
-	const params = useParams({ strict: false });
+	const _params = useParams({ strict: false });
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const FeedbackDialog = useDialog.Feedback.Dialog;

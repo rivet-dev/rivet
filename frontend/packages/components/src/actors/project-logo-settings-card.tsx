@@ -1,4 +1,3 @@
-import * as GroupImageForm from "@/domains/project/forms/project-logo-form";
 import {
 	Card,
 	CardContent,
@@ -6,6 +5,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@rivet-gg/components";
+import * as GroupImageForm from "@/domains/project/forms/project-logo-form";
 import { useProjectLogoUploadMutation } from "../queries";
 
 interface ProjectLogoSettingsCardProps {

@@ -235,7 +235,9 @@ function EmptyState() {
 		select(data) {
 			for (const page of data.pages) {
 				for (const rc of Object.values(page.runnerConfigs)) {
-					for (const [dc, config] of Object.entries(rc.datacenters)) {
+					for (const [_dc, config] of Object.entries(
+						rc.datacenters,
+					)) {
 						if (config.serverless) {
 							return config;
 						}

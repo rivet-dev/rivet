@@ -1,6 +1,6 @@
-import { Icon, faArrowRight } from "@rivet-gg/icons";
-import { ActionCard, type ActionCardProps } from "./action-card";
+import { faArrowRight, Icon } from "@rivet-gg/icons";
 import type { PropsWithChildren } from "react";
+import { ActionCard, type ActionCardProps } from "./action-card";
 
 export interface CtaCardProps extends Omit<ActionCardProps, "action"> {}
 

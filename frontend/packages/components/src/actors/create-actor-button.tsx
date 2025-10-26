@@ -1,5 +1,5 @@
 import { Button, type ButtonProps, WithTooltip } from "@rivet-gg/components";
-import { Icon, faPlus } from "@rivet-gg/icons";
+import { faPlus, Icon } from "@rivet-gg/icons";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import {

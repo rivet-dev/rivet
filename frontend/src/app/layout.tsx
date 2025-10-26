@@ -1,9 +1,7 @@
-import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faBolt,
 	faLink,
-	faServer,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -52,7 +50,6 @@ import { ActorBuildsList } from "./actor-builds-list";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { useInspectorCredentials } from "./credentials-context";
-import { HelpDropdown } from "./help-dropdown";
 import { NamespaceSelect } from "./namespace-select";
 import { UserDropdown } from "./user-dropdown";
 
@@ -392,13 +389,11 @@ const Subnav = () => {
 				}
 			: { to: "/", fuzzy: true },
 	);
+	const hasDataProvider = useDataProviderCheck();
 
 	if (nsMatch === false) {
 		return null;
 	}
-
-	const hasDataProvider = useDataProviderCheck();
-	const hasQuery = hasDataProvider && !!useDataProvider().buildsQueryOptions;
 
 	return (
 		<div className="flex gap-1.5 flex-col">
@@ -412,7 +407,7 @@ const Subnav = () => {
 					Connect
 				</HeaderLink>
 			) : null}
-			{hasDataProvider && hasQuery ? (
+			{hasDataProvider ? (
 				<div className="w-full">
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Instances

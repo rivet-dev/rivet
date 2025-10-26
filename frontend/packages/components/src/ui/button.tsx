@@ -1,9 +1,7 @@
-import { type VariantProps, cva } from "class-variance-authority";
-import * as React from "react";
-
 import { Slot, Slottable } from "@radix-ui/react-slot";
-import { faSpinnerThird } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { cva, type VariantProps } from "class-variance-authority";
+import * as React from "react";
 import { cn } from "../lib/utils";
 import {
 	type CommonHelperProps,

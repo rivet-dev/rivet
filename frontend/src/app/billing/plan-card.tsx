@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/noChildrenProp: its okay */
 import { faCheck, faPlus, Icon, type IconProp } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { Button, cn } from "@/components";
@@ -51,6 +52,7 @@ function PlanCard({
 				<p>Includes:</p>
 				<ul className="text-muted-foreground mt-2 space-y-1">
 					{features?.map((feature, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: it's fine in this case
 						<li key={index}>
 							<Icon icon={feature.icon} /> {feature.label}
 						</li>
@@ -64,11 +66,11 @@ function PlanCard({
 						className="w-full mt-4"
 						children="Current Plan"
 						{...buttonProps}
-					></Button>
+					/>
 				) : (
 					<Button
 						className="w-full mt-4"
-						children={<>{custom ? "Contact Us" : "Upgrade"}</>}
+						children={custom ? "Contact Us" : "Upgrade"}
 						{...buttonProps}
 					/>
 				)

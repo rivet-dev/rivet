@@ -3,7 +3,7 @@ import posthog, { type PostHog } from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import type { PropsWithChildren } from "react";
 import { getConfig, useConfig } from "@/components";
-import { cloudEnv, commonEnv } from "@/lib/env";
+import { commonEnv } from "@/lib/env";
 
 export function initThirdPartyProviders(router: unknown, debug: boolean) {
 	const config = getConfig();

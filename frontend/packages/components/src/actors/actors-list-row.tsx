@@ -1,12 +1,12 @@
 import {
 	Button,
+	cn,
 	RelativeTime,
 	SmallText,
-	WithTooltip,
-	cn,
 	toRecord,
+	WithTooltip,
 } from "@rivet-gg/components";
-import { Icon, faTag, faTags } from "@rivet-gg/icons";
+import { faTag, faTags, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";

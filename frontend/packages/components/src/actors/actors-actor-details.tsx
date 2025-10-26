@@ -1,14 +1,14 @@
 import {
+	cn,
 	Flex,
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
-	cn,
 } from "@rivet-gg/components";
-import { Icon, faQuestionSquare } from "@rivet-gg/icons";
+import { faQuestionSquare, Icon } from "@rivet-gg/icons";
 import { useAtomValue } from "jotai";
-import { type ReactNode, Suspense, memo } from "react";
+import { memo, type ReactNode, Suspense } from "react";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import {

@@ -1,10 +1,8 @@
 "use client";
 
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import { faCheck, faChevronRight, faCircle, Icon } from "@rivet-gg/icons";
 import * as React from "react";
-
-import { Icon, faCheck, faChevronRight, faCircle } from "@rivet-gg/icons";
-import {} from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;

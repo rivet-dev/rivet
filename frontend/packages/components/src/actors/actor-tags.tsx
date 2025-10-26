@@ -1,13 +1,13 @@
 import {
 	Button,
+	cn,
 	DiscreteCopyButton,
 	Slot,
 	Slottable,
 	WithTooltip,
-	cn,
 } from "@rivet-gg/components";
-import { Icon, faTag } from "@rivet-gg/icons";
-import { type ReactNode, forwardRef, useState } from "react";
+import { faTag, Icon } from "@rivet-gg/icons";
+import { forwardRef, type ReactNode, useState } from "react";
 
 const BUILT_IN_TAGS = {
 	actors: ["framework", "framework-version"],

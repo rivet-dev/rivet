@@ -1,19 +1,19 @@
 "use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
 import React from "react";
 import { type DefaultValues, type FormState, useForm } from "react-hook-form";
 import type { z } from "zod";
-import { Form } from "../ui/form";
-
-import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
+import { Form } from "../ui/form";
 
 import AutoFormObject from "./fields/object";
 import type { Dependency, FieldConfig } from "./types";
 import {
-	type ZodObjectOrWrapped,
 	getDefaultValues,
 	getObjectFormSchema,
+	type ZodObjectOrWrapped,
 } from "./utils";
 
 export { AutoFormObject };

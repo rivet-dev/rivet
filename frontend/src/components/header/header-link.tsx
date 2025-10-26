@@ -1,5 +1,5 @@
 import { Icon, type IconProp } from "@rivet-gg/icons";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import type { LinkProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Button, cn } from "@/components";
 

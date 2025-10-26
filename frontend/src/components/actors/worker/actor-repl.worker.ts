@@ -66,7 +66,7 @@ async function evaluateCode(code: string, args: Record<string, unknown>) {
 		}
 
 		jsCode = toJs(program);
-	} catch (e) {
+	} catch (_e) {
 		throw new ReplError("syntax", "Syntax error");
 	}
 
@@ -180,12 +180,12 @@ async function callAction({ name, args }: { name: string; args: unknown[] }) {
 	const url = new URL(`inspect`, init.endpoint).href;
 
 	const additionalHeaders = match(__APP_TYPE__)
-				.with("engine", () => {
-					return init?.engineToken
-						? { "X-Rivet-Token": init.engineToken || "" }
-						: {} as Record<string, string>
-				})
-				.otherwise(() => ({}));
+		.with("engine", () => {
+			return init?.engineToken
+				? { "X-Rivet-Token": init.engineToken || "" }
+				: ({} as Record<string, string>);
+		})
+		.otherwise(() => ({}));
 
 	// we need to build this from scratch because we don't have access to
 	// createInspectorActorContext in the worker

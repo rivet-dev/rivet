@@ -31,25 +31,23 @@ export function ContextSwitcher() {
 	}
 
 	return (
-		<>
-			<Popover open={isOpen} onOpenChange={setIsOpen}>
-				<PopoverTrigger asChild>
-					<Button
-						variant="outline"
-						className="flex h-auto justify-between items-center px-2 py-1.5"
-						endIcon={<Icon icon={faChevronDown} />}
-					>
-						<Breadcrumbs />
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent
-					className="p-0 max-w-[calc(12rem*3)] w-full"
-					align="start"
+		<Popover open={isOpen} onOpenChange={setIsOpen}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="outline"
+					className="flex h-auto justify-between items-center px-2 py-1.5"
+					endIcon={<Icon icon={faChevronDown} />}
 				>
-					<Content onClose={() => setIsOpen(false)} />
-				</PopoverContent>
-			</Popover>
-		</>
+					<Breadcrumbs />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="p-0 max-w-[calc(12rem*3)] w-full"
+				align="start"
+			>
+				<Content onClose={() => setIsOpen(false)} />
+			</PopoverContent>
+		</Popover>
 	);
 }
 
@@ -108,11 +106,7 @@ function Breadcrumbs() {
 	}
 
 	if (match && "project" in match) {
-		return (
-			<>
-				<ProjectBreadcrumb project={match.project} />
-			</>
-		);
+		return <ProjectBreadcrumb project={match.project} />;
 	}
 
 	return null;

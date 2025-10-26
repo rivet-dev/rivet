@@ -1,4 +1,3 @@
-import * as MatchmakerLobbyConfigForm from "@/domains/project/forms/matchmaker-lobby-config-form";
 import {
 	Card,
 	CardContent,
@@ -8,6 +7,7 @@ import {
 	Flex,
 } from "@rivet-gg/components";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import * as MatchmakerLobbyConfigForm from "@/domains/project/forms/matchmaker-lobby-config-form";
 import { useMatchmakerLobbyConfigFormHandler } from "../hooks/use-matchmaker-lobby-config-form-handler";
 import { projectEnvironmentQueryOptions } from "../queries";
 

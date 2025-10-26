@@ -83,7 +83,6 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 					<nav
 						date-component="stepper-navigation"
 						aria-label={ariaLabel}
-						role="tablist"
 						{...props}
 					>
 						<ol
@@ -321,12 +320,11 @@ const StepperSeparator = ({
 		return null;
 	}
 	return (
-		<div
+		<hr
 			date-component="stepper-separator"
 			data-orientation={orientation}
 			data-state={state}
 			data-disabled={disabled}
-			role="separator"
 			tabIndex={-1}
 			className={classForSeparator({ orientation, labelOrientation })}
 		/>

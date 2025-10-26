@@ -3,7 +3,7 @@ import { match } from "ts-pattern";
 import CreateProjectFrameContent from "@/app/dialogs/create-project-frame";
 import { RouteError } from "@/app/route-error";
 import { PendingRouteLayout, RouteLayout } from "@/app/route-layout";
-import { Card, H2, Skeleton } from "@/components";
+import { Card } from "@/components";
 
 export const Route = createFileRoute("/_context/_cloud/orgs/$organization/")({
 	loader: async ({ context, params }) => {

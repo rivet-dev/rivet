@@ -193,7 +193,11 @@ export function filterLogs({
 	typeFilter,
 	filter,
 	logs,
-}: { typeFilter: LogsTypeFilter; filter: string; logs: Logs }) {
+}: {
+	typeFilter: LogsTypeFilter;
+	filter: string;
+	logs: Logs;
+}) {
 	const output = logs?.filter((log) => {
 		if (typeFilter === "errors") {
 			return log.level === "error";

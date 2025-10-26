@@ -3,8 +3,8 @@ import { linter } from "@codemirror/lint";
 import { Annotation } from "@codemirror/state";
 import { githubDark, githubDarkInit } from "@uiw/codemirror-theme-github";
 import ReactCodeMirror, {
-	type ReactCodeMirrorRef,
 	type ReactCodeMirrorProps,
+	type ReactCodeMirrorRef,
 } from "@uiw/react-codemirror";
 import { forwardRef } from "react";
 
@@ -39,11 +39,11 @@ export const JsonCode = forwardRef<ReactCodeMirrorRef, JsonCodeProps>(
 );
 
 export const External = Annotation.define<boolean>();
-export { defaultKeymap } from "@codemirror/commands";
-export { keymap, type KeyBinding, EditorView } from "@codemirror/view";
-export { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 export type { CompletionContext } from "@codemirror/autocomplete";
+export { defaultKeymap } from "@codemirror/commands";
+export { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 export { json, jsonParseLinter } from "@codemirror/lang-json";
+export { EditorView, type KeyBinding, keymap } from "@codemirror/view";
 export type {
 	ReactCodeMirrorProps as CodeMirrorProps,
 	ReactCodeMirrorRef as CodeMirrorRef,

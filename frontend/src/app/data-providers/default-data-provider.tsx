@@ -1,10 +1,9 @@
 import {
 	infiniteQueryOptions,
-	mutationOptions,
 	type MutationOptions,
-	QueryKey,
+	mutationOptions,
+	type QueryKey,
 	queryOptions,
-	UseInfiniteQueryOptions,
 } from "@tanstack/react-query";
 import type {
 	ActorId,
@@ -82,6 +81,7 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as PaginatedActorResponse;
 			},
 			getNextPageParam: (lastPage) => {
@@ -110,6 +110,7 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as PaginatedBuildsResponse;
 			},
 			getNextPageParam: () => {
@@ -223,6 +224,7 @@ const defaultContext = {
 			queryKey: ["actor", actorId, "build"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as Build;
 			},
 			enabled: false,
@@ -233,6 +235,7 @@ const defaultContext = {
 			queryKey: ["actor", actorId, "metrics"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as ActorMetrics;
 			},
 			enabled: false,
@@ -274,6 +277,7 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return [] as ActorLogEntry[];
 			},
 			getNextPageParam: () => null,
@@ -324,6 +328,7 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as PaginatedRegionsResponse;
 			},
 			getNextPageParam: () => null,
@@ -336,6 +341,7 @@ const defaultContext = {
 			enabled: !!regionId,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return {} as Region;
 			},
 		});
@@ -348,6 +354,7 @@ const defaultContext = {
 			retry: 0,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return false as boolean;
 			},
 		});
@@ -357,6 +364,7 @@ const defaultContext = {
 			mutationKey: ["createActor"] as QueryKey,
 			mutationFn: async (_: CreateActor) => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: its intended
 				return "";
 			},
 			onSuccess: () => {

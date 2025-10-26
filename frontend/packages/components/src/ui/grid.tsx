@@ -2,14 +2,14 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/utils";
 import {
 	type AlignItemsValuesUtilitiesProps,
-	type MarginUtilitiesProps,
-	type PaddingUtilitiesProps,
 	getAlignItemsClass,
 	getMarginClass,
 	getPaddingClass,
+	type MarginUtilitiesProps,
 	omitAlignItemsProps,
 	omitMarginProps,
 	omitPaddingProps,
+	type PaddingUtilitiesProps,
 } from "./helpers";
 import {
 	type GapUtilitiesProps,
@@ -22,9 +22,9 @@ import {
 	omitGridColumnsProps,
 } from "./helpers/grid-columns";
 import {
-	type WidthUtilitiesProps,
 	getWidthClass,
 	omitWidthProps,
+	type WidthUtilitiesProps,
 } from "./helpers/width";
 
 interface GridProps

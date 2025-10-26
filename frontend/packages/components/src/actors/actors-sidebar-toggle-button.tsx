@@ -1,5 +1,5 @@
 import { Button } from "@rivet-gg/components";
-import { Icon, faSidebar } from "@rivet-gg/icons";
+import { faSidebar, Icon } from "@rivet-gg/icons";
 import { useActorsLayout } from "./actors-layout-context";
 
 export function ActorsSidebarToggleButton() {

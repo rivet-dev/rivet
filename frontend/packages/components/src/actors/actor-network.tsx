@@ -1,14 +1,14 @@
 import {
 	Button,
+	cn,
 	Dd,
 	DiscreteCopyButton,
 	Dl,
 	DocsSheet,
 	Dt,
 	Flex,
-	cn,
 } from "@rivet-gg/components";
-import { Icon, faBooks } from "@rivet-gg/icons";
+import { faBooks, Icon } from "@rivet-gg/icons";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { Fragment } from "react";

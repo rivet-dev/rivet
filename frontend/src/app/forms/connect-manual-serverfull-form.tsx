@@ -50,7 +50,7 @@ export const Datacenter = function Datacenter({
 };
 
 export const ConnectionCheck = function ConnectionCheck({
-	provider,
+	provider: _,
 }: {
 	provider?: string;
 }) {
@@ -81,7 +81,7 @@ export const ConnectionCheck = function ConnectionCheck({
 
 	useEffect(() => {
 		onChange(success);
-	}, [success]);
+	}, [success, onChange]);
 
 	return (
 		<div

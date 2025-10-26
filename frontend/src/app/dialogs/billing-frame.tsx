@@ -203,7 +203,7 @@ function buttonText(
 	data: Rivet.BillingDetailsResponse.Billing,
 ) {
 	if (plan === data.activePlan && data.futurePlan !== data.activePlan)
-		return <>Resubscribe</>;
+		return "Resubscribe";
 	if (plan === data.futurePlan && data.futurePlan !== data.activePlan)
 		return (
 			<>
@@ -245,10 +245,10 @@ export function comparePlans(
 }
 
 function CurrentPlan({ plan }: { plan?: string }) {
-	if (!plan || plan === "free") return <>Free</>;
-	if (plan === "pro") return <>Hobby</>;
-	if (plan === "team") return <>Team</>;
-	return <>Enterprise</>;
+	if (!plan || plan === "free") return "Free";
+	if (plan === "pro") return "Hobby";
+	if (plan === "team") return "Team";
+	return "Enterprise";
 }
 
 function BillingDetailsButton(props: ComponentProps<typeof Button>) {

@@ -1,8 +1,6 @@
-import { type VariantProps, cva } from "class-variance-authority";
+import { faCheck, faChevronDown, faCircleX, faX, Icon } from "@rivet-gg/icons";
+import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
-
-import { faCheck, faChevronDown, faCircleX, faX } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 import { Badge } from "./badge";
 import { Button } from "./button";

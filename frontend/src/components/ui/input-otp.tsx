@@ -61,8 +61,9 @@ const InputOTPSeparator = React.forwardRef<
 	React.ElementRef<"div">,
 	React.ComponentPropsWithoutRef<"div">
 >(({ ...props }, ref) => (
-	// biome-ignore lint/a11y/useSemanticElements: <explanation>
-	// biome-ignore lint/a11y/useFocusableInteractive: <explanation>
+	// biome-ignore lint/a11y/useSemanticElements: shadcn design
+	// biome-ignore lint/a11y/useFocusableInteractive: shadcn design
+	// biome-ignore lint/a11y/useAriaPropsForRole: shadcn design
 	<div ref={ref} role="separator" {...props}>
 		<Icon icon={faPeriod} />
 	</div>

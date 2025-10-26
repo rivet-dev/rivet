@@ -1,8 +1,8 @@
 "use client";
 import {
+	useVirtualizer,
 	type Virtualizer,
 	type VirtualizerOptions,
-	useVirtualizer,
 } from "@tanstack/react-virtual";
 import {
 	type ComponentPropsWithoutRef,

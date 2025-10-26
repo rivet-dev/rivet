@@ -1,5 +1,4 @@
-import { faArrowUpRightFromSquare } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { ActionCard, type ActionCardProps } from "./action-card";
 import { Button } from "./ui/button";

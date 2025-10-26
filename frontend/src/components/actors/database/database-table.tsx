@@ -7,8 +7,6 @@ import {
 } from "@rivet-gg/icons";
 import {
 	createColumnHelper,
-	// SortingState,
-	type ExpandedState,
 	flexRender,
 	getCoreRowModel,
 	getExpandedRowModel,
@@ -17,7 +15,7 @@ import {
 	type SortingState,
 	useReactTable as useTable,
 } from "@tanstack/react-table";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import type { Column, Columns, ForeignKeys } from "rivetkit/inspector";
 import {
 	Badge,
@@ -33,7 +31,7 @@ import {
 } from "@/components";
 
 declare module "@tanstack/react-table" {
-	interface ColumnMeta<TData, TValue> {
+	interface ColumnMeta<_TData, _TValue> {
 		type: string;
 		notNull: boolean;
 		default: any;
@@ -89,7 +87,7 @@ export function DatabaseTable({
 		},
 	});
 
-	function calculateColumnSizes() {
+	const calculateColumnSizes = useCallback(() => {
 		const headers = table.getFlatHeaders();
 		const colSizes: { [key: string]: number } = {};
 		for (let i = 0; i < headers.length; i++) {
@@ -99,11 +97,11 @@ export function DatabaseTable({
 				header.column.getSize();
 		}
 		return colSizes;
-	}
+	}, [table]);
 
 	const columnSizeVars = useMemo(() => {
 		return calculateColumnSizes();
-	}, [table.getState().columnSizingInfo, table.getState().columnSizing]);
+	}, [calculateColumnSizes]);
 
 	return (
 		<Table
@@ -172,6 +170,7 @@ export function DatabaseTable({
 										</div>
 									)}
 									{header.column.getCanResize() ? (
+										// biome-ignore lint/a11y/noStaticElementInteractions: TODO: fix
 										<div
 											className="cursor-col-resize select-none w-3 -mr-1.5 flex items-center justify-center absolute right-0 inset-y-0 group"
 											onMouseDown={header.getResizeHandler()}
@@ -276,7 +275,7 @@ function createColumns(
 		].filter((v): v is NonNullable<typeof v> => v !== null),
 		...columns.map((col) =>
 			ch.accessor(col.name, {
-				header: (info) => (
+				header: (_info) => (
 					<span className="flex items-center gap-1">
 						{col.name}{" "}
 						<span className="text-muted-foreground text-xs  font-mono-console">

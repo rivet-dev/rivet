@@ -1,4 +1,4 @@
-import { Icon, type IconProp, faComputer } from "@rivet-gg/icons";
+import { faComputer, Icon, type IconProp } from "@rivet-gg/icons";
 import { AssetImage } from "../asset-image";
 import { convertEmojiToUriFriendlyString } from "../lib/emoji";
 
@@ -111,7 +111,10 @@ export function getRegionKey(
 export function RegionIcon({
 	region = "",
 	...props
-}: { region: string | undefined; className?: string }) {
+}: {
+	region: string | undefined;
+	className?: string;
+}) {
 	const regionIcon =
 		REGION_ICON[region as keyof typeof REGION_ICON] ?? REGION_ICON.unknown;
 

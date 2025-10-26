@@ -1,4 +1,4 @@
-import { Icon, faExclamationTriangle, faSpinner } from "@rivet-gg/icons";
+import { faExclamationTriangle, faSpinner, Icon } from "@rivet-gg/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ContainerStatus } from "./actor-worker-container";
 

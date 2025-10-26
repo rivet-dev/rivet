@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: guarded by build-time constants */
 import {
 	faAws,
 	faChevronRight,
@@ -15,7 +16,6 @@ import {
 } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
-	useQuery,
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ import {
 	Link as RouterLink,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
+import { hasProvider } from "@/app/data-providers/engine-data-provider";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
@@ -45,11 +46,12 @@ import {
 	H3,
 	Skeleton,
 } from "@/components";
-import { useCloudDataProvider, useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
+import {
+	useCloudNamespaceDataProvider,
+	useEngineCompatDataProvider,
+	useEngineNamespaceDataProvider,
+} from "@/components/actors";
 import { cloudEnv, engineEnv } from "@/lib/env";
-import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
-import z from "zod";
-import { hasProvider } from "@/app/data-providers/engine-data-provider";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -69,7 +71,7 @@ export function RouteComponent() {
 		refetchInterval: 5000,
 	});
 
-	const navigate = Route.useNavigate();
+	const _navigate = Route.useNavigate();
 
 	const hasConfigs =
 		runnerConfigsCount !== undefined && runnerConfigsCount > 0;
@@ -439,12 +441,14 @@ function Runners() {
 function usePublishableToken() {
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
-			return useSuspenseQuery(useCloudNamespaceDataProvider().publishableTokenQueryOptions())
-				.data;
+			return useSuspenseQuery(
+				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
+			).data;
 		})
 		.with("engine", () => {
-			return useSuspenseQuery(useEngineNamespaceDataProvider().engineAdminTokenQueryOptions())
-				.data;
+			return useSuspenseQuery(
+				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
+			).data;
 		})
 		.otherwise(() => {
 			throw new Error("Not in a valid context");

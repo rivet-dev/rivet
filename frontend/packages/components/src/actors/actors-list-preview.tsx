@@ -1,4 +1,4 @@
-import { Icon, faGripDotsVertical } from "@rivet-gg/icons";
+import { faGripDotsVertical, Icon } from "@rivet-gg/icons";
 import {
 	animate,
 	motion,
@@ -8,9 +8,9 @@ import {
 	useTransform,
 } from "framer-motion";
 import {
+	memo,
 	type ReactNode,
 	Suspense,
-	memo,
 	useCallback,
 	useLayoutEffect,
 	useState,

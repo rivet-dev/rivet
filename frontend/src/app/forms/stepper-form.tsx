@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noBannedTypes: its okay */
 import { zodResolver } from "@hookform/resolvers/zod";
 import type * as Stepperize from "@stepperize/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";

@@ -1,4 +1,4 @@
-import { Icon, faActors } from "@rivet-gg/icons";
+import { faActors, Icon } from "@rivet-gg/icons";
 import { useActorsView } from "./actors-view-context-provider";
 import { ActorsResources } from "./get-started";
 

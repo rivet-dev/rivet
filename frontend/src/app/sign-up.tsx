@@ -2,7 +2,7 @@
 import { useClerk } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as ClerkSignUp from "@clerk/elements/sign-up";
-import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Badge, cn, Skeleton } from "@/components";

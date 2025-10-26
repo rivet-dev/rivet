@@ -1,10 +1,8 @@
 "use client";
 
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
+import { faCircle, Icon } from "@rivet-gg/icons";
 import * as React from "react";
-
-import { faCircle } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 const RadioGroup = React.forwardRef<

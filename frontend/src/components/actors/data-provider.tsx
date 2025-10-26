@@ -1,7 +1,6 @@
 import {
 	type RegisteredRouter,
 	type RouteIds,
-	useMatches,
 	useMatchRoute,
 	useRouteContext,
 } from "@tanstack/react-router";
@@ -68,7 +67,7 @@ export const useEngineNamespaceDataProvider = () => {
 	return useRouteContext({
 		from: "/_context/_engine/ns/$namespace",
 	}).dataProvider;
-}
+};
 
 export const useInspectorDataProvider = () => {
 	const context = useRouteContext({
@@ -101,7 +100,7 @@ export const useCloudNamespaceDataProvider = () => {
 	return useRouteContext({
 		from: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace",
 	}).dataProvider;
-}
+};
 
 export const useEngineCompatDataProvider = () => {
 	return useRouteContext({

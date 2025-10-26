@@ -47,27 +47,25 @@ function ProjectModals() {
 	const BillingDialog = useDialog.Billing.Dialog;
 
 	return (
-		<>
-			<BillingDialog
-				dialogContentProps={{
-					className: "max-w-5xl",
-				}}
-				dialogProps={{
-					open: search.modal === "billing",
-					// FIXME
-					onOpenChange: (value: any) => {
-						if (!value) {
-							navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-		</>
+		<BillingDialog
+			dialogContentProps={{
+				className: "max-w-5xl",
+			}}
+			dialogProps={{
+				open: search.modal === "billing",
+				// FIXME
+				onOpenChange: (value: any) => {
+					if (!value) {
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				},
+			}}
+		/>
 	);
 }

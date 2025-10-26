@@ -99,7 +99,7 @@ function FormStepper({
 }) {
 	const dataProvider = useEngineCompatDataProvider();
 
-	const { data } = useSuspenseInfiniteQuery({
+	useSuspenseInfiniteQuery({
 		...dataProvider.runnerConfigsQueryOptions(),
 	});
 
@@ -166,55 +166,47 @@ function FormStepper({
 
 export function EnvVariablesStep() {
 	return (
-		<>
-			<div>
-				<div
-					className="gap-1 items-center grid grid-cols-2"
-					data-env-variables
-				>
-					<Label
-						asChild
-						className="text-muted-foreground text-xs mb-1"
-					>
-						<p>Key</p>
-					</Label>
-					<Label
-						asChild
-						className="text-muted-foreground text-xs mb-1"
-					>
-						<p>Value</p>
-					</Label>
-					<RivetEndpointEnv />
-					<RivetNamespaceEnv />
-					<RivetTokenEnv />
-					<RivetRunnerEnv />
-				</div>
-				<div className="mt-2 flex justify-end">
-					<CopyButton
-						value={() => {
-							const inputs =
-								document.querySelectorAll<HTMLInputElement>(
-									"[data-env-variables] input",
-								);
-							return Array.from(inputs)
-								.reduce((acc, input, index) => {
-									if (index % 2 === 0) {
-										acc.push(
-											`${input.value}=${inputs[index + 1]?.value}`,
-										);
-									}
-									return acc;
-								}, [] as string[])
-								.join("\n");
-						}}
-					>
-						<Button size="sm" variant="outline">
-							Copy all raw
-						</Button>
-					</CopyButton>
-				</div>
+		<div>
+			<div
+				className="gap-1 items-center grid grid-cols-2"
+				data-env-variables
+			>
+				<Label asChild className="text-muted-foreground text-xs mb-1">
+					<p>Key</p>
+				</Label>
+				<Label asChild className="text-muted-foreground text-xs mb-1">
+					<p>Value</p>
+				</Label>
+				<RivetEndpointEnv />
+				<RivetNamespaceEnv />
+				<RivetTokenEnv />
+				<RivetRunnerEnv />
 			</div>
-		</>
+			<div className="mt-2 flex justify-end">
+				<CopyButton
+					value={() => {
+						const inputs =
+							document.querySelectorAll<HTMLInputElement>(
+								"[data-env-variables] input",
+							);
+						return Array.from(inputs)
+							.reduce((acc, input, index) => {
+								if (index % 2 === 0) {
+									acc.push(
+										`${input.value}=${inputs[index + 1]?.value}`,
+									);
+								}
+								return acc;
+							}, [] as string[])
+							.join("\n");
+					}}
+				>
+					<Button size="sm" variant="outline">
+						Copy all raw
+					</Button>
+				</CopyButton>
+			</div>
+		</div>
 	);
 }
 

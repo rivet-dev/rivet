@@ -241,14 +241,10 @@ const FilterValueCombobox = ({
 	const Display = definition.display;
 	const display = Display ? (
 		<Display value={value} />
+	) : selectedOptionsCount === 1 ? (
+		<span>{value[0]}</span>
 	) : (
-		<>
-			{selectedOptionsCount === 1 ? (
-				<span>{value[0]}</span>
-			) : (
-				<span>{selectedOptionsCount} selected</span>
-			)}
-		</>
+		<span>{selectedOptionsCount} selected</span>
 	);
 	return (
 		<Popover
@@ -735,7 +731,7 @@ export const FilterCreator = ({
 }) => {
 	const [open, setOpen] = useState(false);
 	const [selectedDefId, setSelectedDefId] = useState<string | null>(null);
-	const [commandInput, setCommandInput] = useState("");
+	const [_commandInput, setCommandInput] = useState("");
 	const commandInputRef = useRef<HTMLInputElement>(null);
 
 	const selectedDefinition = definitions[selectedDefId ?? ""] ?? null;
@@ -1293,7 +1289,7 @@ function FilterDateRange({
 function parseTime(time: string) {
 	const [hours, minutes, seconds] = time
 		.split(":")
-		.map((val) => Number.parseInt(val) || 0);
+		.map((val) => Number.parseInt(val, 10) || 0);
 
 	if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) {
 		return null;

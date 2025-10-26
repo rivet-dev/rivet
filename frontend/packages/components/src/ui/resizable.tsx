@@ -1,8 +1,7 @@
 "use client";
-import * as ResizablePrimitive from "react-resizable-panels";
 
-import { faGripVertical } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faGripVertical, Icon } from "@rivet-gg/icons";
+import * as ResizablePrimitive from "react-resizable-panels";
 import { cn } from "../lib/utils";
 
 const ResizablePanelGroup = ({

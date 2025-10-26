@@ -1,6 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
-import { createActorInspectorClient, RecordedRealtimeEvent } from "rivetkit/inspector";
+import {
+	createActorInspectorClient,
+	type RecordedRealtimeEvent,
+} from "rivetkit/inspector";
 import type { ActorId } from "./queries";
 
 type RequestOptions = Parameters<typeof createActorInspectorClient>[1];
@@ -10,7 +13,7 @@ export const createDefaultActorContext = (
 ) => ({
 	createActorInspectorFetchConfiguration: async (
 		actorId: ActorId | string,
-		opts: { auth?: boolean } = { auth: true },
+		_opts: { auth?: boolean } = { auth: true },
 	): Promise<RequestOptions> => ({
 		headers: {
 			"X-RivetKit-Query": JSON.stringify({
@@ -18,7 +21,7 @@ export const createDefaultActorContext = (
 			}),
 		},
 	}),
-	createActorInspectorUrl(actorId: ActorId | string) {
+	createActorInspectorUrl(_actorId: ActorId | string) {
 		return "http://localhost:6420/registry/actors/inspect";
 	},
 	async createActorInspector(
@@ -177,7 +180,9 @@ export const createDefaultActorContext = (
 				if (!response.ok) {
 					throw response;
 				}
-				return await response.json() as {events: RecordedRealtimeEvent[]};
+				return (await response.json()) as {
+					events: RecordedRealtimeEvent[];
+				};
 			},
 		});
 	},

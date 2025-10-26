@@ -1,5 +1,5 @@
 import { Button, WithTooltip } from "@rivet-gg/components";
-import { Icon, faXmark } from "@rivet-gg/icons";
+import { faXmark, Icon } from "@rivet-gg/icons";
 
 import equal from "fast-deep-equal";
 import { useAtomValue } from "jotai";

@@ -1,4 +1,4 @@
-import { faChevronRight, Icon, IconProp } from "@rivet-gg/icons";
+import { faChevronRight, Icon, type IconProp } from "@rivet-gg/icons";
 
 interface ExternalLinkCardProps {
 	href: string;
@@ -14,12 +14,7 @@ export function ExternalLinkCard({
 	description = "Opens in a new tab",
 }: ExternalLinkCardProps) {
 	return (
-		<a
-			href={href}
-			target="_blank"
-			rel="noreferrer"
-			className="block"
-		>
+		<a href={href} target="_blank" rel="noreferrer" className="block">
 			<div className="border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
@@ -31,7 +26,10 @@ export function ExternalLinkCard({
 							</div>
 						</div>
 					</div>
-					<Icon icon={faChevronRight} className="text-muted-foreground" />
+					<Icon
+						icon={faChevronRight}
+						className="text-muted-foreground"
+					/>
 				</div>
 			</div>
 		</a>

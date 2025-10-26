@@ -448,7 +448,9 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 			...dataProvider.runnerHealthCheckQueryOptions({
 				runnerUrl: debouncedEndpoint,
 				headers: Object.fromEntries(
-					debouncedHeaders.filter(([k, v]) => k && v).map(([k, v]) => [k, v]),
+					debouncedHeaders
+						.filter(([k, v]) => k && v)
+						.map(([k, v]) => [k, v]),
 				),
 			}),
 			enabled,
@@ -462,7 +464,7 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 
 	useEffect(() => {
 		onChange(isSuccess);
-	}, [isSuccess]);
+	}, [isSuccess, onChange]);
 
 	return (
 		<AnimatePresence>
@@ -555,17 +557,17 @@ function HealthCheckFailure({
 				</p>
 			);
 		})
-		.with({ invalidRequest: P.any }, (e) => {
+		.with({ invalidRequest: P.any }, (_e) => {
 			return <p>Health check failed because the request was invalid.</p>;
 		})
-		.with({ invalidResponseJson: P.any }, (e) => {
+		.with({ invalidResponseJson: P.any }, (_e) => {
 			return (
 				<p>
 					Health check failed because the response was not valid JSON.
 				</p>
 			);
 		})
-		.with({ requestFailed: P.any }, (e) => {
+		.with({ requestFailed: P.any }, (_e) => {
 			return (
 				<p>
 					Health check failed because the request could not be
@@ -573,10 +575,10 @@ function HealthCheckFailure({
 				</p>
 			);
 		})
-		.with({ requestTimedOut: P.any }, (e) => {
+		.with({ requestTimedOut: P.any }, (_e) => {
 			return <p>Health check failed because the request timed out.</p>;
 		})
-		.with({ invalidResponseSchema: P.any }, (e) => {
+		.with({ invalidResponseSchema: P.any }, (_e) => {
 			return (
 				<p>Health check failed because the response was not valid.</p>
 			);

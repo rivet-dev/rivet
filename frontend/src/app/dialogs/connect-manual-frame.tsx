@@ -3,7 +3,6 @@ import { useState } from "react";
 import {
 	type DialogContentProps,
 	Frame,
-	Tabs,
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@/components";
@@ -34,7 +33,11 @@ export default function CreateProjectFrameContent({
 						className="border rounded-md gap-0"
 						value={mode}
 						onValueChange={(mode) => {
-							setMode(mode === "serverfull" ? "serverless" : "serverfull");
+							setMode(
+								mode === "serverfull"
+									? "serverless"
+									: "serverfull",
+							);
 						}}
 					>
 						<ToggleGroupItem

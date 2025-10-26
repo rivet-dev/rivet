@@ -1,10 +1,8 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { faXmark, Icon } from "@rivet-gg/icons";
 import * as React from "react";
-
-import { faXmark } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 export type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root>;
