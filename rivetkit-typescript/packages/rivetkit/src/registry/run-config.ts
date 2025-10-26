@@ -51,7 +51,7 @@ export const RunnerConfigSchema = z
 			.string()
 			.optional()
 			.default(
-				() => getEnvUniversal("RIVET_RUN_ENGINE_VERSION") ?? "25.8.1",
+				() => getEnvUniversal("RIVET_RUN_ENGINE_VERSION") ?? "25.8.2",
 			),
 
 		/** @experimental */
