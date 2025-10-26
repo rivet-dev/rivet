@@ -12,9 +12,10 @@ const tiers = [
 		priceMonthly: "$0",
 		href: "https://dashboard.rivet.dev/",
 		highlights: [
-			{ description: "5GB Limit", icon: "check" },
-			{ description: "5 Million Writes /mo Limit", icon: "check" },
-			{ description: "200 Million Reads /mo Limit", icon: "check" },
+			{ description: "5GB Storage Limit", icon: "check" },
+			{ description: "5 Million Save State Writes /mo Limit", icon: "check" },
+			{ description: "200 Million Save State Reads /mo Limit", icon: "check" },
+			{ description: "1 Million Actions /mo Limit", icon: "check" },
 			{ description: "100GB Egress Limit", icon: "check" },
 			{ description: "Community Support", icon: "check" },
 		],
@@ -24,8 +25,9 @@ const tiers = [
 			priceMonthly: "$5",
 			href: "https://dashboard.rivet.dev/",
 		highlights: [
-			{ description: "25 Billion Reads /mo included", icon: "gift" },
-			{ description: "50 Million Writes /mo included", icon: "gift" },
+			{ description: "25 Billion Save State Reads /mo included", icon: "gift" },
+			{ description: "50 Million Save State Writes /mo included", icon: "gift" },
+			{ description: "1 Million Actions /mo included", icon: "gift" },
 			{ description: "5GB Storage included", icon: "gift" },
 			{ description: "1TB Egress included", icon: "gift" },
 			{ description: "Email Support", icon: "check" },
@@ -36,8 +38,9 @@ const tiers = [
 		priceMonthly: "$200",
 		href: "https://dashboard.rivet.dev/",
 		highlights: [
-			{ description: "25 Billion Reads /mo included", icon: "gift" },
-			{ description: "50 Million Writes /mo included", icon: "gift" },
+			{ description: "25 Billion Save State Reads /mo included", icon: "gift" },
+			{ description: "50 Million Save State Writes /mo included", icon: "gift" },
+			{ description: "1 Million Actions /mo included", icon: "gift" },
 			{ description: "5GB Storage included", icon: "gift" },
 			{ description: "1TB Egress included", icon: "gift" },
 			{ description: "MFA", icon: "check" },
@@ -76,7 +79,7 @@ const sections = [
 				},
 			},
 			{
-				name: "Reads per month",
+				name: "Save State Reads per month",
 				tiers: {
 					Free: "200 Million",
 					Hobby: "25 Billion included",
@@ -85,11 +88,20 @@ const sections = [
 				},
 			},
 			{
-				name: "Writes per month",
+				name: "Save State Writes per month",
 				tiers: {
 					Free: "5 Million",
 					Hobby: "50 Million included",
 					Team: "50 Million included",
+					Enterprise: "Custom",
+				},
+			},
+			{
+				name: "Actions per month",
+				tiers: {
+					Free: "1 Million",
+					Hobby: "1 Million included",
+					Team: "1 Million included",
 					Enterprise: "Custom",
 				},
 			},
@@ -420,28 +432,36 @@ function UsagePricingTable() {
 							</tr>
 							<tr className="border-b border-white/5">
 								<td className="px-6 py-4 text-sm text-white/80">
-									Reads
+									Save State Reads
 								</td>
 								<td className="px-6 py-4 text-sm text-white text-right">
 									$1.00 per billion reads
 								</td>
 							</tr>
-									<tr className="border-b border-white/5">
-										<td className="px-6 py-4 text-sm text-white/80">
-											Writes
-										</td>
-										<td className="px-6 py-4 text-sm text-white text-right">
-											$1.00 per million writes
-										</td>
-									</tr>
-									<tr>
-										<td className="px-6 py-4 text-sm text-white/80">
-											Egress
-										</td>
-										<td className="px-6 py-4 text-sm text-white text-right">
-											$0.15 per GB
-										</td>
-									</tr>
+							<tr className="border-b border-white/5">
+								<td className="px-6 py-4 text-sm text-white/80">
+									Save State Writes
+								</td>
+								<td className="px-6 py-4 text-sm text-white text-right">
+									$1.00 per million writes
+								</td>
+							</tr>
+							<tr className="border-b border-white/5">
+								<td className="px-6 py-4 text-sm text-white/80">
+									Actions
+								</td>
+								<td className="px-6 py-4 text-sm text-white text-right">
+									$0.15 per million actions
+								</td>
+							</tr>
+							<tr>
+								<td className="px-6 py-4 text-sm text-white/80">
+									Egress
+								</td>
+								<td className="px-6 py-4 text-sm text-white text-right">
+									$0.15 per GB
+								</td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
