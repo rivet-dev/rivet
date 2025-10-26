@@ -1,7 +1,7 @@
 {
 	"name": "example-kitchen-sink",
 	"private": true,
-	"version": "2.0.20",
+	"version": "2.0.21",
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",

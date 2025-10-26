@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/docker-template",
-	"version": "1.0.0",
+	"version": "2.0.21",
 	"description": "Docker compose templating for Rivet",
 	"main": "dist/main.js",
 	"private": true,
