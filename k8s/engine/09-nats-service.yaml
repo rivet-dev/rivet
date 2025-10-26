@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: nats
+    component: nats
+    service: engine
+  name: nats
+  namespace: rivet-engine
+spec:
+  clusterIP: None
+  ports:
+  - name: client
+    port: 4222
+    protocol: TCP
+    targetPort: 4222
+  - name: cluster
+    port: 6222
+    protocol: TCP
+    targetPort: 6222
+  - name: monitoring
+    port: 8222
+    protocol: TCP
+    targetPort: 8222
+  selector:
+    app: nats
+  type: ClusterIP

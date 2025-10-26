@@ -1,0 +1,33 @@
+apiVersion: v1
+data:
+  nats.conf: |
+    # Client port
+    port: 4222
+
+    # HTTP monitoring port
+    http: 8222
+
+    # Clustering configuration
+    cluster {
+      # Cluster port for peer-to-peer communication
+      port: 6222
+
+      # Routes for cluster autodiscovery
+      # Uses StatefulSet DNS: nats-0.nats.rivet-engine.svc.cluster.local
+      routes = [
+        nats://nats-0.nats.rivet-engine.svc.cluster.local:6222
+        nats://nats-1.nats.rivet-engine.svc.cluster.local:6222
+        nats://nats-2.nats.rivet-engine.svc.cluster.local:6222
+      ]
+
+      # Cluster discovery timeout
+      connect_retries: 30
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    app: nats
+    component: nats
+    service: engine
+  name: nats-config
+  namespace: rivet-engine
