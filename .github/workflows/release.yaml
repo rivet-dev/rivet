@@ -67,9 +67,9 @@ jobs:
           npm install -g tsx
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase setup-ci
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase setup-ci
           fi
 
   binaries:
@@ -254,7 +254,7 @@ jobs:
           npm install -g tsx
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi --noValidateGit
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase complete-ci --no-validate-git
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi --noValidateGit
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase complete-ci --no-validate-git
           fi

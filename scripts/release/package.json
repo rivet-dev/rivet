@@ -12,11 +12,12 @@
 	"packageManager": "pnpm@10.13.1",
 	"devDependencies": {
 		"@types/node": "^24.3.0",
-		"minimist": "^1.2.8",
-		"@types/minimist": "^1.2.5"
+		"@types/semver": "^7.5.8"
 	},
 	"dependencies": {
+		"commander": "^12.1.0",
 		"execa": "^8.0.1",
-		"glob": "^10.3.10"
+		"glob": "^10.3.10",
+		"semver": "^7.6.0"
 	}
 }
