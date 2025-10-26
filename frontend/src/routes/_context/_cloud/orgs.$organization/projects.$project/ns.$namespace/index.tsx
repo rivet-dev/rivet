@@ -1,13 +1,16 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
 	CatchBoundary,
 	createFileRoute,
-	type InferAllContext,
 	notFound,
 	redirect,
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
 import { BuildPrefiller } from "@/app/build-prefiller";
-import { useDataProvider } from "@/components/actors";
+import {
+	useDataProvider,
+	type useEngineCompatDataProvider,
+} from "@/components/actors";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
@@ -18,15 +21,18 @@ export const Route = createFileRoute(
 			throw notFound();
 		}
 
-		const isVisible = await shouldDisplayActors(context);
+		const shouldDisplay = await shouldDisplayActors(context);
 
-		if (!isVisible) {
+		if (!shouldDisplay) {
 			throw redirect({ from: Route.to, replace: true, to: "./connect" });
 		}
 	},
 });
 
-async function shouldDisplayActors(context: InferAllContext<typeof Route>) {
+export async function shouldDisplayActors(context: {
+	queryClient: QueryClient;
+	dataProvider: ReturnType<typeof useEngineCompatDataProvider>;
+}) {
 	try {
 		const infiniteBuilds = await context.queryClient.fetchInfiniteQuery(
 			context.dataProvider.buildsQueryOptions(),
@@ -65,16 +71,14 @@ export function RouteComponent() {
 	}
 
 	return (
-		<>
-			<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
-				<Actors actorId={actorId} />
-				<CatchBoundary
-					getResetKey={() => n?.join(",") ?? "no-build-name"}
-					errorComponent={() => null}
-				>
-					{!n ? <BuildPrefiller /> : null}
-				</CatchBoundary>
+		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
+			<Actors actorId={actorId} />
+			<CatchBoundary
+				getResetKey={() => n?.join(",") ?? "no-build-name"}
+				errorComponent={() => null}
+			>
+				{!n ? <BuildPrefiller /> : null}
 			</CatchBoundary>
-		</>
+		</CatchBoundary>
 	);
 }
