@@ -231,8 +231,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const provider = useEngineCompatDataProvider();
 
 	const actorContext = useMemo(() => {
-		return engineToken
-			? createInspectorActorContext({
+		return createInspectorActorContext({
 					url: getConfig().apiUrl,
 					token: async () => {
 						const runner = await queryClient.fetchQuery(
@@ -245,8 +244,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 						);
 					},
 					engineToken,
-				})
-			: null;
+				});
 	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };
