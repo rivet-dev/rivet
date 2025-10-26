@@ -1,11 +1,10 @@
+import { DialogDescription } from "@radix-ui/react-dialog";
+import { faDiscord, Icon } from "@rivet-gg/icons";
+import { usePostHog } from "posthog-js/react";
+import { useState } from "react";
 import * as FeedbackForm from "../forms/feedback-form";
 import type { DialogContentProps } from "../hooks/use-dialog";
 import { FEEDBACK_FORM_ID } from "../lib/constants";
-
-import { DialogDescription } from "@radix-ui/react-dialog";
-import { Icon, faDiscord } from "@rivet-gg/icons";
-import { usePostHog } from "posthog-js/react";
-import { useState } from "react";
 import { Button } from "../ui/button";
 import { DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Flex } from "../ui/flex";

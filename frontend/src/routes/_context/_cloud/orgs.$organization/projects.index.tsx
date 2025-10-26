@@ -58,6 +58,7 @@ function ProjectList() {
 			{isLoading
 				? Array(5)
 						.fill(null)
+						// biome-ignore lint/suspicious/noArrayIndexKey: it's fine here
 						.map((_, i) => <ListItemSkeleton key={i} />)
 				: null}
 

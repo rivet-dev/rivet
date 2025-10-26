@@ -5,14 +5,17 @@
 			"**/*.js",
 			"**/*.json",
 			"**/*.ts",
+			"**/*.tsx",
 			"!engine/artifacts",
 			"!engine/sdks",
 			"!engine/sdks/typescript/api-full",
 			"!engine/sdks/typescript/runner-protocol",
-			"!frontend",
+			"!frontend/packages",
+			"!examples",
 			"!rivetkit-openapi/openapi.json",
 			"!scripts",
-			"!website"
+			"!website",
+			"!**/*.gen.*"
 		],
 		"ignoreUnknown": true
 	},

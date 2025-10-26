@@ -9,7 +9,7 @@ import {
 import { toast } from "sonner";
 
 export const CopyCodeTrigger = forwardRef<HTMLElement, PropsWithChildren>(
-	({ children }, ref) => {
+	({ children }, _ref) => {
 		const handleClick: MouseEventHandler = (event) => {
 			const codeGroup = event.currentTarget.closest("[data-code-group]");
 

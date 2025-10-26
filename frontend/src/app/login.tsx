@@ -2,7 +2,7 @@
 import { useClerk, useUser } from "@clerk/clerk-react";
 import * as Clerk from "@clerk/elements/common";
 import * as SignIn from "@clerk/elements/sign-in";
-import { faGithub, faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faGoogle, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
@@ -29,7 +29,7 @@ export function Login() {
 		if (user) {
 			navigate({ to: "/" });
 		}
-	}, [user]);
+	}, [user, navigate]);
 
 	return (
 		<motion.div

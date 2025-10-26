@@ -4,7 +4,7 @@ import {
 	EditorView,
 	JsonCode,
 } from "@rivet-gg/components/code-mirror";
-import { Icon, faRotateLeft, faSave } from "@rivet-gg/icons";
+import { faRotateLeft, faSave, Icon } from "@rivet-gg/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
 import { ActorStateChangeIndicator } from "./actor-state-change-indicator";

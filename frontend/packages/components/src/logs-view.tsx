@@ -1,5 +1,5 @@
 "use client";
-import { Icon, faArrowDownToLine } from "@rivet-gg/icons";
+import { faArrowDownToLine, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import {
 	type PropsWithChildren,

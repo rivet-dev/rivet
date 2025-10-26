@@ -232,19 +232,17 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 
 	const actorContext = useMemo(() => {
 		return createInspectorActorContext({
-					url: getConfig().apiUrl,
-					token: async () => {
-						const runner = await queryClient.fetchQuery(
-							provider.runnerByNameQueryOptions({
-								runnerName: actor?.runner || "",
-							}),
-						);
-						return (
-							(runner?.metadata?.inspectorToken as string) || ""
-						);
-					},
-					engineToken,
-				});
+			url: getConfig().apiUrl,
+			token: async () => {
+				const runner = await queryClient.fetchQuery(
+					provider.runnerByNameQueryOptions({
+						runnerName: actor?.runner || "",
+					}),
+				);
+				return (runner?.metadata?.inspectorToken as string) || "";
+			},
+			engineToken,
+		});
 	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };

@@ -46,7 +46,7 @@ interface CodeGroupProps {
 	}>[];
 }
 
-const getChildIdx = (child: CodeGroupProps['children'][number]) =>
+const getChildIdx = (child: CodeGroupProps["children"][number]) =>
 	child.props?.file || child.props?.title || child.props?.language || "code";
 
 export function CodeGroup({ children, className }: CodeGroupProps) {
@@ -73,10 +73,14 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 								>
 									{child.props.icon ? (
 										<>
-											<Icon icon={child.props.icon} className="mr-1.5" />
+											<Icon
+												icon={child.props.icon}
+												className="mr-1.5"
+											/>
 											{child.props.title ||
 												languageNames[
-													child.props.language || "bash"
+													child.props.language ||
+														"bash"
 												] ||
 												"Code"}
 										</>

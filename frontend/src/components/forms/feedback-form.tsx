@@ -1,4 +1,5 @@
 import { faBug, faConciergeBell, Icon } from "@rivet-gg/icons";
+import { useId } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import { createSchemaForm } from "../lib/create-schema-form";
@@ -29,6 +30,10 @@ export { Form, Submit };
 
 export const Type = () => {
 	const { control } = useFormContext<FormValues>();
+
+	const bugId = useId();
+	const featureId = useId();
+
 	return (
 		<FormField
 			control={control}
@@ -42,15 +47,18 @@ export const Type = () => {
 							onValueChange={field.onChange}
 						>
 							<div className="flex items-center space-x-2">
-								<RadioGroupItem value="bug" id="bug" />
-								<Label htmlFor="bug">
+								<RadioGroupItem value="bug" id={bugId} />
+								<Label htmlFor={bugId}>
 									<Icon icon={faBug} className="mr-2" />
 									Bug
 								</Label>
 							</div>
 							<div className="flex items-center space-x-2">
-								<RadioGroupItem value="feature" id="feature" />
-								<Label htmlFor="feature">
+								<RadioGroupItem
+									value="feature"
+									id={featureId}
+								/>
+								<Label htmlFor={featureId}>
 									<Icon
 										icon={faConciergeBell}
 										className="mr-2"

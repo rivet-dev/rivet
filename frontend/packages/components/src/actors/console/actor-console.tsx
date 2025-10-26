@@ -1,5 +1,5 @@
 import { Button } from "@rivet-gg/components";
-import { Icon, faChevronDown } from "@rivet-gg/icons";
+import { faChevronDown, Icon } from "@rivet-gg/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { useActorWorkerStatus } from "../worker/actor-worker-context";

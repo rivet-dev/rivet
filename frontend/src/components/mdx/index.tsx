@@ -5,10 +5,9 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 
-import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { CardGroup, CtaCard } from "../cta-card";
 import { cn } from "../lib/utils";
-import { WithTooltip } from "../ui/tooltip";
 import { Link } from "../ui/typography";
 
 // Custom CalloutBase component for dark backgrounds

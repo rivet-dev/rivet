@@ -1,4 +1,4 @@
-import { Icon, faExternalLink } from "@rivet-gg/icons";
+import { faExternalLink, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import {
 	Sheet,

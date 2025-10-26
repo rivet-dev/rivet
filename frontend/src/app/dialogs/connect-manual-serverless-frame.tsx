@@ -86,7 +86,7 @@ function FormStepper({
 }) {
 	const provider = useEngineCompatDataProvider();
 
-	const { data } = useSuspenseInfiniteQuery({
+	useSuspenseInfiniteQuery({
 		...provider.runnerConfigsQueryOptions(),
 	});
 

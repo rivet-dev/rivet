@@ -145,9 +145,7 @@ function Step1({ datacenter }: { datacenter: string }) {
 	return (
 		<>
 			<div className="space-y-4">
-				<p>
-					Deploy the Rivet Railway template to get started quickly.
-				</p>
+				<p>Deploy the Rivet Railway template to get started quickly.</p>
 				<DeployToRailwayButton datacenter={datacenter} />
 			</div>
 			<Accordion type="single" collapsible>

@@ -1,6 +1,6 @@
 import { cn } from "@rivet-gg/components";
 import type { ComponentProps } from "react";
-import { Inspector, type ObjectInspector, chromeDark } from "react-inspector";
+import { chromeDark, Inspector, type ObjectInspector } from "react-inspector";
 
 const INSPECTOR_THEME = {
 	...chromeDark,
@@ -22,7 +22,7 @@ export function ActorObjectInspector(
 				table={false}
 				data={props.data}
 				// Invalid types for theme
-				// @ts-ignore
+				// @ts-expect-error
 				theme={INSPECTOR_THEME}
 			/>
 		</div>

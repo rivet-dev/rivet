@@ -1,10 +1,14 @@
 "use client";
 
 import * as SelectPrimitive from "@radix-ui/react-select";
+import {
+	faCheck,
+	faChevronDown,
+	faChevronUp,
+	faSelect,
+	Icon,
+} from "@rivet-gg/icons";
 import * as React from "react";
-
-import { faCheck, faChevronDown, faChevronUp, faSelect } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 const Select = SelectPrimitive.Root;

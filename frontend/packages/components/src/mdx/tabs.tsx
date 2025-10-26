@@ -10,7 +10,10 @@ import {
 export const Tab = ({
 	title,
 	children,
-}: { title: string; children: React.ReactNode }) => {
+}: {
+	title: string;
+	children: React.ReactNode;
+}) => {
 	return <RivetTabsContent value={title}>{children}</RivetTabsContent>;
 };
 

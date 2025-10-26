@@ -12,7 +12,7 @@ import theme from "./theme.json";
 const langs = {
 	typescript: () => import("@shikijs/langs/typescript"),
 	json: () => import("@shikijs/langs/json"),
-	bash: () => import("@shikijs/langs/bash")
+	bash: () => import("@shikijs/langs/bash"),
 };
 
 interface CodePreviewProps {

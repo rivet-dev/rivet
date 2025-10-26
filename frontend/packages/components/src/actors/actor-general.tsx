@@ -1,4 +1,4 @@
-import { Dd, DiscreteCopyButton, Dl, Dt, Flex, cn } from "@rivet-gg/components";
+import { cn, Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@rivet-gg/components";
 import { formatISO } from "date-fns";
 import equal from "fast-deep-equal";
 import { useAtomValue } from "jotai";

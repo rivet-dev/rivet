@@ -17,11 +17,7 @@ export const ActorStatusLabel = ({ status }: { status: ActorStatus }) => {
 
 const selector = (a: Actor) => a.status;
 
-export const AtomizedActorStatusLabel = ({
-	actor,
-}: {
-	actor: ActorAtom;
-}) => {
+export const AtomizedActorStatusLabel = ({ actor }: { actor: ActorAtom }) => {
 	const status = useAtomValue(selectAtom(actor, selector));
 	return <ActorStatusLabel status={status} />;
 };

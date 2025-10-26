@@ -37,6 +37,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		refetch: refetchData,
 		isLoading,
 	} = useQuery(
+		// biome-ignore lint/style/noNonNullAssertion: its fine, we check for selectedTable presence above
 		actorQueries.actorDatabaseRowsQueryOptions(actorId, selectedTable!, {
 			enabled: !!selectedTable,
 		}),

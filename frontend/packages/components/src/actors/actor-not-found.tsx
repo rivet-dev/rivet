@@ -1,7 +1,8 @@
-import { Icon, faQuestionSquare } from "@rivet-gg/icons";
+import { faQuestionSquare, Icon } from "@rivet-gg/icons";
 import { useAtomValue, useSetAtom } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { useCallback } from "react";
+import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
 import { FilterOp } from "../ui/filters";
 import {
@@ -11,11 +12,12 @@ import {
 } from "./actor-context";
 import { ActorTabs } from "./actors-actor-details";
 import { useActorsView } from "./actors-view-context-provider";
-import { ShimmerLine } from "../shimmer-line";
 
 export function ActorNotFound({
 	features = [],
-}: { features?: ActorFeature[] }) {
+}: {
+	features?: ActorFeature[];
+}) {
 	const { copy } = useActorsView();
 
 	const setFilters = useSetAtom(actorFiltersAtom);

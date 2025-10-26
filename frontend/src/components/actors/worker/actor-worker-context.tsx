@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: its safe */
 import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
@@ -10,9 +11,9 @@ import {
 } from "react";
 import { match } from "ts-pattern";
 import { useInspectorCredentials } from "@/app/credentials-context";
-import { assertNonNullable, ls } from "../../lib/utils";
+import { assertNonNullable } from "../../lib/utils";
 import { useActor } from "../actor-queries-context";
-import { useDataProvider, useEngineCompatDataProvider } from "../data-provider";
+import { useEngineCompatDataProvider } from "../data-provider";
 import { ActorFeature, type ActorId } from "../queries";
 import { ActorWorkerContainer } from "./actor-worker-container";
 

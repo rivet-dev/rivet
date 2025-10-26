@@ -1,7 +1,6 @@
-import { type ReactNode, forwardRef } from "react";
-import { cn } from "../lib/utils";
-
 import { Slot } from "@radix-ui/react-slot";
+import { forwardRef, type ReactNode } from "react";
+import { cn } from "../lib/utils";
 
 export interface InputProps extends React.ComponentPropsWithoutRef<"input"> {
 	asChild?: boolean;

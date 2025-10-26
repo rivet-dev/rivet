@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
 

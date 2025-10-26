@@ -1,7 +1,5 @@
+import { faCheck, faChevronDown, Icon } from "@rivet-gg/icons";
 import * as React from "react";
-
-import { faCheck, faChevronDown } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { Fragment } from "react";
 import { cn } from "../lib/utils";
 import { Badge } from "./badge";

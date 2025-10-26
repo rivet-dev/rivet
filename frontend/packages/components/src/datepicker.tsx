@@ -1,9 +1,7 @@
 "use client";
 
+import { faCalendar, Icon } from "@rivet-gg/icons";
 import { format } from "date-fns";
-
-import { faCalendar } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import type { DateRange } from "react-day-picker";
 import { cn } from "./lib/utils";
 import { Button } from "./ui/button";

@@ -120,7 +120,9 @@ function Datacenter({ actorId }: { actorId: ActorId }) {
 	const showDatacenter = useSearch({
 		strict: false,
 		select: (search) =>
-			(pick(search || {}).showDatacenter as FilterValue)?.value?.includes("1"),
+			(pick(search || {}).showDatacenter as FilterValue)?.value?.includes(
+				"1",
+			),
 	});
 
 	if (!showDatacenter) {

@@ -1,10 +1,8 @@
 "use client";
 
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import { faChevronDown, Icon } from "@rivet-gg/icons";
 import * as React from "react";
-
-import { faChevronDown } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 const Accordion = AccordionPrimitive.Root;

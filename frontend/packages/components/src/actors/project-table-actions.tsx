@@ -5,7 +5,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@rivet-gg/components";
-import { Icon, faEllipsisH } from "@rivet-gg/icons";
+import { faEllipsisH, Icon } from "@rivet-gg/icons";
 
 export function ProjectTableActions() {
 	return (

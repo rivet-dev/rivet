@@ -1,10 +1,8 @@
 "use client";
 
+import { faPeriod, Icon } from "@rivet-gg/icons";
 import { OTPInput, OTPInputContext } from "input-otp";
 import * as React from "react";
-
-import { faPeriod } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 
 const InputOTP = React.forwardRef<

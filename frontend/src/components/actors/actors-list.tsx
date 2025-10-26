@@ -199,6 +199,7 @@ export function ListSkeleton() {
 			{Array(RECORDS_PER_PAGE)
 				.fill(null)
 				.map((_, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: it's fine in this case
 					<ActorsListRowSkeleton key={i} />
 				))}
 		</div>
@@ -211,7 +212,7 @@ function EmptyState({ count }: { count: number }) {
 		from: "/_context",
 		select: (state) => state.n,
 	});
-	const { copy, links } = useActorsView();
+	const { copy } = useActorsView();
 	const { remove, pick } = useActorsFilters();
 
 	const { data: availableNamesCount = 0 } = useInfiniteQuery(
@@ -356,7 +357,7 @@ function useFiltersChangeCallback(): OnFiltersChange {
 				});
 			}
 		},
-		[navigate, pick],
+		[navigate, pick, remove],
 	);
 }
 

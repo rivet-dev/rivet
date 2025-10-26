@@ -1,5 +1,5 @@
 import { Button, type ButtonProps } from "@rivet-gg/components";
-import { Icon, faMagnifyingGlass } from "@rivet-gg/icons";
+import { faMagnifyingGlass, Icon } from "@rivet-gg/icons";
 import { useNavigate } from "@tanstack/react-router";
 import { useActorsView } from "./actors-view-context-provider";
 

@@ -1,17 +1,26 @@
+import { useQuery } from "@tanstack/react-query";
+import equal from "fast-deep-equal";
 import { useAtomValue, useSetAtom } from "jotai";
 import { selectAtom } from "jotai/utils";
-import equal from "fast-deep-equal";
-import { useState, useMemo } from "react";
-import type { Actor, ActorAtom } from "./actor-context";
-import { ActorCpuStats } from "./actor-cpu-stats";
-import { ActorMemoryStats } from "./actor-memory-stats";
-import { Dd, Dl, Dt } from "../ui/typography";
+import { useMemo, useState } from "react";
+import { actorMetricsQueryOptions } from "@/domains/project/queries/actors/query-options";
 import { Button } from "../ui/button";
 import { Flex } from "../ui/flex";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { actorMetricsTimeWindowAtom, actorEnvironmentAtom } from "./actor-context";
-import { useQuery } from "@tanstack/react-query";
-import { actorMetricsQueryOptions } from "@/domains/project/queries/actors/query-options";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "../ui/select";
+import { Dd, Dl, Dt } from "../ui/typography";
+import type { Actor, ActorAtom } from "./actor-context";
+import {
+	actorEnvironmentAtom,
+	actorMetricsTimeWindowAtom,
+} from "./actor-context";
+import { ActorCpuStats } from "./actor-cpu-stats";
+import { ActorMemoryStats } from "./actor-memory-stats";
 
 const selector = (a: Actor) => ({
 	metrics: a.metrics,
@@ -42,16 +51,19 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 	);
 	const defaultMetricsData = useAtomValue(metrics);
 	const [showAdvanced, setShowAdvanced] = useState(false);
-	
+
 	const timeWindowMs = useAtomValue(actorMetricsTimeWindowAtom);
 	const setTimeWindowMs = useSetAtom(actorMetricsTimeWindowAtom);
 	const environment = useAtomValue(actorEnvironmentAtom);
-	
-	const currentTimeWindow = timeWindowOptions.find(option => option.milliseconds === timeWindowMs) || timeWindowOptions[1];
+
+	const currentTimeWindow =
+		timeWindowOptions.find(
+			(option) => option.milliseconds === timeWindowMs,
+		) || timeWindowOptions[1];
 	const [timeWindow, setTimeWindow] = useState(currentTimeWindow.value);
 
 	const isActorRunning = status === "running";
-	
+
 	// Create a query for time window-specific metrics
 	const { data: customMetricsData, status: customMetricsStatus } = useQuery({
 		...actorMetricsQueryOptions(
@@ -61,23 +73,27 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 				actorId: id,
 				timeWindowMs: timeWindowMs,
 			},
-			{ refetchInterval: 5000 }
+			{ refetchInterval: 5000 },
 		),
 		enabled: !!environment && !!id,
 	});
-	
+
 	// Use custom metrics if available, otherwise fall back to default
-	const metricsData = customMetricsData ? {
-		metrics: customMetricsData.metrics,
-		rawData: customMetricsData.rawData,
-		interval: customMetricsData.interval,
-		status: customMetricsStatus,
-		updatedAt: Date.now(),
-	} : defaultMetricsData;
+	const metricsData = customMetricsData
+		? {
+				metrics: customMetricsData.metrics,
+				rawData: customMetricsData.rawData,
+				interval: customMetricsData.interval,
+				status: customMetricsStatus,
+				updatedAt: Date.now(),
+			}
+		: defaultMetricsData;
 
 	const handleTimeWindowChange = (value: string) => {
 		setTimeWindow(value);
-		const selectedOption = timeWindowOptions.find(option => option.value === value);
+		const selectedOption = timeWindowOptions.find(
+			(option) => option.value === value,
+		);
 		if (selectedOption) {
 			setTimeWindowMs(selectedOption.milliseconds);
 		}
@@ -150,9 +166,7 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 		return `${Math.min(cpuRate, 100).toFixed(2)}%`;
 	}, [metricsData, isActorRunning]);
 
-	const calculateMemoryPercentage = (
-		usage: number | null | undefined,
-	) => {
+	const calculateMemoryPercentage = (usage: number | null | undefined) => {
 		if (
 			!isActorRunning ||
 			usage === null ||
@@ -192,15 +206,16 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 		);
 	}
 
-	const memoryPercentage = calculateMemoryPercentage(
-		data.memory_usage_bytes,
-	);
+	const memoryPercentage = calculateMemoryPercentage(data.memory_usage_bytes);
 
 	return (
 		<div className="px-4 my-8">
 			<div className="flex items-center justify-between mb-4">
 				<h3 className="font-semibold">Container Metrics</h3>
-				<Select value={timeWindow} onValueChange={handleTimeWindowChange}>
+				<Select
+					value={timeWindow}
+					onValueChange={handleTimeWindowChange}
+				>
 					<SelectTrigger className="w-32">
 						<SelectValue />
 					</SelectTrigger>
@@ -222,7 +237,8 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 						<Dd className="text-lg font-semibold flex flex-col gap-1">
 							<span>{cpuPercentage}</span>
 							{metricsData.rawData?.cpu_usage_seconds_total &&
-							metricsData.rawData.cpu_usage_seconds_total.length > 0 ? (
+							metricsData.rawData.cpu_usage_seconds_total.length >
+								0 ? (
 								<ActorCpuStats
 									syncId="actor-stats"
 									interval={metricsData.interval / 1000}
@@ -248,7 +264,8 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 								)}
 							</span>
 							{metricsData.rawData?.memory_usage_bytes &&
-							metricsData.rawData.memory_usage_bytes.length > 0 ? (
+							metricsData.rawData.memory_usage_bytes.length >
+								0 ? (
 								<ActorMemoryStats
 									syncId="actor-stats"
 									interval={metricsData.interval / 1000}
@@ -258,7 +275,9 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 											.memory_usage_bytes ?? []
 									}
 									allocatedMemory={
-										resources?.memory ? resources.memory * 1024 * 1024 : 0
+										resources?.memory
+											? resources.memory * 1024 * 1024
+											: 0
 									}
 									isRunning={isActorRunning}
 								/>
@@ -369,9 +388,17 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 						<h4 className="font-medium mb-2">Resource Limits</h4>
 						<Dl>
 							<Dt>Memory Limit</Dt>
-							<Dd>{resources?.memory ? `${resources.memory} MB` : "n/a"}</Dd>
+							<Dd>
+								{resources?.memory
+									? `${resources.memory} MB`
+									: "n/a"}
+							</Dd>
 							<Dt>CPU Limit</Dt>
-							<Dd>{resources?.cpu ? `${resources.cpu / 1000} cores` : "n/a"}</Dd>
+							<Dd>
+								{resources?.cpu
+									? `${resources.cpu / 1000} cores`
+									: "n/a"}
+							</Dd>
 						</Dl>
 					</div>
 
@@ -537,9 +564,7 @@ export function ActorMetrics({ actor }: ActorMetricsProps) {
 							</Dd>
 							<Dt>Close Wait</Dt>
 							<Dd>
-								{formatNumber(
-									data.network_tcp_usage_closewait,
-								)}
+								{formatNumber(data.network_tcp_usage_closewait)}
 							</Dd>
 							<Dt>Closing</Dt>
 							<Dd>

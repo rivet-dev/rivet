@@ -1,17 +1,16 @@
 import {
+	createSchemaForm,
 	FormControl,
 	FormField,
 	FormItem,
 	FormLabel,
 	FormMessage,
 	Label,
-	createSchemaForm,
 } from "@rivet-gg/components";
 import { JsonCode } from "@rivet-gg/components/code-mirror";
+import { useAtomValue, useSetAtom } from "jotai";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
-
-import { useAtomValue, useSetAtom } from "jotai";
 import {
 	actorCustomTagKeys,
 	actorCustomTagValues,

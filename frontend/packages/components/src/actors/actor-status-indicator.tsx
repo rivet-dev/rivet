@@ -1,4 +1,4 @@
-import { Ping, cn } from "@rivet-gg/components";
+import { cn, Ping } from "@rivet-gg/components";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import type { ComponentPropsWithRef } from "react";

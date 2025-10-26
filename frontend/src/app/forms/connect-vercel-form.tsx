@@ -2,7 +2,6 @@ import { useFormContext } from "react-hook-form";
 import z from "zod";
 import * as ConnectManualServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	Code,
 	CodeFrame,
 	CodeGroup,
 	CodePreview,
@@ -153,7 +152,7 @@ export const Headers = ConnectManualServerlessForm.Headers;
 //
 // export const { GET, POST, PUT, PATCH, HEAD, OPTIONS } = toNextHandler(registry);`;
 
-const integrationCode = ({ plan }: { plan: string }) =>
+const integrationCode = ({ plan: _ }: { plan: string }) =>
 	`import { toNextHandler } from "@rivetkit/next-js";
 import { registry } from "@/rivet/registry";
 

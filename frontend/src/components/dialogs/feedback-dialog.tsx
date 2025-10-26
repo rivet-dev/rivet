@@ -42,43 +42,38 @@ export default function FeedbackDialogContent({
 	}
 
 	return (
-		<>
-			<FeedbackForm.Form
-				onSubmit={async (values) => {
-					posthog.capture("survey sent", {
-						utm_source: source,
-						$survey_id: FEEDBACK_FORM_ID,
-						$survey_response: `${values.type} from ${source}: ${values.feedback}`,
-					});
-					setIsSubmit(true);
-				}}
-				defaultValues={{ type: "bug", feedback: "" }}
-			>
-				<DialogHeader>
-					<DialogTitle>Feedback</DialogTitle>
-					<DialogDescription>
-						Join us on{" "}
-						<Link
-							href="https://rivet.gg/discord"
-							target="_blank"
-							rel="noreferrer"
-						>
-							<Icon icon={faDiscord} /> Discord
-						</Link>{" "}
-						to discuss your feedback with the community and the
-						team.
-					</DialogDescription>
-				</DialogHeader>
-				<Flex gap="4" direction="col">
-					<FeedbackForm.Type />
-					<FeedbackForm.Feedback />
-				</Flex>
-				<DialogFooter>
-					<FeedbackForm.Submit type="submit">
-						Send
-					</FeedbackForm.Submit>
-				</DialogFooter>
-			</FeedbackForm.Form>
-		</>
+		<FeedbackForm.Form
+			onSubmit={async (values) => {
+				posthog.capture("survey sent", {
+					utm_source: source,
+					$survey_id: FEEDBACK_FORM_ID,
+					$survey_response: `${values.type} from ${source}: ${values.feedback}`,
+				});
+				setIsSubmit(true);
+			}}
+			defaultValues={{ type: "bug", feedback: "" }}
+		>
+			<DialogHeader>
+				<DialogTitle>Feedback</DialogTitle>
+				<DialogDescription>
+					Join us on{" "}
+					<Link
+						href="https://rivet.gg/discord"
+						target="_blank"
+						rel="noreferrer"
+					>
+						<Icon icon={faDiscord} /> Discord
+					</Link>{" "}
+					to discuss your feedback with the community and the team.
+				</DialogDescription>
+			</DialogHeader>
+			<Flex gap="4" direction="col">
+				<FeedbackForm.Type />
+				<FeedbackForm.Feedback />
+			</Flex>
+			<DialogFooter>
+				<FeedbackForm.Submit type="submit">Send</FeedbackForm.Submit>
+			</DialogFooter>
+		</FeedbackForm.Form>
 	);
 }

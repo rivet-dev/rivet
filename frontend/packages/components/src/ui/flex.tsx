@@ -1,5 +1,5 @@
 import { Slot } from "@radix-ui/react-slot";
-import { type HTMLAttributes, type ReactNode, forwardRef } from "react";
+import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../lib/utils";
 import {
 	type CommonHelperProps,
@@ -22,8 +22,8 @@ import {
 	omitGapProps,
 } from "./helpers/gap";
 import {
-	type JustifyContentUtilitiesProps,
 	getJustifyContentClass,
+	type JustifyContentUtilitiesProps,
 	omitJustifyContentProps,
 } from "./helpers/justify-content";
 

@@ -1,7 +1,7 @@
 import type { Header } from "@tanstack/react-table";
 
 declare module "@tanstack/react-table" {
-	interface ColumnMeta<TData, TValue> {
+	interface ColumnMeta<_TData, _TValue> {
 		isGrow?: boolean;
 		widthPercentage?: number;
 	}

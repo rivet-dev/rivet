@@ -1,4 +1,3 @@
-import { groupProjectsQueryOptions } from "@/domains/project/queries";
 import {
 	Flex,
 	Select,
@@ -8,9 +7,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@rivet-gg/components";
-import { Icon, faCirclePlus } from "@rivet-gg/icons";
+import { faCirclePlus, Icon } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { type ComponentProps, useCallback } from "react";
+import { groupProjectsQueryOptions } from "@/domains/project/queries";
 
 interface GroupProjectSelectProps extends ComponentProps<typeof Select> {
 	groupId: string;

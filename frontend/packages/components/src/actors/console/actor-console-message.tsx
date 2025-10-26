@@ -1,14 +1,14 @@
 import { cn } from "@rivet-gg/components";
 import {
-	Icon,
 	faAngleLeft,
 	faAngleRight,
 	faExclamationCircle,
 	faSpinnerThird,
 	faWarning,
+	Icon,
 } from "@rivet-gg/icons";
 import { format } from "date-fns";
-import { type ReactNode, forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
 
 interface ActorConsoleMessageProps {
 	variant:

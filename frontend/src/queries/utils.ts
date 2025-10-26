@@ -18,8 +18,8 @@ export const shouldRetryAllExpect403 = (failureCount: number, error: Error) => {
 	return true;
 };
 
-export const noThrow = <T extends Query<any, any, any, any>>(
-	error: Error,
+export const noThrow = <_T extends Query<any, any, any, any>>(
+	_error: Error,
 ) => {
 	return false;
 };

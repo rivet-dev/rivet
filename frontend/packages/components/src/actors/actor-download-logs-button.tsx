@@ -1,5 +1,5 @@
 import { Button, WithTooltip } from "@rivet-gg/components";
-import { Icon, faSave } from "@rivet-gg/icons";
+import { faSave, Icon } from "@rivet-gg/icons";
 import { useAtomValue } from "jotai";
 import type { ActorAtom } from "./actor-context";
 import type { LogsTypeFilter } from "./actor-logs";

@@ -1,5 +1,5 @@
 "use client";
-import { Icon, faTrash } from "@rivet-gg/icons";
+import { faTrash, Icon } from "@rivet-gg/icons";
 import { type ChangeEvent, useEffect, useState } from "react";
 import type {
 	ControllerRenderProps,

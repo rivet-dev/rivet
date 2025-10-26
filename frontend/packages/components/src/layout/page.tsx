@@ -1,4 +1,4 @@
-import { Skeleton, cn } from "@rivet-gg/components";
+import { cn, Skeleton } from "@rivet-gg/components";
 import type { ReactNode } from "react";
 
 interface PageLayoutProps {

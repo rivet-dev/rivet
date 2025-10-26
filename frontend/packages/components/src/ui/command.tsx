@@ -1,12 +1,10 @@
 "use client";
 
 import { type DialogProps, DialogTitle } from "@radix-ui/react-dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { faSearch, Icon } from "@rivet-gg/icons";
 import { Command as CommandPrimitive } from "cmdk";
 import * as React from "react";
-
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { faSearch } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
 import { cn } from "../lib/utils";
 import { Dialog, DialogContent } from "./dialog";
 

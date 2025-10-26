@@ -1,5 +1,3 @@
-import { GroupAvatar } from "@/domains/group/components/group-avatar";
-import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 import {
 	Flex,
 	Select,
@@ -11,9 +9,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@rivet-gg/components";
-import { Icon, faCirclePlus } from "@rivet-gg/icons";
+import { faCirclePlus, Icon } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { type ComponentProps, Fragment, useCallback } from "react";
+import { GroupAvatar } from "@/domains/group/components/group-avatar";
+import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 
 interface ProjectSelectProps extends ComponentProps<typeof Select> {
 	showCreateProject?: boolean;

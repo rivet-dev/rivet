@@ -1,10 +1,10 @@
 "use client";
 import {
-	Icon,
-	type IconProp,
 	faCheck,
 	faFilterList,
 	faTimes as faX,
+	Icon,
+	type IconProp,
 } from "@rivet-gg/icons";
 import { endOfDay, lightFormat, startOfDay, subMonths } from "date-fns";
 import { motion } from "framer-motion";
@@ -112,7 +112,10 @@ function filterDefinitionToOptions(definition: FilterDefinition) {
 function defaultFilterDefinitionOperator({
 	definition,
 	filterValues,
-}: { definition: FilterDefinition; filterValues: string[] }) {
+}: {
+	definition: FilterDefinition;
+	filterValues: string[];
+}) {
 	if (definition.type === "date") {
 		return FilterOp.AFTER;
 	}
@@ -854,7 +857,10 @@ function FilterDateOption({
 function FilterDateSingle({
 	value,
 	onOptionSelect,
-}: { value?: string; onOptionSelect: OnOptionSelect }) {
+}: {
+	value?: string;
+	onOptionSelect: OnOptionSelect;
+}) {
 	const [date, setDate] = useState<Date | undefined>(
 		value ? new Date(+value) : undefined,
 	);

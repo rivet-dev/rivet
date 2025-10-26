@@ -1,4 +1,4 @@
-import { Icon, faBug, faConciergeBell } from "@rivet-gg/icons";
+import { faBug, faConciergeBell, Icon } from "@rivet-gg/icons";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import { createSchemaForm } from "../lib/create-schema-form";

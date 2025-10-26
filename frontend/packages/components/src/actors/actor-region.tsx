@@ -3,9 +3,9 @@ import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { useCallback } from "react";
 import {
+	getRegionKey,
 	REGION_LABEL,
 	RegionIcon,
-	getRegionKey,
 } from "../matchmaker/lobby-region";
 import { actorRegionsAtom } from "./actor-context";
 

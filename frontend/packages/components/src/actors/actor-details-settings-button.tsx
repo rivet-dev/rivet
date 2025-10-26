@@ -6,7 +6,7 @@ import {
 	DropdownMenuTrigger,
 	WithTooltip,
 } from "@rivet-gg/components";
-import { Icon, faCog } from "@rivet-gg/icons";
+import { faCog, Icon } from "@rivet-gg/icons";
 import { useActorDetailsSettings } from "./actor-details-settings";
 
 export function ActorDetailsSettingsButton() {

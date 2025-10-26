@@ -1,12 +1,12 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { Icon, faCopy } from "@rivet-gg/icons";
+import { faCopy, Icon } from "@rivet-gg/icons";
 import {
 	type ComponentProps,
+	forwardRef,
 	type MouseEventHandler,
 	type ReactNode,
-	forwardRef,
 	useState,
 } from "react";
 import { toast } from "sonner";

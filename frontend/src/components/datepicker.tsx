@@ -52,7 +52,9 @@ export function DatePicker({
 				{presets ? (
 					<Select
 						onValueChange={(value) =>
-							onDateChange(presets[Number.parseInt(value)].date)
+							onDateChange(
+								presets[Number.parseInt(value, 10)].date,
+							)
 						}
 					>
 						<SelectTrigger>
@@ -94,6 +96,7 @@ export function RangeDatePicker({
 		<div className={cn("grid gap-2", className)}>
 			<Popover>
 				<PopoverTrigger asChild>
+					{/** biome-ignore lint/correctness/useUniqueElementIds: TODO: fix */}
 					<Button
 						id="date"
 						variant={"outline"}
@@ -125,7 +128,7 @@ export function RangeDatePicker({
 						<Select
 							onValueChange={(value) =>
 								onDateChange(
-									presets[Number.parseInt(value)].date,
+									presets[Number.parseInt(value, 10)].date,
 								)
 							}
 						>

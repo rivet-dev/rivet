@@ -1,7 +1,7 @@
 import { Button, ScrollArea } from "@rivet-gg/components";
-import { Icon, faBooks } from "@rivet-gg/icons";
-import { ActorMetrics } from "./actor-metrics";
+import { faBooks, Icon } from "@rivet-gg/icons";
 import type { ActorAtom } from "./actor-context";
+import { ActorMetrics } from "./actor-metrics";
 
 interface ActorMetricsTabProps {
 	actor: ActorAtom;

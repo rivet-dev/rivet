@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { Flex, Frame } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { convertStringToId } from "@/lib/utils";
 
 export default function CreateProjectFrameContent() {
 	const queryClient = useQueryClient();
