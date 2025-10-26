@@ -1,0 +1,30 @@
+apiVersion: v1
+data:
+  config.jsonc: |
+    {
+      "postgres": {
+        "url": "postgresql://postgres:postgres@postgres:5432/rivet"
+      },
+
+      "topology": {
+        "datacenter_label": 1,
+        "datacenters": [
+          {
+            "name": "local",
+            "datacenter_label": 1,
+            "is_leader": true,
+            "public_url": "http://localhost:6420",
+            "peer_url": "http://rivet-engine.rivet-engine.svc.cluster.local:6421",
+            "proxy_url": "http://rivet-engine.rivet-engine.svc.cluster.local:6420"
+          }
+        ]
+      }
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    app: rivet-engine
+    component: rivet-engine
+    service: engine
+  name: engine-config
+  namespace: rivet-engine

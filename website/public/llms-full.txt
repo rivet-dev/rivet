@@ -6164,7 +6164,7 @@ Deploy Rivet on your preferred platform:
 - [Docker Container](/docs/self-hosting/docker-container)
 - [Docker Compose](/docs/self-hosting/docker-compose)
 - [Railway](/docs/self-hosting/railway)
-- Kubernetes
+- [Kubernetes](/docs/self-hosting/kubernetes)
 - AWS Fargate
 - Google Cloud Run
 - Hetzner
@@ -6204,11 +6204,343 @@ cd rivet
 cargo build --release -p rivet-engine
 ./target/release/rivet-engine
 ```
-## Kubernetes Deployment
+## Kubernetes
 
-# Kubernetes Deployment
+# Kubernetes
 
-	Documentation coming soon
+## Quick Start
+
+Deploy Rivet Engine to Kubernetes with PostgreSQL storage.
+
+### 1. Create Namespace
+
+Save as `namespace.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rivet-engine
+```
+
+Apply:
+
+```bash
+kubectl apply -f namespace.yaml
+```
+
+### 2. Deploy PostgreSQL
+
+Save as `postgres.yaml`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: rivet-engine
+data:
+  POSTGRES_DB: rivet
+  POSTGRES_USER: postgres
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: rivet-engine
+type: Opaque
+stringData:
+  # IMPORTANT: Change this password in production!
+  POSTGRES_PASSWORD: "postgres"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: rivet-engine
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: rivet-engine
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:17
+        ports:
+        - containerPort: 5432
+          name: postgres
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        - secretRef:
+            name: postgres-secret
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+          subPath: pgdata
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+Apply and wait for PostgreSQL to be ready:
+
+```bash
+kubectl apply -f postgres.yaml
+kubectl -n rivet-engine wait --for=condition=ready pod -l app=postgres --timeout=300s
+```
+
+### 3. Deploy Rivet Engine
+
+Save as `rivet-engine.yaml`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: engine-config
+  namespace: rivet-engine
+data:
+  config.jsonc: |
+    ,
+      "topology": 
+        ]
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rivet-engine
+  namespace: rivet-engine
+spec:
+  type: LoadBalancer
+  ports:
+  - name: guard
+    port: 6420
+    targetPort: 6420
+    protocol: TCP
+  - name: api-peer
+    port: 6421
+    targetPort: 6421
+    protocol: TCP
+  selector:
+    app: rivet-engine
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rivet-engine
+  namespace: rivet-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rivet-engine
+  template:
+    metadata:
+      labels:
+        app: rivet-engine
+    spec:
+      containers:
+      - name: rivet-engine
+        image: rivetkit/engine:latest
+        args:
+        - start
+        env:
+        - name: RIVET_CONFIG_PATH
+          value: /etc/rivet/config.jsonc
+        ports:
+        - containerPort: 6420
+          name: guard
+        - containerPort: 6421
+          name: api-peer
+        volumeMounts:
+        - name: config
+          mountPath: /etc/rivet
+          readOnly: true
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: engine-config
+```
+
+Apply and wait for the engine to be ready:
+
+```bash
+kubectl apply -f rivet-engine.yaml
+kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
+```
+
+### 4. Access the Engine
+
+Get the service URL:
+
+```bash
+# For LoadBalancer
+kubectl -n rivet-engine get service rivet-engine
+
+# For port forwarding (local development)
+kubectl -n rivet-engine port-forward service/rivet-engine 6420:6420 6421:6421
+```
+
+Test the health endpoint:
+
+```bash
+curl http://localhost:6420/health
+```
+
+Expected response:
+
+```json
+
+```
+
+## Local Development with k3d
+
+For local Kubernetes testing with k3d:
+
+```bash
+# Create k3d cluster
+k3d cluster create rivet \
+  --api-port 6550 \
+  -p "6420:30420@loadbalancer" \
+  -p "6421:30421@loadbalancer" \
+  --agents 2
+
+# Apply manifests (use NodePort service type for k3d)
+kubectl apply -f namespace.yaml
+kubectl apply -f postgres.yaml
+kubectl -n rivet-engine wait --for=condition=ready pod -l app=postgres --timeout=300s
+
+# Modify rivet-engine.yaml service to use NodePort before applying:
+# Change `type: LoadBalancer` to `type: NodePort`
+# Add nodePort fields:
+#   - name: guard
+#     port: 6420
+#     targetPort: 6420
+#     nodePort: 30420
+#   - name: api-peer
+#     port: 6421
+#     targetPort: 6421
+#     nodePort: 30421
+
+kubectl apply -f rivet-engine.yaml
+kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
+
+# Access at http://localhost:6420 and http://localhost:6421
+```
+
+Cleanup:
+
+```bash
+k3d cluster delete rivet
+```
+
+## Production Setup
+
+### Security
+
+1. **Change PostgreSQL password** in `postgres-secret`
+2. **Use TLS** for external access (configure ingress controller)
+3. **Set admin token** via environment variable:
+   ```yaml
+   env:
+   - name: RIVET__AUTH__ADMIN_TOKEN
+     valueFrom:
+       secretKeyRef:
+         name: rivet-secrets
+         key: admin-token
+   ```
+
+### Scaling
+
+For horizontal scaling, update the deployment:
+
+```yaml
+spec:
+  replicas: 3  # Multiple replicas
+```
+
+See our [HPA set up on github](https://github.com/rivet-gg/rivet/tree/main/k8s/engines/05-rivet-engine-hpa.yaml) for info on configuring automatic horizontal scaling.
+
+## Next Steps
+
+- See [Configuration](/docs/self-hosting/configuration) for all options
+- For advanced multi-datacenter setup, see the [GitHub repository](https://github.com/rivet-gg/rivet/tree/main/k8s)
 ## Multi-Region
 
 # Multi-Region
