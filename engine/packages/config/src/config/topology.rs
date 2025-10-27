@@ -97,8 +97,8 @@ impl Datacenter {
 			// Check if host is in the valid_hosts list
 			valid_hosts.iter().any(|valid_host| valid_host == host)
 		} else {
-			// Check if host matches the origin of public_url
-			self.public_url.host_str() == Some(host)
+			// Ignore this behavior if not configured
+			true
 		}
 	}
 
