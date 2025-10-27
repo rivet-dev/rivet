@@ -306,6 +306,12 @@ async function main() {
 		const branch = branchResult.stdout.trim();
 		const latestFlag = releaseOpts.latest ? "true" : "false";
 		await $`gh workflow run .github/workflows/release.yaml -f version=${releaseOpts.version} -f latest=${latestFlag} --ref ${branch}`;
+
+		// Get repository info and print workflow link
+		const repoResult = await $`gh repo view --json nameWithOwner -q .nameWithOwner`;
+		const repo = repoResult.stdout.trim();
+		console.log(`\nWorkflow triggered: https://github.com/${repo}/actions/workflows/release.yaml`);
+		console.log(`View all runs: https://github.com/${repo}/actions`);
 	}
 
 	if (shouldRunStep("run-type-check")) {
