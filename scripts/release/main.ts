@@ -61,6 +61,14 @@ async function getCurrentVersion(): Promise<string> {
 async function runTypeCheck(opts: ReleaseOpts) {
 	console.log("Checking types...");
 	try {
+		// Build rivetkit packages first since some examples depend on them
+		console.log("Building rivetkit packages...");
+		await $({
+			stdio: "inherit",
+			cwd: opts.root,
+		})`pnpm build --force -F rivetkit -F @rivetkit/*`;
+		console.log("✅ Rivetkit packages built");
+
 		// --force to skip cache in case of Turborepo bugs
 		await $({ cwd: opts.root })`pnpm check-types --force`;
 		console.log("✅ Type check passed");
