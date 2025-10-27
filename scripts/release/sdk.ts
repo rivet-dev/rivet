@@ -44,7 +44,9 @@ async function getRivetkitPackages(opts: ReleaseOpts): Promise<string[]> {
 	return allPackages
 		.filter(
 			(pkg: any) =>
-				pkg.name === "rivetkit" || pkg.name.startsWith("@rivetkit/"),
+				(pkg.name === "rivetkit" || pkg.name.startsWith("@rivetkit/")) &&
+				// Exclude engine packages as they're handled separately in enginePackagePaths
+				!pkg.name.startsWith("@rivetkit/engine-"),
 		)
 		.map((pkg: any) => pkg.name);
 }
