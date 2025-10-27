@@ -247,6 +247,11 @@ jobs:
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: |
+          # Authenticate with NPM
+          cat << EOF > ~/.npmrc
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          EOF
+
           # Install dependencies
           pnpm install
 
