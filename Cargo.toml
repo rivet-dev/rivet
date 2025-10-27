@@ -82,7 +82,8 @@ tracing = "0.1.40"
 tracing-core = "0.1"
 tracing-opentelemetry = "0.29"
 tracing-slog = "0.2"
-vergen = "9.0.4"
+vergen = { version = "9.0.4", features = ["build", "cargo", "rustc"] }
+vergen-gitcl = "1.0.0"
 reqwest-eventsource = "0.6.0"
 
 [workspace.dependencies.sentry]

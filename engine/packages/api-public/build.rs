@@ -1,9 +1,18 @@
+use anyhow::Result;
 use fs_extra::dir;
 use std::env;
 use std::fs;
 use std::path::Path;
 
-fn main() {
+fn main() -> Result<()> {
+	// Configure vergen to emit build metadata
+	vergen::Emitter::default()
+		.add_instructions(&vergen::BuildBuilder::all_build()?)?
+		.add_instructions(&vergen::CargoBuilder::all_cargo()?)?
+		.add_instructions(&vergen::RustcBuilder::all_rustc()?)?
+		.add_instructions(&vergen_gitcl::GitclBuilder::all_git()?)?
+		.emit()?;
+
 	let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 	let out_dir = env::var("OUT_DIR").unwrap();
 	let ui_dir = Path::new(&out_dir).join("ui");
@@ -39,4 +48,6 @@ fn main() {
 
 		fs::write(index_html_path, index_html_content).expect("Failed to write index.html");
 	}
+
+	Ok(())
 }

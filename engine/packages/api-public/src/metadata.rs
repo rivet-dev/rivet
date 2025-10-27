@@ -12,6 +12,12 @@ pub async fn get_metadata(Extension(ctx): Extension<ApiCtx>) -> impl IntoRespons
 
 	Json(json!({
 		"runtime": "engine",
-		"version": env!("CARGO_PKG_VERSION")
+		"version": env!("CARGO_PKG_VERSION"),
+		"git_sha": env!("VERGEN_GIT_SHA"),
+		"build_timestamp": env!("VERGEN_BUILD_TIMESTAMP"),
+		"rustc_version": env!("VERGEN_RUSTC_SEMVER"),
+		"rustc_host": env!("VERGEN_RUSTC_HOST_TRIPLE"),
+		"cargo_target": env!("VERGEN_CARGO_TARGET_TRIPLE"),
+		"cargo_profile": if env!("VERGEN_CARGO_DEBUG") == "true" { "debug" } else { "release" }
 	}))
 }
