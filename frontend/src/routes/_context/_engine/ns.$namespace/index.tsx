@@ -27,15 +27,14 @@ export function RouteComponent() {
 	const { actorId, n } = useSearch({ from: "/_context" });
 
 	return (
-		<>
+		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
 			<Actors actorId={actorId} />
-
 			<CatchBoundary
 				getResetKey={() => n?.join(",") ?? "no-build-name"}
 				errorComponent={() => null}
 			>
 				{!n ? <BuildPrefiller /> : null}
 			</CatchBoundary>
-		</>
+		</CatchBoundary>
 	);
 }
