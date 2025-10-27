@@ -231,8 +231,7 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const provider = useEngineCompatDataProvider();
 
 	const actorContext = useMemo(() => {
-		return engineToken
-			? createInspectorActorContext({
+		return createInspectorActorContext({
 					url: getConfig().apiUrl,
 					token: async () => {
 						const runner = await queryClient.fetchQuery(
@@ -245,9 +244,8 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 						);
 					},
 					engineToken,
-				})
-			: null;
-	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
+				});
+	}, [actorId, actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
 
 	return { actorContext, actor, runner, isLoading };
 }
@@ -267,24 +265,6 @@ function ActorEngineProvider({
 		return (
 			<InspectorGuardContext.Provider
 				value={<NoRunnerInfo runner={"unknown"} />}
-			>
-				{children}
-			</InspectorGuardContext.Provider>
-		);
-	}
-
-	if (!actorContext) {
-		return (
-			<InspectorGuardContext.Provider
-				value={
-					<Info>
-						<p>Unable to connect to the Actor's Inspector.</p>
-						<p>
-							Your namespace is missing an engine token. Please
-							report this to Rivet support.
-						</p>
-					</Info>
-				}
 			>
 				{children}
 			</InspectorGuardContext.Provider>
