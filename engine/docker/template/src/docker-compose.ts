@@ -171,8 +171,8 @@ export function generateDockerCompose(context: TemplateContext) {
 
 		services[shellServiceName] = {
 			build: {
-				context: "../..",
-				dockerfile: "docker/universal/Dockerfile",
+				context: "../../..",
+				dockerfile: "engine/docker/universal/Dockerfile",
 				target: "engine-full",
 				args: {
 					BUILD_FRONTEND: "true",
@@ -264,8 +264,8 @@ export function generateDockerCompose(context: TemplateContext) {
 
 			services[serviceName] = {
 				build: {
-					context: "../..",
-					dockerfile: "docker/universal/Dockerfile",
+					context: "../../..",
+					dockerfile: "engine/docker/universal/Dockerfile",
 					target: "engine-full",
 					args: {
 						BUILD_FRONTEND: "true",
@@ -324,8 +324,8 @@ export function generateDockerCompose(context: TemplateContext) {
 
 			services[serviceName] = {
 				build: {
-					context: "../..",
-					dockerfile: "sdks/typescript/test-runner/Dockerfile",
+					context: "../../..",
+					dockerfile: "engine/sdks/typescript/test-runner/Dockerfile",
 				},
 				platform: "linux/amd64",
 				restart: "unless-stopped",
