@@ -67,9 +67,9 @@ jobs:
           npm install -g tsx
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase setup-ci
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase setup-ci
           fi
 
   binaries:
@@ -246,7 +246,13 @@ jobs:
         env:
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Authenticate with NPM
+          cat << EOF > ~/.npmrc
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          EOF
+
           # Install dependencies
           pnpm install
 
@@ -254,7 +260,7 @@ jobs:
           npm install -g tsx
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi --noValidateGit
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase complete-ci --no-validate-git
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi --noValidateGit
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase complete-ci --no-validate-git
           fi
