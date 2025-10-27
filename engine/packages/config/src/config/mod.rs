@@ -176,6 +176,19 @@ impl Root {
 			}));
 		}
 
+		// Validate that all datacenters have valid_hosts configured when there's more than one datacenter
+		let topology = self.topology();
+		if topology.datacenters.len() > 1 {
+			for dc in &topology.datacenters {
+				if dc.valid_hosts.is_none() {
+					bail!(
+						"datacenter '{}' must have valid_hosts configured when there is more than one datacenter",
+						dc.name
+					);
+				}
+			}
+		}
+
 		Ok(())
 	}
 
