@@ -767,7 +767,7 @@ impl FormalChunkedKey for MetadataKey {
 
 	fn split(&self, value: Self::Value) -> Result<Vec<Vec<u8>>> {
 		Ok(
-			rivet_data::versioned::MetadataKeyData::latest(value.try_into()?)
+			rivet_data::versioned::MetadataKeyData::wrap_latest(value.try_into()?)
 				.serialize_with_embedded_version(rivet_data::PEGBOARD_RUNNER_METADATA_VERSION)?
 				.chunks(universaldb::utils::CHUNK_SIZE)
 				.map(|x| x.to_vec())

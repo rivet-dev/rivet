@@ -14,11 +14,11 @@ pub enum RunnerAllocIdxKeyData {
 impl OwnedVersionedData for RunnerAllocIdxKeyData {
 	type Latest = pegboard_namespace_runner_alloc_idx_v1::Data;
 
-	fn latest(latest: pegboard_namespace_runner_alloc_idx_v1::Data) -> Self {
+	fn wrap_latest(latest: pegboard_namespace_runner_alloc_idx_v1::Data) -> Self {
 		RunnerAllocIdxKeyData::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let RunnerAllocIdxKeyData::V1(data) = self {
 			Ok(data)
@@ -48,11 +48,11 @@ pub enum MetadataKeyData {
 impl OwnedVersionedData for MetadataKeyData {
 	type Latest = pegboard_runner_metadata_v1::Data;
 
-	fn latest(latest: pegboard_runner_metadata_v1::Data) -> Self {
+	fn wrap_latest(latest: pegboard_runner_metadata_v1::Data) -> Self {
 		MetadataKeyData::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let MetadataKeyData::V1(data) = self {
 			Ok(data)
@@ -82,11 +82,11 @@ pub enum ActorByKeyKeyData {
 impl OwnedVersionedData for ActorByKeyKeyData {
 	type Latest = pegboard_namespace_actor_by_key_v1::Data;
 
-	fn latest(latest: pegboard_namespace_actor_by_key_v1::Data) -> Self {
+	fn wrap_latest(latest: pegboard_namespace_actor_by_key_v1::Data) -> Self {
 		ActorByKeyKeyData::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let ActorByKeyKeyData::V1(data) = self {
 			Ok(data)
@@ -116,11 +116,11 @@ pub enum RunnerByKeyKeyData {
 impl OwnedVersionedData for RunnerByKeyKeyData {
 	type Latest = pegboard_namespace_runner_by_key_v1::Data;
 
-	fn latest(latest: pegboard_namespace_runner_by_key_v1::Data) -> Self {
+	fn wrap_latest(latest: pegboard_namespace_runner_by_key_v1::Data) -> Self {
 		RunnerByKeyKeyData::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let RunnerByKeyKeyData::V1(data) = self {
 			Ok(data)
@@ -150,11 +150,11 @@ pub enum ActorNameKeyData {
 impl OwnedVersionedData for ActorNameKeyData {
 	type Latest = pegboard_namespace_actor_name_v1::Data;
 
-	fn latest(latest: pegboard_namespace_actor_name_v1::Data) -> Self {
+	fn wrap_latest(latest: pegboard_namespace_actor_name_v1::Data) -> Self {
 		ActorNameKeyData::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let ActorNameKeyData::V1(data) = self {
 			Ok(data)

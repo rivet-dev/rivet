@@ -1,6 +1,6 @@
 use anyhow::*;
 use axum::body::Bytes;
-use epoxy_protocol::{protocol, versioned};
+use epoxy_protocol::versioned;
 use rivet_api_builder::prelude::*;
 use vbare::OwnedVersionedData;
 
@@ -30,5 +30,5 @@ pub async fn message(ctx: ApiCtx, path: VersionedPath, _query: (), body: Bytes) 
 	// Process message directly using ops
 	let response = crate::replica::message_request::message_request(&ctx, request).await?;
 
-	versioned::Response::latest(response).serialize(path.version)
+	versioned::Response::wrap_latest(response).serialize(path.version)
 }

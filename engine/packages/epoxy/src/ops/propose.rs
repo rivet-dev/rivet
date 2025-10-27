@@ -2,7 +2,6 @@ use anyhow::*;
 use epoxy_protocol::protocol::{self, Path, Payload, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
-use rivet_config::Config;
 
 use crate::{http_client, replica, utils};
 

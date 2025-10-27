@@ -13,7 +13,7 @@ async function main() {
 
 		// Create an actor
 		console.log("Creating actor...");
-		const actorResponse = await getOrCreateActor(RIVET_NAMESPACE, "test-runner", "key");
+		const actorResponse = await getOrCreateActor(RIVET_NAMESPACE, "test-runner", "key3");
 		console.log("Actor created:", actorResponse.actor);
 
 		for (let i = 0; i < 10; i++) {

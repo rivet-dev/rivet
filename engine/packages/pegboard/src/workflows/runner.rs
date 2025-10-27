@@ -166,6 +166,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							for event in &events {
 								if event.index <= state.last_event_idx {
 									tracing::warn!(idx=%event.index, "event already received, ignoring");
+									continue;
 								}
 
 								let actor_id =
@@ -1124,7 +1125,7 @@ async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerIn
 	let receiver_subject =
 		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
 
-	let message_serialized = versioned::ToClient::latest(input.message.clone())
+	let message_serialized = versioned::ToClient::wrap_latest(input.message.clone())
 		.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
 	ctx.ups()?

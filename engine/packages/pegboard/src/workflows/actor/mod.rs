@@ -560,6 +560,11 @@ async fn handle_stopped(
 			// NOTE: This should be unreachable because force_reschedule is true
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
+
+				ctx.activity(runtime::SetSleepingInput {
+					actor_id: input.actor_id,
+				})
+				.await?;
 			}
 			runtime::SpawnActorOutput::Destroy => {
 				// Destroyed early

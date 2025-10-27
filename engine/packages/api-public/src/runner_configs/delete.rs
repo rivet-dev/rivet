@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use axum::response::{IntoResponse, Response};
 use futures_util::{StreamExt, TryStreamExt};
 use rivet_api_builder::{

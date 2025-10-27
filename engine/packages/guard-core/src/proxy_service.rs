@@ -880,7 +880,7 @@ impl ProxyService {
 					match res {
 						Ok(resp) => {
 							// Check if this is a retryable response
-							if should_retry(resp.status(), resp.headers()) {
+							if should_retry_request_inner(resp.status(), resp.headers()) {
 								// Request connect error, might retry
 								tracing::debug!(
 									"Request attempt {attempts} failed (service unavailable)"
@@ -1018,10 +1018,10 @@ impl ProxyService {
 				while attempts < max_attempts {
 					attempts += 1;
 
-					let resp = handler
+					let res = handler
 						.handle_request(req_collected.clone(), request_context)
-						.await?;
-					if should_retry(resp.status(), resp.headers()) {
+						.await;
+					if should_retry_request(&res) {
 						// Request connect error, might retry
 						tracing::debug!("Request attempt {attempts} failed (service unavailable)");
 
@@ -1048,7 +1048,7 @@ impl ProxyService {
 						continue;
 					}
 
-					return Ok(resp);
+					return res;
 				}
 
 				// If we get here, all attempts failed
@@ -1831,9 +1831,24 @@ impl ProxyService {
 								Err(err) => {
 									tracing::debug!(?err, "websocket handler error");
 
-									attempts += 1;
-									if attempts > max_attempts || !is_retryable_ws_error(&err) {
-										tracing::debug!(?attempts, "WebSocket failed to reconnect");
+									// Denotes that the connection did not fail, but needs to be retried to
+									// resole a new target
+									let ws_retry = is_ws_retry(&err);
+
+									if ws_retry {
+										attempts = 0;
+									} else {
+										attempts += 1;
+									}
+
+									if attempts > max_attempts
+										|| (!is_retryable_ws_error(&err) && !ws_retry)
+									{
+										tracing::debug!(
+											?attempts,
+											?max_attempts,
+											"WebSocket failed"
+										);
 
 										// Close WebSocket with error
 										ws_handle
@@ -1850,18 +1865,19 @@ impl ProxyService {
 
 										break;
 									} else {
-										let backoff = ProxyService::calculate_backoff(
-											attempts,
-											initial_interval,
-										);
-										let backoff = Duration::from_millis(100);
+										if !ws_retry {
+											let backoff = ProxyService::calculate_backoff(
+												attempts,
+												initial_interval,
+											);
 
-										tracing::debug!(
-											?backoff,
-											"WebSocket attempt {attempts} failed (service unavailable)"
-										);
+											tracing::debug!(
+												?backoff,
+												"WebSocket attempt {attempts} failed (service unavailable)"
+											);
 
-										tokio::time::sleep(backoff).await;
+											tokio::time::sleep(backoff).await;
+										}
 
 										match state
 											.resolve_route(
@@ -2401,8 +2417,21 @@ fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseBody>> {
 		.map_err(Into::into)
 }
 
+fn should_retry_request(res: &Result<Response<ResponseBody>>) -> bool {
+	match res {
+		Ok(resp) => should_retry_request_inner(resp.status(), resp.headers()),
+		Err(err) => {
+			if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
+				rivet_err.group() == "guard" && rivet_err.code() == "service_unavailable"
+			} else {
+				false
+			}
+		}
+	}
+}
+
 // Determine if a response should trigger a retry: 503 + x-rivet-error
-fn should_retry(status: StatusCode, headers: &hyper::HeaderMap) -> bool {
+fn should_retry_request_inner(status: StatusCode, headers: &hyper::HeaderMap) -> bool {
 	status == StatusCode::SERVICE_UNAVAILABLE && headers.contains_key(X_RIVET_ERROR)
 }
 
@@ -2410,6 +2439,14 @@ fn should_retry(status: StatusCode, headers: &hyper::HeaderMap) -> bool {
 fn is_retryable_ws_error(err: &anyhow::Error) -> bool {
 	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
 		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_unavailable"
+	} else {
+		false
+	}
+}
+
+fn is_ws_retry(err: &anyhow::Error) -> bool {
+	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
+		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_retry"
 	} else {
 		false
 	}

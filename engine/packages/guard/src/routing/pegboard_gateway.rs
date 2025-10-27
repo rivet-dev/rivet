@@ -12,7 +12,6 @@ const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 pub const X_RIVET_AMESPACE: HeaderName = HeaderName::from_static("x-rivet-namespace");
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
-const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
 /// Route requests to actor services using path-based routing
 #[tracing::instrument(skip_all)]
@@ -172,9 +171,8 @@ async fn route_request_inner(
 				res = stopped_sub.next() => {
 					res?;
 
-					// Attempt to rewake once
-					if wake_retries < 3 {
-						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to beocme ready, attempting rewake");
+					if wake_retries < 16 {
+						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
 						wake_retries += 1;
 
 						let res = ctx.signal(pegboard::workflows::actor::Wake {})
@@ -194,6 +192,9 @@ async fn route_request_inner(
 						} else {
 							res?;
 						}
+					} else {
+						tracing::warn!("actor retried waking 16 times, has not yet started");
+						return Err(rivet_guard_core::errors::ServiceUnavailable.build());
 					}
 				}
 				res = fail_sub.next() => {

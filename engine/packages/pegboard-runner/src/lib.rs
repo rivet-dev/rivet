@@ -164,7 +164,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 				),
 			};
 
-			let msg_serialized = protocol::versioned::ToGateway::latest(protocol::ToGateway {
+			let msg_serialized = protocol::versioned::ToGateway::wrap_latest(protocol::ToGateway {
 				message: close_message.clone(),
 			})
 			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
