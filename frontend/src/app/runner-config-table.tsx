@@ -258,7 +258,7 @@ function Regions({ regions }: { regions: string[] }) {
 	if (regions.length === 1) {
 		return (
 			<ActorRegion
-				className="w-full items-start flex-1"
+				className="w-full items-center flex-1"
 				regionId={regions[0]}
 				showLabel
 			/>
