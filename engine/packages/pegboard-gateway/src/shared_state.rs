@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, RequestId, versioned};
-use scc::HashMap;
+use rivet_runner_protocol::{self as protocol, MessageId, PROTOCOL_VERSION, RequestId, versioned};
+use scc::{HashMap, hash_map::Entry};
 use std::{
 	ops::Deref,
 	sync::Arc,
@@ -13,9 +13,14 @@ use vbare::OwnedVersionedData;
 
 use crate::WebsocketPendingLimitReached;
 
-const GC_INTERVAL: Duration = Duration::from_secs(60);
+const GC_INTERVAL: Duration = Duration::from_secs(15);
 const MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_PENDING_MSGS_PER_REQ: usize = 1024;
+const MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
+
+pub enum TunnelMessageData {
+	Message(protocol::ToServerTunnelMessageKind),
+	Timeout,
+}
 
 struct InFlightRequest {
 	/// UPS subject to send messages to for this request.
@@ -24,29 +29,30 @@ struct InFlightRequest {
 	msg_tx: mpsc::Sender<TunnelMessageData>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
 	opened: bool,
+	pending_msgs: Vec<PendingMessage>,
+	hibernation_state: Option<HibernationState>,
 }
 
 pub struct PendingMessage {
+	message_id: MessageId,
 	send_instant: Instant,
-	payload: protocol::ToClientTunnelMessage,
 }
 
-impl Into<protocol::ToClientTunnelMessage> for PendingMessage {
-	fn into(self) -> protocol::ToClientTunnelMessage {
-		self.payload
-	}
+struct HibernationState {
+	total_pending_ws_msgs_size: u64,
+	last_ws_msg_index: u16,
+	pending_ws_msgs: Vec<PendingWebsocketMessage>,
 }
 
-pub enum TunnelMessageData {
-	Message(protocol::ToServerTunnelMessageKind),
-	Timeout,
+pub struct PendingWebsocketMessage {
+	payload: Vec<u8>,
+	send_instant: Instant,
 }
 
 pub struct SharedStateInner {
 	ups: PubSub,
 	receiver_subject: String,
-	requests_in_flight: HashMap<RequestId, InFlightRequest>,
-	pending_messages: HashMap<RequestId, Vec<PendingMessage>>,
+	in_flight_requests: HashMap<RequestId, InFlightRequest>,
 }
 
 #[derive(Clone)]
@@ -61,8 +67,7 @@ impl SharedState {
 		Self(Arc::new(SharedStateInner {
 			ups,
 			receiver_subject,
-			requests_in_flight: HashMap::new(),
-			pending_messages: HashMap::new(),
+			in_flight_requests: HashMap::new(),
 		}))
 	}
 
@@ -85,16 +90,23 @@ impl SharedState {
 	) -> mpsc::Receiver<TunnelMessageData> {
 		let (msg_tx, msg_rx) = mpsc::channel(128);
 
-		self.requests_in_flight
-			.upsert_async(
-				request_id,
-				InFlightRequest {
+		match self.in_flight_requests.entry_async(request_id).await {
+			Entry::Vacant(entry) => {
+				entry.insert_entry(InFlightRequest {
 					receiver_subject,
 					msg_tx,
 					opened: false,
-				},
-			)
-			.await;
+					pending_msgs: Vec::new(),
+					hibernation_state: None,
+				});
+			}
+			Entry::Occupied(mut entry) => {
+				entry.receiver_subject = receiver_subject;
+				entry.msg_tx = msg_tx;
+				entry.opened = false;
+				entry.pending_msgs.clear();
+			}
+		}
 
 		msg_rx
 	}
@@ -102,26 +114,33 @@ impl SharedState {
 	pub async fn send_message(
 		&self,
 		request_id: RequestId,
-		message_kind: protocol::ToClientTunnelMessageKind,
+		mut message_kind: protocol::ToClientTunnelMessageKind,
 	) -> Result<()> {
 		let message_id = Uuid::new_v4().as_bytes().clone();
 
-		// Get subject and whether this is the first message for this request
-		let (tunnel_receiver_subject, include_reply_to) = {
-			if let Some(mut req) = self.requests_in_flight.get_async(&request_id).await {
-				let receiver_subject = req.receiver_subject.clone();
+		let mut req = self
+			.in_flight_requests
+			.get_async(&request_id)
+			.await
+			.context("request not in flight")?;
 
-				let include_reply_to = !req.opened;
-				if include_reply_to {
-					// Mark as opened so subsequent messages skip reply_to
-					req.opened = true;
-				}
+		let include_reply_to = !req.opened;
+		if include_reply_to {
+			// Mark as opened so subsequent messages skip reply_to
+			req.opened = true;
+		}
 
-				(receiver_subject, include_reply_to)
+		let ws_msg_index =
+			if let (Some(hs), protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(msg)) =
+				(&req.hibernation_state, &mut message_kind)
+			{
+				// TODO: This ends up skipping 0 as an index when initiated but whatever
+				msg.index = hs.last_ws_msg_index.wrapping_add(1);
+
+				Some(msg.index)
 			} else {
-				bail!("request not in flight");
-			}
-		};
+				None
+			};
 
 		let payload = protocol::ToClientTunnelMessage {
 			request_id: request_id.clone(),
@@ -136,40 +155,39 @@ impl SharedState {
 			message_kind,
 		};
 
-		// Save pending message
-		{
-			let pending_msg = PendingMessage {
-				send_instant: Instant::now(),
-				payload: payload.clone(),
-			};
-			let mut pending_msgs_by_req_id = self
-				.pending_messages
-				.entry_async(request_id)
-				.await
-				.or_insert_with(Vec::new);
-			let pending_msgs_by_req_id = pending_msgs_by_req_id.get_mut();
-
-			tracing::info!(l=?pending_msgs_by_req_id.len(), message_id=?Uuid::from_bytes(payload.message_id), request_id=?Uuid::from_bytes(payload.request_id), "new msg -----------");
-
-			if pending_msgs_by_req_id.len() >= MAX_PENDING_MSGS_PER_REQ {
-				self.pending_messages.remove_async(&request_id).await;
-
-				return Err(WebsocketPendingLimitReached {
-					limit: MAX_PENDING_MSGS_PER_REQ,
-				}
-				.build());
-			}
-
-			pending_msgs_by_req_id.push(pending_msg);
-		}
+		let now = Instant::now();
+		req.pending_msgs.push(PendingMessage {
+			message_id,
+			send_instant: now,
+		});
 
 		// Send message
 		let message = protocol::ToClient::ToClientTunnelMessage(payload);
-		let message_serialized = versioned::ToClient::latest(message)
+		let message_serialized = versioned::ToClient::wrap_latest(message)
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
+
+		if let (Some(hs), Some(ws_msg_index)) = (&mut req.hibernation_state, ws_msg_index) {
+			hs.total_pending_ws_msgs_size += message_serialized.len() as u64;
+
+			if hs.total_pending_ws_msgs_size > MAX_PENDING_MSGS_SIZE_PER_REQ
+				|| hs.pending_ws_msgs.len() >= u16::MAX as usize
+			{
+				return Err(WebsocketPendingLimitReached {}.build());
+			}
+
+			hs.last_ws_msg_index = ws_msg_index;
+
+			let pending_ws_msg = PendingWebsocketMessage {
+				payload: message_serialized.clone(),
+				send_instant: now,
+			};
+
+			hs.pending_ws_msgs.push(pending_ws_msg);
+		}
+
 		self.ups
 			.publish(
-				&tunnel_receiver_subject,
+				&req.receiver_subject,
 				&message_serialized,
 				PublishOpts::one(),
 			)
@@ -192,31 +210,33 @@ impl SharedState {
 						message_id=?Uuid::from_bytes(msg.message_id),
 						"successfully deserialized message"
 					);
+
+					let Some(mut in_flight) =
+						self.in_flight_requests.get_async(&msg.request_id).await
+					else {
+						tracing::debug!(
+							request_id=?Uuid::from_bytes(msg.request_id),
+							"in flight has already been disconnected"
+						);
+						continue;
+					};
+
 					if let protocol::ToServerTunnelMessageKind::TunnelAck = &msg.message_kind {
-						tracing::info!(message_id=?Uuid::from_bytes(msg.message_id), request_id=?Uuid::from_bytes(msg.request_id), "ack -----------");
-						// Handle ack message
-						if let Some(mut pending_msgs) =
-							self.pending_messages.get_async(&msg.request_id).await
-						{
-							pending_msgs.retain(|m| m.payload.message_id != msg.message_id);
-						} else {
+						let prev_len = in_flight.pending_msgs.len();
+
+						in_flight
+							.pending_msgs
+							.retain(|m| m.message_id != msg.message_id);
+
+						if prev_len == in_flight.pending_msgs.len() {
 							tracing::warn!(
 								"pending message does not exist or ack received after message body"
 							)
-						};
+						}
 					} else {
 						// Send message to the request handler to emulate the real network action
-						let Some(in_flight) =
-							self.requests_in_flight.get_async(&msg.request_id).await
-						else {
-							tracing::debug!(
-								?msg.request_id,
-								"in flight has already been disconnected"
-							);
-							continue;
-						};
 						tracing::debug!(
-							?msg.request_id,
+							request_id=?Uuid::from_bytes(msg.request_id),
 							"forwarding message to request handler"
 						);
 						let _ = in_flight
@@ -235,15 +255,16 @@ impl SharedState {
 								message_kind: protocol::ToClientTunnelMessageKind::TunnelAck,
 							},
 						);
-						let ack_message_serialized = match versioned::ToClient::latest(ack_message)
-							.serialize_with_embedded_version(PROTOCOL_VERSION)
-						{
-							Ok(x) => x,
-							Err(err) => {
-								tracing::error!(?err, "failed to serialize ack");
-								continue;
-							}
-						};
+						let ack_message_serialized =
+							match versioned::ToClient::wrap_latest(ack_message)
+								.serialize_with_embedded_version(PROTOCOL_VERSION)
+							{
+								Ok(x) => x,
+								Err(err) => {
+									tracing::error!(?err, "failed to serialize ack");
+									continue;
+								}
+							};
 						tokio::spawn(async move {
 							if let Err(err) = ups_clone
 								.publish(
@@ -265,78 +286,157 @@ impl SharedState {
 		}
 	}
 
-	pub async fn send_reclaimed_messages(&self, request_id: RequestId) -> Result<()> {
-		let receiver_subject =
-			if let Some(req) = self.requests_in_flight.get_async(&request_id).await {
-				req.receiver_subject.clone()
-			} else {
-				bail!("request not in flight");
-			};
+	pub async fn toggle_hibernation(&self, request_id: RequestId, enable: bool) -> Result<()> {
+		let mut req = self
+			.in_flight_requests
+			.get_async(&request_id)
+			.await
+			.context("request not in flight")?;
 
-		// When a request is started again, read all of its pending messages and send them to the new receiver
-		let Some(entry) = self.pending_messages.get_async(&request_id).await else {
-			return Ok(());
+		match (req.hibernation_state.is_some(), enable) {
+			(true, true) => {}
+			(true, false) => req.hibernation_state = None,
+			(false, true) => {
+				req.hibernation_state = Some(HibernationState {
+					total_pending_ws_msgs_size: 0,
+					last_ws_msg_index: 0,
+					pending_ws_msgs: Vec::new(),
+				});
+			}
+			(false, false) => {}
+		}
+
+		Ok(())
+	}
+
+	pub async fn resend_pending_websocket_messages(
+		&self,
+		request_id: RequestId,
+		last_msg_index: i64,
+	) -> Result<()> {
+		let Some(mut req) = self.in_flight_requests.get_async(&request_id).await else {
+			bail!("request not in flight");
 		};
-		let reclaimed_pending_msgs = entry.get();
 
-		if !reclaimed_pending_msgs.is_empty() {
-			tracing::debug!(request_id=?Uuid::from_bytes(request_id.clone()), "resending pending messages");
+		let receiver_subject = req.receiver_subject.clone();
 
-			for pending_msg in reclaimed_pending_msgs {
-				// Send message
-				let message =
-					protocol::ToClient::ToClientTunnelMessage(pending_msg.payload.clone());
-				let message_serialized = versioned::ToClient::latest(message)
-					.serialize_with_embedded_version(PROTOCOL_VERSION)?;
-				self.ups
-					.publish(&receiver_subject, &message_serialized, PublishOpts::one())
-					.await?;
+		if let Some(hs) = &mut req.hibernation_state {
+			if !hs.pending_ws_msgs.is_empty() {
+				tracing::debug!(request_id=?Uuid::from_bytes(request_id.clone()), len=?hs.pending_ws_msgs.len(), ?last_msg_index, "resending pending messages");
+
+				let len = hs.pending_ws_msgs.len().try_into()?;
+
+				for (iter_index, pending_msg) in hs.pending_ws_msgs.iter().enumerate() {
+					let msg_index = hs
+						.last_ws_msg_index
+						.wrapping_sub(len)
+						.wrapping_add(1)
+						.wrapping_add(iter_index.try_into()?);
+
+					if last_msg_index < 0 || wrapping_gt(msg_index, last_msg_index.try_into()?) {
+						self.ups
+							.publish(&receiver_subject, &pending_msg.payload, PublishOpts::one())
+							.await?;
+					}
+				}
+
+				// Perform ack
+				if last_msg_index >= 0 {
+					let last_msg_index = last_msg_index.try_into()?;
+					let mut iter_index = 0;
+
+					hs.pending_ws_msgs.retain(|_| {
+						let msg_index = hs
+							.last_ws_msg_index
+							.wrapping_sub(len)
+							.wrapping_add(1)
+							.wrapping_add(iter_index);
+						let keep = wrapping_gt(msg_index, last_msg_index);
+
+						iter_index += 1;
+
+						keep
+					});
+
+					if hs.pending_ws_msgs.is_empty() {
+						hs.last_ws_msg_index = last_msg_index;
+					}
+				}
 			}
 		}
 
 		Ok(())
 	}
 
+	pub async fn ack_pending_websocket_messages(
+		&self,
+		request_id: RequestId,
+		ack_index: u16,
+	) -> Result<()> {
+		let Some(mut req) = self.in_flight_requests.get_async(&request_id).await else {
+			bail!("request not in flight");
+		};
+
+		let Some(hs) = &mut req.hibernation_state else {
+			tracing::warn!("cannot ack ws messages, hibernation is not enabled");
+			return Ok(());
+		};
+
+		let len = hs.pending_ws_msgs.len().try_into()?;
+		let mut iter_index = 0u16;
+		hs.pending_ws_msgs.retain(|_| {
+			let msg_index = hs
+				.last_ws_msg_index
+				.wrapping_sub(len)
+				.wrapping_add(1)
+				.wrapping_add(iter_index);
+			let keep = wrapping_gt(msg_index, ack_index);
+
+			iter_index += 1;
+
+			keep
+		});
+
+		Ok(())
+	}
+
 	async fn gc(&self) {
 		let mut interval = tokio::time::interval(GC_INTERVAL);
+		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
 		loop {
 			interval.tick().await;
 
 			let now = Instant::now();
 
-			// Purge unacked messages
-			let mut expired_req_ids = Vec::new();
-			self.pending_messages
-				.retain_async(|request_id, pending_msgs| {
-					if let Some(pending_msg) = pending_msgs.first() {
-						if now.duration_since(pending_msg.send_instant) > MESSAGE_ACK_TIMEOUT {
-							// Expired
-							expired_req_ids.push(request_id.clone());
-							false
-						} else {
-							true
-						}
-					} else {
-						false
+			self.in_flight_requests
+				.retain_async(|_, req| {
+					if req.msg_tx.is_closed() {
+						return false;
 					}
+
+					let mut keep = true;
+
+					if let Some(earliest_pending_msg) = req.pending_msgs.first() {
+						keep = now.duration_since(earliest_pending_msg.send_instant)
+							> MESSAGE_ACK_TIMEOUT;
+					}
+
+					if let Some(hs) = &req.hibernation_state {
+						if let (true, Some(earliest_pending_ws_msg)) =
+							(keep, hs.pending_ws_msgs.first())
+						{
+							keep = now.duration_since(earliest_pending_ws_msg.send_instant)
+								> MESSAGE_ACK_TIMEOUT;
+						}
+					}
+
+					if !keep {
+						let _ = req.msg_tx.send(TunnelMessageData::Timeout);
+					}
+
+					keep
 				})
-				.await;
-
-			// Close in-flight requests for expired messages
-			for request_id in expired_req_ids {
-				if let Some(x) = self.requests_in_flight.get_async(&request_id).await {
-					let _ = x.msg_tx.send(TunnelMessageData::Timeout);
-				} else {
-					tracing::debug!(
-						request_id=?Uuid::from_bytes(request_id),
-						"message expired for in flight that does not exist"
-					);
-				}
-			}
-
-			// Purge no longer in flight
-			self.requests_in_flight
-				.retain_async(|_k, v| !v.msg_tx.is_closed())
 				.await;
 		}
 	}
@@ -349,3 +449,11 @@ impl Deref for SharedState {
 		&self.0
 	}
 }
+
+fn wrapping_gt(a: u16, b: u16) -> bool {
+	a != b && a.wrapping_sub(b) < u16::MAX / 2
+}
+
+// fn wrapping_lt(a: u16, b: u16) -> bool {
+//     b.wrapping_sub(a) < u16::MAX / 2
+// }

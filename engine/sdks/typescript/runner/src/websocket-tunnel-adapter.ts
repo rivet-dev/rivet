@@ -254,11 +254,6 @@ export class WebSocketTunnelAdapter {
 		let hasListeners = false;
 
 		if (listeners && listeners.size > 0) {
-			logger()?.debug({
-				msg: "------------- listeners",
-				l: listeners?.size
-			});
-
 			hasListeners = true;
 			for (const listener of listeners) {
 				try {
@@ -316,10 +311,6 @@ export class WebSocketTunnelAdapter {
 				break;
 			case "message":
 				if (this.#onmessage) {
-					logger()?.debug({
-						msg: "---------------- msg",
-					});
-
 					hasListeners = true;
 					try {
 						this.#onmessage.call(this, event);
@@ -335,11 +326,6 @@ export class WebSocketTunnelAdapter {
 
 		// Buffer the event if no listeners are registered
 		if (!hasListeners) {
-			logger()?.debug({
-				msg: "------------- no listeners",
-				type,
-			});
-
 			this.#bufferedEvents.push({ type, event });
 		}
 	}
@@ -351,12 +337,6 @@ export class WebSocketTunnelAdapter {
 		this.#bufferedEvents = this.#bufferedEvents.filter(
 			(buffered) => buffered.type !== type,
 		);
-
-		logger()?.debug({
-			msg: "------------- flush",
-			type,
-			l: eventsToFlush.length
-		});
 
 		for (const { event } of eventsToFlush) {
 			// Re-fire the event, which will now have listeners
@@ -430,7 +410,7 @@ export class WebSocketTunnelAdapter {
 	}
 
 	// Internal methods called by the Tunnel class
-	_handleOpen(): void {
+	_handleOpen(requestId: ArrayBuffer): void {
 		if (this.#readyState !== 0) {
 			// CONNECTING
 			return;
@@ -440,6 +420,7 @@ export class WebSocketTunnelAdapter {
 
 		const event = {
 			type: "open",
+			rivetRequestId: requestId,
 			target: this,
 		};
 
@@ -447,7 +428,7 @@ export class WebSocketTunnelAdapter {
 	}
 
 	/// Returns false if the message was sent off.
-	_handleMessage(data: string | Uint8Array, isBinary: boolean): boolean {
+	_handleMessage(requestId: ArrayBuffer, data: string | Uint8Array, index: number, isBinary: boolean): boolean {
 		if (this.#readyState !== 1) {
 			// OPEN
 			return true;
@@ -481,21 +462,19 @@ export class WebSocketTunnelAdapter {
 		}
 
 		const event = {
-			data: messageData,
 			type: "message",
+			data: messageData,
+			rivetRequestId: requestId,
+			rivetMessageIndex: index,
 			target: this,
 		};
-
-		logger()?.debug({
-			msg: "------------ tunnel fire event",
-		});
 
 		this.#fireEvent("message", event);
 
 		return false;
 	}
 
-	_handleClose(code?: number, reason?: string): void {
+	_handleClose(requestId: ArrayBuffer, code?: number, reason?: string): void {
 		if (this.#readyState === 3) {
 			// CLOSED
 			return;
@@ -504,10 +483,11 @@ export class WebSocketTunnelAdapter {
 		this.#readyState = 3; // CLOSED
 
 		const event = {
+			type: "close",
 			wasClean: true,
 			code: code || 1000,
 			reason: reason || "",
-			type: "close",
+			rivetRequestId: requestId,
 			target: this,
 		};
 

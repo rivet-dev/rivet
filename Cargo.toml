@@ -148,7 +148,7 @@ version = "4.3"
 features = ["derive"]
 
 [workspace.dependencies.rivet-term]
-git = "https://github.com/rivet-gg/rivet-term"
+git = "https://github.com/rivet-dev/rivet-term"
 rev = "55e328470b68c557fb9bc8298369f90182d35b6d"
 
 [workspace.dependencies.clickhouse]
@@ -249,7 +249,8 @@ default-features = false
 features = ["ansi","fmt","json","env-filter"]
 
 [workspace.dependencies.vbare]
-version = "0.0.2"
+git = "https://github.com/rivet-dev/vbare"
+rev = "3ae474a0234801bb96d70bec4eddd4f2d640971e"
 
 [workspace.dependencies.vbare-compiler]
 version = "0.0.2"

@@ -1,0 +1,5 @@
+{
+  "code": "websocket_service_retry",
+  "group": "guard",
+  "message": "WebSocket service retry."
+}

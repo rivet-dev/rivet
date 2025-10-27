@@ -3,7 +3,7 @@ use epoxy_protocol::protocol::{self, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 
-use crate::{http_client, replica, types, utils};
+use crate::{http_client, replica, utils};
 
 #[derive(Debug)]
 pub struct Input {

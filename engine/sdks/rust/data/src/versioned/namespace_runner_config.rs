@@ -11,11 +11,11 @@ pub enum NamespaceRunnerConfig {
 impl OwnedVersionedData for NamespaceRunnerConfig {
 	type Latest = namespace_runner_config_v2::RunnerConfig;
 
-	fn latest(latest: namespace_runner_config_v2::RunnerConfig) -> Self {
+	fn wrap_latest(latest: namespace_runner_config_v2::RunnerConfig) -> Self {
 		NamespaceRunnerConfig::V2(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let NamespaceRunnerConfig::V2(data) = self {
 			Ok(data)
@@ -87,7 +87,7 @@ impl NamespaceRunnerConfig {
 		match self {
 			NamespaceRunnerConfig::V1(_) => Ok(self),
 			NamespaceRunnerConfig::V2(config) => {
-				let namespace_runner_config_v2::RunnerConfig { metadata, kind } = config;
+				let namespace_runner_config_v2::RunnerConfig { kind, .. } = config;
 
 				match kind {
 					namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {

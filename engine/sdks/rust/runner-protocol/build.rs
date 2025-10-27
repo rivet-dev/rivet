@@ -22,7 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// TypeScript SDK generation
-	let cli_js_path = workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js");
+	let cli_js_path = workspace_root
+		.parent()
+		.unwrap()
+		.join("node_modules/@bare-ts/tools/dist/bin/cli.js");
 	if cli_js_path.exists() {
 		typescript::generate_sdk(&schema_dir);
 	} else {
@@ -59,16 +62,20 @@ mod typescript {
 			panic!("Failed to create SDK directory: {}", e);
 		}
 
-		let output =
-			Command::new(workspace_root.join("node_modules/@bare-ts/tools/dist/bin/cli.js"))
-				.arg("compile")
-				.arg("--generator")
-				.arg("ts")
-				.arg(highest_version_path)
-				.arg("-o")
-				.arg(src_dir.join("index.ts"))
-				.output()
-				.expect("Failed to execute bare compiler for TypeScript");
+		let output = Command::new(
+			workspace_root
+				.parent()
+				.unwrap()
+				.join("node_modules/@bare-ts/tools/dist/bin/cli.js"),
+		)
+		.arg("compile")
+		.arg("--generator")
+		.arg("ts")
+		.arg(highest_version_path)
+		.arg("-o")
+		.arg(src_dir.join("index.ts"))
+		.output()
+		.expect("Failed to execute bare compiler for TypeScript");
 
 		if !output.status.success() {
 			panic!(

@@ -10,11 +10,11 @@ pub enum Request {
 impl OwnedVersionedData for Request {
 	type Latest = v1::Request;
 
-	fn latest(latest: v1::Request) -> Self {
+	fn wrap_latest(latest: v1::Request) -> Self {
 		Request::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let Request::V1(data) = self {
 			Ok(data)
@@ -50,11 +50,11 @@ pub enum Response {
 impl OwnedVersionedData for Response {
 	type Latest = v1::Response;
 
-	fn latest(latest: v1::Response) -> Self {
+	fn wrap_latest(latest: v1::Response) -> Self {
 		Response::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let Response::V1(data) = self {
 			Ok(data)
@@ -90,11 +90,11 @@ pub enum LogEntry {
 impl OwnedVersionedData for LogEntry {
 	type Latest = v1::LogEntry;
 
-	fn latest(latest: v1::LogEntry) -> Self {
+	fn wrap_latest(latest: v1::LogEntry) -> Self {
 		LogEntry::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let LogEntry::V1(data) = self {
 			Ok(data)
@@ -134,11 +134,11 @@ pub enum ClusterConfig {
 impl OwnedVersionedData for ClusterConfig {
 	type Latest = v1::ClusterConfig;
 
-	fn latest(latest: v1::ClusterConfig) -> Self {
+	fn wrap_latest(latest: v1::ClusterConfig) -> Self {
 		ClusterConfig::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let ClusterConfig::V1(data) = self {
 			Ok(data)
@@ -178,11 +178,11 @@ pub enum Ballot {
 impl OwnedVersionedData for Ballot {
 	type Latest = v1::Ballot;
 
-	fn latest(latest: v1::Ballot) -> Self {
+	fn wrap_latest(latest: v1::Ballot) -> Self {
 		Ballot::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let Ballot::V1(data) = self {
 			Ok(data)

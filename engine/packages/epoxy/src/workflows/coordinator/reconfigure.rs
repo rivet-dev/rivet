@@ -1,5 +1,5 @@
 use anyhow::*;
-use epoxy_protocol::protocol::{self, ReplicaId};
+use epoxy_protocol::protocol::{self};
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};

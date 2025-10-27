@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use epoxy_protocol::protocol;
 use universaldb::Transaction;
 
-use crate::replica::{ballot, messages};
+use crate::replica::ballot;
 
 #[tracing::instrument(skip_all)]
 pub async fn accept(

@@ -8,6 +8,7 @@ import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
+const WEBSOCKET_STATE_PERSIST_TIMEOUT = 30000; // 30 seconds
 
 interface PendingRequest {
 	resolve: (response: Response) => void;
@@ -95,13 +96,6 @@ export class Tunnel {
 	}
 
 	#sendAck(requestId: RequestId, messageId: MessageId) {
-		logger()?.debug({
-			msg: "------------ tunnel ws ready",
-			ready: this.#runner.__webSocketReady(),
-			requestId: uuidstringify(new Uint8Array(requestId)),
-			messageId: uuidstringify(new Uint8Array(messageId)),
-		});
-
 		if (!this.#runner.__webSocketReady()) {
 			return;
 		}
@@ -202,7 +196,7 @@ export class Tunnel {
 		}
 		actor.requests.clear();
 
-		// Close all WebSockets for this actor
+		// Flush acks and close all WebSockets for this actor
 		for (const webSocketId of actor.webSockets) {
 			const ws = this.#actorWebSockets.get(webSocketId);
 			if (ws) {
@@ -283,20 +277,12 @@ export class Tunnel {
 					);
 					break;
 				case "ToClientWebSocketMessage":
-					let unhandled = await this.#handleWebSocketMessage(
+					this.#sendAck(message.requestId, message.messageId);
+
+					let _unhandled = await this.#handleWebSocketMessage(
 						message.requestId,
 						message.messageKind.val,
 					);
-					logger()?.debug({
-						msg: "------------ unhandled",
-						unhandled,
-						requestId: uuidstringify(new Uint8Array(message.requestId)),
-						messageId: uuidstringify(new Uint8Array(message.messageId)),
-					});
-
-					if (!unhandled) {
-						this.#sendAck(message.requestId, message.messageId);
-					}
 					break;
 				case "ToClientWebSocketClose":
 					this.#sendAck(message.requestId, message.messageId);
@@ -350,8 +336,8 @@ export class Tunnel {
 							existing.actorId = req.actorId;
 						} else {
 							this.#actorPendingRequests.set(requestIdStr, {
-								resolve: () => {},
-								reject: () => {},
+								resolve: () => { },
+								reject: () => { },
 								streamController: controller,
 								actorId: req.actorId,
 							});
@@ -518,7 +504,7 @@ export class Tunnel {
 					const dataBuffer =
 						typeof data === "string"
 							? (new TextEncoder().encode(data)
-									.buffer as ArrayBuffer)
+								.buffer as ArrayBuffer)
 							: data;
 
 					this.#sendMessage(requestId, {
@@ -553,13 +539,17 @@ export class Tunnel {
 			this.#actorWebSockets.set(webSocketId, adapter);
 
 			// Send open confirmation
+			let hibernationConfig = this.#runner.config.getActorHibernationConfig(actor.actorId, requestId);
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketOpen",
-				val: null,
+				val: {
+					canHibernate: hibernationConfig.enabled,
+					lastMsgIndex: BigInt(hibernationConfig.lastMsgIndex ?? -1),
+				},
 			});
 
 			// Notify adapter that connection is open
-			adapter._handleOpen();
+			adapter._handleOpen(requestId);
 
 			// Create a minimal request object for the websocket handler
 			// Include original headers from the open message
@@ -611,13 +601,8 @@ export class Tunnel {
 	/// Returns false if the message was sent off
 	async #handleWebSocketMessage(
 		requestId: ArrayBuffer,
-		msg: protocol.ToServerWebSocketMessage,
+		msg: protocol.ToClientWebSocketMessage,
 	): Promise<boolean> {
-		logger()?.debug({
-			msg: "adapter handle msg",
-			requestId: uuidstringify(new Uint8Array(requestId)),
-		});
-
 		const webSocketId = bufferToString(requestId);
 		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
@@ -625,10 +610,28 @@ export class Tunnel {
 				? new Uint8Array(msg.data)
 				: new TextDecoder().decode(new Uint8Array(msg.data));
 
-			return adapter._handleMessage(data, msg.binary);
+			return adapter._handleMessage(requestId, data, msg.index, msg.binary);
 		} else {
 			return true;
 		}
+	}
+
+	__ackWebsocketMessage(requestId: ArrayBuffer, index: number) {
+		logger()?.debug({
+			msg: "ack ws msg",
+			requestId: uuidstringify(new Uint8Array(requestId)),
+			index,
+		});
+
+		if (index < 0 || index > 65535) throw new Error("invalid websocket ack index");
+
+		// Send the ack message
+		this.#sendMessage(requestId, {
+			tag: "ToServerWebSocketMessageAck",
+			val: {
+				index,
+			},
+		});
 	}
 
 	async #handleWebSocketClose(
@@ -639,6 +642,7 @@ export class Tunnel {
 		const adapter = this.#actorWebSockets.get(webSocketId);
 		if (adapter) {
 			adapter._handleClose(
+				requestId,
 				close.code || undefined,
 				close.reason || undefined,
 			);

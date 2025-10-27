@@ -1,7 +1,6 @@
 use anyhow::*;
 use epoxy_protocol::protocol::ReplicaId;
 use gas::prelude::*;
-use rivet_api_builder::prelude::*;
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::keys;
