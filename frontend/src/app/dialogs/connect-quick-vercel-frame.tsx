@@ -2,6 +2,7 @@ import { faVercel, Icon } from "@rivet-gg/icons";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
+	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
@@ -19,7 +20,8 @@ import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
 import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
-import { EnvVariablesStep } from "./connect-railway-frame";
+import { EnvVariablesStep, useSelectedDatacenter } from "./connect-railway-frame";
+import { useMemo } from "react";
 
 const { stepper } = ConnectVercelForm;
 
@@ -134,7 +136,37 @@ function FormStepper({
 	);
 }
 
+const useVercelTemplateLink = () => {
+	const dataProvider = useEngineCompatDataProvider();
+	const { data: token } = useQuery(
+			dataProvider.engineAdminTokenQueryOptions(),
+		);
+	const endpoint = useSelectedDatacenter();
+
+
+	return useMemo(() => {
+	const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
+	const env = [
+		"NEXT_PUBLIC_RIVET_ENDPOINT",
+		"NEXT_PUBLIC_RIVET_TOKEN",
+		"NEXT_PUBLIC_RIVET_NAMESPACE",
+	].join(",");
+	const projectName = "rivetkit-vercel";
+	const envDefaults = {
+		NEXT_PUBLIC_RIVET_ENDPOINT: endpoint,
+		NEXT_PUBLIC_RIVET_TOKEN: token,
+		NEXT_PUBLIC_RIVET_NAMESPACE: dataProvider.engineNamespace,
+	};
+
+	return (
+		`https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`
+	);
+	}, [dataProvider.engineNamespace, endpoint, token]);
+
+};
+
 function StepInitialInfo() {
+	const vercelTemplateLink = useVercelTemplateLink();
 	return (
 		<>
 			<div className="space-y-4">
@@ -142,7 +174,7 @@ function StepInitialInfo() {
 					Deploy the Rivet Vercel template to get started quickly.
 				</p>
 				<ExternalLinkCard
-					href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Ftemplate-vercel&env=NEXT_PUBLIC_RIVET_ENDPOINT,NEXT_PUBLIC_RIVET_TOKEN,NEXT_PUBLIC_RIVET_NAMESPACE&project-name=rivetkit-vercel&repository-name=rivetkit-vercel"
+					href={vercelTemplateLink}
 					icon={faVercel}
 					title="Deploy Template to Vercel"
 				/>
