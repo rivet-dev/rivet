@@ -355,7 +355,7 @@ function DeployToRailwayButton() {
 	);
 }
 
-const useSelectedDatacenter = () => {
+export const useSelectedDatacenter = () => {
 	const datacenter = useWatch({ name: "datacenter" });
 
 	const { data } = useQuery(
