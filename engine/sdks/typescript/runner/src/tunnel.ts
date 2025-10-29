@@ -57,7 +57,7 @@ export class Tunnel {
 
 		// Close all WebSockets
 		for (const [_, ws] of this.#actorWebSockets) {
-			ws.close();
+			ws.__closeWithRetry();
 		}
 		this.#actorWebSockets.clear();
 	}
@@ -163,7 +163,7 @@ export class Tunnel {
 				const webSocket = this.#actorWebSockets.get(requestIdStr);
 				if (webSocket) {
 					// Close the WebSocket connection
-					webSocket.close(1000, "Message acknowledgment timeout");
+					webSocket.__closeWithRetry(1000, "Message acknowledgment timeout");
 
 					// Clean up from actorWebSockets map
 					this.#actorWebSockets.delete(requestIdStr);
@@ -200,7 +200,7 @@ export class Tunnel {
 		for (const webSocketId of actor.webSockets) {
 			const ws = this.#actorWebSockets.get(webSocketId);
 			if (ws) {
-				ws.close(1000, "Actor stopped");
+				ws.__closeWithRetry(1000, "Actor stopped");
 				this.#actorWebSockets.delete(webSocketId);
 			}
 		}
@@ -468,6 +468,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Actor not found",
+					retry: false,
 				},
 			});
 			return;
@@ -485,6 +486,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Not Implemented",
+					retry: false,
 				},
 			});
 			return;
@@ -515,13 +517,14 @@ export class Tunnel {
 						},
 					});
 				},
-				(code?: number, reason?: string) => {
+				(code?: number, reason?: string, retry: boolean = false) => {
 					// Send close through tunnel
 					this.#sendMessage(requestId, {
 						tag: "ToServerWebSocketClose",
 						val: {
 							code: code || null,
 							reason: reason || null,
+							retry,
 						},
 					});
 
@@ -586,6 +589,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Server Error",
+					retry: false,
 				},
 			});
 
@@ -636,7 +640,7 @@ export class Tunnel {
 
 	async #handleWebSocketClose(
 		requestId: ArrayBuffer,
-		close: protocol.ToServerWebSocketClose,
+		close: protocol.ToClientWebSocketClose,
 	) {
 		const webSocketId = bufferToString(requestId);
 		const adapter = this.#actorWebSockets.get(webSocketId);

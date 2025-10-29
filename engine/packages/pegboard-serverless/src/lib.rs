@@ -470,8 +470,8 @@ async fn outbound_handler(
 
 async fn drain_runner(ctx: &StandaloneCtx, runner_id: Id) -> Result<()> {
 	let res = ctx
-		.signal(pegboard::workflows::runner::Forward {
-			inner: protocol::ToServer::ToServerStopping,
+		.signal(pegboard::workflows::runner::Stop {
+			reset_actor_rescheduling: true,
 		})
 		.to_workflow::<pegboard::workflows::runner::Workflow>()
 		.tag("runner_id", runner_id)

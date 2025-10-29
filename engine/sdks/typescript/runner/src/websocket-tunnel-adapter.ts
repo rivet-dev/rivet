@@ -17,7 +17,7 @@ export class WebSocketTunnelAdapter {
 	#protocol = "";
 	#url = "";
 	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
-	#closeCallback: (code?: number, reason?: string) => void;
+	#closeCallback: (code?: number, reason?: string, retry?: boolean) => void;
 
 	// Event buffering for events fired before listeners are attached
 	#bufferedEvents: Array<{
@@ -28,7 +28,7 @@ export class WebSocketTunnelAdapter {
 	constructor(
 		webSocketId: string,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
-		closeCallback: (code?: number, reason?: string) => void,
+		closeCallback: (code?: number, reason?: string, retry?: boolean) => void,
 	) {
 		this.#webSocketId = webSocketId;
 		this.#sendCallback = sendCallback;
@@ -186,6 +186,14 @@ export class WebSocketTunnelAdapter {
 	}
 
 	close(code?: number, reason?: string): void {
+		this.closeInner(code, reason);
+	}
+
+	__closeWithRetry(code?: number, reason?: string): void {
+		this.closeInner(code, reason, true);
+	}
+
+	closeInner(code?: number, reason?: string, retry: boolean = false): void {
 		if (
 			this.#readyState === 2 || // CLOSING
 			this.#readyState === 3 // CLOSED
@@ -196,7 +204,7 @@ export class WebSocketTunnelAdapter {
 		this.#readyState = 2; // CLOSING
 
 		// Send close through tunnel
-		this.#closeCallback(code, reason);
+		this.#closeCallback(code, reason, retry);
 
 		// Update state and fire event
 		this.#readyState = 3; // CLOSED

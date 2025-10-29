@@ -614,6 +614,7 @@ pub async fn reschedule_actor(
 	input: &Input,
 	state: &mut LifecycleState,
 	force_reschedule: bool,
+	reset_rescheduling: bool,
 ) -> Result<SpawnActorOutput> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
@@ -633,7 +634,7 @@ pub async fn reschedule_actor(
 		})
 		.await?;
 
-	state.reschedule_state.retry_count = if reset {
+	state.reschedule_state.retry_count = if reset || reset_rescheduling {
 		0
 	} else {
 		state.reschedule_state.retry_count + 1

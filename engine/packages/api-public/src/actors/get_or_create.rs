@@ -1,8 +1,5 @@
 use anyhow::Result;
-use axum::{
-	http::HeaderMap,
-	response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Response};
 use rivet_api_builder::{
 	ApiError,
 	extract::{Extension, Json, Query},
@@ -77,11 +74,10 @@ pub struct GetOrCreateResponse {
 )]
 pub async fn get_or_create(
 	Extension(ctx): Extension<ApiCtx>,
-	headers: HeaderMap,
 	Query(query): Query<GetOrCreateQuery>,
 	Json(body): Json<GetOrCreateRequest>,
 ) -> Response {
-	match get_or_create_inner(ctx, headers, query, body).await {
+	match get_or_create_inner(ctx, query, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
 	}
@@ -90,7 +86,6 @@ pub async fn get_or_create(
 #[tracing::instrument(skip_all)]
 async fn get_or_create_inner(
 	ctx: ApiCtx,
-	headers: HeaderMap,
 	query: GetOrCreateQuery,
 	body: GetOrCreateRequest,
 ) -> Result<GetOrCreateResponse> {

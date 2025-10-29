@@ -20,7 +20,10 @@ use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::time::Duration;
 use tokio::sync::watch;
-use tokio_tungstenite::tungstenite::{Message, protocol::frame::coding::CloseCode};
+use tokio_tungstenite::tungstenite::{
+	Message,
+	protocol::frame::{CloseFrame, coding::CloseCode},
+};
 
 use crate::shared_state::{SharedState, TunnelMessageData};
 
@@ -35,6 +38,13 @@ const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 	"Reached limit on pending websocket messages, aborting connection."
 )]
 pub struct WebsocketPendingLimitReached;
+
+#[derive(Debug)]
+enum LifecycleResult {
+	ServerClose(protocol::ToServerWebSocketClose),
+	ClientClose(Option<CloseFrame>),
+	Aborted,
+}
 
 pub struct PegboardGateway {
 	shared_state: SharedState,
@@ -123,6 +133,10 @@ impl CustomServeTrait for PegboardGateway {
 						) => {
 							return anyhow::Ok(response_start);
 						}
+						protocol::ToServerTunnelMessageKind::ToServerResponseAbort => {
+							tracing::warn!("request aborted");
+							return Err(ServiceUnavailable.build());
+						}
 						_ => {
 							tracing::warn!("received non-response message from pubsub");
 						}
@@ -170,7 +184,7 @@ impl CustomServeTrait for PegboardGateway {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		unique_request_id: Uuid,
-	) -> Result<()> {
+	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 
@@ -293,7 +307,14 @@ impl CustomServeTrait for PegboardGateway {
 										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
 									) => {
 										tracing::debug!(?close, "server closed websocket");
-										return Err(WebSocketServiceRetry.build());
+
+
+										if open_msg.can_hibernate && close.retry {
+											// Successful closure
+											return Err(WebSocketServiceRetry.build());
+										} else {
+											return Ok(LifecycleResult::ServerClose(close));
+										}
 									}
 									TunnelMessageData::Timeout => {
 										tracing::warn!("websocket message timeout");
@@ -303,17 +324,15 @@ impl CustomServeTrait for PegboardGateway {
 								}
 							} else {
 								tracing::debug!("tunnel sub closed");
-								break;
+								return Err(WebSocketServiceRetry.build());
 							}
 						}
 						_ = tunnel_to_ws_abort_rx.changed() => {
 							tracing::debug!("task aborted");
-							return Ok(true);
+							return Ok(LifecycleResult::Aborted);
 						}
 					}
 				}
-
-				Err(WebSocketServiceRetry.build())
 			}
 			.instrument(tracing::info_span!("tunnel_to_ws_task")),
 		);
@@ -357,24 +376,22 @@ impl CustomServeTrait for PegboardGateway {
 											.send_message(request_id, ws_message)
 											.await?;
 									}
-									Message::Close(_) => {
-										return Ok(false);
+									Message::Close(close) => {
+										return Ok(LifecycleResult::ClientClose(close));
 									}
 									_ => {}
 								}
 							} else {
 								tracing::debug!("websocket stream closed");
-								break;
+								return Ok(LifecycleResult::ClientClose(None));
 							}
 						}
 						_ = ws_to_tunnel_abort_rx.changed() => {
 							tracing::debug!("task aborted");
-							return Ok(true);
+							return Ok(LifecycleResult::Aborted);
 						}
 					};
 				}
-
-				Ok(false)
 			}
 			.instrument(tracing::info_span!("ws_to_tunnel_task")),
 		);
@@ -385,7 +402,7 @@ impl CustomServeTrait for PegboardGateway {
 				let res = tunnel_to_ws.await?;
 
 				// Abort other if not aborted
-				if !matches!(res, Ok(true)) {
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "tunnel to ws task completed, aborting counterpart");
 
 					drop(ws_to_tunnel_abort_tx);
@@ -399,7 +416,7 @@ impl CustomServeTrait for PegboardGateway {
 				let res = ws_to_tunnel.await?;
 
 				// Abort other if not aborted
-				if !matches!(res, Ok(true)) {
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ws to tunnel task completed, aborting counterpart");
 
 					drop(tunnel_to_ws_abort_tx);
@@ -410,23 +427,32 @@ impl CustomServeTrait for PegboardGateway {
 				res
 			}
 		);
-		let lifecycle_res = tunnel_to_ws_res
-			.err()
-			.or(ws_to_tunnel_res.err())
-			.map(Err)
-			.unwrap_or(Ok(()));
 
-		let (close_code, close_reason) = if lifecycle_res.is_ok() {
-			(CloseCode::Normal.into(), None)
-		} else {
-			(CloseCode::Error.into(), Some("ws.downstream_closed".into()))
+		// Determine single result from both tasks
+		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res) {
+			// Prefer error
+			(_, Err(err)) => Err(err),
+			(Err(err), _) => Err(err),
+			// Prefer non aborted result if both succeed
+			(Ok(res), Ok(LifecycleResult::Aborted)) => Ok(res),
+			(Ok(LifecycleResult::Aborted), Ok(res)) => Ok(res),
+			// Prefer tunnel to ws if both succeed (unlikely case)
+			(res, _) => res,
 		};
 
 		// Send WebSocket close message to runner
+		let (close_code, close_reason) = match &mut lifecycle_res {
+			// Taking here because it won't be used again
+			Ok(LifecycleResult::ClientClose(Some(close))) => {
+				(close.code, Some(std::mem::take(&mut close.reason)))
+			}
+			Ok(_) => (CloseCode::Normal.into(), None),
+			Err(_) => (CloseCode::Error.into(), Some("ws.downstream_closed".into())),
+		};
 		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
 			protocol::ToClientWebSocketClose {
-				code: Some(close_code),
-				reason: close_reason,
+				code: Some(close_code.into()),
+				reason: close_reason.map(|x| x.as_str().to_string()),
 			},
 		);
 
@@ -438,6 +464,20 @@ impl CustomServeTrait for PegboardGateway {
 			tracing::error!(?err, "error sending close message");
 		}
 
-		lifecycle_res
+		// Send WebSocket close message to client
+		match lifecycle_res {
+			Ok(LifecycleResult::ServerClose(close)) => {
+				if let Some(code) = close.code {
+					Ok(Some(CloseFrame {
+						code: code.into(),
+						reason: close.reason.unwrap_or_default().into(),
+					}))
+				} else {
+					Ok(None)
+				}
+			}
+			Ok(_) => Ok(None),
+			Err(err) => Err(err),
+		}
 	}
 }

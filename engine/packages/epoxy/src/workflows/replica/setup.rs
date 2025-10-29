@@ -675,7 +675,6 @@ async fn recover_key_value_with_instances(
 				committed_entries.push(CommittedEntry {
 					instance: (*instance_replica_id, *instance_slot_id),
 					entry: entry.clone(),
-					seq: entry.seq,
 					deps: entry.deps.clone(),
 				});
 			}
@@ -729,7 +728,7 @@ async fn recover_key_value_with_instances(
 struct CommittedEntry {
 	instance: (protocol::ReplicaId, protocol::SlotId),
 	entry: protocol::LogEntry,
-	seq: u64, // Seq is u64 in protocol
+	// seq: u64, // Seq is u64 in protocol
 	deps: Vec<protocol::Instance>,
 }
 

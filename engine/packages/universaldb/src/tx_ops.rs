@@ -34,17 +34,6 @@ pub enum Operation {
 	},
 }
 
-impl Operation {
-	pub fn sorting_key(&self) -> &[u8] {
-		match self {
-			Operation::Set { key, .. } => key,
-			Operation::Clear { key } => key,
-			Operation::ClearRange { begin, .. } => begin,
-			Operation::AtomicOp { key, .. } => key,
-		}
-	}
-}
-
 #[derive(Debug, Clone)]
 pub enum GetOutput {
 	Value(Vec<u8>),

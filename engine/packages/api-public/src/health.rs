@@ -87,7 +87,7 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 				}
 			} else {
 				// Remote datacenter - HTTP request
-				match send_health_checks(&ctx, &dc).await {
+				match send_health_checks(&dc).await {
 					Ok(response) => DatacenterHealth {
 						datacenter_label: dc.datacenter_label,
 						datacenter_name: dc.name.clone(),
@@ -129,7 +129,6 @@ async fn fanout_inner(ctx: ApiCtx) -> Result<FanoutResponse> {
 
 #[tracing::instrument(skip_all)]
 async fn send_health_checks(
-	ctx: &ApiCtx,
 	dc: &rivet_config::config::topology::Datacenter,
 ) -> Result<HealthResponse> {
 	let client = rivet_pools::reqwest::client().await?;
