@@ -640,20 +640,20 @@ pub async fn reschedule_actor(
 	};
 	state.reschedule_state.last_retry_ts = now;
 
-	// Don't sleep for first retry
-	if state.reschedule_state.retry_count > 0 {
-		let next = backoff.step().expect("should not have max retry");
+	// // Don't sleep for first retry
+	// if state.reschedule_state.retry_count > 0 {
+	// 	let next = backoff.step().expect("should not have max retry");
 
-		// Sleep for backoff or destroy early
-		if let Some(_sig) = ctx
-			.listen_with_timeout::<Destroy>(Instant::from(next) - Instant::now())
-			.await?
-		{
-			tracing::debug!("destroying before actor start");
+	// 	// Sleep for backoff or destroy early
+	// 	if let Some(_sig) = ctx
+	// 		.listen_with_timeout::<Destroy>(Instant::from(next) - Instant::now())
+	// 		.await?
+	// 	{
+	// 		tracing::debug!("destroying before actor start");
 
-			return Ok(SpawnActorOutput::Destroy);
-		}
-	}
+	// 		return Ok(SpawnActorOutput::Destroy);
+	// 	}
+	// }
 
 	let next_generation = state.generation + 1;
 	let spawn_res = spawn_actor(
