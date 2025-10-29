@@ -12,6 +12,8 @@
 # Prevent from counting in the language statistics
 engine/artifacts/** linguist-generated=true
 engine/sdks/** linguist-generated=true
+engine/sdks/typescript/runner/** linguist-generated=false
+engine/sdks/typescript/test-runner/** linguist-generated=false
 engine/sdks/schema/** linguist-generated=false
 
 website/public/llms.txt linguist-generated=true

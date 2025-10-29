@@ -4391,6 +4391,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-tungstenite",
  "tower 0.5.2",
  "tracing",
  "universaldb",

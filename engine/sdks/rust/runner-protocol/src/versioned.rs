@@ -574,6 +574,7 @@ fn convert_to_server_tunnel_message_kind_v1_to_v2(
 			v2::ToServerTunnelMessageKind::ToServerWebSocketClose(v2::ToServerWebSocketClose {
 				code: close.code,
 				reason: close.reason,
+				retry: false,
 			})
 		}
 	}

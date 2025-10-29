@@ -228,40 +228,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							ctx.activity(AckCommandsInput { last_command_idx }).await?;
 						}
 						protocol::ToServer::ToServerStopping => {
-							if !state.draining {
-								// The workflow will enter a draining state where it can still process signals if
-								// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
-								state.draining = true;
-
-								// Can't parallelize these two activities, requires reading from state
-								ctx.activity(ClearDbInput {
-									runner_id: input.runner_id,
-									name: input.name.clone(),
-									key: input.key.clone(),
-									update_state: RunnerState::Draining,
-								})
-								.await?;
-
-								let actors = ctx
-									.activity(FetchRemainingActorsInput {
-										runner_id: input.runner_id,
-									})
-									.await?;
-
-								// Set all remaining actors to lost immediately
-								if !actors.is_empty() {
-									for (actor_id, generation) in &actors {
-										ctx.signal(crate::workflows::actor::Lost {
-											generation: *generation,
-											force_reschedule: false,
-										})
-										.to_workflow::<crate::workflows::actor::Workflow>()
-										.tag("actor_id", actor_id)
-										.send()
-										.await?;
-									}
-								}
-							}
+							handle_stopping(ctx, &input, state, false).await?;
 						}
 						protocol::ToServer::ToServerPing(_)
 						| protocol::ToServer::ToServerKvRequest(_)
@@ -292,6 +259,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 								// Because this is a race condition, we want the actor to reschedule
 								// regardless of its crash policy
 								force_reschedule: true,
+								reset_rescheduling: true,
 							})
 							.to_workflow::<crate::workflows::actor::Workflow>()
 							.tag("actor_id", actor_id)
@@ -348,14 +316,17 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							.await?;
 					}
 				}
+				Some(Main::Stop(sig)) => {
+					handle_stopping(ctx, &input, state, sig.reset_actor_rescheduling).await?;
+				}
 				None => {
-					if state.draining
-						|| ctx
-							.activity(CheckExpiredInput {
-								runner_id: input.runner_id,
-							})
-							.await?
-					{
+					let expired = ctx
+						.activity(CheckExpiredInput {
+							runner_id: input.runner_id,
+						})
+						.await?;
+
+					if state.draining || expired {
 						return Ok(Loop::Break(()));
 					}
 				}
@@ -387,6 +358,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 			.signal(crate::workflows::actor::Lost {
 				generation,
 				force_reschedule: false,
+				reset_rescheduling: false,
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)
@@ -413,6 +385,51 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		message: protocol::ToClient::ToClientClose,
 	})
 	.await?;
+
+	Ok(())
+}
+
+async fn handle_stopping(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	state: &mut LifecycleState,
+	reset_actor_rescheduling: bool,
+) -> Result<()> {
+	if !state.draining {
+		// The workflow will enter a draining state where it can still process signals if
+		// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
+		state.draining = true;
+
+		// Can't parallelize these two activities, requires reading from state
+		ctx.activity(ClearDbInput {
+			runner_id: input.runner_id,
+			name: input.name.clone(),
+			key: input.key.clone(),
+			update_state: RunnerState::Draining,
+		})
+		.await?;
+
+		let actors = ctx
+			.activity(FetchRemainingActorsInput {
+				runner_id: input.runner_id,
+			})
+			.await?;
+
+		// Set all remaining actors to lost immediately
+		if !actors.is_empty() {
+			for (actor_id, generation) in &actors {
+				ctx.signal(crate::workflows::actor::Lost {
+					generation: *generation,
+					force_reschedule: false,
+					reset_rescheduling: reset_actor_rescheduling,
+				})
+				.to_workflow::<crate::workflows::actor::Workflow>()
+				.tag("actor_id", actor_id)
+				.send()
+				.await?;
+			}
+		}
+	}
 
 	Ok(())
 }
@@ -1138,6 +1155,11 @@ async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerIn
 #[signal("pegboard_runner_check_queue")]
 pub struct CheckQueue {}
 
+#[signal("pegboard_runner_stop")]
+pub struct Stop {
+	pub reset_actor_rescheduling: bool,
+}
+
 #[signal("pegboard_runner_command")]
 pub struct Command {
 	pub inner: protocol::Command,
@@ -1153,4 +1175,5 @@ join_signal!(Main {
 	// Forwarded from the ws to this workflow
 	Forward(Forward),
 	CheckQueue,
+	Stop,
 });

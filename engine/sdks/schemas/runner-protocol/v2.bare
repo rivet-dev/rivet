@@ -264,6 +264,7 @@ type ToServerWebSocketMessageAck struct {
 type ToServerWebSocketClose struct {
 	code: optional<u16>
 	reason: optional<str>
+	retry: bool
 }
 
 # To Server

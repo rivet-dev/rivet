@@ -1,4 +1,6 @@
 use anyhow::*;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use epoxy_protocol::protocol::{self, Path, Payload, ReplicaId};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
@@ -68,15 +70,7 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 
 	match path {
 		Path::PathFast(protocol::PathFast { payload }) => {
-			commit(
-				ctx,
-				&config,
-				replica_id,
-				&quorum_members,
-				payload,
-				input.purge_cache,
-			)
-			.await
+			commit(ctx, &config, replica_id, payload, input.purge_cache).await
 		}
 		Path::PathSlow(protocol::PathSlow { payload }) => {
 			run_paxos_accept(
@@ -125,15 +119,7 @@ pub async fn run_paxos_accept(
 
 	// EPaxos Step 20
 	if quorum >= utils::calculate_quorum(quorum_members.len(), utils::QuorumType::Slow) {
-		commit(
-			ctx,
-			&config,
-			replica_id,
-			&quorum_members,
-			payload_for_accepts,
-			purge_cache,
-		)
-		.await
+		commit(ctx, &config, replica_id, payload_for_accepts, purge_cache).await
 	} else {
 		Ok(ProposalResult::ConsensusFailed)
 	}
@@ -144,7 +130,6 @@ pub async fn commit(
 	ctx: &OperationCtx,
 	config: &protocol::ClusterConfig,
 	replica_id: ReplicaId,
-	quorum_members: &[ReplicaId],
 	payload: Payload,
 	purge_cache: bool,
 ) -> Result<ProposalResult> {
@@ -182,6 +167,27 @@ pub async fn commit(
 			let _ = send_commits(&ctx, &config, replica_id, &all_replicas, &payload).await;
 		}
 	});
+
+	if purge_cache {
+		let keys = payload
+			.proposal
+			.commands
+			.iter()
+			.map(replica::utils::extract_key_from_command)
+			.flatten()
+			.map(|key| BASE64.encode(key))
+			.collect::<Vec<_>>();
+
+		// Purge optimistic cache for all dcs
+		if !keys.is_empty() {
+			let ctx = ctx.clone();
+			tokio::spawn(async move {
+				if let Err(err) = purge_optimistic_cache(ctx, keys).await {
+					tracing::error!(?err, "failed purging optimistic cache");
+				}
+			});
+		}
+	}
 
 	if let Some(cmd_err) = cmd_err {
 		Ok(ProposalResult::CommandError(cmd_err))
@@ -322,6 +328,25 @@ async fn send_commits(
 		},
 	)
 	.await?;
+
+	Ok(())
+}
+
+async fn purge_optimistic_cache(ctx: OperationCtx, keys: Vec<String>) -> Result<()> {
+	for dc in &ctx.config().topology().datacenters {
+		let workflow_id = ctx
+			.workflow(crate::workflows::purger::Input {
+				replica_id: dc.datacenter_label as u64,
+			})
+			.tag("replica_id", dc.datacenter_label as u64)
+			.unique()
+			.dispatch()
+			.await?;
+		ctx.signal(crate::workflows::purger::Purge { keys: keys.clone() })
+			.to_workflow_id(workflow_id)
+			.send()
+			.await?;
+	}
 
 	Ok(())
 }

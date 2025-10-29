@@ -1809,16 +1809,11 @@ impl ProxyService {
 								)
 								.await
 							{
-								Ok(()) => {
+								Ok(close_frame) => {
 									tracing::debug!("websocket handler complete, closing");
 
 									// Send graceful close
-									ws_handle
-										.send(to_hyper_close(Some(CloseFrame {
-											code: CloseCode::Normal,
-											reason: "".into(),
-										})))
-										.await?;
+									ws_handle.send(to_hyper_close(close_frame)).await?;
 
 									// Flush to ensure close frame is sent
 									ws_handle.flush().await?;

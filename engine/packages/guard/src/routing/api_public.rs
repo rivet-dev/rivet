@@ -9,6 +9,7 @@ use hyper::{Request, Response};
 use rivet_guard_core::WebSocketHandle;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingOutput};
 use rivet_guard_core::{CustomServeTrait, request_context::RequestContext};
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use tower::Service;
 
 struct ApiPublicService {
@@ -51,7 +52,7 @@ impl CustomServeTrait for ApiPublicService {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		_unique_request_id: Uuid,
-	) -> Result<()> {
+	) -> Result<Option<CloseFrame>> {
 		bail!("api-public does not support WebSocket connections")
 	}
 }

@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Request, Response};
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use uuid::Uuid;
 
 use crate::WebSocketHandle;
@@ -28,5 +29,5 @@ pub trait CustomServeTrait: Send + Sync {
 		request_context: &mut RequestContext,
 		// Identifies the websocket across retries.
 		unique_request_id: Uuid,
-	) -> Result<()>;
+	) -> Result<Option<CloseFrame>>;
 }
