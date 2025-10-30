@@ -1,6 +1,10 @@
 import type { cors } from "hono/cors";
 import { z } from "zod";
-import { HEADER_ACTOR_QUERY } from "@/driver-helpers/mod";
+import {
+	HEADER_ACTOR_QUERY,
+	HEADER_RIVET_ACTOR,
+	HEADER_RIVET_TARGET,
+} from "@/driver-helpers/mod";
 import { getEnvUniversal } from "@/utils";
 
 type CorsOptions = NonNullable<Parameters<typeof cors>[0]>;
@@ -50,8 +54,9 @@ const defaultCors: CorsOptions = {
 		"User-Agent",
 		"baggage",
 		"sentry-trace",
-		"x-rivet-actor",
-		"x-rivet-target",
+		HEADER_RIVET_ACTOR,
+		HEADER_RIVET_TARGET,
+		HEADER_ACTOR_QUERY,
 	],
 	maxAge: 3600,
 	credentials: true,
