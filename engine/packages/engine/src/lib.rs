@@ -4,6 +4,7 @@ use commands::*;
 use rivet_service_manager::RunConfig;
 
 pub mod commands;
+pub mod keys;
 pub mod run_config;
 pub mod util;
 
