@@ -130,6 +130,8 @@ services:
     networks:
       - rivet-network
       - rivet-network-to-core
+    ports:
+      - '4317:4317'
   otel-collector-client:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped

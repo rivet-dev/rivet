@@ -1,5 +1,4 @@
 use anyhow::*;
-use epoxy_protocol::protocol;
 use futures_util::FutureExt;
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};

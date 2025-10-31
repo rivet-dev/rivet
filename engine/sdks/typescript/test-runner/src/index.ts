@@ -13,7 +13,7 @@ const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
 const RIVET_RUNNER_NAME = process.env.RIVET_RUNNER_NAME ?? "test-runner";
 const RIVET_RUNNER_KEY =
-	process.env.RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`;
+	process.env.RIVET_RUNNER_KEY;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	? Number(process.env.RIVET_RUNNER_VERSION)
 	: 1;
@@ -28,7 +28,7 @@ const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER === undefined;
 let runnerStarted = Promise.withResolvers();
 let runnerStopped = Promise.withResolvers();
 let runner: Runner | null = null;
-const actorWebSockets = new Map<string, WebSocket>();
+const websocketLastMsgIndexes: Map<string, number> = new Map();
 
 // Create internal server
 const app = new Hono();
@@ -94,8 +94,6 @@ app.get("/start", async (c) => {
 	});
 });
 
-await autoConfigureServerless();
-
 if (AUTOSTART_SERVER) {
 	serve({
 		fetch: app.fetch,
@@ -106,8 +104,10 @@ if (AUTOSTART_SERVER) {
 	);
 }
 
-if (AUTOSTART_RUNNER)
+if (AUTOSTART_RUNNER) {
 	[runner, runnerStarted, runnerStopped] = await startRunner();
+}
+else await autoConfigureServerless();
 
 async function autoConfigureServerless() {
 	const res = await fetch(
@@ -155,13 +155,13 @@ async function startRunner(): Promise<
 		token: RIVET_TOKEN,
 		namespace: RIVET_NAMESPACE,
 		runnerName: RIVET_RUNNER_NAME,
-		runnerKey: RIVET_RUNNER_KEY,
+		runnerKey: RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`,
 		totalSlots: RIVET_RUNNER_TOTAL_SLOTS,
 		prepopulateActorNames: {},
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => {},
+		onDisconnected: () => { },
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -208,13 +208,12 @@ async function startRunner(): Promise<
 			);
 		},
 		websocket: async (
-			_runner: Runner,
+			runner: Runner,
 			actorId: string,
 			ws: WebSocket,
 			request: Request,
 		) => {
 			getLogger().info(`WebSocket connected for actor ${actorId}`);
-			actorWebSockets.set(actorId, ws);
 
 			// Echo server - send back any messages received
 			ws.addEventListener("message", (event) => {
@@ -222,13 +221,19 @@ async function startRunner(): Promise<
 				getLogger().info({
 					msg: `WebSocket message from actor ${actorId}`,
 					data,
+					index: (event as any).rivetMessageIndex,
 				});
+
 				ws.send(`Echo: ${data}`);
+
+				// Ack
+				const websocketId = Buffer.from((event as any).rivetRequestId).toString("base64");
+				websocketLastMsgIndexes.set(websocketId, (event as any).rivetMessageIndex);
+				runner.sendWebsocketMessageAck((event as any).rivetRequestId, (event as any).rivetMessageIndex);
 			});
 
 			ws.addEventListener("close", () => {
 				getLogger().info(`WebSocket closed for actor ${actorId}`);
-				actorWebSockets.delete(actorId);
 			});
 
 			ws.addEventListener("error", (error) => {
@@ -237,6 +242,13 @@ async function startRunner(): Promise<
 					error,
 				});
 			});
+		},
+		getActorHibernationConfig(actorId, requestId) {
+			const websocketId = Buffer.from(requestId).toString("base64");
+			return {
+				enabled: true,
+				lastMsgIndex: websocketLastMsgIndexes.get(websocketId),
+			};
 		},
 	};
 

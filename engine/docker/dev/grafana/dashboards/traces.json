@@ -173,7 +173,7 @@
 					},
 					"pluginVersion": "4.0.6",
 					"queryType": "timeseries",
-					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND $__conditionalAll(ServiceName, $service_name)\r\n  AND $__conditionalAll(SpanName, $span_name)\r\n  AND (($ray_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['ray_id'], $ray_id))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['workflow_id'], $workflow_id))\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
+					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  ServiceName,\r\n  count() as ` `\r\nFROM otel.otel_traces\r\nWHERE\r\n  ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\nGROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000\r\n",
 					"refId": "A"
 				}
 			],
@@ -431,7 +431,7 @@
 					},
 					"pluginVersion": "4.9.0",
 					"queryType": "table",
-					"rawSql": "SELECT\r\n  (argMin(StatusCode, Timestamp) = 'Error' ? '⚠️' : '') as ` `,\r\n  min(Timestamp) as Ts,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  argMin(SpanName, Timestamp) as `Span Name`,\r\n  argMin(coalesce(NULLIF(SpanAttributes['uri'], ''), NULLIF(SpanAttributes['workflow_id'], ''), SpanAttributes['actor_id']), Timestamp) as `URI/workflow_id/actor_id`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(ServiceName, $service_name)\r\n  AND $__conditionalAll(SpanName, $span_name)\r\n  AND (($ray_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['ray_id'], $ray_id))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['workflow_id'], $workflow_id))\r\n  AND ServiceName != 'loadgenerator'\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
+					"rawSql": "SELECT\r\n  (argMin(StatusCode, Timestamp) = 'Error' ? '⚠️' : '') as ` `,\r\n  min(Timestamp) as Ts,\r\n  TraceId as `Trace ID`,\r\n  argMin(ServiceName, Timestamp) as `Service Name`,\r\n  argMin(SpanName, Timestamp) as `Span Name`,\r\n  argMin(coalesce(NULLIF(SpanAttributes['uri'], ''), NULLIF(SpanAttributes['workflow_id'], ''), SpanAttributes['actor_id']), Timestamp) as `URI/workflow_id/actor_id`,\r\n  divide(max(Duration), 1000000) as Duration\r\nFROM otel.otel_traces\r\nWHERE\r\n  ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n  AND ServiceName != 'loadgenerator'\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\nGROUP BY TraceId\r\nORDER BY Duration DESC\r\nLIMIT 100\r\n",
 					"refId": "A"
 				}
 			],
@@ -581,7 +581,7 @@
 					},
 					"pluginVersion": "4.0.6",
 					"queryType": "traces",
-					"rawSql": "WITH\n\t(SELECT min(Start) FROM otel.otel_traces_trace_id_ts WHERE $__conditionalAll(TraceId, $trace_id)) as trace_start,\n\t(SELECT max(End) + 1 FROM otel.otel_traces_trace_id_ts WHERE $__conditionalAll(TraceId, $trace_id)) as trace_end\nSELECT\n\tTraceId as traceID,\n\tSpanId as spanID,\n\tParentSpanId as parentSpanID,\n\tServiceName as serviceName,\n\tSpanName as operationName, Timestamp as startTime,\n\tmultiply(Duration, 0.000001) as duration,\n\tarrayMap(key -> map('key', key, 'value', SpanAttributes[key]), mapKeys(SpanAttributes)) as tags,\n\tarrayMap(key -> map('key', key, 'value', ResourceAttributes[key]), mapKeys(ResourceAttributes)) as serviceTags,\n\tarrayMap((name, timestamp, attributes) -> tuple(name, toString(multiply(toUnixTimestamp64Nano(timestamp), 0.000001)), arrayMap( key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(name String, timestamp String, fields Array(Map(String, String))), `Events.Name`, `Events.Timestamp`, `Events.Attributes`) AS logs,\n\tarrayMap((traceID, spanID, attributes) -> tuple(traceID, spanID, arrayMap(key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(traceID String, spanID String, tags Array(Map(String, String))), `Links.TraceId`, `Links.SpanId`, `Links.Attributes`) AS references\nFROM otel.otel_traces\nWHERE\n\t$__conditionalAll(traceID, $trace_id) AND startTime >= trace_start AND startTime <= trace_end AND ( Duration > 0 )\nORDER BY Timestamp DESC, Duration DESC\nLIMIT 1000",
+					"rawSql": "WITH\n\t'${trace_id}' as trace_id,\n\t(SELECT min(Start) FROM otel.otel_traces_trace_id_ts WHERE TraceId = trace_id) as trace_start,\n\t(SELECT max(End) + 1 FROM otel.otel_traces_trace_id_ts WHERE TraceId = trace_id) as trace_end\nSELECT\n\tTraceId as traceID,\n\tSpanId as spanID,\n\tParentSpanId as parentSpanID,\n\tServiceName as serviceName,\n\tSpanName as operationName, Timestamp as startTime,\n\tmultiply(Duration, 0.000001) as duration,\n\tarrayMap(key -> map('key', key, 'value', SpanAttributes[key]), mapKeys(SpanAttributes)) as tags,\n\tarrayMap(key -> map('key', key, 'value', ResourceAttributes[key]), mapKeys(ResourceAttributes)) as serviceTags,\n\tarrayMap((name, timestamp, attributes) -> tuple(name, toString(multiply(toUnixTimestamp64Nano(timestamp), 0.000001)), arrayMap( key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(name String, timestamp String, fields Array(Map(String, String))), `Events.Name`, `Events.Timestamp`, `Events.Attributes`) AS logs,\n\tarrayMap((traceID, spanID, attributes) -> tuple(traceID, spanID, arrayMap(key -> map('key', key, 'value', attributes[key]), mapKeys(attributes)))::Tuple(traceID String, spanID String, tags Array(Map(String, String))), `Links.TraceId`, `Links.SpanId`, `Links.Attributes`) AS references\nFROM otel.otel_traces\nWHERE\n\ttraceID = trace_id AND startTime >= trace_start AND startTime <= trace_end AND ( Duration > 0 )\nORDER BY Timestamp DESC, Duration DESC\nLIMIT 1000",
 					"refId": "A"
 				}
 			],
@@ -722,7 +722,7 @@
 					},
 					"pluginVersion": "4.0.6",
 					"queryType": "timeseries",
-					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId, $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND $__conditionalAll(ServiceName, $service_name)\r\n  AND $__conditionalAll(SpanName, $span_name)\r\n  AND (($ray_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['ray_id'], $ray_id)\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : $__conditionalAll(SpanAttributes['workflow_id'], $workflow_id))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
+					"rawSql": "SELECT\r\n  $__timeInterval(Timestamp) as time,\r\n  count(*) as ` `,\r\n  ServiceName\r\nFROM otel.otel_traces\r\nWHERE\r\n  $__conditionalAll(TraceId IN (${trace_id:singlequote}),  $trace_id)\r\n  AND ( Timestamp >= $__fromTime AND Timestamp <= $__toTime )\r\n  AND ServiceName IN (${service_name:singlequote})\r\n  AND SpanName IN (${span_name:singlequote})\r\n  AND (($ray_id, NULL).1 = 'All' ? true : SpanAttributes['ray_id'] IN (${ray_id:singlequote}))\r\n  AND (($workflow_id, NULL).1 = 'All' ? true : SpanAttributes['workflow_id'] IN (${workflow_id:singlequote}))\r\n AND StatusCode IN ('Error', 'STATUS_CODE_ERROR')\r\n  AND ServiceName != 'loadgenerator' GROUP BY ServiceName, time\r\nORDER BY time ASC\r\nLIMIT 100000",
 					"refId": "A"
 				}
 			],
@@ -886,14 +886,14 @@
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"definition": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"description": "",
 				"includeAll": true,
 				"label": "Span",
 				"multi": true,
 				"name": "span_name",
 				"options": [],
-				"query": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"query": "SELECT DISTINCT SpanName FROM otel.otel_traces WHERE ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
@@ -908,14 +908,14 @@
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"definition": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"description": "",
 				"includeAll": true,
 				"label": "Ray ID",
 				"multi": true,
 				"name": "ray_id",
 				"options": [],
-				"query": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"query": "SELECT DISTINCT SpanAttributes['ray_id'] FROM otel.otel_traces WHERE SpanAttributes['ray_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
@@ -930,29 +930,17 @@
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"definition": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"description": "",
 				"includeAll": true,
 				"label": "Workflow ID",
 				"multi": true,
 				"name": "workflow_id",
 				"options": [],
-				"query": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND $__conditionalAll(ServiceName, $service_name) LIMIT 1000;",
+				"query": "SELECT DISTINCT SpanAttributes['workflow_id'] FROM otel.otel_traces WHERE SpanAttributes['workflow_id'] != '' AND ServiceName IN (${service_name:singlequote}) LIMIT 1000;",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
-			},
-			{
-				"current": {
-					"text": "30",
-					"value": "30"
-				},
-				"hide": 2,
-				"label": "Metric Export Interval (seconds)",
-				"name": "metric_interval",
-				"query": "30",
-				"skipUrlSync": true,
-				"type": "constant"
 			}
 		]
 	},

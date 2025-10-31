@@ -268,6 +268,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							Main::Lost(Lost {
 								generation: state.generation,
 								force_reschedule: false,
+								reset_rescheduling: false,
 							})
 						}
 					} else if let Some(alarm_ts) = state.alarm_ts {
@@ -372,7 +373,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										protocol::ActorStateStopped { code, .. },
 									) => {
 										if let Some(res) =
-											handle_stopped(ctx, &input, state, Some(code), false, false)
+											handle_stopped(ctx, &input, state, Some(code), None)
 												.await?
 										{
 											return Ok(Loop::Break(res));
@@ -393,7 +394,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									state.sleeping = false;
 									state.will_wake = false;
 
-									match runtime::reschedule_actor(ctx, &input, state, false).await? {
+									match runtime::reschedule_actor(ctx, &input, state, false, false).await? {
 										runtime::SpawnActorOutput::Allocated { .. } => {},
 										runtime::SpawnActorOutput::Sleep => {
 											state.sleeping = true;
@@ -434,7 +435,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 
 							if let Some(res) =
-								handle_stopped(ctx, &input, state, None, true, sig.force_reschedule).await?
+								handle_stopped(ctx, &input, state, None, Some(sig)).await?
 							{
 								return Ok(Loop::Break(res));
 							}
@@ -493,10 +494,9 @@ async fn handle_stopped(
 	input: &Input,
 	state: &mut runtime::LifecycleState,
 	code: Option<protocol::StopCode>,
-	lost: bool,
-	force_reschedule: bool,
+	lost_sig: Option<Lost>,
 ) -> Result<Option<runtime::LifecycleRes>> {
-	tracing::debug!(?code, %force_reschedule, "actor stopped");
+	tracing::debug!(?code, ?lost_sig, "actor stopped");
 
 	// Reset retry count on successful exit
 	if let Some(protocol::StopCode::Ok) = code {
@@ -541,7 +541,7 @@ async fn handle_stopped(
 	}
 
 	// Kill old actor if lost (just in case it ended up allocating)
-	if let (true, Some(old_runner_workflow_id)) = (lost, old_runner_workflow_id) {
+	if let (Some(_), Some(old_runner_workflow_id)) = (&lost_sig, old_runner_workflow_id) {
 		ctx.signal(crate::workflows::runner::Command {
 			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
 				actor_id: input.actor_id.to_string(),
@@ -553,13 +553,24 @@ async fn handle_stopped(
 		.await?;
 	}
 
+	let (force_reschedule, reset_rescheduling) = if let Some(lost_sig) = &lost_sig {
+		(lost_sig.force_reschedule, lost_sig.reset_rescheduling)
+	} else {
+		(false, false)
+	};
+
 	// Reschedule no matter what
 	if force_reschedule {
-		match runtime::reschedule_actor(ctx, &input, state, true).await? {
+		match runtime::reschedule_actor(ctx, &input, state, true, reset_rescheduling).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			// NOTE: This should be unreachable because force_reschedule is true
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
+
+				ctx.activity(runtime::SetSleepingInput {
+					actor_id: input.actor_id,
+				})
+				.await?;
 			}
 			runtime::SpawnActorOutput::Destroy => {
 				// Destroyed early
@@ -578,7 +589,9 @@ async fn handle_stopped(
 
 		match (input.crash_policy, failed) {
 			(CrashPolicy::Restart, true) => {
-				match runtime::reschedule_actor(ctx, &input, state, false).await? {
+				match runtime::reschedule_actor(ctx, &input, state, false, reset_rescheduling)
+					.await?
+				{
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
 					// policy is `Restart`.
@@ -608,7 +621,7 @@ async fn handle_stopped(
 
 				return Ok(Some(runtime::LifecycleRes {
 					generation: state.generation,
-					kill: lost,
+					kill: lost_sig.is_some(),
 				}));
 			}
 		}
@@ -617,7 +630,7 @@ async fn handle_stopped(
 	else if state.will_wake {
 		state.sleeping = false;
 
-		match runtime::reschedule_actor(ctx, &input, state, false).await? {
+		match runtime::reschedule_actor(ctx, &input, state, false, reset_rescheduling).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
@@ -676,10 +689,14 @@ pub struct Event {
 #[signal("pegboard_actor_wake")]
 pub struct Wake {}
 
+#[derive(Debug)]
 #[signal("pegboard_actor_lost")]
 pub struct Lost {
 	pub generation: u32,
+	/// Immediately reschedules the actor regardless of its crash policy.
 	pub force_reschedule: bool,
+	/// Resets the rescheduling retry count to 0.
+	pub reset_rescheduling: bool,
 }
 
 #[signal("pegboard_actor_destroy")]

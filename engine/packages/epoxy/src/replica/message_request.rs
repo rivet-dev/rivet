@@ -1,5 +1,5 @@
 use anyhow::*;
-use epoxy_protocol::protocol::{self, ReplicaId};
+use epoxy_protocol::protocol::{self};
 use gas::prelude::*;
 use rivet_api_builder::prelude::*;
 
@@ -149,6 +149,16 @@ pub async fn message_request(
 			protocol::ResponseKind::KvGetResponse(protocol::KvGetResponse {
 				value: result.value,
 			})
+		}
+		protocol::RequestKind::KvPurgeRequest(req) => {
+			// Handle KV purge request
+			ctx.op(ops::kv::purge_local::Input {
+				replica_id: current_replica_id,
+				keys: req.keys.clone(),
+			})
+			.await?;
+
+			protocol::ResponseKind::KvPurgeResponse
 		}
 	};
 

@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::response::IntoResponse;
-use rivet_api_builder::{ApiError, extract::Extension};
+use rivet_api_builder::extract::Extension;
 use serde_json::json;
 
 use crate::ctx::ApiCtx;

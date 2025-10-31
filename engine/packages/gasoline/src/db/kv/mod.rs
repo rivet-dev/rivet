@@ -2532,7 +2532,7 @@ impl Database for DatabaseKv {
 
 				Ok(())
 			})
-			.custom_instrument(tracing::info_span!("commit_workflow_sleep_event_tx"))
+			.custom_instrument(tracing::info_span!("upsert_loop_event_tx"))
 			.await
 			.map_err(WorkflowError::Udb)?;
 
@@ -2593,7 +2593,7 @@ impl Database for DatabaseKv {
 
 				Ok(())
 			})
-			.custom_instrument(tracing::info_span!("update_workflow_sleep_event_tx"))
+			.custom_instrument(tracing::info_span!("update_workflow_sleep_state_tx"))
 			.await
 			.map_err(WorkflowError::Udb)?;
 

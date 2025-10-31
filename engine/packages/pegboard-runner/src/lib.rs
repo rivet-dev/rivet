@@ -11,7 +11,7 @@ use rivet_guard_core::{
 };
 use rivet_runner_protocol as protocol;
 use std::time::Duration;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
@@ -62,7 +62,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		path: &str,
 		_request_context: &mut RequestContext,
 		_unique_request_id: Uuid,
-	) -> Result<()> {
+	) -> Result<Option<CloseFrame>> {
 		// Get UPS
 		let ups = self.ctx.ups().context("failed to get UPS instance")?;
 
@@ -147,24 +147,30 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		// Send WebSocket close messages to all remaining active requests
 		let active_requests = conn.tunnel_active_requests.lock().await;
 		for (request_id, req) in &*active_requests {
-			let (close_code, close_reason) = if lifecycle_res.is_ok() {
-				(CloseCode::Normal.into(), None)
-			} else {
-				(CloseCode::Error.into(), Some("ws.upstream_closed".into()))
-			};
+			let close_msg_kind = if req.is_ws {
+				let (close_code, close_reason) = if lifecycle_res.is_ok() {
+					(CloseCode::Normal.into(), None)
+				} else {
+					(CloseCode::Error.into(), Some("ws.upstream_closed".into()))
+				};
 
-			let close_message = protocol::ToServerTunnelMessage {
-				request_id: request_id.clone(),
-				message_id: Uuid::new_v4().into_bytes(),
-				message_kind: protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(
+				protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(
 					protocol::ToServerWebSocketClose {
 						code: Some(close_code),
 						reason: close_reason,
+						retry: true,
 					},
-				),
+				)
+			} else {
+				protocol::ToServerTunnelMessageKind::ToServerResponseAbort
+			};
+			let close_message = protocol::ToServerTunnelMessage {
+				request_id: request_id.clone(),
+				message_id: Uuid::new_v4().into_bytes(),
+				message_kind: close_msg_kind,
 			};
 
-			let msg_serialized = protocol::versioned::ToGateway::latest(protocol::ToGateway {
+			let msg_serialized = protocol::versioned::ToGateway::wrap_latest(protocol::ToGateway {
 				message: close_message.clone(),
 			})
 			.serialize_with_embedded_version(protocol::PROTOCOL_VERSION)
@@ -188,6 +194,6 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		}
 
 		// This will determine the close frame sent back to the runner websocket
-		lifecycle_res
+		lifecycle_res.map(|_| None)
 	}
 }

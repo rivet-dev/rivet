@@ -358,7 +358,7 @@ impl PubSubDriver for PostgresDriver {
 		// Retry getting a connection from the pool with backoff in case the connection is
 		// currently disconnected
 		let mut backoff = Backoff::default();
-		let mut last_error = None;
+		let mut last_error;
 
 		loop {
 			match self.pool.get().await {

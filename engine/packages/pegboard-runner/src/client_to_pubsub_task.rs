@@ -35,7 +35,7 @@ pub async fn task(
 				// Parse message
 				let msg =
 					match versioned::ToServer::deserialize_version(&data, conn.protocol_version)
-						.and_then(|x| x.into_latest())
+						.and_then(|x| x.unwrap_latest())
 					{
 						Ok(x) => x,
 						Err(err) => {
@@ -95,7 +95,7 @@ async fn handle_message(
 			let actor_id = match Id::parse(&req.actor_id) {
 				Ok(actor_id) => actor_id,
 				Err(err) => {
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: protocol::KvResponseData::KvErrorResponse(
@@ -132,16 +132,16 @@ async fn handle_message(
 
 			// Verify actor belongs to this runner
 			if !actor_belongs {
-				let res_msg = versioned::ToClient::latest(protocol::ToClient::ToClientKvResponse(
-					protocol::ToClientKvResponse {
+				let res_msg = versioned::ToClient::wrap_latest(
+					protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 						request_id: req.request_id,
 						data: protocol::KvResponseData::KvErrorResponse(
 							protocol::KvErrorResponse {
 								message: "given actor does not belong to runner".to_string(),
 							},
 						),
-					},
-				));
+					}),
+				);
 
 				let res_msg_serialized = res_msg
 					.serialize(conn.protocol_version)
@@ -160,7 +160,7 @@ async fn handle_message(
 				protocol::KvRequestData::KvGetRequest(body) => {
 					let res = kv::get(&*ctx.udb()?, actor_id, body.keys).await;
 
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: match res {
@@ -204,7 +204,7 @@ async fn handle_message(
 					)
 					.await;
 
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: match res {
@@ -238,7 +238,7 @@ async fn handle_message(
 				protocol::KvRequestData::KvPutRequest(body) => {
 					let res = kv::put(&*ctx.udb()?, actor_id, body.keys, body.values).await;
 
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: match res {
@@ -266,7 +266,7 @@ async fn handle_message(
 				protocol::KvRequestData::KvDeleteRequest(body) => {
 					let res = kv::delete(&*ctx.udb()?, actor_id, body.keys).await;
 
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: match res {
@@ -292,7 +292,7 @@ async fn handle_message(
 				protocol::KvRequestData::KvDropRequest => {
 					let res = kv::delete_all(&*ctx.udb()?, actor_id).await;
 
-					let res_msg = versioned::ToClient::latest(
+					let res_msg = versioned::ToClient::wrap_latest(
 						protocol::ToClient::ToClientKvResponse(protocol::ToClientKvResponse {
 							request_id: req.request_id,
 							data: match res {
@@ -368,7 +368,7 @@ async fn handle_tunnel_message(
 	}
 
 	// Publish message to UPS
-	let msg_serialized = versioned::ToGateway::latest(protocol::ToGateway { message: msg })
+	let msg_serialized = versioned::ToGateway::wrap_latest(protocol::ToGateway { message: msg })
 		.serialize_with_embedded_version(PROTOCOL_VERSION)
 		.context("failed to serialize tunnel message for gateway")?;
 	ctx.ups()

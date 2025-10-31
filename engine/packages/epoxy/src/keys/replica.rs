@@ -52,7 +52,7 @@ impl FormalKey for LogEntryKey {
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		epoxy_protocol::versioned::LogEntry::latest(value)
+		epoxy_protocol::versioned::LogEntry::wrap_latest(value)
 			.serialize_with_embedded_version(epoxy_protocol::PROTOCOL_VERSION)
 	}
 }
@@ -162,7 +162,7 @@ impl FormalKey for ConfigKey {
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		epoxy_protocol::versioned::ClusterConfig::latest(value)
+		epoxy_protocol::versioned::ClusterConfig::wrap_latest(value)
 			.serialize_with_embedded_version(epoxy_protocol::PROTOCOL_VERSION)
 	}
 }
@@ -223,7 +223,7 @@ impl FormalKey for CurrentBallotKey {
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		epoxy_protocol::versioned::Ballot::latest(value)
+		epoxy_protocol::versioned::Ballot::wrap_latest(value)
 			.serialize_with_embedded_version(epoxy_protocol::PROTOCOL_VERSION)
 	}
 }
@@ -262,7 +262,7 @@ impl FormalKey for InstanceBallotKey {
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		epoxy_protocol::versioned::Ballot::latest(value)
+		epoxy_protocol::versioned::Ballot::wrap_latest(value)
 			.serialize_with_embedded_version(epoxy_protocol::PROTOCOL_VERSION)
 	}
 }

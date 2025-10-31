@@ -135,7 +135,7 @@ pub async fn send_message_to_address(
 	let client = rivet_pools::reqwest::client().await?;
 
 	// Create the request
-	let request = versioned::Request::latest(request);
+	let request = versioned::Request::wrap_latest(request);
 
 	// Send the request
 	let response_result = client

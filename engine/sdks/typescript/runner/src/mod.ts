@@ -8,7 +8,7 @@ import { importWebSocket } from "./websocket.js";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 1;
+const PROTOCOL_VERSION: number = 2;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -62,7 +62,13 @@ export interface RunnerConfig {
 		config: ActorConfig,
 	) => Promise<void>;
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
+	getActorHibernationConfig: (actorId: string, requestId: ArrayBuffer) => HibernationConfig;
 	noAutoShutdown?: boolean;
+}
+
+export interface HibernationConfig {
+	enabled: boolean;
+	lastMsgIndex: number | undefined;
 }
 
 export interface KvListOptions {
@@ -1358,28 +1364,22 @@ export class Runner {
 			return;
 		}
 
-		logger()?.debug({
-			msg: "------------ SEND",
-		});
-
 		const encoded = protocol.encodeToServer(message);
 		if (
 			this.#pegboardWebSocket &&
 			this.#pegboardWebSocket.readyState === 1
 		) {
-			logger()?.debug({
-				msg: "------------ SEND 2",
-			});
 			this.#pegboardWebSocket.send(encoded);
-			logger()?.debug({
-				msg: "------------ SEND 3",
-			});
 		} else {
 			logger()?.error({
 				msg: "WebSocket not available or not open for sending data",
 				runnerId: this.runnerId,
 			});
 		}
+	}
+
+	sendWebsocketMessageAck(requestId: ArrayBuffer, index: number) {
+		this.#tunnel?.__ackWebsocketMessage(requestId, index);
 	}
 
 	getServerlessInitPacket(): string | undefined {

@@ -2,7 +2,7 @@ use anyhow::Result;
 use epoxy_protocol::protocol;
 use universaldb::Transaction;
 
-use crate::replica::{ballot, messages, utils};
+use crate::replica::ballot;
 
 // EPaxos Step 16
 #[tracing::instrument(skip_all)]

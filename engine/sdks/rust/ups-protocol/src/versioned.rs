@@ -10,11 +10,11 @@ pub enum UpsMessage {
 impl OwnedVersionedData for UpsMessage {
 	type Latest = v1::UpsMessage;
 
-	fn latest(latest: v1::UpsMessage) -> Self {
+	fn wrap_latest(latest: v1::UpsMessage) -> Self {
 		UpsMessage::V1(latest)
 	}
 
-	fn into_latest(self) -> Result<Self::Latest> {
+	fn unwrap_latest(self) -> Result<Self::Latest> {
 		#[allow(irrefutable_let_patterns)]
 		if let UpsMessage::V1(data) = self {
 			Ok(data)
