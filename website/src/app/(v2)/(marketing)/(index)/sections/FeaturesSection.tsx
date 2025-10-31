@@ -70,7 +70,7 @@ export function FeaturesSection() {
 		<section className="w-full py-24">
 			<div className="mx-auto max-w-7xl">
 				<div className="text-center mb-16">
-					<h2 className="text-4xl sm:text-5xl font-700 text-white mb-6">
+					<h2 className="text-2xl sm:text-3xl font-700 text-white mb-6">
 						Built for Modern Applications
 					</h2>
 					<p className="text-lg sm:text-xl font-500 text-white/60 max-w-2xl mx-auto">

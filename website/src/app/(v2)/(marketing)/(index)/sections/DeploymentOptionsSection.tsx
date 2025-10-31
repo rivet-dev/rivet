@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CopyCommand } from "../components/CopyCommand";
+import { MarketingButton } from "../components/MarketingButton";
 
 interface DeploymentOptionProps {
 	title: string;
@@ -22,68 +23,75 @@ export function DeploymentOptionsSection() {
 		<section className="w-full">
 			<div className="mx-auto max-w-7xl">
 				<div className="text-center mb-16">
-					<h2 className="text-4xl sm:text-5xl font-700 text-white mb-6">
+					<h2 className="text-2xl sm:text-3xl font-700 text-white mb-6">
 						Run It Your Way
 					</h2>
-					<p className="text-lg sm:text-xl font-500 text-white/60 max-w-2xl mx-auto">
-						Deploy Rivet however works best for your team, from local development to production at scale.
-					</p>
 				</div>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
 					<DeploymentOption
-						title="Local Development"
-						description="Just an npm package. No CLI or Docker container to install and learn. Get started in seconds with your existing JavaScript toolchain."
-					/>
-
-					<DeploymentOption
-						title="Rivet Cloud with Bring Your Own Cloud"
-						description="Dead simple to connect to your existing cloud infrastructure. We handle the orchestration, you keep control of your data and infrastructure."
+						title="Rivet Cloud"
+						description="Build on any cloud while we manage the Actors for you."
 					>
 						<div className="flex flex-col gap-3 mt-4">
 							<Link
-								href="https://hub.rivet.gg/sign-in"
-								className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm group"
-								target="_blank"
-								rel="noopener noreferrer"
+								href="/dashboard"
+								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
 							>
 								Sign In with Rivet
 								<span className="transition-transform group-hover:translate-x-1">→</span>
 							</Link>
+						</div>
+					</DeploymentOption>
+
+					<DeploymentOption
+						title="On-prem/hybrid cloud"
+						description="Enterprise grade Rivet for wherever you need it."
+					>
+						<div className="flex flex-col gap-3 mt-4">
 							<Link
-								href="/pricing"
-								className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm group"
+								href="/docs/general/self-hosting"
+								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
 							>
-								View Pricing
+								Contact Sales
 								<span className="transition-transform group-hover:translate-x-1">→</span>
 							</Link>
 						</div>
 					</DeploymentOption>
 
 					<DeploymentOption
-						title="Self-Host"
-						description="Scalable self-hosted deployments. Just a single Docker container or Rust binary connected with Postgres, FoundationDB, or filesystem."
+						title="Rivet Open-Source"
+						description="Rivet is open-source Apache 2.0 and easy to build with."
 					>
-						<div className="mt-4">
+						<div className="flex flex-col gap-3 mt-4">
 							<Link
-								href="/docs/general/self-hosting"
-								className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm mb-4 group"
+								href="https://github.com/rivet-dev/rivet"
+								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
+								target="_blank"
+								rel="noopener noreferrer"
 							>
-								View Self-Hosting Docs
+								Get the source code
 								<span className="transition-transform group-hover:translate-x-1">→</span>
 							</Link>
-							<div className="mt-3">
-								<CopyCommand command="docker run -p 6420:6420 rivetkit/engine" />
-							</div>
 						</div>
 					</DeploymentOption>
 				</div>
 
-				<div className="text-center p-6 border border-white/10 rounded-xl bg-white/[0.01]">
-					<h4 className="text-lg font-semibold text-white mb-2">Hybrid Deployment</h4>
-					<p className="text-white/60">
-						Run in Rivet Cloud for production, use self-hosting for on-premises deployments
-					</p>
+				<div className="mt-12">
+					<DeploymentOption
+						title="Local Development"
+						description="Just an npm package. No CLI or Docker container to install and learn. Get started in seconds with your existing JavaScript toolchain."
+					>
+						<div className="flex flex-col gap-3 mt-4">
+							<Link
+								href="/docs/getting-started"
+								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
+							>
+								Quickstart
+								<span className="transition-transform group-hover:translate-x-1">→</span>
+							</Link>
+						</div>
+					</DeploymentOption>
 				</div>
 			</div>
 		</section>
