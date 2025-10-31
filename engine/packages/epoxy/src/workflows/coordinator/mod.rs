@@ -40,6 +40,12 @@ pub async fn epoxy_coordinator(ctx: &mut WorkflowCtx, _input: &Input) -> Result<
 				Main::ReplicaReconfigure(_) => {
 					replica_status_change::replica_reconfigure(ctx).await?;
 				}
+				Main::OverrideState(sig) => {
+					ctx.activity(OverrideStateActivityInput { config: sig.config })
+						.await?;
+
+					reconfigure::reconfigure(ctx).await?;
+				}
 			}
 
 			Ok(Loop::<()>::Continue)
@@ -67,6 +73,21 @@ pub async fn check_config_changes(ctx: &ActivityCtx, _input: &InitInput) -> Resu
 	Ok(())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct OverrideStateActivityInput {
+	pub config: types::ClusterConfig,
+}
+
+#[activity(OverrideStateActivity)]
+pub async fn override_state_activity(
+	ctx: &ActivityCtx,
+	input: &OverrideStateActivityInput,
+) -> Result<()> {
+	let mut state = ctx.state::<State>()?;
+	state.config = input.config.clone();
+	Ok(())
+}
+
 #[message("epoxy_coordinator_config_update")]
 pub struct ConfigChangeMessage {
 	pub config: types::ClusterConfig,
@@ -87,8 +108,14 @@ pub struct ReplicaStatusChange {
 #[signal("epoxy_coordinator_replica_reconfigure")]
 pub struct ReplicaReconfigure {}
 
+#[signal("epoxy_coordinator_override_state")]
+pub struct OverrideState {
+	pub config: types::ClusterConfig,
+}
+
 join_signal!(Main {
 	Reconfigure,
 	ReplicaStatusChange,
 	ReplicaReconfigure,
+	OverrideState,
 });
