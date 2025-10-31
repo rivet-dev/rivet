@@ -65,17 +65,26 @@ pub fn compare_ballots(
 	))
 }
 
+/// Result of ballot validation with detailed context for error reporting
+#[derive(Debug)]
+pub struct BallotValidationResult {
+	pub is_valid: bool,
+	pub incoming_ballot: protocol::Ballot,
+	pub stored_ballot: protocol::Ballot,
+	pub comparison: std::cmp::Ordering,
+}
+
 /// Validate that a ballot is the highest seen for the given instance & updates the highest stored
 /// ballot if needed.
 ///
-/// Returns true if the ballot is valid (higher than previously seen).
+/// Returns detailed validation result including comparison information.
 #[tracing::instrument(skip_all)]
 pub async fn validate_and_update_ballot_for_instance(
 	tx: &Transaction,
 	replica_id: protocol::ReplicaId,
 	ballot: &protocol::Ballot,
 	instance: &protocol::Instance,
-) -> Result<bool> {
+) -> Result<BallotValidationResult> {
 	let instance_ballot_key =
 		keys::replica::InstanceBallotKey::new(instance.replica_id, instance.slot_id);
 	let subspace = keys::subspace(replica_id);
@@ -98,18 +107,24 @@ pub async fn validate_and_update_ballot_for_instance(
 	};
 
 	// Compare incoming ballot with highest seen - only accept if strictly greater
-	let is_valid = match compare_ballots(ballot, &highest_ballot) {
+	let comparison = compare_ballots(ballot, &highest_ballot);
+	let is_valid = match comparison {
 		std::cmp::Ordering::Greater => true,
 		std::cmp::Ordering::Equal | std::cmp::Ordering::Less => false,
 	};
 
 	// If the incoming ballot is higher, update our stored highest
-	if compare_ballots(ballot, &highest_ballot) == std::cmp::Ordering::Greater {
+	if comparison == std::cmp::Ordering::Greater {
 		let serialized = instance_ballot_key.serialize(ballot.clone())?;
 		tx.set(&packed_key, &serialized);
 
 		tracing::debug!(?ballot, ?instance, "updated highest ballot for instance");
 	}
 
-	Ok(is_valid)
+	Ok(BallotValidationResult {
+		is_valid,
+		incoming_ballot: ballot.clone(),
+		stored_ballot: highest_ballot,
+		comparison,
+	})
 }

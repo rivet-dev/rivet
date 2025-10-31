@@ -21,10 +21,17 @@ pub async fn accept(
 
 	// Validate ballot
 	let current_ballot = ballot::get_ballot(tx, replica_id).await?;
-	let is_valid =
+	let validation =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &current_ballot, &instance)
 			.await?;
-	ensure!(is_valid, "ballot validation failed for pre_accept");
+	ensure!(
+		validation.is_valid,
+		"ballot validation failed for accept: incoming ballot {:?} is not greater than stored ballot {:?} for instance {:?} (comparison: {:?})",
+		validation.incoming_ballot,
+		validation.stored_ballot,
+		instance,
+		validation.comparison
+	);
 
 	// EPaxos Step 18
 	let log_entry = protocol::LogEntry {

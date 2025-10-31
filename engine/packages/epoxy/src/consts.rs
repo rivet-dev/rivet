@@ -28,10 +28,10 @@ pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 ///
 /// Our current impl is incredily slow since we do not parallelize downloads.
 ///
-/// Assume we have 10M keys with a 50k chunk size. This results in 200 round trips.
+/// Assume we have 10M keys with a 5k chunk size. This results in 2000 round trips.
 ///
-/// If we have a latency of 200 ms (worst case), this takes 40 seconds total to propagate.
-pub const DOWNLOAD_INSTANCE_COUNT: u64 = 50_000;
+/// If we have a latency of 200 ms (worst case), this takes 400 seconds total to propagate.
+pub const DOWNLOAD_INSTANCE_COUNT: u64 = 5_000;
 
 /// Number of keys to recover in a single chunk during the recovery process.
 ///
