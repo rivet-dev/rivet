@@ -1,6 +1,7 @@
 import type {
 	ActorConfig as EngineActorConfig,
 	RunnerConfig as EngineRunnerConfig,
+	HibernationConfig,
 } from "@rivetkit/engine-runner";
 import { Runner } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
@@ -9,12 +10,14 @@ import { streamSSE } from "hono/streaming";
 import { WSContext } from "hono/ws";
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
+import { PERSIST_SYMBOL } from "@/actor/instance";
 import { deserializeActorKey } from "@/actor/keys";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
 	handleRawWebSocketHandler,
 	handleWebSocketConnect,
+	truncateRawWebSocketPathPrefix,
 } from "@/actor/router-endpoints";
 import type { Client } from "@/client/client";
 import {
@@ -37,6 +40,7 @@ import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
+	arrayBuffersEqual,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -137,6 +141,130 @@ export class EngineActorDriver implements ActorDriver {
 			onActorStart: this.#runnerOnActorStart.bind(this),
 			onActorStop: this.#runnerOnActorStop.bind(this),
 			logger: getLogger("engine-runner"),
+			getActorHibernationConfig: (
+				actorId: string,
+				requestId: ArrayBuffer,
+				request: Request,
+			): HibernationConfig => {
+				const url = new URL(request.url);
+				const path = url.pathname;
+
+				// Get actor instance from runner to access actor name
+				const actorInstance = this.#runner.getActor(actorId);
+				if (!actorInstance) {
+					logger().warn({
+						msg: "actor not found in getActorHibernationConfig",
+						actorId,
+					});
+					return { enabled: false, lastMsgIndex: undefined };
+				}
+
+				// Load actor handler to access persisted data
+				const handler = this.#actors.get(actorId);
+				if (!handler) {
+					logger().warn({
+						msg: "actor handler not found in getActorHibernationConfig",
+						actorId,
+					});
+					return { enabled: false, lastMsgIndex: undefined };
+				}
+				if (!handler.actor) {
+					logger().warn({
+						msg: "actor not found in getActorHibernationConfig",
+						actorId,
+					});
+					return { enabled: false, lastMsgIndex: undefined };
+				}
+
+				// Check for existing WS
+				const existingWs = handler.actor[
+					PERSIST_SYMBOL
+				].hibernatableWebSocket.find((ws) =>
+					arrayBuffersEqual(ws.requestId, requestId),
+				);
+
+				// Determine configuration for new WS
+				let hibernationConfig: HibernationConfig;
+				if (existingWs) {
+					hibernationConfig = {
+						enabled: true,
+						lastMsgIndex: Number(existingWs.msgIndex),
+					};
+				} else {
+					if (path === PATH_CONNECT_WEBSOCKET) {
+						hibernationConfig = {
+							enabled: true,
+							lastMsgIndex: undefined,
+						};
+					} else if (path.startsWith(PATH_RAW_WEBSOCKET_PREFIX)) {
+						// Find actor config
+						const definition = lookupInRegistry(
+							this.#registryConfig,
+							actorInstance.config.name,
+						);
+
+						// Check if can hibernate
+						const canHibernatWebSocket =
+							definition.config.options?.canHibernatWebSocket;
+						if (canHibernatWebSocket === true) {
+							hibernationConfig = {
+								enabled: true,
+								lastMsgIndex: undefined,
+							};
+						} else if (typeof canHibernatWebSocket === "function") {
+							try {
+								// Truncate the path to match the behavior on onRawWebSocket
+								const newPath = truncateRawWebSocketPathPrefix(
+									url.pathname,
+								);
+								const truncatedRequest = new Request(
+									`http://actor${newPath}`,
+									request,
+								);
+
+								const canHibernate =
+									canHibernatWebSocket(truncatedRequest);
+								hibernationConfig = {
+									enabled: canHibernate,
+									lastMsgIndex: undefined,
+								};
+							} catch (error) {
+								logger().error({
+									msg: "error calling canHibernatWebSocket",
+									error,
+								});
+								hibernationConfig = {
+									enabled: false,
+									lastMsgIndex: undefined,
+								};
+							}
+						} else {
+							hibernationConfig = {
+								enabled: false,
+								lastMsgIndex: undefined,
+							};
+						}
+					} else {
+						logger().warn({
+							msg: "unexpected path for getActorHibernationConfig",
+							path,
+						});
+						hibernationConfig = {
+							enabled: false,
+							lastMsgIndex: undefined,
+						};
+					}
+				}
+
+				// Save hibernatable WebSocket
+				handler.actor[PERSIST_SYMBOL].hibernatableWebSocket.push({
+					requestId,
+					lastSeenTimestamp: BigInt(Date.now()),
+					msgIndex: -1n,
+				});
+
+				return hibernationConfig;
+			},
 		};
 
 		// Create and start runner

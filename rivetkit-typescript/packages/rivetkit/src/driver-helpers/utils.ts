@@ -15,6 +15,7 @@ export function serializeEmptyPersistData(
 		state: bufferToArrayBuffer(cbor.encode(undefined)),
 		connections: [],
 		scheduledEvents: [],
+		hibernatableWebSocket: [],
 	};
 	return PERSISTED_ACTOR_VERSIONED.serializeWithEmbeddedVersion(persistData);
 }

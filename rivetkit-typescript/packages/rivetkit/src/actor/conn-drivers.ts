@@ -5,6 +5,7 @@ import type { AnyConn } from "@/actor/conn";
 import type { AnyActorInstance } from "@/actor/instance";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
 import { encodeDataToString } from "@/actor/protocol/serde";
+import type { HonoWebSocketAdapter } from "@/manager/hono-websocket-adapter";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { assertUnreachable, type promiseWithResolvers } from "@/utils";
 
@@ -67,6 +68,15 @@ export interface ConnDriver<State> {
 		conn: AnyConn,
 		state: State,
 	): ConnReadyState | undefined;
+
+	/**
+	 * If the underlying connection can hibernate.
+	 */
+	isHibernatable(
+		actor: AnyActorInstance,
+		conn: AnyConn,
+		state: State,
+	): boolean;
 }
 
 // MARK: WebSocket
@@ -140,6 +150,22 @@ const WEBSOCKET_DRIVER: ConnDriver<ConnDriverWebSocketState> = {
 	): ConnReadyState | undefined => {
 		return state.websocket.readyState;
 	},
+
+	isHibernatable(
+		_actor: AnyActorInstance,
+		_conn: AnyConn,
+		state: ConnDriverWebSocketState,
+	): boolean {
+		// Extract isHibernatable from the HonoWebSocketAdapter
+		if (state.websocket.raw) {
+			const raw = state.websocket.raw as HonoWebSocketAdapter;
+			if (typeof raw.isHibernatable === "boolean") {
+				return raw.isHibernatable;
+			}
+		}
+
+		return false;
+	},
 };
 
 // MARK: SSE
@@ -175,6 +201,10 @@ const SSE_DRIVER: ConnDriver<ConnDriverSseState> = {
 
 		return ConnReadyState.OPEN;
 	},
+
+	isHibernatable(): boolean {
+		return false;
+	},
 };
 
 // MARK: HTTP
@@ -186,6 +216,9 @@ const HTTP_DRIVER: ConnDriver<ConnDriverHttpState> = {
 	disconnect: async () => {
 		// Noop
 		// TODO: Abort the request
+	},
+	isHibernatable(): boolean {
+		return false;
 	},
 };
 

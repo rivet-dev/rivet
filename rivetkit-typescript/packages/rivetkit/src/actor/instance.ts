@@ -15,6 +15,7 @@ import { PERSISTED_ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {
+	arrayBuffersEqual,
 	bufferToArrayBuffer,
 	getEnvUniversal,
 	promiseWithResolvers,
@@ -45,12 +46,15 @@ import { serializeActorKey } from "./keys";
 import type {
 	PersistedActor,
 	PersistedConn,
+	PersistedHibernatableWebSocket,
 	PersistedScheduleEvent,
 } from "./persisted";
 import { processMessage } from "./protocol/old";
 import { CachedSerializer } from "./protocol/serde";
 import { Schedule } from "./schedule";
 import { DeadlineError, deadline } from "./utils";
+
+export const PERSIST_SYMBOL = Symbol("persist");
 
 /**
  * Options for the `_saveState` method.
@@ -157,6 +161,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * Any data that should be stored indefinitely should be held within this object.
 	 */
 	#persist!: PersistedActor<S, CP, CS, I>;
+
+	get [PERSIST_SYMBOL](): PersistedActor<S, CP, CS, I> {
+		return this.#persist;
+	}
 
 	/** Raw state without the proxy wrapper */
 	#persistRaw!: PersistedActor<S, CP, CS, I>;
@@ -1534,17 +1542,116 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#activeRawWebSockets.add(websocket);
 			this.#resetSleepTimer();
 
-			// Track socket close
-			const onSocketClosed = () => {
+			// Track hibernatable WebSockets
+			let rivetRequestId: ArrayBuffer | undefined;
+			let persistedHibernatableWebSocket:
+				| PersistedHibernatableWebSocket
+				| undefined;
+
+			const onSocketOpened = (event: any) => {
+				rivetRequestId = event?.rivetRequestId;
+
+				// Find hibernatable WS
+				if (rivetRequestId) {
+					const rivetRequestIdLocal = rivetRequestId;
+					persistedHibernatableWebSocket =
+						this.#persist.hibernatableWebSocket.find((ws) =>
+							arrayBuffersEqual(
+								ws.requestId,
+								rivetRequestIdLocal,
+							),
+						);
+
+					if (persistedHibernatableWebSocket) {
+						persistedHibernatableWebSocket.lastSeenTimestamp =
+							BigInt(Date.now());
+					}
+				}
+
+				this.#rLog.debug({
+					msg: "actor instance onSocketOpened",
+					rivetRequestId,
+					isHibernatable: !!persistedHibernatableWebSocket,
+					hibernationMsgIndex:
+						persistedHibernatableWebSocket?.msgIndex,
+				});
+			};
+
+			const onSocketMessage = (event: any) => {
+				// Update state of hibernatable WS
+				if (persistedHibernatableWebSocket) {
+					persistedHibernatableWebSocket.lastSeenTimestamp = BigInt(
+						Date.now(),
+					);
+					persistedHibernatableWebSocket.msgIndex = BigInt(
+						event.rivetMessageIndex,
+					);
+				}
+
+				this.#rLog.debug({
+					msg: "actor instance onSocketMessage",
+					rivetRequestId,
+					isHibernatable: !!persistedHibernatableWebSocket,
+					hibernationMsgIndex:
+						persistedHibernatableWebSocket?.msgIndex,
+				});
+			};
+
+			const onSocketClosed = (_event: any) => {
+				// Remove hibernatable WS
+				if (rivetRequestId) {
+					const rivetRequestIdLocal = rivetRequestId;
+					const wsIndex =
+						this.#persist.hibernatableWebSocket.findIndex((ws) =>
+							arrayBuffersEqual(
+								ws.requestId,
+								rivetRequestIdLocal,
+							),
+						);
+
+					const removed = this.#persist.hibernatableWebSocket.splice(
+						wsIndex,
+						1,
+					);
+					if (removed.length > 0) {
+						this.#rLog.debug({
+							msg: "removed hibernatable websocket",
+							rivetRequestId,
+							hibernationMsgIndex:
+								persistedHibernatableWebSocket?.msgIndex,
+						});
+					} else {
+						this.#rLog.warn({
+							msg: "could not find hibernatable websocket to remove",
+							rivetRequestId,
+							hibernationMsgIndex:
+								persistedHibernatableWebSocket?.msgIndex,
+						});
+					}
+				}
+
+				this.#rLog.debug({
+					msg: "actor instance onSocketMessage",
+					rivetRequestId,
+					isHibernatable: !!persistedHibernatableWebSocket,
+					hibernatableWebSocketCount:
+						this.#persist.hibernatableWebSocket.length,
+				});
+
 				// Remove listener and socket from tracking
 				try {
+					websocket.removeEventListener("open", onSocketOpened);
+					websocket.removeEventListener("message", onSocketMessage);
 					websocket.removeEventListener("close", onSocketClosed);
 					websocket.removeEventListener("error", onSocketClosed);
 				} catch {}
 				this.#activeRawWebSockets.delete(websocket);
 				this.#resetSleepTimer();
 			};
+
 			try {
+				websocket.addEventListener("open", onSocketOpened);
+				websocket.addEventListener("message", onSocketMessage);
 				websocket.addEventListener("close", onSocketClosed);
 				websocket.addEventListener("error", onSocketClosed);
 			} catch {}
@@ -1794,7 +1901,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Check for active conns. This will also cover active actions, since all actions have a connection.
 		for (const conn of this.#connections.values()) {
-			if (conn.status === "connected") return false;
+			if (conn.status === "connected" && !conn.isHibernatable)
+				return false;
 		}
 
 		// Do not sleep if raw fetches are in-flight
@@ -1980,6 +2088,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					},
 				},
 			})),
+			hibernatableWebSocket: persist.hibernatableWebSocket.map((ws) => ({
+				requestId: ws.requestId,
+				lastSeenTimestamp: ws.lastSeenTimestamp,
+				msgIndex: ws.msgIndex,
+			})),
 		};
 	}
 
@@ -2011,6 +2124,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						args: event.kind.val.args,
 					},
 				},
+			})),
+			hibernatableWebSocket: bareData.hibernatableWebSocket.map((ws) => ({
+				requestId: ws.requestId,
+				lastSeenTimestamp: ws.lastSeenTimestamp,
+				msgIndex: ws.msgIndex,
 			})),
 		};
 	}
