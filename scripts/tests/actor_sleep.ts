@@ -17,6 +17,8 @@ async function main() {
 		console.log("Actor created:", actorResponse.actor);
 
 		for (let i = 0; i < 10; i++) {
+			await testWebSocket(actorResponse.actor.actor_id);
+
 			console.log("Sleeping actor...");
 			const actorSleepResponse = await fetch(`${RIVET_ENDPOINT}/sleep`, {
 				method: "GET",
@@ -38,7 +40,6 @@ async function main() {
 			// await new Promise(resolve => setTimeout(resolve, 2000));
 		}
 
-
 		// Make a request to the actor
 		console.log("Making request to actor...");
 		const actorPingResponse = await fetch(`${RIVET_ENDPOINT}/ping`, {
@@ -59,8 +60,6 @@ async function main() {
 		}
 
 		console.log("Actor ping response:", pingResult);
-
-		// await testWebSocket(actorResponse.actor.actor_id);
 	} catch (error) {
 		console.error(`Actor test failed:`, error);
 	}
@@ -89,14 +88,6 @@ function testWebSocket(actorId: string): Promise<void> {
 
 		let pingReceived = false;
 		let echoReceived = false;
-		const timeout = setTimeout(() => {
-			console.log(
-				"No response received within timeout, but connection was established",
-			);
-			// Connection was established, that's enough for the test
-			ws.close();
-			resolve();
-		}, 2000);
 
 		ws.addEventListener("open", () => {
 			console.log("WebSocket connected");
@@ -126,21 +117,18 @@ function testWebSocket(actorId: string): Promise<void> {
 				console.log("Echo test successful!");
 
 				// All tests passed
-				clearTimeout(timeout);
 				ws.close();
 				resolve();
 			}
 		});
 
-		ws.addEventListener("error", (error) => {
-			clearTimeout(timeout);
-			reject(new Error(`WebSocket error: ${error.message}`));
+		ws.addEventListener("error", (event) => {
+			reject(new Error(`WebSocket error: ${event}`));
 		});
 
-		ws.addEventListener("close", () => {
-			clearTimeout(timeout);
+		ws.addEventListener("close", event => {
 			if (!pingReceived || !echoReceived) {
-				reject(new Error("WebSocket closed before completing tests"));
+				reject(new Error(`WebSocket closed before completing tests: ${event.code} (${event.reason}) ${new Date().toISOString()}`));
 			}
 		});
 	});

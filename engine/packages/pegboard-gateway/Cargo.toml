@@ -12,6 +12,7 @@ bytes.workspace = true
 futures-util.workspace = true
 gas.workspace = true
 http-body-util.workspace = true
+# TODO: Doesn't match workspace version
 hyper = "1.6"
 hyper-tungstenite.workspace = true
 pegboard.workspace = true
@@ -20,7 +21,9 @@ rivet-error.workspace = true
 rivet-guard-core.workspace = true
 rivet-runner-protocol.workspace = true
 rivet-util.workspace = true
+scc.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
