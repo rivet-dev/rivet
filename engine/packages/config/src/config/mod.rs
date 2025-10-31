@@ -95,6 +95,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub telemetry: Telemetry,
+
+	#[serde(default)]
+	pub allow_version_rollback: bool,
 }
 
 impl Default for Root {
@@ -112,6 +115,7 @@ impl Default for Root {
 			clickhouse: None,
 			vector_http: None,
 			telemetry: Default::default(),
+			allow_version_rollback: false,
 		}
 	}
 }
