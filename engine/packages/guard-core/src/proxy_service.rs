@@ -717,8 +717,17 @@ impl ProxyService {
 			None
 		};
 
-		// Extract IP address from remote_addr
-		let client_ip = self.remote_addr.ip();
+		// Extract IP address from X-Forwarded-For header or fall back to remote_addr
+		let client_ip = req
+			.headers()
+			.get(X_FORWARDED_FOR)
+			.and_then(|h| h.to_str().ok())
+			.and_then(|forwarded| {
+				// X-Forwarded-For can be a comma-separated list, take the first IP
+				forwarded.split(',').next().map(|s| s.trim())
+			})
+			.and_then(|ip_str| ip_str.parse::<std::net::IpAddr>().ok())
+			.unwrap_or_else(|| self.remote_addr.ip());
 
 		// Apply rate limiting
 		if !self
@@ -726,7 +735,13 @@ impl ProxyService {
 			.check_rate_limit(client_ip, &actor_id, req.headers())
 			.await?
 		{
-			return Err(errors::RateLimit.build());
+			return Err(errors::RateLimit {
+				actor_id,
+				method: req.method().to_string(),
+				path: path.clone(),
+				ip: client_ip.to_string(),
+			}
+			.build());
 		}
 
 		// Check in-flight limit
@@ -735,7 +750,13 @@ impl ProxyService {
 			.acquire_in_flight(client_ip, &actor_id, req.headers())
 			.await?
 		{
-			return Err(errors::RateLimit.build());
+			return Err(errors::RateLimit {
+				actor_id,
+				method: req.method().to_string(),
+				path: path.clone(),
+				ip: client_ip.to_string(),
+			}
+			.build());
 		}
 
 		// Increment metrics
