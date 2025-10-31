@@ -263,3 +263,9 @@ export function arrayBuffersEqual(
 	}
 	return true;
 }
+
+export const EXTRA_ERROR_LOG = {
+	issues: "https://github.com/rivet-dev/rivetkit/issues",
+	support: "https://rivet.dev/discord",
+	version: VERSION,
+};
