@@ -10,7 +10,7 @@ export function CTASection() {
 
 			<div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
 				<MarketingButton 
-					href="/dashboard"
+					href="/docs/quickstart/"
 					primary
 				>
 					Get Started
