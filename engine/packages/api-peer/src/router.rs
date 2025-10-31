@@ -36,9 +36,11 @@ pub async fn router(
 				post(internal::bump_serverless_autoscaler),
 			)
 			.route(
-				"/epoxy/replica-reconfigure",
+				"/epoxy/coordinator/replica-reconfigure",
 				post(internal::epoxy_replica_reconfigure),
 			)
+			.route("/epoxy/coordinator/state", get(internal::get_epoxy_state))
+			.route("/epoxy/coordinator/state", post(internal::set_epoxy_state))
 			.route("/debug/tracing/config", put(internal::set_tracing_config))
 	})
 	.await
