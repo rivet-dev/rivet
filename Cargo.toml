@@ -371,6 +371,9 @@ path = "engine/packages/test-deps-docker"
 [workspace.dependencies.rivet-tracing-reconfigure]
 path = "engine/packages/tracing-reconfigure"
 
+[workspace.dependencies.rivet-tracing-utils]
+path = "engine/packages/tracing-utils"
+
 [workspace.dependencies.rivet-types]
 path = "engine/packages/types"
 

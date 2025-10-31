@@ -2,6 +2,7 @@ use std::future::Future;
 
 use anyhow::{Context, Result, anyhow};
 use futures_util::FutureExt;
+use rivet_tracing_utils::CustomInstrumentExt;
 
 use crate::{
 	driver::{DatabaseDriverHandle, Erased},
@@ -20,6 +21,7 @@ impl Database {
 	}
 
 	/// Run a closure with automatic retry logic
+	#[tracing::instrument(skip_all)]
 	pub async fn run<'a, F, Fut, T>(&'a self, closure: F) -> Result<T>
 	where
 		F: Fn(RetryableTransaction) -> Fut + Send + Sync,
@@ -29,7 +31,9 @@ impl Database {
 		let closure = &closure;
 		self.driver
 			.run(Box::new(|tx| {
-				async move { closure(tx).await.map(|value| Box::new(value) as Erased) }.boxed()
+				async move { closure(tx).await.map(|value| Box::new(value) as Erased) }
+					.custom_instrument(tracing::info_span!("run_attempt"))
+					.boxed()
 			}))
 			.await
 			.and_then(|res| {
