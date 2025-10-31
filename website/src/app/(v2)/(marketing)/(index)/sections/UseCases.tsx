@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useCases } from "@/data/use-cases";
 import Link from "next/link";
 import { IconWithSpotlight } from "../sections/IconWithSpotlight";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface UseCaseCardProps {
 	title: string;
@@ -12,6 +13,7 @@ interface UseCaseCardProps {
 	className?: string;
 	iconPath: string;
 	variant?: "default" | "large";
+	onHover?: (title: string | null) => void;
 }
 
 function UseCaseCard({
@@ -21,6 +23,7 @@ function UseCaseCard({
 	className = "",
 	iconPath,
 	variant = "default",
+	onHover,
 }: UseCaseCardProps) {
 	const cardRef = useRef<HTMLAnchorElement>(null);
 
@@ -51,6 +54,8 @@ function UseCaseCard({
 				href={href}
 				className={`group relative block ${className}`}
 				onMouseMove={handleMouseMove}
+				onMouseEnter={() => onHover?.(title)}
+				onMouseLeave={() => onHover?.(null)}
 			>
 				<div className="h-full border border-white/20 bg-white/[0.008] hover:border-white/30 hover:bg-white/[0.02] rounded-xl p-6 transition-colors relative overflow-hidden flex flex-row gap-6">
 					{/* Gradient overlay on hover */}
@@ -105,6 +110,8 @@ function UseCaseCard({
 			href={href}
 			className={`group relative block ${className}`}
 			onMouseMove={handleMouseMove}
+			onMouseEnter={() => onHover?.(title)}
+			onMouseLeave={() => onHover?.(null)}
 		>
 			<div className="h-full border border-white/20 bg-white/[0.008] hover:border-white/30 hover:bg-white/[0.02] rounded-xl p-6 transition-colors relative overflow-hidden flex flex-col">
 				{/* Gradient overlay on hover */}
@@ -130,6 +137,8 @@ function UseCaseCard({
 }
 
 export function UseCases() {
+	const [hoveredTitle, setHoveredTitle] = useState<string | null>(null);
+
 	// Map the use cases we want to display
 	const selectedUseCases = [
 		useCases.find((uc) => uc.title === "Agent Orchestration & MCP")!, // agent orchestration & mcp
@@ -201,7 +210,23 @@ export function UseCases() {
 		<section className="w-full">
 			<div className="container relative mx-auto px-6 lg:px-16 xl:px-20 max-w-[1500px]">
 				<h2 className="text-2xl sm:text-3xl font-700 text-white mb-8 text-left">
-					Actors make it simple to build
+					Actors make it simple to build{" "}
+					<span className="inline-block relative">
+						<AnimatePresence mode="wait">
+							{hoveredTitle && (
+								<motion.span
+									key={hoveredTitle}
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.15, ease: "easeOut" }}
+									className="text-[#FF5C00] inline-block"
+								>
+									{hoveredTitle}
+								</motion.span>
+							)}
+						</AnimatePresence>
+					</span>
 				</h2>
 				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-4 md:gap-4 xl:gap-3 2xl:gap-6 auto-rows-[300px]">
 					{/* First item - takes 6 columns (half width on medium+) */}
@@ -212,6 +237,7 @@ export function UseCases() {
 						iconPath={getIconPath(selectedUseCases[0].title)}
 						className="sm:col-span-2 md:col-span-6"
 						variant="large"
+						onHover={setHoveredTitle}
 					/>
 
 					{/* Remaining items - 3 columns each (quarter width on medium+) */}
@@ -223,6 +249,7 @@ export function UseCases() {
 							href={useCase.href}
 							iconPath={getIconPath(useCase.title)}
 							className="md:col-span-3"
+							onHover={setHoveredTitle}
 						/>
 					))}
 				</div>
