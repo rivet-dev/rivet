@@ -43,6 +43,17 @@ const useInspectorToken = (runnerName: string) => {
 		});
 };
 
+const useConnectionDetails = () => {
+	return match(__APP_TYPE__)
+		.with("inspector", () => {
+			return {namespace: "", engineToken: ""};
+		})
+		.otherwise(() => {
+			const provider = useEngineCompatDataProvider();
+			return {namespace: provider.engineNamespace, engineToken: provider.engineToken};
+		});
+}
+
 interface ActorWorkerContextProviderProps {
 	actorId: ActorId;
 	children: ReactNode;
@@ -51,9 +62,9 @@ export const ActorWorkerContextProvider = ({
 	children,
 	actorId,
 }: ActorWorkerContextProviderProps) => {
-	const dataProvider = useEngineCompatDataProvider();
-	const engineToken = dataProvider.engineToken;
-	const namespace = dataProvider.engineNamespace;
+	const dataProvider = useDataProvider();
+	const {engineToken, namespace} = useConnectionDetails();
+	
 	const {
 		data: {
 			features,
