@@ -16,6 +16,8 @@ pub(crate) const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-to
 pub(crate) const SEC_WEBSOCKET_PROTOCOL: HeaderName =
 	HeaderName::from_static("sec-websocket-protocol");
 pub(crate) const WS_PROTOCOL_TARGET: &str = "rivet_target.";
+pub(crate) const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
+pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
 #[derive(Debug, Clone)]
 pub struct ActorPathInfo {

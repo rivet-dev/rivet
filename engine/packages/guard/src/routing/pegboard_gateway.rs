@@ -5,12 +5,11 @@ use gas::prelude::*;
 use hyper::header::HeaderName;
 use rivet_guard_core::proxy_service::{RouteConfig, RouteTarget, RoutingOutput, RoutingTimeout};
 
-use super::SEC_WEBSOCKET_PROTOCOL;
+use super::{SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN};
 use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
-const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 /// Route requests to actor services using path-based routing
 #[tracing::instrument(skip_all)]
@@ -18,17 +17,15 @@ pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
 	actor_id_str: &str,
-	_token: Option<&str>,
+	token: Option<&str>,
 	path: &str,
 	_headers: &hyper::HeaderMap,
 	_is_websocket: bool,
 ) -> Result<Option<RoutingOutput>> {
-	// NOTE: Token validation implemented in EE
-
 	// Parse actor ID
 	let actor_id = Id::parse(actor_id_str).context("invalid actor id in path")?;
 
-	route_request_inner(ctx, shared_state, actor_id, path).await
+	route_request_inner(ctx, shared_state, actor_id, path, token).await
 }
 
 /// Route requests to actor services based on headers
@@ -47,28 +44,39 @@ pub async fn route_request(
 		return Ok(None);
 	}
 
-	// Extract actor ID from WebSocket protocol or HTTP header
-	let actor_id_str = if is_websocket {
+	// Extract actor ID and token from WebSocket protocol or HTTP headers
+	let (actor_id_str, token) = if is_websocket {
 		// For WebSocket, parse the sec-websocket-protocol header
-		headers
+		let protocols_header = headers
 			.get(SEC_WEBSOCKET_PROTOCOL)
 			.and_then(|protocols| protocols.to_str().ok())
-			.and_then(|protocols| {
-				// Parse protocols to find actor.{id}
-				protocols
-					.split(',')
-					.map(|p| p.trim())
-					.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
-			})
+			.ok_or_else(|| {
+				crate::errors::MissingHeader {
+					header: "sec-websocket-protocol".to_string(),
+				}
+				.build()
+			})?;
+
+		let protocols: Vec<&str> = protocols_header.split(',').map(|p| p.trim()).collect();
+
+		let actor_id = protocols
+			.iter()
+			.find_map(|p| p.strip_prefix(WS_PROTOCOL_ACTOR))
 			.ok_or_else(|| {
 				crate::errors::MissingHeader {
 					header: "`rivet_actor.*` protocol in sec-websocket-protocol".to_string(),
 				}
 				.build()
-			})?
+			})?;
+
+		let token = protocols
+			.iter()
+			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN));
+
+		(actor_id, token)
 	} else {
-		// For HTTP, use the x-rivet-actor header
-		headers
+		// For HTTP, use headers
+		let actor_id = headers
 			.get(X_RIVET_ACTOR)
 			.map(|x| x.to_str())
 			.transpose()
@@ -78,13 +86,21 @@ pub async fn route_request(
 					header: X_RIVET_ACTOR.to_string(),
 				}
 				.build()
-			})?
+			})?;
+
+		let token = headers
+			.get(X_RIVET_TOKEN)
+			.map(|x| x.to_str())
+			.transpose()
+			.context("invalid x-rivet-token header")?;
+
+		(actor_id, token)
 	};
 
 	// Find actor to route to
 	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, actor_id, path).await
+	route_request_inner(ctx, shared_state, actor_id, path, token).await
 }
 
 async fn route_request_inner(
@@ -92,7 +108,10 @@ async fn route_request_inner(
 	shared_state: &SharedState,
 	actor_id: Id,
 	path: &str,
+	_token: Option<&str>,
 ) -> Result<Option<RoutingOutput>> {
+	// NOTE: Token validation implemented in EE
+
 	// Route to peer dc where the actor lives
 	if actor_id.label() != ctx.config().dc_label() {
 		tracing::debug!(peer_dc_label=?actor_id.label(), "re-routing actor to peer dc");
