@@ -84,12 +84,14 @@ pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Resu
 	#[derive(Serialize, Deserialize)]
 	struct RecoverState {
 		after_key: Option<Vec<u8>>,
+		incomplete_key_range_start: Option<Vec<u8>>,
 		total_recovered_keys: u64,
 	}
 
 	ctx.loope(
 		RecoverState {
 			after_key: None,
+			incomplete_key_range_start: None,
 			total_recovered_keys: 0,
 		},
 		|ctx, state| {
@@ -100,12 +102,16 @@ pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Resu
 					.activity(RecoverKeysChunkInput {
 						learning_config,
 						after_key: state.after_key.clone(),
+						incomplete_key_range_start: state.incomplete_key_range_start.clone(),
 						count: crate::consts::RECOVER_KEY_CHUNK_SIZE,
 						total_recovered_keys: state.total_recovered_keys,
 					})
 					.await?;
 
 				// Update state for next iteration
+				// Store incomplete_key_range_start for next iteration if present
+				state.incomplete_key_range_start = output.incomplete_key_range_start.clone();
+
 				if let Some(last_key) = output.last_key {
 					state.after_key = Some(last_key);
 					state.total_recovered_keys += output.recovered_count;
@@ -343,6 +349,9 @@ pub struct RecoverKeysChunkInput {
 	pub learning_config: types::ClusterConfig,
 	/// The last key value from the previous chunk, used for pagination
 	pub after_key: Option<Vec<u8>>,
+	/// A key that wasn't fully processed in the previous chunk due to too many instances.
+	/// When set, the range will start FROM this key instead of skipping past after_key.
+	pub incomplete_key_range_start: Option<Vec<u8>>,
 	pub count: u64,
 	pub total_recovered_keys: u64,
 }
@@ -357,6 +366,10 @@ pub struct RecoverKeysChunkOutput {
 	pub last_key: Option<Vec<u8>>,
 	/// Number of keys recovered in this chunk
 	pub recovered_count: u64,
+	/// If set, indicates we didn't finish this chunk due to encountering a key with too many instances.
+	///
+	/// The next iteration should start FROM this key instead of skipping past last_key.
+	pub incomplete_key_range_start: Option<Vec<u8>>,
 }
 
 /// Recovers committed values for a chunk of keys after downloading all log entries.
@@ -387,10 +400,11 @@ pub async fn recover_keys_chunk(
 		"recovering keys chunk"
 	);
 
-	let (last_key, recovered_count) = ctx
+	let (last_key, recovered_count, incomplete_key_range_start) = ctx
 		.udb()?
 		.run(|tx| {
 			let after_key = input.after_key.clone();
+			let incomplete_key_range_start = input.incomplete_key_range_start.clone();
 			let count = input.count;
 
 			async move {
@@ -401,18 +415,26 @@ pub async fn recover_keys_chunk(
 					crate::keys::replica::KeyInstanceKey::subspace_for_all_keys();
 				let prefix = subspace.pack(&key_instance_all);
 
-				// Build range start key - either from after_key or from the beginning
-				let begin_key = if let Some(after_key) = &after_key {
-					// Skip past all KeyInstance entries for the last processed key.
-					let key_instance_subspace =
-						crate::keys::replica::KeyInstanceKey::subspace(after_key.clone());
-					let mut key_after_all_instances = subspace.pack(&key_instance_subspace);
-					// Append 0xFF to get past all instances for this key
-					key_after_all_instances.push(0xFF);
-					KeySelector::first_greater_or_equal(key_after_all_instances)
-				} else {
-					KeySelector::first_greater_or_equal(prefix.clone())
-				};
+				// Build range start key
+				let begin_key =
+					if let Some(incomplete_key_range_start) = &incomplete_key_range_start {
+						// Start FROM this incomplete key (don't skip past it)
+						let key_instance_subspace = crate::keys::replica::KeyInstanceKey::subspace(
+							incomplete_key_range_start.clone(),
+						);
+						let key_start = subspace.pack(&key_instance_subspace);
+						KeySelector::first_greater_or_equal(key_start)
+					} else if let Some(after_key) = &after_key {
+						// Skip past all KeyInstance entries for the last processed key
+						let key_instance_subspace =
+							crate::keys::replica::KeyInstanceKey::subspace(after_key.clone());
+						let mut key_after_all_instances = subspace.pack(&key_instance_subspace);
+						// Append 0xFF to get past all instances for this key
+						key_after_all_instances.push(0xFF);
+						KeySelector::first_greater_or_equal(key_after_all_instances)
+					} else {
+						KeySelector::first_greater_or_equal(prefix.clone())
+					};
 
 				// Build range end key - after all KEY_INSTANCE entries
 				let mut end_prefix = prefix.clone();
@@ -498,23 +520,34 @@ pub async fn recover_keys_chunk(
 
 				// If no keys were processed despite scanning {count} instances,
 				// it means a single key has too many instances (i.e. larger than
-				// the range limit)
-				if recovered_count == 0 && scanned_count >= count {
-					bail!(
-						"single key has more than {count} instances, cannot process in one chunk. key: {:?}",
-						current_key,
+				// the range limit). Return incomplete_key_range_start so the workflow can retry from this position.
+				let incomplete_key_range_start = if recovered_count == 0 && scanned_count >= count {
+					tracing::warn!(
+						?replica_id,
+						?current_key,
+						scanned_count,
+						count,
+						"encountered key with more than {count} instances, will retry from this position"
 					);
-				}
+					current_key
+				} else {
+					None
+				};
 
 				tracing::info!(
 					?replica_id,
 					recovered_count,
 					scanned_count,
+					?incomplete_key_range_start,
 					"recovered keys in chunk"
 				);
 
 				// Return the last key value for pagination
-				Result::Ok((last_processed_key, recovered_count))
+				Result::Ok((
+					last_processed_key,
+					recovered_count,
+					incomplete_key_range_start,
+				))
 			}
 		})
 		.custom_instrument(tracing::info_span!("recover_keys_chunk_tx"))
@@ -523,6 +556,7 @@ pub async fn recover_keys_chunk(
 	Ok(RecoverKeysChunkOutput {
 		last_key,
 		recovered_count,
+		incomplete_key_range_start,
 	})
 }
 
