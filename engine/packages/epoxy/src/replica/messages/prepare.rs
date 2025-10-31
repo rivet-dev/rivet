@@ -30,10 +30,9 @@ pub async fn prepare(
 	};
 
 	// EPaxos Step 38: Validate ballot for this instance
-	let is_valid =
+	let validation =
 		ballot::validate_and_update_ballot_for_instance(tx, replica_id, &ballot, &instance).await?;
-
-	let response = if is_valid {
+	let response = if validation.is_valid {
 		// EPaxos Step 39: Reply PrepareOK with current log entry data
 		match current_entry {
 			Some(entry) => protocol::PrepareResponse::PrepareOk(protocol::PrepareOk {

@@ -157,6 +157,8 @@ pub struct DownloadInstancesChunkOutput {
 }
 
 #[activity(DownloadInstancesChunk)]
+#[timeout = 300]
+#[max_retries = 100]
 pub async fn download_instances_chunk(
 	ctx: &ActivityCtx,
 	input: &DownloadInstancesChunkInput,
@@ -197,6 +199,8 @@ pub async fn download_instances_chunk(
 
 	// Apply each log entry from the downloaded instances
 	let total_entries = instances.len();
+	let mut applied_count = 0;
+	let mut skipped_count = 0;
 	for (idx, entry) in instances.iter().enumerate() {
 		tracing::debug!(
 			progress = format!("{}/{}", idx + 1, total_entries),
@@ -206,8 +210,26 @@ pub async fn download_instances_chunk(
 		);
 
 		// Apply the log entry to replay any uncommitted operations
-		apply_log_entry(ctx, &entry.log_entry, &entry.instance).await?;
+		// Skip entries that fail to apply (e.g., ballot validation failures during recovery)
+		if let Err(err) = apply_log_entry(ctx, &entry.log_entry, &entry.instance).await {
+			tracing::debug!(
+				?err,
+				?entry.instance,
+				state = ?entry.log_entry.state,
+				"skipping log entry that failed to apply during recovery"
+			);
+			skipped_count += 1;
+			continue;
+		}
+		applied_count += 1;
 	}
+
+	tracing::info!(
+		total_entries,
+		applied_count,
+		skipped_count,
+		"finished applying log entries for chunk"
+	);
 
 	// Return whether we should continue downloading chunks and the last instance
 	Ok(DownloadInstancesChunkOutput {
@@ -479,7 +501,8 @@ pub async fn recover_keys_chunk(
 				// the range limit)
 				if recovered_count == 0 && scanned_count >= count {
 					bail!(
-						"single key has more than {count} instances, cannot process in one chunk",
+						"single key has more than {count} instances, cannot process in one chunk. key: {:?}",
+						current_key,
 					);
 				}
 
