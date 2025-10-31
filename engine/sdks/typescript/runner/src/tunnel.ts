@@ -541,8 +541,29 @@ export class Tunnel {
 			// Store adapter
 			this.#actorWebSockets.set(webSocketId, adapter);
 
+			// Convert headers to map
+			//
+			// We need to manually ensure the original Upgrade/Connection WS
+			// headers are present
+			const headerInit: Record<string, string> = {};
+			if (open.headers) {
+				for (const [k, v] of open.headers as ReadonlyMap<
+					string,
+					string
+				>) {
+					headerInit[k] = v;
+				}
+			}
+			headerInit["Upgrade"] = "websocket";
+			headerInit["Connection"] = "Upgrade";
+
+			const request = new Request(`http://localhost${open.path}`, {
+				method: "GET",
+				headers: headerInit,
+			});
+
 			// Send open confirmation
-			let hibernationConfig = this.#runner.config.getActorHibernationConfig(actor.actorId, requestId);
+			let hibernationConfig = this.#runner.config.getActorHibernationConfig(actor.actorId, requestId, request);
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketOpen",
 				val: {
@@ -554,25 +575,7 @@ export class Tunnel {
 			// Notify adapter that connection is open
 			adapter._handleOpen(requestId);
 
-			// Create a minimal request object for the websocket handler
-			// Include original headers from the open message
-			const headerInit: Record<string, string> = {};
-			if (open.headers) {
-				for (const [k, v] of open.headers as ReadonlyMap<
-					string,
-					string
-				>) {
-					headerInit[k] = v;
-				}
-			}
-			// Ensure websocket upgrade headers are present
-			headerInit["Upgrade"] = "websocket";
-			headerInit["Connection"] = "Upgrade";
 
-			const request = new Request(`http://localhost${open.path}`, {
-				method: "GET",
-				headers: headerInit,
-			});
 
 			// Call websocket handler
 			await websocketHandler(
