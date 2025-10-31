@@ -11,7 +11,7 @@ interface DeploymentOptionProps {
 function DeploymentOption({ title, description, children }: DeploymentOptionProps) {
 	return (
 		<div className="border border-white/10 rounded-xl p-8 bg-white/[0.02]">
-			<h3 className="text-2xl font-semibold text-white mb-4">{title}</h3>
+			<h3 className="text-2xl font-medium text-white mb-4">{title}</h3>
 			<p className="text-white/60 leading-relaxed mb-6">{description}</p>
 			{children}
 		</div>
@@ -84,7 +84,7 @@ export function DeploymentOptionsSection() {
 					>
 						<div className="flex flex-col gap-3 mt-4">
 							<Link
-								href="/docs/getting-started"
+								href="/docs/quickstart/"
 								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
 							>
 								Quickstart
