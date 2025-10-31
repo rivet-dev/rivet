@@ -135,12 +135,14 @@ pub async fn send_message_to_address(
 	let client = rivet_pools::reqwest::client().await?;
 
 	// Create the request
-	let request = versioned::Request::wrap_latest(request);
+	let request = versioned::Request::wrap_latest(request)
+		.serialize()
+		.context("failed to serialize epoxy request")?;
 
 	// Send the request
 	let response_result = client
 		.post(replica_url.to_string())
-		.body(request.serialize()?)
+		.body(request)
 		.send()
 		.custom_instrument(tracing::info_span!("http_request"))
 		.await;
