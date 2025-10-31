@@ -137,7 +137,7 @@ impl TransactionTask {
 		}
 	}
 
-	fn create_transaction(&self) -> RocksDbTransaction<OptimisticTransactionDB> {
+	fn create_transaction(&self) -> RocksDbTransaction<'_, OptimisticTransactionDB> {
 		let write_opts = WriteOptions::default();
 		let txn_opts = rocksdb::OptimisticTransactionOptions::default();
 		self.db.transaction_opt(&write_opts, &txn_opts)

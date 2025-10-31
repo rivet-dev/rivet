@@ -10,7 +10,6 @@ use crate::{errors, shared_state::SharedState};
 
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
-pub const X_RIVET_AMESPACE: HeaderName = HeaderName::from_static("x-rivet-namespace");
 const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 /// Route requests to actor services using path-based routing
