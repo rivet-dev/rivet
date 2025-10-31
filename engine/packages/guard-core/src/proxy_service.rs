@@ -35,8 +35,12 @@ use crate::{
 	request_context::RequestContext,
 };
 
+const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
+const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
+const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
+
 const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(100); // Keep TCP connection open briefly after WebSocket close
@@ -1060,6 +1064,7 @@ impl ProxyService {
 		}
 	}
 
+	/// Modifies the incoming request before it is proxied.
 	fn proxied_request_builder(
 		&self,
 		req_parts: &hyper::http::request::Parts,
@@ -1089,13 +1094,16 @@ impl ProxyService {
 			.method(req_parts.method.clone())
 			.uri(url.to_string());
 
-		// Add proxy headers
-		{
-			let headers = builder
-				.headers_mut()
-				.expect("request builder unexpectedly in error state");
-			add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
-		}
+		// Modify proxy headers
+		let headers = builder
+			.headers_mut()
+			.expect("request builder unexpectedly in error state");
+
+		headers.remove(X_RIVET_TARGET);
+		headers.remove(X_RIVET_ACTOR);
+		headers.remove(X_RIVET_TOKEN);
+
+		add_proxy_headers_with_addr(headers, &req_parts.headers, self.remote_addr)?;
 
 		Ok(builder)
 	}
