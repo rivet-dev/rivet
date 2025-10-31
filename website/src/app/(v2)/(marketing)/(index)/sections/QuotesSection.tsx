@@ -135,7 +135,7 @@ export function QuotesSection() {
 	return (
 		<div className="mx-auto max-w-6xl">
 			<div className="text-center mb-16">
-				<h2 className="text-4xl sm:text-5xl font-700 text-white mb-6">
+				<h2 className="text-2xl sm:text-3xl font-700 text-white mb-6">
 					What People Are Saying
 				</h2>
 				<p className="text-lg font-500 text-white/40">

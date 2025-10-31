@@ -14,17 +14,13 @@ export function HeroSection() {
 					<div className="max-w-7xl mx-auto text-center">
 						{/* Title */}
 						<h1 className="hero-bg-exclude text-4xl md:text-5xl font-normal text-white leading-[1.3] sm:leading-[1.1] tracking-[-0.03em] max-w-full">
-							{/*Lightweight library for building modern backends*/}
-							{/*Library for building stateful applications and distributed systems*/}
-							{/*Build and scale stateful workloads*/}
-							State + Compute = Less Complexity
+							The Primitive for Real-Time and Agent Applications
 						</h1>
 
 						<div className="h-5" />
 
 						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
-							Rivet Actors merge state and compute in to a primitive that scales effortlessly with less complex infrastructure.
-							Easily self-hostable and works with your infrastructure.
+							Rivet Actors are a simple primitive that provides in-memory state with WebSockets, fault-tolerance, and hibernation.
 						</p>
 
 						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
@@ -95,10 +91,10 @@ export function HeroSection() {
 						{/* CTA Buttons */}
 						<div className="hero-bg-exclude flex flex-col sm:flex-row items-center justify-center gap-4">
 							<MarketingButton
-								href="/docs/actors"
+								href="/dashboard"
 								primary
 							>
-								Quickstart — 5 minutes
+								Get Started
 							</MarketingButton>
 
 							<MarketingButton href="/talk-to-an-engineer">
