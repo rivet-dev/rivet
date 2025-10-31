@@ -33,7 +33,7 @@ Open your browser to [http://localhost:5173](http://localhost:5173) to see the c
 You can also test the server directly by running:
 
 ```sh
-curl -X POST http://localhost:8080/increment/test
+curl -X POST http://localhost:6420/increment/test
 ```
 
 ## License

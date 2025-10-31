@@ -151,6 +151,12 @@ export class EngineActorDriver implements ActorDriver {
 			metadata: {
 				inspectorToken: this.#runConfig.inspector.token(),
 			},
+			getActorHibernationConfig(actorId, requestId) {
+				return {
+					enabled: false,
+					lastMsgIndex: 0,
+				};
+			},
 			prepopulateActorNames: buildActorNames(registryConfig),
 			onConnected: () => {
 				this.#runnerStarted.resolve(undefined);

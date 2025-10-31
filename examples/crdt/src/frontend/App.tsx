@@ -4,7 +4,7 @@ import * as Y from "yjs";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 import type { registry } from "../backend/registry";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 function YjsEditor({ documentId }: { documentId: string }) {
 	const yjsDocument = useActor({

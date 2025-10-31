@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { registry } from "../../backend/registry";
 import { authClient } from "../auth-client";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 interface ChatRoomProps {
 	user: { id: string; email: string };

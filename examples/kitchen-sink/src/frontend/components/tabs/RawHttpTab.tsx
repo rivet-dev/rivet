@@ -25,7 +25,7 @@ export default function RawHttpTab({ state }: TabProps) {
   };
 
   const getActorUrl = () => {
-    const baseUrl = "http://localhost:8080";
+    const baseUrl = "http://localhost:6420";
     const actorPath = state.actorKey ?
       `/actors/${state.actorName}/${encodeURIComponent(state.actorKey)}` :
       `/actors/${state.actorName}`;
