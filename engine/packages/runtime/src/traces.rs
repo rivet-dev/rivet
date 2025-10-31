@@ -1,7 +1,7 @@
 // Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
 
 use console_subscriber;
-use opentelemetry::trace::TracerProvider;
+use opentelemetry::trace::{TraceContextExt, TracerProvider};
 use rivet_metrics::OtelProviderGuard;
 use std::sync::OnceLock;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
@@ -40,7 +40,9 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	let registry = registry
 		.with(reload_layer)
 		.with(otel_metric_layer)
-		.with(otel_trace_layer);
+		.with(otel_trace_layer)
+		.with(sentry::integrations::tracing::layer())
+		.with(SentryOtelLayer);
 
 	// Check if tokio console is enabled
 	let enable_tokio_console = std::env::var("TOKIO_CONSOLE_ENABLE").map_or(false, |x| x == "1");
@@ -72,6 +74,44 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 				.layer(),
 		)
 		.init()
+}
+
+/// Replaces sentry's trace id with otel's trace id
+struct SentryOtelLayer;
+
+impl<S> Layer<S> for SentryOtelLayer
+where
+	S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+	fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+		if let Some(span) = ctx.event_span(event) {
+			// The OTel layer stores the OTel context in span extensions
+			let extensions = span.extensions();
+
+			if let Some(otel_data) = extensions.get::<tracing_opentelemetry::OtelData>() {
+				let span = otel_data.parent_cx.span();
+				let span_context = span.span_context();
+				let trace_id = if span_context.is_valid() {
+					Some(span_context.trace_id())
+				} else {
+					otel_data.builder.trace_id
+				};
+
+				if let (Some(trace_id), Some(span_id)) = (trace_id, otel_data.builder.span_id) {
+					sentry::configure_scope(|scope| {
+						scope.set_context(
+							"trace",
+							sentry::protocol::TraceContext {
+								trace_id: trace_id.to_bytes().into(),
+								span_id: span_id.to_bytes().into(),
+								..Default::default()
+							},
+						);
+					});
+				}
+			}
+		}
+	}
 }
 
 /// Build an EnvFilter from a filter specification string
