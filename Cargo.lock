@@ -4608,6 +4608,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-tracing-utils"
+version = "2.0.22-rc.1"
+dependencies = [
+ "futures-util",
+ "lazy_static",
+ "rivet-metrics",
+ "tracing",
+]
+
+[[package]]
 name = "rivet-types"
 version = "2.0.22-rc.1"
 dependencies = [
@@ -4655,6 +4665,7 @@ dependencies = [
  "reqwest",
  "rivet-config",
  "rivet-metrics",
+ "rivet-tracing-utils",
  "rivet-util-id",
  "serde",
  "serde_json",
@@ -6330,6 +6341,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-pools",
  "rivet-test-deps-docker",
+ "rivet-tracing-utils",
  "rocksdb",
  "serde",
  "tempfile",

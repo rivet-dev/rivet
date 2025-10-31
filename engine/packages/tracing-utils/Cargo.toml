@@ -1,0 +1,12 @@
+[package]
+name = "rivet-tracing-utils"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures-util.workspace = true
+lazy_static.workspace = true
+rivet-metrics.workspace = true
+tracing.workspace = true

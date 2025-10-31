@@ -24,6 +24,7 @@ regex.workspace = true
 reqwest.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
+rivet-tracing-utils.workspace = true
 rivet-util-id.workspace = true
 serde.workspace = true
 serde_json.workspace = true
