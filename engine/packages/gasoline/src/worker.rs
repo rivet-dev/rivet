@@ -264,19 +264,6 @@ impl Worker {
 				async move {
 					if let Err(err) = ctx.run(current_span_ctx).await {
 						tracing::error!(?err, ?workflow_id, "unhandled workflow error");
-
-						sentry::with_scope(
-							|scope| {
-								scope.set_tag("error", err.to_string());
-								scope.set_tag("workflow_id", workflow_id.to_string());
-							},
-							|| {
-								sentry::capture_message(
-									"unhandled workflow error",
-									sentry::Level::Error,
-								);
-							},
-						);
 					}
 				},
 			);

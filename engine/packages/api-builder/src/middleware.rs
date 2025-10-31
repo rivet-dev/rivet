@@ -147,19 +147,6 @@ pub async fn http_logging_middleware(
 				%internal,
 				"http server error"
 			);
-
-			sentry::with_scope(
-				|scope| {
-					scope.set_tag("status", status_code);
-					scope.set_tag("group", group);
-					scope.set_tag("code", code);
-					scope.set_tag("meta", meta);
-					scope.set_tag("internal", internal);
-				},
-				|| {
-					sentry::capture_message(&format!("{group}.{code}"), sentry::Level::Error);
-				},
-			);
 		} else if status.is_client_error() {
 			let group = error.as_ref().map_or("-", |x| &x.group);
 			let code = error.as_ref().map_or("-", |x| &x.code);

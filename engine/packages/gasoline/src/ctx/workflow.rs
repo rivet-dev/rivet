@@ -226,15 +226,6 @@ impl WorkflowCtx {
 							KeyValue::new("error_code", err.to_string()),
 						],
 					);
-
-					sentry::with_scope(
-						|scope| {
-							scope.set_tag("error", err.to_string());
-						},
-						|| {
-							sentry::capture_message("workflow error", sentry::Level::Error);
-						},
-					);
 				}
 
 				let err_str = err.to_string();

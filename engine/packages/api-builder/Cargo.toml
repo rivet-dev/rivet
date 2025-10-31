@@ -21,7 +21,6 @@ rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
 rivet-pools.workspace = true
-sentry.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true

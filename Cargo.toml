@@ -85,9 +85,9 @@ vergen = "9.0.4"
 reqwest-eventsource = "0.6.0"
 
 [workspace.dependencies.sentry]
-version = "0.37.0"
+version = "0.45.0"
 default-features = false
-features = ["anyhow","backtrace","contexts","debug-images","panic","reqwest","rustls"]
+features = ["anyhow","backtrace","contexts","debug-images","panic","reqwest","rustls","tracing"]
 
 [workspace.dependencies.windows]
 version = "0.58"
