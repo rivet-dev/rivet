@@ -12,7 +12,8 @@
 			"!frontend",
 			"!rivetkit-openapi/openapi.json",
 			"!scripts",
-			"!website"
+			"!website",
+			"!site"
 		],
 		"ignoreUnknown": true
 	},
