@@ -15,7 +15,6 @@ import {
 } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
-	useQuery,
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -45,10 +44,8 @@ import {
 	H3,
 	Skeleton,
 } from "@/components";
-import { useCloudDataProvider, useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
+import { useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
 import { cloudEnv, engineEnv } from "@/lib/env";
-import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
-import z from "zod";
 import { hasProvider } from "@/app/data-providers/engine-data-provider";
 
 export const Route = createFileRoute(
@@ -63,16 +60,14 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { data: runnerConfigsCount, isLoading } = useSuspenseInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
-		select: (data) => Object.values(data.pages[0].runnerConfigs).length,
+	const { data: runnerNamesCount, isLoading } = useSuspenseInfiniteQuery({
+		...useEngineCompatDataProvider().runnerNamesQueryOptions(),
+		select: (data) => data.pages[0].names.length,
 		refetchInterval: 5000,
 	});
 
-	const navigate = Route.useNavigate();
-
-	const hasConfigs =
-		runnerConfigsCount !== undefined && runnerConfigsCount > 0;
+	const hasRunnerNames =
+		runnerNamesCount !== undefined && runnerNamesCount > 0;
 
 	if (isLoading) {
 		return (
@@ -116,7 +111,7 @@ export function RouteComponent() {
 		);
 	}
 
-	if (!hasConfigs) {
+	if (!hasRunnerNames) {
 		return (
 			<div className="h-full border my-2 mr-2 px-4 py-4 rounded-lg flex flex-col items-center justify-safe-center overflow-auto @container">
 				<div className="grid grid-cols-1 @7xl:grid-cols-2 gap-8 justify-safe-center">
