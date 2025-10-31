@@ -2,18 +2,14 @@ import Link from "next/link";
 import Image from "next/image";
 
 // Platform images
-import rivetWhiteLogo from "../images/platforms/rivet-white.svg";
 import cloudflareWorkersLogo from "../images/platforms/cloudflare-workers.svg";
 import bunLogo from "../images/platforms/bun.svg";
 import denoLogo from "../images/platforms/deno.svg";
 import nodejsLogo from "../images/platforms/nodejs.svg";
-import fileSystemLogo from "../images/platforms/file-system.svg";
-import memoryLogo from "../images/platforms/memory.svg";
 import vercelLogo from "../images/platforms/vercel.svg";
 import awsLambdaLogo from "../images/platforms/aws-lambda.svg";
 import awsLogo from "../images/platforms/aws-light.svg";
 import supabaseLogo from "../images/platforms/supabase.svg";
-import postgresLogo from "../images/platforms/postgres.svg";
 import railwayLogo from "../images/platforms/railway.svg";
 import freestyleLogo from "../images/platforms/freestyle.svg";
 import gcpLogo from "../images/platforms/gcp.svg";
@@ -76,7 +72,7 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 			: status === "help-wanted"
 				? "bg-[#0059ff] text-white"
 				: status === "1-click-deploy"
-					? "bg-[#007aff] text-white"
+					? "bg-[#3ECF8E] text-white"
 					: "";
 
 	return (
@@ -101,14 +97,14 @@ function TechLink({ href, name, icon, alt, external, status }: TechLinkProps) {
 }
 
 interface TechSubSectionProps {
-	title: string;
+	title?: string;
 	children: React.ReactNode;
 }
 
 function TechSubSection({ title, children }: TechSubSectionProps) {
 	return (
 		<div className="mx-auto lg:ml-auto max-w-full lg:max-w-md">
-			<h3 className="text-lg font-600 text-white/80 mb-3">{title}</h3>
+			{title && <h3 className="text-lg font-600 text-white/80 mb-3">{title}</h3>}
 			<div className="grid grid-cols-1 grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2.5">
 				{children}
 			</div>
@@ -152,7 +148,7 @@ function TechSectionText({
 
 	return (
 		<div className="space-y-6">
-			<h2 className="text-4xl sm:text-5xl font-700 text-white">
+			<h2 className="text-2xl sm:text-3xl font-700 text-white">
 				{heading}
 			</h2>
 			<div className="space-y-4">
@@ -196,35 +192,7 @@ export function TechSection() {
 					/>
 
 					<TechSectionSubsections>
-						<TechSubSection title="Storage">
-							<TechLink
-								href="/docs/cloud"
-								name="Rivet Cloud"
-								icon={rivetWhiteLogo}
-								alt="Rivet Cloud"
-								status="1-click-deploy"
-							/>
-							<TechLink
-								href="/docs/actors/"
-								name="Postgres"
-								icon={postgresLogo}
-								alt="Postgres"
-							/>
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="File System"
-								icon={fileSystemLogo}
-								alt="File System"
-							/>
-							<TechLink
-								href="/docs/actors/quickstart/backend"
-								name="Memory"
-								icon={memoryLogo}
-								alt="Memory"
-							/>
-						</TechSubSection>
-
-						<TechSubSection title="Compute">
+						<TechSubSection title="">
 							<TechLink
 								href="/docs/actors/quickstart/backend"
 								name="Node.js"
