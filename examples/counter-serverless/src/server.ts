@@ -2,5 +2,5 @@ import { registry } from "./registry";
 
 registry.start({
 	runnerKind: "serverless",
-	autoConfigureServerless: { url: "http://localhost:8080" },
+	autoConfigureServerless: { url: "http://localhost:6420" },
 });

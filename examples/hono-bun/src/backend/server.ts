@@ -8,7 +8,7 @@ const { client, fetch } = registry.start({
 	// Hono requires using Hono.serve
 	disableDefaultServer: true,
 	// Override endpoint
-	overrideServerAddress: "http://localhost:8080/rivet",
+	overrideServerAddress: "http://localhost:6420/rivet",
 	// Specify Hono-specific upgradeWebSocket
 	getUpgradeWebSocket: () => upgradeWebSocket,
 	cors: {
@@ -48,4 +48,4 @@ Bun.serve({
 	websocket,
 });
 
-console.log("Listening at http://localhost:8080");
+console.log("Listening at http://localhost:6420");

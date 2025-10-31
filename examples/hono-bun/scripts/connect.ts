@@ -2,7 +2,7 @@ import { createClient } from "rivetkit/client";
 import type { Registry } from "../src/registry";
 
 async function main() {
-	const client = createClient<Registry>("http://localhost:8080/rivet");
+	const client = createClient<Registry>("http://localhost:6420/rivet");
 
 	const counter = client.counter.getOrCreate().connect();
 

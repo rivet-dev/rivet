@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Message, registry } from "../backend/registry";
 
 const { useActor } = createRivetKit<typeof registry>({
-	endpoint: import.meta.env.VITE_RIVET_ENDPOINT ?? "http://localhost:8080/api",
+	endpoint: import.meta.env.VITE_RIVET_ENDPOINT ?? "http://localhost:6420/api",
 	namespace: import.meta.env.VITE_RIVET_NAMESPACE,
 	runnerName: import.meta.env.VITE_RIVET_RUNNER_NAME ?? "freestyle-runner",
 });

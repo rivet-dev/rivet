@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { registry } from "../backend/registry";
 import type { Message } from "../backend/types";
 
-const { useActor } = createRivetKit<typeof registry>("http://localhost:8080");
+const { useActor } = createRivetKit<typeof registry>("http://localhost:6420");
 
 export function App() {
 	const aiAgent = useActor({

@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-The database migrations will run automatically on startup. Open your browser to `http://localhost:5173` to see the frontend and the backend will be running on `http://localhost:8080`.
+The database migrations will run automatically on startup. Open your browser to `http://localhost:5173` to see the frontend and the backend will be running on `http://localhost:6420`.
 
 ## Features
 
