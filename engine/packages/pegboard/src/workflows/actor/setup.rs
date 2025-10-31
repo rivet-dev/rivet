@@ -7,7 +7,7 @@ use super::State;
 
 use crate::{errors, keys};
 
-const MAX_INPUT_SIZE: usize = util::file_size::mebibytes(4) as usize;
+const MAX_INPUT_SIZE: usize = util::size::mebibytes(4) as usize;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ValidateInput {

@@ -213,6 +213,11 @@ type KvGetResponse struct {
 	value: optional<data>
 }
 
+type KvPurgeRequest struct {
+	keys: list<data>
+}
+
+type KvPurgeResponse void
 
 # MARK: Request/Response
 type RequestKind union {
@@ -225,7 +230,8 @@ type RequestKind union {
 	HealthCheckRequest |
 	CoordinatorUpdateReplicaStatusRequest |
 	BeginLearningRequest |
-	KvGetRequest
+	KvGetRequest |
+	KvPurgeRequest
 }
 
 type Request struct {
@@ -244,7 +250,8 @@ type ResponseKind union {
 	HealthCheckResponse |
 	CoordinatorUpdateReplicaStatusResponse |
 	BeginLearningResponse |
-	KvGetResponse
+	KvGetResponse |
+	KvPurgeResponse
 }
 
 type Response struct {

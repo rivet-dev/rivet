@@ -20,6 +20,7 @@ use crate::{errors::WsError, utils::UrlData};
 pub struct TunnelActiveRequest {
 	/// Subject to send replies to.
 	pub gateway_reply_to: String,
+	pub is_ws: bool,
 }
 
 pub struct Conn {

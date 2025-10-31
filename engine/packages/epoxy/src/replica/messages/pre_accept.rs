@@ -3,7 +3,7 @@ use epoxy_protocol::protocol;
 use std::cmp;
 use universaldb::Transaction;
 
-use crate::replica::{ballot, messages, utils};
+use crate::replica::{ballot, utils};
 
 #[tracing::instrument(skip_all)]
 pub async fn pre_accept(

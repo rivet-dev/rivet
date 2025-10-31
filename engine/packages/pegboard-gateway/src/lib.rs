@@ -4,27 +4,32 @@ use bytes::Bytes;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, header::HeaderName};
+use hyper::{Request, Response, StatusCode};
 use rivet_error::*;
 use rivet_guard_core::{
 	WebSocketHandle,
 	custom_serve::CustomServeTrait,
-	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
+	errors::{
+		ServiceUnavailable, WebSocketServiceRetry, WebSocketServiceTimeout,
+		WebSocketServiceUnavailable,
+	},
 	proxy_service::ResponseBody,
 	request_context::RequestContext,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::time::Duration;
-use tokio_tungstenite::tungstenite::{Message, protocol::frame::coding::CloseCode};
+use tokio::sync::watch;
+use tokio_tungstenite::tungstenite::{
+	Message,
+	protocol::frame::{CloseFrame, coding::CloseCode},
+};
 
 use crate::shared_state::{SharedState, TunnelMessageData};
 
 pub mod shared_state;
 
 const TUNNEL_ACK_TIMEOUT: Duration = Duration::from_secs(2);
-const SEC_WEBSOCKET_PROTOCOL: HeaderName = HeaderName::from_static("sec-websocket-protocol");
-const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
@@ -32,8 +37,13 @@ const WS_PROTOCOL_ACTOR: &str = "rivet_actor.";
 	"websocket_pending_limit_reached",
 	"Reached limit on pending websocket messages, aborting connection."
 )]
-pub struct WebsocketPendingLimitReached {
-	limit: usize,
+pub struct WebsocketPendingLimitReached;
+
+#[derive(Debug)]
+enum LifecycleResult {
+	ServerClose(protocol::ToServerWebSocketClose),
+	ClientClose(Option<CloseFrame>),
+	Aborted,
 }
 
 pub struct PegboardGateway {
@@ -123,6 +133,10 @@ impl CustomServeTrait for PegboardGateway {
 						) => {
 							return anyhow::Ok(response_start);
 						}
+						protocol::ToServerTunnelMessageKind::ToServerResponseAbort => {
+							tracing::warn!("request aborted");
+							return Err(ServiceUnavailable.build());
+						}
 						_ => {
 							tracing::warn!("received non-response message from pubsub");
 						}
@@ -134,7 +148,7 @@ impl CustomServeTrait for PegboardGateway {
 				}
 			}
 
-			tracing::warn!("received no message response");
+			tracing::warn!(request_id=?Uuid::from_bytes(request_id), "received no message response during request init");
 			Err(ServiceUnavailable.build())
 		};
 		let response_start = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
@@ -170,7 +184,7 @@ impl CustomServeTrait for PegboardGateway {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		unique_request_id: Uuid,
-	) -> Result<()> {
+	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 
@@ -213,9 +227,9 @@ impl CustomServeTrait for PegboardGateway {
 			while let Some(msg) = msg_rx.recv().await {
 				match msg {
 					TunnelMessageData::Message(
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen,
+						protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg),
 					) => {
-						return anyhow::Ok(());
+						return anyhow::Ok(msg);
 					}
 					TunnelMessageData::Message(
 						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
@@ -235,10 +249,11 @@ impl CustomServeTrait for PegboardGateway {
 				}
 			}
 
-			tracing::warn!("received no message response");
+			tracing::warn!(request_id=?Uuid::from_bytes(request_id), "received no message response during ws init");
 			Err(WebSocketServiceUnavailable.build())
 		};
-		tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+
+		let open_msg = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
 			.await
 			.map_err(|_| {
 				tracing::warn!("timed out waiting for tunnel ack");
@@ -246,126 +261,198 @@ impl CustomServeTrait for PegboardGateway {
 				WebSocketServiceUnavailable.build()
 			})??;
 
+		self.shared_state
+			.toggle_hibernation(request_id, open_msg.can_hibernate)
+			.await?;
+
 		// Send reclaimed messages
 		self.shared_state
-			.send_reclaimed_messages(request_id)
+			.resend_pending_websocket_messages(request_id, open_msg.last_msg_index)
 			.await?;
 
 		let ws_rx = client_ws.recv();
 
-		// Spawn task to forward messages from server to client
-		let mut server_to_client = tokio::spawn(
+		let (tunnel_to_ws_abort_tx, mut tunnel_to_ws_abort_rx) = watch::channel(());
+		let (ws_to_tunnel_abort_tx, mut ws_to_tunnel_abort_rx) = watch::channel(());
+
+		// Spawn task to forward messages from tunnel to ws
+		let shared_state = self.shared_state.clone();
+		let tunnel_to_ws = tokio::spawn(
 			async move {
-				while let Some(msg) = msg_rx.recv().await {
-					match msg {
-						TunnelMessageData::Message(
-							protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
-						) => {
-							let msg = if ws_msg.binary {
-								Message::Binary(ws_msg.data.into())
+				loop {
+					tokio::select! {
+						res = msg_rx.recv() => {
+							if let Some(msg) = res {
+								match msg {
+									TunnelMessageData::Message(
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
+									) => {
+										let msg = if ws_msg.binary {
+											Message::Binary(ws_msg.data.into())
+										} else {
+											Message::Text(
+												String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
+											)
+										};
+										client_ws.send(msg).await?;
+									}
+									TunnelMessageData::Message(
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack),
+									) => {
+										shared_state
+											.ack_pending_websocket_messages(request_id, ack.index)
+											.await?;
+									}
+									TunnelMessageData::Message(
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
+									) => {
+										tracing::debug!(?close, "server closed websocket");
+
+
+										if open_msg.can_hibernate && close.retry {
+											// Successful closure
+											return Err(WebSocketServiceRetry.build());
+										} else {
+											return Ok(LifecycleResult::ServerClose(close));
+										}
+									}
+									TunnelMessageData::Timeout => {
+										tracing::warn!("websocket message timeout");
+										return Err(WebSocketServiceTimeout.build());
+									}
+									_ => {}
+								}
 							} else {
-								Message::Text(
-									String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
-								)
-							};
-							client_ws.send(msg).await?;
+								tracing::debug!("tunnel sub closed");
+								return Err(WebSocketServiceRetry.build());
+							}
 						}
-						TunnelMessageData::Message(
-							protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
-						) => {
-							tracing::debug!(?close, "server closed websocket");
-							return Err(WebSocketServiceUnavailable.build());
+						_ = tunnel_to_ws_abort_rx.changed() => {
+							tracing::debug!("task aborted");
+							return Ok(LifecycleResult::Aborted);
 						}
-						TunnelMessageData::Timeout => {
-							tracing::warn!("websocket message timeout");
-							return Err(WebSocketServiceUnavailable.build());
-						}
-						_ => {}
 					}
 				}
-
-				tracing::debug!("tunnel sub closed");
-
-				Err(WebSocketServiceUnavailable.build())
 			}
-			.instrument(tracing::info_span!("server_to_client_task")),
+			.instrument(tracing::info_span!("tunnel_to_ws_task")),
 		);
 
-		// Spawn task to forward messages from client to server
+		// Spawn task to forward messages from ws to tunnel
 		let shared_state_clone = self.shared_state.clone();
-		let mut client_to_server = tokio::spawn(
+		let ws_to_tunnel = tokio::spawn(
 			async move {
 				let mut ws_rx = ws_rx.lock().await;
 
-				while let Some(msg) = ws_rx.try_next().await? {
-					match msg {
-						Message::Binary(data) => {
-							let ws_message =
-								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-									protocol::ToClientWebSocketMessage {
-										data: data.into(),
-										binary: true,
-									},
-								);
-							shared_state_clone
-								.send_message(request_id, ws_message)
-								.await?;
+				loop {
+					tokio::select! {
+						res = ws_rx.try_next() => {
+							if let Some(msg) = res? {
+								match msg {
+									Message::Binary(data) => {
+										let ws_message =
+											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+												protocol::ToClientWebSocketMessage {
+													// NOTE: This gets set in shared_state.ts
+													index: 0,
+													data: data.into(),
+													binary: true,
+												},
+											);
+										shared_state_clone
+											.send_message(request_id, ws_message)
+											.await?;
+									}
+									Message::Text(text) => {
+										let ws_message =
+											protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
+												protocol::ToClientWebSocketMessage {
+													// NOTE: This gets set in shared_state.ts
+													index: 0,
+													data: text.as_bytes().to_vec(),
+													binary: false,
+												},
+											);
+										shared_state_clone
+											.send_message(request_id, ws_message)
+											.await?;
+									}
+									Message::Close(close) => {
+										return Ok(LifecycleResult::ClientClose(close));
+									}
+									_ => {}
+								}
+							} else {
+								tracing::debug!("websocket stream closed");
+								return Ok(LifecycleResult::ClientClose(None));
+							}
 						}
-						Message::Text(text) => {
-							let ws_message =
-								protocol::ToClientTunnelMessageKind::ToClientWebSocketMessage(
-									protocol::ToClientWebSocketMessage {
-										data: text.as_bytes().to_vec(),
-										binary: false,
-									},
-								);
-							shared_state_clone
-								.send_message(request_id, ws_message)
-								.await?;
+						_ = ws_to_tunnel_abort_rx.changed() => {
+							tracing::debug!("task aborted");
+							return Ok(LifecycleResult::Aborted);
 						}
-						Message::Close(_) => {
-							return Ok(());
-						}
-						_ => {}
-					}
+					};
 				}
-
-				tracing::debug!("websocket stream closed");
-
-				Ok(())
 			}
-			.instrument(tracing::info_span!("client_to_server_task")),
+			.instrument(tracing::info_span!("ws_to_tunnel_task")),
 		);
 
-		// Wait for either task to complete
-		let lifecycle_res = tokio::select! {
-			res = &mut server_to_client => {
-				let res = res?;
-				tracing::debug!(?res, "server to client task completed");
+		// Wait for both tasks to complete
+		let (tunnel_to_ws_res, ws_to_tunnel_res) = tokio::join!(
+			async {
+				let res = tunnel_to_ws.await?;
+
+				// Abort other if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "tunnel to ws task completed, aborting counterpart");
+
+					drop(ws_to_tunnel_abort_tx);
+				} else {
+					tracing::debug!(?res, "tunnel to ws task completed");
+				}
+
+				res
+			},
+			async {
+				let res = ws_to_tunnel.await?;
+
+				// Abort other if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "ws to tunnel task completed, aborting counterpart");
+
+					drop(tunnel_to_ws_abort_tx);
+				} else {
+					tracing::debug!(?res, "ws to tunnel task completed");
+				}
+
 				res
 			}
-			res = &mut client_to_server => {
-				let res = res?;
-				tracing::debug!(?res, "client to server task completed");
-				res
-			}
-		};
+		);
 
-		// Abort remaining tasks
-		server_to_client.abort();
-		client_to_server.abort();
-
-		let (close_code, close_reason) = if lifecycle_res.is_ok() {
-			(CloseCode::Normal.into(), None)
-		} else {
-			(CloseCode::Error.into(), Some("ws.downstream_closed".into()))
+		// Determine single result from both tasks
+		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res) {
+			// Prefer error
+			(_, Err(err)) => Err(err),
+			(Err(err), _) => Err(err),
+			// Prefer non aborted result if both succeed
+			(Ok(res), Ok(LifecycleResult::Aborted)) => Ok(res),
+			(Ok(LifecycleResult::Aborted), Ok(res)) => Ok(res),
+			// Prefer tunnel to ws if both succeed (unlikely case)
+			(res, _) => res,
 		};
 
 		// Send WebSocket close message to runner
+		let (close_code, close_reason) = match &mut lifecycle_res {
+			// Taking here because it won't be used again
+			Ok(LifecycleResult::ClientClose(Some(close))) => {
+				(close.code, Some(std::mem::take(&mut close.reason)))
+			}
+			Ok(_) => (CloseCode::Normal.into(), None),
+			Err(_) => (CloseCode::Error.into(), Some("ws.downstream_closed".into())),
+		};
 		let close_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketClose(
 			protocol::ToClientWebSocketClose {
-				code: Some(close_code),
-				reason: close_reason,
+				code: Some(close_code.into()),
+				reason: close_reason.map(|x| x.as_str().to_string()),
 			},
 		);
 
@@ -377,6 +464,20 @@ impl CustomServeTrait for PegboardGateway {
 			tracing::error!(?err, "error sending close message");
 		}
 
-		lifecycle_res
+		// Send WebSocket close message to client
+		match lifecycle_res {
+			Ok(LifecycleResult::ServerClose(close)) => {
+				if let Some(code) = close.code {
+					Ok(Some(CloseFrame {
+						code: code.into(),
+						reason: close.reason.unwrap_or_default().into(),
+					}))
+				} else {
+					Ok(None)
+				}
+			}
+			Ok(_) => Ok(None),
+			Err(err) => Err(err),
+		}
 	}
 }

@@ -114,7 +114,7 @@ pub async fn fetch_serverless_runner_metadata(
 		});
 	}
 
-	let payload = serde_json::from_str::<ServerlessMetadataPayload>(&body_raw).map_err(|err| {
+	let payload = serde_json::from_str::<ServerlessMetadataPayload>(&body_raw).map_err(|_| {
 		ServerlessMetadataError::InvalidResponseJson {
 			body: body_for_user,
 		}

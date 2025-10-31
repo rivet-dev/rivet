@@ -1063,18 +1063,21 @@ export function writeToClientWebSocketOpen(bc: bare.ByteCursor, x: ToClientWebSo
 }
 
 export type ToClientWebSocketMessage = {
+    readonly index: u16
     readonly data: ArrayBuffer
     readonly binary: boolean
 }
 
 export function readToClientWebSocketMessage(bc: bare.ByteCursor): ToClientWebSocketMessage {
     return {
+        index: bare.readU16(bc),
         data: bare.readData(bc),
         binary: bare.readBool(bc),
     }
 }
 
 export function writeToClientWebSocketMessage(bc: bare.ByteCursor, x: ToClientWebSocketMessage): void {
+    bare.writeU16(bc, x.index)
     bare.writeData(bc, x.data)
     bare.writeBool(bc, x.binary)
 }
@@ -1107,7 +1110,22 @@ export function writeToClientWebSocketClose(bc: bare.ByteCursor, x: ToClientWebS
     write5(bc, x.reason)
 }
 
-export type ToServerWebSocketOpen = null
+export type ToServerWebSocketOpen = {
+    readonly canHibernate: boolean
+    readonly lastMsgIndex: i64
+}
+
+export function readToServerWebSocketOpen(bc: bare.ByteCursor): ToServerWebSocketOpen {
+    return {
+        canHibernate: bare.readBool(bc),
+        lastMsgIndex: bare.readI64(bc),
+    }
+}
+
+export function writeToServerWebSocketOpen(bc: bare.ByteCursor, x: ToServerWebSocketOpen): void {
+    bare.writeBool(bc, x.canHibernate)
+    bare.writeI64(bc, x.lastMsgIndex)
+}
 
 export type ToServerWebSocketMessage = {
     readonly data: ArrayBuffer
@@ -1126,21 +1144,38 @@ export function writeToServerWebSocketMessage(bc: bare.ByteCursor, x: ToServerWe
     bare.writeBool(bc, x.binary)
 }
 
+export type ToServerWebSocketMessageAck = {
+    readonly index: u16
+}
+
+export function readToServerWebSocketMessageAck(bc: bare.ByteCursor): ToServerWebSocketMessageAck {
+    return {
+        index: bare.readU16(bc),
+    }
+}
+
+export function writeToServerWebSocketMessageAck(bc: bare.ByteCursor, x: ToServerWebSocketMessageAck): void {
+    bare.writeU16(bc, x.index)
+}
+
 export type ToServerWebSocketClose = {
     readonly code: u16 | null
     readonly reason: string | null
+    readonly retry: boolean
 }
 
 export function readToServerWebSocketClose(bc: bare.ByteCursor): ToServerWebSocketClose {
     return {
         code: read9(bc),
         reason: read5(bc),
+        retry: bare.readBool(bc),
     }
 }
 
 export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebSocketClose): void {
     write9(bc, x.code)
     write5(bc, x.reason)
+    bare.writeBool(bc, x.retry)
 }
 
 /**
@@ -1159,6 +1194,7 @@ export type ToServerTunnelMessageKind =
      */
     | { readonly tag: "ToServerWebSocketOpen"; readonly val: ToServerWebSocketOpen }
     | { readonly tag: "ToServerWebSocketMessage"; readonly val: ToServerWebSocketMessage }
+    | { readonly tag: "ToServerWebSocketMessageAck"; readonly val: ToServerWebSocketMessageAck }
     | { readonly tag: "ToServerWebSocketClose"; readonly val: ToServerWebSocketClose }
 
 export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunnelMessageKind {
@@ -1174,10 +1210,12 @@ export function readToServerTunnelMessageKind(bc: bare.ByteCursor): ToServerTunn
         case 3:
             return { tag: "ToServerResponseAbort", val: null }
         case 4:
-            return { tag: "ToServerWebSocketOpen", val: null }
+            return { tag: "ToServerWebSocketOpen", val: readToServerWebSocketOpen(bc) }
         case 5:
             return { tag: "ToServerWebSocketMessage", val: readToServerWebSocketMessage(bc) }
         case 6:
+            return { tag: "ToServerWebSocketMessageAck", val: readToServerWebSocketMessageAck(bc) }
+        case 7:
             return { tag: "ToServerWebSocketClose", val: readToServerWebSocketClose(bc) }
         default: {
             bc.offset = offset
@@ -1208,6 +1246,7 @@ export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerT
         }
         case "ToServerWebSocketOpen": {
             bare.writeU8(bc, 4)
+            writeToServerWebSocketOpen(bc, x.val)
             break
         }
         case "ToServerWebSocketMessage": {
@@ -1215,8 +1254,13 @@ export function writeToServerTunnelMessageKind(bc: bare.ByteCursor, x: ToServerT
             writeToServerWebSocketMessage(bc, x.val)
             break
         }
-        case "ToServerWebSocketClose": {
+        case "ToServerWebSocketMessageAck": {
             bare.writeU8(bc, 6)
+            writeToServerWebSocketMessageAck(bc, x.val)
+            break
+        }
+        case "ToServerWebSocketClose": {
+            bare.writeU8(bc, 7)
             writeToServerWebSocketClose(bc, x.val)
             break
         }

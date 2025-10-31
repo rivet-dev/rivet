@@ -1,5 +1,4 @@
 use anyhow::*;
-use epoxy_protocol::protocol::ReplicaId;
 use std::result::Result::Ok;
 use universaldb::prelude::*;
 

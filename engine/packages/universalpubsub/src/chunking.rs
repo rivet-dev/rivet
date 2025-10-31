@@ -144,7 +144,7 @@ pub fn split_payload_into_chunks(
 	let start_ups_message = rivet_ups_protocol::UpsMessage {
 		body: MessageBody::MessageStart(start_message),
 	};
-	let start_overhead = UpsMessage::latest(start_ups_message)
+	let start_overhead = UpsMessage::wrap_latest(start_ups_message)
 		.serialize_with_embedded_version(PROTOCOL_VERSION)?
 		.len();
 
@@ -157,7 +157,7 @@ pub fn split_payload_into_chunks(
 	let chunk_ups_message = rivet_ups_protocol::UpsMessage {
 		body: MessageBody::MessageChunk(chunk_message),
 	};
-	let chunk_overhead = UpsMessage::latest(chunk_ups_message)
+	let chunk_overhead = UpsMessage::wrap_latest(chunk_ups_message)
 		.serialize_with_embedded_version(PROTOCOL_VERSION)?
 		.len();
 
@@ -222,5 +222,5 @@ pub fn encode_chunk(
 	};
 
 	let ups_message = rivet_ups_protocol::UpsMessage { body };
-	UpsMessage::latest(ups_message).serialize_with_embedded_version(PROTOCOL_VERSION)
+	UpsMessage::wrap_latest(ups_message).serialize_with_embedded_version(PROTOCOL_VERSION)
 }
