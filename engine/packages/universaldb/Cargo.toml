@@ -14,6 +14,7 @@ futures-util.workspace = true
 lazy_static.workspace = true
 rand.workspace = true
 rivet-metrics.workspace = true
+rivet-tracing-utils.workspace = true
 rocksdb.workspace = true
 serde.workspace = true
 thiserror.workspace = true
