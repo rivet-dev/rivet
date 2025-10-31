@@ -62,7 +62,7 @@ export interface RunnerConfig {
 		config: ActorConfig,
 	) => Promise<void>;
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
-	getActorHibernationConfig: (actorId: string, requestId: ArrayBuffer) => HibernationConfig;
+	getActorHibernationConfig: (actorId: string, requestId: ArrayBuffer, request: Request) => HibernationConfig;
 	noAutoShutdown?: boolean;
 }
 

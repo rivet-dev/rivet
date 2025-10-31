@@ -70,6 +70,16 @@ export const ActorConfigSchema = z
 				connectionLivenessInterval: z.number().positive().default(5000),
 				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
+				/** @experimental */
+				canHibernatWebSocket: z
+					.union([
+						z.boolean(),
+						z
+							.function()
+							.args(z.custom<Request>())
+							.returns(z.boolean()),
+					])
+					.default(false),
 			})
 			.strict()
 			.default({}),

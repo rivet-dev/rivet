@@ -3,10 +3,20 @@ export interface RivetEvent {
 	type: string;
 	target?: any;
 	currentTarget?: any;
+	/**
+	 * @experimental
+	 * Request ID for hibernatable websockets (provided by engine runner)
+	 **/
+	rivetRequestId?: ArrayBuffer;
 }
 
 export interface RivetMessageEvent extends RivetEvent {
 	data: any;
+	/**
+	 * @experimental
+	 * Message index for hibernatable websockets (provided by engine runner)
+	 **/
+	rivetMessageIndex?: number;
 }
 
 export interface RivetCloseEvent extends RivetEvent {
