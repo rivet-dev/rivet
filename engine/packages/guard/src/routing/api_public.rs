@@ -50,6 +50,7 @@ impl CustomServeTrait for ApiPublicService {
 		_headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
+		_unique_request_id: Uuid,
 	) -> Result<()> {
 		bail!("api-public does not support WebSocket connections")
 	}

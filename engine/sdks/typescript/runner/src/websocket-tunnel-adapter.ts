@@ -254,6 +254,11 @@ export class WebSocketTunnelAdapter {
 		let hasListeners = false;
 
 		if (listeners && listeners.size > 0) {
+			logger()?.debug({
+				msg: "------------- listeners",
+				l: listeners?.size
+			});
+
 			hasListeners = true;
 			for (const listener of listeners) {
 				try {
@@ -311,6 +316,10 @@ export class WebSocketTunnelAdapter {
 				break;
 			case "message":
 				if (this.#onmessage) {
+					logger()?.debug({
+						msg: "---------------- msg",
+					});
+
 					hasListeners = true;
 					try {
 						this.#onmessage.call(this, event);
@@ -326,6 +335,11 @@ export class WebSocketTunnelAdapter {
 
 		// Buffer the event if no listeners are registered
 		if (!hasListeners) {
+			logger()?.debug({
+				msg: "------------- no listeners",
+				type,
+			});
+
 			this.#bufferedEvents.push({ type, event });
 		}
 	}
@@ -337,6 +351,12 @@ export class WebSocketTunnelAdapter {
 		this.#bufferedEvents = this.#bufferedEvents.filter(
 			(buffered) => buffered.type !== type,
 		);
+
+		logger()?.debug({
+			msg: "------------- flush",
+			type,
+			l: eventsToFlush.length
+		});
 
 		for (const { event } of eventsToFlush) {
 			// Re-fire the event, which will now have listeners
@@ -426,10 +446,11 @@ export class WebSocketTunnelAdapter {
 		this.#fireEvent("open", event);
 	}
 
-	_handleMessage(data: string | Uint8Array, isBinary: boolean): void {
+	/// Returns false if the message was sent off.
+	_handleMessage(data: string | Uint8Array, isBinary: boolean): boolean {
 		if (this.#readyState !== 1) {
 			// OPEN
-			return;
+			return true;
 		}
 
 		let messageData: any;
@@ -465,7 +486,13 @@ export class WebSocketTunnelAdapter {
 			target: this,
 		};
 
+		logger()?.debug({
+			msg: "------------ tunnel fire event",
+		});
+
 		this.#fireEvent("message", event);
+
+		return false;
 	}
 
 	_handleClose(code?: number, reason?: string): void {
