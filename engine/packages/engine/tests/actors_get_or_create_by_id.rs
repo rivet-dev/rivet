@@ -1,3 +1,5 @@
+#![allow(unused_variables, unused_imports)]
+
 mod common;
 
 use serde_json::json;

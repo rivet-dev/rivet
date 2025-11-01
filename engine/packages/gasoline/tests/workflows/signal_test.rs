@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct SignalTestInput {}
 
 #[workflow(SignalTestWorkflow)]
@@ -17,6 +18,7 @@ pub async fn signal_test_workflow(
 
 #[signal("test_signal")]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TestSignal {
 	pub value: String,
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 use serde_json::json;
 
 #[derive(Clone)]

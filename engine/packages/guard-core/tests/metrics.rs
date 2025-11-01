@@ -1,13 +1,5 @@
 mod common;
 
-use hyper::{Method, StatusCode};
-use std::sync::Arc;
-use std::time::Duration;
-use uuid::Uuid;
-
-use common::{TestServer, create_test_config, init_tracing, start_guard};
-use rivet_guard_core::RouteTarget;
-
 // TODO:
 //#[tokio::test]
 //async fn test_metrics_incremented_on_request() {
