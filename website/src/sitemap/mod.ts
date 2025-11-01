@@ -108,160 +108,6 @@ export const sitemap = [
 						href: "/docs",
 						icon: faSquareInfo,
 					},
-				]
-			},
-			{
-				// TOOD: These are product pages
-				// - https://tanstack.com/query/latest
-				// - https://docs.restate.dev/use-cases/ai-agents
-				title: "Libraries",
-				pages: [
-					{ title: "Actors", href: "/docs/tools/actors", icon: faActorsBorderless },
-					// { title: "Workflows", href: "/docs/what-are-workflows", },
-					// { title: "Agent Orchestration", href: "/docs/what-are-agents", },
-				]
-			},
-			{
-				title: "Use Cases",
-				pages: [
-					...useCases.slice(0, 3).map(({ title, href, icon }) => ({
-						title,
-						href,
-						icon,
-					})),
-					{
-						title: "More",
-						collapsible: true,
-						pages: useCases.slice(3).map(({ title, href, icon }) => ({
-							title,
-							href,
-							icon,
-						})),
-					},
-				],
-			},
-			{
-				title: "Reference",
-				pages: [
-					{
-						title: "Deploy",
-						icon: faUpload,
-						collapsible: true,
-						pages: deployHosts.map(({ title, href, icon, badge }) => ({
-							title,
-							href,
-							icon,
-							badge,
-						})),
-					},
-					{
-						title: "Rivet Cloud",
-						icon: faCloud,
-						collapsible: true,
-						pages: [
-							{
-								title: "Overview",
-								href: "/docs/cloud",
-								// icon: faSquareInfo,
-							},
-						],
-					},
-					{
-						title: "Self-Hosting",
-						icon: faServer,
-						collapsible: true,
-						pages: [
-							{
-								title: "Overview",
-								href: "/docs/self-hosting",
-								// icon: faSquareInfo,
-							},
-							{
-								title: "Install",
-								href: "/docs/self-hosting/install",
-								// icon: faDownload,
-							},
-							{
-								title: "Concepts",
-								collapsible: true,
-								pages: [
-									{
-										title: "Connect Backend",
-										href: "/docs/self-hosting/connect-backend",
-										// icon: faNetworkWired,
-									},
-									{
-										title: "Configuration",
-										href: "/docs/self-hosting/configuration",
-										// icon: faGear,
-									},
-									{
-										title: "Multi-Region",
-										href: "/docs/self-hosting/multi-region",
-										// icon: faGlobe,
-									},
-								],
-							},
-							{
-								title: "Platforms",
-								collapsible: true,
-								pages: [
-									{
-										title: "Docker Container",
-										href: "/docs/self-hosting/docker-container",
-									},
-									{
-										title: "Docker Compose",
-										href: "/docs/self-hosting/docker-compose",
-									},
-									{
-										title: "Railway",
-										href: "/docs/self-hosting/railway",
-									},
-								],
-							},
-							//{
-							//	title: "Advanced",
-							//	pages: [
-							//	// TODO: Scaling
-							//		// TODO: Architecture
-							//		// TODO: Networking (exposed ports, how data gets routed to actors, etc)
-							//	],
-							//},
-						],
-					},
-					// {
-					// 	title: "Rivet Inspector",
-					// 	href: "/docs/general/studio",
-					// 	icon: faPalette,
-					// },
-					{
-						title: "Docs for LLMs",
-						href: "/docs/general/docs-for-llms",
-						icon: faSquareBinary,
-					},
-					// {
-					// 	title: "System Architecture",
-					// 	href: "/docs/general/system-architecture",
-					// 	icon: faLayerGroup,
-					// },
-				],
-			},
-		],
-	},
-	{
-		title: "Actors",
-		href: "/docs/actors",
-		//icon: faActorsBorderless,
-		sidebar: [
-			{
-				title: "General",
-				pages: [
-					{
-						title: "Overview",
-						href: "/docs/actors",
-						icon: faSquareInfo,
-					},
 					{
 						title: "Quickstart",
 						icon: faForward,
@@ -293,8 +139,32 @@ export const sitemap = [
 				]
 			},
 			{
+				title: "Use Cases",
+				pages: [
+					...useCases.slice(0, 3).map(({ title, href, icon }) => ({
+						title,
+						href,
+						icon,
+					})),
+					{
+						title: "More",
+						collapsible: true,
+						pages: useCases.slice(3).map(({ title, href, icon }) => ({
+							title,
+							href,
+							icon,
+						})),
+					},
+				],
+			},
+			{
 				title: "Concepts",
 				pages: [
+					{
+						title: "What are Rivet Actors?",
+						href: "/docs/actors",
+						icon: faSquareInfo,
+					},
 					{
 						title: "State",
 						href: "/docs/actors/state",
@@ -402,14 +272,19 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
-								title: "Clients",
-								href: "/docs/actors/clients",
-								icon: faCode,
-							},
-							{
 								title: "Testing",
 								href: "/docs/actors/testing",
 								icon: faVialCircleCheck,
+							},
+							{
+								title: "CORS",
+								href: "/docs/general/cors",
+								icon: faShareNodes,
+							},
+							{
+								title: "Logging",
+								href: "/docs/general/logging",
+								icon: faListUl,
 							},
 							{
 								title: "Scaling & Concurrency",
@@ -418,27 +293,71 @@ export const sitemap = [
 							},
 						],
 					},
-				]
+				],
+			},
+			{
+				title: "Clients",
+				pages: [
+					{
+						title: "Overview",
+						href: "/docs/actors/clients",
+						// icon: faCode,
+					},
+					{
+						title: "Languages & Frameworks",
+						collapsible: true,
+						pages: [
+							{
+								title: "JavaScript",
+								href: "/docs/clients/javascript",
+								icon: faNodeJs,
+							},
+							{
+								title: "React",
+								href: "/docs/clients/react",
+								icon: faReact,
+							},
+							{
+								title: "Next.js",
+								href: "/docs/clients/next-js",
+								icon: faNextjs,
+							},
+							{
+								title: "Rust",
+								href: "/docs/clients/rust",
+								icon: faRust,
+							},
+							{
+								title: "OpenAPI",
+								href: "/docs/clients/openapi",
+								icon: faFileImport,
+							},
+						]
+					}
+				],
+			},
+			{
+				title: "Reference",
+				pages: [
+					// {
+					// 	title: "Rivet Inspector",
+					// 	href: "/docs/general/studio",
+					// 	icon: faPalette,
+					// },
+					{
+						title: "Docs for LLMs",
+						href: "/docs/general/docs-for-llms",
+						// icon: faSquareBinary,
+					},
+					// {
+					// 	title: "System Architecture",
+					// 	href: "/docs/general/system-architecture",
+					// 	icon: faLayerGroup,
+					// },
+				],
 			},
 		],
 	},
-
-	// {
-	// 	title: "Workflows",
-	// 	href: "/docs/workflows",
-	// 	//icon: faActorsBorderless,
-	// 	sidebar: [
-	// 	]
-	// },
-	//
-	// {
-	// 	title: "Agents",
-	// 	href: "/docs/agents",
-	// 	//icon: faActorsBorderless,
-	// 	sidebar: [
-	// 	]
-	// },
-
 	{
 		title: "Integrations",
 		href: "/docs/integrations",
@@ -459,62 +378,88 @@ export const sitemap = [
 	},
 
 	{
-		title: "API Reference",
-		href: "/docs/api",
-		//icon: faActorsBorderless,
+		title: "Deploy",
+		href: "/docs/deploy",
+		sidebar: deployHosts.map(({ title, href, icon, badge }) => ({
+			title,
+			href,
+			icon,
+			badge,
+		})),
+	},
+	{
+		title: "Rivet Cloud",
+		href: "/docs/cloud",
 		sidebar: [
 			{
-				title: "General",
+				title: "Overview",
+				href: "/docs/cloud",
+				// icon: faSquareInfo,
+			},
+		],
+	},
+	{
+		title: "Self-Hosting",
+		href: "/docs/self-hosting",
+		sidebar: [
+			{
+				title: "Overview",
+				href: "/docs/self-hosting",
+				// icon: faSquareInfo,
+			},
+			{
+				title: "Install",
+				href: "/docs/self-hosting/install",
+				// icon: faDownload,
+			},
+			{
+				title: "Actors",
+				collapsible: true,
 				pages: [
-				{
-					title: "Overview",
-					href: "/docs/api"
-				},
 					{
-						title: "CORS",
-						href: "/docs/general/cors",
-						icon: faShareNodes,
+						title: "Connect Backend",
+						href: "/docs/self-hosting/connect-backend",
+						// icon: faNetworkWired,
 					},
 					{
-						title: "Logging",
-						href: "/docs/general/logging",
-						icon: faListUl,
+						title: "Configuration",
+						href: "/docs/self-hosting/configuration",
+						// icon: faGear,
+					},
+					{
+						title: "Multi-Region",
+						href: "/docs/self-hosting/multi-region",
+						// icon: faGlobe,
 					},
 				],
 			},
 			{
-				title: "Clients",
-				// icon: faCode,
-				// collapsible: true,
+				title: "Platforms",
+				collapsible: true,
 				pages: [
 					{
-						title: "JavaScript",
-						href: "/docs/clients/javascript",
-						icon: faNodeJs,
+						title: "Docker Container",
+						href: "/docs/self-hosting/docker-container",
 					},
 					{
-						title: "React",
-						href: "/docs/clients/react",
-						icon: faReact,
+						title: "Docker Compose",
+						href: "/docs/self-hosting/docker-compose",
 					},
 					{
-						title: "Next.js",
-						href: "/docs/clients/next-js",
-						icon: faNextjs,
-					},
-					{
-						title: "Rust",
-						href: "/docs/clients/rust",
-						icon: faRust,
-					},
-					{
-						title: "OpenAPI",
-						href: "/docs/clients/openapi",
-						icon: faFileImport,
+						title: "Railway",
+						href: "/docs/self-hosting/railway",
 					},
 				],
 			},
-		]
+			//{
+			//	title: "Advanced",
+			//	pages: [
+			//	// TODO: Scaling
+			//		// TODO: Architecture
+			//		// TODO: Networking (exposed ports, how data gets routed to actors, etc)
+			//	],
+			//},
+		],
 	},
 
 	// {

@@ -1,7 +1,3 @@
-import * as crypto from "node:crypto";
-import * as fsSync from "node:fs";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
 import { ActorAlreadyExists } from "@/actor/errors";
@@ -27,6 +23,12 @@ import {
 	setLongTimeout,
 	stringifyError,
 } from "@/utils";
+import {
+	getNodeCrypto,
+	getNodeFs,
+	getNodeFsSync,
+	getNodePath,
+} from "@/utils/node";
 import { logger } from "./log";
 import {
 	ensureDirectoryExists,
@@ -93,6 +95,7 @@ export class FileSystemGlobalState {
 	constructor(persist: boolean = true, customPath?: string) {
 		this.#persist = persist;
 		this.#storagePath = persist ? getStoragePath(customPath) : "/tmp";
+		const path = getNodePath();
 		this.#stateDir = path.join(this.#storagePath, "state");
 		this.#dbsDir = path.join(this.#storagePath, "databases");
 		this.#alarmsDir = path.join(this.#storagePath, "alarms");
@@ -104,6 +107,7 @@ export class FileSystemGlobalState {
 			ensureDirectoryExistsSync(this.#alarmsDir);
 
 			try {
+				const fsSync = getNodeFsSync();
 				const actorIds = fsSync.readdirSync(this.#stateDir);
 				this.#actorCountOnStartup = actorIds.length;
 			} catch (error) {
@@ -131,15 +135,15 @@ export class FileSystemGlobalState {
 	}
 
 	getActorStatePath(actorId: string): string {
-		return path.join(this.#stateDir, actorId);
+		return getNodePath().join(this.#stateDir, actorId);
 	}
 
 	getActorDbPath(actorId: string): string {
-		return path.join(this.#dbsDir, `${actorId}.db`);
+		return getNodePath().join(this.#dbsDir, `${actorId}.db`);
 	}
 
 	getActorAlarmPath(actorId: string): string {
-		return path.join(this.#alarmsDir, actorId);
+		return getNodePath().join(this.#alarmsDir, actorId);
 	}
 
 	async *getActorsIterator(params: {
@@ -148,6 +152,7 @@ export class FileSystemGlobalState {
 		let actorIds = Array.from(this.#actors.keys()).sort();
 
 		// Check if state directory exists first
+		const fsSync = getNodeFsSync();
 		if (fsSync.existsSync(this.#stateDir)) {
 			actorIds = fsSync
 				.readdirSync(this.#stateDir)
@@ -258,6 +263,7 @@ export class FileSystemGlobalState {
 
 		// Read & parse file
 		try {
+			const fs = getNodeFs();
 			const stateData = await fs.readFile(stateFilePath);
 
 			// Cache the loaded state in handler
@@ -352,8 +358,10 @@ export class FileSystemGlobalState {
 		// Persist alarm to disk
 		if (this.#persist) {
 			const alarmPath = this.getActorAlarmPath(actorId);
+			const crypto = getNodeCrypto();
 			const tempPath = `${alarmPath}.tmp.${crypto.randomUUID()}`;
 			try {
+				const path = getNodePath();
 				await ensureDirectoryExists(path.dirname(alarmPath));
 				const alarmData: schema.ActorAlarm = {
 					actorId,
@@ -363,10 +371,12 @@ export class FileSystemGlobalState {
 					ACTOR_ALARM_VERSIONED.serializeWithEmbeddedVersion(
 						alarmData,
 					);
+				const fs = getNodeFs();
 				await fs.writeFile(tempPath, data);
 				await fs.rename(tempPath, alarmPath);
 			} catch (error) {
 				try {
+					const fs = getNodeFs();
 					await fs.unlink(tempPath);
 				} catch {}
 				logger().error({
@@ -391,10 +401,12 @@ export class FileSystemGlobalState {
 	): Promise<void> {
 		const dataPath = this.getActorStatePath(actorId);
 		// Generate unique temp filename to prevent any race conditions
+		const crypto = getNodeCrypto();
 		const tempPath = `${dataPath}.tmp.${crypto.randomUUID()}`;
 
 		try {
 			// Create directory if needed
+			const path = getNodePath();
 			await ensureDirectoryExists(path.dirname(dataPath));
 
 			// Convert to BARE types for serialization
@@ -409,11 +421,13 @@ export class FileSystemGlobalState {
 			// Perform atomic write
 			const serializedState =
 				ACTOR_STATE_VERSIONED.serializeWithEmbeddedVersion(bareState);
+			const fs = getNodeFs();
 			await fs.writeFile(tempPath, serializedState);
 			await fs.rename(tempPath, dataPath);
 		} catch (error) {
 			// Cleanup temp file on error
 			try {
+				const fs = getNodeFs();
 				await fs.unlink(tempPath);
 			} catch {
 				// Ignore cleanup errors
@@ -548,12 +562,14 @@ export class FileSystemGlobalState {
 	 */
 	#loadAlarmsSync(): void {
 		try {
+			const fsSync = getNodeFsSync();
 			const files = fsSync.existsSync(this.#alarmsDir)
 				? fsSync.readdirSync(this.#alarmsDir)
 				: [];
 			for (const file of files) {
 				// Skip temp files
 				if (file.includes(".tmp.")) continue;
+				const path = getNodePath();
 				const fullPath = path.join(this.#alarmsDir, file);
 				try {
 					const buf = fsSync.readFileSync(fullPath);
@@ -622,6 +638,7 @@ export class FileSystemGlobalState {
 			// On trigger: remove persisted alarm file
 			if (this.#persist) {
 				try {
+					const fs = getNodeFs();
 					await fs.unlink(this.getActorAlarmPath(actorId));
 				} catch (err: any) {
 					if (err?.code !== "ENOENT") {
@@ -668,6 +685,8 @@ export class FileSystemGlobalState {
 	}
 
 	getOrCreateInspectorAccessToken(): string {
+		const path = getNodePath();
+		const fsSync = getNodeFsSync();
 		const tokenPath = path.join(this.#storagePath, "inspector-token");
 		if (fsSync.existsSync(tokenPath)) {
 			return fsSync.readFileSync(tokenPath, "utf-8");
@@ -683,6 +702,7 @@ export class FileSystemGlobalState {
 	 */
 	#cleanupTempFilesSync(): void {
 		try {
+			const fsSync = getNodeFsSync();
 			const files = fsSync.readdirSync(this.#stateDir);
 			const tempFiles = files.filter((f) => f.includes(".tmp."));
 
@@ -690,6 +710,7 @@ export class FileSystemGlobalState {
 
 			for (const tempFile of tempFiles) {
 				try {
+					const path = getNodePath();
 					const fullPath = path.join(this.#stateDir, tempFile);
 					const stat = fsSync.statSync(fullPath);
 

@@ -1,4 +1,3 @@
-import { PlatformIcons } from "../components/PlatformIcons";
 import { MarketingButton } from "../components/MarketingButton";
 import { CopyCommand } from "../components/CopyCommand";
 import Link from "next/link";
@@ -7,7 +6,7 @@ import { WithTooltip } from "@rivet-gg/components";
 export function HeroSection() {
 	return (
 		<div className="relative isolate mt-[73px] landing-hero flex flex-col px-4 sm:px-6">
-			<div className="h-16 sm:h-20" />
+			<div className="h-24 sm:h-32" />
 
 			<div className="mx-auto md:px-8 flex flex-col h-full">
 				{/* Main content centered vertically */}
@@ -17,10 +16,38 @@ export function HeroSection() {
 						<h1 className="hero-bg-exclude text-4xl md:text-5xl font-normal text-white leading-[1.3] sm:leading-[1.1] tracking-[-0.03em] max-w-full">
 							{/*Lightweight library for building modern backends*/}
 							{/*Library for building stateful applications and distributed systems*/}
-							Build and scale stateful workloads
+							{/*Build and scale stateful workloads*/}
+							State + Compute = Less Complexity
 						</h1>
 
 						<div className="h-5" />
+
+						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+							Rivet Actors merge state and compute in to a primitive that scales effortlessly with less complex infrastructure.
+							Easily self-hostable and works with your infrastructure.
+						</p>
+
+						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+							Rivet Actors are lightweight processes that unite state and compute.<br/>Scales effortlessly with less complex infrastructure.<br/>
+							Easily{" "}
+							<span className="text-white/90">self-hostable</span>{" "}
+							and works with{" "}
+							<span className="text-white/90">
+								your infrastructure
+							</span>
+							.
+						</p>*/}
+
+						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+							Rivet Actors are lightweight processes that merge state and compute{" "}<br/>in to a primitive that scales effortlessly with less complex infrastructure.<br/>
+							Easily{" "}
+							<span className="text-white/90">self-hostable</span>{" "}
+							and works with{" "}
+							<span className="text-white/90">
+								your infrastructure
+							</span>
+							.
+						</p>*/}
 
 						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
 							Rivet is a library for{" "}
@@ -40,7 +67,7 @@ export function HeroSection() {
 						</p>*/}
 
 
-						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
+						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
 							Rivet is an open-source library for{" "}
 							<span className="ttext-white/90">long-lived processes</span>.
 							<br />
@@ -56,7 +83,7 @@ export function HeroSection() {
 								your infrastructure
 							</span>
 							.
-						</p>
+						</p>*/}
 
 						<div className="h-8" />
 
@@ -87,10 +114,6 @@ export function HeroSection() {
 						/>*/}
 					</div>
 				</div>
-
-				<div className="h-8" />
-
-				<PlatformIcons />
 
 				<div className="h-8 sm:h-12" />
 			</div>
