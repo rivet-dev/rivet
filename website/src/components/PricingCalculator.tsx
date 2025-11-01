@@ -6,33 +6,28 @@ const PRIMITIVES = [
 	{ label: "Actor", value: "actor" },
 ];
 
-const MEMORY_OPTIONS = [128, 256, 512, 1024, 2048]; // in MB
 
-const MS_IN_HOUR = 3600 * 1000;
-const COST_PER_MS = 0.00000000163;
-const COST_PER_GB_BW = 0.05;
+const COST_PER_GB_BW = 0.15;
 const COST_PER_MILLION_READS = 0.2;
 const COST_PER_MILLION_WRITES = 1.0;
-const COST_PER_GB_MONTH = 0.2;
+const COST_PER_GB_MONTH = 0.40;
+const COST_PER_MILLION_ACTIONS = 0.15;
 
 function calculateCost({
-	memory,
-	requests,
-	durationMs,
 	bandwidthGB,
 	reads,
 	writes,
 	storedGB,
+	actions,
 }) {
-	const totalMs = requests * durationMs;
-	const computeCost = totalMs * COST_PER_MS * (memory / 128);
 	const bandwidthCost = Math.max(0, bandwidthGB - 10) * COST_PER_GB_BW;
 	const readCost =
 		(Math.max(0, reads - 1_000_000) / 1_000_000) * COST_PER_MILLION_READS;
 	const writeCost =
 		(Math.max(0, writes - 1_000_000) / 1_000_000) * COST_PER_MILLION_WRITES;
 	const storageCost = Math.max(0, storedGB) * COST_PER_GB_MONTH;
-	return computeCost + bandwidthCost + readCost + writeCost + storageCost;
+	const actionCost = (Math.max(0, actions - 1_000_000) / 1_000_000) * COST_PER_MILLION_ACTIONS;
+	return bandwidthCost + readCost + writeCost + storageCost + actionCost;
 }
 
 const inputStyle = {
@@ -82,63 +77,6 @@ function PrimitiveEntry({ entry, onChange, onRemove, index }) {
 			</div>
 			<div style={{ marginBottom: 8 }}>
 				<label>
-					Memory Allocation:&nbsp;
-					<select
-						value={entry.memory}
-						onChange={(e) =>
-							onChange({
-								...entry,
-								memory: Number(e.target.value),
-							})
-						}
-						style={inputStyle}
-					>
-						{MEMORY_OPTIONS.map((mb) => (
-							<option key={mb} value={mb}>
-								{mb} MB
-							</option>
-						))}
-					</select>
-				</label>
-			</div>
-			<div style={{ marginBottom: 8 }}>
-				<label>
-					Requests per month:&nbsp;
-					<input
-						type="number"
-						min={0}
-						step={1000}
-						value={entry.requests}
-						onChange={(e) =>
-							onChange({
-								...entry,
-								requests: Number(e.target.value),
-							})
-						}
-						style={inputStyle}
-					/>
-				</label>
-			</div>
-			<div style={{ marginBottom: 8 }}>
-				<label>
-					Duration per request (ms):&nbsp;
-					<input
-						type="number"
-						min={1}
-						step={1}
-						value={entry.durationMs}
-						onChange={(e) =>
-							onChange({
-								...entry,
-								durationMs: Number(e.target.value),
-							})
-						}
-						style={inputStyle}
-					/>
-				</label>
-			</div>
-			<div style={{ marginBottom: 8 }}>
-				<label>
 					Bandwidth usage (GB/month):&nbsp;
 					<input
 						type="number"
@@ -154,10 +92,13 @@ function PrimitiveEntry({ entry, onChange, onRemove, index }) {
 						style={inputStyle}
 					/>
 				</label>
+				<div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+					Note: 10 GB bandwidth included, $0.15/GB for additional
+				</div>
 			</div>
 			<div style={{ marginBottom: 8 }}>
 				<label>
-					Storage Reads per month:&nbsp;
+					Save State Reads per month:&nbsp;
 					<input
 						type="number"
 						min={0}
@@ -175,7 +116,7 @@ function PrimitiveEntry({ entry, onChange, onRemove, index }) {
 			</div>
 			<div style={{ marginBottom: 8 }}>
 				<label>
-					Storage Writes per month:&nbsp;
+					Save State Writes per month:&nbsp;
 					<input
 						type="number"
 						min={0}
@@ -185,6 +126,24 @@ function PrimitiveEntry({ entry, onChange, onRemove, index }) {
 							onChange({
 								...entry,
 								writes: Number(e.target.value),
+							})
+						}
+						style={inputStyle}
+					/>
+				</label>
+			</div>
+			<div style={{ marginBottom: 8 }}>
+				<label>
+					Actions per month:&nbsp;
+					<input
+						type="number"
+						min={0}
+						step={1000}
+						value={entry.actions}
+						onChange={(e) =>
+							onChange({
+								...entry,
+								actions: Number(e.target.value),
 							})
 						}
 						style={inputStyle}
@@ -245,13 +204,11 @@ function CollapsibleSection({ title, children, open, onToggle }) {
 }
 
 const defaultEntry = {
-	memory: 128,
-	requests: 1000000,
-	durationMs: 50,
 	bandwidthGB: 0,
 	reads: 1000000,
 	writes: 1000000,
 	storedGB: 0,
+	actions: 0,
 };
 
 export default function PricingCalculator() {
