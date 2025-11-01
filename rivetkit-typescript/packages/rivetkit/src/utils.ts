@@ -248,3 +248,18 @@ export function combineUrlPath(
 	const fullQuery = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 	return `${baseUrl.protocol}//${baseUrl.host}${fullPath}${fullQuery}`;
 }
+
+export function arrayBuffersEqual(
+	buf1: ArrayBuffer,
+	buf2: ArrayBuffer,
+): boolean {
+	if (buf1.byteLength !== buf2.byteLength) return false;
+
+	const view1 = new Uint8Array(buf1);
+	const view2 = new Uint8Array(buf2);
+
+	for (let i = 0; i < view1.length; i++) {
+		if (view1[i] !== view2[i]) return false;
+	}
+	return true;
+}

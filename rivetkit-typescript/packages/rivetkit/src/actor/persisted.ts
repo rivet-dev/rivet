@@ -5,6 +5,7 @@ export interface PersistedActor<S, CP, CS, I> {
 	state: S;
 	connections: PersistedConn<CP, CS>[];
 	scheduledEvents: PersistedScheduleEvent[];
+	hibernatableWebSocket: PersistedHibernatableWebSocket[];
 }
 
 /** Object representing connection that gets persisted to storage. */
@@ -36,4 +37,10 @@ export interface PersistedScheduleEvent {
 	eventId: string;
 	timestamp: number;
 	kind: PersistedScheduleEventKind;
+}
+
+export interface PersistedHibernatableWebSocket {
+	requestId: ArrayBuffer;
+	lastSeenTimestamp: bigint;
+	msgIndex: bigint;
 }

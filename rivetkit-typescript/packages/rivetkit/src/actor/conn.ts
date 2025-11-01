@@ -1,5 +1,6 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import { PersistedHibernatableWebSocket } from "@/schemas/actor-persist/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { bufferToArrayBuffer } from "@/utils";
@@ -123,6 +124,25 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	public get status(): ConnectionStatus {
 		return this.__status;
+	}
+
+	/**
+	 * @experimental
+	 *
+	 * If the underlying connection can hibernate.
+	 */
+	public get isHibernatable(): boolean {
+		if (this.__driverState) {
+			const driverKind = getConnDriverKindFromState(this.__driverState);
+			const driver = CONN_DRIVERS[driverKind];
+			return driver.isHibernatable(
+				this.#actor,
+				this,
+				(this.__driverState as any)[driverKind],
+			);
+		} else {
+			return false;
+		}
 	}
 
 	/**
