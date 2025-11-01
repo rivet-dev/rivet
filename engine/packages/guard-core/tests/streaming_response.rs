@@ -72,7 +72,7 @@ async fn test_streaming_response_should_timeout() {
 			println!("✅ Got response immediately: {}", response.status());
 
 			// If we get here, streaming is working. Let's verify we can read data
-			let (parts, body) = response.into_parts();
+			let (_parts, body) = response.into_parts();
 
 			// Try to read the first chunk with a timeout
 			let mut body_stream = body.into_data_stream();
@@ -240,7 +240,6 @@ fn create_streaming_routing_fn(server_addr: SocketAddr) -> RoutingFn {
 				if path == "/stream" {
 					let target = RouteTarget {
 						actor_id: Some(Id::v1(Uuid::new_v4(), 0)),
-						server_id: Some(Uuid::new_v4()),
 						host: server_addr.ip().to_string(),
 						port: server_addr.port(),
 						path: path.to_string(),

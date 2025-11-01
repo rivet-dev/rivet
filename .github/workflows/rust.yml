@@ -46,14 +46,17 @@ jobs:
   #   runs-on: depot-ubuntu-24.04
   #   steps:
   #     - uses: actions/checkout@v4
-      
+
   #     - uses: actions-rust-lang/setup-rust-toolchain@v1
   #       with:
   #         toolchain: stable
   #         components: clippy
-      
+
   #     - uses: Swatinem/rust-cache@v2
-      
+  #       with:
+  #         shared-key: "rust-ci"
+  #         cache-on-failure: true
+
   #     - name: Run clippy
   #       run: cargo clippy --all-targets --all-features -- -W warnings
 
@@ -68,6 +71,9 @@ jobs:
           toolchain: stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          cache-on-failure: true
 
       - name: Check
         run: cargo check --all-targets --all-features
@@ -86,6 +92,12 @@ jobs:
   #         toolchain: stable
   #
   #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         # Share cache across all Rust jobs
+  #         shared-key: "rust-ci"
+  #         # Save cache even if the build fails
+  #         cache-on-failure: true
+  #         # Only save cache on main branch to avoid cache pollution from PRs
   #
   #     - name: Run tests
   #       run: cargo test --verbose

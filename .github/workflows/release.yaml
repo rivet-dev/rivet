@@ -188,7 +188,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN}}
 
       - name: Build & Push (rivetkit/engine:full)
-        uses: docker/build-push-action@v4
+        uses: depot/build-push-action@v1
         with:
           context: .
           push: true
@@ -205,7 +205,7 @@ jobs:
           #   netrc=${{ runner.temp }}/netrc
 
       - name: Build & Push (rivetkit/engine:slim)
-        uses: docker/build-push-action@v4
+        uses: depot/build-push-action@v1
         with:
           context: .
           push: true
