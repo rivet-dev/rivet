@@ -391,9 +391,7 @@ async fn verify_configuration_propagated(test_ctx: &TestCtx, expected_epoch: u64
 	for &replica_id in &replica_ids {
 		let ctx = test_ctx.get_ctx(replica_id);
 
-		let result = ctx
-			.op(epoxy::ops::read_cluster_config::Input { replica_id })
-			.await?;
+		let result = ctx.op(epoxy::ops::read_cluster_config::Input {}).await?;
 
 		tracing::info!(
 			replica_id,

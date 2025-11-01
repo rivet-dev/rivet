@@ -972,7 +972,7 @@ async fn test_snapshot_reads(db: &Database) {
 		let key1 = test_subspace.pack(&("snap_key1",));
 		let key2 = test_subspace.pack(&("snap_key2",));
 		let key3 = test_subspace.pack(&("snap_key3",));
-		let key4 = test_subspace.pack(&("snap_key4",));
+		let _key4 = test_subspace.pack(&("snap_key4",));
 
 		// Snapshot read should see database value
 		let snapshot_value = tx.get(&key1, Snapshot).await?;
@@ -2363,6 +2363,7 @@ async fn test_atomic_nonexistent_keys(db: &Database) {
 	);
 }
 
+#[allow(dead_code)]
 async fn test_versionstamps(db: &Database) {
 	// Test 1: Basic versionstamp insertion and ordering within a single transaction
 	db.run(|tx| async move {
