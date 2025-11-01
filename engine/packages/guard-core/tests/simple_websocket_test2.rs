@@ -1,13 +1,10 @@
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use futures_util::{future, pin_mut};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use hyper::{Request, Response};
 use hyper_tungstenite::{HyperWebsocket, tungstenite};
 use hyper_util::rt::TokioIo;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_tungstenite::connect_async;
 use tungstenite::Message;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;

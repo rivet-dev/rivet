@@ -19,6 +19,7 @@ struct BenchResult {
 	max: Duration,
 }
 
+#[allow(dead_code)]
 async fn warm_sleep(ms: u64) {
 	tokio::time::sleep(Duration::from_millis(ms)).await
 }
@@ -79,6 +80,7 @@ async fn run_publish_once(
 	Ok(())
 }
 
+#[allow(dead_code)]
 async fn run_subscribe_publish_once(
 	publisher: &PubSub,
 	subscriber: &PubSub,
@@ -149,6 +151,7 @@ async fn run_publish_one_once(
 	Ok(())
 }
 
+#[allow(dead_code)]
 async fn run_subscribe_publish_one_once(
 	publisher: &PubSub,
 	subscriber: &PubSub,
@@ -356,8 +359,8 @@ async fn run_benches(
 			Ok(sub)
 		},
 		// Per-iteration teardown: drop the per-iteration subscription to unsubscribe
-		|_, mut sub| async move {
-			drop(&mut sub);
+		|_, sub| async move {
+			drop(sub);
 			Ok(())
 		},
 		// Final teardown: nothing to do
@@ -488,8 +491,8 @@ async fn run_benches(
 			Ok(sub)
 		},
 		// Per-iteration teardown: drop the per-iteration subscription to unsubscribe
-		|_, mut sub| async move {
-			drop(&mut sub);
+		|_, sub| async move {
+			drop(sub);
 			Ok(())
 		},
 		// Final teardown: nothing to do

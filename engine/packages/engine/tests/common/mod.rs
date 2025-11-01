@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables, unused_imports)]
+
 pub mod actors;
 pub mod ctx;
 pub mod ns;

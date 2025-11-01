@@ -277,8 +277,7 @@ async fn create_websocket_test_server(
 			Box::pin(async move {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
-						actor_id: Some(Id::new_v1()),
-						server_id: Some(Uuid::new_v4()),
+						actor_id: Some(Id::v1(Uuid::new_v4(), 0)),
 						host: server_addr.ip().to_string(),
 						port: server_addr.port(),
 						path: path.to_string(),
@@ -694,7 +693,7 @@ async fn test_websocket_rate_limiting() {
 		Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+	let _server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 	let test_server_addr = test_server.addr;
 
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
@@ -706,7 +705,6 @@ async fn test_websocket_rate_limiting() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
-						server_id: Some(server_id),
 						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
@@ -814,8 +812,7 @@ async fn test_websocket_retry() {
 			Box::pin(async move {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
-						actor_id: Some(Id::new_v1()),
-						server_id: Some(Uuid::new_v4()),
+						actor_id: Some(Id::v1(Uuid::new_v4(), 0)),
 						host: server_addr.ip().to_string(),
 						port: server_addr.port(),
 						path: path.to_string(),
@@ -997,7 +994,7 @@ async fn test_websocket_max_in_flight() {
 		Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+	let _server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 	let test_server_addr = test_server.addr;
 
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
@@ -1009,7 +1006,6 @@ async fn test_websocket_max_in_flight() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
-						server_id: Some(server_id),
 						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),

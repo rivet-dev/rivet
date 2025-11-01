@@ -79,30 +79,30 @@ jobs:
       matrix:
         include:
           - platform: linux
-            runner: depot-ubuntu-24.04-4
+            runner: depot-ubuntu-24.04-8
             target: x86_64-unknown-linux-musl
             binary_ext: ""
             arch: x86_64
           # TODO: Add back when working
           # - platform: linux
-          #   runner: depot-ubuntu-24.04-arm-4
+          #   runner: depot-ubuntu-24.04-arm-8
           #   target: aarch64-unknown-linux-musl
           #   binary_ext: ""
           #   arch: aarch64
           - platform: windows
-            runner: depot-ubuntu-24.04-4
+            runner: depot-ubuntu-24.04-8
             target: x86_64-pc-windows-gnu
             binary_ext: ".exe"
             arch: x86_64
           - platform: macos
             # Use Linux instead of macOS builders since macOS does not support Docker
-            runner: depot-ubuntu-24.04-4
+            runner: depot-ubuntu-24.04-8
             target: x86_64-apple-darwin
             binary_ext: ""
             arch: x86_64
           - platform: macos
             # Use Linux instead of macOS builders since macOS does not support Docker
-            runner: depot-ubuntu-24.04-4
+            runner: depot-ubuntu-24.04-8
             target: aarch64-apple-darwin
             binary_ext: ""
             arch: aarch64
@@ -162,10 +162,10 @@ jobs:
       matrix:
         include:
           - platform: linux/arm64
-            runner: depot-ubuntu-24.04-arm-4
+            runner: depot-ubuntu-24.04-arm-8
             arch_suffix: -arm64
           - platform: linux/x86_64
-            runner: depot-ubuntu-24.04-4
+            runner: depot-ubuntu-24.04-8
             arch_suffix: -amd64
     runs-on: ${{ matrix.runner }}
     steps:
@@ -188,7 +188,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN}}
 
       - name: Build & Push (rivetkit/engine:full)
-        uses: docker/build-push-action@v4
+        uses: depot/build-push-action@v1
         with:
           context: .
           push: true
@@ -205,7 +205,7 @@ jobs:
           #   netrc=${{ runner.temp }}/netrc
 
       - name: Build & Push (rivetkit/engine:slim)
-        uses: docker/build-push-action@v4
+        uses: depot/build-push-action@v1
         with:
           context: .
           push: true
