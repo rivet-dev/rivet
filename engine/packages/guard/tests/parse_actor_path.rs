@@ -1,4 +1,4 @@
-use rivet_guard::routing::{ActorPathInfo, parse_actor_path};
+use rivet_guard::routing::parse_actor_path;
 
 #[test]
 fn test_parse_actor_path_with_token() {

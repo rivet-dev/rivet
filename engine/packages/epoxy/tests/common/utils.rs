@@ -3,6 +3,7 @@ use epoxy::ops::propose::ProposalResult;
 use epoxy_protocol::protocol;
 
 /// Helper function to execute a command through the ops API
+#[allow(dead_code)]
 pub async fn execute_command(
 	ctx: &gas::prelude::TestCtx,
 	command: protocol::CommandKind,
