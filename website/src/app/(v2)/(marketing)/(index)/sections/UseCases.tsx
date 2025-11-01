@@ -200,6 +200,9 @@ export function UseCases() {
 	return (
 		<section className="w-full">
 			<div className="container relative mx-auto px-6 lg:px-16 xl:px-20 max-w-[1500px]">
+				<h2 className="text-2xl sm:text-3xl font-700 text-white mb-8 text-left">
+					Actors make it simple to build
+				</h2>
 				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-4 md:gap-4 xl:gap-3 2xl:gap-6 auto-rows-[300px]">
 					{/* First item - takes 6 columns (half width on medium+) */}
 					<UseCaseCard
