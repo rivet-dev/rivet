@@ -1,7 +1,7 @@
 import type { Next } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import * as errors from "@/actor/errors";
-import { getEnvUniversal } from "@/utils";
+import { EXTRA_ERROR_LOG, getEnvUniversal, VERSION } from "@/utils";
 import type { Logger } from "./log";
 
 export function assertUnreachable(x: never): never {
@@ -228,8 +228,7 @@ export function deconstructError(
 			group,
 			code,
 			message,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
-			support: "https://rivet.dev/discord",
+			...EXTRA_ERROR_LOG,
 			...extraLog,
 		});
 	} else if (exposeInternalError) {
@@ -246,8 +245,7 @@ export function deconstructError(
 				group,
 				code,
 				message,
-				issues: "https://github.com/rivet-dev/rivetkit/issues",
-				support: "https://rivet.dev/discord",
+				...EXTRA_ERROR_LOG,
 				...extraLog,
 			});
 		} else {
@@ -262,8 +260,7 @@ export function deconstructError(
 				group,
 				code,
 				message,
-				issues: "https://github.com/rivet-dev/rivetkit/issues",
-				support: "https://rivet.dev/discord",
+				...EXTRA_ERROR_LOG,
 				...extraLog,
 			});
 		}
@@ -281,8 +278,7 @@ export function deconstructError(
 			msg: "internal error",
 			error: getErrorMessage(error),
 			stack: (error as Error)?.stack,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
-			support: "https://rivet.dev/discord",
+			...EXTRA_ERROR_LOG,
 			...extraLog,
 		});
 	}

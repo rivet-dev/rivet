@@ -8,6 +8,7 @@ import {
 	ensureDirectoryExists,
 	getStoragePath,
 } from "@/drivers/file-system/utils";
+import { EXTRA_ERROR_LOG } from "@/utils";
 import { logger } from "./log";
 
 export const ENGINE_PORT = 6420;
@@ -110,8 +111,7 @@ export async function ensureEngineProcess(
 			msg: "engine process exited, please report this error",
 			code,
 			signal,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
-			support: "https://rivet.dev/discord",
+			...EXTRA_ERROR_LOG,
 		});
 		// Clean up log streams
 		stdoutStream.end();
@@ -228,8 +228,7 @@ async function downloadEngineBinaryIfNeeded(
 			msg: "engine download failed, please report this error",
 			tempPath,
 			error,
-			issues: "https://github.com/rivet-dev/rivetkit/issues",
-			support: "https://rivet.dev/discord",
+			...EXTRA_ERROR_LOG,
 		});
 		try {
 			await fs.unlink(tempPath);
