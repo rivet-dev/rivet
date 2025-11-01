@@ -92,7 +92,7 @@ pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 
 		// Forward raw message to WebSocket
 		let serialized_msg =
-			match versioned::ToClient::wrap_latest(msg).serialize_version(conn.protocol_version) {
+			match versioned::ToClient::wrap_latest(msg).serialize(conn.protocol_version) {
 				Result::Ok(x) => x,
 				Err(err) => {
 					tracing::error!(?err, "failed to serialize tunnel message");
