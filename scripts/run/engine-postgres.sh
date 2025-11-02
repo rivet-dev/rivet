@@ -32,4 +32,4 @@ cd "${REPO_ROOT}"
 
 RIVET__POSTGRES__URL=postgres://postgres:postgres@localhost:5432/postgres \
 RUST_LOG=debug \
-cargo run --bin rivet-engine -- start "$@"
+cargo run --bin rivet-engine -- start "$@" | tee /tmp/rivet-engine.log
