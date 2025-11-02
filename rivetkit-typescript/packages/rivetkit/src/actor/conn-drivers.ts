@@ -83,10 +83,19 @@ export interface ConnDriver<State> {
 const WEBSOCKET_DRIVER: ConnDriver<ConnDriverWebSocketState> = {
 	sendMessage: (
 		actor: AnyActorInstance,
-		_conn: AnyConn,
+		conn: AnyConn,
 		state: ConnDriverWebSocketState,
 		message: CachedSerializer<protocol.ToClient>,
 	) => {
+		if (state.websocket.readyState !== ConnReadyState.OPEN) {
+			actor.rLog.warn({
+				msg: "attempting to send message to closed websocket, this is likely a bug in RivetKit",
+				connId: conn.id,
+				wsReadyState: state.websocket.readyState,
+			});
+			return;
+		}
+
 		const serialized = message.serialize(state.encoding);
 
 		actor.rLog.debug({
