@@ -11,9 +11,16 @@ function parseEnvInt(value: string | undefined, fallback: number) {
 	return Math.floor(parsed);
 }
 
+/**
+ * What the actor should do once spawned.
+ */
+export type ActorBehavior = "sleep-cycle" | "http";
+
 const RUN_DURATION = parseEnvInt(process.env.RUN_DURATION, 10_000);
 const SPAWN_ACTOR_INTERVAL = parseEnvInt(process.env.SPAWN_ACTOR_INTERVAL, 10);
 const TOTAL_ACTOR_COUNT = Math.ceil(RUN_DURATION / SPAWN_ACTOR_INTERVAL);
+export const BEHAVIOR: ActorBehavior = (process.env.BEHAVIOR ??
+	"sleep-cycle") as ActorBehavior;
 const PROGRESS_LOG_INTERVAL_MS = 250;
 
 type DurationStats = {
