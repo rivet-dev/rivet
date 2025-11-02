@@ -169,7 +169,7 @@
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
 		"nanoevents": "^9.1.0",
-		"on-change": "^5.0.1",
+		"on-change": "npm:@rivetkit/on-change@^6.0.2-rc.1",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
 		"zod": "^3.25.76"
