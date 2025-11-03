@@ -550,11 +550,11 @@ export class EngineActorDriver implements ActorDriver {
 		});
 	}
 
-	async sleep(actorId: string) {
+	startSleep(actorId: string) {
 		this.#runner.sleepActor(actorId);
 	}
 
-	async shutdown(immediate: boolean): Promise<void> {
+	async shutdownRunner(immediate: boolean): Promise<void> {
 		logger().info({ msg: "stopping engine actor driver" });
 		await this.#runner.shutdown(immediate);
 	}
@@ -565,7 +565,7 @@ export class EngineActorDriver implements ActorDriver {
 			stream.onAbort(() => {});
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
-				this.shutdown(true);
+				this.shutdownRunner(true);
 			});
 
 			await this.#runnerStarted.promise;

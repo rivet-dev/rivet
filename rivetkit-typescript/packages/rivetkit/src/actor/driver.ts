@@ -35,9 +35,17 @@ export interface ActorDriver {
 	 */
 	getDatabase(actorId: string): Promise<unknown | undefined>;
 
-	sleep?(actorId: string): Promise<void>;
+	/**
+	 * Requests the actor to go to sleep.
+	 *
+	 * This will call `_stop` independently.
+	 */
+	startSleep?(actorId: string): void;
 
-	shutdown?(immediate: boolean): Promise<void>;
+	/**
+	 * Shuts down the actor runner.
+	 */
+	shutdownRunner?(immediate: boolean): Promise<void>;
 
 	// Serverless
 	/** This handles the serverless start request. This should manage the lifecycle of the runner tied to the request lifecycle. */

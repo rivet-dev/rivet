@@ -79,7 +79,8 @@ export class FileSystemActorDriver implements ActorDriver {
 		return this.#state.createDatabase(actorId);
 	}
 
-	sleep(actorId: string): Promise<void> {
-		return this.#state.sleepActor(actorId);
+	startSleep(actorId: string): void {
+		// Spawns the sleepActor promise
+		this.#state.sleepActor(actorId);
 	}
 }
