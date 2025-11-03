@@ -17,7 +17,7 @@ export const ACTOR_STATUS_LABEL_MAP = {
 
 export const ActorStatusLabel = ({ status }: { status?: ActorStatus }) => {
 	return (
-		<span className="whitespace-nowrap">
+		<span className="whitespace-nowrap" data-slot="status-label">
 			{status ? ACTOR_STATUS_LABEL_MAP[status] : "Unknown"}
 		</span>
 	);
