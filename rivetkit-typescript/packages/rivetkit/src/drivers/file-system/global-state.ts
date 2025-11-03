@@ -325,7 +325,7 @@ export class FileSystemGlobalState {
 
 		// Stop actor
 		invariant(actor.actor, "actor should be loaded");
-		await actor.actor._stop();
+		await actor.actor._onStop();
 
 		// Remove from map after stop is complete
 		this.#actors.delete(actorId);

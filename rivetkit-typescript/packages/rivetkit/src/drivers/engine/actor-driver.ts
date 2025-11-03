@@ -427,7 +427,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		const handler = this.#actors.get(actorId);
 		if (handler?.actor) {
-			await handler.actor._stop();
+			await handler.actor._onStop();
 			this.#actors.delete(actorId);
 		}
 

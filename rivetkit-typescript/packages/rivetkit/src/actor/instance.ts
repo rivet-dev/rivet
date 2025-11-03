@@ -150,7 +150,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#stopCalled = false;
 
 	get isStopping() {
-		return this.#stopCalled || this.#sleepCalled;
+		return this.#stopCalled;
 	}
 
 	#persistChanged = false;
@@ -1294,8 +1294,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#assertReady(allowStoppingState: boolean = false) {
 		if (!this.#ready) throw new errors.InternalError("Actor not ready");
-		if (!allowStoppingState && this.#sleepCalled)
-			throw new errors.InternalError("Actor is going to sleep");
 		if (!allowStoppingState && this.#stopCalled)
 			throw new errors.InternalError("Actor is stopping");
 	}
@@ -1930,7 +1928,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		if (canSleep) {
 			this.#sleepTimeout = setTimeout(() => {
-				this._sleep();
+				this._startSleep();
 			}, this.#config.options.sleepTimeout);
 		}
 	}
@@ -1958,20 +1956,32 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return true;
 	}
 
-	/** Puts an actor to sleep. This should just start the sleep sequence, most shutdown logic should be in _stop (which is called by the ActorDriver when sleeping). */
-	_sleep() {
+	/**
+	 * Puts an actor to sleep. This should just start the sleep sequence, most shutdown logic should be in _stop (which is called by the ActorDriver when sleeping).
+	 *
+	 * For the engine, this will:
+	 * 1. Publish EventActorIntent with ActorIntentSleep (via driver.startSleep)
+	 * 2. Engine runner will wait for CommandStopActor
+	 * 3. Engine runner will call _onStop and wait for it to finish
+	 * 4. Engine runner will publish EventActorStateUpdate with ActorStateSTop
+	 **/
+	_startSleep() {
+		// IMPORTANT: #sleepCalled should have no effect on the actor's
+		// behavior aside from preventing calling _startSleep twice. Wait for
+		// `_onStop` before putting in a stopping state.
+		if (this.#sleepCalled) {
+			this.#rLog.warn({ msg: "already sleeping actor" });
+			return;
+		}
+		this.#sleepCalled = true;
+
+		// NOTE: Publishes ActorIntentSleep
 		const sleep = this.#actorDriver.startSleep?.bind(
 			this.#actorDriver,
 			this.#actorId,
 		);
 		invariant(this.#sleepingSupported, "sleeping not supported");
 		invariant(sleep, "no sleep on driver");
-
-		if (this.#sleepCalled) {
-			this.#rLog.warn({ msg: "already sleeping actor" });
-			return;
-		}
-		this.#sleepCalled = true;
 
 		this.#rLog.info({ msg: "actor sleeping" });
 
@@ -1985,7 +1995,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: Stop
-	async _stop() {
+	/**
+	 * For the engine:
+	 * 1. Engine runner receives CommandStopActor
+	 * 2. Engine runner calls _onStop and waits for it to finish
+	 * 3. Engine runner publishes EventActorStateUpdate with ActorStateSTop
+	 */
+	async _onStop() {
 		if (this.#stopCalled) {
 			this.#rLog.warn({ msg: "already stopping actor" });
 			return;
