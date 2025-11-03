@@ -1,5 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
+import { generateConnRequestId } from "@/actor/conn";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
 	handleRawWebSocketHandler,
@@ -173,6 +174,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				actorId,
 				encoding,
 				params,
+				generateConnRequestId(),
 				connId,
 				connToken,
 			);
@@ -231,6 +233,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				actorId,
 				encoding,
 				connParams,
+				generateConnRequestId(),
 				connId,
 				connToken,
 			);

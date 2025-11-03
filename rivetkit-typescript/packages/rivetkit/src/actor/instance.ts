@@ -27,7 +27,7 @@ import {
 	Conn,
 	type ConnId,
 	generateConnId,
-	generateConnSocketId,
+	generateConnRequestId,
 	generateConnToken,
 } from "./conn";
 import {
@@ -232,6 +232,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						lastSeen: conn.lastSeen,
 						stateEnabled: conn.__stateEnabled,
 						isHibernatable: conn.isHibernatable,
+						requestId: conn.__socket?.requestId,
+						driver: conn.__driverState
+							? getConnDriverKindFromState(conn.__driverState)
+							: undefined,
 					}),
 				);
 			},
@@ -247,10 +251,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				await this.saveState({ immediate: true });
 			},
 			executeAction: async (name, params) => {
-				const socketId = generateConnSocketId();
+				const requestId = generateConnRequestId();
 				const conn = await this.createConn(
 					{
-						socketId,
+						requestId: requestId,
 						driverState: { [ConnDriverKind.HTTP]: {} },
 					},
 					undefined,
@@ -264,7 +268,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						params || [],
 					);
 				} finally {
-					this.__connDisconnected(conn, true, socketId);
+					this.__connDisconnected(conn, true, requestId);
 				}
 			},
 		};
@@ -873,16 +877,20 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	__connDisconnected(
 		conn: Conn<S, CP, CS, V, I, DB>,
 		wasClean: boolean,
-		socketId: string,
+		requestId: string,
 	) {
 		// If socket ID is provided, check if it matches the current socket ID
 		// If it doesn't match, this is a stale disconnect event from an old socket
-		if (socketId && conn.__socket && socketId !== conn.__socket.socketId) {
+		if (
+			requestId &&
+			conn.__socket &&
+			requestId !== conn.__socket.requestId
+		) {
 			this.#rLog.debug({
 				msg: "ignoring stale disconnect event",
 				connId: conn.id,
-				eventSocketId: socketId,
-				currentSocketId: conn.__socket.socketId,
+				eventRequestId: requestId,
+				currentRequestId: conn.__socket.requestId,
 			});
 			return;
 		}

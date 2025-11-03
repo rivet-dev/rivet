@@ -7,7 +7,7 @@ import { ActionContext } from "@/actor/action";
 import type { AnyConn } from "@/actor/conn";
 import {
 	generateConnId,
-	generateConnSocketId,
+	generateConnRequestId,
 	generateConnToken,
 } from "@/actor/conn";
 import { ConnDriverKind } from "@/actor/conn-drivers";
@@ -115,8 +115,9 @@ export async function handleWebSocketConnect(
 	actorId: string,
 	encoding: Encoding,
 	parameters: unknown,
-	connId?: string,
-	connToken?: string,
+	requestId: string,
+	connId: string | undefined,
+	connToken: string | undefined,
 ): Promise<UpgradeWebSocketArgs> {
 	const exposeInternalError = req
 		? getRequestExposeInternalError(req)
@@ -161,7 +162,6 @@ export async function handleWebSocketConnect(
 
 	// Promise used to wait for the websocket close in `disconnect`
 	const closePromise = promiseWithResolvers<void>();
-	const socketId = generateConnSocketId();
 
 	return {
 		onOpen: (_evt: any, ws: WSContext) => {
@@ -183,7 +183,7 @@ export async function handleWebSocketConnect(
 
 					conn = await actor.createConn(
 						{
-							socketId,
+							requestId: requestId,
 							driverState: {
 								[ConnDriverKind.WEBSOCKET]: {
 									encoding,
@@ -302,7 +302,7 @@ export async function handleWebSocketConnect(
 			handlersPromise
 				.then(({ conn, actor }) => {
 					const wasClean = event.wasClean || event.code === 1000;
-					actor.__connDisconnected(conn, wasClean, socketId);
+					actor.__connDisconnected(conn, wasClean, requestId);
 				})
 				.catch((error) => {
 					deconstructError(
@@ -342,7 +342,7 @@ export async function handleSseConnect(
 
 	const encoding = getRequestEncoding(c.req);
 	const parameters = getRequestConnParams(c.req);
-	const socketId = generateConnSocketId();
+	const requestId = generateConnRequestId();
 
 	// Check for reconnection parameters
 	const connId = c.req.header(HEADER_CONN_ID);
@@ -365,7 +365,7 @@ export async function handleSseConnect(
 
 			conn = await actor.createConn(
 				{
-					socketId,
+					requestId: requestId,
 					driverState: {
 						[ConnDriverKind.SSE]: {
 							encoding,
@@ -396,7 +396,7 @@ export async function handleSseConnect(
 
 					// Cleanup
 					if (conn) {
-						actor.__connDisconnected(conn, false, socketId);
+						actor.__connDisconnected(conn, false, requestId);
 					}
 
 					abortResolver.resolve(undefined);
@@ -435,7 +435,7 @@ export async function handleSseConnect(
 
 			// Cleanup on error
 			if (conn && actor !== undefined) {
-				actor.__connDisconnected(conn, false, socketId);
+				actor.__connDisconnected(conn, false, requestId);
 			}
 
 			// Close the stream on error
@@ -465,7 +465,7 @@ export async function handleAction(
 		HTTP_ACTION_REQUEST_VERSIONED,
 	);
 	const actionArgs = cbor.decode(new Uint8Array(request.args));
-	const socketId = generateConnSocketId();
+	const requestId = generateConnRequestId();
 
 	// Invoke the action
 	let actor: AnyActorInstance | undefined;
@@ -479,7 +479,7 @@ export async function handleAction(
 		// Create conn
 		conn = await actor.createConn(
 			{
-				socketId,
+				requestId: requestId,
 				driverState: { [ConnDriverKind.HTTP]: {} },
 			},
 			parameters,
@@ -492,7 +492,7 @@ export async function handleAction(
 	} finally {
 		if (conn) {
 			// HTTP connections don't have persistent sockets, so no socket ID needed
-			actor?.__connDisconnected(conn, true, socketId);
+			actor?.__connDisconnected(conn, true, requestId);
 		}
 	}
 
