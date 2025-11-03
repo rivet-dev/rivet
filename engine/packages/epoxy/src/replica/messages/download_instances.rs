@@ -12,7 +12,7 @@ pub async fn download_instances(
 	replica_id: ReplicaId,
 	req: protocol::DownloadInstancesRequest,
 ) -> Result<Vec<protocol::DownloadInstancesEntry>> {
-	tracing::info!(?replica_id, "handling download instances message");
+	tracing::debug!(?replica_id, "handling download instances message");
 
 	let mut entries = Vec::new();
 	let subspace = keys::subspace(replica_id);

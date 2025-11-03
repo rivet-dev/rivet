@@ -14,7 +14,7 @@ pub async fn message_request(
 
 	let kind = match request.kind {
 		protocol::RequestKind::UpdateConfigRequest(req) => {
-			tracing::info!(
+			tracing::debug!(
 				epoch = ?req.config.epoch,
 				replica_count = req.config.replicas.len(),
 				"received configuration update request"
@@ -103,7 +103,7 @@ pub async fn message_request(
 		}
 		protocol::RequestKind::CoordinatorUpdateReplicaStatusRequest(req) => {
 			// Send signal to coordinator workflow
-			tracing::info!(
+			tracing::debug!(
 				?current_replica_id,
 				update_replica_id=?req.replica_id,
 				update_status=?req.status,
@@ -124,7 +124,7 @@ pub async fn message_request(
 		}
 		protocol::RequestKind::BeginLearningRequest(req) => {
 			// Send signal to replica workflow
-			tracing::info!(?current_replica_id, "received begin learning request");
+			tracing::debug!(?current_replica_id, "received begin learning request");
 
 			ctx.signal(crate::workflows::replica::BeginLearning {
 				config: req.config.clone().into(),

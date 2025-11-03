@@ -171,7 +171,7 @@ async fn upsert_inner(
 			)
 			.await
 			{
-				tracing::warn!(?err, runner_name = ?path.runner_name, "failed to refresh runner config metadata");
+				tracing::warn!(?err, runner_name=?path.runner_name, "failed to refresh runner config metadata");
 			}
 		} else {
 			tracing::debug!("endpoint config unchanged, skipping metadata refresh");

@@ -18,7 +18,7 @@ pub async fn accepted(
 		instance,
 	} = payload;
 
-	tracing::info!(?replica_id, ?instance, "handling accepted message");
+	tracing::debug!(?replica_id, ?instance, "handling accepted message");
 
 	// Create accepted log entry
 	let current_ballot = ballot::get_ballot(tx, replica_id).await?;

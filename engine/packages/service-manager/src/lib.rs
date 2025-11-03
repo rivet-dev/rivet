@@ -122,12 +122,12 @@ pub async fn start(
 	services: Vec<Service>,
 ) -> Result<()> {
 	// Spawn services
-	tracing::info!(services = ?services.len(), "starting services");
+	tracing::info!(services=?services.len(), "starting services");
 	let mut join_set = tokio::task::JoinSet::new();
 	let cron_schedule = tokio_cron_scheduler::JobScheduler::new().await?;
 	let mut sleep_indefinitely = false;
 	for service in services {
-		tracing::debug!(name = %service.name, kind = ?service.kind, "server starting service");
+		tracing::debug!(name=%service.name, kind=?service.kind, "server starting service");
 
 		match service.kind.behavior() {
 			ServiceBehavior::Service => {
@@ -138,21 +138,21 @@ pub async fn start(
 						let config = config.clone();
 						let pools = pools.clone();
 						async move {
-							tracing::debug!(service = %service.name, "starting service");
+							tracing::debug!(service=%service.name, "starting service");
 
 							loop {
 								match (service.run)(config.clone(), pools.clone()).await {
 									Result::Ok(_) => {
-										tracing::error!(service = %service.name, "service exited unexpectedly");
+										tracing::error!(service=%service.name, "service exited unexpectedly");
 									}
 									Err(err) => {
-										tracing::error!(service = %service.name, ?err, "service crashed");
+										tracing::error!(service=%service.name, ?err, "service crashed");
 									}
 								}
 
 								tokio::time::sleep(Duration::from_secs(1)).await;
 
-								tracing::info!(service = %service.name, "restarting service");
+								tracing::info!(service=%service.name, "restarting service");
 							}
 						}
 					})
@@ -166,20 +166,20 @@ pub async fn start(
 						let config = config.clone();
 						let pools = pools.clone();
 						async move {
-							tracing::debug!(oneoff = %service.name, "starting oneoff");
+							tracing::debug!(oneoff=%service.name, "starting oneoff");
 
 							loop {
 								match (service.run)(config.clone(), pools.clone()).await {
 									Result::Ok(_) => {
-										tracing::debug!(oneoff = %service.name, "oneoff finished");
+										tracing::debug!(oneoff=%service.name, "oneoff finished");
 										break;
 									}
 									Err(err) => {
-										tracing::error!(oneoff = %service.name, ?err, "oneoff crashed");
+										tracing::error!(oneoff=%service.name, ?err, "oneoff crashed");
 
 										tokio::time::sleep(Duration::from_secs(1)).await;
 
-										tracing::info!(oneoff = %service.name, "restarting oneoff");
+										tracing::info!(oneoff=%service.name, "restarting oneoff");
 									}
 								}
 							}
@@ -200,20 +200,20 @@ pub async fn start(
 							let config = config.clone();
 							let pools = pools.clone();
 							async move {
-								tracing::debug!(cron = %service.name, "starting immediate cron");
+								tracing::debug!(cron=%service.name, "starting immediate cron");
 
 								for attempt in 1..=8 {
 									match (service.run)(config.clone(), pools.clone()).await {
 										Result::Ok(_) => {
-											tracing::debug!(cron = %service.name, ?attempt, "cron finished");
+											tracing::debug!(cron=%service.name, ?attempt, "cron finished");
 											break;
 										}
 										Err(err) => {
-											tracing::error!(cron = %service.name, ?attempt, ?err, "cron crashed");
+											tracing::error!(cron=%service.name, ?attempt, ?err, "cron crashed");
 
 											tokio::time::sleep(Duration::from_secs(1)).await;
 
-											tracing::info!(cron = %service.name, ?attempt, "restarting cron");
+											tracing::info!(cron=%service.name, ?attempt, "restarting cron");
 										}
 									}
 								}
@@ -235,20 +235,20 @@ pub async fn start(
 							let pools = pools.clone();
 							let service = service.clone();
 							Box::pin(async move {
-								tracing::debug!(cron = %service.name, ?notification, "running cron");
+								tracing::debug!(cron=%service.name, ?notification, "running cron");
 
 								for attempt in 1..=8 {
 									match (service.run)(config.clone(), pools.clone()).await {
 										Result::Ok(_) => {
-											tracing::debug!(cron = %service.name, ?attempt, "cron finished");
+											tracing::debug!(cron=%service.name, ?attempt, "cron finished");
 											return;
 										}
 										Err(err) => {
-											tracing::error!(cron = %service.name, ?attempt, ?err, "cron crashed");
+											tracing::error!(cron=%service.name, ?attempt, ?err, "cron crashed");
 
 											tokio::time::sleep(Duration::from_secs(1)).await;
 
-											tracing::info!(cron = %service.name, ?attempt, "restarting cron");
+											tracing::info!(cron=%service.name, ?attempt, "restarting cron");
 										}
 									}
 								}

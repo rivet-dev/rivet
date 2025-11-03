@@ -11,7 +11,7 @@ pub async fn pre_accept(
 	replica_id: protocol::ReplicaId,
 	pre_accept_req: protocol::PreAcceptRequest,
 ) -> Result<protocol::PreAcceptResponse> {
-	tracing::info!(?replica_id, "handling pre-accept message");
+	tracing::debug!(?replica_id, "handling pre-accept message");
 
 	let protocol::Payload {
 		proposal,
