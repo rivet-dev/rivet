@@ -15,7 +15,9 @@ use crate::{keys, workflows::actor::Allocate};
 pub const RUNNER_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
 /// How long to wait after last ping before forcibly removing a runner from the database and deleting its
 /// workflow, evicting all actors. Note that the runner may still be running and can reconnect.
-const RUNNER_LOST_THRESHOLD_MS: i64 = util::duration::minutes(2);
+///
+/// Runner ping interval is currently set to 3s.
+const RUNNER_LOST_THRESHOLD_MS: i64 = util::duration::seconds(15);
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 500;
 
