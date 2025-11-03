@@ -171,15 +171,6 @@ export class Runner {
 		}
 
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
-
-		this.#config.onActorStop(actorId, actor.generation).catch((err) => {
-			logger()?.error({
-				msg: "error in onactorstop for actor",
-				runnerId: this.runnerId,
-				actorId,
-				err,
-			});
-		});
 	}
 
 	#stopAllActors() {
