@@ -183,6 +183,12 @@ const config = {
 				".justify-safe-center": {
 					"justify-content": "safe center",
 				},
+				".items-safe-start": {
+					"align-items": "safe start",
+				},
+				".items-safe-end": {
+					"align-items": "safe end",
+				},
 			});
 		}),
 	],
