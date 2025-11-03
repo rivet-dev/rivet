@@ -120,7 +120,7 @@ export function RouteComponent() {
 			<div className="h-full border my-2 mr-2 px-4 py-4 rounded-lg flex flex-col items-center justify-safe-center overflow-auto @container">
 				<div className="grid grid-cols-1 @7xl:grid-cols-2 gap-8 justify-safe-center">
 					<div className="max-w-3xl border rounded-lg w-full bg-card">
-						<div className="mt-2 flex justify-between items-center px-6 py-4 sticky top-0">
+						<div className="mt-2 flex justify-between items-center px-6 py-4">
 							<H2>Create New Project</H2>
 						</div>
 						<p className="max-w-5xl mb-6 px-6 text-muted-foreground">
