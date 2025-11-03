@@ -164,11 +164,18 @@ export class Runner {
 		if (!actor) return;
 
 		// If onActorStop times out, Pegboard will handle this timeout with ACTOR_STOP_THRESHOLD_DURATION_MS
+		//
+		// If we receive a request while onActorStop is running, a Service
+		// Unavailable error will be returned to Guard and the request will be
+		// retried
 		try {
 			await this.#config.onActorStop(actorId, actor.generation);
 		} catch (err) {
 			console.error(`Error in onActorStop for actor ${actorId}:`, err);
 		}
+
+		// Close requests after onActorStop so you can send messages over the tunnel
+		this.#tunnel?.closeActiveRequests(actor);
 
 		this.#sendActorStateUpdate(actorId, actor.generation, "stopped");
 	}
@@ -217,6 +224,7 @@ export class Runner {
 		);
 	}
 
+	// IMPORTANT: Make sure to call stopActiveRequests if calling #removeActor
 	#removeActor(
 		actorId: string,
 		generation?: number,
@@ -242,8 +250,6 @@ export class Runner {
 
 		this.#actors.delete(actorId);
 
-		// Unregister actor from tunnel
-		this.#tunnel?.unregisterActor(actor);
 
 		return actor;
 	}
