@@ -1024,8 +1024,6 @@ pub(crate) async fn allocate_pending_actors(
 				let mut stream = tx.get_ranges_keyvalues(
 					universaldb::RangeOption {
 						mode: StreamingMode::Iterator,
-						// Containers bin pack so we reverse the order
-						reverse: true,
 						..(&runner_alloc_subspace).into()
 					},
 					// NOTE: This is not Serializable because we don't want to conflict with all of the

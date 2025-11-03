@@ -5,8 +5,8 @@ use rivet_types::actors::CrashPolicy;
 
 use crate::{errors, workflows::runner::AllocatePendingActorsInput};
 
-mod actor_keys;
 mod destroy;
+mod keys;
 mod runtime;
 mod setup;
 
@@ -147,7 +147,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	.await?;
 
 	if let Some(key) = &input.key {
-		match actor_keys::reserve_key(
+		match keys::reserve_key(
 			ctx,
 			input.namespace_id,
 			input.name.clone(),
@@ -156,8 +156,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		)
 		.await?
 		{
-			actor_keys::ReserveKeyOutput::Success => {}
-			actor_keys::ReserveKeyOutput::ForwardToDatacenter { dc_label } => {
+			keys::ReserveKeyOutput::Success => {}
+			keys::ReserveKeyOutput::ForwardToDatacenter { dc_label } => {
 				ctx.msg(Failed {
 					error: errors::Actor::KeyReservedInDifferentDatacenter {
 						datacenter_label: dc_label,
@@ -181,7 +181,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 				return Ok(());
 			}
-			actor_keys::ReserveKeyOutput::KeyExists { existing_actor_id } => {
+			keys::ReserveKeyOutput::KeyExists { existing_actor_id } => {
 				ctx.msg(Failed {
 					error: errors::Actor::DuplicateKey {
 						key: key.clone(),
@@ -696,6 +696,7 @@ pub struct Lost {
 	/// Immediately reschedules the actor regardless of its crash policy.
 	pub force_reschedule: bool,
 	/// Resets the rescheduling retry count to 0.
+	#[serde(default)]
 	pub reset_rescheduling: bool,
 }
 
