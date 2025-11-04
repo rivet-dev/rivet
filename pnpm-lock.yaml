@@ -207,6 +207,33 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
 
+  engine/tests/load:
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^1.9.4
+        version: 1.9.4
+      '@types/k6':
+        specifier: ^0.47.3
+        version: 0.47.3
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.2
+
+  engine/tests/smoke:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.18.1
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../../rivetkit-typescript/packages/rivetkit
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.2
+
   examples/ai-agent:
     dependencies:
       '@ai-sdk/openai':
@@ -1311,21 +1338,6 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
 
-  examples/smoke-test:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.18.1
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-      tsx:
-        specifier: ^3.12.7
-        version: 3.14.0
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.2
-
   examples/starter:
     dependencies:
       rivetkit:
@@ -1977,7 +1989,7 @@ importers:
         version: 3.13.12(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
-        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
+        version: 4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/language@6.11.3)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -2451,13 +2463,13 @@ importers:
         version: 6.0.1
       '@mdx-js/loader':
         specifier: ^3.1.1
-        version: 3.1.1(webpack@5.101.3)
+        version: 3.1.1(webpack@5.101.3(esbuild@0.25.9))
       '@mdx-js/react':
         specifier: ^3.1.1
         version: 3.1.1(@types/react@19.2.2)(react@19.1.1)
       '@next/mdx':
         specifier: ^15.5.2
-        version: 15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))
+        version: 15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9)))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))
       '@next/third-parties':
         specifier: latest
         version: 16.0.1(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)
@@ -2647,7 +2659,7 @@ importers:
         version: 13.0.2(eslint@8.26.0)(typescript@5.9.2)
       file-loader:
         specifier: ^6.2.0
-        version: 6.2.0(webpack@5.101.3)
+        version: 6.2.0(webpack@5.101.3(esbuild@0.25.9))
       prettier:
         specifier: ^2.8.8
         version: 2.8.8
@@ -3279,15 +3291,32 @@ packages:
   '@better-fetch/fetch@1.1.18':
     resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
 
+  '@biomejs/biome@1.9.4':
+    resolution: {integrity: sha512-1rkd7G70+o9KkTn5KLmDYXihGoTaIGO9PIIN2ZB7UJxFrWw04CZHPYiMRjYsaDvVV7hP1dYNRLxSANLaBFGpog==}
+    engines: {node: '>=14.21.3'}
+    hasBin: true
+
   '@biomejs/biome@2.2.3':
     resolution: {integrity: sha512-9w0uMTvPrIdvUrxazZ42Ib7t8Y2yoGLKLdNne93RLICmaHw7mcLv4PPb5LvZLJF3141gQHiCColOh/v6VWlWmg==}
     engines: {node: '>=14.21.3'}
     hasBin: true
 
+  '@biomejs/cli-darwin-arm64@1.9.4':
+    resolution: {integrity: sha512-bFBsPWrNvkdKrNCYeAp+xo2HecOGPAy9WyNyB/jKnnedgzl4W4Hb9ZMzYNbf8dMCGmUdSavlYHiR01QaYR58cw==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [darwin]
+
   '@biomejs/cli-darwin-arm64@2.2.3':
     resolution: {integrity: sha512-OrqQVBpadB5eqzinXN4+Q6honBz+tTlKVCsbEuEpljK8ASSItzIRZUA02mTikl3H/1nO2BMPFiJ0nkEZNy3B1w==}
     engines: {node: '>=14.21.3'}
     cpu: [arm64]
+    os: [darwin]
+
+  '@biomejs/cli-darwin-x64@1.9.4':
+    resolution: {integrity: sha512-ngYBh/+bEedqkSevPVhLP4QfVPCpb+4BBe2p7Xs32dBgs7rh9nY2AIYUL6BgLw1JVXV8GlpKmb/hNiuIxfPfZg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
     os: [darwin]
 
   '@biomejs/cli-darwin-x64@2.2.3':
@@ -3296,8 +3325,20 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@biomejs/cli-linux-arm64-musl@1.9.4':
+    resolution: {integrity: sha512-v665Ct9WCRjGa8+kTr0CzApU0+XXtRgwmzIf1SeKSGAv+2scAlW6JR5PMFo6FzqqZ64Po79cKODKf3/AAmECqA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
   '@biomejs/cli-linux-arm64-musl@2.2.3':
     resolution: {integrity: sha512-q3w9jJ6JFPZPeqyvwwPeaiS/6NEszZ+pXKF+IczNo8Xj6fsii45a4gEEicKyKIytalV+s829ACZujQlXAiVLBQ==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@biomejs/cli-linux-arm64@1.9.4':
+    resolution: {integrity: sha512-fJIW0+LYujdjUgJJuwesP4EjIBl/N/TcOX3IvIHJQNsAqvV2CHIogsmA94BPG6jZATS4Hi+xv4SkBBQSt1N4/g==}
     engines: {node: '>=14.21.3'}
     cpu: [arm64]
     os: [linux]
@@ -3308,8 +3349,20 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@biomejs/cli-linux-x64-musl@1.9.4':
+    resolution: {integrity: sha512-gEhi/jSBhZ2m6wjV530Yy8+fNqG8PAinM3oV7CyO+6c3CEh16Eizm21uHVsyVBEB6RIM8JHIl6AGYCv6Q6Q9Tg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
   '@biomejs/cli-linux-x64-musl@2.2.3':
     resolution: {integrity: sha512-y76Dn4vkP1sMRGPFlNc+OTETBhGPJ90jY3il6jAfur8XWrYBQV3swZ1Jo0R2g+JpOeeoA0cOwM7mJG6svDz79w==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
+    os: [linux]
+
+  '@biomejs/cli-linux-x64@1.9.4':
+    resolution: {integrity: sha512-lRCJv/Vi3Vlwmbd6K+oQ0KhLHMAysN8lXoCI7XeHlxaajk06u7G+UsFSO01NAs5iYuWKmVZjmiOzJ0OJmGsMwg==}
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [linux]
@@ -3320,10 +3373,22 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@biomejs/cli-win32-arm64@1.9.4':
+    resolution: {integrity: sha512-tlbhLk+WXZmgwoIKwHIHEBZUwxml7bRJgk0X2sPyNR3S93cdRq6XulAZRQJ17FYGGzWne0fgrXBKpl7l4M87Hg==}
+    engines: {node: '>=14.21.3'}
+    cpu: [arm64]
+    os: [win32]
+
   '@biomejs/cli-win32-arm64@2.2.3':
     resolution: {integrity: sha512-Ms9zFYzjcJK7LV+AOMYnjN3pV3xL8Prxf9aWdDVL74onLn5kcvZ1ZMQswE5XHtnd/r/0bnUd928Rpbs14BzVmA==}
     engines: {node: '>=14.21.3'}
     cpu: [arm64]
+    os: [win32]
+
+  '@biomejs/cli-win32-x64@1.9.4':
+    resolution: {integrity: sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA==}
+    engines: {node: '>=14.21.3'}
+    cpu: [x64]
     os: [win32]
 
   '@biomejs/cli-win32-x64@2.2.3':
@@ -6761,6 +6826,9 @@ packages:
 
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
+
+  '@types/k6@0.47.3':
+    resolution: {integrity: sha512-5epuxqaZ6oFYMDuzIK9H7GxJfApkCPiupiF5cKTfJvetmsImP/3F2nS22DoJ7/2XoieTLSffR8yyicGco9dpMw==}
 
   '@types/lodash@4.17.20':
     resolution: {integrity: sha512-H3MHACvFUEiujabxhaI/ImO6gUrd8oOurg7LQtS7mbwIXA/cUqWrvBsaeJ23aZEPk1TAYkurjfMbSELfoCXlGA==}
@@ -14391,6 +14459,17 @@ snapshots:
 
   '@better-fetch/fetch@1.1.18': {}
 
+  '@biomejs/biome@1.9.4':
+    optionalDependencies:
+      '@biomejs/cli-darwin-arm64': 1.9.4
+      '@biomejs/cli-darwin-x64': 1.9.4
+      '@biomejs/cli-linux-arm64': 1.9.4
+      '@biomejs/cli-linux-arm64-musl': 1.9.4
+      '@biomejs/cli-linux-x64': 1.9.4
+      '@biomejs/cli-linux-x64-musl': 1.9.4
+      '@biomejs/cli-win32-arm64': 1.9.4
+      '@biomejs/cli-win32-x64': 1.9.4
+
   '@biomejs/biome@2.2.3':
     optionalDependencies:
       '@biomejs/cli-darwin-arm64': 2.2.3
@@ -14402,25 +14481,49 @@ snapshots:
       '@biomejs/cli-win32-arm64': 2.2.3
       '@biomejs/cli-win32-x64': 2.2.3
 
+  '@biomejs/cli-darwin-arm64@1.9.4':
+    optional: true
+
   '@biomejs/cli-darwin-arm64@2.2.3':
+    optional: true
+
+  '@biomejs/cli-darwin-x64@1.9.4':
     optional: true
 
   '@biomejs/cli-darwin-x64@2.2.3':
     optional: true
 
+  '@biomejs/cli-linux-arm64-musl@1.9.4':
+    optional: true
+
   '@biomejs/cli-linux-arm64-musl@2.2.3':
+    optional: true
+
+  '@biomejs/cli-linux-arm64@1.9.4':
     optional: true
 
   '@biomejs/cli-linux-arm64@2.2.3':
     optional: true
 
+  '@biomejs/cli-linux-x64-musl@1.9.4':
+    optional: true
+
   '@biomejs/cli-linux-x64-musl@2.2.3':
+    optional: true
+
+  '@biomejs/cli-linux-x64@1.9.4':
     optional: true
 
   '@biomejs/cli-linux-x64@2.2.3':
     optional: true
 
+  '@biomejs/cli-win32-arm64@1.9.4':
+    optional: true
+
   '@biomejs/cli-win32-arm64@2.2.3':
+    optional: true
+
+  '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
   '@biomejs/cli-win32-x64@2.2.3':
@@ -16066,12 +16169,12 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.2': {}
 
-  '@mdx-js/loader@3.1.1(webpack@5.101.3)':
+  '@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9))':
     dependencies:
       '@mdx-js/mdx': 3.1.1
       source-map: 0.7.6
     optionalDependencies:
-      webpack: 5.101.3
+      webpack: 5.101.3(esbuild@0.25.9)
     transitivePeerDependencies:
       - supports-color
 
@@ -16249,11 +16352,11 @@ snapshots:
     dependencies:
       glob: 7.1.7
 
-  '@next/mdx@15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))':
+  '@next/mdx@15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3(esbuild@0.25.9)))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))':
     dependencies:
       source-map: 0.7.6
     optionalDependencies:
-      '@mdx-js/loader': 3.1.1(webpack@5.101.3)
+      '@mdx-js/loader': 3.1.1(webpack@5.101.3(esbuild@0.25.9))
       '@mdx-js/react': 3.1.1(@types/react@19.2.2)(react@19.1.1)
 
   '@next/swc-darwin-arm64@15.4.5':
@@ -18275,6 +18378,8 @@ snapshots:
 
   '@types/json5@0.0.29': {}
 
+  '@types/k6@0.47.3': {}
+
   '@types/lodash@4.17.20': {}
 
   '@types/mdast@3.0.15':
@@ -18454,6 +18559,16 @@ snapshots:
     dependencies:
       '@codemirror/autocomplete': 6.19.0
       '@codemirror/commands': 6.8.1
+      '@codemirror/language': 6.11.3
+      '@codemirror/lint': 6.9.0
+      '@codemirror/search': 6.5.11
+      '@codemirror/state': 6.5.2
+      '@codemirror/view': 6.38.2
+
+  '@uiw/codemirror-extensions-basic-setup@4.25.1(@codemirror/autocomplete@6.19.0)(@codemirror/commands@6.9.0)(@codemirror/language@6.11.3)(@codemirror/lint@6.9.0)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)':
+    dependencies:
+      '@codemirror/autocomplete': 6.19.0
+      '@codemirror/commands': 6.9.0
       '@codemirror/language': 6.11.3
       '@codemirror/lint': 6.9.0
       '@codemirror/search': 6.5.11
@@ -20515,7 +20630,7 @@ snapshots:
       eslint: 8.26.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.26.0)
       eslint-plugin-react: 7.37.5(eslint@8.26.0)
       eslint-plugin-react-hooks: 4.6.2(eslint@8.26.0)
@@ -20537,7 +20652,7 @@ snapshots:
     dependencies:
       debug: 4.4.1
       eslint: 8.26.0
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0)
       glob: 7.2.3
       is-glob: 4.0.3
       resolve: 1.22.10
@@ -20556,7 +20671,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1)(eslint@8.26.0):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@5.62.0(eslint@8.26.0)(typescript@5.9.2))(eslint-import-resolver-typescript@2.7.1(eslint-plugin-import@2.32.0(eslint@8.26.0))(eslint@8.26.0))(eslint@8.26.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -21055,11 +21170,11 @@ snapshots:
     dependencies:
       flat-cache: 3.2.0
 
-  file-loader@6.2.0(webpack@5.101.3):
+  file-loader@6.2.0(webpack@5.101.3(esbuild@0.25.9)):
     dependencies:
       loader-utils: 2.0.4
       schema-utils: 3.3.0
-      webpack: 5.101.3
+      webpack: 5.101.3(esbuild@0.25.9)
 
   file-saver@2.0.5: {}
 
@@ -25571,16 +25686,6 @@ snapshots:
       webpack: 5.101.3(esbuild@0.25.9)
     optionalDependencies:
       esbuild: 0.25.9
-    optional: true
-
-  terser-webpack-plugin@5.3.14(webpack@5.101.3):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      jest-worker: 27.5.1
-      schema-utils: 4.3.3
-      serialize-javascript: 6.0.2
-      terser: 5.44.0
-      webpack: 5.101.3
 
   terser@5.44.0:
     dependencies:
@@ -26693,38 +26798,6 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
-  webpack@5.101.3:
-    dependencies:
-      '@types/eslint-scope': 3.7.7
-      '@types/estree': 1.0.8
-      '@types/json-schema': 7.0.15
-      '@webassemblyjs/ast': 1.14.1
-      '@webassemblyjs/wasm-edit': 1.14.1
-      '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.15.0
-      acorn-import-phases: 1.0.4(acorn@8.15.0)
-      browserslist: 4.26.3
-      chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.18.3
-      es-module-lexer: 1.7.0
-      eslint-scope: 5.1.1
-      events: 3.3.0
-      glob-to-regexp: 0.4.1
-      graceful-fs: 4.2.11
-      json-parse-even-better-errors: 2.3.1
-      loader-runner: 4.3.1
-      mime-types: 2.1.35
-      neo-async: 2.6.2
-      schema-utils: 4.3.3
-      tapable: 2.3.0
-      terser-webpack-plugin: 5.3.14(webpack@5.101.3)
-      watchpack: 2.4.4
-      webpack-sources: 3.3.3
-    transitivePeerDependencies:
-      - '@swc/core'
-      - esbuild
-      - uglify-js
-
   webpack@5.101.3(esbuild@0.25.9):
     dependencies:
       '@types/eslint-scope': 3.7.7
@@ -26756,7 +26829,6 @@ snapshots:
       - '@swc/core'
       - esbuild
       - uglify-js
-    optional: true
 
   whatwg-fetch@3.6.20: {}
 

@@ -33,7 +33,7 @@ export async function spawnActor(opts: SpawnActorOptions): Promise<void> {
 	}
 }
 
-export async function spawnActorSleepCycle({
+export async function spawnActorHttp({
 	client,
 	index,
 	testId,
@@ -52,7 +52,6 @@ export async function spawnActorSleepCycle({
 		const iterationDuration = iterationEnd - iterationStart;
 		iterationDurations.push(iterationDuration);
 
-		succeeded = true;
 		onSuccess();
 	} catch (error) {
 		errors.push({ index, error });
@@ -60,7 +59,7 @@ export async function spawnActorSleepCycle({
 	}
 }
 
-export async function spawnActorHttp({
+export async function spawnActorSleepCycle({
 	client,
 	index,
 	testId,
@@ -89,6 +88,13 @@ export async function spawnActorHttp({
 			const iterationEnd = performance.now();
 			const iterationDuration = iterationEnd - iterationStart;
 			iterationDurations.push(iterationDuration);
+
+			// Wait for actor to sleep
+			// const sleepTime = 1_100 + Math.random() * 800;
+			const sleepTime = Math.random() * 2500;
+			console.log("sleeping", sleepTime);
+			// const sleepTime = 1000;
+			await new Promise((res) => setTimeout(res, sleepTime));
 		}
 
 		succeeded = true;
