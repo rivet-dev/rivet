@@ -12,7 +12,7 @@ import {
 } from "@/actor/conn";
 import { ConnDriverKind } from "@/actor/conn-drivers";
 import * as errors from "@/actor/errors";
-import type { AnyActorInstance } from "@/actor/instance";
+import { type AnyActorInstance, PERSIST_SYMBOL } from "@/actor/instance";
 import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
@@ -38,7 +38,11 @@ import {
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
-import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
+import {
+	arrayBuffersEqual,
+	bufferToArrayBuffer,
+	promiseWithResolvers,
+} from "@/utils";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
 import { parseMessage } from "./protocol/old";
@@ -595,38 +599,38 @@ export async function handleRawWebSocketHandler(
 
 	// Return WebSocket event handlers
 	return {
-		onOpen: (_evt: any, ws: any) => {
+		onOpen: (evt: any, ws: any) => {
+			// Extract rivetRequestId provided by engine runner
+			const rivetRequestId = evt?.rivetRequestId;
+			const isHibernatable =
+				actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex((ws) =>
+					arrayBuffersEqual(ws.requestId, rivetRequestId),
+				) !== -1;
+
 			// Wrap the Hono WebSocket in our adapter
-			const adapter = new HonoWebSocketAdapter(ws);
+			const adapter = new HonoWebSocketAdapter(
+				ws,
+				rivetRequestId,
+				isHibernatable,
+			);
 
 			// Store adapter reference on the WebSocket for event handlers
 			(ws as any).__adapter = adapter;
 
-			// Extract the path after prefix and preserve query parameters
-			// Use URL API for cleaner parsing
-			const url = new URL(path, "http://actor");
-			const pathname =
-				url.pathname.replace(/^\/raw\/websocket\/?/, "") || "/";
-			const normalizedPath =
-				(pathname.startsWith("/") ? pathname : "/" + pathname) +
-				url.search;
-
+			const newPath = truncateRawWebSocketPathPrefix(path);
 			let newRequest: Request;
 			if (req) {
-				newRequest = new Request(`http://actor${normalizedPath}`, req);
+				newRequest = new Request(`http://actor${newPath}`, req);
 			} else {
-				newRequest = new Request(`http://actor${normalizedPath}`, {
+				newRequest = new Request(`http://actor${newPath}`, {
 					method: "GET",
 				});
 			}
 
 			actor.rLog.debug({
 				msg: "rewriting websocket url",
-				from: path,
-				to: newRequest.url,
-				pathname: url.pathname,
-				search: url.search,
-				normalizedPath,
+				fromPath: path,
+				toUrl: newRequest.url,
 			});
 
 			// Call the actor's onWebSocket handler with the adapted WebSocket
@@ -710,4 +714,23 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
 	}
+}
+
+/**
+ * Truncase the PATH_RAW_WEBSOCKET_PREFIX path prefix in order to pass a clean
+ * path to the onWebSocket handler.
+ *
+ * Example:
+ * - `/raw/websocket/foo` -> `/foo`
+ * - `/raw/websocket` -> `/`
+ */
+export function truncateRawWebSocketPathPrefix(path: string): string {
+	// Extract the path after prefix and preserve query parameters
+	// Use URL API for cleaner parsing
+	const url = new URL(path, "http://actor");
+	const pathname = url.pathname.replace(/^\/raw\/websocket\/?/, "") || "/";
+	const normalizedPath =
+		(pathname.startsWith("/") ? pathname : "/" + pathname) + url.search;
+
+	return normalizedPath;
 }
