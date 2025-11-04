@@ -136,6 +136,14 @@ export type ExtractActorConnState<A extends AnyActorInstance> =
 		? ConnState
 		: never;
 
+enum CanSleep {
+	Yes,
+	NotReady,
+	ActiveConns,
+	ActiveHonoHttpRequests,
+	ActiveRawWebSockets,
+}
+
 export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	// Shared actor context for this instance
 	actorContext: ActorContext<S, CP, CS, V, I, DB>;
@@ -1913,7 +1921,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#rLog.debug({
 			msg: "resetting sleep timer",
-			canSleep,
+			canSleep: CanSleep[canSleep],
 			existingTimeout: !!this.#sleepTimeout,
 			timeout: this.#config.options.sleepTimeout,
 		});
@@ -1926,7 +1934,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Don't set a new timer if already sleeping
 		if (this.#sleepCalled) return;
 
-		if (canSleep) {
+		if (canSleep === CanSleep.Yes) {
 			this.#sleepTimeout = setTimeout(() => {
 				this._startSleep();
 			}, this.#config.options.sleepTimeout);
@@ -1934,8 +1942,17 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/** If this actor can be put in a sleeping state. */
-	#canSleep(): boolean {
-		if (!this.#ready) return false;
+	#canSleep(): CanSleep {
+		if (!this.#ready) return CanSleep.NotReady;
+
+		// Do not sleep if Hono HTTP requests are in-flight
+		if (this.#activeHonoHttpRequests > 0)
+			return CanSleep.ActiveHonoHttpRequests;
+
+		// TODO: When WS hibernation is ready, update this to only count non-hibernatable websockets
+		// Do not sleep if there are raw websockets open
+		if (this.#activeRawWebSockets.size > 0)
+			return CanSleep.ActiveRawWebSockets;
 
 		// Check for active conns. This will also cover active actions, since all actions have a connection.
 		for (const conn of this.#connections.values()) {
@@ -1943,17 +1960,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			// if (conn.status === "connected" && !conn.isHibernatable)
 			// 	return false;
 
-			if (conn.status === "connected") return false;
+			if (conn.status === "connected") return CanSleep.ActiveConns;
 		}
 
-		// Do not sleep if Hono HTTP requests are in-flight
-		if (this.#activeHonoHttpRequests > 0) return false;
-
-		// TODO: When WS hibernation is ready, update this to only count non-hibernatable websockets
-		// Do not sleep if there are raw websockets open
-		if (this.#activeRawWebSockets.size > 0) return false;
-
-		return true;
+		return CanSleep.Yes;
 	}
 
 	/**
