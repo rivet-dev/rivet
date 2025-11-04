@@ -23,16 +23,28 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 	#eventListeners: Map<string, Set<(event: any) => void>> = new Map();
 	#closeCode?: number;
 	#closeReason?: string;
+	readonly rivetRequestId?: ArrayBuffer;
+	readonly isHibernatable: boolean;
 
-	constructor(ws: WSContext) {
+	constructor(
+		ws: WSContext,
+		rivetRequestId: ArrayBuffer | undefined,
+		isHibernatable: boolean,
+	) {
 		this.#ws = ws;
+		this.rivetRequestId = rivetRequestId;
+		this.isHibernatable = isHibernatable;
 
 		// The WSContext is already open when we receive it
 		this.#readyState = this.OPEN;
 
 		// Immediately fire the open event
 		setTimeout(() => {
-			this.#fireEvent("open", { type: "open", target: this });
+			this.#fireEvent("open", {
+				type: "open",
+				target: this,
+				rivetRequestId: this.rivetRequestId,
+			});
 		}, 0);
 	}
 
@@ -155,6 +167,7 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 				code,
 				reason,
 				wasClean: code === 1000,
+				rivetRequestId: this.rivetRequestId,
 			});
 		} catch (error) {
 			logger().error({ msg: "error closing websocket", error });
@@ -165,6 +178,7 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 				code: 1006,
 				reason: "Abnormal closure",
 				wasClean: false,
+				rivetRequestId: this.rivetRequestId,
 			});
 		}
 	}
@@ -204,6 +218,8 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 	_handleMessage(data: any): void {
 		// Hono may pass either raw data or a MessageEvent-like object
 		let messageData: string | ArrayBuffer | ArrayBufferView;
+		let rivetRequestId: ArrayBuffer | undefined;
+		let rivetMessageIndex: number | undefined;
 
 		if (typeof data === "string") {
 			messageData = data;
@@ -212,6 +228,14 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 		} else if (data && typeof data === "object" && "data" in data) {
 			// Handle MessageEvent-like objects
 			messageData = data.data;
+
+			// Preserve hibernation-related properties from engine runner
+			if ("rivetRequestId" in data) {
+				rivetRequestId = data.rivetRequestId;
+			}
+			if ("rivetMessageIndex" in data) {
+				rivetMessageIndex = data.rivetMessageIndex;
+			}
 		} else {
 			// Fallback - shouldn't happen in normal operation
 			messageData = String(data);
@@ -222,12 +246,15 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 			dataType: typeof messageData,
 			isArrayBuffer: messageData instanceof ArrayBuffer,
 			dataStr: typeof messageData === "string" ? messageData : "<binary>",
+			rivetMessageIndex,
 		});
 
 		this.#fireEvent("message", {
 			type: "message",
 			target: this,
 			data: messageData,
+			rivetRequestId,
+			rivetMessageIndex,
 		});
 	}
 
@@ -249,6 +276,7 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 			code,
 			reason,
 			wasClean: code === 1000,
+			rivetRequestId: this.rivetRequestId,
 		});
 	}
 
