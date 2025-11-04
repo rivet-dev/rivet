@@ -195,9 +195,11 @@ pub async fn http_logging_middleware(
 		);
 
 		let error_code: String = if status.is_success() {
-			"".into()
+			String::new()
+		} else if let Some(err) = &error {
+			format!("{}.{}", err.group, err.code)
 		} else {
-			status.to_string()
+			String::new()
 		};
 		metrics::API_REQUEST_DURATION.record(
 			duration,

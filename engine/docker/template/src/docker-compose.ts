@@ -238,6 +238,7 @@ export function generateDockerCompose(context: TemplateContext) {
 				clickhouse: { condition: "service_healthy" },
 			},
 			networks: [dcNetworkName, dcToCoreNetworkName],
+			ports: ["4317:4317"],
 		};
 
 		services[otelCollectorClientServiceName] = {

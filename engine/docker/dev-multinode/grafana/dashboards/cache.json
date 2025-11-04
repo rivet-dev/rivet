@@ -17,8 +17,8 @@
 	},
 	"editable": true,
 	"fiscalYearStartMonth": 0,
-	"graphTooltip": 0,
-	"id": 4,
+	"graphTooltip": 1,
+	"id": 8,
 	"links": [],
 	"panels": [
 		{
@@ -37,7 +37,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -66,7 +66,6 @@
 						}
 					},
 					"mappings": [],
-					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
 						"steps": [
@@ -79,29 +78,30 @@
 								"value": 80
 							}
 						]
-					}
+					},
+					"unit": "reqps"
 				},
 				"overrides": []
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
+				"w": 12,
 				"x": 0,
 				"y": 0
 			},
-			"id": 10,
+			"id": 1,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -116,36 +116,27 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
 					"meta": {},
-					"pluginVersion": "4.10.2",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    CASE\n        WHEN ResourceAttributes['datacenter_id'] != '' AND ResourceAttributes['server_id'] != '' THEN concat(ResourceAttributes['datacenter_id'], ' - ', ResourceAttributes['server_id'])\n        ELSE 'Route Cache Size'\n    END as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_route_cache_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_request_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
-			"title": "Route Cache Size",
+			"title": "Cache Request Rate",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "label",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\label"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -167,7 +158,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -196,7 +187,6 @@
 						}
 					},
 					"mappings": [],
-					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
 						"steps": [
@@ -209,237 +199,30 @@
 								"value": 80
 							}
 						]
-					}
+					},
+					"unit": "reqps"
 				},
 				"overrides": []
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
-				"x": 8,
+				"w": 12,
+				"x": 12,
 				"y": 0
-			},
-			"id": 11,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
-					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_rate_limiter_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
-					"refId": "A"
-				}
-			],
-			"title": "Rate Limiters",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 0
-			},
-			"id": 12,
-			"options": {
-				"legend": {
-					"calcs": ["lastNotNull"],
-					"displayMode": "table",
-					"placement": "bottom",
-					"showLegend": true,
-					"sortBy": "Last *",
-					"sortDesc": true
-				},
-				"tooltip": {
-					"hideZeros": false,
-					"mode": "multi",
-					"sort": "none"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
-					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_in_flight_counter_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
-					"refId": "A"
-				}
-			],
-			"title": "In-Flight Counters",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"color": {
-						"mode": "palette-classic"
-					},
-					"custom": {
-						"axisBorderShow": false,
-						"axisCenteredZero": false,
-						"axisColorMode": "text",
-						"axisLabel": "",
-						"axisPlacement": "auto",
-						"axisSoftMax": 1,
-						"barAlignment": 0,
-						"barWidthFactor": 0.6,
-						"drawStyle": "line",
-						"fillOpacity": 0,
-						"gradientMode": "none",
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"insertNulls": false,
-						"lineInterpolation": "linear",
-						"lineWidth": 1,
-						"pointSize": 5,
-						"scaleDistribution": {
-							"type": "linear"
-						},
-						"showPoints": "auto",
-						"spanNulls": false,
-						"stacking": {
-							"group": "A",
-							"mode": "none"
-						},
-						"thresholdsStyle": {
-							"mode": "off"
-						}
-					},
-					"mappings": [],
-					"min": 0,
-					"thresholds": {
-						"mode": "absolute",
-						"steps": [
-							{
-								"color": "green",
-								"value": null
-							},
-							{
-								"color": "red",
-								"value": 80
-							}
-						]
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 0,
-				"y": 8
 			},
 			"id": 2,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -454,13 +237,30 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    avg(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_tcp_connection_pending'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_request_errors'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
-			"title": "Active TCP Connections",
+			"title": "Cache Request Error Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -479,7 +279,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -508,6 +308,128 @@
 						}
 					},
 					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "reqps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 8
+			},
+			"id": 3,
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_value_miss_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
+					"refId": "A"
+				}
+			],
+			"title": "Cache Miss Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"max": 1,
 					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
@@ -522,29 +444,150 @@
 							}
 						]
 					},
-					"unit": "req/s"
+					"unit": "percentunit"
 				},
 				"overrides": []
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
-				"x": 8,
+				"w": 12,
+				"x": 12,
 				"y": 8
+			},
+			"id": 4,
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(total_diff > 0 AND miss_diff >= 0, miss_diff / total_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            miss_val - lagInFrame(miss_val, 1, miss_val) OVER (PARTITION BY key ORDER BY time) as miss_diff,\n            total_val - lagInFrame(total_val, 1, total_val) OVER (PARTITION BY key ORDER BY time) as total_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                sumIf(Value, MetricName = 'rivet_cache_value_miss_total') as miss_val,\n                sumIf(Value, MetricName = 'rivet_cache_value_total') as total_val\n            FROM otel.otel_metrics_sum\n            WHERE MetricName IN ('rivet_cache_value_miss_total', 'rivet_cache_value_total')\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> ''\n)\nORDER BY label",
+					"refId": "A"
+				}
+			],
+			"title": "Cache Miss Rate (% of total)",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "reqps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 16
 			},
 			"id": 5,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -559,118 +602,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_guard_tcp_connection'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_value_empty_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
-			"title": "TCP Connection Rate",
-			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 8
-			},
-			"id": 1,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_tcp_connection_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-					"refId": "A"
-				}
-			],
-			"title": "TCP Connection Duration",
+			"title": "Cache Empty Rate",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
-						"rowField": "Time",
-						"valueField": "count"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\le"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
-			"type": "heatmap"
+			"type": "timeseries"
 		},
 		{
 			"datasource": {
@@ -688,7 +644,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -717,6 +673,7 @@
 						}
 					},
 					"mappings": [],
+					"max": 1,
 					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
@@ -730,29 +687,151 @@
 								"value": 80
 							}
 						]
-					}
+					},
+					"unit": "percentunit"
 				},
 				"overrides": []
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
-				"x": 0,
+				"w": 12,
+				"x": 12,
 				"y": 16
+			},
+			"id": 6,
+			"options": {
+				"legend": {
+					"calcs": ["mean"],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"hideZeros": false,
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"pluginVersion": "11.5.2",
+			"targets": [
+				{
+					"datasource": {
+						"type": "grafana-clickhouse-datasource",
+						"uid": "clickhouse"
+					},
+					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
+					"instant": false,
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"range": true,
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(total_diff > 0 AND empty_diff >= 0, empty_diff / total_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            empty_val - lagInFrame(empty_val, 1, empty_val) OVER (PARTITION BY key ORDER BY time) as empty_diff,\n            total_val - lagInFrame(total_val, 1, total_val) OVER (PARTITION BY key ORDER BY time) as total_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                sumIf(Value, MetricName = 'rivet_cache_value_empty_total') as empty_val,\n                sumIf(Value, MetricName = 'rivet_cache_value_total') as total_val\n            FROM otel.otel_metrics_sum\n            WHERE MetricName IN ('rivet_cache_value_empty_total', 'rivet_cache_value_total')\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> ''\n)\nORDER BY label",
+					"refId": "A"
+				}
+			],
+			"title": "Cache Empty Rate (% of total)",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "grafana-clickhouse-datasource",
+				"uid": "clickhouse"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisBorderShow": false,
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"axisSoftMin": 0,
+						"barAlignment": 0,
+						"barWidthFactor": 0.6,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"insertNulls": false,
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "reqps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 0,
+				"y": 24
 			},
 			"id": 7,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -767,13 +846,30 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    avg(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_proxy_request_pending'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_purge_request_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
-			"title": "Active Proxy Requests",
+			"title": "Cache Purge Request Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -792,7 +888,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -821,7 +917,6 @@
 						}
 					},
 					"mappings": [],
-					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
 						"steps": [
@@ -835,29 +930,29 @@
 							}
 						]
 					},
-					"unit": "req/s"
+					"unit": "reqps"
 				},
 				"overrides": []
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
-				"x": 8,
-				"y": 16
+				"w": 12,
+				"x": 12,
+				"y": 24
 			},
 			"id": 8,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -872,226 +967,35 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_guard_proxy_request'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        key as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            key,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY key ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY key ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['key'] as key,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_cache_purge_value_total'\n                AND Attributes['key'] IN array($key)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, key\n        )\n    )\n    WHERE key <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
-			"title": "Proxy Request Rate",
+			"title": "Cache Purge Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 16,
-				"y": 16
-			},
-			"id": 9,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_proxy_request_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-					"refId": "A"
-				}
-			],
-			"title": "Proxy Request Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\le"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
-		},
-		{
-			"datasource": {
-				"type": "grafana-clickhouse-datasource",
-				"uid": "clickhouse"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 8,
-				"w": 8,
-				"x": 0,
-				"y": 24
-			},
-			"id": 6,
-			"options": {
-				"calculate": false,
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "11.5.2",
-			"targets": [
-				{
-					"datasource": {
-						"type": "grafana-clickhouse-datasource",
-						"uid": "clickhouse"
-					},
-					"editorMode": "code",
-					"editorType": "sql",
-					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_resolve_route_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
-					"refId": "A"
-				}
-			],
-			"title": "Resolve Route Duration",
-			"transformations": [
-				{
-					"id": "groupingToMatrix",
-					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
-						"rowField": "Time",
-						"valueField": "count"
-					}
-				},
-				{
-					"id": "convertFieldType",
-					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "Time\\le"
-							}
-						],
-						"fields": {}
-					}
-				}
-			],
-			"type": "heatmap"
 		}
 	],
 	"preload": false,
-	"refresh": "",
+	"refresh": "30s",
 	"schemaVersion": 40,
 	"tags": [],
 	"templating": {
@@ -1099,16 +1003,19 @@
 			{
 				"current": {
 					"text": "All",
-					"value": "$__all"
+					"value": ["$__all"]
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY cluster_id",
-				"description": "",
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"includeAll": true,
-				"label": "Cluster ID",
+				"label": "project",
 				"multi": true,
-				"name": "cluster_id",
+				"name": "project",
 				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY cluster_id",
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
@@ -1116,16 +1023,19 @@
 			{
 				"current": {
 					"text": "All",
-					"value": "$__all"
+					"value": ["$__all"]
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY datacenter_id",
-				"description": "",
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"includeAll": true,
-				"label": "Dataceter ID",
+				"label": "datacenter",
 				"multi": true,
-				"name": "datacenter_id",
+				"name": "datacenter",
 				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY datacenter_id",
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
@@ -1133,31 +1043,22 @@
 			{
 				"current": {
 					"text": "All",
-					"value": "$__all"
+					"value": ["$__all"]
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['server_id'] as server_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY server_id",
-				"description": "",
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT Attributes['key'] FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_cache_request_total' AND ServiceName = 'rivet' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY Attributes['key']",
 				"includeAll": true,
-				"label": "Server ID",
+				"label": "key",
 				"multi": true,
-				"name": "server_id",
+				"name": "key",
 				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['server_id'] as server_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY server_id",
+				"query": "SELECT DISTINCT Attributes['key'] FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_cache_request_total' AND ServiceName = 'rivet' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY Attributes['key']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
-			},
-			{
-				"current": {
-					"text": "30",
-					"value": "30"
-				},
-				"hide": 2,
-				"label": "Metric Export Interval (seconds)",
-				"name": "metric_interval",
-				"query": "30",
-				"skipUrlSync": true,
-				"type": "constant"
 			}
 		]
 	},
@@ -1166,9 +1067,9 @@
 		"to": "now"
 	},
 	"timepicker": {},
-	"timezone": "browser",
-	"title": "Rivet Guard",
-	"uid": "cen785ige8fswd2",
+	"timezone": "",
+	"title": "Cache",
+	"uid": "c35233ed-b698-4838-9426-18e1586017f1",
 	"version": 1,
 	"weekStart": ""
 }

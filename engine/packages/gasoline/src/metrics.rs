@@ -51,7 +51,7 @@ lazy_static::lazy_static! {
 	pub static ref WORKFLOW_ACTIVE: Gauge<u64> = METER.u64_gauge("rivet_gasoline_workflow_active")
 		.with_description("Total active workflows.")
 		.build();
-	/// Expected attributes: "workflow_name", "error_code"
+	/// Expected attributes: "workflow_name", "error"
 	pub static ref WORKFLOW_DEAD: Gauge<u64> = METER.u64_gauge("rivet_gasoline_workflow_dead")
 		.with_description("Total dead workflows.")
 		.build();
@@ -59,7 +59,7 @@ lazy_static::lazy_static! {
 	pub static ref WORKFLOW_SLEEPING: Gauge<u64> = METER.u64_gauge("rivet_gasoline_workflow_sleeping")
 		.with_description("Total sleeping workflows.")
 		.build();
-	/// Expected attributes: "workflow_name", "error_code"
+	/// Expected attributes: "workflow_name", "error"
 	pub static ref WORKFLOW_ERRORS: Counter<u64> = METER.u64_counter("rivet_gasoline_workflow_errors")
 		.with_description("All errors made in a workflow.")
 		.build();

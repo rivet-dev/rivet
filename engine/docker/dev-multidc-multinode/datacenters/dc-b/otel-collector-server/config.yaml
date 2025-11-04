@@ -4,6 +4,14 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
 processors:
+  resource:
+    attributes:
+      - key: rivet.project
+        value: dev
+        action: upsert
+      - key: rivet.datacenter
+        value: dc-b
+        action: upsert
   batch:
     timeout: 5s
     send_batch_size: 10000
@@ -42,6 +50,7 @@ service:
       receivers:
         - otlp
       processors:
+        - resource
         - batch
       exporters:
         - clickhouse
@@ -49,6 +58,7 @@ service:
       receivers:
         - otlp
       processors:
+        - resource
         - batch
       exporters:
         - clickhouse
@@ -56,6 +66,7 @@ service:
       receivers:
         - otlp
       processors:
+        - resource
         - batch
       exporters:
         - clickhouse
