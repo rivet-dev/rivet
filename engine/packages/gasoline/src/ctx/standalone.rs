@@ -84,18 +84,18 @@ impl StandaloneCtx {
 	}
 
 	#[tracing::instrument(skip_all)]
-	pub fn new_from_operation(ctx: &OperationCtx, req_id: Id) -> WorkflowResult<Self> {
+	pub fn new_from_operation(op_ctx: &OperationCtx, req_id: Id) -> WorkflowResult<Self> {
 		let mut ctx = StandaloneCtx::new(
-			ctx.db().clone(),
-			ctx.config().clone(),
-			ctx.pools().clone(),
-			ctx.cache().clone(),
-			ctx.name(),
-			ctx.ray_id(),
+			op_ctx.db().clone(),
+			op_ctx.config().clone(),
+			op_ctx.pools().clone(),
+			op_ctx.cache().clone(),
+			op_ctx.name(),
+			op_ctx.ray_id(),
 			req_id,
 		)?;
 
-		ctx.from_workflow = ctx.from_workflow;
+		ctx.from_workflow = true;
 
 		Ok(ctx)
 	}
