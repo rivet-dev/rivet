@@ -207,7 +207,7 @@ export class Tunnel {
 		actor.webSockets.clear();
 	}
 
-	async #fetch(actorId: string, request: Request): Promise<Response> {
+	async #fetch(actorId: string, requestId: protocol.RequestId, request: Request): Promise<Response> {
 		// Validate actor exists
 		if (!this.#runner.hasActor(actorId)) {
 			logger()?.warn({
@@ -220,6 +220,7 @@ export class Tunnel {
 		const fetchHandler = this.#runner.config.fetch(
 			this.#runner,
 			actorId,
+			requestId,
 			request,
 		);
 
@@ -354,12 +355,13 @@ export class Tunnel {
 				// Call fetch handler with validation
 				const response = await this.#fetch(
 					req.actorId,
+					requestId,
 					streamingRequest,
 				);
 				await this.#sendResponse(requestId, response);
 			} else {
 				// Non-streaming request
-				const response = await this.#fetch(req.actorId, request);
+				const response = await this.#fetch(req.actorId, requestId, request);
 				await this.#sendResponse(requestId, response);
 			}
 		} catch (error) {
@@ -451,7 +453,7 @@ export class Tunnel {
 	}
 
 	async #handleWebSocketOpen(
-		requestId: ArrayBuffer,
+		requestId: protocol.RequestId,
 		open: protocol.ToClientWebSocketOpen,
 	) {
 		const webSocketId = bufferToString(requestId);
@@ -582,6 +584,7 @@ export class Tunnel {
 				this.#runner,
 				open.actorId,
 				adapter,
+				requestId,
 				request,
 			);
 		} catch (error) {

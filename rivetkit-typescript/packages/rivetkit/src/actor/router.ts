@@ -42,6 +42,7 @@ import {
 } from "@/inspector/actor";
 import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import type { RunnerConfig } from "@/registry/run-config";
+import { generateConnRequestId } from "./conn";
 import { ConnDriverKind } from "./conn-drivers";
 import type { ActorDriver } from "./driver";
 import { InternalError } from "./errors";
@@ -175,6 +176,7 @@ export function createActorRouter(
 					c.env.actorId,
 					encoding,
 					connParams,
+					generateConnRequestId(),
 					connIdRaw,
 					connTokenRaw,
 				);

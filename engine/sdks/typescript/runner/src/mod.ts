@@ -48,12 +48,14 @@ export interface RunnerConfig {
 	fetch: (
 		runner: Runner,
 		actorId: string,
+		requestId: protocol.RequestId,
 		request: Request,
 	) => Promise<Response>;
 	websocket?: (
 		runner: Runner,
 		actorId: string,
 		ws: any,
+		requestId: protocol.RequestId,
 		request: Request,
 	) => Promise<void>;
 	onActorStart: (
