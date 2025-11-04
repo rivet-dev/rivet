@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TagsTestInput {
 	pub tag_key: String,
 	pub tag_value: String,
@@ -19,6 +20,7 @@ pub async fn tags_test_workflow(ctx: &mut WorkflowCtx, input: &TagsTestInput) ->
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
+#[allow(dead_code)]
 pub struct UpdateTagsActivityInput {
 	pub key: String,
 	pub value: String,

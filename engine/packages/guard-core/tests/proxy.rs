@@ -123,7 +123,7 @@ async fn test_rate_limiting() {
 		Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+	let _server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 
 	// Create routing function that returns consistent actor ID
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
@@ -134,7 +134,6 @@ async fn test_rate_limiting() {
 			Box::pin(async move {
 				let route_target = RouteTarget {
 					actor_id: Some(actor_id),
-					server_id: Some(server_id),
 					host: test_server_addr.ip().to_string(),
 					port: test_server_addr.port(),
 					path: path.to_string(),
@@ -203,7 +202,7 @@ async fn test_max_in_flight_requests() {
 		Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+	let _server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 
 	let test_server_addr = test_server.addr;
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
@@ -215,7 +214,6 @@ async fn test_max_in_flight_requests() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
-						server_id: Some(server_id),
 						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
@@ -276,7 +274,7 @@ async fn test_timeout_handling() {
 		Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
+	let _server_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap();
 
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
 		move |_hostname: &str,
@@ -287,7 +285,6 @@ async fn test_timeout_handling() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
-						server_id: Some(server_id),
 						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
@@ -351,7 +348,6 @@ async fn test_retry_functionality() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(Id::v1(Uuid::new_v4(), 0)),
-						server_id: Some(Uuid::new_v4()),
 						host: server_addr.ip().to_string(),
 						port: server_addr.port(),
 						path: path.to_string(),
@@ -532,7 +528,6 @@ async fn test_different_path_routing() {
 				Ok(RoutingOutput::Route(RouteConfig {
 					targets: vec![RouteTarget {
 						actor_id: Some(actor_id),
-						server_id: Some(Uuid::new_v4()),
 						host: test_server_addr.ip().to_string(),
 						port: test_server_addr.port(),
 						path: path.to_string(),
@@ -675,7 +670,7 @@ async fn test_header_functionality_in_routing_and_middleware() {
 		Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
 		0,
 	);
-	let server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+	let _server_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
 
 	// Create a routing function that can access headers
 	let routing_fn: rivet_guard_core::proxy_service::RoutingFn = Arc::new(
@@ -703,7 +698,6 @@ async fn test_header_functionality_in_routing_and_middleware() {
 
 				let route_target = RouteTarget {
 					actor_id: Some(actor_id),
-					server_id: Some(server_id),
 					host: test_server_addr.ip().to_string(),
 					port: test_server_addr.port(),
 					path: custom_path,

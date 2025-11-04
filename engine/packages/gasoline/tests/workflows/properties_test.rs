@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PropertiesTestInput {}
 
 #[workflow(PropertiesTestWorkflow)]
@@ -22,6 +23,7 @@ pub async fn properties_test_workflow(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
+#[allow(dead_code)]
 pub struct PropertiesActivityInput {
 	pub expected_workflow_id: Id,
 	pub expected_ray_id: Id,

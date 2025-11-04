@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct StateTestInput {
 	pub initial_value: i32,
 }
@@ -23,6 +24,7 @@ pub async fn state_test_workflow(ctx: &mut WorkflowCtx, input: &StateTestInput) 
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
+#[allow(dead_code)]
 pub struct SetStateActivityInput {
 	pub value: i32,
 }
@@ -45,6 +47,7 @@ pub async fn set_state_activity(ctx: &ActivityCtx, input: &SetStateActivityInput
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
+#[allow(dead_code)]
 pub struct GetStateActivityInput {}
 
 #[activity(GetStateActivity)]
@@ -60,6 +63,7 @@ pub async fn get_state_activity(ctx: &ActivityCtx, _input: &GetStateActivityInpu
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
+#[allow(dead_code)]
 pub struct TestState {
 	pub value: i32,
 }

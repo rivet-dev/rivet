@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ActivityTestInput {
 	pub message: String,
 }
@@ -21,6 +22,7 @@ pub async fn activity_test_workflow(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
+#[allow(dead_code)]
 pub struct TestActivityInput {
 	pub message: String,
 }

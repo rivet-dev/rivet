@@ -211,7 +211,7 @@ async fn test_workflow_eviction() {
 	let test_id = Uuid::new_v4();
 
 	// Run workflow
-	let (workflow_id, db_path) = {
+	let (workflow_id, _db_path) = {
 		let test_deps = rivet_test_deps::TestDeps::new_with_test_id(test_id)
 			.await
 			.unwrap();

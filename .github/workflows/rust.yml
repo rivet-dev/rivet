@@ -14,8 +14,6 @@ defaults:
     # Enable fail-fast behavior
     shell: bash -e {0}
 env:
-  # Disable incremental compilation for faster from-scratch builds
-  CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg tokio_unstable"
   CARGO_TERM_COLOR: always
 jobs:
@@ -34,8 +32,8 @@ jobs:
               - '**/*.rs'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
-              - '.github/workflows/rust-ci.yml'
-  
+              - '.github/workflows/rust.yml'
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
@@ -49,28 +47,31 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all -- --check
-  
+
   # clippy:
   #   name: Clippy
-  #   runs-on: depot-ubuntu-24.04
+  #   runs-on: depot-ubuntu-24.04-8
   #   needs: changes
   #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
-  #     
+  #
   #     - uses: actions-rust-lang/setup-rust-toolchain@v1
   #       with:
   #         toolchain: stable
   #         components: clippy
-  #     
+  #
   #     - uses: Swatinem/rust-cache@v2
-  #     
+  #       with:
+  #         shared-key: "rust-ci"
+  #         cache-on-failure: true
+  #
   #     - name: Run clippy
   #       run: cargo clippy --all-targets --all-features -- -W warnings
-  
+
   check:
     name: Check
-    runs-on: depot-ubuntu-24.04
+    runs-on: depot-ubuntu-24.04-8
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     steps:
@@ -79,15 +80,19 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci"
+          cache-on-failure: true
+
       - name: Check
         run: cargo check --all-targets --all-features
         env:
           # Deny warnings
           RUSTFLAGS: --cfg tokio_unstable -D warnings
-  
+
   # test:
   #   name: Test
-  #   runs-on: depot-ubuntu-24.04
+  #   runs-on: depot-ubuntu-24.04-8
   #   needs: changes
   #   if: needs.changes.outputs.rust == 'true'
   #   steps:
@@ -98,6 +103,12 @@ jobs:
   #         toolchain: stable
   #
   #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         # Share cache across all Rust jobs
+  #         shared-key: "rust-ci"
+  #         # Save cache even if the build fails
+  #         cache-on-failure: true
+  #         # Only save cache on main branch to avoid cache pollution from PRs
   #
   #     - name: Run tests
   #       run: cargo test --verbose
@@ -128,11 +139,11 @@ jobs:
             echo "No Rust changes detected, skipping checks"
             exit 0
           fi
-          
+
           # If rust code changed, verify all jobs passed
           if [ "${{ needs.fmt.result }}" == "failure" ] || [ "${{ needs.check.result }}" == "failure" ]; then
             echo "One or more required jobs failed"
             exit 1
           fi
-          
+
           echo "All Rust checks passed"
