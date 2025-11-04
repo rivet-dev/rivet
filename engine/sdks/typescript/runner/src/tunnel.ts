@@ -183,7 +183,7 @@ export class Tunnel {
 		}
 	}
 
-	unregisterActor(actor: ActorInstance) {
+	closeActiveRequests(actor: ActorInstance) {
 		const actorId = actor.actorId;
 
 		// Terminate all requests for this actor
@@ -469,7 +469,12 @@ export class Tunnel {
 				msg: "ignoring websocket for unknown actor",
 				actorId: open.actorId,
 			});
-			// Send close immediately
+
+			// NOTE: Closing a WebSocket before open is equivalent to a Service
+			// Unavailable error and will cause Guard to retry the request
+			//
+			// See
+			// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/pegboard-gateway/src/lib.rs#L238
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketClose",
 				val: {
