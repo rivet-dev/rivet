@@ -30,6 +30,7 @@ jobs:
           filters: |
             rust:
               - '**/*.rs'
+              - '**/*.bare'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
               - '.github/workflows/rust.yml'
