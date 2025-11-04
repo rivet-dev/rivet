@@ -93,9 +93,7 @@
 			"id": 24,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -200,9 +198,7 @@
 			"id": 27,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -418,9 +414,7 @@
 			"id": 26,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -636,9 +630,7 @@
 			"id": 25,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -743,9 +735,7 @@
 			"id": 28,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -850,9 +840,7 @@
 			"id": 29,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": false,
@@ -968,12 +956,8 @@
 			},
 			{
 				"current": {
-					"text": [
-						"All"
-					],
-					"value": [
-						"$__all"
-					]
+					"text": ["All"],
+					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",

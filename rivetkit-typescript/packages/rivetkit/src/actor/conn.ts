@@ -27,7 +27,7 @@ export function generateConnToken(): string {
 	return generateSecureToken(32);
 }
 
-export function generateConnSocketId(): string {
+export function generateConnRequestId(): string {
 	return crypto.randomUUID();
 }
 
@@ -258,7 +258,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 			}
 
-			this.#actor.__connDisconnected(this, true, this.__socket.socketId);
+			this.#actor.__connDisconnected(this, true, this.__socket.requestId);
 		} else {
 			this.#actor.rLog.warn({
 				msg: "missing connection driver state for disconnect",

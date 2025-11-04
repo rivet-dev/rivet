@@ -41,6 +41,7 @@ import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
 	arrayBuffersEqual,
+	bufferToString,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -434,8 +435,9 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async #runnerFetch(
-		runner: Runner,
+		_runner: Runner,
 		actorId: string,
+		_requestIdBuf: ArrayBuffer,
 		request: Request,
 	): Promise<Response> {
 		logger().debug({
@@ -448,12 +450,14 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async #runnerWebSocket(
-		runner: Runner,
+		_runner: Runner,
 		actorId: string,
 		websocketRaw: any,
+		requestIdBuf: ArrayBuffer,
 		request: Request,
 	): Promise<void> {
 		const websocket = websocketRaw as UniversalWebSocket;
+		const requestId = bufferToString(requestIdBuf);
 
 		logger().debug({ msg: "runner websocket", actorId, url: request.url });
 
@@ -497,6 +501,7 @@ export class EngineActorDriver implements ActorDriver {
 				actorId,
 				encoding,
 				connParams,
+				requestId,
 				// Extract connId and connToken from protocols if needed
 				undefined,
 				undefined,

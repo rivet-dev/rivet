@@ -269,3 +269,8 @@ export const EXTRA_ERROR_LOG = {
 	support: "https://rivet.dev/discord",
 	version: VERSION,
 };
+
+/** Converts a buffer to a string. Used for storing strings in a lookup map. */
+export function bufferToString(buffer: ArrayBuffer): string {
+	return Buffer.from(buffer).toString("base64");
+}
