@@ -1,5 +1,5 @@
 {
-	"name": "@rivet/load-tests",
+	"name": "test-load",
 	"private": true,
 	"scripts": {
 		"build": "tsc",

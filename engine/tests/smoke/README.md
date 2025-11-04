@@ -1,11 +1,5 @@
 # Smoke Test for RivetKit
 
-Example project demonstrating a simple getOrCreate smoke test with [RivetKit](https://rivetkit.org).
-
-[Learn More →](https://github.com/rivet-dev/rivetkit)
-
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
-
 ## Getting Started
 
 ### Prerequisites
@@ -34,6 +28,5 @@ npm run smoke
 
 Set `TOTAL_ACTOR_COUNT` and `SPAWN_ACTOR_INTERVAL` environment variables to adjust the workload.
 
-## License
+Set `BEHAVIOR` to change the test type.
 
-Apache 2.0

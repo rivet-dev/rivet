@@ -4,6 +4,7 @@ packages:
   - engine/sdks/typescript/runner
   - engine/sdks/typescript/runner-protocol
   - engine/sdks/typescript/test-runner
+  - engine/tests/*
   - examples/*
   - frontend
   - frontend/packages/components/

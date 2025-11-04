@@ -7,6 +7,12 @@ const counter = actor({
 	state: {
 		count: 0,
 	},
+	onStart: async () => {
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	},
+	onStop: async () => {
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	},
 	actions: {
 		increment: (c, x: number) => {
 			c.state.count += x;
