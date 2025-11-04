@@ -76,8 +76,8 @@ services:
       - rivet-network-dc-a
   rivet-shell-dc-a:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -151,8 +151,8 @@ services:
       - rivet-network-dc-a
   rivet-engine-dc-a-0:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -194,8 +194,8 @@ services:
       start_period: 30s
   rivet-engine-dc-a-1:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -235,8 +235,8 @@ services:
       start_period: 30s
   rivet-engine-dc-a-2:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -276,8 +276,8 @@ services:
       start_period: 30s
   runner-dc-a-0:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -293,8 +293,8 @@ services:
       - rivet-network-dc-a
   runner-dc-a-1:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -308,8 +308,8 @@ services:
       - rivet-network-dc-a
   runner-dc-a-2:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -343,8 +343,8 @@ services:
       - rivet-network-dc-b
   rivet-shell-dc-b:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -418,8 +418,8 @@ services:
       - rivet-network-dc-b
   rivet-engine-dc-b-0:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -459,8 +459,8 @@ services:
       start_period: 30s
   rivet-engine-dc-b-1:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -500,8 +500,8 @@ services:
       start_period: 30s
   rivet-engine-dc-b-2:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -541,8 +541,8 @@ services:
       start_period: 30s
   runner-dc-b-0:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -556,8 +556,8 @@ services:
       - rivet-network-dc-b
   runner-dc-b-1:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -571,8 +571,8 @@ services:
       - rivet-network-dc-b
   runner-dc-b-2:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -606,8 +606,8 @@ services:
       - rivet-network-dc-c
   rivet-shell-dc-c:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -681,8 +681,8 @@ services:
       - rivet-network-dc-c
   rivet-engine-dc-c-0:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -722,8 +722,8 @@ services:
       start_period: 30s
   rivet-engine-dc-c-1:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -763,8 +763,8 @@ services:
       start_period: 30s
   rivet-engine-dc-c-2:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -804,8 +804,8 @@ services:
       start_period: 30s
   runner-dc-c-0:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -819,8 +819,8 @@ services:
       - rivet-network-dc-c
   runner-dc-c-1:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -834,8 +834,8 @@ services:
       - rivet-network-dc-c
   runner-dc-c-2:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
