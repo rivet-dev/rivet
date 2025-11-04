@@ -545,8 +545,15 @@ export class EngineActorDriver implements ActorDriver {
 			});
 		}
 
-		websocket.addEventListener("message", (event) => {
+		websocket.addEventListener("message", (event: RivetMessageEvent) => {
 			wsHandlerPromise.then((x) => x.onMessage?.(event, wsContext));
+
+			invariant(event.rivetRequestId, "missing rivetRequestId");
+			invariant(event.rivetMessageIndex, "missing rivetMessageIndex");
+			this.#runner.sendWebsocketMessageAck(
+				event.rivetRequestId,
+				event.rivetMessageIndex,
+			);
 		});
 
 		websocket.addEventListener("close", (event) => {
