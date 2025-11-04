@@ -250,7 +250,7 @@ impl SharedState {
 						let ack_message = protocol::ToClient::ToClientTunnelMessage(
 							protocol::ToClientTunnelMessage {
 								request_id: msg.request_id,
-								message_id: Uuid::new_v4().into_bytes(),
+								message_id: msg.message_id,
 								gateway_reply_to: None,
 								message_kind: protocol::ToClientTunnelMessageKind::TunnelAck,
 							},
