@@ -33,20 +33,17 @@ pub async fn task(
 				);
 
 				// Parse message
-				let msg =
-					match versioned::ToServer::deserialize_version(&data, conn.protocol_version)
-						.and_then(|x| x.unwrap_latest())
-					{
-						Ok(x) => x,
-						Err(err) => {
-							tracing::warn!(
-								?err,
-								data_len = data.len(),
-								"failed to deserialize message"
-							);
-							continue;
-						}
-					};
+				let msg = match versioned::ToServer::deserialize(&data, conn.protocol_version) {
+					Ok(x) => x,
+					Err(err) => {
+						tracing::warn!(
+							?err,
+							data_len = data.len(),
+							"failed to deserialize message"
+						);
+						continue;
+					}
+				};
 
 				handle_message(&ctx, &conn, msg)
 					.await
