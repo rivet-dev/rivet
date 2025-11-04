@@ -10,16 +10,6 @@ mod keys;
 mod runtime;
 mod setup;
 
-/// Time to delay an actor from rescheduling after a rescheduling failure.
-const BASE_RETRY_TIMEOUT_MS: usize = 2000;
-/// How long to wait after creating and not receiving a starting state before setting actor as lost.
-const ACTOR_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
-/// How long to wait after stopping and not receiving a stop state before setting actor as lost.
-const ACTOR_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
-/// How long an actor goes without retries before it's retry count is reset to 0, effectively resetting its
-/// backoff to 0.
-const RETRY_RESET_DURATION_MS: i64 = util::duration::minutes(10);
-
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
 	pub actor_id: Id,
@@ -227,7 +217,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		runtime::SpawnActorOutput::Allocated {
 			runner_id,
 			runner_workflow_id,
-		} => runtime::LifecycleState::new(runner_id, runner_workflow_id),
+		} => runtime::LifecycleState::new(
+			runner_id,
+			runner_workflow_id,
+			ctx.config().pegboard().actor_start_threshold(),
+		),
 		runtime::SpawnActorOutput::Sleep => {
 			ctx.activity(runtime::SetSleepingInput {
 				actor_id: input.actor_id,
@@ -311,8 +305,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								}) => match intent {
 									protocol::ActorIntent::ActorIntentSleep => {
 										if !state.sleeping {
-											state.gc_timeout_ts =
-												Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
+											state.gc_timeout_ts = Some(
+												util::timestamp::now()
+													+ ctx.config().pegboard().actor_stop_threshold(),
+											);
 											state.sleeping = true;
 
 											ctx.activity(runtime::SetSleepingInput {
@@ -333,8 +329,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
-										state.gc_timeout_ts =
-											Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
+										state.gc_timeout_ts = Some(
+											util::timestamp::now()
+												+ ctx.config().pegboard().actor_stop_threshold(),
+										);
 
 										ctx.activity(runtime::SetNotConnectableInput {
 											actor_id: input.actor_id,
