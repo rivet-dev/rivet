@@ -17,6 +17,7 @@ import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {
 	arrayBuffersEqual,
 	bufferToArrayBuffer,
+	EXTRA_ERROR_LOG,
 	getEnvUniversal,
 	promiseWithResolvers,
 	SinglePromiseQueue,
@@ -194,8 +195,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#sleepTimeout?: NodeJS.Timeout;
 
-	// Track active raw requests so sleep logic can account for them
-	#activeRawFetchCount = 0;
+	/**
+	 * Track active HTTP requests through Hono router so sleep logic can
+	 * account for them. Does not include WebSockets.
+	 **/
+	#activeHonoHttpRequests = 0;
 	#activeRawWebSockets = new Set<UniversalWebSocket>();
 
 	#schedule!: Schedule;
@@ -287,7 +291,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	get #sleepingSupported(): boolean {
-		return this.#actorDriver.sleep !== undefined;
+		return this.#actorDriver.startSleep !== undefined;
 	}
 
 	/**
@@ -1517,10 +1521,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			throw new errors.FetchHandlerNotDefined();
 		}
 
-		// Track active raw fetch while handler runs
-		this.#activeRawFetchCount++;
-		this.#resetSleepTimer();
-
 		try {
 			const response = await this.#config.onFetch(
 				this.actorContext,
@@ -1538,12 +1538,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			throw error;
 		} finally {
-			// Decrement active raw fetch counter and re-evaluate sleep
-			this.#activeRawFetchCount = Math.max(
-				0,
-				this.#activeRawFetchCount - 1,
-			);
-			this.#resetSleepTimer();
 			this.#savePersistThrottled();
 		}
 	}
@@ -1880,6 +1874,29 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
+	/**
+	 * Called by router middleware when an HTTP request begins.
+	 */
+	__beginHonoHttpRequest() {
+		this.#activeHonoHttpRequests++;
+		this.#resetSleepTimer();
+	}
+
+	/**
+	 * Called by router middleware when an HTTP request ends.
+	 */
+	__endHonoHttpRequest() {
+		this.#activeHonoHttpRequests--;
+		if (this.#activeHonoHttpRequests < 0) {
+			this.#activeHonoHttpRequests = 0;
+			this.#rLog.warn({
+				msg: "active hono requests went below 0, this is a RivetKit bug",
+				...EXTRA_ERROR_LOG,
+			});
+		}
+		this.#resetSleepTimer();
+	}
+
 	// MARK: Sleep
 	/**
 	 * Reset timer from the last actor interaction that allows it to be put to sleep.
@@ -1900,6 +1917,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			msg: "resetting sleep timer",
 			canSleep,
 			existingTimeout: !!this.#sleepTimeout,
+			timeout: this.#config.options.sleepTimeout,
 		});
 
 		if (this.#sleepTimeout) {
@@ -1912,12 +1930,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		if (canSleep) {
 			this.#sleepTimeout = setTimeout(() => {
-				this._sleep().catch((error) => {
-					this.#rLog.error({
-						msg: "error during sleep",
-						error: stringifyError(error),
-					});
-				});
+				this._sleep();
 			}, this.#config.options.sleepTimeout);
 		}
 	}
@@ -1935,9 +1948,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			if (conn.status === "connected") return false;
 		}
 
-		// Do not sleep if raw fetches are in-flight
-		if (this.#activeRawFetchCount > 0) return false;
+		// Do not sleep if Hono HTTP requests are in-flight
+		if (this.#activeHonoHttpRequests > 0) return false;
 
+		// TODO: When WS hibernation is ready, update this to only count non-hibernatable websockets
 		// Do not sleep if there are raw websockets open
 		if (this.#activeRawWebSockets.size > 0) return false;
 
@@ -1945,8 +1959,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/** Puts an actor to sleep. This should just start the sleep sequence, most shutdown logic should be in _stop (which is called by the ActorDriver when sleeping). */
-	async _sleep() {
-		const sleep = this.#actorDriver.sleep?.bind(
+	_sleep() {
+		const sleep = this.#actorDriver.startSleep?.bind(
 			this.#actorDriver,
 			this.#actorId,
 		);
@@ -1962,11 +1976,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#rLog.info({ msg: "actor sleeping" });
 
 		// Schedule sleep to happen on the next tick. This allows for any action that calls _sleep to complete.
-		setImmediate(async () => {
+		setImmediate(() => {
 			// The actor driver should call stop when ready to stop
 			//
 			// This will call _stop once Pegboard responds with the new status
-			await sleep();
+			sleep();
 		});
 	}
 

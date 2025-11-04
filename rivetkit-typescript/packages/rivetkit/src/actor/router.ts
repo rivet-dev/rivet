@@ -78,6 +78,17 @@ export function createActorRouter(
 
 	router.use("*", loggerMiddleware(loggerWithoutContext()));
 
+	// Track all HTTP requests to prevent actor from sleeping during active requests
+	router.use("*", async (c, next) => {
+		const actor = await actorDriver.loadActor(c.env.actorId);
+		actor.__beginHonoHttpRequest();
+		try {
+			await next();
+		} finally {
+			actor.__endHonoHttpRequest();
+		}
+	});
+
 	router.get("/", (c) => {
 		return c.text(
 			"This is an RivetKit actor.\n\nLearn more at https://rivetkit.org",

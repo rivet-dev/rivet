@@ -78,7 +78,7 @@ runDriverTests({
 					},
 					driver: driverConfig,
 					cleanup: async () => {
-						await actorDriver.shutdown?.(true);
+						await actorDriver.shutdownRunner?.(true);
 					},
 				};
 			},
