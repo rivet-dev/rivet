@@ -146,7 +146,7 @@ export async function configureDefaultLogger(
 			},
 		},
 		hooks: {
-			logMethod(inputArgs, _method, level) {
+			logMethod(inputArgs, method, level) {
 				// TODO: This is a hack to not implement our own transport target. We can get better perf if we have our own transport target.
 
 				const levelMap: Record<number, string> = {
@@ -162,20 +162,41 @@ export async function configureDefaultLogger(
 					getEnvUniversal("LOG_TIMESTAMP") === "1"
 						? Date.now()
 						: undefined;
+
+				// Get bindings from the logger instance (child logger fields)
+				const bindings = (this as any).bindings?.() || {};
+
 				// TODO: This can be simplified in logfmt.ts
 				if (inputArgs.length >= 2) {
 					const [objOrMsg, msg] = inputArgs;
 					if (typeof objOrMsg === "object" && objOrMsg !== null) {
-						customWrite(levelName, { ...objOrMsg, msg, time });
+						customWrite(levelName, {
+							...bindings,
+							...objOrMsg,
+							msg,
+							time,
+						});
 					} else {
-						customWrite(levelName, { msg: String(objOrMsg), time });
+						customWrite(levelName, {
+							...bindings,
+							msg: String(objOrMsg),
+							time,
+						});
 					}
 				} else if (inputArgs.length === 1) {
 					const [objOrMsg] = inputArgs;
 					if (typeof objOrMsg === "object" && objOrMsg !== null) {
-						customWrite(levelName, { ...objOrMsg, time });
+						customWrite(levelName, {
+							...bindings,
+							...objOrMsg,
+							time,
+						});
 					} else {
-						customWrite(levelName, { msg: String(objOrMsg), time });
+						customWrite(levelName, {
+							...bindings,
+							msg: String(objOrMsg),
+							time,
+						});
 					}
 				}
 			},
