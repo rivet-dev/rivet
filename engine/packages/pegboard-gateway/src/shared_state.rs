@@ -401,6 +401,14 @@ impl SharedState {
 	}
 
 	async fn gc(&self) {
+		#[derive(Debug)]
+		enum MsgGcReason {
+			/// Any tunnel message not acked (TunnelAck)
+			MessageNotAcked,
+			/// WebSocket pending messages (ToServerWebSocketMessageAck)
+			WebSocketMessageNotAcked,
+		}
+
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -410,32 +418,44 @@ impl SharedState {
 			let now = Instant::now();
 
 			self.in_flight_requests
-				.retain_async(|_, req| {
+				.retain_async(|request_id, req| {
 					if req.msg_tx.is_closed() {
 						return false;
 					}
 
-					let mut keep = true;
-
-					if let Some(earliest_pending_msg) = req.pending_msgs.first() {
-						keep = now.duration_since(earliest_pending_msg.send_instant)
-							> MESSAGE_ACK_TIMEOUT;
-					}
-
-					if let Some(hs) = &req.hibernation_state {
-						if let (true, Some(earliest_pending_ws_msg)) =
-							(keep, hs.pending_ws_msgs.first())
-						{
-							keep = now.duration_since(earliest_pending_ws_msg.send_instant)
-								> MESSAGE_ACK_TIMEOUT;
+					let reason = 'reason: {
+						if let Some(earliest_pending_msg) = req.pending_msgs.first() {
+							if now.duration_since(earliest_pending_msg.send_instant)
+								<= MESSAGE_ACK_TIMEOUT
+							{
+								break 'reason Some(MsgGcReason::MessageNotAcked);
+							}
 						}
-					}
 
-					if !keep {
+						if let Some(hs) = &req.hibernation_state
+							&& let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first()
+						{
+							if now.duration_since(earliest_pending_ws_msg.send_instant)
+								<= MESSAGE_ACK_TIMEOUT
+							{
+								break 'reason Some(MsgGcReason::WebSocketMessageNotAcked);
+							}
+						}
+
+						None
+					};
+
+					if let Some(reason) = &reason {
+						tracing::debug!(
+							request_id=?Uuid::from_bytes(*request_id),
+							?reason,
+							"gc collecting in flight request"
+						);
 						let _ = req.msg_tx.send(TunnelMessageData::Timeout);
 					}
 
-					keep
+					// Return true if the request was not gc'd
+					reason.is_none()
 				})
 				.await;
 		}
