@@ -478,6 +478,7 @@ pub fn create_test_cache_key_fn() -> CacheKeyFn {
 	Arc::new(
 		move |hostname: &str,
 		      path: &str,
+		      _method: &hyper::Method,
 		      _port_type: rivet_guard_core::proxy_service::PortType,
 		      _headers: &hyper::HeaderMap| {
 			// Extract just the hostname, stripping the port if present

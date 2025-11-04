@@ -9,7 +9,12 @@ use gas::prelude::*;
 use crate::routing::pegboard_gateway::X_RIVET_ACTOR;
 
 #[tracing::instrument(skip_all)]
-pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> Result<u64> {
+pub fn build_cache_key(
+	target: &str,
+	path: &str,
+	method: &hyper::Method,
+	headers: &hyper::HeaderMap,
+) -> Result<u64> {
 	// Check target
 	ensure!(target == "actor", "wrong target");
 
@@ -26,11 +31,12 @@ pub fn build_cache_key(target: &str, path: &str, headers: &hyper::HeaderMap) -> 
 		.context("invalid x-rivet-actor header")?;
 	let actor_id = Id::parse(actor_id_str).context("invalid x-rivet-actor header")?;
 
-	// Create a hash using target, actor_id, and path
+	// Create a hash using target, actor_id, path, and method
 	let mut hasher = DefaultHasher::new();
 	target.hash(&mut hasher);
 	actor_id.hash(&mut hasher);
 	path.hash(&mut hasher);
+	method.as_str().hash(&mut hasher);
 	let hash = hasher.finish();
 
 	Ok(hash)
