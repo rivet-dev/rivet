@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import type { createClient } from "rivetkit/client";
 import type { Registry } from "../server/registry";
+import { BEHAVIOR } from ".";
 
 export type SmokeTestError = {
 	index: number;
@@ -19,7 +20,47 @@ export type SpawnActorOptions = {
 	onFailure: () => void;
 };
 
-export async function spawnActor({
+export async function spawnActor(opts: SpawnActorOptions): Promise<void> {
+	switch (BEHAVIOR) {
+		case "sleep-cycle":
+			await spawnActorSleepCycle(opts);
+			break;
+		case "http":
+			await spawnActorHttp(opts);
+			break;
+		default:
+			throw "Unknown behavior";
+	}
+}
+
+export async function spawnActorSleepCycle({
+	client,
+	index,
+	testId,
+	errors,
+	iterationDurations,
+	onSuccess,
+	onFailure,
+}: SpawnActorOptions): Promise<void> {
+	try {
+		// Connect to actor
+		const iterationStart = performance.now();
+		const key = ["test", testId, index.toString()];
+		const counter = client.counter.getOrCreate(key);
+		await counter.increment(1);
+		const iterationEnd = performance.now();
+		const iterationDuration = iterationEnd - iterationStart;
+		iterationDurations.push(iterationDuration);
+
+		succeeded = true;
+		onSuccess();
+	} catch (error) {
+		errors.push({ index, error });
+		onFailure();
+	}
+}
+
+export async function spawnActorHttp({
 	client,
 	index,
 	testId,
@@ -48,12 +89,6 @@ export async function spawnActor({
 			const iterationEnd = performance.now();
 			const iterationDuration = iterationEnd - iterationStart;
 			iterationDurations.push(iterationDuration);
-
-			// Wait for actor to sleep (if > 500 ms)
-			const sleepTime = 100 + Math.random() * 800;
-			console.log("sleeping", sleepTime);
-			// const sleepTime = 1000;
-			await new Promise((res) => setTimeout(res, sleepTime));
 		}
 
 		succeeded = true;
