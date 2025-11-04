@@ -9,6 +9,7 @@ import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 2;
+const RUNNER_PING_INTERVAL = 3_000;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
@@ -64,7 +65,11 @@ export interface RunnerConfig {
 		config: ActorConfig,
 	) => Promise<void>;
 	onActorStop: (actorId: string, generation: number) => Promise<void>;
-	getActorHibernationConfig: (actorId: string, requestId: ArrayBuffer, request: Request) => HibernationConfig;
+	getActorHibernationConfig: (
+		actorId: string,
+		requestId: ArrayBuffer,
+		request: Request,
+	) => HibernationConfig;
 	noAutoShutdown?: boolean;
 }
 
@@ -249,7 +254,6 @@ export class Runner {
 		}
 
 		this.#actors.delete(actorId);
-
 
 		return actor;
 	}
@@ -510,7 +514,6 @@ export class Runner {
 			this.#processUnsentKvRequests();
 
 			// Start ping interval
-			const pingInterval = 1000;
 			const pingLoop = setInterval(() => {
 				if (ws.readyState === 1) {
 					this.__sendToServer({
@@ -526,7 +529,7 @@ export class Runner {
 						runnerId: this.runnerId,
 					});
 				}
-			}, pingInterval);
+			}, RUNNER_PING_INTERVAL);
 			this.#pingLoop = pingLoop;
 
 			// Start command acknowledgment interval (5 minutes)
