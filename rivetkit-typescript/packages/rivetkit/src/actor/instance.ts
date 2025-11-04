@@ -328,6 +328,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			actorId,
 		};
 
+		const extraLogParams = actorDriver.getExtraActorLogParams?.();
+		if (extraLogParams) Object.assign(logParams, extraLogParams);
+
 		this.#log = getBaseLogger().child(
 			Object.assign(
 				getIncludeTarget() ? { target: "actor" } : {},
