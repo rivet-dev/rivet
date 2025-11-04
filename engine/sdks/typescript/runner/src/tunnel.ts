@@ -214,7 +214,12 @@ export class Tunnel {
 				msg: "ignoring request for unknown actor",
 				actorId,
 			});
-			return new Response("Actor not found", { status: 404 });
+
+			// NOTE: This is a special response that will cause Guard to retry the request
+			//
+			// See should_retry_request_inner
+			// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/guard-core/src/proxy_service.rs#L2458
+			return new Response("Actor not found", { status: 503, headers: { "x-rivet-error": "runner.actor_not_found" } });
 		}
 
 		const fetchHandler = this.#runner.config.fetch(
