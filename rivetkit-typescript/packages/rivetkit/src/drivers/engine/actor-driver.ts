@@ -29,7 +29,11 @@ import {
 } from "@/common/actor-router-consts";
 import type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
 import { getLogger } from "@/common/log";
-import type { UniversalWebSocket } from "@/common/websocket-interface";
+import type {
+	RivetEvent,
+	RivetMessageEvent,
+	UniversalWebSocket,
+} from "@/common/websocket-interface";
 import {
 	type ActorDriver,
 	type AnyActorInstance,
@@ -41,7 +45,7 @@ import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import {
 	arrayBuffersEqual,
-	bufferToString,
+	idToStr,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
@@ -465,7 +469,7 @@ export class EngineActorDriver implements ActorDriver {
 		request: Request,
 	): Promise<void> {
 		const websocket = websocketRaw as UniversalWebSocket;
-		const requestId = bufferToString(requestIdBuf);
+		const requestId = idToStr(requestIdBuf);
 
 		logger().debug({ msg: "runner websocket", actorId, url: request.url });
 

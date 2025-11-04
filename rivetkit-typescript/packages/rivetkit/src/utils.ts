@@ -2,6 +2,7 @@ export { stringifyError } from "@/common/utils";
 export { assertUnreachable } from "./common/utils";
 
 import type { Context as HonoContext, Handler as HonoHandler } from "hono";
+import { stringify as uuidstringify } from "uuid";
 
 import pkgJson from "../package.json" with { type: "json" };
 
@@ -270,7 +271,6 @@ export const EXTRA_ERROR_LOG = {
 	version: VERSION,
 };
 
-/** Converts a buffer to a string. Used for storing strings in a lookup map. */
-export function bufferToString(buffer: ArrayBuffer): string {
-	return Buffer.from(buffer).toString("base64");
+export function idToStr(id: ArrayBuffer): string {
+	return uuidstringify(new Uint8Array(id));
 }
