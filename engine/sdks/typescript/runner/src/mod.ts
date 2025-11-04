@@ -454,12 +454,17 @@ export class Runner {
 		const wsEndpoint = endpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
-		return `${wsEndpoint}?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
+
+		// Ensure the endpoint ends with /runners/connect
+		const baseUrl = wsEndpoint.endsWith("/")
+			? wsEndpoint.slice(0, -1)
+			: wsEndpoint;
+		return `${baseUrl}/runners/connect?protocol_version=${PROTOCOL_VERSION}&namespace=${encodeURIComponent(this.#config.namespace)}&runner_key=${encodeURIComponent(this.#config.runnerKey)}`;
 	}
 
 	// MARK: Runner protocol
 	async #openPegboardWebSocket() {
-		const protocols = ["rivet", `rivet_target.runner`];
+		const protocols = ["rivet"];
 		if (this.config.token)
 			protocols.push(`rivet_token.${this.config.token}`);
 

@@ -51,7 +51,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						.map(|v| v.eq_ignore_ascii_case("websocket"))
 						.unwrap_or(false);
 
-					// First, check if this is an actor path-based route
+					// MARK: Path-based routing
+					// Route actor
 					if let Some(actor_path_info) = parse_actor_path(path) {
 						tracing::debug!(?actor_path_info, "routing using path-based actor routing");
 
@@ -71,8 +72,15 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 						}
 					}
 
-					// Fallback to header-based routing
-					// Extract target from WebSocket protocol or HTTP header
+					// Route runner
+					if let Some(routing_output) =
+						runner::route_request_path_based(&ctx, host, path, headers).await?
+					{
+						return Ok(routing_output);
+					}
+
+					// MARK: Header- & protocol-based routing (X-Rivet-Target)
+					// Determine target
 					let target = if is_websocket {
 						// For WebSocket, parse the sec-websocket-protocol header
 						headers
