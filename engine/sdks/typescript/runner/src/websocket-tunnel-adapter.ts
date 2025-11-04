@@ -28,7 +28,11 @@ export class WebSocketTunnelAdapter {
 	constructor(
 		webSocketId: string,
 		sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void,
-		closeCallback: (code?: number, reason?: string, retry?: boolean) => void,
+		closeCallback: (
+			code?: number,
+			reason?: string,
+			retry?: boolean,
+		) => void,
 	) {
 		this.#webSocketId = webSocketId;
 		this.#sendCallback = sendCallback;
@@ -436,7 +440,12 @@ export class WebSocketTunnelAdapter {
 	}
 
 	/// Returns false if the message was sent off.
-	_handleMessage(requestId: ArrayBuffer, data: string | Uint8Array, index: number, isBinary: boolean): boolean {
+	_handleMessage(
+		requestId: ArrayBuffer,
+		data: string | Uint8Array,
+		index: number,
+		isBinary: boolean,
+	): boolean {
 		if (this.#readyState !== 1) {
 			// OPEN
 			return true;
