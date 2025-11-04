@@ -12,6 +12,10 @@ pub enum SubCommand {
 		#[clap(short = 'q', long)]
 		query: Option<String>,
 	},
+	Nuke {
+		#[clap(long)]
+		yes: bool,
+	},
 }
 
 #[derive(ValueEnum, Clone, PartialEq)]
@@ -53,6 +57,23 @@ impl SubCommand {
 				}
 
 				Ok(())
+			}
+			Self::Nuke { yes } => {
+				if !yes {
+					bail!("Please pass '--yes' flag to confirm you want to nuke the database");
+				}
+
+				match config.database() {
+					rivet_config::config::Database::Postgres(_) => {
+						bail!("nuke postgres not implemented");
+					}
+					rivet_config::config::Database::FileSystem(file_system) => {
+						println!("Removing {}", file_system.path.display());
+						tokio::fs::remove_dir_all(&file_system.path).await?;
+						println!("Complete");
+						Ok(())
+					}
+				}
 			}
 		}
 	}

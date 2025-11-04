@@ -6,5 +6,4 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "${REPO_ROOT}"
 
-RUST_LOG="${RUST_LOG:-debug}" \
-cargo run --bin rivet-engine -- start "$@"
+rm -rf "~/Library/Application Support/rivet-engine/"
