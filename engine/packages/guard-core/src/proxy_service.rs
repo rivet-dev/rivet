@@ -191,7 +191,15 @@ pub type RoutingFn = Arc<
 >;
 
 pub type CacheKeyFn = Arc<
-	dyn for<'a> Fn(&'a str, &'a str, PortType, &'a hyper::HeaderMap) -> Result<u64> + Send + Sync,
+	dyn for<'a> Fn(
+			&'a str,
+			&'a str,
+			&'a hyper::Method,
+			PortType,
+			&'a hyper::HeaderMap,
+		) -> Result<u64>
+		+ Send
+		+ Sync,
 >;
 
 #[derive(Clone, Debug)]
@@ -375,6 +383,7 @@ impl ProxyState {
 		&self,
 		hostname: &str,
 		path: &str,
+		method: &hyper::Method,
 		port_type: PortType,
 		headers: &hyper::HeaderMap,
 		ignore_cache: bool,
@@ -385,11 +394,13 @@ impl ProxyState {
 		tracing::debug!(
 			hostname = %hostname_only,
 			path = %path,
+			method = %method,
 			port_type = ?port_type,
 			"Resolving route for request"
 		);
 
-		let cache_key = (self.cache_key_fn)(hostname_only, &path, port_type.clone(), headers)?;
+		let cache_key =
+			(self.cache_key_fn)(hostname_only, &path, method, port_type.clone(), headers)?;
 
 		// Check cache first
 		if !ignore_cache {
@@ -700,6 +711,7 @@ impl ProxyService {
 			.resolve_route(
 				host,
 				&path,
+				req.method(),
 				self.state.port_type.clone(),
 				req.headers(),
 				false,
@@ -922,6 +934,7 @@ impl ProxyService {
 									.resolve_route(
 										&host,
 										&path,
+										&req_parts.method,
 										self.state.port_type.clone(),
 										&req_parts.headers,
 										true,
@@ -996,6 +1009,7 @@ impl ProxyService {
 									.resolve_route(
 										&host,
 										&path,
+										&req_parts.method,
 										self.state.port_type.clone(),
 										&req_parts.headers,
 										true,
@@ -1060,6 +1074,7 @@ impl ProxyService {
 							.resolve_route(
 								&host,
 								&path,
+								req_collected.method(),
 								self.state.port_type.clone(),
 								&req_headers,
 								true,
@@ -1155,8 +1170,9 @@ impl ProxyService {
 			.map(|x| x.to_string())
 			.unwrap_or_else(|| req.uri().path().to_string());
 
-		// Capture headers before request is consumed
+		// Capture headers and method before request is consumed
 		let req_headers = req.headers().clone();
+		let req_method = req.method().clone();
 		let ray_id = req.extensions().get::<RequestIds>().map(|x| x.ray_id);
 
 		// Get middleware config for this actor if it exists
@@ -1449,6 +1465,7 @@ impl ProxyService {
 								.resolve_route(
 									&req_host,
 									&req_path,
+									&req_method,
 									state.port_type.clone(),
 									&req_headers,
 									true,
@@ -1907,6 +1924,7 @@ impl ProxyService {
 											.resolve_route(
 												&req_host,
 												&req_path,
+												&req_method,
 												state.port_type.clone(),
 												&req_headers,
 												true,
