@@ -90,7 +90,7 @@ export function App() {
 				console.log("found actor", actorId);
 
 				const wsOrigin = rivetUrl.replace(/^http/, "ws");
-				const wsUrl = `${wsOrigin}/gateway/actors/${actorId}/route/raw/websocket?sessionId=${encodeURIComponent(sessionId)}`;
+				const wsUrl = `${wsOrigin}/gateway/${actorId}/raw/websocket?sessionId=${encodeURIComponent(sessionId)}`;
 
 				console.log("ws url:", wsUrl);
 

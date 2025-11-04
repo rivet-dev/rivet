@@ -134,8 +134,8 @@ async function handleHttpGatewayPathBased(
  * Routes requests using either path-based routing or header-based routing:
  *
  * Path-based routing (checked first):
- * - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
- * - /gateway/actors/{actor_id}/route/{...path}
+ * - /gateway/{actor_id}/{...path}
+ * - /gateway/{actor_id}@{token}/{...path}
  *
  * Header-based routing (fallback):
  * - WebSocket requests: Uses sec-websocket-protocol for routing (target.actor, actor.{id})
@@ -340,8 +340,8 @@ async function handleHttpGateway(
 /**
  * Parse actor routing information from path
  * Matches patterns:
- * - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
- * - /gateway/actors/{actor_id}/route/{...path}
+ * - /gateway/{actor_id}/{...path}
+ * - /gateway/{actor_id}@{token}/{...path}
  */
 export function parseActorPath(path: string): ActorPathInfo | null {
 	// Find query string position (everything from ? onwards, but before fragment)
@@ -374,50 +374,48 @@ export function parseActorPath(path: string): ActorPathInfo | null {
 	// Split the path into segments
 	const segments = basePath.split("/").filter((s) => s.length > 0);
 
-	// Check minimum required segments: gateway, actors, {actor_id}, route
-	if (segments.length < 4) {
+	// Check minimum required segments: gateway, {actor_id}
+	if (segments.length < 2) {
 		return null;
 	}
 
-	// Verify the fixed segments
-	if (segments[0] !== "gateway" || segments[1] !== "actors") {
+	// Verify the first segment is "gateway"
+	if (segments[0] !== "gateway") {
 		return null;
 	}
 
-	// Check for empty actor_id
-	if (segments[2].length === 0) {
+	// Extract actor_id segment (may contain @token)
+	const actorSegment = segments[1];
+
+	// Check for empty actor segment
+	if (actorSegment.length === 0) {
 		return null;
 	}
 
-	const actorId = segments[2];
-
-	// Check for token or direct route
+	// Parse actor_id and optional token from the segment
+	let actorId: string;
 	let token: string | undefined;
-	let remainingPathStartIdx: number;
 
-	if (
-		segments.length >= 6 &&
-		segments[3] === "tokens" &&
-		segments[5] === "route"
-	) {
-		// Pattern with token: /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
-		// Check for empty token
-		if (segments[4].length === 0) {
+	const atPos = actorSegment.indexOf("@");
+	if (atPos !== -1) {
+		// Pattern: /gateway/{actor_id}@{token}/{...path}
+		actorId = actorSegment.slice(0, atPos);
+		token = actorSegment.slice(atPos + 1);
+
+		// Check for empty actor_id or token
+		if (actorId.length === 0 || token.length === 0) {
 			return null;
 		}
-		token = segments[4];
-		remainingPathStartIdx = 6;
-	} else if (segments.length >= 4 && segments[3] === "route") {
-		// Pattern without token: /gateway/actors/{actor_id}/route/{...path}
-		token = undefined;
-		remainingPathStartIdx = 4;
 	} else {
-		return null;
+		// Pattern: /gateway/{actor_id}/{...path}
+		actorId = actorSegment;
+		token = undefined;
 	}
 
-	// Calculate the position in the original path where remaining path starts
+	// Calculate remaining path
+	// The remaining path starts after /gateway/{actor_id[@token]}/
 	let prefixLen = 0;
-	for (let i = 0; i < remainingPathStartIdx; i++) {
+	for (let i = 0; i < 2; i++) {
 		prefixLen += 1 + segments[i].length; // +1 for the slash
 	}
 
