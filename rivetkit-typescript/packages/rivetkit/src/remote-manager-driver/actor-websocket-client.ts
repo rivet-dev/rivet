@@ -8,7 +8,6 @@ import {
 	WS_PROTOCOL_CONN_TOKEN,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
-	WS_PROTOCOL_TARGET,
 	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
 import { importWebSocket } from "@/common/websocket";
@@ -30,7 +29,7 @@ export async function openWebSocketToActor(
 
 	// WebSocket connections go through guard
 	const endpoint = getEndpoint(runConfig);
-	const guardUrl = combineUrlPath(endpoint, path);
+	const guardUrl = combineUrlPath(endpoint, `/gateway/${actorId}${path}`);
 
 	logger().debug({
 		msg: "opening websocket to actor via guard",
@@ -70,7 +69,6 @@ export function buildWebSocketProtocols(
 ): string[] {
 	const protocols: string[] = [];
 	protocols.push(WS_PROTOCOL_RIVETKIT);
-	protocols.push(`${WS_PROTOCOL_TARGET}actor`);
 	protocols.push(`${WS_PROTOCOL_ACTOR}${actorId}`);
 	protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
 	if (runConfig.token) {

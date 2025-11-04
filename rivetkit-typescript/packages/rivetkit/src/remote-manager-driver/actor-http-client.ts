@@ -1,7 +1,6 @@
 import type { ClientConfig } from "@/client/config";
 import {
 	HEADER_RIVET_ACTOR,
-	HEADER_RIVET_TARGET,
 	HEADER_RIVET_TOKEN,
 } from "@/common/actor-router-consts";
 import { combineUrlPath } from "@/utils";
@@ -15,7 +14,10 @@ export async function sendHttpRequestToActor(
 	// Route through guard port
 	const url = new URL(actorRequest.url);
 	const endpoint = getEndpoint(runConfig);
-	const guardUrl = combineUrlPath(endpoint, url.pathname + url.search);
+	const guardUrl = combineUrlPath(
+		endpoint,
+		`/gateway/${actorId}${url.pathname}${url.search}`,
+	);
 
 	// Handle body properly based on method and presence
 	let bodyToSend: ArrayBuffer | null = null;
@@ -76,7 +78,6 @@ function buildGuardHeadersForHttp(
 		headers.set(key, value);
 	}
 	// Add guard-specific headers
-	headers.set(HEADER_RIVET_TARGET, "actor");
 	headers.set(HEADER_RIVET_ACTOR, actorId);
 	if (runConfig.token) {
 		headers.set(HEADER_RIVET_TOKEN, runConfig.token);
