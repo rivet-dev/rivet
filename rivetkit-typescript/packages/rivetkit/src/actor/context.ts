@@ -163,6 +163,6 @@ export class ActorContext<
 	 * @experimental
 	 */
 	sleep() {
-		this.#actor._sleep();
+		this.#actor._startSleep();
 	}
 }
