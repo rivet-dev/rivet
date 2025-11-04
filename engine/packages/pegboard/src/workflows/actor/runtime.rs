@@ -619,17 +619,12 @@ pub async fn reschedule_actor(
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
 	// Determine next backoff sleep duration
-	let mut backoff = util::backoff::Backoff::new_at(
-		8,
-		None,
-		BASE_RETRY_TIMEOUT_MS,
-		500,
-		state.reschedule_state.retry_count,
-	);
+	let mut backoff = reschedule_backoff(state.reschedule_state.retry_count);
 
 	let (now, reset) = ctx
 		.v(2)
 		.activity(CompareRetryInput {
+			retry_count: state.reschedule_state.retry_count,
 			last_retry_ts: state.reschedule_state.last_retry_ts,
 		})
 		.await?;
@@ -720,15 +715,27 @@ pub async fn clear_pending_allocation(
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct CompareRetryInput {
+	#[serde(default)]
+	retry_count: usize,
 	last_retry_ts: i64,
 }
 
 #[activity(CompareRetry)]
 async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> Result<(i64, bool)> {
-	let now = util::timestamp::now();
+	let mut state = ctx.state::<State>()?;
 
+	let now = util::timestamp::now();
 	// If the last retry ts is more than RETRY_RESET_DURATION_MS ago, reset retry count
-	Ok((now, input.last_retry_ts < now - RETRY_RESET_DURATION_MS))
+	let reset = input.last_retry_ts < now - RETRY_RESET_DURATION_MS;
+
+	if reset {
+		state.reschedule_ts = None;
+	} else {
+		let backoff = reschedule_backoff(input.retry_count);
+		state.reschedule_ts = Some(now + i64::try_from(backoff.current_duration())?);
+	}
+
+	Ok((now, reset))
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -740,7 +747,9 @@ pub struct SetStartedInput {
 pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
 
-	state.start_ts = Some(util::timestamp::now());
+	if state.start_ts.is_none() {
+		state.start_ts = Some(util::timestamp::now());
+	}
 	state.connectable_ts = Some(util::timestamp::now());
 
 	ctx.udb()?
@@ -799,4 +808,8 @@ pub async fn set_complete(ctx: &ActivityCtx, input: &SetCompleteInput) -> Result
 	state.complete_ts = Some(util::timestamp::now());
 
 	Ok(())
+}
+
+fn reschedule_backoff(retry_count: usize) -> util::backoff::Backoff {
+	util::backoff::Backoff::new_at(8, None, BASE_RETRY_TIMEOUT_MS, 500, retry_count)
 }

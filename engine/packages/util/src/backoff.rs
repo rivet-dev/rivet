@@ -85,8 +85,7 @@ impl Backoff {
 			return None;
 		}
 
-		let next_wait = self.wait * 2usize.pow(self.i.min(self.max_exponent) as u32)
-			+ rand::thread_rng().gen_range(0..self.randomness);
+		let next_wait = self.current_duration() + rand::thread_rng().gen_range(0..self.randomness);
 		self.sleep_until += Duration::from_millis(next_wait as u64);
 
 		self.i += 1;

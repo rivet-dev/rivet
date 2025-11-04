@@ -58,6 +58,8 @@ pub struct State {
 	pub complete_ts: Option<i64>,
 	pub connectable_ts: Option<i64>,
 	pub pending_allocation_ts: Option<i64>,
+	#[serde(default)]
+	pub reschedule_ts: Option<i64>,
 	pub destroy_ts: Option<i64>,
 
 	// Null if not allocated
@@ -93,6 +95,7 @@ impl State {
 			sleep_ts: None,
 			connectable_ts: None,
 			complete_ts: None,
+			reschedule_ts: None,
 			destroy_ts: None,
 
 			runner_id: None,

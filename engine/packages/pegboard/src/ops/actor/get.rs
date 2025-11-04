@@ -87,10 +87,11 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 			crash_policy: actor_state.crash_policy,
 
 			create_ts: actor_state.create_ts,
-			pending_allocation_ts: actor_state.pending_allocation_ts,
 			start_ts: actor_state.start_ts,
-			sleep_ts: actor_state.sleep_ts,
+			pending_allocation_ts: actor_state.pending_allocation_ts,
 			connectable_ts: actor_state.connectable_ts,
+			sleep_ts: actor_state.sleep_ts,
+			reschedule_ts: actor_state.reschedule_ts,
 			destroy_ts: actor_state.destroy_ts,
 		});
 	}
