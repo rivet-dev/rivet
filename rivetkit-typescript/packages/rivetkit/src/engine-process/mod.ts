@@ -85,6 +85,18 @@ export async function ensureEngineProcess(
 		stdio: ["inherit", "pipe", "pipe"],
 		env: {
 			...process.env,
+			// In development, runners can be terminated without a graceful
+			// shutdown (i.e. SIGKILL instead of SIGTERM). This is treated as a
+			// crash by Rivet Engine in production and implements a backoff for
+			// rescheduling actors in case of a crash loop.
+			//
+			// This is problematic in development since this will cause actors
+			// to become unresponsive if frequently killing your dev server.
+			//
+			// We reduce the timeouts for resetting a runner as healthy in
+			// order to account for this.
+			RIVET__PEGBOARD__RETRY_RESET_DURATION: "100",
+			RIVET__PEGBOARD__BASE_RETRY_TIMEOUT: "100",
 		},
 	});
 
