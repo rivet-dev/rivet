@@ -45,6 +45,7 @@ import {
 	type LongTimeoutHandle,
 	promiseWithResolvers,
 	setLongTimeout,
+	stringifyError,
 } from "@/utils";
 import { KEYS } from "./kv";
 import { logger } from "./log";
@@ -427,7 +428,14 @@ export class EngineActorDriver implements ActorDriver {
 
 		const handler = this.#actors.get(actorId);
 		if (handler?.actor) {
-			await handler.actor._onStop();
+			try {
+				await handler.actor._onStop();
+			} catch (err) {
+				logger().error({
+					msg: "error in _onStop, proceeding with removing actor",
+					err: stringifyError(err),
+				});
+			}
 			this.#actors.delete(actorId);
 		}
 
