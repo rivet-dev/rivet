@@ -6,7 +6,6 @@
 			"**/*.json",
 			"**/*.ts",
 			"!engine/artifacts",
-			"!engine/sdks",
 			"!engine/sdks/typescript/api-full",
 			"!engine/sdks/typescript/runner-protocol",
 			"!frontend",

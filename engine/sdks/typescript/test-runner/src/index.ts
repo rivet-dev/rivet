@@ -12,8 +12,7 @@ const INTERNAL_SERVER_PORT = process.env.INTERNAL_SERVER_PORT
 	: 5051;
 const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
 const RIVET_RUNNER_NAME = process.env.RIVET_RUNNER_NAME ?? "test-runner";
-const RIVET_RUNNER_KEY =
-	process.env.RIVET_RUNNER_KEY;
+const RIVET_RUNNER_KEY = process.env.RIVET_RUNNER_KEY;
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	? Number(process.env.RIVET_RUNNER_VERSION)
 	: 1;
@@ -106,8 +105,7 @@ if (AUTOSTART_SERVER) {
 
 if (AUTOSTART_RUNNER) {
 	[runner, runnerStarted, runnerStopped] = await startRunner();
-}
-else await autoConfigureServerless();
+} else await autoConfigureServerless();
 
 async function autoConfigureServerless() {
 	const res = await fetch(
@@ -155,13 +153,14 @@ async function startRunner(): Promise<
 		token: RIVET_TOKEN,
 		namespace: RIVET_NAMESPACE,
 		runnerName: RIVET_RUNNER_NAME,
-		runnerKey: RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`,
+		runnerKey:
+			RIVET_RUNNER_KEY ?? `key-${Math.floor(Math.random() * 10000)}`,
 		totalSlots: RIVET_RUNNER_TOTAL_SLOTS,
 		prepopulateActorNames: {},
 		onConnected: () => {
 			runnerStarted.resolve(undefined);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
@@ -227,9 +226,17 @@ async function startRunner(): Promise<
 				ws.send(`Echo: ${data}`);
 
 				// Ack
-				const websocketId = Buffer.from((event as any).rivetRequestId).toString("base64");
-				websocketLastMsgIndexes.set(websocketId, (event as any).rivetMessageIndex);
-				runner.sendWebsocketMessageAck((event as any).rivetRequestId, (event as any).rivetMessageIndex);
+				const websocketId = Buffer.from(
+					(event as any).rivetRequestId,
+				).toString("base64");
+				websocketLastMsgIndexes.set(
+					websocketId,
+					(event as any).rivetMessageIndex,
+				);
+				runner.sendWebsocketMessageAck(
+					(event as any).rivetRequestId,
+					(event as any).rivetMessageIndex,
+				);
 			});
 
 			ws.addEventListener("close", () => {

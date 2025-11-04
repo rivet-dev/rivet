@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import {
 	type Level,
 	type LevelWithSilent,
@@ -5,7 +6,6 @@ import {
 	pino,
 	stdTimeFunctions,
 } from "pino";
-import { inspect } from "util";
 
 export type { Logger } from "pino";
 
