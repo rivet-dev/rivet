@@ -2,7 +2,6 @@ import type { ClientConfig } from "@/client/config";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
-	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_ID,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_CONN_TOKEN,
@@ -41,14 +40,7 @@ export async function openWebSocketToActor(
 	// Create WebSocket connection
 	const ws = new WebSocket(
 		guardUrl,
-		buildWebSocketProtocols(
-			runConfig,
-			actorId,
-			encoding,
-			params,
-			connId,
-			connToken,
-		),
+		buildWebSocketProtocols(runConfig, encoding, params, connId, connToken),
 	);
 
 	// Set binary type to arraybuffer for proper encoding support
@@ -61,7 +53,6 @@ export async function openWebSocketToActor(
 
 export function buildWebSocketProtocols(
 	runConfig: ClientConfig,
-	actorId: string,
 	encoding: Encoding,
 	params?: unknown,
 	connId?: string,
@@ -69,7 +60,6 @@ export function buildWebSocketProtocols(
 ): string[] {
 	const protocols: string[] = [];
 	protocols.push(WS_PROTOCOL_RIVETKIT);
-	protocols.push(`${WS_PROTOCOL_ACTOR}${actorId}`);
 	protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
 	if (runConfig.token) {
 		protocols.push(`${WS_PROTOCOL_TOKEN}${runConfig.token}`);
