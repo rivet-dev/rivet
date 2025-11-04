@@ -1,83 +1,95 @@
 name: Rust CI
-
 on:
   pull_request:
-    paths-ignore:
-      - 'frontend/**'
   push:
     branches:
       - main
-
 concurrency:
   group: rust-${{ github.ref }}
   cancel-in-progress: true
-
 permissions:
   contents: read
-
 defaults:
   run:
     # Enable fail-fast behavior
     shell: bash -e {0}
-
 env:
   # Disable incremental compilation for faster from-scratch builds
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg tokio_unstable"
   CARGO_TERM_COLOR: always
-
 jobs:
+  # Detect if rust code changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            rust:
+              - '**/*.rs'
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+              - '.github/workflows/rust-ci.yml'
+  
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: rustfmt
-
       - name: Check formatting
         run: cargo fmt --all -- --check
-
+  
   # clippy:
   #   name: Clippy
   #   runs-on: depot-ubuntu-24.04
+  #   needs: changes
+  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
-      
+  #     
   #     - uses: actions-rust-lang/setup-rust-toolchain@v1
   #       with:
   #         toolchain: stable
   #         components: clippy
-      
+  #     
   #     - uses: Swatinem/rust-cache@v2
-      
+  #     
   #     - name: Run clippy
   #       run: cargo clippy --all-targets --all-features -- -W warnings
-
+  
   check:
     name: Check
     runs-on: depot-ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-
       - uses: Swatinem/rust-cache@v2
-
       - name: Check
         run: cargo check --all-targets --all-features
         env:
           # Deny warnings
           RUSTFLAGS: --cfg tokio_unstable -D warnings
-
+  
   # test:
   #   name: Test
   #   runs-on: depot-ubuntu-24.04
+  #   needs: changes
+  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
   #
@@ -93,9 +105,34 @@ jobs:
   # deny:
   #   name: Deny
   #   runs-on: ubuntu-latest
+  #   needs: changes
+  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
   #     - name: cargo deny
   #       uses: EmbarkStudios/cargo-deny-action@v1
   #       with:
   #         rust-version: "1.88.0"
+
+  # This job always runs and should be the required status check
+  status-check:
+    name: Rust CI Status
+    runs-on: ubuntu-latest
+    needs: [changes, fmt, check]
+    if: always()
+    steps:
+      - name: Check job status
+        run: |
+          # If rust code didn't change, consider it a pass
+          if [ "${{ needs.changes.outputs.rust }}" != "true" ]; then
+            echo "No Rust changes detected, skipping checks"
+            exit 0
+          fi
+          
+          # If rust code changed, verify all jobs passed
+          if [ "${{ needs.fmt.result }}" == "failure" ] || [ "${{ needs.check.result }}" == "failure" ]; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
+          
+          echo "All Rust checks passed"
