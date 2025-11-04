@@ -2,6 +2,9 @@
 	"name": "@rivetkit/engine-workspace",
 	"private": true,
 	"packageManager": "pnpm@10.13.1",
+	"engines": {
+		"node": ">=20"
+	},
 	"scripts": {
 		"start": "npx turbo watch build",
 		"build": "npx turbo build",
