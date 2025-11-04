@@ -1,0 +1,54 @@
+# MARK: Connection
+# Represents an event subscription.
+type PersistedSubscription struct {
+	# Event name
+	eventName: str
+}
+
+type PersistedConnection struct {
+	id: str
+	token: str
+	parameters: data
+	state: data
+	subscriptions: list<PersistedSubscription>
+	lastSeen: u64
+}
+
+# MARK: Schedule Event
+type GenericPersistedScheduleEvent struct {
+	# Action name
+	action: str
+	# Arguments for the action
+	#
+	# CBOR array
+	args: optional<data>
+}
+
+type PersistedScheduleEventKind union {
+	GenericPersistedScheduleEvent
+}
+
+type PersistedScheduleEvent struct {
+	eventId: str
+	timestamp: u64
+	kind: PersistedScheduleEventKind
+}
+
+# MARK: WebSocket
+type PersistedHibernatableWebSocket struct {
+	requestId: data
+	lastSeenTimestamp: u64
+	msgIndex: u64
+}
+
+# MARK: Actor
+# Represents the persisted state of an actor.
+type PersistedActor struct {
+	# Input data passed to the actor on initialization
+	input: optional<data>
+	hasInitialized: bool
+	state: data
+	connections: list<PersistedConnection>
+	scheduledEvents: list<PersistedScheduleEvent>
+	hibernatableWebSocket: list<PersistedHibernatableWebSocket>
+}
