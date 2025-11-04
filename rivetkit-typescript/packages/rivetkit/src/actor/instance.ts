@@ -225,9 +225,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				return Array.from(this.#connections.entries()).map(
 					([id, conn]) => ({
 						id,
-						stateEnabled: conn.__stateEnabled,
 						params: conn.params as any,
 						state: conn.__stateEnabled ? conn.state : undefined,
+						status: conn.status,
+						subscriptions: conn.subscriptions.size,
+						lastSeen: conn.lastSeen,
+						stateEnabled: conn.__stateEnabled,
+						isHibernatable: conn.isHibernatable,
 					}),
 				);
 			},
@@ -1291,13 +1295,19 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#checkConnectionsLiveness() {
 		this.#rLog.debug({ msg: "checking connections liveness" });
 
+		let connected = 0;
+		let reconnecting = 0;
+		let removed = 0;
 		for (const conn of this.#connections.values()) {
 			if (conn.__status === "connected") {
+				connected += 1;
 				this.#rLog.debug({
 					msg: "connection is alive",
 					connId: conn.id,
 				});
 			} else {
+				reconnecting += 1;
+
 				const lastSeen = conn.__persist.lastSeen;
 				const sinceLastSeen = Date.now() - lastSeen;
 				if (
@@ -1321,9 +1331,18 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 
 				// Assume that the connection is dead here, no need to disconnect anything
+				removed += 1;
 				this.#removeConn(conn);
 			}
 		}
+
+		this.#rLog.debug({
+			msg: "checked connection liveness",
+			total: connected + reconnecting,
+			connected,
+			reconnecting,
+			removed,
+		});
 	}
 
 	/**
