@@ -73,8 +73,8 @@ services:
       - rivet-network
   rivet-shell:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -145,8 +145,8 @@ services:
       - rivet-network
   rivet-engine:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -185,8 +185,8 @@ services:
       start_period: 30s
   runner:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:

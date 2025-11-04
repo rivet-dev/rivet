@@ -1,8 +1,8 @@
 services:
   rivet-engine:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
     restart: unless-stopped
     command: /usr/bin/rivet-engine start

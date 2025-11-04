@@ -73,8 +73,8 @@ services:
       - rivet-network
   rivet-shell:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -143,8 +143,8 @@ services:
       - rivet-network
   rivet-engine-0:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -183,8 +183,8 @@ services:
       start_period: 30s
   rivet-engine-1:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -221,8 +221,8 @@ services:
       start_period: 30s
   rivet-engine-2:
     build:
-      context: ../..
-      dockerfile: docker/universal/Dockerfile
+      context: ../../..
+      dockerfile: engine/docker/universal/Dockerfile
       target: engine-full
       args:
         BUILD_FRONTEND: 'true'
@@ -259,8 +259,8 @@ services:
       start_period: 30s
   runner-0:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -276,8 +276,8 @@ services:
       - rivet-network
   runner-1:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -291,8 +291,8 @@ services:
       - rivet-network
   runner-2:
     build:
-      context: ../..
-      dockerfile: sdks/typescript/test-runner/Dockerfile
+      context: ../../..
+      dockerfile: engine/sdks/typescript/test-runner/Dockerfile
     platform: linux/amd64
     restart: unless-stopped
     environment:
