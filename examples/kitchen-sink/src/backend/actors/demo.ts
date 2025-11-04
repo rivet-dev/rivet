@@ -157,6 +157,6 @@ export const demo = actor({
 		...websocketActions,
 	},
 	options: {
-		sleepTimeout: 2000,
+		sleepTimeout: 10_000,
 	},
 });
