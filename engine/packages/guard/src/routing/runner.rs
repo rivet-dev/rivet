@@ -6,7 +6,7 @@ use std::sync::Arc;
 use super::{SEC_WEBSOCKET_PROTOCOL, X_RIVET_TOKEN};
 pub(crate) const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
-/// Route requests to the API service
+/// Route requests to the runner service using header-based routing
 #[tracing::instrument(skip_all)]
 pub async fn route_request(
 	ctx: &StandaloneCtx,
@@ -19,8 +19,38 @@ pub async fn route_request(
 		return Ok(None);
 	}
 
-	tracing::debug!(?host, path, "routing to runner");
+	tracing::debug!(?host, path, "routing to runner via header");
 
+	route_runner_internal(ctx, host, headers).await.map(Some)
+}
+
+/// Route requests to the runner service using path-based routing
+/// Matches path: /runners/connect
+#[tracing::instrument(skip_all)]
+pub async fn route_request_path_based(
+	ctx: &StandaloneCtx,
+	host: &str,
+	path: &str,
+	headers: &hyper::HeaderMap,
+) -> Result<Option<RoutingOutput>> {
+	// Check if path matches /runners/connect
+	let path_without_query = path.split('?').next().unwrap_or(path);
+	if path_without_query != "/runners/connect" {
+		return Ok(None);
+	}
+
+	tracing::debug!(?host, path, "routing to runner via path");
+
+	route_runner_internal(ctx, host, headers).await.map(Some)
+}
+
+/// Internal runner routing logic shared by both header-based and path-based routing
+#[tracing::instrument(skip_all)]
+async fn route_runner_internal(
+	ctx: &StandaloneCtx,
+	host: &str,
+	headers: &hyper::HeaderMap,
+) -> Result<RoutingOutput> {
 	// Validate that the host is valid for the current datacenter
 	let current_dc = ctx.config().topology().current_dc()?;
 	if !current_dc.is_valid_regional_host(host) {
@@ -95,5 +125,5 @@ pub async fn route_request(
 	}
 
 	let tunnel = pegboard_runner::PegboardRunnerWsCustomServe::new(ctx.clone());
-	Ok(Some(RoutingOutput::CustomServe(Arc::new(tunnel))))
+	Ok(RoutingOutput::CustomServe(Arc::new(tunnel)))
 }
