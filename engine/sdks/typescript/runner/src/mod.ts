@@ -43,7 +43,7 @@ export interface RunnerConfig {
 	prepopulateActorNames: Record<string, { metadata: Record<string, any> }>;
 	metadata?: Record<string, any>;
 	onConnected: () => void;
-	onDisconnected: () => void;
+	onDisconnected: (code: number, reason: string) => void;
 	onShutdown: () => void;
 	fetch: (
 		runner: Runner,
@@ -640,7 +640,7 @@ export class Runner {
 				reason: ev.reason.toString(),
 			});
 
-			this.#config.onDisconnected();
+			this.#config.onDisconnected(ev.code, ev.reason);
 
 			if (ev.reason.toString().startsWith("ws.eviction")) {
 				logger()?.info({

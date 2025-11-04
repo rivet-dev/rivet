@@ -125,11 +125,13 @@ export class EngineActorDriver implements ActorDriver {
 
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: () => {
+			onDisconnected: (code, reason) => {
 				logger().warn({
 					msg: "runner disconnected",
 					namespace: this.#runConfig.namespace,
 					runnerName: this.#runConfig.runnerName,
+					code,
+					reason,
 				});
 				hasDisconnected = true;
 			},
