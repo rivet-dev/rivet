@@ -54,6 +54,8 @@ import {
 import { KEYS } from "./kv";
 import { logger } from "./log";
 
+const RUNNER_SSE_PING_INTERVAL = 1000;
+
 interface ActorHandler {
 	actor?: AnyActorInstance;
 	actorStartPromise?: ReturnType<typeof promiseWithResolvers<void>>;
@@ -75,6 +77,7 @@ export class EngineActorDriver implements ActorDriver {
 
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
+	#isRunnerStopped: boolean = false;
 
 	// WebSocket message acknowledgment debouncing
 	#wsAckQueue: Map<
@@ -150,6 +153,7 @@ export class EngineActorDriver implements ActorDriver {
 			},
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
+				this.#isRunnerStopped = true;
 			},
 			fetch: this.#runnerFetch.bind(this),
 			websocket: this.#runnerWebSocket.bind(this),
@@ -652,6 +656,29 @@ export class EngineActorDriver implements ActorDriver {
 			invariant(payload, "runnerId not set");
 			await stream.writeSSE({ data: payload });
 
+			// Send ping every second to keep the connection alive
+			while (true) {
+				if (this.#isRunnerStopped) {
+					logger().debug({
+						msg: "runner is stopped",
+					});
+					break;
+				}
+
+				if (stream.closed || stream.aborted) {
+					logger().debug({
+						msg: "runner sse stream closed",
+						closed: stream.closed,
+						aborted: stream.aborted,
+					});
+					break;
+				}
+
+				await stream.writeSSE({ event: "ping", data: "" });
+				await stream.sleep(RUNNER_SSE_PING_INTERVAL);
+			}
+
+			// Wait for the runner to stop if the SSE stream aborted early for any reason
 			await this.#runnerStopped.promise;
 		});
 	}
