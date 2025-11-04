@@ -3,9 +3,8 @@ import { parseActorPath } from "@/manager/gateway";
 
 describe("parseActorPath", () => {
 	describe("Valid paths with token", () => {
-		test("should parse basic path with token and route", () => {
-			const path =
-				"/gateway/actors/actor-123/tokens/my-token/route/api/v1/endpoint";
+		test("should parse basic path with token", () => {
+			const path = "/gateway/actor-123@my-token/api/v1/endpoint";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -16,7 +15,7 @@ describe("parseActorPath", () => {
 
 		test("should parse path with UUID as actor ID", () => {
 			const path =
-				"/gateway/actors/12345678-1234-1234-1234-123456789abc/tokens/my-token/route/status";
+				"/gateway/12345678-1234-1234-1234-123456789abc@my-token/status";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -28,8 +27,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should parse path with token and query parameters", () => {
-			const path =
-				"/gateway/actors/actor-456/tokens/token123/route/api?key=value";
+			const path = "/gateway/actor-456@token123/api?key=value";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -39,7 +37,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should parse path with token and no remaining path", () => {
-			const path = "/gateway/actors/actor-000/tokens/tok/route";
+			const path = "/gateway/actor-000@tok";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -50,7 +48,7 @@ describe("parseActorPath", () => {
 
 		test("should parse complex path with token and multiple segments", () => {
 			const path =
-				"/gateway/actors/actor-complex/tokens/secure-token/route/api/v2/users/123/profile/settings";
+				"/gateway/actor-complex@secure-token/api/v2/users/123/profile/settings";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -64,7 +62,7 @@ describe("parseActorPath", () => {
 
 	describe("Valid paths without token", () => {
 		test("should parse basic path without token", () => {
-			const path = "/gateway/actors/actor-123/route/api/v1/endpoint";
+			const path = "/gateway/actor-123/api/v1/endpoint";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -74,8 +72,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should parse path with UUID without token", () => {
-			const path =
-				"/gateway/actors/12345678-1234-1234-1234-123456789abc/route/status";
+			const path = "/gateway/12345678-1234-1234-1234-123456789abc/status";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -87,8 +84,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should parse path without token and with query params", () => {
-			const path =
-				"/gateway/actors/actor-456/route/api/endpoint?foo=bar&baz=qux";
+			const path = "/gateway/actor-456/api/endpoint?foo=bar&baz=qux";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -98,7 +94,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should parse path without token and no remaining path", () => {
-			const path = "/gateway/actors/actor-000/route";
+			const path = "/gateway/actor-000";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -110,8 +106,7 @@ describe("parseActorPath", () => {
 
 	describe("Query parameters and fragments", () => {
 		test("should preserve query parameters", () => {
-			const path =
-				"/gateway/actors/actor-456/route/api/endpoint?foo=bar&baz=qux";
+			const path = "/gateway/actor-456/api/endpoint?foo=bar&baz=qux";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -119,7 +114,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should strip fragment from path", () => {
-			const path = "/gateway/actors/actor-789/route/page#section";
+			const path = "/gateway/actor-789/page#section";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -129,7 +124,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should preserve query but strip fragment", () => {
-			const path = "/gateway/actors/actor-123/route/api?query=1#section";
+			const path = "/gateway/actor-123/api?query=1#section";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -138,8 +133,8 @@ describe("parseActorPath", () => {
 			expect(result?.remainingPath).toBe("/api?query=1");
 		});
 
-		test("should handle path ending with route but having query string", () => {
-			const path = "/gateway/actors/actor-123/route?direct=true";
+		test("should handle path with only actor ID and query string", () => {
+			const path = "/gateway/actor-123?direct=true";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -151,7 +146,7 @@ describe("parseActorPath", () => {
 
 	describe("Trailing slashes", () => {
 		test("should preserve trailing slash in remaining path", () => {
-			const path = "/gateway/actors/actor-111/route/api/";
+			const path = "/gateway/actor-111/api/";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -163,7 +158,7 @@ describe("parseActorPath", () => {
 
 	describe("Special characters", () => {
 		test("should handle actor ID with allowed special characters", () => {
-			const path = "/gateway/actors/actor_id-123.test/route/endpoint";
+			const path = "/gateway/actor_id-123.test/endpoint";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -173,8 +168,7 @@ describe("parseActorPath", () => {
 		});
 
 		test("should handle URL encoded characters in remaining path", () => {
-			const path =
-				"/gateway/actors/actor-123/route/api%20endpoint/test%2Fpath";
+			const path = "/gateway/actor-123/api%20endpoint/test%2Fpath";
 			const result = parseActorPath(path);
 
 			expect(result).not.toBeNull();
@@ -186,31 +180,11 @@ describe("parseActorPath", () => {
 
 	describe("Invalid paths - wrong prefix", () => {
 		test("should reject path with wrong prefix", () => {
-			expect(parseActorPath("/api/actors/123/route/endpoint")).toBeNull();
-		});
-
-		test("should reject path with wrong actor keyword", () => {
-			expect(
-				parseActorPath("/gateway/actor/123/route/endpoint"),
-			).toBeNull();
+			expect(parseActorPath("/api/123/endpoint")).toBeNull();
 		});
 
 		test("should reject path missing gateway prefix", () => {
-			expect(parseActorPath("/actors/123/route/endpoint")).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - missing route", () => {
-		test("should reject path without route keyword", () => {
-			expect(parseActorPath("/gateway/actors/123")).toBeNull();
-		});
-
-		test("should reject path with endpoint but no route keyword", () => {
-			expect(parseActorPath("/gateway/actors/123/endpoint")).toBeNull();
-		});
-
-		test("should reject path with tokens but no route keyword", () => {
-			expect(parseActorPath("/gateway/actors/123/tokens/tok")).toBeNull();
+			expect(parseActorPath("/123/endpoint")).toBeNull();
 		});
 	});
 
@@ -218,88 +192,57 @@ describe("parseActorPath", () => {
 		test("should reject path with only gateway", () => {
 			expect(parseActorPath("/gateway")).toBeNull();
 		});
-
-		test("should reject path with only gateway and actors", () => {
-			expect(parseActorPath("/gateway/actors")).toBeNull();
-		});
-
-		test("should reject path with only gateway, actors, and actor ID", () => {
-			expect(parseActorPath("/gateway/actors/123")).toBeNull();
-		});
 	});
 
-	describe("Invalid paths - malformed token path", () => {
-		test("should reject token path missing route keyword", () => {
-			expect(
-				parseActorPath("/gateway/actors/123/tokens/tok/api"),
-			).toBeNull();
+	describe("Invalid paths - malformed token", () => {
+		test("should reject path with empty actor ID before @", () => {
+			expect(parseActorPath("/gateway/@token/endpoint")).toBeNull();
 		});
 
-		test("should reject path with empty token", () => {
-			expect(
-				parseActorPath("/gateway/actors/123/tokens//route/api"),
-			).toBeNull();
-		});
-	});
-
-	describe("Invalid paths - wrong segment positions", () => {
-		test("should reject segments in wrong order", () => {
-			expect(
-				parseActorPath("/actors/gateway/123/route/endpoint"),
-			).toBeNull();
-		});
-
-		test("should reject route keyword in wrong position", () => {
-			expect(
-				parseActorPath("/gateway/route/actors/123/endpoint"),
-			).toBeNull();
+		test("should reject path with empty token after @", () => {
+			expect(parseActorPath("/gateway/actor-123@/endpoint")).toBeNull();
 		});
 	});
 
 	describe("Invalid paths - empty values", () => {
-		test("should reject path with empty actor ID", () => {
-			expect(
-				parseActorPath("/gateway/actors//route/endpoint"),
-			).toBeNull();
-		});
-
-		test("should reject path with empty actor ID in token path", () => {
-			expect(
-				parseActorPath("/gateway/actors//tokens/tok/route/endpoint"),
-			).toBeNull();
+		test("should reject path with empty actor segment", () => {
+			expect(parseActorPath("/gateway//endpoint")).toBeNull();
 		});
 	});
 
 	describe("Invalid paths - double slash", () => {
 		test("should reject path with double slashes", () => {
-			const path = "/gateway/actors//actor-123/route/endpoint";
+			const path = "/gateway//actor-123/endpoint";
 			expect(parseActorPath(path)).toBeNull();
 		});
 	});
 
 	describe("Invalid paths - case sensitive", () => {
 		test("should reject path with capitalized Gateway", () => {
-			expect(
-				parseActorPath("/Gateway/actors/123/route/endpoint"),
-			).toBeNull();
+			expect(parseActorPath("/Gateway/123/endpoint")).toBeNull();
+		});
+	});
+
+	describe("Token edge cases", () => {
+		test("should handle token with special characters", () => {
+			const path =
+				"/gateway/actor-123@token-with-dashes_and_underscores/api";
+			const result = parseActorPath(path);
+
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor-123");
+			expect(result?.token).toBe("token-with-dashes_and_underscores");
+			expect(result?.remainingPath).toBe("/api");
 		});
 
-		test("should reject path with capitalized Actors", () => {
-			expect(
-				parseActorPath("/gateway/Actors/123/route/endpoint"),
-			).toBeNull();
-		});
+		test("should handle multiple @ symbols (only first is used)", () => {
+			const path = "/gateway/actor-123@token@extra/api";
+			const result = parseActorPath(path);
 
-		test("should reject path with capitalized Route", () => {
-			expect(
-				parseActorPath("/gateway/actors/123/Route/endpoint"),
-			).toBeNull();
-		});
-
-		test("should reject token path with capitalized Route", () => {
-			expect(
-				parseActorPath("/gateway/actors/123/tokens/tok/Route/endpoint"),
-			).toBeNull();
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor-123");
+			expect(result?.token).toBe("token@extra");
+			expect(result?.remainingPath).toBe("/api");
 		});
 	});
 });

@@ -142,8 +142,8 @@ pub fn create_routing_function(ctx: StandaloneCtx, shared_state: SharedState) ->
 
 /// Parse actor routing information from path
 /// Matches patterns:
-/// - /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
-/// - /gateway/actors/{actor_id}/route/{...path}
+/// - /gateway/{actor_id}/{...path}
+/// - /gateway/{actor_id}@{token}/{...path}
 pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
 	// Find query string position (everything from ? onwards, but before fragment)
 	let query_pos = path.find('?');
@@ -173,47 +173,41 @@ pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
 	// Split the path into segments
 	let segments: Vec<&str> = base_path.split('/').filter(|s| !s.is_empty()).collect();
 
-	// Check minimum required segments: gateway, actors, {actor_id}, route
-	if segments.len() < 4 {
+	// Check minimum required segments: gateway, {actor_id}
+	if segments.len() < 2 {
 		return None;
 	}
 
-	// Verify the fixed segments
-	if segments[0] != "gateway" || segments[1] != "actors" {
+	// Verify the fixed segment
+	if segments[0] != "gateway" {
 		return None;
 	}
 
-	// Check for empty actor_id
-	if segments[2].is_empty() {
+	// Check for empty actor_id segment
+	if segments[1].is_empty() {
 		return None;
 	}
 
-	let actor_id = segments[2].to_string();
+	// Parse actor_id and optional token from second segment
+	// Pattern: {actor_id}@{token} or just {actor_id}
+	let actor_id_segment = segments[1];
+	let (actor_id, token) = if let Some(at_pos) = actor_id_segment.find('@') {
+		let aid = &actor_id_segment[..at_pos];
+		let tok = &actor_id_segment[at_pos + 1..];
 
-	// Check for token or direct route
-	let (token, remaining_path_start_idx) =
-		if segments.len() >= 6 && segments[3] == "tokens" && segments[5] == "route" {
-			// Pattern with token: /gateway/actors/{actor_id}/tokens/{token}/route/{...path}
-			// Check for empty token
-			if segments[4].is_empty() {
-				return None;
-			}
-			(Some(segments[4].to_string()), 6)
-		} else if segments.len() >= 4 && segments[3] == "route" {
-			// Pattern without token: /gateway/actors/{actor_id}/route/{...path}
-			(None, 4)
-		} else {
+		// Check for empty actor_id or token
+		if aid.is_empty() || tok.is_empty() {
 			return None;
-		};
+		}
+
+		(aid.to_string(), Some(tok.to_string()))
+	} else {
+		(actor_id_segment.to_string(), None)
+	};
 
 	// Calculate the position in the original path where remaining path starts
-	let mut prefix_len = 0;
-	for (i, segment) in segments.iter().enumerate() {
-		if i >= remaining_path_start_idx {
-			break;
-		}
-		prefix_len += 1 + segment.len(); // +1 for the slash
-	}
+	// We need to skip "/gateway/{actor_id_segment}"
+	let prefix_len = 1 + segments[0].len() + 1 + segments[1].len(); // "/gateway/{actor_id_segment}"
 
 	// Extract the remaining path preserving trailing slashes
 	let remaining_base = if prefix_len < base_path.len() {
