@@ -7,15 +7,16 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::Full;
-use hyper::body::Incoming as BodyIncoming;
 use hyper::{Method, Request, Response, StatusCode};
-use hyper_tungstenite::HyperWebsocket;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use common::{create_test_cache_key_fn, create_test_config, init_tracing, start_guard};
+use common::{create_test_config, init_tracing, start_guard};
+use rivet_guard_core::WebSocketHandle;
 use rivet_guard_core::custom_serve::CustomServeTrait;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingFn, RoutingOutput};
 use rivet_guard_core::request_context::RequestContext;
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use uuid::Uuid;
 
 // Track what was called for testing
 #[derive(Clone, Debug, Default)]
@@ -33,19 +34,16 @@ struct TestCustomServe {
 impl CustomServeTrait for TestCustomServe {
 	async fn handle_request(
 		&self,
-		req: Request<BodyIncoming>,
+		req: Request<Full<Bytes>>,
 		_request_context: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		// Track this HTTP call
 		let path = req.uri().path().to_string();
 		self.tracker.http_calls.lock().unwrap().push(path.clone());
 
-		// Read request body if present
-		let (parts, body) = req.into_parts();
-		let body_bytes = match http_body_util::BodyExt::collect(body).await {
-			Result::Ok(collected) => collected.to_bytes(),
-			Err(_) => Bytes::new(),
-		};
+		// Read request body
+		let (parts, _body) = req.into_parts();
+		let body_bytes = Bytes::new(); // Empty for test purposes
 
 		// Create a test response
 		let response_body = format!(
@@ -65,50 +63,44 @@ impl CustomServeTrait for TestCustomServe {
 
 	async fn handle_websocket(
 		&self,
-		client_ws: HyperWebsocket,
+		websocket: WebSocketHandle,
 		_headers: &hyper::HeaderMap,
 		_path: &str,
 		_request_context: &mut RequestContext,
-	) -> std::result::Result<(), (HyperWebsocket, anyhow::Error)> {
+		_unique_request_id: Uuid,
+	) -> Result<Option<CloseFrame>> {
 		// Track this WebSocket call
-		// Note: We no longer have the path from the request, so we'll track a generic call
 		self.tracker
 			.websocket_calls
 			.lock()
 			.unwrap()
 			.push("websocket".to_string());
 
-		// Get the actual WebSocket stream
-		let ws = client_ws.await?;
-		let (mut sink, mut stream) = ws.split();
+		let ws_rx = websocket.recv();
 
 		// Echo messages back with "Custom: " prefix
-		while let Some(msg) = stream.next().await {
-			match msg {
-				Result::Ok(hyper_tungstenite::tungstenite::Message::Text(text)) => {
+		while let Some(msg_result) = ws_rx.lock().await.next().await {
+			match msg_result {
+				std::result::Result::Ok(msg) if msg.is_text() => {
+					let text = msg.to_text().unwrap_or("");
 					let response = format!("Custom: {}", text);
-					if let Err(e) = sink
-						.send(hyper_tungstenite::tungstenite::Message::Text(
-							response.into(),
-						))
-						.await
-					{
+					if let std::result::Result::Err(e) = websocket.send(response.into()).await {
 						eprintln!("Failed to send WebSocket message: {}", e);
 						break;
 					}
 				}
-				Result::Ok(hyper_tungstenite::tungstenite::Message::Close(_)) => {
+				std::result::Result::Ok(msg) if msg.is_close() => {
 					break;
 				}
-				Result::Ok(_) => {}
-				Err(e) => {
+				std::result::Result::Ok(_) => {}
+				std::result::Result::Err(e) => {
 					eprintln!("WebSocket error: {}", e);
 					break;
 				}
 			}
 		}
 
-		Ok(())
+		Ok(None)
 	}
 }
 

@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct EvictionTestInput {
 	pub test_id: Uuid,
 }
@@ -31,12 +32,14 @@ pub async fn eviction_test_workflow(
 }
 
 #[message("running_message")]
+#[allow(dead_code)]
 pub struct RunningMessage {
 	pub value: String,
 }
 
 #[signal("test_signal2")]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TestSignal2 {
 	pub value: String,
 }
