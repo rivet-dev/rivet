@@ -163,6 +163,9 @@ export async function handleWebSocketConnect(
 	// Promise used to wait for the websocket close in `disconnect`
 	const closePromise = promiseWithResolvers<void>();
 
+	// Track connection outside of scope for cleanup
+	let createdConn: AnyConn | undefined;
+
 	return {
 		onOpen: (_evt: any, ws: WSContext) => {
 			actor.rLog.debug("actor websocket open");
@@ -197,6 +200,9 @@ export async function handleWebSocketConnect(
 						connId,
 						connToken,
 					);
+
+					// Store connection so we can clean on close
+					createdConn = conn;
 
 					// Unblock other handlers
 					handlersResolve({ conn, actor, connId: conn.id });
@@ -298,20 +304,13 @@ export async function handleWebSocketConnect(
 			// https://github.com/cloudflare/workerd/issues/2569
 			ws.close(1000, "hack_force_close");
 
-			// Handle cleanup asynchronously
-			handlersPromise
-				.then(({ conn, actor }) => {
+			// Wait for actor.createConn to finish before removing the connection
+			handlersPromise.finally(() => {
+				if (createdConn) {
 					const wasClean = event.wasClean || event.code === 1000;
-					actor.__connDisconnected(conn, wasClean, requestId);
-				})
-				.catch((error) => {
-					deconstructError(
-						error,
-						actor.rLog,
-						{ wsEvent: "close" },
-						exposeInternalError,
-					);
-				});
+					actor.__connDisconnected(createdConn, wasClean, requestId);
+				}
+			});
 		},
 		onError: (_error: unknown) => {
 			try {
