@@ -2,6 +2,7 @@ use gas::prelude::*;
 use gasoline as gas;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct BasicWorkflowInput {
 	pub value: String,
 }

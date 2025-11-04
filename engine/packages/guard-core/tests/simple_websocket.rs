@@ -5,7 +5,6 @@ use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode, body::Incoming};
 use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -89,7 +88,7 @@ async fn start_websocket_server() -> SocketAddr {
 			let accept_result = listener.accept().await;
 
 			// Handle the connection
-			let (stream, remote_addr) = match accept_result {
+			let (stream, _remote_addr) = match accept_result {
 				Ok(conn) => {
 					println!("Server: Accepted connection from {}", conn.1);
 					conn

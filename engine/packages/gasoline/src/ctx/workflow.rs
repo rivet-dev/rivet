@@ -546,7 +546,7 @@ impl WorkflowCtx {
 	pub fn workflow<I>(
 		&mut self,
 		input: impl WorkflowRepr<I>,
-	) -> builder::sub_workflow::SubWorkflowBuilder<impl WorkflowRepr<I>, I>
+	) -> builder::sub_workflow::SubWorkflowBuilder<'_, impl WorkflowRepr<I>, I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -687,7 +687,10 @@ impl WorkflowCtx {
 	// }
 
 	/// Creates a signal builder.
-	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::signal::SignalBuilder<T> {
+	pub fn signal<T: Signal + Serialize>(
+		&mut self,
+		body: T,
+	) -> builder::signal::SignalBuilder<'_, T> {
 		builder::signal::SignalBuilder::new(self, self.version, body)
 	}
 
@@ -816,7 +819,7 @@ impl WorkflowCtx {
 	}
 
 	/// Creates a message builder.
-	pub fn msg<M: Message>(&mut self, body: M) -> builder::message::MessageBuilder<M> {
+	pub fn msg<M: Message>(&mut self, body: M) -> builder::message::MessageBuilder<'_, M> {
 		builder::message::MessageBuilder::new(self, self.version, body)
 	}
 
