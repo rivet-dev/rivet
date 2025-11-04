@@ -399,16 +399,31 @@ export function parseActorPath(path: string): ActorPathInfo | null {
 	const atPos = actorSegment.indexOf("@");
 	if (atPos !== -1) {
 		// Pattern: /gateway/{actor_id}@{token}/{...path}
-		actorId = actorSegment.slice(0, atPos);
-		token = actorSegment.slice(atPos + 1);
+		const rawActorId = actorSegment.slice(0, atPos);
+		const rawToken = actorSegment.slice(atPos + 1);
 
 		// Check for empty actor_id or token
-		if (actorId.length === 0 || token.length === 0) {
+		if (rawActorId.length === 0 || rawToken.length === 0) {
+			return null;
+		}
+
+		// URL-decode both actor_id and token
+		try {
+			actorId = decodeURIComponent(rawActorId);
+			token = decodeURIComponent(rawToken);
+		} catch (e) {
+			// Invalid URL encoding
 			return null;
 		}
 	} else {
 		// Pattern: /gateway/{actor_id}/{...path}
-		actorId = actorSegment;
+		// URL-decode actor_id
+		try {
+			actorId = decodeURIComponent(actorSegment);
+		} catch (e) {
+			// Invalid URL encoding
+			return null;
+		}
 		token = undefined;
 	}
 

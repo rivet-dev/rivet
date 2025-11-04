@@ -227,6 +227,9 @@ features = ["full","extra-traits"]
 version = "2.5.4"
 features = ["serde"]
 
+[workspace.dependencies.urlencoding]
+version = "2.1"
+
 [workspace.dependencies.uuid]
 version = "1.11.0"
 features = ["v4","serde"]
