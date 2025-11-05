@@ -646,7 +646,11 @@ export class EngineActorDriver implements ActorDriver {
 			stream.onAbort(() => {});
 			c.req.raw.signal.addEventListener("abort", () => {
 				logger().debug("SSE aborted, shutting down runner");
-				this.shutdownRunner(true);
+
+				// We cannot assume that the request will always be closed gracefully by Rivet. We always proceed with a graceful shutdown in case the request was terminated for any other reason.
+				//
+				// If we did not use a graceful shutdown, the runner would
+				this.shutdownRunner(false);
 			});
 
 			await this.#runnerStarted.promise;
