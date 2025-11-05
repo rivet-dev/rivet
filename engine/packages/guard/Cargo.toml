@@ -48,6 +48,7 @@ tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
 url.workspace = true
+urlencoding.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]

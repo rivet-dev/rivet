@@ -107,12 +107,52 @@ fn test_parse_actor_path_special_characters() {
 
 #[test]
 fn test_parse_actor_path_encoded_characters() {
-	// URL encoded characters in path
+	// URL encoded characters in remaining path
 	let path = "/gateway/actor-123/api%20endpoint/test%2Fpath";
 	let result = parse_actor_path(path).unwrap();
 	assert_eq!(result.actor_id, "actor-123");
 	assert_eq!(result.token, None);
 	assert_eq!(result.remaining_path, "/api%20endpoint/test%2Fpath");
+}
+
+#[test]
+fn test_parse_actor_path_encoded_actor_id() {
+	// URL encoded characters in actor_id (e.g., actor-123 with hyphen encoded)
+	let path = "/gateway/actor%2D123/endpoint";
+	let result = parse_actor_path(path).unwrap();
+	assert_eq!(result.actor_id, "actor-123");
+	assert_eq!(result.token, None);
+	assert_eq!(result.remaining_path, "/endpoint");
+}
+
+#[test]
+fn test_parse_actor_path_encoded_token() {
+	// URL encoded characters in token (e.g., @ symbol encoded in token)
+	let path = "/gateway/actor-123@tok%40en/endpoint";
+	let result = parse_actor_path(path).unwrap();
+	assert_eq!(result.actor_id, "actor-123");
+	assert_eq!(result.token, Some("tok@en".to_string()));
+	assert_eq!(result.remaining_path, "/endpoint");
+}
+
+#[test]
+fn test_parse_actor_path_encoded_actor_id_and_token() {
+	// URL encoded characters in both actor_id and token
+	let path = "/gateway/actor%2D123@token%2Dwith%2Dencoded/endpoint";
+	let result = parse_actor_path(path).unwrap();
+	assert_eq!(result.actor_id, "actor-123");
+	assert_eq!(result.token, Some("token-with-encoded".to_string()));
+	assert_eq!(result.remaining_path, "/endpoint");
+}
+
+#[test]
+fn test_parse_actor_path_encoded_spaces() {
+	// URL encoded spaces in actor_id
+	let path = "/gateway/actor%20with%20spaces/endpoint";
+	let result = parse_actor_path(path).unwrap();
+	assert_eq!(result.actor_id, "actor with spaces");
+	assert_eq!(result.token, None);
+	assert_eq!(result.remaining_path, "/endpoint");
 }
 
 // Invalid path tests

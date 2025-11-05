@@ -208,9 +208,15 @@ pub fn parse_actor_path(path: &str) -> Option<ActorPathInfo> {
 			return None;
 		}
 
-		(aid.to_string(), Some(tok.to_string()))
+		// URL-decode both actor_id and token
+		let decoded_aid = urlencoding::decode(aid).ok()?.to_string();
+		let decoded_tok = urlencoding::decode(tok).ok()?.to_string();
+
+		(decoded_aid, Some(decoded_tok))
 	} else {
-		(actor_id_segment.to_string(), None)
+		// URL-decode actor_id
+		let decoded_aid = urlencoding::decode(actor_id_segment).ok()?.to_string();
+		(decoded_aid, None)
 	};
 
 	// Calculate the position in the original path where remaining path starts
