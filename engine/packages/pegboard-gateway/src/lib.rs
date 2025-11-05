@@ -76,6 +76,15 @@ impl CustomServeTrait for PegboardGateway {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 
+		// Extract origin for CORS (before consuming request)
+		// When credentials: true, we must echo back the actual origin, not "*"
+		let origin = req
+			.headers()
+			.get("origin")
+			.and_then(|v| v.to_str().ok())
+			.unwrap_or("*")
+			.to_string();
+
 		// Extract request parts
 		let mut headers = HashableMap::new();
 		for (name, value) in req.headers() {
@@ -86,6 +95,42 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Extract method and path before consuming the request
 		let method = req.method().to_string();
+
+		// Handle CORS preflight OPTIONS requests at gateway level
+		//
+		// We need to do this in Guard because there is no way of sending an OPTIONS request to the
+		// actor since we don't have the `x-rivet-token` header. This implementation allows
+		// requests from anywhere and lets the actor handle CORS manually in `onBeforeConnect`.
+		// This had the added benefit of also applying to WebSockets.
+		if req.method() == hyper::Method::OPTIONS {
+			tracing::debug!("handling OPTIONS preflight request at gateway");
+
+			// Extract requested headers
+			let requested_headers = req
+				.headers()
+				.get("access-control-request-headers")
+				.and_then(|v| v.to_str().ok())
+				.unwrap_or("*");
+
+			let mut response = Response::builder()
+				.status(StatusCode::NO_CONTENT)
+				.header("access-control-allow-origin", &origin)
+				.header("access-control-allow-credentials", "true")
+				.header(
+					"access-control-allow-methods",
+					"GET, POST, PUT, DELETE, OPTIONS, PATCH",
+				)
+				.header("access-control-allow-headers", requested_headers)
+				.header("access-control-expose-headers", "*")
+				.header("access-control-max-age", "86400");
+
+			// Add Vary header to prevent cache poisoning when echoing origin
+			if origin != "*" {
+				response = response.header("vary", "Origin");
+			}
+
+			return Ok(response.body(ResponseBody::Full(Full::new(Bytes::new())))?);
+		}
 
 		let body_bytes = req
 			.into_body()
@@ -164,9 +209,20 @@ impl CustomServeTrait for PegboardGateway {
 		let mut response_builder =
 			Response::builder().status(StatusCode::from_u16(response_start.status)?);
 
-		// Add headers
+		// Add headers from actor
 		for (key, value) in response_start.headers {
 			response_builder = response_builder.header(key, value);
+		}
+
+		// Add CORS headers to actual request
+		response_builder = response_builder
+			.header("access-control-allow-origin", &origin)
+			.header("access-control-allow-credentials", "true")
+			.header("access-control-expose-headers", "*");
+
+		// Add Vary header to prevent cache poisoning when echoing origin
+		if origin != "*" {
+			response_builder = response_builder.header("vary", "Origin");
 		}
 
 		// Add body
