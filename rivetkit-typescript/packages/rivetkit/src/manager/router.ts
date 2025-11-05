@@ -186,6 +186,13 @@ function addServerlessRoutes(
 		newRunConfig.totalSlots = totalSlots;
 		newRunConfig.runnerName = runnerName;
 		newRunConfig.namespace = namespace;
+		if (newRunConfig.runnerKey) {
+			logger().warn({
+				msg: "runner keys are not supported by serverless runners, this will be overwritten with a random runner key",
+				oldRunnerKey: newRunConfig.runnerKey,
+			});
+			newRunConfig.runnerKey = undefined;
+		}
 
 		// Create new actor driver with updated config
 		const actorDriver = driverConfig.actor(

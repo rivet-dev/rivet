@@ -7,10 +7,8 @@ export const EngingConfigSchema = z
 		/** Unique key for this runner. Runners connecting a given key will replace any other runner connected with the same key. */
 		runnerKey: z
 			.string()
-			.default(
-				() =>
-					getEnvUniversal("RIVET_RUNNER_KEY") ?? crypto.randomUUID(),
-			),
+			.optional()
+			.transform((x) => x ?? getEnvUniversal("RIVET_RUNNER_KEY")),
 
 		/** How many actors this runner can run. */
 		totalSlots: z.number().default(100_000),
