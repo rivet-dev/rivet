@@ -12,7 +12,7 @@ pub async fn lead_consensus(
 	replica_id: protocol::ReplicaId,
 	proposal: protocol::Proposal,
 ) -> Result<protocol::Payload> {
-	tracing::info!(?replica_id, "leading consensus");
+	tracing::debug!(?replica_id, "leading consensus");
 
 	// EPaxos Step 1
 	let instance_num_key = keys::replica::InstanceNumberKey;

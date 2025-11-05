@@ -66,7 +66,7 @@ pub fn set_sampler_ratio(ratio: f64) -> anyhow::Result<()> {
 		.ok_or_else(|| anyhow::anyhow!("sampler not initialized"))?;
 
 	sampler.set_ratio(ratio);
-	tracing::info!(?ratio, "updated sampler ratio");
+	tracing::debug!(?ratio, "updated sampler ratio");
 
 	Ok(())
 }

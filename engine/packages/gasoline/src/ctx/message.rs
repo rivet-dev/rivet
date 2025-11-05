@@ -162,7 +162,7 @@ impl MessageCtx {
 				)
 				.await
 			{
-				tracing::warn!(?err, "publish message failed, trying again");
+				tracing::debug!(?err, "publish message failed, trying again");
 				continue;
 			}
 

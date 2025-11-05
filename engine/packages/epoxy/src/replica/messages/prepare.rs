@@ -11,7 +11,7 @@ pub async fn prepare(
 	replica_id: protocol::ReplicaId,
 	prepare_req: protocol::PrepareRequest,
 ) -> Result<protocol::PrepareResponse> {
-	tracing::info!(?replica_id, "handling prepare message");
+	tracing::debug!(?replica_id, "handling prepare message");
 
 	let protocol::PrepareRequest { ballot, instance } = prepare_req;
 

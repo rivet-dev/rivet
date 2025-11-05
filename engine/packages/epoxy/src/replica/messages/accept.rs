@@ -17,7 +17,7 @@ pub async fn accept(
 		instance,
 	} = accept_req.payload;
 
-	tracing::info!(?replica_id, ?instance, "handling accept message");
+	tracing::debug!(?replica_id, ?instance, "handling accept message");
 
 	// Validate ballot
 	let current_ballot = ballot::get_ballot(tx, replica_id).await?;

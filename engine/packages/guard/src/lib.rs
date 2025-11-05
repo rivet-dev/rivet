@@ -24,7 +24,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	// Initialize with a default CryptoProvider for rustls
 	let provider = rustls::crypto::ring::default_provider();
 	if provider.install_default().is_err() {
-		tracing::warn!("crypto provider already installed in this process");
+		tracing::debug!("crypto provider already installed in this process");
 	}
 
 	// Share shared context

@@ -9,7 +9,7 @@ pub fn decide_path(
 	pre_accept_oks: Vec<protocol::Payload>,
 	payload: &protocol::Payload,
 ) -> Result<protocol::Path> {
-	tracing::info!(instance=?payload.instance, "deciding path");
+	tracing::debug!(instance=?payload.instance, "deciding path");
 
 	let mut new_payload = payload.clone();
 	let mut path = protocol::Path::PathFast(protocol::PathFast {
@@ -29,7 +29,7 @@ pub fn decide_path(
 			// EPaxos Steps 11 (returns PathFast)
 			continue;
 		} else {
-			tracing::info!(?pre_accept_ok.deps, "received dissenting voice");
+			tracing::debug!(?pre_accept_ok.deps, "received dissenting voice");
 
 			// EPaxos Step 13
 			let new_deps = utils::union_deps(new_payload.deps, pre_accept_ok.deps);

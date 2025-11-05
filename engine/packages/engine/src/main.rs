@@ -25,7 +25,7 @@ async fn main_inner() -> Result<()> {
 
 	// Load config
 	let config = rivet_config::Config::load(&cli.config).await?;
-	tracing::info!(config = ?*config, "loaded config");
+	tracing::info!(config=?*config, "loaded config");
 
 	// Initialize telemetry (does nothing if telemetry is disabled)
 	let _guard = rivet_telemetry::init(&config);
