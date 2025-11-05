@@ -563,16 +563,20 @@ enc
 		// TODO: Handle queue
 		// TODO: Reconnect with backoff
 
-		// Reject open promise
-		if (this.#onOpenPromise) {
-			this.#onOpenPromise.reject(new Error("Closed"));
-		}
-
 		// We can't use `event instanceof CloseEvent` because it's not defined in NodeJS
 		//
 		// These properties will be undefined
 		const closeEvent = event as CloseEvent;
 		const wasClean = closeEvent.wasClean;
+
+		// Reject open promise
+		if (this.#onOpenPromise) {
+			this.#onOpenPromise.reject(
+				new Error(
+					`websocket closed with code ${closeEvent.code}: ${closeEvent.reason}`,
+				),
+			);
+		}
 
 		logger().info({
 			msg: "socket closed",
