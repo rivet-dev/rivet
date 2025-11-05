@@ -241,21 +241,20 @@ pub async fn reserve_actor_key(
 				input.name.clone(),
 				input.key.clone(),
 			));
-			let (start, end) = actor_key_subspace.range();
 
 			let mut stream = tx.get_ranges_keyvalues(
 				universaldb::RangeOption {
 					mode: StreamingMode::Iterator,
-					..(start, end).into()
+					..(&actor_key_subspace).into()
 				},
 				Serializable,
 			);
 
 			while let Some(entry) = stream.try_next().await? {
-				let (_idx_key, data) = tx.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
+				let (idx_key, data) = tx.read_entry::<keys::ns::ActorByKeyKey>(&entry)?;
 				if !data.is_destroyed {
 					return Ok(ReserveActorKeyOutput::ExistingActor {
-						existing_actor_id: _idx_key.actor_id,
+						existing_actor_id: idx_key.actor_id,
 					});
 				}
 			}
