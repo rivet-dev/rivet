@@ -2,8 +2,6 @@ use anyhow::Result;
 use gas::prelude::*;
 use universaldb::prelude::*;
 
-pub mod runner_config;
-
 pub fn subspace() -> universaldb::utils::Subspace {
 	universaldb::utils::Subspace::new(&(RIVET, NAMESPACE))
 }
