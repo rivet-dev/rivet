@@ -15,6 +15,9 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<actor::Workflow>()?;
 	registry.register_workflow::<runner::Workflow>()?;
 	registry.register_workflow::<runner2::Workflow>()?;
+	registry.register_workflow::<serverless::pool::Workflow>()?;
+	registry.register_workflow::<serverless::runner::Workflow>()?;
+	registry.register_workflow::<serverless::connection::Workflow>()?;
 
 	Ok(registry)
 }

@@ -43,7 +43,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		}
 	}
 
-	// TODO: Get rid of this
+	// TODO: Get rid of this (RVT-5281)
 	// NOTE: This is a bad implementation because it disregards other errors that may have happened earlier
 	#[allow(non_snake_case)]
 	pub fn bypass_signal_from_workflow_I_KNOW_WHAT_IM_DOING(mut self) -> Self {

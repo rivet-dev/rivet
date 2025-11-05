@@ -24,11 +24,11 @@ serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
 
-tokio.workspace = true
-tracing.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 pegboard-actor-kv.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 universalpubsub.workspace = true
 uuid.workspace = true
 utoipa.workspace = true

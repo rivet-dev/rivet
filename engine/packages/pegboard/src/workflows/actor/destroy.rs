@@ -33,7 +33,14 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 	// If a slot was allocated at the time of actor destruction then bump the serverless autoscaler so it can scale down
 	// if needed
 	if res.allocated_serverless_slot {
-		ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+		ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
+			.await?;
+
+		ctx.v(2)
+			.signal(crate::workflows::serverless::pool::Bump {})
+			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+			.tag("namespace_id", input.namespace_id)
+			.tag("runner_name", res.runner_name_selector.clone())
 			.send()
 			.await?;
 	}
@@ -60,6 +67,7 @@ struct UpdateStateAndDbInput {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateStateAndDbOutput {
 	allocated_serverless_slot: bool,
+	runner_name_selector: String,
 }
 
 #[activity(UpdateStateAndDb)]
@@ -147,6 +155,7 @@ async fn update_state_and_db(
 
 	Ok(UpdateStateAndDbOutput {
 		allocated_serverless_slot: old_allocated_serverless_slot,
+		runner_name_selector: state.runner_name_selector.clone(),
 	})
 }
 
