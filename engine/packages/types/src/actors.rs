@@ -15,11 +15,20 @@ pub struct Actor {
 	pub runner_name_selector: String,
 	pub crash_policy: CrashPolicy,
 
+	/// Denotes when the actor was first created.
 	pub create_ts: i64,
+	/// Denotes when the actor was first made connectable. Null if never.
 	pub start_ts: Option<i64>,
+	/// Denotes when the actor started waiting for an allocation.
 	pub pending_allocation_ts: Option<i64>,
+	/// Denotes when the actor was last connectable. Null if actor is not running.
 	pub connectable_ts: Option<i64>,
+	/// Denotes when the actor entered a sleeping state.
 	pub sleep_ts: Option<i64>,
+	/// Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to
+	/// allocate until the given timestamp.
+	pub reschedule_ts: Option<i64>,
+	/// Denotes when the actor was destroyed.
 	pub destroy_ts: Option<i64>,
 }
 
