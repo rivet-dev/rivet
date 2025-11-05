@@ -1,14 +1,24 @@
 use gas::prelude::*;
 use pegboard::ops::runner::update_alloc_idx::{Action, RunnerEligibility};
 use std::sync::{Arc, atomic::Ordering};
+use tokio::sync::watch;
 
-use crate::{UPDATE_PING_INTERVAL, conn::Conn};
+use crate::{LifecycleResult, UPDATE_PING_INTERVAL, conn::Conn};
 
 /// Updates the ping of all runners requesting a ping update at once.
 #[tracing::instrument(skip_all)]
-pub async fn task(ctx: StandaloneCtx, conn: Arc<Conn>) -> Result<()> {
+pub async fn task(
+	ctx: StandaloneCtx,
+	conn: Arc<Conn>,
+	mut ping_abort_rx: watch::Receiver<()>,
+) -> Result<LifecycleResult> {
 	loop {
-		tokio::time::sleep(UPDATE_PING_INTERVAL).await;
+		tokio::select! {
+			_ = tokio::time::sleep(UPDATE_PING_INTERVAL) => {}
+			_ = ping_abort_rx.changed() => {
+				return Ok(LifecycleResult::Aborted);
+			}
+		}
 
 		let Some(wf) = ctx
 			.workflow::<pegboard::workflows::runner::Input>(conn.workflow_id)

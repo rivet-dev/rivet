@@ -24,14 +24,13 @@ pub struct TunnelActiveRequest {
 }
 
 pub struct Conn {
+	pub namespace_id: Id,
+	pub runner_name: String,
+	pub runner_key: String,
 	pub runner_id: Id,
-
 	pub workflow_id: Id,
-
 	pub protocol_version: u16,
-
 	pub ws_handle: WebSocketHandle,
-
 	pub last_rtt: AtomicU32,
 
 	/// Active HTTP & WebSocket requests. They are separate but use the same mechanism to
@@ -63,7 +62,7 @@ pub async fn init_conn(
 	let mut ws_rx = ws_rx.lock().await;
 
 	// Receive init packet
-	let (runner_id, workflow_id) = if let Some(msg) =
+	let (runner_name, runner_id, workflow_id) = if let Some(msg) =
 		tokio::time::timeout(Duration::from_secs(5), ws_rx.next())
 			.await
 			.map_err(|_| WsError::TimedOutWaitingForInit.build())?
@@ -81,7 +80,7 @@ pub async fn init_conn(
 			.map_err(|err| WsError::InvalidPacket(err.to_string()).build())
 			.context("failed to deserialize initial packet from client")?;
 
-		let (runner_id, workflow_id) =
+		let (runner_name, runner_id, workflow_id) =
 			if let protocol::ToServer::ToServerInit(protocol::ToServerInit {
 				name,
 				version,
@@ -160,7 +159,7 @@ pub async fn init_conn(
 						)
 					})?;
 
-				(runner_id, workflow_id)
+				(name.clone(), runner_id, workflow_id)
 			} else {
 				tracing::debug!(?packet, "invalid initial packet");
 				return Err(WsError::InvalidInitialPacket("must be `ToServer::Init`").build());
@@ -178,12 +177,15 @@ pub async fn init_conn(
 				)
 			})?;
 
-		(runner_id, workflow_id)
+		(runner_name, runner_id, workflow_id)
 	} else {
 		return Err(WsError::ConnectionClosed.build());
 	};
 
 	Ok(Arc::new(Conn {
+		namespace_id: namespace.namespace_id,
+		runner_name,
+		runner_key,
 		runner_id,
 		workflow_id,
 		protocol_version,

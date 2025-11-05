@@ -486,8 +486,8 @@ impl CustomServeTrait for PegboardGateway {
 		// Determine single result from both tasks
 		let mut lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res) {
 			// Prefer error
-			(_, Err(err)) => Err(err),
 			(Err(err), _) => Err(err),
+			(_, Err(err)) => Err(err),
 			// Prefer non aborted result if both succeed
 			(Ok(res), Ok(LifecycleResult::Aborted)) => Ok(res),
 			(Ok(LifecycleResult::Aborted), Ok(res)) => Ok(res),

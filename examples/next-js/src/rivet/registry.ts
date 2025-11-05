@@ -3,6 +3,9 @@ import { actor, setup } from "rivetkit";
 export type Message = { sender: string; text: string; timestamp: number };
 
 export const chatRoom = actor({
+	options: {
+		sleepTimeout: 2000,
+	},
 	// Persistent state that survives restarts
 	state: {
 		messages: [] as Message[],

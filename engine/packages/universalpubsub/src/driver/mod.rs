@@ -13,8 +13,10 @@ pub type PubSubDriverHandle = Arc<dyn PubSubDriver>;
 pub enum PublishBehavior {
 	/// Publishes a message to a single subscriber.
 	///
-	/// This does not limit it to a single subscriber, but instead enables in-memory optimizations
-	/// to speed this up.
+	/// This should not be used if there will ever be more than one subscription at a time to the given topic
+	/// on a global scale. Its intended to enable in-memory optimizations where a subscription that exists on
+	/// the same machine as the published message will not have to communicate with the driver but can instead
+	/// be delivered entirely in-memory.
 	OneSubscriber,
 
 	/// Publishes a message to multiple subscribers.
