@@ -120,10 +120,10 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    concat(bounds[idx-1], 's - ', bounds[idx], 's') as label,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_api_request_duration'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, label\nORDER BY Time",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_api_request_duration'\n            AND Attributes['path'] IN array($path)\n            AND Attributes['method'] IN array($method)\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -132,8 +132,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "label",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -144,7 +144,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\label"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -169,6 +169,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -244,28 +245,29 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"legendFormat": "{{datacenter_id}} {{method}} {{path}}",
+					"instant": false,
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path']\n    ) as label,\n    sum(Value) as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_api_request_pending'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        concat(ResourceAttributes['rivet.datacenter'], ' ', Attributes['method'], ' ', Attributes['path']) as label,\n        max(Value) as value\n    FROM otel.otel_metrics_sum\n    WHERE MetricName = 'rivet_api_request_pending'\n        AND Attributes['path'] IN array($path)\n        AND Attributes['method'] IN array($method)\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n        AND TimeUnix <= $__toTime_ms()\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Requests Pending",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "label",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
-					"options": {}
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
 				}
 			],
 			"type": "timeseries"
@@ -364,10 +366,10 @@
 					"format": 1,
 					"legendFormat": "{{datacenter_id}} {{method}} {{path}}",
 					"meta": {},
-					"pluginVersion": "4.10.2",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path']\n    ) as label,\n    sum(Sum) / sum(Count) as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_api_request_duration'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nHAVING sum(Count) > 0\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        concat(datacenter, ' ', method, ' ', path) as label,\n        if(count_diff > 0 AND sum_diff >= 0, sum_diff / count_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            method,\n            path,\n            datacenter,\n            sum_val,\n            count_val,\n            sum_val - lagInFrame(sum_val, 1, sum_val) OVER (PARTITION BY method, path, datacenter ORDER BY time) as sum_diff,\n            count_val - lagInFrame(count_val, 1, count_val) OVER (PARTITION BY method, path, datacenter ORDER BY time) as count_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['method'] as method,\n                Attributes['path'] as path,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Sum) as sum_val,\n                max(Count) as count_val\n            FROM otel.otel_metrics_histogram\n            WHERE MetricName = 'rivet_api_request_duration'\n                AND Attributes['path'] IN array($path)\n                AND Attributes['method'] IN array($method)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, method, path, datacenter\n        )\n    )\n    WHERE datacenter <> ''\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
@@ -491,10 +493,10 @@
 					"format": 1,
 					"legendFormat": "{{datacenter_id}} {{method}} {{path}}",
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path']\n    ) as label,\n    sum(Sum) / sum(Count) as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_api_request_duration'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nHAVING value >= (\n    SELECT quantile(0.95)(avg_value)\n    FROM (\n        SELECT sum(Sum) / sum(Count) as avg_value\n        FROM otel.otel_metrics_histogram\n        WHERE MetricName = 'rivet_api_request_duration'\n            AND $__conditionalAll(Attributes['path'], $path)\n            AND $__conditionalAll(Attributes['method'], $method)\n            AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n            AND $__timeFilter(TimeUnix)\n        GROUP BY \n            $__timeInterval(TimeUnix),\n            ResourceAttributes['datacenter_id'],\n            Attributes['method'],\n            Attributes['path']\n    )\n)\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n      SELECT\n          time,\n          label,\n          quantileInterpolatedWeighted(0.95)(bound_value, count_value) as value\n      FROM (\n          SELECT\n              $__timeInterval(TimeUnix) as time,\n              concat(ResourceAttributes['rivet.datacenter'], ' ', Attributes['method'], ' ', Attributes['path']) as label,\n              arrayJoin(arrayEnumerate(arrayConcat([0], ExplicitBounds, [inf]))) as idx,\n              arrayConcat([0], ExplicitBounds, [inf])[idx] as bound_value,\n              BucketCounts[idx] as count_value\n          FROM otel.otel_metrics_histogram\n          WHERE MetricName = 'rivet_api_request_duration'\n              AND Attributes['path'] IN array($path)\n              AND Attributes['method'] IN array($method)\n              AND ResourceAttributes['rivet.project'] IN array($project)\n              AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n              AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n              AND TimeUnix <= $__toTime_ms()\n      )\n      GROUP BY time, label\n  )\n\nORDER BY label\n",
 					"refId": "A"
 				}
 			],
@@ -618,10 +620,10 @@
 					"format": 1,
 					"legendFormat": "{{datacenter_id}} {{method}} {{path}}",
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path']\n    ) as label,\n    sum(Sum) / sum(Count) as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_api_request_duration'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nHAVING value >= (\n    SELECT quantile(0.99)(avg_value)\n    FROM (\n        SELECT sum(Sum) / sum(Count) as avg_value\n        FROM otel.otel_metrics_histogram\n        WHERE MetricName = 'rivet_api_request_duration'\n            AND $__conditionalAll(Attributes['path'], $path)\n            AND $__conditionalAll(Attributes['method'], $method)\n            AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n            AND $__timeFilter(TimeUnix)\n        GROUP BY \n            $__timeInterval(TimeUnix),\n            ResourceAttributes['datacenter_id'],\n            Attributes['method'],\n            Attributes['path']\n    )\n)\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n      SELECT\n          time,\n          label,\n          quantileInterpolatedWeighted(0.99)(bound_value, count_value) as value\n      FROM (\n          SELECT\n              $__timeInterval(TimeUnix) as time,\n              concat(ResourceAttributes['rivet.datacenter'], ' ', Attributes['method'], ' ', Attributes['path']) as label,\n              arrayJoin(arrayEnumerate(arrayConcat([0], ExplicitBounds, [inf]))) as idx,\n              arrayConcat([0], ExplicitBounds, [inf])[idx] as bound_value,\n              BucketCounts[idx] as count_value\n          FROM otel.otel_metrics_histogram\n          WHERE MetricName = 'rivet_api_request_duration'\n              AND Attributes['path'] IN array($path)\n              AND Attributes['method'] IN array($method)\n              AND ResourceAttributes['rivet.project'] IN array($project)\n              AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n              AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n              AND TimeUnix <= $__toTime_ms()\n      )\n      GROUP BY time, label\n  )\n\nORDER BY label\n",
 					"refId": "A"
 				}
 			],
@@ -667,6 +669,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -744,36 +747,28 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"legendFormat": "{{datacenter_id}} {{method}} {{path}}",
+					"instant": false,
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path']\n    ) as label,\n    sum(Value) / $metric_interval as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_api_request_total'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        concat(datacenter, ' ', method, ' ', path) as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            method,\n            path,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY method, path, datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY method, path, datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['method'] as method,\n                Attributes['path'] as path,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_api_request_total'\n                AND Attributes['path'] IN array($path)\n                AND Attributes['method'] IN array($method)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, method, path, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Request Rate",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "label",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\label"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -795,6 +790,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -872,36 +868,28 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"legendFormat": "{{datacenter_id}} {{method}} {{path}}: {{status}} ({{error_code}})",
+					"instant": false,
 					"meta": {},
-					"pluginVersion": "4.11.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path'], ': ',\n        Attributes['status'], ' (',\n        Attributes['error_code'], ')'\n    ) as label,\n    sum(Value) / $metric_interval as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_api_request_errors'\n    AND Attributes['status'] LIKE '4%'\n    AND Attributes['error_code'] NOT IN ('API_CANCELLED', 'CAPTCHA_CAPTCHA_REQUIRED')\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        concat(datacenter, ' ', method, ' ', path, ': ', status, ' (', error_code, ')') as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            method,\n            path,\n            status,\n            error_code,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY method, path, status, error_code, datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY method, path, status, error_code, datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['method'] as method,\n                Attributes['path'] as path,\n                Attributes['status'] as status,\n                Attributes['error_code'] as error_code,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_api_request_errors'\n                AND Attributes['status'] LIKE '4%'\n                AND Attributes['error_code'] NOT IN ('API_CANCELLED', 'CAPTCHA_CAPTCHA_REQUIRED')\n                AND Attributes['path'] IN array($path)\n                AND Attributes['method'] IN array($method)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, method, path, status, error_code, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY time",
 					"refId": "A"
 				}
 			],
 			"title": "Error Rate (4xx)",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "label",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\label"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -923,6 +911,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -1000,29 +989,29 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"legendFormat": "{{datacenter_id}} {{method}} {{path}}: {{status}} ({{error_code}})",
+					"instant": false,
 					"meta": {},
 					"pluginVersion": "4.11.1",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(\n        ResourceAttributes['datacenter_id'], ' ',\n        Attributes['method'], ' ',\n        Attributes['path'], ': ',\n        Attributes['error_code'], ' (',\n        Attributes['status'], ')'\n    ) as label,\n    sum(Value) / $metric_interval as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_api_request_errors'\n    AND Attributes['status'] LIKE '5%'\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    10 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        concat(datacenter, ' ', method, ' ', path, ': ', error_code, ' (', status, ')') as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            method,\n            path,\n            status,\n            error_code,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY method, path, status, error_code, datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY method, path, status, error_code, datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                Attributes['method'] as method,\n                Attributes['path'] as path,\n                Attributes['status'] as status,\n                Attributes['error_code'] as error_code,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_api_request_errors'\n                AND Attributes['status'] LIKE '5%'\n                AND Attributes['path'] IN array($path)\n                AND Attributes['method'] IN array($method)\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, method, path, status, error_code, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY time",
 					"refId": "A"
 				}
 			],
 			"title": "Error Rate (5xx)",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "label",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
-					"options": {}
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
 				}
 			],
 			"type": "timeseries"
@@ -1043,6 +1032,8 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
+						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -1118,35 +1109,29 @@
 					},
 					"editorMode": "code",
 					"editorType": "sql",
-					"format": 0,
+					"format": 1,
 					"legendFormat": "{{method}} {{path}}: {{status}} {{error_code}}",
 					"meta": {},
-					"pluginVersion": "4.11.1",
-					"queryType": "timeseries",
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    -- Attributes['method'] as method,\n    -- Attributes['path'] as path,\n    Attributes['status'] as status,\n    -- Attributes['error_code'] as error_code,\n    sum(Count) / 30 as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_api_request_duration'\n    AND (Attributes['status'] = '200 OK' OR Attributes['status'] LIKE '5%')\n    AND $__conditionalAll(Attributes['path'], $path)\n    AND $__conditionalAll(Attributes['method'], $method)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, status\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        label,\n        greatest(0, total_count - lagInFrame(total_count, 1, 0) OVER (PARTITION BY label ORDER BY time)) / $__interval_ms * 1000 as value\n    FROM (\n        SELECT\n            $__timeInterval(TimeUnix) as time,\n            concat(Attributes['status'], ' ', Attributes['error_code']) as label,\n            sum(arraySum(BucketCounts)) as total_count\n        FROM otel.otel_metrics_histogram\n        WHERE MetricName = 'rivet_api_request_duration'\n            AND (Attributes['status'] = '200 OK' OR Attributes['status'] LIKE '5%')\n            AND Attributes['path'] IN array($path)\n            AND Attributes['method'] IN array($method)\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY time, label\n    )\n)\nORDER BY label\n",
 					"refId": "A"
 				}
 			],
 			"title": "200 vs 5xx (4xx excluded)",
 			"transformations": [
 				{
-					"id": "organize",
+					"id": "prepareTimeSeries",
 					"options": {
-						"excludeByName": {},
-						"includeByName": {},
-						"indexByName": {
-							"time": 0,
-							"value 200 OK": 2,
-							"value 500 Internal Server Error": 1
-						},
-						"renameByName": {
-							"200 OK": "200",
-							"500 Internal Server Error": "500",
-							"time": "time",
-							"value 200 OK": "200",
-							"value 500 Internal Server Error": "500"
-						}
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -1161,49 +1146,60 @@
 		"list": [
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_errors' ORDER BY datacenter_id",
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"includeAll": true,
-				"label": "Datacenter ID",
+				"label": "Project",
 				"multi": true,
-				"name": "datacenter_id",
+				"name": "project",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_errors' ORDER BY datacenter_id",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"refresh": 1,
 				"regex": "",
-				"sort": 1,
 				"type": "query"
 			},
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT Attributes['path'] as path FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request' AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id) ORDER BY path",
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
+				"includeAll": true,
+				"label": "Datacenter",
+				"multi": true,
+				"name": "datacenter",
+				"options": [],
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
+				"refresh": 1,
+				"regex": "",
+				"type": "query"
+			},
+			{
+				"current": {
+					"text": "All",
+					"value": ["$__all"]
+				},
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT Attributes['path'] as path FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY path",
 				"includeAll": true,
 				"label": "Path",
 				"multi": true,
 				"name": "path",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT Attributes['path'] as path FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request' AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id) ORDER BY path",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT Attributes['path'] as path FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) ORDER BY path",
 				"refresh": 1,
 				"regex": "",
 				"sort": 1,
@@ -1211,44 +1207,28 @@
 			},
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request' AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
+				"definition": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
 				"includeAll": true,
 				"label": "Method",
 				"multi": true,
 				"name": "method",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request' AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
-			},
-			{
-				"current": {
-					"text": "30",
-					"value": "30"
-				},
-				"hide": 2,
-				"label": "Metric Export Interval (seconds)",
-				"name": "metric_interval",
-				"query": "30",
-				"skipUrlSync": true,
-				"type": "constant"
 			}
 		]
 	},
 	"time": {
-		"from": "now-24h",
+		"from": "now-30m",
 		"to": "now"
 	},
 	"timepicker": {},

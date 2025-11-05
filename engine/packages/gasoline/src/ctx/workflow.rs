@@ -223,7 +223,7 @@ impl WorkflowCtx {
 						1,
 						&[
 							KeyValue::new("workflow_name", self.name.clone()),
-							KeyValue::new("error_code", err.to_string()),
+							KeyValue::new("error", err.to_string()),
 						],
 					);
 				}

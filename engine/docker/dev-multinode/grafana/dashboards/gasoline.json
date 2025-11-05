@@ -18,7 +18,7 @@
 	"editable": true,
 	"fiscalYearStartMonth": 0,
 	"graphTooltip": 1,
-	"id": 3,
+	"id": 6,
 	"links": [],
 	"panels": [
 		{
@@ -71,7 +71,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -117,34 +118,26 @@
 					"instant": false,
 					"legendFormat": "{{workflow_name}}",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_active'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_active'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND Attributes['workflow_name'] IN array($workflow_name)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Running Workflows",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "workflow_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\workflow_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -247,34 +240,26 @@
 					"instant": false,
 					"legendFormat": "{{workflow_name}}",
 					"meta": {},
-					"pluginVersion": "4.10.2",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_sleeping'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_sleeping'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND Attributes['workflow_name'] IN array($workflow_name)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Sleeping Workflows",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "workflow_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\workflow_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -330,7 +315,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -376,34 +362,26 @@
 					"instant": false,
 					"legendFormat": "{{workflow_name}}",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND Attributes['workflow_name'] IN array($workflow_name)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Dead Workflows",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "workflow_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\workflow_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -460,7 +438,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -506,34 +485,26 @@
 					"instant": false,
 					"legendFormat": "({{workflow_name}}) {{error_code}}",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name, error_code\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(Attributes['workflow_name'], ' (', Attributes['error'], ')') as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_workflow_dead'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND Attributes['workflow_name'] IN array($workflow_name)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Dead Workflow Errors",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "workflow_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\workflow_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -589,7 +560,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -635,34 +607,26 @@
 					"instant": false,
 					"legendFormat": "__auto",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    count(*) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_worker_last_ping'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['rivet.datacenter'] as label,\n    count(*) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_worker_last_ping'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label, ResourceAttributes['rivet.datacenter']\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Active Workers",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "datacenter_id",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\datacenter_id"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -718,7 +682,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -764,34 +729,26 @@
 					"instant": false,
 					"legendFormat": "{{signal_name}}",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['signal_name'] as signal_name,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_signal_pending'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, signal_name\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['signal_name'] as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_signal_pending'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Pending Signals",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "signal_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\signal_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -888,9 +845,9 @@
 					"format": 1,
 					"hide": false,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_recv_lag'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_signal_recv_lag'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -899,8 +856,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -911,7 +868,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1001,9 +958,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n  MetricName = 'rivet_gasoline_signal_pull_duration'\n  AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n  AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n  AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n  AND $__timeFilter(TimeUnix)\nGROUP BY\n  Time, le\nORDER BY\n  Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_signal_pull_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -1012,8 +969,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -1024,7 +981,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1084,7 +1041,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -1126,34 +1084,31 @@
 						"uid": "clickhouse"
 					},
 					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
 					"instant": false,
 					"legendFormat": "{{worker_instance_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Last Pull Workflows Duration",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "worker_instance_id",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\worker_instance_id"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -1210,7 +1165,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -1252,34 +1208,31 @@
 						"uid": "clickhouse"
 					},
 					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
 					"instant": false,
 					"legendFormat": "{{worker_instance_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as worker_instance_id,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, worker_instance_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Last Pull Workflows History Duration",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "worker_instance_id",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\worker_instance_id"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -1366,9 +1319,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_pull_workflows_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -1377,7 +1330,7 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -1389,7 +1342,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1479,9 +1432,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_pull_workflows_history_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_pull_workflows_history_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -1490,7 +1443,7 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -1502,7 +1455,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1605,9 +1558,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_activity_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_activity_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -1616,8 +1569,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -1628,7 +1581,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1686,7 +1639,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -1733,34 +1687,26 @@
 					"format": 1,
 					"legendFormat": "{{activity_name}}: {{error_code}}",
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['activity_name'] as activity_name,\n    Attributes['error_code'] as error_code,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_gasoline_activity_errors'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, activity_name, error_code\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    concat(Attributes['activity_name'], ' (', Attributes['error'], ')') as label,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_activity_errors'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND Attributes['workflow_name'] IN array($workflow_name)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Activity Error Rate",
 			"transformations": [
 				{
-					"id": "groupingToMatrix",
+					"id": "prepareTimeSeries",
 					"options": {
-						"columnField": "activity_name",
-						"emptyValue": "zero",
-						"rowField": "time",
-						"valueField": "value"
+						"format": "multi"
 					}
 				},
 				{
-					"id": "convertFieldType",
+					"id": "renameByRegex",
 					"options": {
-						"conversions": [
-							{
-								"destinationType": "time",
-								"targetField": "time\\activity_name"
-							}
-						],
-						"fields": {}
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
 					}
 				}
 			],
@@ -1847,18 +1793,18 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_loop_iteration_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
-			"title": "Loop Upsert Duration",
+			"title": "Loop Iteration Duration",
 			"transformations": [
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -1870,7 +1816,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1928,7 +1874,8 @@
 						"mode": "absolute",
 						"steps": [
 							{
-								"color": "green"
+								"color": "green",
+								"value": null
 							},
 							{
 								"color": "red",
@@ -1971,9 +1918,14 @@
 						"uid": "clickhouse"
 					},
 					"editorMode": "code",
+					"editorType": "sql",
+					"format": 1,
 					"legendFormat": "{{workflow_name}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['workflow_name'] as workflow_name,\n    sum(Count) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_histogram\nWHERE MetricName = 'rivet_gasoline_loop_iteration_duration'\n    AND Attributes['workflow_name'] LIKE '${workflow_name:regex}'\n    AND ResourceAttributes['cluster_id'] LIKE '${cluster_id:regex}'\n    AND ResourceAttributes['datacenter_id'] LIKE '${datacenter_id:regex}'\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, workflow_name\nORDER BY time",
+					"rawSql": "WITH\n    30 as collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        workflow_name as label,\n        greatest(0, total_count - lagInFrame(total_count, 1, 0) OVER (PARTITION BY workflow_name ORDER BY time)) / $__interval_ms * 1000 as value\n    FROM (\n        SELECT\n            $__timeInterval(TimeUnix) as time,\n            Attributes['workflow_name'] as workflow_name,\n            sum(arraySum(BucketCounts)) as total_count\n        FROM otel.otel_metrics_histogram\n        WHERE MetricName = 'rivet_gasoline_loop_iteration_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY time, workflow_name\n    )\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
@@ -1982,8 +1934,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "workflow_name",
-						"emptyValue": "zero",
+						"columnField": "label",
+						"emptyValue": "null",
 						"rowField": "time",
 						"valueField": "value"
 					}
@@ -1994,7 +1946,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "time\\workflow_name"
+								"targetField": "time\\label"
 							}
 						],
 						"fields": {}
@@ -2084,9 +2036,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_message_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_message_send_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -2095,7 +2047,7 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -2107,7 +2059,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -2197,9 +2149,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_signal_send_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_signal_send_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -2208,8 +2160,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -2220,7 +2172,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -2310,9 +2262,9 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n  $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_find_workflows_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_find_workflows_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -2321,7 +2273,7 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -2333,7 +2285,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -2423,18 +2375,18 @@
 					"editorType": "sql",
 					"format": 1,
 					"meta": {},
-					"pluginVersion": "4.10.1",
+					"pluginVersion": "4.11.2",
 					"queryType": "table",
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_gasoline_workflow_dispatch_duration'\n    AND $__conditionalAll(Attributes['workflow_name'], $workflow_name)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_gasoline_workflow_dispatch_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND Attributes['workflow_name'] IN array($workflow_name)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
-			"title": "Sub Workflow Dispatch Duration",
+			"title": "Workflow Dispatch Duration",
 			"transformations": [
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
+						"columnField": "bucket",
 						"emptyValue": "zero",
 						"rowField": "Time",
 						"valueField": "count"
@@ -2446,7 +2398,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -2464,94 +2416,56 @@
 		"list": [
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"includeAll": true,
-				"label": "Cluster ID",
+				"label": "project",
 				"multi": true,
-				"name": "cluster_id",
+				"name": "project",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY cluster_id",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"refresh": 1,
 				"regex": "",
-				"sort": 1,
 				"type": "query"
 			},
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"includeAll": true,
-				"label": "Datacenter ID",
+				"label": "datacenter",
 				"multi": true,
-				"name": "datacenter_id",
+				"name": "datacenter",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_gasoline_worker_last_ping' ORDER BY datacenter_id",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"refresh": 1,
 				"regex": "",
-				"sort": 1,
 				"type": "query"
 			},
 			{
 				"current": {
-					"text": ["All"],
+					"text": "All",
 					"value": ["$__all"]
 				},
-				"datasource": {
-					"type": "grafana-clickhouse-datasource",
-					"uid": "clickhouse"
-				},
-				"definition": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
+				"definition": "SELECT DISTINCT Attributes['workflow_name'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND MetricName = 'rivet_gasoline_workflow_total' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['workflow_name']",
 				"includeAll": true,
-				"label": "Workflow Name",
+				"label": "workflow name",
 				"multi": true,
 				"name": "workflow_name",
 				"options": [],
-				"query": {
-					"qryType": 1,
-					"rawSql": "SELECT DISTINCT Attributes['workflow_name'] as workflow_name FROM otel.otel_metrics_histogram WHERE MetricName = 'rivet_gasoline_signal_recv_lag' ORDER BY workflow_name",
-					"refId": "ClickHouseVariableQueryEditor-VariableQuery"
-				},
+				"query": "SELECT DISTINCT Attributes['workflow_name'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND MetricName = 'rivet_gasoline_workflow_total' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY Attributes['workflow_name']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
-			},
-			{
-				"current": {
-					"text": "30",
-					"value": "30"
-				},
-				"hide": 2,
-				"label": "Metric Export Interval (seconds)",
-				"name": "metric_interval",
-				"query": "30",
-				"skipUrlSync": true,
-				"type": "constant"
 			}
 		]
 	},
 	"time": {
-		"from": "now-5m",
+		"from": "now-1h",
 		"to": "now"
 	},
 	"timepicker": {},
