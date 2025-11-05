@@ -19,6 +19,7 @@ export const Actor: core.serialization.ObjectSchema<serializers.Actor.Raw, Rivet
     name: core.serialization.string(),
     namespaceId: core.serialization.property("namespace_id", RivetId),
     pendingAllocationTs: core.serialization.property("pending_allocation_ts", core.serialization.number().optional()),
+    rescheduleTs: core.serialization.property("reschedule_ts", core.serialization.number().optional()),
     runnerNameSelector: core.serialization.property("runner_name_selector", core.serialization.string()),
     sleepTs: core.serialization.property("sleep_ts", core.serialization.number().optional()),
     startTs: core.serialization.property("start_ts", core.serialization.number().optional()),
@@ -36,6 +37,7 @@ export declare namespace Actor {
         name: string;
         namespace_id: RivetId.Raw;
         pending_allocation_ts?: number | null;
+        reschedule_ts?: number | null;
         runner_name_selector: string;
         sleep_ts?: number | null;
         start_ts?: number | null;

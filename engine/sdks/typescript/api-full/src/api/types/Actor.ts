@@ -6,16 +6,27 @@ import * as Rivet from "../index";
 
 export interface Actor {
     actorId: Rivet.RivetId;
+    /** Denotes when the actor was last connectable. Null if actor is not running. */
     connectableTs?: number;
     crashPolicy: Rivet.CrashPolicy;
+    /** Denotes when the actor was first created. */
     createTs: number;
     datacenter: string;
+    /** Denotes when the actor was destroyed. */
     destroyTs?: number;
     key?: string;
     name: string;
     namespaceId: Rivet.RivetId;
+    /** Denotes when the actor started waiting for an allocation. */
     pendingAllocationTs?: number;
+    /**
+     * Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to
+     * allocate until the given timestamp.
+     */
+    rescheduleTs?: number;
     runnerNameSelector: string;
+    /** Denotes when the actor entered a sleeping state. */
     sleepTs?: number;
+    /** Denotes when the actor was first made connectable. Null if never. */
     startTs?: number;
 }

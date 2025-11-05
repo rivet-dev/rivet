@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/core",
-	"version": "2.0.22-rc.1",
+	"version": "2.0.22-rc.2",
 	"description": "Placeholder package. Use rivetkit instead.",
 	"license": "Apache-2.0",
 	"sideEffects": [

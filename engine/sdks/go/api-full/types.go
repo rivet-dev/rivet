@@ -90,19 +90,28 @@ type RunnerConfigsUpsertRequestBody struct {
 }
 
 type Actor struct {
-	ActorId             RivetId     `json:"actor_id"`
-	ConnectableTs       *int64      `json:"connectable_ts,omitempty"`
-	CrashPolicy         CrashPolicy `json:"crash_policy,omitempty"`
-	CreateTs            int64       `json:"create_ts"`
-	Datacenter          string      `json:"datacenter"`
-	DestroyTs           *int64      `json:"destroy_ts,omitempty"`
-	Key                 *string     `json:"key,omitempty"`
-	Name                string      `json:"name"`
-	NamespaceId         RivetId     `json:"namespace_id"`
-	PendingAllocationTs *int64      `json:"pending_allocation_ts,omitempty"`
-	RunnerNameSelector  string      `json:"runner_name_selector"`
-	SleepTs             *int64      `json:"sleep_ts,omitempty"`
-	StartTs             *int64      `json:"start_ts,omitempty"`
+	ActorId RivetId `json:"actor_id"`
+	// Denotes when the actor was last connectable. Null if actor is not running.
+	ConnectableTs *int64      `json:"connectable_ts,omitempty"`
+	CrashPolicy   CrashPolicy `json:"crash_policy,omitempty"`
+	// Denotes when the actor was first created.
+	CreateTs   int64  `json:"create_ts"`
+	Datacenter string `json:"datacenter"`
+	// Denotes when the actor was destroyed.
+	DestroyTs   *int64  `json:"destroy_ts,omitempty"`
+	Key         *string `json:"key,omitempty"`
+	Name        string  `json:"name"`
+	NamespaceId RivetId `json:"namespace_id"`
+	// Denotes when the actor started waiting for an allocation.
+	PendingAllocationTs *int64 `json:"pending_allocation_ts,omitempty"`
+	// Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to
+	// allocate until the given timestamp.
+	RescheduleTs       *int64 `json:"reschedule_ts,omitempty"`
+	RunnerNameSelector string `json:"runner_name_selector"`
+	// Denotes when the actor entered a sleeping state.
+	SleepTs *int64 `json:"sleep_ts,omitempty"`
+	// Denotes when the actor was first made connectable. Null if never.
+	StartTs *int64 `json:"start_ts,omitempty"`
 
 	_rawJSON json.RawMessage
 }
