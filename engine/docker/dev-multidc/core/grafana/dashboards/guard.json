@@ -17,8 +17,8 @@
 	},
 	"editable": true,
 	"fiscalYearStartMonth": 0,
-	"graphTooltip": 0,
-	"id": 115,
+	"graphTooltip": 1,
+	"id": 7,
 	"links": [],
 	"panels": [
 		{
@@ -37,7 +37,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -89,10 +89,12 @@
 				"x": 0,
 				"y": 0
 			},
-			"id": 10,
+			"id": 1,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"lastNotNull"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -116,13 +118,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"legendFormat": "{{datacenter}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_route_cache_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_route_cache_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Route Cache Size",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -141,7 +161,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -193,10 +213,12 @@
 				"x": 8,
 				"y": 0
 			},
-			"id": 11,
+			"id": 2,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"lastNotNull"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -220,13 +242,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"legendFormat": "{{datacenter}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_rate_limiter_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_rate_limiter_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Rate Limiters",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -245,7 +285,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -297,10 +337,12 @@
 				"x": 16,
 				"y": 0
 			},
-			"id": 12,
+			"id": 3,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"lastNotNull"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -324,13 +366,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"legendFormat": "{{datacenter}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_in_flight_counter_count'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        sum(Value) as value\n    FROM otel.otel_metrics_gauge\n    WHERE MetricName = 'rivet_guard_in_flight_counter_count'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND $__timeFilter(TimeUnix)\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "In-Flight Counters",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -349,7 +409,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -401,10 +461,12 @@
 				"x": 0,
 				"y": 8
 			},
-			"id": 2,
+			"id": 4,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"lastNotNull"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -428,13 +490,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"legendFormat": "{{datacenter}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    avg(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_tcp_connection_pending'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        max(Value) as value\n    FROM otel.otel_metrics_sum\n    WHERE MetricName = 'rivet_guard_tcp_connection_pending'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n        AND TimeUnix <= $__toTime_ms()\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Active TCP Connections",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -453,7 +533,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -482,7 +562,6 @@
 						}
 					},
 					"mappings": [],
-					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
 						"steps": [
@@ -496,7 +575,7 @@
 							}
 						]
 					},
-					"unit": "req/s"
+					"unit": "reqps"
 				},
 				"overrides": []
 			},
@@ -509,16 +588,18 @@
 			"id": 5,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"mean"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -533,13 +614,30 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_guard_tcp_connection'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        datacenter as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_guard_tcp_connection_total'\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "TCP Connection Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -568,9 +666,15 @@
 				"x": 16,
 				"y": 8
 			},
-			"id": 1,
+			"id": 6,
+			"interval": "15s",
 			"options": {
 				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
 				"cellGap": 0,
 				"color": {
 					"exponent": 0.5,
@@ -600,6 +704,8 @@
 				},
 				"yAxis": {
 					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
 					"reverse": false,
 					"unit": "s"
 				}
@@ -614,9 +720,10 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_tcp_connection_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_tcp_connection_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -625,8 +732,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -637,7 +744,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -662,7 +769,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMax": 5,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -717,7 +824,9 @@
 			"id": 7,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"lastNotNull"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -741,13 +850,31 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"legendFormat": "{{datacenter}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    avg(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_guard_proxy_request_pending'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    4 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        $__timeInterval(TimeUnix) as time,\n        ResourceAttributes['rivet.datacenter'] as label,\n        max(Value) as value\n    FROM otel.otel_metrics_sum\n    WHERE MetricName = 'rivet_guard_proxy_request_pending'\n        AND ResourceAttributes['rivet.project'] IN array($project)\n        AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n        AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n        AND TimeUnix <= $__toTime_ms()\n    GROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Active Proxy Requests",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -766,7 +893,7 @@
 						"axisColorMode": "text",
 						"axisLabel": "",
 						"axisPlacement": "auto",
-						"axisSoftMax": 1,
+						"axisSoftMin": 0,
 						"barAlignment": 0,
 						"barWidthFactor": 0.6,
 						"drawStyle": "line",
@@ -795,7 +922,6 @@
 						}
 					},
 					"mappings": [],
-					"min": 0,
 					"thresholds": {
 						"mode": "absolute",
 						"steps": [
@@ -809,7 +935,7 @@
 							}
 						]
 					},
-					"unit": "req/s"
+					"unit": "reqps"
 				},
 				"overrides": []
 			},
@@ -822,16 +948,18 @@
 			"id": 8,
 			"options": {
 				"legend": {
-					"calcs": ["lastNotNull"],
+					"calcs": [
+						"mean"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
-					"sortBy": "Last *",
+					"sortBy": "Mean",
 					"sortDesc": true
 				},
 				"tooltip": {
 					"hideZeros": false,
-					"mode": "multi",
+					"mode": "single",
 					"sort": "none"
 				}
 			},
@@ -846,13 +974,30 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{datacenter_id}} - {{server_id}}",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
 					"range": true,
-					"rawSql": "SELECT\n    $__timeInterval(TimeUnix) as time,\n    ResourceAttributes['datacenter_id'] as datacenter_id,\n    ResourceAttributes['server_id'] as server_id,\n    sum(Value) / $__interval_ms * 1000 as value\nFROM otel.otel_metrics_sum\nWHERE MetricName = 'rivet_guard_proxy_request'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, datacenter_id, server_id\nORDER BY time",
+					"rawSql": "WITH\n    30 AS collector_rate_s,\n    5 AS smoothness\n\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n    SELECT\n        time,\n        datacenter as label,\n        if(value_diff >= 0, value_diff / time_diff, 0) as value\n    FROM (\n        SELECT\n            time,\n            datacenter,\n            value,\n            value - lagInFrame(value, 1, value) OVER (PARTITION BY datacenter ORDER BY time) as value_diff,\n            toUnixTimestamp(time) - lagInFrame(toUnixTimestamp(time), 1, toUnixTimestamp(time)) OVER (PARTITION BY datacenter ORDER BY time) as time_diff\n        FROM (\n            SELECT\n                $__timeInterval(TimeUnix) as time,\n                ResourceAttributes['rivet.datacenter'] as datacenter,\n                max(Value) as value\n            FROM otel.otel_metrics_sum\n            WHERE MetricName = 'rivet_guard_proxy_request_total'\n                AND ResourceAttributes['rivet.project'] IN array($project)\n                AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n                AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000) * smoothness)\n                AND TimeUnix <= $__toTime_ms()\n            GROUP BY time, datacenter\n        )\n    )\n    WHERE datacenter <> '' AND time_diff > 0\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
 			"title": "Proxy Request Rate",
+			"transformations": [
+				{
+					"id": "prepareTimeSeries",
+					"options": {
+						"format": "multi"
+					}
+				},
+				{
+					"id": "renameByRegex",
+					"options": {
+						"regex": "^value\\s(.*)$",
+						"renamePattern": "$1"
+					}
+				}
+			],
 			"type": "timeseries"
 		},
 		{
@@ -882,8 +1027,14 @@
 				"y": 16
 			},
 			"id": 9,
+			"interval": "15s",
 			"options": {
 				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
 				"cellGap": 0,
 				"color": {
 					"exponent": 0.5,
@@ -913,6 +1064,8 @@
 				},
 				"yAxis": {
 					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
 					"reverse": false,
 					"unit": "s"
 				}
@@ -927,9 +1080,10 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_proxy_request_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_proxy_request_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -938,8 +1092,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -950,7 +1104,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -981,13 +1135,19 @@
 			},
 			"gridPos": {
 				"h": 8,
-				"w": 8,
+				"w": 12,
 				"x": 0,
 				"y": 24
 			},
-			"id": 6,
+			"id": 10,
+			"interval": "15s",
 			"options": {
 				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
 				"cellGap": 0,
 				"color": {
 					"exponent": 0.5,
@@ -1017,6 +1177,8 @@
 				},
 				"yAxis": {
 					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
 					"reverse": false,
 					"unit": "s"
 				}
@@ -1031,9 +1193,10 @@
 					"editorMode": "code",
 					"editorType": "sql",
 					"format": 1,
-					"instant": false,
-					"range": true,
-					"rawSql": "WITH\n    $__timeInterval(TimeUnix) as time_bucket,\n    arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n    ExplicitBounds AS bounds\nSELECT\n    time_bucket as Time,\n    bounds[idx+1] AS le,\n    sum(BucketCounts[idx]) AS count\nFROM otel.otel_metrics_histogram\nWHERE\n    MetricName = 'rivet_guard_resolve_route_duration'\n    AND $__conditionalAll(ResourceAttributes['cluster_id'], $cluster_id)\n    AND $__conditionalAll(ResourceAttributes['datacenter_id'], $datacenter_id)\n    AND $__conditionalAll(ResourceAttributes['server_id'], $server_id)\n    AND $__timeFilter(TimeUnix)\nGROUP BY Time, le\nORDER BY Time, le",
+					"meta": {},
+					"pluginVersion": "4.11.2",
+					"queryType": "table",
+					"rawSql": "WITH\n    30 as collector_rate_s\n\nSELECT Time, bucket, count\nFROM (\n    SELECT\n        Time,\n        bucket,\n        greatest(0, count - lagInFrame(count, 1, 0) OVER (PARTITION BY bucket ORDER BY Time)) AS count\n    FROM (\n        WITH\n            $__timeInterval(TimeUnix) as time_bucket,\n            arrayJoin(arrayEnumerate(BucketCounts)) AS idx,\n            case when idx = length(BucketCounts) then inf else ExplicitBounds[idx] end as bucket\n        SELECT\n            time_bucket as Time,\n            bucket,\n            sum(BucketCounts[idx]) AS count\n        FROM otel.otel_metrics_histogram\n        WHERE\n            MetricName = 'rivet_guard_resolve_route_duration'\n            AND ResourceAttributes['rivet.project'] IN array($project)\n            AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n            AND TimeUnix >= $__fromTime_ms() - toIntervalMillisecond(greatest(collector_rate_s * 1000, $__interval_s * 1000))\n            AND TimeUnix <= $__toTime_ms()\n            AND AggregationTemporality = 2\n        GROUP BY Time, bucket\n    )\n)\nWHERE $__timeFilter(Time)",
 					"refId": "A"
 				}
 			],
@@ -1042,8 +1205,8 @@
 				{
 					"id": "groupingToMatrix",
 					"options": {
-						"columnField": "le",
-						"emptyValue": "zero",
+						"columnField": "bucket",
+						"emptyValue": "null",
 						"rowField": "Time",
 						"valueField": "count"
 					}
@@ -1054,7 +1217,7 @@
 						"conversions": [
 							{
 								"destinationType": "time",
-								"targetField": "Time\\le"
+								"targetField": "Time\\bucket"
 							}
 						],
 						"fields": {}
@@ -1065,7 +1228,7 @@
 		}
 	],
 	"preload": false,
-	"refresh": "",
+	"refresh": "30s",
 	"schemaVersion": 40,
 	"tags": [],
 	"templating": {
@@ -1073,16 +1236,21 @@
 			{
 				"current": {
 					"text": "All",
-					"value": "$__all"
+					"value": [
+						"$__all"
+					]
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY cluster_id",
-				"description": "",
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"includeAll": true,
-				"label": "Cluster ID",
+				"label": "project",
 				"multi": true,
-				"name": "cluster_id",
+				"name": "project",
 				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['cluster_id'] as cluster_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY cluster_id",
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.project'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' ORDER BY ResourceAttributes['rivet.project']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
@@ -1090,48 +1258,24 @@
 			{
 				"current": {
 					"text": "All",
-					"value": "$__all"
+					"value": [
+						"$__all"
+					]
 				},
-				"definition": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY datacenter_id",
-				"description": "",
+				"datasource": {
+					"type": "grafana-clickhouse-datasource",
+					"uid": "clickhouse"
+				},
+				"definition": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"includeAll": true,
-				"label": "Dataceter ID",
+				"label": "datacenter",
 				"multi": true,
-				"name": "datacenter_id",
+				"name": "datacenter",
 				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['datacenter_id'] as datacenter_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY datacenter_id",
+				"query": "SELECT DISTINCT ResourceAttributes['rivet.datacenter'] FROM otel.otel_metrics_gauge WHERE ServiceName = 'rivet' AND ResourceAttributes['rivet.project'] IN array($project) ORDER BY ResourceAttributes['rivet.datacenter']",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
-			},
-			{
-				"current": {
-					"text": "All",
-					"value": "$__all"
-				},
-				"definition": "SELECT DISTINCT ResourceAttributes['server_id'] as server_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY server_id",
-				"description": "",
-				"includeAll": true,
-				"label": "Server ID",
-				"multi": true,
-				"name": "server_id",
-				"options": [],
-				"query": "SELECT DISTINCT ResourceAttributes['server_id'] as server_id FROM otel.otel_metrics_gauge WHERE MetricName = 'rivet_guard_tcp_connection_pending' ORDER BY server_id",
-				"refresh": 1,
-				"regex": "",
-				"type": "query"
-			},
-			{
-				"current": {
-					"text": "30",
-					"value": "30"
-				},
-				"hide": 2,
-				"label": "Metric Export Interval (seconds)",
-				"name": "metric_interval",
-				"query": "30",
-				"skipUrlSync": true,
-				"type": "constant"
 			}
 		]
 	},
@@ -1140,8 +1284,8 @@
 		"to": "now"
 	},
 	"timepicker": {},
-	"timezone": "browser",
-	"title": "Rivet Guard",
+	"timezone": "",
+	"title": "Guard",
 	"uid": "cen785ige8fswd",
 	"version": 1,
 	"weekStart": ""

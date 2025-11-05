@@ -137,6 +137,8 @@ services:
     networks:
       - rivet-network-dc-a
       - rivet-network-dc-a-to-core
+    ports:
+      - '4317:4317'
   otel-collector-client-dc-a:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
@@ -404,6 +406,8 @@ services:
     networks:
       - rivet-network-dc-b
       - rivet-network-dc-b-to-core
+    ports:
+      - '4317:4317'
   otel-collector-client-dc-b:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped
@@ -667,6 +671,8 @@ services:
     networks:
       - rivet-network-dc-c
       - rivet-network-dc-c-to-core
+    ports:
+      - '4317:4317'
   otel-collector-client-dc-c:
     image: otel/opentelemetry-collector-contrib:latest
     restart: unless-stopped

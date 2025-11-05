@@ -1,6 +1,7 @@
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use gas::prelude::*;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData, RunnerByKeyKeyData};
+use rivet_metrics::KeyValue;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use universaldb::{
 	options::{ConflictRangeType, StreamingMode},
@@ -9,7 +10,7 @@ use universaldb::{
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::{keys, workflows::actor::Allocate};
+use crate::{keys, metrics, workflows::actor::Allocate};
 
 /// How long after last ping before considering a runner ineligible for allocation.
 pub const RUNNER_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
@@ -989,11 +990,11 @@ pub(crate) async fn allocate_pending_actors(
 	input: &AllocatePendingActorsInput,
 ) -> Result<AllocatePendingActorsOutput> {
 	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
-	let res = ctx
+	let (allocations, pending_actor_count) = ctx
 		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
-			let mut results = Vec::new();
+			let mut allocations = Vec::new();
 
 			let pending_actor_subspace = keys::subspace().subspace(
 				&keys::ns::PendingActorByRunnerNameSelectorKey::subspace(
@@ -1010,12 +1011,15 @@ pub(crate) async fn allocate_pending_actors(
 				// the one we choose
 				Snapshot,
 			);
+			let mut pending_actor_count = 0;
 			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
 
 			'queue_loop: loop {
 				let Some(queue_entry) = queue_stream.try_next().await? else {
 					break;
 				};
+
+				pending_actor_count += 1;
 
 				let (queue_key, generation) =
 					tx.read_entry::<keys::ns::PendingActorByRunnerNameSelectorKey>(&queue_entry)?;
@@ -1115,23 +1119,33 @@ pub(crate) async fn allocate_pending_actors(
 						generation,
 					)?;
 
-					results.push(ActorAllocation {
+					allocations.push(ActorAllocation {
 						actor_id: queue_key.actor_id,
 						signal: Allocate {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
 						},
 					});
+
+					pending_actor_count -= 1;
 					continue 'queue_loop;
 				}
 			}
 
-			Ok(results)
+			Ok((allocations, pending_actor_count))
 		})
 		.custom_instrument(tracing::info_span!("runner_allocate_pending_actors_tx"))
 		.await?;
 
-	Ok(AllocatePendingActorsOutput { allocations: res })
+	metrics::ACTOR_PENDING_ALLOCATION.record(
+		pending_actor_count as f64,
+		&[
+			KeyValue::new("namespace_id", input.namespace_id.to_string()),
+			KeyValue::new("runner_name", input.name.to_string()),
+		],
+	);
+
+	Ok(AllocatePendingActorsOutput { allocations })
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

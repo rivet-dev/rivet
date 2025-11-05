@@ -17,7 +17,7 @@ admin_password = admin
 
 [auth.anonymous]
 enabled = true
-org_role = Viewer
+org_role = Admin
 
 [dashboards]
 default_home_dashboard_path = /var/lib/grafana/dashboards/api.json

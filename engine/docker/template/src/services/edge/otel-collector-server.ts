@@ -3,7 +3,7 @@ import type { TemplateContext } from "../../context";
 
 export function generateDatacenterOtelCollectorServer(
 	context: TemplateContext,
-	dcId: string,
+	dcName: string,
 ) {
 	const clickhouseHost =
 		context.config.networkMode === "host" ? "127.0.0.1" : "clickhouse";
@@ -18,6 +18,20 @@ export function generateDatacenterOtelCollectorServer(
 			},
 		},
 		processors: {
+			resource: {
+				attributes: [
+					{
+						key: "rivet.project",
+						value: "dev",
+						action: "upsert",
+					},
+					{
+						key: "rivet.datacenter",
+						value: dcName,
+						action: "upsert",
+					},
+				],
+			},
 			batch: {
 				timeout: "5s",
 				send_batch_size: 10000,
@@ -65,17 +79,17 @@ export function generateDatacenterOtelCollectorServer(
 			pipelines: {
 				logs: {
 					receivers: ["otlp"],
-					processors: ["batch"],
+					processors: ["resource", "batch"],
 					exporters: ["clickhouse"],
 				},
 				traces: {
 					receivers: ["otlp"],
-					processors: ["batch"],
+					processors: ["resource", "batch"],
 					exporters: ["clickhouse"],
 				},
 				metrics: {
 					receivers: ["otlp"],
-					processors: ["batch"],
+					processors: ["resource", "batch"],
 					exporters: ["clickhouse"],
 				},
 			},
@@ -86,7 +100,7 @@ export function generateDatacenterOtelCollectorServer(
 
 	context.writeDatacenterServiceFile(
 		"otel-collector-server",
-		dcId,
+		dcName,
 		"config.yaml",
 		yamlContent,
 	);
