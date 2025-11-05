@@ -158,6 +158,11 @@ jobs:
   docker:
     name: "Build & Push Docker Images"
     needs: [setup]
+    permissions:
+      # Allows Depot to authenticate with GitHub OIDC
+      id-token: write
+      # Allow reading repository contents
+      contents: read
     strategy:
       matrix:
         include:
