@@ -1920,6 +1920,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#resetSleepTimer() {
 		if (this.#config.options.noSleep || !this.#sleepingSupported) return;
 
+		// Don't sleep if already stopping
+		if (this.#stopCalled) return;
+
 		const canSleep = this.#canSleep();
 
 		this.#rLog.debug({
@@ -1979,11 +1982,20 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * 4. Engine runner will publish EventActorStateUpdate with ActorStateSTop
 	 **/
 	_startSleep() {
+		if (this.#stopCalled) {
+			this.#rLog.debug({
+				msg: "cannot call _startSleep if actor already stopping",
+			});
+			return;
+		}
+
 		// IMPORTANT: #sleepCalled should have no effect on the actor's
 		// behavior aside from preventing calling _startSleep twice. Wait for
 		// `_onStop` before putting in a stopping state.
 		if (this.#sleepCalled) {
-			this.#rLog.warn({ msg: "already sleeping actor" });
+			this.#rLog.warn({
+				msg: "cannot call _startSleep twice, actor already sleeping",
+			});
 			return;
 		}
 		this.#sleepCalled = true;
@@ -2069,7 +2081,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Clear timeouts
 		if (this.#pendingSaveTimeout) clearTimeout(this.#pendingSaveTimeout);
-		if (this.#sleepTimeout) clearTimeout(this.#sleepTimeout);
 		if (this.#checkConnLivenessInterval)
 			clearInterval(this.#checkConnLivenessInterval);
 

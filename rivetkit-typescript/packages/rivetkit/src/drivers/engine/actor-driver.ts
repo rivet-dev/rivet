@@ -602,7 +602,7 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	async shutdownRunner(immediate: boolean): Promise<void> {
-		logger().info({ msg: "stopping engine actor driver" });
+		logger().info({ msg: "stopping engine actor driver", immediate });
 
 		// Clear the ack flush interval
 		if (this.#wsAckFlushInterval) {
