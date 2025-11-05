@@ -15,10 +15,7 @@ use universaldb::utils::{FormalKey, IsolationLevel::*};
 
 use crate::{keys, metrics, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
 
-use super::{
-	ACTOR_START_THRESHOLD_MS, Allocate, BASE_RETRY_TIMEOUT_MS, Destroy, Input, PendingAllocation,
-	RETRY_RESET_DURATION_MS, State, destroy,
-};
+use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
 
 #[derive(Deserialize, Serialize)]
 pub struct LifecycleState {
@@ -42,7 +39,7 @@ pub struct LifecycleState {
 }
 
 impl LifecycleState {
-	pub fn new(runner_id: Id, runner_workflow_id: Id) -> Self {
+	pub fn new(runner_id: Id, runner_workflow_id: Id, actor_start_threshold: i64) -> Self {
 		LifecycleState {
 			generation: 0,
 			runner_id: Some(runner_id),
@@ -51,7 +48,7 @@ impl LifecycleState {
 			will_wake: false,
 			wake_for_alarm: false,
 			alarm_ts: None,
-			gc_timeout_ts: Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS),
+			gc_timeout_ts: Some(util::timestamp::now() + actor_start_threshold),
 			reschedule_state: RescheduleState::default(),
 		}
 	}
@@ -619,7 +616,10 @@ pub async fn reschedule_actor(
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
 	// Determine next backoff sleep duration
-	let mut backoff = reschedule_backoff(state.reschedule_state.retry_count);
+	let mut backoff = reschedule_backoff(
+		state.reschedule_state.retry_count,
+		ctx.config().pegboard().base_retry_timeout(),
+	);
 
 	let (now, reset) = ctx
 		.v(2)
@@ -670,7 +670,8 @@ pub async fn reschedule_actor(
 		state.runner_workflow_id = Some(*runner_workflow_id);
 
 		// Reset gc timeout once allocated
-		state.gc_timeout_ts = Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS);
+		state.gc_timeout_ts =
+			Some(util::timestamp::now() + ctx.config().pegboard().actor_start_threshold());
 	}
 
 	Ok(spawn_res)
@@ -725,13 +726,17 @@ async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> Result<(
 	let mut state = ctx.state::<State>()?;
 
 	let now = util::timestamp::now();
+
 	// If the last retry ts is more than RETRY_RESET_DURATION_MS ago, reset retry count
-	let reset = input.last_retry_ts < now - RETRY_RESET_DURATION_MS;
+	let reset = input.last_retry_ts < now - ctx.config().pegboard().retry_reset_duration();
 
 	if reset {
 		state.reschedule_ts = None;
 	} else {
-		let backoff = reschedule_backoff(input.retry_count);
+		let backoff = reschedule_backoff(
+			input.retry_count,
+			ctx.config().pegboard().base_retry_timeout(),
+		);
 		state.reschedule_ts = Some(now + i64::try_from(backoff.current_duration())?);
 	}
 
@@ -810,6 +815,6 @@ pub async fn set_complete(ctx: &ActivityCtx, input: &SetCompleteInput) -> Result
 	Ok(())
 }
 
-fn reschedule_backoff(retry_count: usize) -> util::backoff::Backoff {
-	util::backoff::Backoff::new_at(8, None, BASE_RETRY_TIMEOUT_MS, 500, retry_count)
+fn reschedule_backoff(retry_count: usize, base_retry_timeout: usize) -> util::backoff::Backoff {
+	util::backoff::Backoff::new_at(8, None, base_retry_timeout, 500, retry_count)
 }

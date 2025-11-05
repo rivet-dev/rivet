@@ -11,6 +11,7 @@ pub mod clickhouse;
 pub mod db;
 pub mod guard;
 pub mod logs;
+pub mod pegboard;
 pub mod pubsub;
 pub mod telemetry;
 pub mod topology;
@@ -24,6 +25,7 @@ pub use clickhouse::*;
 pub use db::Database;
 pub use guard::*;
 pub use logs::*;
+pub use pegboard::*;
 pub use pubsub::PubSub;
 pub use telemetry::*;
 pub use topology::*;
@@ -73,6 +75,9 @@ pub struct Root {
 	pub api_peer: Option<ApiPeer>,
 
 	#[serde(default)]
+	pub pegboard: Option<Pegboard>,
+
+	#[serde(default)]
 	pub logs: Option<Logs>,
 
 	#[serde(default)]
@@ -107,6 +112,7 @@ impl Default for Root {
 			guard: None,
 			api_public: None,
 			api_peer: None,
+			pegboard: None,
 			logs: None,
 			topology: None,
 			database: None,
@@ -134,6 +140,11 @@ impl Root {
 	pub fn api_peer(&self) -> &ApiPeer {
 		static DEFAULT: LazyLock<ApiPeer> = LazyLock::new(ApiPeer::default);
 		self.api_peer.as_ref().unwrap_or(&DEFAULT)
+	}
+
+	pub fn pegboard(&self) -> &Pegboard {
+		static DEFAULT: LazyLock<Pegboard> = LazyLock::new(Pegboard::default);
+		self.pegboard.as_ref().unwrap_or(&DEFAULT)
 	}
 
 	pub fn logs(&self) -> &Logs {
