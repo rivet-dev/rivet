@@ -6,7 +6,6 @@ import {
 	type MiddlewareHandler,
 	type Next,
 } from "hono";
-import { cors as corsMiddleware } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { streamSSE } from "hono/streaming";
 import invariant from "invariant";
@@ -23,13 +22,13 @@ import {
 	WS_PROTOCOL_PATH,
 	WS_PROTOCOL_TRANSPORT,
 } from "@/common/actor-router-consts";
+import { cors } from "@/common/cors";
 import {
 	handleHealthRequest,
 	handleMetadataRequest,
 	handleRouteError,
 	handleRouteNotFound,
 	loggerMiddleware,
-	type MetadataResponse,
 } from "@/common/router";
 import {
 	assertUnreachable,
@@ -37,7 +36,7 @@ import {
 	noopNext,
 	stringifyError,
 } from "@/common/utils";
-import { type ActorDriver, HEADER_ACTOR_ID } from "@/driver-helpers/mod";
+import { HEADER_ACTOR_ID } from "@/driver-helpers/mod";
 import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
@@ -45,11 +44,9 @@ import type {
 import { createManagerInspectorRouter } from "@/inspector/manager";
 import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import {
-	type ActorsCreateRequest,
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
 	ActorsCreateResponseSchema,
-	type ActorsGetOrCreateRequest,
 	ActorsGetOrCreateRequestSchema,
 	type ActorsGetOrCreateResponse,
 	ActorsGetOrCreateResponseSchema,
@@ -57,11 +54,9 @@ import {
 	ActorsListResponseSchema,
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
-import { RivetIdSchema } from "@/manager-api/common";
 import type { AnyClient } from "@/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { DriverConfig, RunnerConfig } from "@/registry/run-config";
-import { VERSION } from "@/utils";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import { logger } from "./log";
@@ -97,7 +92,7 @@ export function createManagerRouter(
 		runConfig.basePath,
 	);
 
-	router.use("*", loggerMiddleware(logger()));
+	router.use("*", loggerMiddleware(logger()), cors());
 
 	// HACK: Add Sec-WebSocket-Protocol header to fix KIT-339
 	//
@@ -148,9 +143,6 @@ function addServerlessRoutes(
 	client: AnyClient,
 	router: OpenAPIHono,
 ) {
-	// Apply CORS
-	if (runConfig.cors) router.use("*", corsMiddleware(runConfig.cors));
-
 	// GET /
 	router.get("/", (c) => {
 		return c.text(
@@ -223,8 +215,7 @@ function addManagerRoutes(
 	managerDriver: ManagerDriver,
 	router: OpenAPIHono,
 ) {
-	// Serve inspector BEFORE the rest of the routes, since this has a special
-	// CORS config that should take precedence for the `/inspector` path
+	// Inspector
 	if (isInspectorEnabled(runConfig, "manager")) {
 		if (!managerDriver.inspector) {
 			throw new Unsupported("inspector");
@@ -232,7 +223,6 @@ function addManagerRoutes(
 		router.route(
 			"/inspect",
 			new Hono<{ Variables: { inspector: any } }>()
-				.use(corsMiddleware(runConfig.inspector.cors))
 				.use(secureInspector(runConfig))
 				.use((c, next) => {
 					c.set("inspector", managerDriver.inspector!);
@@ -241,9 +231,6 @@ function addManagerRoutes(
 				.route("/", createManagerInspectorRouter()),
 		);
 	}
-
-	// Apply CORS
-	if (runConfig.cors) router.use("*", corsMiddleware(runConfig.cors));
 
 	// Actor gateway
 	router.use("*", actorGateway.bind(undefined, runConfig, managerDriver));

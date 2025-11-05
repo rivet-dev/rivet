@@ -1,5 +1,4 @@
 import { Hono, type Context as HonoContext } from "hono";
-import { cors } from "hono/cors";
 import invariant from "invariant";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import {
@@ -320,22 +319,18 @@ export function createActorRouter(
 			new Hono<
 				ActorInspectorRouterEnv & { Bindings: ActorRouterBindings }
 			>()
-				.use(
-					cors(runConfig.inspector.cors),
-					secureInspector(runConfig),
-					async (c, next) => {
-						const inspector = (
-							await actorDriver.loadActor(c.env.actorId)
-						).inspector;
-						invariant(
-							inspector,
-							"inspector not supported on this platform",
-						);
+				.use(secureInspector(runConfig), async (c, next) => {
+					const inspector = (
+						await actorDriver.loadActor(c.env.actorId)
+					).inspector;
+					invariant(
+						inspector,
+						"inspector not supported on this platform",
+					);
 
-						c.set("inspector", inspector);
-						return next();
-					},
-				)
+					c.set("inspector", inspector);
+					return next();
+				})
 				.route("/", createActorInspectorRouter()),
 		);
 	}

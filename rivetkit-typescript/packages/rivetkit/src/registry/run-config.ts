@@ -1,4 +1,3 @@
-import type { cors } from "hono/cors";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ActorDriverBuilder } from "@/actor/driver";
@@ -8,8 +7,6 @@ import { InspectorConfigSchema } from "@/inspector/config";
 import type { ManagerDriverBuilder } from "@/manager/driver";
 import type { GetUpgradeWebSocket } from "@/utils";
 import { getEnvUniversal } from "@/utils";
-
-type CorsOptions = NonNullable<Parameters<typeof cors>[0]>;
 
 export const DriverConfigSchema = z.object({
 	/** Machine-readable name to identify this driver by. */
@@ -24,9 +21,6 @@ export type DriverConfig = z.infer<typeof DriverConfigSchema>;
 export const RunnerConfigSchema = z
 	.object({
 		driver: DriverConfigSchema.optional(),
-
-		/** CORS configuration for the router. Uses Hono's CORS middleware options. */
-		cors: z.custom<CorsOptions>().optional(),
 
 		/** @experimental */
 		maxIncomingMessageSize: z.number().optional().default(65_536),
