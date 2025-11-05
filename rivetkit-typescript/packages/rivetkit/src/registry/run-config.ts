@@ -6,7 +6,7 @@ import { EngingConfigSchema as EngineConfigSchema } from "@/drivers/engine/confi
 import { InspectorConfigSchema } from "@/inspector/config";
 import type { ManagerDriverBuilder } from "@/manager/driver";
 import type { GetUpgradeWebSocket } from "@/utils";
-import { getEnvUniversal } from "@/utils";
+import { getEnvUniversal, VERSION } from "@/utils";
 
 export const DriverConfigSchema = z.object({
 	/** Machine-readable name to identify this driver by. */
@@ -45,7 +45,7 @@ export const RunnerConfigSchema = z
 			.string()
 			.optional()
 			.default(
-				() => getEnvUniversal("RIVET_RUN_ENGINE_VERSION") ?? "25.8.2",
+				() => getEnvUniversal("RIVET_RUN_ENGINE_VERSION") ?? VERSION,
 			),
 
 		/** @experimental */
