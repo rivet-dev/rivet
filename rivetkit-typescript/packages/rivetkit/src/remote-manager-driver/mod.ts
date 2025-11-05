@@ -383,7 +383,6 @@ export class RemoteManagerDriver implements ManagerDriver {
 		// Build protocols
 		const protocols = buildWebSocketProtocols(
 			this.#config,
-			actorId,
 			encoding,
 			params,
 			connId,

@@ -1,8 +1,5 @@
 import type { ClientConfig } from "@/client/config";
-import {
-	HEADER_RIVET_ACTOR,
-	HEADER_RIVET_TOKEN,
-} from "@/common/actor-router-consts";
+import { HEADER_RIVET_TOKEN } from "@/common/actor-router-consts";
 import { combineUrlPath } from "@/utils";
 import { getEndpoint } from "./api-utils";
 
@@ -78,7 +75,6 @@ function buildGuardHeadersForHttp(
 		headers.set(key, value);
 	}
 	// Add guard-specific headers
-	headers.set(HEADER_RIVET_ACTOR, actorId);
 	if (runConfig.token) {
 		headers.set(HEADER_RIVET_TOKEN, runConfig.token);
 	}
