@@ -619,6 +619,7 @@ pub async fn reschedule_actor(
 	let mut backoff = reschedule_backoff(
 		state.reschedule_state.retry_count,
 		ctx.config().pegboard().base_retry_timeout(),
+		ctx.config().pegboard().reschedule_backoff_max_exponent(),
 	);
 
 	let (now, reset) = ctx
@@ -736,6 +737,7 @@ async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> Result<(
 		let backoff = reschedule_backoff(
 			input.retry_count,
 			ctx.config().pegboard().base_retry_timeout(),
+			ctx.config().pegboard().reschedule_backoff_max_exponent(),
 		);
 		state.reschedule_ts = Some(now + i64::try_from(backoff.current_duration())?);
 	}
@@ -815,6 +817,10 @@ pub async fn set_complete(ctx: &ActivityCtx, input: &SetCompleteInput) -> Result
 	Ok(())
 }
 
-fn reschedule_backoff(retry_count: usize, base_retry_timeout: usize) -> util::backoff::Backoff {
-	util::backoff::Backoff::new_at(8, None, base_retry_timeout, 500, retry_count)
+fn reschedule_backoff(
+	retry_count: usize,
+	base_retry_timeout: usize,
+	max_exponent: usize,
+) -> util::backoff::Backoff {
+	util::backoff::Backoff::new_at(max_exponent, None, base_retry_timeout, 500, retry_count)
 }
