@@ -11,10 +11,6 @@ const { client, fetch } = registry.start({
 	overrideServerAddress: "http://localhost:8080/rivet",
 	// Specify Hono-specific upgradeWebSocket
 	getUpgradeWebSocket: () => upgradeWebSocket,
-	cors: {
-		origin: "http://localhost:5173",
-		credentials: true,
-	},
 });
 
 // Setup router
