@@ -655,4 +655,8 @@ export class EngineActorDriver implements ActorDriver {
 			await this.#runnerStopped.promise;
 		});
 	}
+
+	getExtraActorLogParams(): Record<string, string> {
+		return { runnerId: this.#runner.runnerId ?? "-" };
+	}
 }
