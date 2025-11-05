@@ -19,7 +19,7 @@ pub async fn commit(
 		instance,
 	} = commit_req.payload;
 
-	tracing::info!(?replica_id, ?instance, "handling commit message");
+	tracing::debug!(?replica_id, ?instance, "handling commit message");
 
 	// EPaxos Step 24
 	let current_ballot = ballot::get_ballot(tx, replica_id).await?;

@@ -1051,7 +1051,7 @@ impl WorkflowCtx {
 
 		// No-op
 		if duration <= 0 {
-			if !replay && duration < -50 {
+			if !replay && duration < -25 {
 				tracing::warn!(%duration, "tried to sleep for a negative duration");
 			}
 		}

@@ -63,7 +63,7 @@ pub async fn check_config_changes(
 	ctx: &ActivityCtx,
 	_input: &CheckConfigChangesInput,
 ) -> Result<Option<ConfigChange>> {
-	tracing::info!("checking for config changes");
+	tracing::debug!("checking for config changes");
 
 	let state = ctx.state::<State>()?;
 
@@ -107,7 +107,7 @@ pub async fn check_config_changes(
 		.collect();
 
 	if new_replicas.is_empty() {
-		tracing::info!("no new replicas found");
+		tracing::debug!("no new replicas found");
 		return Ok(None);
 	}
 
@@ -144,7 +144,7 @@ pub async fn health_check_new_replicas(
 		return Ok(false);
 	}
 
-	tracing::info!(
+	tracing::debug!(
 		new_replicas = ?input.new_replicas,
 		"health checking new replicas"
 	);
@@ -154,7 +154,7 @@ pub async fn health_check_new_replicas(
 		let replica_id = replica.replica_id;
 
 		async move {
-			tracing::info!(?replica_id, "sending health check to replica");
+			tracing::debug!(?replica_id, "sending health check to replica");
 
 			let from_replica_id = ctx.config().epoxy_replica_id();
 			let request = protocol::Request {
@@ -171,7 +171,7 @@ pub async fn health_check_new_replicas(
 			.await
 			.with_context(|| format!("health check failed for replica {}", replica_id))?;
 
-			tracing::info!(?replica_id, "health check successful");
+			tracing::debug!(?replica_id, "health check successful");
 			Ok(())
 		}
 	});
@@ -199,7 +199,7 @@ pub async fn add_replicas_as_joining(
 		state.config.replicas.push(replica.clone().into());
 	}
 
-	tracing::info!("added {} replicas as joining", input.new_replicas.len());
+	tracing::debug!("added {} replicas as joining", input.new_replicas.len());
 
 	// IMPORTANT: Do not increment epoch at this stage, despite what the EPaxos paper recommends.
 	// See epoxy/README.md for more details.
@@ -231,7 +231,7 @@ pub async fn send_begin_learning(
 		let config = config.clone();
 
 		async move {
-			tracing::info!(?replica_id, "sending begin learning to replica");
+			tracing::debug!(?replica_id, "sending begin learning to replica");
 
 			let request = protocol::Request {
 				from_replica_id: ctx.config().epoxy_replica_id(),
@@ -244,7 +244,7 @@ pub async fn send_begin_learning(
 			crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &config, request)
 				.await?;
 
-			tracing::info!(?replica_id, "begin learning sent successfully");
+			tracing::debug!(?replica_id, "begin learning sent successfully");
 			Ok(())
 		}
 	});
@@ -266,21 +266,21 @@ fn should_abort_reconfigure(
 			.iter()
 			.find(|x| x.datacenter_label as u64 == replica.replica_id)
 		else {
-			tracing::info!(
+			tracing::debug!(
 				"config changed during reconfigure (replica removed), aborting reconfigure"
 			);
 			return Ok(true);
 		};
 
 		if url::Url::parse(&replica.api_peer_url)? != current_dc.peer_url {
-			tracing::info!(
+			tracing::debug!(
 				"config changed during reconfigure (api_peer_url changed), aborting reconfigure"
 			);
 			return Ok(true);
 		}
 
 		if url::Url::parse(&replica.guard_url)? != current_dc.public_url {
-			tracing::info!(
+			tracing::debug!(
 				"config changed during reconfigure (guard_url changed), aborting reconfigure"
 			);
 			return Ok(true);

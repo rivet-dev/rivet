@@ -117,7 +117,7 @@ pub async fn setup_replica(ctx: &mut WorkflowCtx, _input: &super::Input) -> Resu
 					state.total_recovered_keys += output.recovered_count;
 				} else {
 					// No more keys to recover
-					tracing::info!(
+					tracing::debug!(
 						total_recovered_keys = state.total_recovered_keys,
 						"finished recovering keys"
 					);
@@ -172,7 +172,7 @@ pub async fn download_instances_chunk(
 	let config = &input.learning_config;
 	let proto_config: protocol::ClusterConfig = input.learning_config.clone().into();
 
-	tracing::info!(
+	tracing::debug!(
 		from_replica_id = ?input.from_replica_id,
 		replica_progress = format!("{}/{}", input.replica_index, input.total_replicas - 1), // -1 to exclude self
 		total_downloaded_instances = input.total_downloaded_instances,
@@ -201,7 +201,7 @@ pub async fn download_instances_chunk(
 	};
 	let instances = download_response.instances;
 
-	tracing::info!(instance_count = instances.len(), "received instances");
+	tracing::debug!(instance_count = instances.len(), "received instances");
 
 	// Apply each log entry from the downloaded instances
 	let total_entries = instances.len();
@@ -230,7 +230,7 @@ pub async fn download_instances_chunk(
 		applied_count += 1;
 	}
 
-	tracing::info!(
+	tracing::debug!(
 		total_entries,
 		applied_count,
 		skipped_count,
@@ -269,7 +269,7 @@ async fn apply_log_entry(
 ) -> Result<()> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
-	tracing::info!(
+	tracing::debug!(
 		?instance,
 		?log_entry.state,
 		"replaying log entry"
@@ -334,7 +334,7 @@ async fn apply_log_entry(
 		.custom_instrument(tracing::info_span!("apply_log_entry_tx"))
 		.await?;
 
-	tracing::info!(
+	tracing::debug!(
 		?instance,
 		?log_entry.state,
 		"successfully replayed log entry"
@@ -392,7 +392,7 @@ pub async fn recover_keys_chunk(
 ) -> Result<RecoverKeysChunkOutput> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
-	tracing::info!(
+	tracing::debug!(
 		?replica_id,
 		total_recovered_keys = input.total_recovered_keys,
 		after_key_len = input.after_key.as_ref().map(|k| k.len()),
@@ -534,7 +534,7 @@ pub async fn recover_keys_chunk(
 					None
 				};
 
-				tracing::info!(
+				tracing::debug!(
 					?replica_id,
 					recovered_count,
 					scanned_count,
@@ -801,7 +801,7 @@ pub async fn notify_active(ctx: &ActivityCtx, input: &NotifyActiveInput) -> Resu
 	let config = &input.learning_config;
 	let proto_config: protocol::ClusterConfig = config.clone().into();
 
-	tracing::info!("notifying coordinator that replica is active");
+	tracing::debug!("notifying coordinator that replica is active");
 
 	// Send status update to coordinator
 	let request = protocol::Request {
@@ -818,6 +818,6 @@ pub async fn notify_active(ctx: &ActivityCtx, input: &NotifyActiveInput) -> Resu
 	crate::http_client::send_message(&ApiCtx::new_from_activity(&ctx)?, &proto_config, request)
 		.await?;
 
-	tracing::info!("notified coordinator of active status");
+	tracing::debug!("notified coordinator of active status");
 	Ok(())
 }

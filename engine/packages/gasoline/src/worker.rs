@@ -152,7 +152,10 @@ impl Worker {
 
 		for (workflow_id, wf) in &self.running_workflows {
 			if wf.stop.send(()).is_err() {
-				tracing::warn!(?workflow_id, "stop channel closed");
+				tracing::warn!(
+					?workflow_id,
+					"stop channel closed, workflow likely already stopped"
+				);
 			}
 		}
 

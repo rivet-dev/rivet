@@ -85,9 +85,9 @@ pub async fn update_replica_status(
 	// Update status
 	replica_state.status = input.new_status.clone().into();
 
-	tracing::info!(
-		replica_id = ?input.replica_id,
-		new_status = ?input.new_status,
+	tracing::debug!(
+		replica_id=?input.replica_id,
+		new_status=?input.new_status,
 		"updated replica status"
 	);
 
@@ -103,7 +103,7 @@ pub async fn increment_epoch(ctx: &ActivityCtx, _input: &IncrementEpochInput) ->
 
 	state.config.epoch += 1;
 
-	tracing::info!(new_epoch = state.config.epoch, "incremented epoch");
+	tracing::debug!(new_epoch = state.config.epoch, "incremented epoch");
 
 	Ok(())
 }
@@ -119,7 +119,7 @@ pub async fn update_replica_urls(ctx: &ActivityCtx, _input: &UpdateReplicaUrlsIn
 	for replica in state.config.replicas.iter_mut() {
 		let Some(dc) = ctx.config().dc_for_label(replica.replica_id as u16) else {
 			tracing::warn!(
-				replica_id = ?replica.replica_id,
+				replica_id=?replica.replica_id,
 				"datacenter not found for replica, skipping url update"
 			);
 			continue;
@@ -128,10 +128,10 @@ pub async fn update_replica_urls(ctx: &ActivityCtx, _input: &UpdateReplicaUrlsIn
 		replica.api_peer_url = dc.peer_url.to_string();
 		replica.guard_url = dc.public_url.to_string();
 
-		tracing::info!(
-			replica_id = ?replica.replica_id,
-			api_peer_url = ?dc.peer_url,
-			guard_url = ?dc.public_url,
+		tracing::debug!(
+			replica_id=?replica.replica_id,
+			api_peer_url=?dc.peer_url,
+			guard_url=?dc.public_url,
 			"updated replica urls"
 		);
 	}
@@ -156,7 +156,7 @@ pub async fn notify_all_replicas(
 
 	let config: protocol::ClusterConfig = state.config.clone().into();
 
-	tracing::info!(
+	tracing::debug!(
 		epoch = config.epoch,
 		replica_count = config.replicas.len(),
 		"notifying all replicas of config change"
@@ -180,7 +180,7 @@ pub async fn notify_all_replicas(
 				.await
 				.with_context(|| format!("failed to update config for replica {}", replica_id))?;
 
-			tracing::info!(?replica_id, "config update sent");
+			tracing::debug!(?replica_id, "config update sent");
 			Ok(())
 		}
 	});

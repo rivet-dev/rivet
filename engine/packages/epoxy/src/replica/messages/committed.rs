@@ -18,7 +18,7 @@ pub async fn committed(
 		instance,
 	} = payload;
 
-	tracing::info!(?replica_id, ?instance, "handling committed message");
+	tracing::debug!(?replica_id, ?instance, "handling committed message");
 
 	// EPaxos Step 21: Create committed log entry
 	let current_ballot = ballot::get_ballot(tx, replica_id).await?;

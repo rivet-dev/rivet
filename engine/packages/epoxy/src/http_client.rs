@@ -57,7 +57,7 @@ where
 	)
 	.collect::<FuturesUnordered<_>>()
 	.await;
-	tracing::info!(?quorum_size, len = ?responses.len(), ?quorum_type, "fanout quorum size");
+	tracing::debug!(?quorum_size, len = ?responses.len(), ?quorum_type, "fanout quorum size");
 
 	// Choose how many successful responses we need before considering a success
 	let target_responses = match quorum_type {
@@ -115,7 +115,7 @@ pub async fn send_message_to_address(
 	let to_replica_id = request.to_replica_id;
 
 	if from_replica_id == to_replica_id {
-		tracing::info!(
+		tracing::debug!(
 			to_replica = to_replica_id,
 			"sending message to replica directly"
 		);
@@ -126,7 +126,7 @@ pub async fn send_message_to_address(
 	let mut replica_url = url::Url::parse(&replica_url)?;
 	replica_url.set_path(&format!("/v{PROTOCOL_VERSION}/epoxy/message"));
 
-	tracing::info!(
+	tracing::debug!(
 		to_replica = to_replica_id,
 		%replica_url,
 		"sending message to replica via http"
@@ -183,7 +183,7 @@ pub async fn send_message_to_address(
 	let body = response.bytes().await?;
 	let response_body = versioned::Response::deserialize(&body)?;
 
-	tracing::info!(
+	tracing::debug!(
 		to_replica = to_replica_id,
 		"successfully sent message via http"
 	);

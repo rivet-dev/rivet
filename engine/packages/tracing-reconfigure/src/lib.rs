@@ -13,20 +13,18 @@ pub struct SetTracingConfigMessage {
 
 #[tracing::instrument(skip_all)]
 pub async fn start(_config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
-	tracing::info!("starting tracing reconfigure subscriber service");
-
 	// Subscribe to tracing config updates
 	let ups = pools.ups()?;
 	let subject = "rivet.debug.tracing.config";
 	let mut sub = ups.subscribe(subject).await?;
 
-	tracing::info!(subject = ?subject, "subscribed to tracing config updates");
+	tracing::debug!(subject = ?subject, "subscribed to tracing config updates");
 
 	// Process incoming messages
 	while let Ok(NextOutput::Message(msg)) = sub.next().await {
 		match serde_json::from_slice::<SetTracingConfigMessage>(&msg.payload) {
 			Ok(update_msg) => {
-				tracing::info!(
+				tracing::debug!(
 					filter = ?update_msg.filter,
 					sampler_ratio = ?update_msg.sampler_ratio,
 					"received tracing config update"
@@ -75,8 +73,6 @@ pub async fn start(_config: rivet_config::Config, pools: rivet_pools::Pools) -> 
 			}
 		}
 	}
-
-	tracing::warn!("tracing reconfigure subscriber service stopped");
 
 	Ok(())
 }

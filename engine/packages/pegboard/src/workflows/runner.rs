@@ -253,7 +253,10 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 						true,
 					) = (&command.inner, state.draining)
 					{
-						tracing::warn!(?actor_id, "attempt to schedule actor to draining runner");
+						tracing::warn!(
+							?actor_id,
+							"attempt to schedule actor to draining runner, reallocating"
+						);
 
 						let res = ctx
 							.signal(crate::workflows::actor::Lost {

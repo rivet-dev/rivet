@@ -28,7 +28,7 @@ pub async fn epoxy_explicit_prepare(
 	let replica_id = ctx.config().epoxy_replica_id();
 	let instance = &input.instance;
 
-	tracing::info!(
+	tracing::debug!(
 		?instance,
 		"starting explicit prepare for potentially failed replica"
 	);
@@ -317,7 +317,7 @@ async fn restart_phase1(
 		commands: commands.unwrap_or_else(|| vec![]), // Empty vec for no-op
 	};
 
-	tracing::info!(
+	tracing::debug!(
 		?instance,
 		commands_count = proposal.commands.len(),
 		"restarting phase1 with propose operation"

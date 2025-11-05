@@ -54,7 +54,7 @@ async fn route_runner_internal(
 	// Validate that the host is valid for the current datacenter
 	let current_dc = ctx.config().topology().current_dc()?;
 	if !current_dc.is_valid_regional_host(host) {
-		tracing::warn!(?host, datacenter = ?current_dc.name, "invalid host for current datacenter");
+		tracing::warn!(?host, datacenter=?current_dc.name, "invalid host for current datacenter");
 
 		// Determine valid hosts for error message
 		let valid_hosts = if let Some(hosts) = &current_dc.valid_hosts {

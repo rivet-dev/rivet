@@ -190,11 +190,11 @@ impl PubSub {
 			match self.driver.publish(subject, encoded).await {
 				Result::Ok(_) => break,
 				Err(err) if !backoff.tick().await => {
-					tracing::info!(?err, "error publishing, cannot retry again");
+					tracing::warn!(?err, "error publishing, cannot retry again");
 					return Err(crate::errors::Ups::PublishFailed.build().into());
 				}
 				Err(err) => {
-					tracing::info!(?err, "error publishing, retrying");
+					tracing::debug!(?err, "error publishing, retrying");
 					// Continue retrying
 				}
 			}

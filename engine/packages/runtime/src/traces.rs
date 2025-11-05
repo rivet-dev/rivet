@@ -152,7 +152,7 @@ pub fn reload_log_filter(filter_spec: &str) -> anyhow::Result<()> {
 	// Reload the filter
 	handle.reload(env_filter)?;
 
-	tracing::info!(?filter_spec, "reloaded log filter");
+	tracing::debug!(?filter_spec, "reloaded log filter");
 
 	Ok(())
 }

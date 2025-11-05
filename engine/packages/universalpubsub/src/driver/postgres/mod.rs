@@ -116,7 +116,7 @@ impl PostgresDriver {
 		loop {
 			match tokio_postgres::connect(&conn_str, tokio_postgres::NoTls).await {
 				Result::Ok((new_client, conn)) => {
-					tracing::info!("postgres listen connection established");
+					tracing::debug!("postgres listen connection established");
 					// Reset backoff on successful connection
 					backoff = Backoff::default();
 
@@ -148,7 +148,7 @@ impl PostgresDriver {
 							"re-subscribing to channels after reconnection"
 						);
 						for channel in &channels {
-							tracing::info!(?channel, "re-subscribing to channel");
+							tracing::debug!(?channel, "re-subscribing to channel");
 							if let Result::Err(e) = new_client
 								.execute(&format!("LISTEN \"{}\"", channel), &[])
 								.await
