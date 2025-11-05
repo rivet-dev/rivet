@@ -364,7 +364,6 @@ impl CustomServeTrait for PegboardGateway {
 									) => {
 										tracing::debug!(?close, "server closed websocket");
 
-
 										if open_msg.can_hibernate && close.retry {
 											// Successful closure
 											return Err(WebSocketServiceRetry.build());

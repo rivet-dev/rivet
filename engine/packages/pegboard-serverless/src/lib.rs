@@ -387,6 +387,16 @@ async fn outbound_handler(
 
 					return Ok(());
 				}
+				Err(sse::Error::InvalidStatusCode(code, res)) => {
+					let body = res
+						.text()
+						.await
+						.unwrap_or_else(|_| "<could not read body>".to_string());
+					bail!(
+						"invalid status code ({code}):\n{}",
+						util::safe_slice(&body, 0, 512)
+					);
+				}
 				Err(err) => return Err(err.into()),
 			}
 		}

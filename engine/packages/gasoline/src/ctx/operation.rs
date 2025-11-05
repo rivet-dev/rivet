@@ -29,7 +29,7 @@ pub struct OperationCtx {
 	pools: rivet_pools::Pools,
 	cache: rivet_cache::Cache,
 	msg_ctx: MessageCtx,
-	from_workflow: bool,
+	pub(crate) from_workflow: bool,
 }
 
 impl OperationCtx {
