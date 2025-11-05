@@ -178,6 +178,64 @@ describe("parseActorPath", () => {
 		});
 	});
 
+	describe("URL-encoded actor_id and token", () => {
+		test("should decode URL-encoded characters in actor_id", () => {
+			const path = "/gateway/actor%2D123/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor-123");
+			expect(result?.token).toBeUndefined();
+			expect(result?.remainingPath).toBe("/endpoint");
+		});
+
+		test("should decode URL-encoded characters in token", () => {
+			const path = "/gateway/actor-123@tok%40en/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor-123");
+			expect(result?.token).toBe("tok@en");
+			expect(result?.remainingPath).toBe("/endpoint");
+		});
+
+		test("should decode URL-encoded characters in both actor_id and token", () => {
+			const path = "/gateway/actor%2D123@token%2Dwith%2Dencoded/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor-123");
+			expect(result?.token).toBe("token-with-encoded");
+			expect(result?.remainingPath).toBe("/endpoint");
+		});
+
+		test("should decode URL-encoded spaces in actor_id", () => {
+			const path = "/gateway/actor%20with%20spaces/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).not.toBeNull();
+			expect(result?.actorId).toBe("actor with spaces");
+			expect(result?.token).toBeUndefined();
+			expect(result?.remainingPath).toBe("/endpoint");
+		});
+
+		test("should reject invalid URL encoding in actor_id", () => {
+			// %ZZ is invalid hex
+			const path = "/gateway/actor%ZZ123/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).toBeNull();
+		});
+
+		test("should reject invalid URL encoding in token", () => {
+			// %GG is invalid hex
+			const path = "/gateway/actor-123@token%GG/endpoint";
+			const result = parseActorPath(path);
+
+			expect(result).toBeNull();
+		});
+	});
+
 	describe("Invalid paths - wrong prefix", () => {
 		test("should reject path with wrong prefix", () => {
 			expect(parseActorPath("/api/123/endpoint")).toBeNull();
