@@ -74,12 +74,10 @@ impl Pegboard {
 	}
 
 	pub fn runner_eligible_threshold(&self) -> i64 {
-		self.runner_eligible_threshold
-			.unwrap_or(util::duration::seconds(10))
+		self.runner_eligible_threshold.unwrap_or(10_000)
 	}
 
 	pub fn runner_lost_threshold(&self) -> i64 {
-		self.runner_lost_threshold
-			.unwrap_or(util::duration::seconds(15))
+		self.runner_lost_threshold.unwrap_or(15_000)
 	}
 }
