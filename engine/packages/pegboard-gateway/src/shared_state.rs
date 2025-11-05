@@ -7,7 +7,7 @@ use std::{
 	sync::Arc,
 	time::{Duration, Instant},
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
@@ -22,15 +22,27 @@ pub enum TunnelMessageData {
 	Timeout,
 }
 
+pub struct InFlightRequestHandle {
+	pub msg_rx: mpsc::Receiver<TunnelMessageData>,
+	/// Used to check if the request handler has been dropped.
+	///
+	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
+	/// request after `msg_rx` has dropped.
+	pub drop_rx: watch::Receiver<()>,
+}
+
 struct InFlightRequest {
 	/// UPS subject to send messages to for this request.
 	receiver_subject: String,
 	/// Sender for incoming messages to this request.
 	msg_tx: mpsc::Sender<TunnelMessageData>,
+	/// Used to check if the request handler has been dropped.
+	drop_tx: watch::Sender<()>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
 	opened: bool,
 	pending_msgs: Vec<PendingMessage>,
 	hibernation_state: Option<HibernationState>,
+	stopping: bool,
 }
 
 pub struct PendingMessage {
@@ -87,28 +99,37 @@ impl SharedState {
 		&self,
 		receiver_subject: String,
 		request_id: RequestId,
-	) -> mpsc::Receiver<TunnelMessageData> {
+	) -> InFlightRequestHandle {
 		let (msg_tx, msg_rx) = mpsc::channel(128);
+		let (drop_tx, drop_rx) = watch::channel(());
 
 		match self.in_flight_requests.entry_async(request_id).await {
 			Entry::Vacant(entry) => {
 				entry.insert_entry(InFlightRequest {
 					receiver_subject,
 					msg_tx,
+					drop_tx,
 					opened: false,
 					pending_msgs: Vec::new(),
 					hibernation_state: None,
+					stopping: false,
 				});
 			}
 			Entry::Occupied(mut entry) => {
 				entry.receiver_subject = receiver_subject;
 				entry.msg_tx = msg_tx;
+				entry.drop_tx = drop_tx;
 				entry.opened = false;
 				entry.pending_msgs.clear();
+
+				if entry.stopping {
+					entry.hibernation_state = None;
+					entry.stopping = false;
+				}
 			}
 		}
 
-		msg_rx
+		InFlightRequestHandle { msg_rx, drop_rx }
 	}
 
 	pub async fn send_message(
@@ -401,64 +422,128 @@ impl SharedState {
 	}
 
 	async fn gc(&self) {
-		#[derive(Debug)]
-		enum MsgGcReason {
-			/// Any tunnel message not acked (TunnelAck)
-			MessageNotAcked,
-			/// WebSocket pending messages (ToServerWebSocketMessageAck)
-			WebSocketMessageNotAcked,
-		}
-
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		loop {
 			interval.tick().await;
 
-			let now = Instant::now();
-
-			self.in_flight_requests
-				.retain_async(|request_id, req| {
-					if req.msg_tx.is_closed() {
-						return false;
-					}
-
-					let reason = 'reason: {
-						if let Some(earliest_pending_msg) = req.pending_msgs.first() {
-							if now.duration_since(earliest_pending_msg.send_instant)
-								<= MESSAGE_ACK_TIMEOUT
-							{
-								break 'reason Some(MsgGcReason::MessageNotAcked);
-							}
-						}
-
-						if let Some(hs) = &req.hibernation_state
-							&& let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first()
-						{
-							if now.duration_since(earliest_pending_ws_msg.send_instant)
-								<= MESSAGE_ACK_TIMEOUT
-							{
-								break 'reason Some(MsgGcReason::WebSocketMessageNotAcked);
-							}
-						}
-
-						None
-					};
-
-					if let Some(reason) = &reason {
-						tracing::debug!(
-							request_id=?Uuid::from_bytes(*request_id),
-							?reason,
-							"gc collecting in flight request"
-						);
-						let _ = req.msg_tx.send(TunnelMessageData::Timeout);
-					}
-
-					// Return true if the request was not gc'd
-					reason.is_none()
-				})
-				.await;
+			self.gc_in_flight_requests().await;
 		}
+	}
+
+	/// This will remove all in flight requests that are cancelled or had an ack timeout.
+	///
+	/// Purging requests is done in a 2 phase commit in order to ensure that the InFlightRequest is
+	/// kept until the ToClientWebSocketClose message has been successfully sent.
+	///
+	/// If we did not use a 2 phase commit (i.e. a single `retain` for any GC purge), the
+	/// InFlightRequest would be removed immediately and the runner would never receive the
+	/// ToClientWebSocketClose.
+	///
+	/// **Phase 1**
+	///
+	/// 1a. Find requests that need to be purged (either closed by gateway or message acknowledgement took too long)
+	/// 1b. Flag the request as `stopping` to prevent re-purging this request in the next GC tick
+	/// 1c. Send a `Timeout` message to `msg_tx` which will terminate the task in `handle_websocket`
+	/// 1d. Once both tasks terminate, `handle_websocket` sends the `ToClientWebSocketClose` to the in flight request
+	/// 1e. `handle_websocket` exits and drops `drop_rx`
+	///
+	/// **Phase 2**
+	///
+	/// 2a. Remove all requests where it was flagged as stopping and `drop_rx` has been dropped
+	async fn gc_in_flight_requests(&self) {
+		#[derive(Debug)]
+		enum MsgGcReason {
+			/// Gateway channel is closed and there are no pending messages
+			GatewayClosed,
+			/// Any tunnel message not acked (TunnelAck)
+			MessageNotAcked,
+			/// WebSocket pending messages (ToServerWebSocketMessageAck)
+			WebSocketMessageNotAcked,
+		}
+
+		let now = Instant::now();
+
+		// First, check if an in flight req is beyond the timeout for tunnel message ack and websocket
+		// message ack
+		self.in_flight_requests
+			.iter_mut_async(|mut entry| {
+				let (request_id, req) = &mut *entry;
+
+				if req.stopping {
+					return true;
+				}
+
+				let reason = 'reason: {
+					// If we have no pending messages of any kind and the channel is closed, remove the
+					// in flight req
+					if req.msg_tx.is_closed()
+						&& req.pending_msgs.is_empty()
+						&& req
+							.hibernation_state
+							.as_ref()
+							.map(|hs| hs.pending_ws_msgs.is_empty())
+							.unwrap_or(true)
+					{
+						break 'reason Some(MsgGcReason::GatewayClosed);
+					}
+
+					if let Some(earliest_pending_msg) = req.pending_msgs.first() {
+						if now.duration_since(earliest_pending_msg.send_instant)
+							<= MESSAGE_ACK_TIMEOUT
+						{
+							break 'reason Some(MsgGcReason::MessageNotAcked);
+						}
+					}
+
+					if let Some(hs) = &req.hibernation_state
+						&& let Some(earliest_pending_ws_msg) = hs.pending_ws_msgs.first()
+					{
+						if now.duration_since(earliest_pending_ws_msg.send_instant)
+							<= MESSAGE_ACK_TIMEOUT
+						{
+							break 'reason Some(MsgGcReason::WebSocketMessageNotAcked);
+						}
+					}
+
+					None
+				};
+
+				if let Some(reason) = &reason {
+					tracing::debug!(
+						request_id=?Uuid::from_bytes(*request_id),
+						?reason,
+						"gc stopping in flight request"
+					);
+
+					let _ = req.msg_tx.send(TunnelMessageData::Timeout);
+
+					// Mark req as stopping to skip this loop next time the gc is run
+					req.stopping = true;
+				}
+
+				true
+			})
+			.await;
+
+		self.in_flight_requests
+			.retain_async(|request_id, req| {
+				// The reason we check for stopping here is because drop_tx could be dropped if we are
+				// between websocket retries (we don't want to remove the in flight req in this case).
+				// When the websocket reconnects a new channel will be created
+				if req.stopping && req.drop_tx.is_closed() {
+					tracing::debug!(
+						request_id=?Uuid::from_bytes(*request_id),
+						"gc removing in flight request"
+					);
+
+					return false;
+				}
+
+				true
+			})
+			.await;
 	}
 }
 
