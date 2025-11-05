@@ -50,4 +50,7 @@ export interface ActorDriver {
 	// Serverless
 	/** This handles the serverless start request. This should manage the lifecycle of the runner tied to the request lifecycle. */
 	serverlessHandleStart?(c: HonoContext): Promise<Response>;
+
+	/** Extra properties to add to logs for each actor. */
+	getExtraActorLogParams?(): Record<string, string>;
 }
