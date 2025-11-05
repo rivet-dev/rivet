@@ -97,6 +97,8 @@ export async function ensureEngineProcess(
 			// order to account for this.
 			RIVET__PEGBOARD__RETRY_RESET_DURATION: "100",
 			RIVET__PEGBOARD__BASE_RETRY_TIMEOUT: "100",
+			// Set max exponent to 1 to have a maximum of base_retry_timeout
+			RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT: "1",
 		},
 	});
 

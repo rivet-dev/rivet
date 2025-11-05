@@ -29,6 +29,12 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub retry_reset_duration: Option<i64>,
+	/// Maximum exponent for the reschedule backoff calculation.
+	///
+	/// This controls the maximum backoff duration when rescheduling actors.
+	///
+	/// **Experimental**
+	pub reschedule_backoff_max_exponent: Option<usize>,
 }
 
 impl Pegboard {
@@ -46,5 +52,9 @@ impl Pegboard {
 
 	pub fn retry_reset_duration(&self) -> i64 {
 		self.retry_reset_duration.unwrap_or(10 * 60 * 1000)
+	}
+
+	pub fn reschedule_backoff_max_exponent(&self) -> usize {
+		self.reschedule_backoff_max_exponent.unwrap_or(8)
 	}
 }
