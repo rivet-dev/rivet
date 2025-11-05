@@ -2,7 +2,7 @@ use gas::prelude::*;
 use universaldb::options::ConflictRangeType;
 use universaldb::utils::IsolationLevel::*;
 
-use crate::{keys, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
+use crate::keys;
 
 #[derive(Debug)]
 pub struct Input {
@@ -45,6 +45,8 @@ pub enum RunnerEligibility {
 
 #[operation]
 pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input) -> Result<Output> {
+	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
+
 	let notifications = ctx
 		.udb()?
 		.run(|tx| {
@@ -183,7 +185,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 								)?;
 
 								if last_ping_ts.saturating_sub(old_last_ping_ts)
-									> RUNNER_ELIGIBLE_THRESHOLD_MS
+									> runner_eligible_threshold
 								{
 									notifications.push(RunnerNotification {
 										runner_id: runner.runner_id,

@@ -13,7 +13,7 @@ use std::time::Instant;
 use universaldb::options::{ConflictRangeType, MutationType, StreamingMode};
 use universaldb::utils::{FormalKey, IsolationLevel::*};
 
-use crate::{keys, metrics, workflows::runner::RUNNER_ELIGIBLE_THRESHOLD_MS};
+use crate::{keys, metrics};
 
 use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
 
@@ -148,12 +148,14 @@ async fn allocate_actor(
 		})
 		.unwrap_or_default();
 
+	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
+
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
 	let (for_serverless, res) = ctx
 		.udb()?
 		.run(|tx| async move {
-			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
+			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
 			// Check if runner is an serverless runner
 			let for_serverless = tx

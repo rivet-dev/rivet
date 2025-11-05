@@ -99,6 +99,11 @@ export async function ensureEngineProcess(
 			RIVET__PEGBOARD__BASE_RETRY_TIMEOUT: "100",
 			// Set max exponent to 1 to have a maximum of base_retry_timeout
 			RIVET__PEGBOARD__RESCHEDULE_BACKOFF_MAX_EXPONENT: "1",
+			// Reduce thresholds for faster development iteration
+			//
+			// Default ping interval is 3s, this gives a 2s & 4s grace
+			RIVET__PEGBOARD__RUNNER_ELIGIBLE_THRESHOLD: "5000",
+			RIVET__PEGBOARD__RUNNER_LOST_THRESHOLD: "7000",
 		},
 	});
 
