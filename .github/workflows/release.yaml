@@ -158,11 +158,6 @@ jobs:
   docker:
     name: "Build & Push Docker Images"
     needs: [setup]
-    permissions:
-      # Allows Depot to authenticate with GitHub OIDC
-      id-token: write
-      # Allow reading repository contents
-      contents: read
     strategy:
       matrix:
         include:
@@ -193,7 +188,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN}}
 
       - name: Build & Push (rivetkit/engine:full)
-        uses: depot/build-push-action@v1
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
@@ -210,7 +205,7 @@ jobs:
           #   netrc=${{ runner.temp }}/netrc
 
       - name: Build & Push (rivetkit/engine:slim)
-        uses: depot/build-push-action@v1
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
