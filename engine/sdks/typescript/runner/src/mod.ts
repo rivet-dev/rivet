@@ -449,9 +449,11 @@ export class Runner {
 	}
 
 	// MARK: Networking
+	get pegboardEndpoint() {
+		return this.#config.pegboardEndpoint || this.#config.endpoint;
+	}
 	get pegboardUrl() {
-		const endpoint = this.#config.pegboardEndpoint || this.#config.endpoint;
-		const wsEndpoint = endpoint
+		const wsEndpoint = this.pegboardEndpoint
 			.replace("http://", "ws://")
 			.replace("https://", "wss://");
 
@@ -472,8 +474,16 @@ export class Runner {
 		const ws = new WS(this.pegboardUrl, protocols) as any as WebSocket;
 		this.#pegboardWebSocket = ws;
 
+		logger()?.info({
+			msg: "connecting",
+			endpoint: this.pegboardEndpoint,
+			namespace: this.#config.namespace,
+			runnerKey: this.#config.runnerKey,
+			hasToken: !!this.config.token,
+		});
+
 		ws.addEventListener("open", () => {
-			logger()?.info({ msg: "Connected" });
+			logger()?.info({ msg: "connected" });
 
 			// Reset reconnect attempt counter on successful connection
 			this.#reconnectAttempt = 0;
