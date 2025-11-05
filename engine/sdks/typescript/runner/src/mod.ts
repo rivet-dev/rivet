@@ -3,7 +3,11 @@ import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
 import { Tunnel } from "./tunnel";
-import { calculateBackoff, unreachable } from "./utils";
+import {
+	calculateBackoff,
+	parseWebSocketCloseReason,
+	unreachable,
+} from "./utils";
 import { importWebSocket } from "./websocket.js";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
@@ -430,7 +434,9 @@ export class Runner {
 				}
 			}
 		} else {
-			logger()?.warn({
+			// This is often logged when the serverless SSE stream closes after
+			// the runner has already shut down
+			logger()?.debug({
 				msg: "no runner WebSocket to shutdown or already closed",
 				runnerId: this.runnerId,
 				readyState: this.#pegboardWebSocket?.readyState,
@@ -483,7 +489,20 @@ export class Runner {
 		});
 
 		ws.addEventListener("open", () => {
-			logger()?.info({ msg: "connected" });
+			if (this.#reconnectAttempt > 0) {
+				logger()?.info({
+					msg: "runner reconnected",
+					namespace: this.#config.namespace,
+					runnerName: this.#config.runnerName,
+					reconnectAttempt: this.#reconnectAttempt,
+				});
+			} else {
+				logger()?.debug({
+					msg: "runner connected",
+					namespace: this.#config.namespace,
+					runnerName: this.#config.runnerName,
+				});
+			}
 
 			// Reset reconnect attempt counter on successful connection
 			this.#reconnectAttempt = 0;
@@ -650,22 +669,30 @@ export class Runner {
 		});
 
 		ws.addEventListener("close", async (ev) => {
-			logger()?.info({
-				msg: "connection closed",
-				runnerId: this.runnerId,
-				code: ev.code,
-				reason: ev.reason.toString(),
-			});
-
-			this.#config.onDisconnected(ev.code, ev.reason);
-
-			if (ev.reason.toString().startsWith("ws.eviction")) {
+			const closeError = parseWebSocketCloseReason(ev.reason);
+			if (
+				closeError?.group === "ws" &&
+				closeError?.error === "eviction"
+			) {
 				logger()?.info({
 					msg: "runner evicted",
 					runnerId: this.runnerId,
 				});
 
+				this.#config.onDisconnected(ev.code, ev.reason);
+
 				await this.shutdown(true);
+			} else {
+				logger()?.warn({
+					msg: "runner disconnected",
+					namespace: this.#config.namespace,
+					runnerName: this.#config.runnerName,
+					code: ev.code,
+					reason: ev.reason.toString(),
+					closeError,
+				});
+
+				this.#config.onDisconnected(ev.code, ev.reason);
 			}
 
 			// Clear ping loop on close
