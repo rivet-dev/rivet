@@ -198,6 +198,7 @@ pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Re
 			start_ts: actor_state.start_ts,
 			sleep_ts: actor_state.sleep_ts,
 			connectable_ts: actor_state.connectable_ts,
+			reschedule_ts: actor_state.reschedule_ts,
 			destroy_ts: actor_state.destroy_ts,
 		});
 	}

@@ -830,14 +830,16 @@
               "integer",
               "null"
             ],
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor was last connectable. Null if actor is not running."
           },
           "crash_policy": {
             "$ref": "#/components/schemas/CrashPolicy"
           },
           "create_ts": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor was first created."
           },
           "datacenter": {
             "type": "string"
@@ -847,7 +849,8 @@
               "integer",
               "null"
             ],
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor was destroyed."
           },
           "key": {
             "type": [
@@ -866,7 +869,16 @@
               "integer",
               "null"
             ],
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor started waiting for an allocation."
+          },
+          "reschedule_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Denotes when the actor will try to allocate again. If this is set, the actor will not attempt to\nallocate until the given timestamp."
           },
           "runner_name_selector": {
             "type": "string"
@@ -876,14 +888,16 @@
               "integer",
               "null"
             ],
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor entered a sleeping state."
           },
           "start_ts": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int64"
+            "format": "int64",
+            "description": "Denotes when the actor was first made connectable. Null if never."
           }
         }
       },
