@@ -1858,11 +1858,34 @@ impl ProxyService {
 								Ok(close_frame) => {
 									tracing::debug!("websocket handler complete, closing");
 
-									// Send graceful close
-									ws_handle.send(to_hyper_close(close_frame)).await?;
+									// Send graceful close. This may fail if client already sent
+									// close frame, which is normal.
+									tracing::debug!(?close_frame, "sending close frame to client");
+									match ws_handle.send(to_hyper_close(close_frame)).await {
+										Ok(_) => {
+											tracing::debug!("close frame sent successfully");
+										}
+										Err(err) => {
+											tracing::debug!(
+												?err,
+												"failed to send close frame (websocket may be already closing)"
+											);
+										}
+									}
 
 									// Flush to ensure close frame is sent
-									ws_handle.flush().await?;
+									tracing::debug!("flushing websocket");
+									match ws_handle.flush().await {
+										Ok(_) => {
+											tracing::debug!("websocket flushed successfully");
+										}
+										Err(err) => {
+											tracing::debug!(
+												?err,
+												"failed to flush websocket (websocket may be already closing)"
+											);
+										}
+									}
 
 									// Keep TCP connection open briefly to allow client to process close
 									tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
@@ -2541,6 +2564,11 @@ fn to_hyper_close(frame: Option<CloseFrame>) -> hyper_tungstenite::tungstenite::
 			},
 		))
 	} else {
-		tokio_tungstenite::tungstenite::Message::Close(None)
+		tokio_tungstenite::tungstenite::Message::Close(Some(
+			tokio_tungstenite::tungstenite::protocol::CloseFrame {
+				code: CloseCode::Normal,
+				reason: "ws.closed".into(),
+			},
+		))
 	}
 }
