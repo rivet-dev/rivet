@@ -12,13 +12,6 @@ use vbare::OwnedVersionedData;
 
 use crate::{keys, metrics, workflows::actor::Allocate};
 
-/// How long after last ping before considering a runner ineligible for allocation.
-pub const RUNNER_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
-/// How long to wait after last ping before forcibly removing a runner from the database and deleting its
-/// workflow, evicting all actors. Note that the runner may still be running and can reconnect.
-///
-/// Runner ping interval is currently set to 3s.
-const RUNNER_LOST_THRESHOLD_MS: i64 = util::duration::seconds(15);
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 500;
 
@@ -88,8 +81,10 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		let input = input.clone();
 
 		async move {
+			let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
+
 			match ctx
-				.listen_with_timeout::<Main>(RUNNER_LOST_THRESHOLD_MS)
+				.listen_with_timeout::<Main>(runner_lost_threshold)
 				.await?
 			{
 				Some(Main::Forward(sig)) => {
@@ -117,7 +112,7 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 									runner_id: input.runner_id.to_string(),
 									last_event_idx: init_data.last_event_idx,
 									metadata: protocol::ProtocolMetadata {
-										runner_lost_threshold: RUNNER_LOST_THRESHOLD_MS,
+										runner_lost_threshold: runner_lost_threshold,
 									},
 								}),
 							})
@@ -403,7 +398,7 @@ async fn handle_stopping(
 ) -> Result<()> {
 	if !state.draining {
 		// The workflow will enter a draining state where it can still process signals if
-		// needed. After RUNNER_LOST_THRESHOLD_MS it will exit this loop and stop.
+		// needed. After the runner lost threshold it will exit this loop and stop.
 		state.draining = true;
 
 		// Can't parallelize these two activities, requires reading from state
@@ -942,6 +937,8 @@ struct CheckExpiredInput {
 
 #[activity(CheckExpired)]
 async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<bool> {
+	let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
+
 	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
@@ -954,7 +951,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 				.await?;
 
 			let now = util::timestamp::now();
-			let expired = last_ping_ts < now - RUNNER_LOST_THRESHOLD_MS;
+			let expired = last_ping_ts < now - runner_lost_threshold;
 
 			if expired {
 				tx.write(&keys::runner::ExpiredTsKey::new(input.runner_id), now)?;
@@ -989,6 +986,8 @@ pub(crate) async fn allocate_pending_actors(
 	ctx: &ActivityCtx,
 	input: &AllocatePendingActorsInput,
 ) -> Result<AllocatePendingActorsOutput> {
+	let runner_eligible_threshold = ctx.config().pegboard().runner_eligible_threshold();
+
 	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
 	let (allocations, pending_actor_count) = ctx
 		.udb()?
@@ -1012,7 +1011,7 @@ pub(crate) async fn allocate_pending_actors(
 				Snapshot,
 			);
 			let mut pending_actor_count = 0;
-			let ping_threshold_ts = util::timestamp::now() - RUNNER_ELIGIBLE_THRESHOLD_MS;
+			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
 			'queue_loop: loop {
 				let Some(queue_entry) = queue_stream.try_next().await? else {

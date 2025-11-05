@@ -35,6 +35,21 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub reschedule_backoff_max_exponent: Option<usize>,
+	/// How long after last ping before considering a runner ineligible for allocation.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub runner_eligible_threshold: Option<i64>,
+	/// How long to wait after last ping before forcibly removing a runner from the database
+	/// and deleting its workflow, evicting all actors.
+	///
+	/// Note that the runner may still be running and can reconnect.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub runner_lost_threshold: Option<i64>,
 }
 
 impl Pegboard {
@@ -56,5 +71,15 @@ impl Pegboard {
 
 	pub fn reschedule_backoff_max_exponent(&self) -> usize {
 		self.reschedule_backoff_max_exponent.unwrap_or(8)
+	}
+
+	pub fn runner_eligible_threshold(&self) -> i64 {
+		self.runner_eligible_threshold
+			.unwrap_or(util::duration::seconds(10))
+	}
+
+	pub fn runner_lost_threshold(&self) -> i64 {
+		self.runner_lost_threshold
+			.unwrap_or(util::duration::seconds(15))
 	}
 }
