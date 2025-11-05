@@ -99,7 +99,7 @@ export class EngineActorDriver implements ActorDriver {
 
 		// HACK: Override inspector token (which are likely to be
 		// removed later on) with token from x-rivet-token header
-		const token = runConfig.token ?? runConfig.token;
+		const token = runConfig.token;
 		if (token && runConfig.inspector && runConfig.inspector.enabled) {
 			runConfig.inspector.token = () => token;
 		}
@@ -116,10 +116,10 @@ export class EngineActorDriver implements ActorDriver {
 			version: this.#version,
 			endpoint: getEndpoint(runConfig),
 			token,
-			namespace: runConfig.namespace ?? runConfig.namespace,
-			totalSlots: runConfig.totalSlots ?? runConfig.totalSlots,
-			runnerName: runConfig.runnerName ?? runConfig.runnerName,
-			runnerKey: runConfig.runnerKey,
+			namespace: runConfig.namespace,
+			totalSlots: runConfig.totalSlots,
+			runnerName: runConfig.runnerName,
+			runnerKey: runConfig.runnerKey ?? crypto.randomUUID(),
 			metadata: {
 				inspectorToken: this.#runConfig.inspector.token(),
 			},
