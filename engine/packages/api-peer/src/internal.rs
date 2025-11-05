@@ -29,6 +29,12 @@ pub async fn cache_purge(
 	Ok(CachePurgeResponse {})
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct BumpServerlessAutoscalerRequest {
+	pub namespace_id: Id,
+	pub runner_name: String,
+}
+
 #[derive(Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BumpServerlessAutoscalerResponse {}
@@ -37,9 +43,12 @@ pub async fn bump_serverless_autoscaler(
 	ctx: ApiCtx,
 	_path: (),
 	_query: (),
-	_body: (),
+	body: BumpServerlessAutoscalerRequest,
 ) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+	ctx.signal(pegboard::workflows::serverless::pool::BumpConfig {})
+		.to_workflow::<pegboard::workflows::serverless::pool::Workflow>()
+		.tag("runner_name", body.runner_name)
+		.tag("namespace_id", body.namespace_id)
 		.send()
 		.await?;
 

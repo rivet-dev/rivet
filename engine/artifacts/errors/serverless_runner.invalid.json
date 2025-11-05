@@ -1,0 +1,5 @@
+{
+  "code": "invalid",
+  "group": "serverless_runner",
+  "message": "Invalid runner config."
+}

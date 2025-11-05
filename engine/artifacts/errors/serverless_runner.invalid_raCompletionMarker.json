@@ -1,0 +1,5 @@
+{
+  "code": "invalid_raCompletionMarker",
+  "group": "serverless_runner",
+  "message": "Invalid runner config."
+}
