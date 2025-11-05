@@ -10,10 +10,6 @@ const serverOutput = registry.start({
 	basePath: "/api",
 	getUpgradeWebSocket: () => upgradeWebSocket,
 	overrideServerAddress: `${process.env.FREESTYLE_ENDPOINT ?? "http://localhost:8080"}/api`,
-	cors: {
-		origin: process.env.FREESTYLE_ENDPOINT ?? "http://localhost:5173",
-		credentials: true,
-	},
 });
 
 const app = new Hono();

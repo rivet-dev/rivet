@@ -164,7 +164,12 @@ async function startRunner(): Promise<
 		onShutdown: () => {
 			runnerStopped.resolve(undefined);
 		},
-		fetch: async (runner: Runner, actorId: string, request: Request) => {
+		fetch: async (
+			runner: Runner,
+			actorId: string,
+			_requestId: ArrayBuffer,
+			request: Request,
+		) => {
 			getLogger().info(
 				`Fetch called for actor ${actorId}, URL: ${request.url}`,
 			);
@@ -210,7 +215,8 @@ async function startRunner(): Promise<
 			runner: Runner,
 			actorId: string,
 			ws: WebSocket,
-			request: Request,
+			_requestId: ArrayBuffer,
+			_request: Request,
 		) => {
 			getLogger().info(`WebSocket connected for actor ${actorId}`);
 

@@ -5,12 +5,7 @@ import { Hono } from "hono";
 import type { WSContext } from "hono/ws";
 import { registry } from "./registry.js";
 
-const { client } = registry.start({
-	cors: {
-		origin: "http://localhost:5173",
-		credentials: true,
-	},
-});
+const { client } = registry.start();
 
 const app = new Hono();
 const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });

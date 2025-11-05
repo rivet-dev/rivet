@@ -92,9 +92,7 @@
 			"id": 1,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -216,9 +214,7 @@
 			"id": 2,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -340,9 +336,7 @@
 			"id": 3,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -464,9 +458,7 @@
 			"id": 4,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -588,9 +580,7 @@
 			"id": 5,
 			"options": {
 				"legend": {
-					"calcs": [
-						"mean"
-					],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -824,9 +814,7 @@
 			"id": 7,
 			"options": {
 				"legend": {
-					"calcs": [
-						"lastNotNull"
-					],
+					"calcs": ["lastNotNull"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -948,9 +936,7 @@
 			"id": 8,
 			"options": {
 				"legend": {
-					"calcs": [
-						"mean"
-					],
+					"calcs": ["mean"],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -1236,9 +1222,7 @@
 			{
 				"current": {
 					"text": "All",
-					"value": [
-						"$__all"
-					]
+					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -1258,9 +1242,7 @@
 			{
 				"current": {
 					"text": "All",
-					"value": [
-						"$__all"
-					]
+					"value": ["$__all"]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",

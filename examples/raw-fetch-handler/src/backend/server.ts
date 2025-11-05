@@ -4,12 +4,7 @@ import { cors } from "hono/cors";
 import { registry } from "./registry";
 
 // Start RivetKit
-const { client } = registry.start({
-	cors: {
-		origin: "http://localhost:5173",
-		credentials: true,
-	},
-});
+const { client } = registry.start();
 
 // Setup router
 const app = new Hono();
