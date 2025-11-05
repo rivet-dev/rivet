@@ -526,7 +526,14 @@ async fn handle_stopped(
 	if allocate_pending_res.allocations.is_empty() {
 		// Bump autoscaler so it can scale down if needed
 		if deallocate_res.for_serverless {
-			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+			ctx.removed::<Message<BumpServerlessAutoscalerStub>>()
+				.await?;
+
+			ctx.v(2)
+				.signal(crate::workflows::serverless::pool::Bump {})
+				.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+				.tag("namespace_id", input.namespace_id)
+				.tag("runner_name", input.runner_name_selector.clone())
 				.send()
 				.await?;
 		}
@@ -722,3 +729,6 @@ join_signal!(Main {
 	Lost,
 	Destroy,
 });
+
+#[message("pegboard_bump_serverless_autoscaler")]
+pub(crate) struct BumpServerlessAutoscalerStub {}

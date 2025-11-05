@@ -71,3 +71,13 @@ pub enum Runner {
 	#[error("not_found", "The runner does not exist.")]
 	NotFound,
 }
+
+#[derive(RivetError, Debug, Deserialize, Serialize)]
+#[error("runner_config")]
+pub enum RunnerConfig {
+	#[error("invalid", "Invalid runner config.", "Invalid runner config: {reason}")]
+	Invalid { reason: String },
+
+	#[error("not_found", "No config for this runner exists.")]
+	NotFound,
+}

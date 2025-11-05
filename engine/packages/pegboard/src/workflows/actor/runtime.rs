@@ -1,3 +1,4 @@
+// runner wf see how signal fail handling
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use futures_util::StreamExt;
@@ -101,7 +102,7 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct AllocateActorInput {
+struct AllocateActorInputV1 {
 	actor_id: Id,
 	generation: u32,
 	force_allocate: bool,
@@ -109,7 +110,64 @@ struct AllocateActorInput {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AllocateActorOutput {
+pub enum AllocateActorOutputV1 {
+	Allocated {
+		runner_id: Id,
+		runner_workflow_id: Id,
+	},
+	Pending {
+		pending_allocation_ts: i64,
+	},
+	Sleep,
+}
+
+#[activity(AllocateActor)]
+async fn allocate_actor(
+	ctx: &ActivityCtx,
+	input: &AllocateActorInputV1,
+) -> Result<AllocateActorOutputV1> {
+	bail!("allocate actor v1 should never be called again")
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct AllocateActorInputV2 {
+	actor_id: Id,
+	generation: u32,
+	force_allocate: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AllocateActorOutputV2 {
+	status: AllocateActorStatus,
+	serverless: bool,
+}
+
+impl From<AllocateActorOutputV1> for AllocateActorOutputV2 {
+	fn from(value: AllocateActorOutputV1) -> Self {
+		Self {
+			serverless: false,
+			status: match value {
+				AllocateActorOutputV1::Allocated {
+					runner_id,
+					runner_workflow_id,
+				} => AllocateActorStatus::Allocated {
+					runner_id,
+					runner_workflow_id,
+				},
+				AllocateActorOutputV1::Pending {
+					pending_allocation_ts,
+				} => AllocateActorStatus::Pending {
+					pending_allocation_ts,
+				},
+				AllocateActorOutputV1::Sleep => AllocateActorStatus::Sleep,
+			},
+		}
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum AllocateActorStatus {
 	Allocated {
 		runner_id: Id,
 		runner_workflow_id: Id,
@@ -121,11 +179,11 @@ pub enum AllocateActorOutput {
 }
 
 // If no availability, returns the timestamp of the actor's queue key
-#[activity(AllocateActor)]
-async fn allocate_actor(
+#[activity(AllocateActorV2)]
+async fn allocate_actor_v2(
 	ctx: &ActivityCtx,
-	input: &AllocateActorInput,
-) -> Result<AllocateActorOutput> {
+	input: &AllocateActorInputV2,
+) -> Result<AllocateActorOutputV2> {
 	let start_instant = Instant::now();
 
 	let mut state = ctx.state::<State>()?;
@@ -135,7 +193,7 @@ async fn allocate_actor(
 
 	// Check if valid serverless config exists for the current ns + runner name
 	let runner_config_res = ctx
-		.op(namespace::ops::runner_config::get::Input {
+		.op(crate::ops::runner_config::get::Input {
 			runners: vec![(namespace_id, runner_name_selector.clone())],
 			bypass_cache: false,
 		})
@@ -152,7 +210,7 @@ async fn allocate_actor(
 
 	// NOTE: This txn should closely resemble the one found in the allocate_pending_actors activity of the
 	// client wf
-	let (for_serverless, res) = ctx
+	let res = ctx
 		.udb()?
 		.run(|tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
@@ -161,7 +219,7 @@ async fn allocate_actor(
 			let for_serverless = tx
 				.with_subspace(namespace::keys::subspace())
 				.exists(
-					&namespace::keys::runner_config::ByVariantKey::new(
+					&keys::runner_config::ByVariantKey::new(
 						namespace_id,
 						RunnerConfigVariant::Serverless,
 						runner_name_selector.clone(),
@@ -304,22 +362,23 @@ async fn allocate_actor(
 					// Set actor as not sleeping
 					tx.delete(&keys::actor::SleepTsKey::new(input.actor_id));
 
-					return Ok((
-						for_serverless,
-						AllocateActorOutput::Allocated {
+					return Ok(AllocateActorOutputV2 {
+						serverless: for_serverless,
+						status: AllocateActorStatus::Allocated {
 							runner_id: old_runner_alloc_key.runner_id,
 							runner_workflow_id: old_runner_alloc_key_data.workflow_id,
 						},
-					));
+					});
 				}
 			}
 
 			// At this point in the txn there is no availability
 
 			match (crash_policy, input.force_allocate, has_valid_serverless) {
-				(CrashPolicy::Sleep, false, false) => {
-					Ok((for_serverless, AllocateActorOutput::Sleep))
-				}
+				(CrashPolicy::Sleep, false, false) => Ok(AllocateActorOutputV2 {
+					serverless: for_serverless,
+					status: AllocateActorStatus::Sleep,
+				}),
 				// Write the actor to the alloc queue to wait
 				_ => {
 					let pending_allocation_ts = util::timestamp::now();
@@ -337,12 +396,12 @@ async fn allocate_actor(
 						input.generation,
 					)?;
 
-					Ok((
-						for_serverless,
-						AllocateActorOutput::Pending {
+					Ok(AllocateActorOutputV2 {
+						serverless: for_serverless,
+						status: AllocateActorStatus::Pending {
 							pending_allocation_ts,
 						},
-					))
+					})
 				}
 			}
 		})
@@ -354,25 +413,27 @@ async fn allocate_actor(
 		dt,
 		&[KeyValue::new(
 			"did_reserve",
-			matches!(res, AllocateActorOutput::Allocated { .. }).to_string(),
+			matches!(res.status, AllocateActorStatus::Allocated { .. }).to_string(),
 		)],
 	);
 
-	state.for_serverless = for_serverless;
-	state.allocated_serverless_slot = for_serverless;
+	state.for_serverless = res.serverless;
+	state.allocated_serverless_slot = res.serverless;
 
-	match &res {
-		AllocateActorOutput::Allocated {
+	match &res.status {
+		AllocateActorStatus::Allocated {
 			runner_id,
 			runner_workflow_id,
+			..
 		} => {
 			state.sleep_ts = None;
 			state.pending_allocation_ts = None;
 			state.runner_id = Some(*runner_id);
 			state.runner_workflow_id = Some(*runner_workflow_id);
 		}
-		AllocateActorOutput::Pending {
+		AllocateActorStatus::Pending {
 			pending_allocation_ts,
+			..
 		} => {
 			tracing::warn!(
 				actor_id=?input.actor_id,
@@ -381,7 +442,7 @@ async fn allocate_actor(
 
 			state.pending_allocation_ts = Some(*pending_allocation_ts);
 		}
-		AllocateActorOutput::Sleep => {}
+		AllocateActorStatus::Sleep => {}
 	}
 
 	Ok(res)
@@ -481,24 +542,46 @@ pub async fn spawn_actor(
 	generation: u32,
 	force_allocate: bool,
 ) -> Result<SpawnActorOutput> {
-	// Attempt allocation
-	let allocate_res = ctx
-		.activity(AllocateActorInput {
-			actor_id: input.actor_id,
-			generation,
-			force_allocate,
-		})
-		.await?;
+	let allocate_res: AllocateActorOutputV2 = match ctx.check_version(2).await? {
+		1 => {
+			// Attempt allocation
+			ctx.activity(AllocateActorInputV1 {
+				actor_id: input.actor_id,
+				generation,
+				force_allocate,
+			})
+			.await?
+			.into()
+		}
+		_latest => {
+			ctx.v(2)
+				.activity(AllocateActorInputV2 {
+					actor_id: input.actor_id,
+					generation,
+					force_allocate,
+				})
+				.await?
+		}
+	};
 
-	match allocate_res {
-		AllocateActorOutput::Allocated {
+	match allocate_res.status {
+		AllocateActorStatus::Allocated {
 			runner_id,
 			runner_workflow_id,
 		} => {
 			// Bump the autoscaler so it can scale up
-			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-				.send()
+			ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
 				.await?;
+
+			if allocate_res.serverless {
+				ctx.v(2)
+					.signal(crate::workflows::serverless::pool::Bump {})
+					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+					.tag("namespace_id", input.namespace_id)
+					.tag("runner_name", input.runner_name_selector.clone())
+					.send()
+					.await?;
+			}
 
 			ctx.signal(crate::workflows::runner::Command {
 				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
@@ -527,13 +610,21 @@ pub async fn spawn_actor(
 				runner_workflow_id,
 			})
 		}
-		AllocateActorOutput::Pending {
+		AllocateActorStatus::Pending {
 			pending_allocation_ts,
 		} => {
-			// Bump the autoscaler so it can scale up
-			ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
-				.send()
+			ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
 				.await?;
+			// Bump the autoscaler so it can scale up
+			if allocate_res.serverless {
+				ctx.v(2)
+					.signal(crate::workflows::serverless::pool::Bump {})
+					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
+					.tag("namespace_id", input.namespace_id)
+					.tag("runner_name", input.runner_name_selector.clone())
+					.send()
+					.await?;
+			}
 
 			// If allocation fails, the allocate txn already inserted this actor into the queue. Now we wait for
 			// an `Allocate` signal
@@ -602,7 +693,7 @@ pub async fn spawn_actor(
 				}
 			}
 		}
-		AllocateActorOutput::Sleep => Ok(SpawnActorOutput::Sleep),
+		AllocateActorStatus::Sleep => Ok(SpawnActorOutput::Sleep),
 	}
 }
 

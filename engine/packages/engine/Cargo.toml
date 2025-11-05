@@ -21,7 +21,6 @@ include_dir.workspace = true
 indoc.workspace = true
 lz4_flex.workspace = true
 pegboard-runner.workspace = true
-pegboard-serverless.workspace = true
 reqwest.workspace = true
 rivet-api-peer.workspace = true
 rivet-bootstrap.workspace = true

@@ -17,12 +17,12 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		Service::new("bootstrap", ServiceKind::Oneshot, |config, pools| {
 			Box::pin(rivet_bootstrap::start(config, pools))
 		}),
-		Service::new(
-			"pegboard_serverless",
-			// There should only be one of these, since it's auto-scaling requests
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
-		),
+		// Service::new(
+		// 	"pegboard_serverless",
+		// 	// There should only be one of these, since it's auto-scaling requests
+		// 	ServiceKind::Singleton,
+		// 	|config, pools| Box::pin(pegboard_serverless::start(config, pools)),
+		// ),
 		// Core services
 		Service::new("tracing_reconfigure", ServiceKind::Core, |config, pools| {
 			Box::pin(rivet_tracing_reconfigure::start(config, pools))
