@@ -2,6 +2,7 @@ import * as protocol from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
+import { stringifyCommandWrapper, stringifyEvent } from "./stringify";
 import { Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
@@ -754,7 +755,7 @@ export class Runner {
 		for (const commandWrapper of commands) {
 			this.log?.info({
 				msg: "received command",
-				commandWrapper,
+				command: stringifyCommandWrapper(commandWrapper),
 			});
 			if (commandWrapper.inner.tag === "CommandStartActor") {
 				this.#handleCommandStartActor(commandWrapper);
@@ -905,9 +906,8 @@ export class Runner {
 
 		this.log?.info({
 			msg: "sending event to server",
-			index: eventWrapper.index,
-			tag: eventWrapper.inner.tag,
-			val: eventWrapper.inner.val,
+			event: stringifyEvent(eventWrapper.inner),
+			index: eventWrapper.index.toString(),
 		});
 
 		this.__sendToServer({
@@ -962,9 +962,8 @@ export class Runner {
 
 		this.log?.info({
 			msg: "sending event to server",
-			index: eventWrapper.index,
-			tag: eventWrapper.inner.tag,
-			val: eventWrapper.inner.val,
+			event: stringifyEvent(eventWrapper.inner),
+			index: eventWrapper.index.toString(),
 		});
 
 		this.__sendToServer({
