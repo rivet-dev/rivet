@@ -219,14 +219,16 @@ export class EngineActorDriver implements ActorDriver {
 						);
 
 						// Check if can hibernate
-						const canHibernatWebSocket =
-							definition.config.options?.canHibernatWebSocket;
-						if (canHibernatWebSocket === true) {
+						const canHibernateWebSocket =
+							definition.config.options?.canHibernateWebSocket;
+						if (canHibernateWebSocket === true) {
 							hibernationConfig = {
 								enabled: true,
 								lastMsgIndex: undefined,
 							};
-						} else if (typeof canHibernatWebSocket === "function") {
+						} else if (
+							typeof canHibernateWebSocket === "function"
+						) {
 							try {
 								// Truncate the path to match the behavior on onRawWebSocket
 								const newPath = truncateRawWebSocketPathPrefix(
@@ -238,14 +240,14 @@ export class EngineActorDriver implements ActorDriver {
 								);
 
 								const canHibernate =
-									canHibernatWebSocket(truncatedRequest);
+									canHibernateWebSocket(truncatedRequest);
 								hibernationConfig = {
 									enabled: canHibernate,
 									lastMsgIndex: undefined,
 								};
 							} catch (error) {
 								logger().error({
-									msg: "error calling canHibernatWebSocket",
+									msg: "error calling canHibernateWebSocket",
 									error,
 								});
 								hibernationConfig = {

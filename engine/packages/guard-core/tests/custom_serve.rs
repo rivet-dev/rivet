@@ -12,17 +12,21 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use common::{create_test_config, init_tracing, start_guard};
 use rivet_guard_core::WebSocketHandle;
-use rivet_guard_core::custom_serve::CustomServeTrait;
+use rivet_guard_core::custom_serve::{CustomServeTrait, HibernationResult};
+use rivet_guard_core::errors::WebSocketServiceHibernate;
 use rivet_guard_core::proxy_service::{ResponseBody, RoutingFn, RoutingOutput};
 use rivet_guard_core::request_context::RequestContext;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use uuid::Uuid;
+
+const HIBERNATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 // Track what was called for testing
 #[derive(Clone, Debug, Default)]
 struct CallTracker {
 	http_calls: Arc<Mutex<Vec<String>>>,
 	websocket_calls: Arc<Mutex<Vec<String>>>,
+	websocket_hibernation_calls: Arc<Mutex<Vec<String>>>,
 }
 
 // Test implementation of CustomServeTrait
@@ -83,6 +87,11 @@ impl CustomServeTrait for TestCustomServe {
 			match msg_result {
 				std::result::Result::Ok(msg) if msg.is_text() => {
 					let text = msg.to_text().unwrap_or("");
+
+					if text == "hibernate" {
+						return Err(WebSocketServiceHibernate.build());
+					}
+
 					let response = format!("Custom: {}", text);
 					if let std::result::Result::Err(e) = websocket.send(response.into()).await {
 						eprintln!("Failed to send WebSocket message: {}", e);
@@ -101,6 +110,22 @@ impl CustomServeTrait for TestCustomServe {
 		}
 
 		Ok(None)
+	}
+
+	async fn handle_websocket_hibernation(
+		&self,
+		_websocket: WebSocketHandle,
+	) -> Result<HibernationResult> {
+		// Track this WebSocket call
+		self.tracker
+			.websocket_hibernation_calls
+			.lock()
+			.unwrap()
+			.push("hibernation".to_string());
+
+		tokio::time::sleep(HIBERNATION_TIMEOUT).await;
+
+		Ok(HibernationResult::Continue)
 	}
 }
 
@@ -230,6 +255,68 @@ async fn test_custom_serve_websocket() {
 	// Verify HTTP handler was not called
 	let http_calls = tracker.http_calls.lock().unwrap();
 	assert_eq!(http_calls.len(), 0);
+}
+
+#[tokio::test]
+async fn test_custom_serve_websocket_hibernation() {
+	init_tracing();
+
+	// Create tracker to verify calls
+	let tracker = CallTracker::default();
+
+	// Create routing function that returns CustomServe
+	let routing_fn = create_custom_serve_routing_fn(tracker.clone());
+
+	// Start guard with custom routing
+	let config = create_test_config(|_| {});
+	let (guard_addr, _shutdown) = start_guard(config, routing_fn).await;
+
+	// Connect to WebSocket through guard
+	let ws_url = format!("ws://{}/ws/custom", guard_addr);
+	let (mut ws_stream, response) = connect_async(&ws_url)
+		.await
+		.expect("Failed to connect to WebSocket");
+
+	// Verify upgrade was successful
+	assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+
+	// Send hibernation
+	ws_stream
+		.send(Message::Text("hibernate".to_string().into()))
+		.await
+		.expect("Failed to send WebSocket message");
+
+	// Send a test message
+	let test_message = "Hello Custom Hibernating WebSocket";
+	ws_stream
+		.send(Message::Text(test_message.to_string().into()))
+		.await
+		.expect("Failed to send WebSocket message");
+
+	// Give some time for async operations to complete
+	tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+	// Verify the WebSocket handler hibernated
+	let ws_hibernation_calls = tracker.websocket_hibernation_calls.lock().unwrap();
+	assert_eq!(ws_hibernation_calls.len(), 1);
+	assert_eq!(ws_hibernation_calls[0], "hibernation");
+
+	// Receive the echoed message with custom prefix
+	let response = tokio::time::timeout(HIBERNATION_TIMEOUT * 2, ws_stream.next())
+		.await
+		.expect("timed out waiting for message from hibernating WebSocket");
+	match response {
+		Some(Result::Ok(Message::Text(text))) => {
+			assert_eq!(text, format!("Custom: {}", test_message));
+		}
+		other => panic!("Expected text message, got: {:?}", other),
+	}
+
+	// Close the connection
+	ws_stream
+		.close(None)
+		.await
+		.expect("Failed to close WebSocket");
 }
 
 #[tokio::test]

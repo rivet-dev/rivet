@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
@@ -9,6 +9,11 @@ use uuid::Uuid;
 use crate::WebSocketHandle;
 use crate::proxy_service::ResponseBody;
 use crate::request_context::RequestContext;
+
+pub enum HibernationResult {
+	Continue,
+	Close,
+}
 
 /// Trait for custom request serving logic that can handle both HTTP and WebSocket requests
 #[async_trait]
@@ -23,11 +28,21 @@ pub trait CustomServeTrait: Send + Sync {
 	/// Handle a WebSocket connection after upgrade. Supports connection retries.
 	async fn handle_websocket(
 		&self,
-		websocket: WebSocketHandle,
-		headers: &hyper::HeaderMap,
-		path: &str,
-		request_context: &mut RequestContext,
+		_websocket: WebSocketHandle,
+		_headers: &hyper::HeaderMap,
+		_path: &str,
+		_request_context: &mut RequestContext,
 		// Identifies the websocket across retries.
-		unique_request_id: Uuid,
-	) -> Result<Option<CloseFrame>>;
+		_unique_request_id: Uuid,
+	) -> Result<Option<CloseFrame>> {
+		bail!("service does not support websockets");
+	}
+
+	/// Returns true if the websocket should close.
+	async fn handle_websocket_hibernation(
+		&self,
+		_websocket: WebSocketHandle,
+	) -> Result<HibernationResult> {
+		bail!("service does not support websocket hibernation");
+	}
 }
