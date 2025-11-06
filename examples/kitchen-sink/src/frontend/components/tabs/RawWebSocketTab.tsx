@@ -32,7 +32,7 @@ export default function RawWebSocketTab({ state }: TabProps) {
     const actorPath = state.actorKey ?
       `/actors/${state.actorName}/${encodeURIComponent(state.actorKey)}/ws` :
       `/actors/${state.actorName}/ws`;
-    return `${wsProtocol}//localhost:8080${actorPath}`;
+    return `${wsProtocol}//localhost:6420${actorPath}`;
   };
 
   const addMessage = (type: "sent" | "received", data: string, isBinary = false) => {

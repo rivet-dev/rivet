@@ -2,7 +2,7 @@ import { createClient } from "rivetkit/client";
 import type { registry } from "../src/registry.js";
 
 // Get endpoint from environment variable or default to localhost
-const endpoint = process.env.RIVETKIT_ENDPOINT ?? "http://localhost:8080";
+const endpoint = process.env.RIVETKIT_ENDPOINT ?? "http://localhost:6420";
 console.log("🔗 Using endpoint:", endpoint);
 
 // Create RivetKit client

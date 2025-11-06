@@ -18,7 +18,7 @@ app.post("/increment/:name", async (req, res) => {
 });
 
 app.listen(8080, () => {
-	console.log("Listening at http://localhost:8080");
+	console.log("Listening at http://localhost:6420");
 });
 
 export default app;
