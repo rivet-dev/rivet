@@ -181,11 +181,20 @@ export class EngineActorDriver implements ActorDriver {
 				// Determine configuration for new WS
 				let hibernationConfig: HibernationConfig;
 				if (existingWs) {
+					logger().debug({
+						msg: "found existing hibernatable websocket",
+						requestId: idToStr(requestId),
+						lastMsgIndex: existingWs.msgIndex,
+					});
 					hibernationConfig = {
 						enabled: true,
 						lastMsgIndex: Number(existingWs.msgIndex),
 					};
 				} else {
+					logger().debug({
+						msg: "no existing hibernatable websocket found",
+						requestId: idToStr(requestId),
+					});
 					if (path === PATH_CONNECT_WEBSOCKET) {
 						hibernationConfig = {
 							enabled: true,
@@ -251,12 +260,24 @@ export class EngineActorDriver implements ActorDriver {
 					}
 				}
 
-				// Save hibernatable WebSocket
-				handler.actor[PERSIST_SYMBOL].hibernatableWebSocket.push({
-					requestId,
-					lastSeenTimestamp: BigInt(Date.now()),
-					msgIndex: -1n,
-				});
+				// Save or update hibernatable WebSocket
+				if (existingWs) {
+					logger().debug({
+						msg: "updated existing hibernatable websocket timestamp",
+						requestId: idToStr(requestId),
+					});
+					existingWs.lastSeenTimestamp = BigInt(Date.now());
+				} else {
+					logger().debug({
+						msg: "created new hibernatable websocket entry",
+						requestId: idToStr(requestId),
+					});
+					handler.actor[PERSIST_SYMBOL].hibernatableWebSocket.push({
+						requestId,
+						lastSeenTimestamp: BigInt(Date.now()),
+						msgIndex: -1n,
+					});
+				}
 
 				return hibernationConfig;
 			},
