@@ -625,6 +625,51 @@ export class EngineActorDriver implements ActorDriver {
 	async shutdownRunner(immediate: boolean): Promise<void> {
 		logger().info({ msg: "stopping engine actor driver", immediate });
 
+		// TODO: We need to update the runner to have a draining state so:
+		// 1. Send ToServerDraining
+		//		- This causes Pegboard to stop allocating actors to this runner
+		// 2. Pegboard sends ToClientStopActor for all actors on this runner which handles the graceful migration of each actor independently
+		// 3. Send ToServerStopping once all actors have successfully stopped
+		//
+		// What's happening right now is:
+		// 1. All actors enter stopped state
+		// 2. Actors still respond to requests because only RivetKit knows it's
+		//    stopping, this causes all requests to issue errors that the actor is
+		//    stopping. (This will NOT return a 503 bc the runner has no idea the
+		//    actors are stopping.)
+		// 3. Once the last actor stops, then the runner finally stops + actors
+		//    reschedule
+		//
+		// This means that:
+		// - All actors on this runner are bricked until the slowest _onStop finishes
+		// - Guard will not gracefully handle requests bc it's not receiving a 503
+		// - Actors can still be scheduled to this runner while the other
+		//   actors are stopping, meaning that those actors will NOT get _onStop
+		//   and will potentiall corrupt their state
+		//
+		// HACK: Stop all actors to allow state to be saved
+		// NOTE: _onStop is only supposed to be called by the runner, we're
+		// abusing it here
+		logger().debug({
+			msg: "stopping all actors before shutdown",
+			actorCount: this.#actors.size,
+		});
+		const stopPromises: Promise<void>[] = [];
+		for (const [_actorId, handler] of this.#actors.entries()) {
+			if (handler.actor) {
+				stopPromises.push(
+					handler.actor._onStop().catch((err) => {
+						handler.actor?.rLog.error({
+							msg: "_onStop errored",
+							error: stringifyError(err),
+						});
+					}),
+				);
+			}
+		}
+		await Promise.all(stopPromises);
+		logger().debug({ msg: "all actors stopped" });
+
 		// Clear the ack flush interval
 		if (this.#wsAckFlushInterval) {
 			clearInterval(this.#wsAckFlushInterval);
