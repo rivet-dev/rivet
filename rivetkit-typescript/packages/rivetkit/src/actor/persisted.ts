@@ -16,8 +16,11 @@ export interface PersistedConn<CP, CS> {
 	state: CS;
 	subscriptions: PersistedSubscription[];
 
-	/** Last time the socket was seen. This is set when disconencted so we can determine when we need to clean this up. */
+	/** Last time the socket was seen. This is set when disconnected so we can determine when we need to clean this up. */
 	lastSeen: number;
+
+	/** Request ID of the hibernatable WebSocket. See PersistedActor.hibernatableWebSocket */
+	hibernatableRequestId?: ArrayBuffer;
 }
 
 export interface PersistedSubscription {
