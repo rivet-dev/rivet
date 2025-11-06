@@ -386,7 +386,7 @@ export class Runner {
 			const pegboardWebSocket = this.#pegboardWebSocket;
 			if (immediate) {
 				// Stop immediately
-				pegboardWebSocket.close(1000, "Stopping");
+				pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
 			} else {
 				// Wait for actors to shut down before stopping
 				try {
@@ -431,7 +431,7 @@ export class Runner {
 					this.log?.info({
 						msg: "closing WebSocket",
 					});
-					pegboardWebSocket.close(1000, "Stopping");
+					pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
 
 					await closePromise;
 
@@ -681,22 +681,25 @@ export class Runner {
 				closeError?.group === "ws" &&
 				closeError?.error === "eviction"
 			) {
-				this.log?.info({
-					msg: "runner evicted",
-				});
+				this.log?.info("runner websocket evicted");
 
 				this.#config.onDisconnected(ev.code, ev.reason);
 
 				await this.shutdown(true);
 			} else {
-				this.log?.warn({
-					msg: "runner disconnected",
-					namespace: this.#config.namespace,
-					runnerName: this.#config.runnerName,
-					code: ev.code,
-					reason: ev.reason.toString(),
-					closeError,
-				});
+				if (
+					closeError?.group === "pegboard" &&
+					closeError?.error === "runner_shutdown"
+				) {
+					this.log?.info("runner shutdown");
+				} else {
+					this.log?.warn({
+						msg: "runner disconnected",
+						code: ev.code,
+						reason: ev.reason.toString(),
+						closeError,
+					});
+				}
 
 				this.#config.onDisconnected(ev.code, ev.reason);
 			}
