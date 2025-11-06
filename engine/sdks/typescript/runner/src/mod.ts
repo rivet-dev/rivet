@@ -172,6 +172,13 @@ export class Runner {
 
 	// MARK: Manage actors
 	sleepActor(actorId: string, generation?: number) {
+		if (this.#shutdown) {
+			this.log?.warn({
+				msg: "runner is shut down, cannot sleep actor",
+			});
+			return;
+		}
+
 		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
 
@@ -860,6 +867,7 @@ export class Runner {
 		intentType: "sleep" | "stop",
 	) {
 		if (this.#shutdown) {
+			console.trace("send actor intent", actorId, intentType);
 			this.log?.warn({
 				msg: "Runner is shut down, cannot send actor intent",
 			});
