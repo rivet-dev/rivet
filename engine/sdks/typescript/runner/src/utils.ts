@@ -1,3 +1,5 @@
+import { logger } from "./log";
+
 export function unreachable(x: never): never {
 	throw `Unreachable: ${x}`;
 }
@@ -28,4 +30,37 @@ export function calculateBackoff(
 	}
 
 	return Math.floor(delay);
+}
+
+export interface ParsedCloseReason {
+	group: string;
+	error: string;
+	rayId?: string;
+}
+
+/**
+ * Parses a WebSocket close reason in the format: {group}.{error} or {group}.{error}#{ray_id}
+ *
+ * Examples:
+ *   - "ws.eviction#t1s80so6h3irenp8ymzltfoittcl00"
+ *   - "ws.client_closed"
+ *
+ * Returns undefined if the format is invalid
+ */
+export function parseWebSocketCloseReason(
+	reason: string,
+): ParsedCloseReason | undefined {
+	const [mainPart, rayId] = reason.split("#");
+	const [group, error] = mainPart.split(".");
+
+	if (!group || !error) {
+		logger()?.warn({ msg: "failed to parse close reason", reason });
+		return undefined;
+	}
+
+	return {
+		group,
+		error,
+		rayId,
+	};
 }

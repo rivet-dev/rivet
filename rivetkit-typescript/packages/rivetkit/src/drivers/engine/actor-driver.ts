@@ -111,7 +111,6 @@ export class EngineActorDriver implements ActorDriver {
 		);
 
 		// Create runner configuration
-		let hasDisconnected = false;
 		const engineRunnerConfig: EngineRunnerConfig = {
 			version: this.#version,
 			endpoint: getEndpoint(runConfig),
@@ -125,32 +124,9 @@ export class EngineActorDriver implements ActorDriver {
 			},
 			prepopulateActorNames: buildActorNames(registryConfig),
 			onConnected: () => {
-				if (hasDisconnected) {
-					logger().info({
-						msg: "runner reconnected",
-						namespace: this.#runConfig.namespace,
-						runnerName: this.#runConfig.runnerName,
-					});
-				} else {
-					logger().debug({
-						msg: "runner connected",
-						namespace: this.#runConfig.namespace,
-						runnerName: this.#runConfig.runnerName,
-					});
-				}
-
 				this.#runnerStarted.resolve(undefined);
 			},
-			onDisconnected: (code, reason) => {
-				logger().warn({
-					msg: "runner disconnected",
-					namespace: this.#runConfig.namespace,
-					runnerName: this.#runConfig.runnerName,
-					code,
-					reason,
-				});
-				hasDisconnected = true;
-			},
+			onDisconnected: (_code, _reason) => {},
 			onShutdown: () => {
 				this.#runnerStopped.resolve(undefined);
 				this.#isRunnerStopped = true;
