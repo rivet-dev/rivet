@@ -1,5 +1,6 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
+import type { Logger } from "pino";
 import { stringify as uuidstringify, v4 as uuidv4 } from "uuid";
 import { logger } from "./log";
 import type { ActorInstance, Runner } from "./mod";
@@ -35,6 +36,10 @@ export class Tunnel {
 
 	#gcInterval?: NodeJS.Timeout;
 
+	get log(): Logger | undefined {
+		return this.#runner.log;
+	}
+
 	constructor(runner: Runner) {
 		this.#runner = runner;
 	}
@@ -68,7 +73,7 @@ export class Tunnel {
 	) {
 		// TODO: Switch this with runner WS
 		if (!this.#runner.__webSocketReady()) {
-			logger()?.warn(
+			this.log?.warn(
 				"cannot send tunnel message, socket not connected to engine",
 			);
 			return;
@@ -84,7 +89,7 @@ export class Tunnel {
 			requestIdStr,
 		});
 
-		logger()?.debug({
+		this.log?.debug({
 			msg: "send tunnel msg",
 			requestId: requestIdStr,
 			messageId: messageIdStr,
@@ -117,7 +122,7 @@ export class Tunnel {
 			},
 		};
 
-		logger()?.debug({
+		this.log?.debug({
 			msg: "ack tunnel msg",
 			requestId: idToStr(requestId),
 			messageId: idToStr(messageId),
@@ -184,7 +189,7 @@ export class Tunnel {
 
 		// Remove timed out messages
 		if (messagesToDelete.length > 0) {
-			logger()?.warn({
+			this.log?.warn({
 				msg: "purging unacked tunnel messages, this indicates that the Rivet Engine is disconnected or not responding",
 				count: messagesToDelete.length,
 			});
@@ -225,7 +230,7 @@ export class Tunnel {
 	): Promise<Response> {
 		// Validate actor exists
 		if (!this.#runner.hasActor(actorId)) {
-			logger()?.warn({
+			this.log?.warn({
 				msg: "ignoring request for unknown actor",
 				actorId,
 			});
@@ -257,7 +262,7 @@ export class Tunnel {
 	async handleTunnelMessage(message: protocol.ToClientTunnelMessage) {
 		const requestIdStr = idToStr(message.requestId);
 		const messageIdStr = idToStr(message.messageId);
-		logger()?.debug({
+		this.log?.debug({
 			msg: "receive tunnel msg",
 			requestId: requestIdStr,
 			messageId: messageIdStr,
@@ -271,7 +276,7 @@ export class Tunnel {
 				const didDelete =
 					this.#pendingTunnelMessages.delete(messageIdStr);
 				if (!didDelete) {
-					logger()?.warn({
+					this.log?.warn({
 						msg: "received tunnel ack for nonexistent message",
 						requestId: requestIdStr,
 						messageId: messageIdStr,
@@ -402,7 +407,7 @@ export class Tunnel {
 				await this.#sendResponse(requestId, response);
 			}
 		} catch (error) {
-			logger()?.error({ msg: "error handling request", error });
+			this.log?.error({ msg: "error handling request", error });
 			this.#sendResponseError(requestId, 500, "Internal Server Error");
 		} finally {
 			// Clean up request tracking
@@ -497,7 +502,7 @@ export class Tunnel {
 		// Validate actor exists
 		const actor = this.#runner.getActor(open.actorId);
 		if (!actor) {
-			logger()?.warn({
+			this.log?.warn({
 				msg: "ignoring websocket for unknown actor",
 				actorId: open.actorId,
 			});
@@ -521,7 +526,7 @@ export class Tunnel {
 		const websocketHandler = this.#runner.config.websocket;
 
 		if (!websocketHandler) {
-			logger()?.error({
+			this.log?.error({
 				msg: "no websocket handler configured for tunnel",
 			});
 			// Send close immediately
@@ -633,7 +638,7 @@ export class Tunnel {
 				request,
 			);
 		} catch (error) {
-			logger()?.error({ msg: "error handling websocket open", error });
+			this.log?.error({ msg: "error handling websocket open", error });
 			// Send close on error
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketClose",
@@ -677,7 +682,7 @@ export class Tunnel {
 	}
 
 	__ackWebsocketMessage(requestId: ArrayBuffer, index: number) {
-		logger()?.debug({
+		this.log?.debug({
 			msg: "ack ws msg",
 			requestId: idToStr(requestId),
 			index,
