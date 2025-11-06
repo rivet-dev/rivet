@@ -12,6 +12,10 @@ on:
         required: true
         type: boolean
         default: true
+      reuse_engine_version:
+        description: 'Reuse engine artifacts from this version (skips building)'
+        required: false
+        type: string
 
 defaults:
   run:
@@ -75,6 +79,7 @@ jobs:
   binaries:
     name: "Build & Push Binaries"
     needs: [setup]
+    if: ${{ !inputs.reuse_engine_version }}
     strategy:
       matrix:
         include:
@@ -158,6 +163,7 @@ jobs:
   docker:
     name: "Build & Push Docker Images"
     needs: [setup]
+    if: ${{ !inputs.reuse_engine_version }}
     strategy:
       matrix:
         include:
@@ -223,7 +229,8 @@ jobs:
 
   complete:
     name: "Complete"
-    needs: [docker, binaries]
+    needs: [setup, docker, binaries]
+    if: ${{ always() && !cancelled() && needs.setup.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped') && (needs.binaries.result == 'success' || needs.binaries.result == 'skipped') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -259,8 +266,15 @@ jobs:
           # Install tsx globally
           npm install -g tsx
 
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase complete-ci --no-validate-git
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase complete-ci --no-validate-git
+          # Build command based on inputs
+          CMD="./scripts/release/main.ts --version \"${{ github.event.inputs.version }}\" --phase complete-ci --no-validate-git"
+
+          if [ "${{ inputs.latest }}" != "true" ]; then
+            CMD="$CMD --no-latest"
           fi
+
+          if [ -n "${{ inputs.reuse_engine_version }}" ]; then
+            CMD="$CMD --reuse-engine-version \"${{ inputs.reuse_engine_version }}\""
+          fi
+
+          eval "$CMD"

@@ -46,6 +46,8 @@ export interface ReleaseOpts {
 	latest: boolean;
 	/** Commit to publish release for. */
 	commit: string;
+	/** Optional version to reuse artifacts and Docker images from instead of building. */
+	reuseEngineVersion?: string;
 }
 
 async function getCurrentVersion(): Promise<string> {
@@ -56,6 +58,80 @@ async function getCurrentVersion(): Promise<string> {
 	);
 	const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
 	return packageJson.version;
+}
+
+async function validateReuseVersion(version: string): Promise<void> {
+	console.log(`Validating that version ${version} exists...`);
+
+	// Fetch tags to ensure we have the latest
+	console.log(`Fetching tags...`);
+	await $({ stdio: "inherit" })`git fetch --tags`;
+
+	// Get short commit from version tag
+	let shortCommit: string;
+	try {
+		const result = await $`git rev-parse v${version}`;
+		const fullCommit = result.stdout.trim();
+		shortCommit = fullCommit.slice(0, 7);
+		console.log(`✅ Found tag v${version} (commit ${shortCommit})`);
+	} catch (error) {
+		throw new Error(
+			`Version ${version} does not exist in git. Make sure the tag v${version} exists in the remote repository.`,
+		);
+	}
+
+	// Check Docker images exist
+	console.log(`Checking Docker images for ${shortCommit}...`);
+	try {
+		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-amd64`;
+		await $({ stdio: "inherit" })`docker manifest inspect rivetkit/engine:slim-${shortCommit}-arm64`;
+		console.log("✅ Docker images exist");
+	} catch (error) {
+		throw new Error(
+			`Docker images for version ${version} (commit ${shortCommit}) do not exist. Error: ${error}`,
+		);
+	}
+
+	// Check S3 artifacts exist
+	console.log(`Checking S3 artifacts for ${shortCommit}...`);
+	const endpointUrl =
+		"https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com";
+
+	// Get credentials
+	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
+	if (!awsAccessKeyId) {
+		const result =
+			await $`op read ${"op://Engineering/rivet-releases R2 Upload/username"}`;
+		awsAccessKeyId = result.stdout.trim();
+	}
+	let awsSecretAccessKey = process.env.R2_RELEASES_SECRET_ACCESS_KEY;
+	if (!awsSecretAccessKey) {
+		const result =
+			await $`op read ${"op://Engineering/rivet-releases R2 Upload/password"}`;
+		awsSecretAccessKey = result.stdout.trim();
+	}
+
+	const awsEnv = {
+		AWS_ACCESS_KEY_ID: awsAccessKeyId,
+		AWS_SECRET_ACCESS_KEY: awsSecretAccessKey,
+		AWS_DEFAULT_REGION: "auto",
+	};
+
+	const commitPrefix = `engine/${shortCommit}/`;
+	const listResult = await $({
+		env: awsEnv,
+		shell: true,
+		stdio: ["pipe", "pipe", "inherit"],
+	})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
+	const files = JSON.parse(listResult.stdout);
+
+	if (!Array.isArray(files?.Contents) || files.Contents.length === 0) {
+		throw new Error(
+			`No S3 artifacts found for version ${version} (commit ${shortCommit}) under ${commitPrefix}`,
+		);
+	}
+
+	console.log(`✅ S3 artifacts exist (${files.Contents.length} files found)`);
 }
 
 async function runTypeCheck(opts: ReleaseOpts) {
@@ -70,7 +146,7 @@ async function runTypeCheck(opts: ReleaseOpts) {
 		console.log("✅ Rivetkit packages built");
 
 		// --force to skip cache in case of Turborepo bugs
-		await $({ cwd: opts.root })`pnpm check-types --force`;
+		await $({ stdio: "inherit", cwd: opts.root })`pnpm check-types --force`;
 		console.log("✅ Type check passed");
 	} catch (err) {
 		console.error("❌ Type check failed");
@@ -124,6 +200,7 @@ const STEPS = [
 	"git-commit",
 	"git-push",
 	"trigger-workflow",
+	"validate-reuse-version",
 	"run-type-check",
 	"publish-sdk",
 	"tag-docker",
@@ -144,6 +221,8 @@ type Phase = (typeof PHASES)[number];
 
 // Map phases to individual steps
 const PHASE_MAP: Record<Phase, Step[]> = {
+	// These steps modify the source code, so they need to be ran & committed
+	// locally. CI cannot push commits.
 	"setup-local": [
 		"update-version",
 		"generate-fern",
@@ -151,7 +230,9 @@ const PHASE_MAP: Record<Phase, Step[]> = {
 		"git-push",
 		"trigger-workflow",
 	],
-	"setup-ci": ["run-type-check"],
+	// These steps validate the repository before triggering release.
+	"setup-ci": ["validate-reuse-version", "run-type-check"],
+	// These steps run after the required artifacts have been successfully built.
 	"complete-ci": [
 		"publish-sdk",
 		"tag-docker",
@@ -173,6 +254,10 @@ async function main() {
 		.option(
 			"--override-commit <commit>",
 			"Override the commit to pull artifacts from (defaults to current commit)",
+		)
+		.option(
+			"--reuse-engine-version <version>",
+			"Reuse artifacts and Docker images from a previous version instead of building",
 		)
 		.option("--latest", "Tag version as the latest version", true)
 		.option("--no-latest", "Do not tag version as the latest version")
@@ -262,6 +347,7 @@ async function main() {
 		version: version,
 		latest: opts.latest,
 		commit,
+		reuseEngineVersion: opts.reuseEngineVersion,
 	};
 
 	if (releaseOpts.commit.length == 40) {
@@ -282,14 +368,15 @@ async function main() {
 
 	if (shouldRunStep("generate-fern")) {
 		console.log("==> Generating Fern");
-		await $`./scripts/fern/gen.sh`;
+		await $({ stdio: "inherit" })`./scripts/fern/gen.sh`;
 	}
 
 	if (shouldRunStep("git-commit")) {
 		assert(opts.validateGit, "cannot commit without git validation");
 		console.log("==> Committing Changes");
-		await $`git add .`;
+		await $({ stdio: "inherit" })`git add .`;
 		await $({
+			stdio: "inherit",
 			shell: true,
 		})`git commit --allow-empty -m "chore(release): update version to ${releaseOpts.version}"`;
 	}
@@ -301,10 +388,10 @@ async function main() {
 		const branch = branchResult.stdout.trim();
 		if (branch === "main") {
 			// Push on main
-			await $`git push`;
+			await $({ stdio: "inherit" })`git push`;
 		} else {
 			// Modify current branch
-			await $`gt submit --force --no-edit --publish`;
+			await $({ stdio: "inherit" })`gt submit --force --no-edit --publish`;
 		}
 	}
 
@@ -313,13 +400,28 @@ async function main() {
 		const branchResult = await $`git rev-parse --abbrev-ref HEAD`;
 		const branch = branchResult.stdout.trim();
 		const latestFlag = releaseOpts.latest ? "true" : "false";
-		await $`gh workflow run .github/workflows/release.yaml -f version=${releaseOpts.version} -f latest=${latestFlag} --ref ${branch}`;
+
+		// Build workflow command
+		let workflowCmd = `gh workflow run .github/workflows/release.yaml -f version=${releaseOpts.version} -f latest=${latestFlag}`;
+		if (releaseOpts.reuseEngineVersion) {
+			workflowCmd += ` -f reuse_engine_version=${releaseOpts.reuseEngineVersion}`;
+		}
+		workflowCmd += ` --ref ${branch}`;
+
+		await $({ stdio: "inherit", shell: true })`${workflowCmd}`;
 
 		// Get repository info and print workflow link
 		const repoResult = await $`gh repo view --json nameWithOwner -q .nameWithOwner`;
 		const repo = repoResult.stdout.trim();
 		console.log(`\nWorkflow triggered: https://github.com/${repo}/actions/workflows/release.yaml`);
 		console.log(`View all runs: https://github.com/${repo}/actions`);
+	}
+
+	if (shouldRunStep("validate-reuse-version")) {
+		if (releaseOpts.reuseEngineVersion) {
+			console.log("==> Validating Reuse Version");
+			await validateReuseVersion(releaseOpts.reuseEngineVersion);
+		}
 	}
 
 	if (shouldRunStep("run-type-check")) {
