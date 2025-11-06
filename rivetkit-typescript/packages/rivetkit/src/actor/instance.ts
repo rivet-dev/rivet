@@ -53,7 +53,7 @@ import type {
 import { processMessage } from "./protocol/old";
 import { CachedSerializer } from "./protocol/serde";
 import { Schedule } from "./schedule";
-import { DeadlineError, deadline } from "./utils";
+import { DeadlineError, deadline, isConnStatePath, isStatePath } from "./utils";
 
 export const PERSIST_SYMBOL = Symbol("persist");
 
@@ -698,7 +698,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Set raw persist object
 		this.#persistRaw = target;
 
-		// TODO: Only validate this for conn state
 		// TODO: Allow disabling in production
 		// If this can't be proxied, return raw value
 		if (target === null || typeof target !== "object") {
@@ -732,35 +731,46 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				_previousValue: any,
 				_applyData: any,
 			) => {
-				if (path !== "state" && !path.startsWith("state.")) {
-					return;
+				const actorStatePath = isStatePath(path);
+				const connStatePath = isConnStatePath(path);
+
+				// Validate CBOR serializability for state changes
+				if (actorStatePath || connStatePath) {
+					let invalidPath = "";
+					if (
+						!isCborSerializable(
+							value,
+							(invalidPathPart) => {
+								invalidPath = invalidPathPart;
+							},
+							"",
+						)
+					) {
+						throw new errors.InvalidStateType({
+							path: path + (invalidPath ? `.${invalidPath}` : ""),
+						});
+					}
 				}
 
-				let invalidPath = "";
-				if (
-					!isCborSerializable(
-						value,
-						(invalidPathPart) => {
-							invalidPath = invalidPathPart;
-						},
-						"",
-					)
-				) {
-					throw new errors.InvalidStateType({
-						path: path + (invalidPath ? `.${invalidPath}` : ""),
-					});
-				}
+				this.#rLog.debug({
+					msg: "onChange triggered, setting persistChanged=true",
+					path,
+				});
 				this.#persistChanged = true;
 
-				// Inform the inspector about state changes
-				this.inspector.emitter.emit(
-					"stateUpdated",
-					this.#persist.state,
-				);
+				// Inform the inspector about state changes (only for state path)
+				if (actorStatePath) {
+					this.inspector.emitter.emit(
+						"stateUpdated",
+						this.#persist.state,
+					);
+				}
 
 				// Call onStateChange if it exists
+				//
 				// Skip if we're already inside onStateChange to prevent infinite recursion
 				if (
+					actorStatePath &&
 					this.#config.onStateChange &&
 					this.#ready &&
 					!this.#isInOnStateChange
@@ -806,6 +816,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#rLog.info({
 				msg: "actor restoring",
 				connections: persistData.connections.length,
+				hibernatableWebSockets:
+					persistData.hibernatableWebSocket.length,
 			});
 
 			// Set initial state
@@ -1868,6 +1880,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async saveState(opts: SaveStateOptions) {
 		this.#assertReady(opts.allowStoppingState);
 
+		this.#rLog.debug({
+			msg: "saveState called",
+			persistChanged: this.#persistChanged,
+			allowStoppingState: opts.allowStoppingState,
+			immediate: opts.immediate,
+		});
+
 		if (this.#persistChanged) {
 			if (opts.immediate) {
 				// Save immediately
@@ -2075,7 +2094,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		for (const connection of this.#connections.values()) {
 			promises.push(connection.disconnect());
 
-			// TODO: Figure out how to abort HTTP requests on shutdown
+			// TODO: Figure out how to abort HTTP requests on shutdown. This
+			// might already be handled by the engine runner tunnel shutdown.
 		}
 
 		// Wait for any background tasks to finish, with timeout
