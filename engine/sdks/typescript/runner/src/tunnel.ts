@@ -4,6 +4,10 @@ import type { Logger } from "pino";
 import { stringify as uuidstringify, v4 as uuidv4 } from "uuid";
 import { logger } from "./log";
 import type { ActorInstance, Runner } from "./mod";
+import {
+	stringifyToClientTunnelMessageKind,
+	stringifyToServerTunnelMessageKind,
+} from "./stringify";
 import { unreachable } from "./utils";
 import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
@@ -90,9 +94,11 @@ export class Tunnel {
 	) {
 		// TODO: Switch this with runner WS
 		if (!this.#runner.__webSocketReady()) {
-			this.log?.warn(
-				"cannot send tunnel message, socket not connected to engine",
-			);
+			this.log?.warn({
+				msg: "cannot send tunnel message, socket not connected to engine",
+				requestId: idToStr(requestId),
+				message: stringifyToServerTunnelMessageKind(messageKind),
+			});
 			return;
 		}
 
@@ -110,7 +116,7 @@ export class Tunnel {
 			msg: "send tunnel msg",
 			requestId: requestIdStr,
 			messageId: messageIdStr,
-			message: messageKind,
+			message: stringifyToServerTunnelMessageKind(messageKind),
 		});
 
 		// Send message
@@ -283,7 +289,7 @@ export class Tunnel {
 			msg: "receive tunnel msg",
 			requestId: requestIdStr,
 			messageId: messageIdStr,
-			message: message.messageKind,
+			message: stringifyToClientTunnelMessageKind(message.messageKind),
 		});
 
 		if (message.messageKind.tag === "TunnelAck") {
