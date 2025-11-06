@@ -25,7 +25,7 @@ use tokio_tungstenite::tungstenite::{
 	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
-use crate::shared_state::{SharedState, TunnelMessageData};
+use crate::shared_state::{InFlightRequestHandle, SharedState, TunnelMessageData};
 
 pub mod shared_state;
 
@@ -145,7 +145,10 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Start listening for request responses
 		let request_id = Uuid::new_v4().into_bytes();
-		let mut msg_rx = self
+		let InFlightRequestHandle {
+			mut msg_rx,
+			drop_rx: _drop_rx,
+		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject, request_id)
 			.await;
@@ -258,7 +261,10 @@ impl CustomServeTrait for PegboardGateway {
 
 		// Start listening for WebSocket messages
 		let request_id = unique_request_id.into_bytes();
-		let mut msg_rx = self
+		let InFlightRequestHandle {
+			mut msg_rx,
+			drop_rx: _drop_rx,
+		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject.clone(), request_id)
 			.await;
