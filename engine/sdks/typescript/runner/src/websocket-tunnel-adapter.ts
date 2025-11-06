@@ -18,6 +18,7 @@ export class WebSocketTunnelAdapter {
 	#url = "";
 	#sendCallback: (data: ArrayBuffer | string, isBinary: boolean) => void;
 	#closeCallback: (code?: number, reason?: string, retry?: boolean) => void;
+	#canHibernate: boolean = false;
 
 	// Event buffering for events fired before listeners are attached
 	#bufferedEvents: Array<{
@@ -71,6 +72,16 @@ export class WebSocketTunnelAdapter {
 
 	get url(): string {
 		return this.#url;
+	}
+
+	/** @experimental */
+	get canHibernate(): boolean {
+		return this.#canHibernate;
+	}
+
+	/** @experimental */
+	set canHibernate(value: boolean) {
+		this.#canHibernate = value;
 	}
 
 	get onopen(): ((this: any, ev: any) => any) | null {

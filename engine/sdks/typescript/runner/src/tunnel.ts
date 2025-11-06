@@ -82,8 +82,11 @@ export class Tunnel {
 		// closed:
 		// https://github.com/rivet-dev/rivet/blob/00d4f6a22da178a6f8115e5db50d96c6f8387c2e/engine/packages/pegboard-runner/src/lib.rs#L157
 		for (const [_, ws] of this.#actorWebSockets) {
-			// TODO: Trigger close event, but do not send anything over the tunnel
-			ws.__closeWithoutCallback(1000, "ws.tunnel_shutdown");
+			// Only close non-hibernatable websockets to prevent sending
+			// unnecessary close messages for websockets that will be hibernated
+			if (!ws.canHibernate) {
+				ws.__closeWithoutCallback(1000, "ws.tunnel_shutdown");
+			}
 		}
 		this.#actorWebSockets.clear();
 	}
@@ -668,6 +671,8 @@ export class Tunnel {
 					requestId,
 					request,
 				);
+			adapter.canHibernate = hibernationConfig.enabled;
+
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketOpen",
 				val: {
