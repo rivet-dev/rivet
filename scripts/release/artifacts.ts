@@ -38,6 +38,9 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 	let sourceCommit = opts.commit;
 	if (opts.reuseEngineVersion) {
 		console.log(`==> Reusing artifacts from version ${opts.reuseEngineVersion}`);
+		// Fetch tags to ensure we have the version tag
+		console.log(`==> Fetching tags...`);
+		await $({ stdio: "inherit" })`git fetch --tags`;
 		const result = await $`git rev-parse v${opts.reuseEngineVersion}`;
 		sourceCommit = result.stdout.trim().slice(0, 7);
 		console.log(`==> Source commit: ${sourceCommit}`);
