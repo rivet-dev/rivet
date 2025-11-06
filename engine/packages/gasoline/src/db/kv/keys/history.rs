@@ -1735,7 +1735,7 @@ pub mod insert {
 			tx,
 			workflow_id,
 			location,
-			EventType::MessageSend,
+			EventType::Removed,
 			version,
 			create_ts,
 		)?;
