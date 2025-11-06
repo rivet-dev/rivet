@@ -11,7 +11,7 @@ type PersistedConnection struct {
 	parameters: data
 	state: data
 	subscriptions: list<PersistedSubscription>
-	lastSeen: u64
+	lastSeen: i64
 }
 
 # MARK: Schedule Event
@@ -30,15 +30,15 @@ type PersistedScheduleEventKind union {
 
 type PersistedScheduleEvent struct {
 	eventId: str
-	timestamp: u64
+	timestamp: i64
 	kind: PersistedScheduleEventKind
 }
 
 # MARK: WebSocket
 type PersistedHibernatableWebSocket struct {
 	requestId: data
-	lastSeenTimestamp: u64
-	msgIndex: u64
+	lastSeenTimestamp: i64
+	msgIndex: i64
 }
 
 # MARK: Actor

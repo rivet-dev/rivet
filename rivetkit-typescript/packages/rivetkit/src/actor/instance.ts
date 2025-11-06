@@ -676,6 +676,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 			this.#onPersistSavedPromise?.resolve();
 		} catch (error) {
+			this.#rLog.error({
+				msg: "error saving persist",
+				error: stringifyError(error),
+			});
 			this.#onPersistSavedPromise?.reject(error);
 			throw error;
 		}
