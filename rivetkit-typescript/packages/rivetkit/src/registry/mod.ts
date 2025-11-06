@@ -80,7 +80,7 @@ export class Registry<A extends RegistryActors> {
 		// a serverless runner request, so we do not know what to health check
 		if (config.runnerKind === "serverless") {
 			logger().debug("disabling health check since using serverless");
-			config.disableHealthCheck = true;
+			config.disableMetadataLookup = true;
 		}
 
 		// Auto-configure serverless runner if not in prod
@@ -289,7 +289,7 @@ async function configureServerlessRunner(config: RunnerConfig): Promise<void> {
 			encoding: config.encoding,
 			headers: config.headers,
 			getUpgradeWebSocket: config.getUpgradeWebSocket,
-			disableHealthCheck: true, // We don't need health check for this operation
+			disableMetadataLookup: true, // We don't need health check for this operation
 		};
 
 		// Fetch all datacenters
