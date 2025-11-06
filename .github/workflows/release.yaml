@@ -70,11 +70,18 @@ jobs:
           # Install tsx globally
           npm install -g tsx
 
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase setup-ci
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase setup-ci
+          # Build command based on inputs
+          CMD="./scripts/release/main.ts --version \"${{ github.event.inputs.version }}\" --phase setup-ci"
+
+          if [ "${{ inputs.latest }}" != "true" ]; then
+            CMD="$CMD --no-latest"
           fi
+
+          if [ -n "${{ inputs.reuse_engine_version }}" ]; then
+            CMD="$CMD --reuse-engine-version \"${{ inputs.reuse_engine_version }}\""
+          fi
+
+          eval "$CMD"
 
   binaries:
     name: "Build & Push Binaries"
