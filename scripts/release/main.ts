@@ -101,13 +101,13 @@ async function validateReuseVersion(version: string): Promise<void> {
 	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
 	if (!awsAccessKeyId) {
 		const result =
-			await $`op read ${"op://Engineering/rivet-releases R2 Upload/username"}`;
+			await $`op read "op://Engineering/rivet-releases R2 Upload/username"`;
 		awsAccessKeyId = result.stdout.trim();
 	}
 	let awsSecretAccessKey = process.env.R2_RELEASES_SECRET_ACCESS_KEY;
 	if (!awsSecretAccessKey) {
 		const result =
-			await $`op read ${"op://Engineering/rivet-releases R2 Upload/password"}`;
+			await $`op read "op://Engineering/rivet-releases R2 Upload/password"`;
 		awsSecretAccessKey = result.stdout.trim();
 	}
 

@@ -51,6 +51,7 @@ jobs:
 
       - name: Setup
         env:
+          # https://docs.github.com/en/actions/security-guides/automatic-token-authentication
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
@@ -259,6 +260,7 @@ jobs:
 
       - name: Complete
         env:
+          # https://cli.github.com/manual/gh_help_environment
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
