@@ -14,6 +14,7 @@ use crate::options::ConflictRangeType;
 // that
 const TXN_CONFLICT_TTL: Duration = Duration::from_secs(10);
 
+#[derive(Debug)]
 struct PreviousTransaction {
 	insert_instant: Instant,
 	start_version: u64,
@@ -56,8 +57,9 @@ impl TransactionConflictTracker {
 		txns.retain(|txn| txn.insert_instant.elapsed() < TXN_CONFLICT_TTL);
 
 		for txn2 in &*txns {
-			// Check txn versions overlap
-			if txn1_start_version > txn2.start_version && txn1_start_version < txn2.commit_version {
+			// Check txn versions overlap (intersection or encapsulation)
+			if txn1_start_version < txn2.commit_version && txn2.start_version < txn1_commit_version
+			{
 				for (cr1_start, cr1_end, cr1_type) in &txn1_conflict_ranges {
 					for (cr2_start, cr2_end, cr2_type) in &txn2.conflict_ranges {
 						// Check conflict ranges overlap

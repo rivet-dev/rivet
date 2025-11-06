@@ -1,5 +1,5 @@
 use anyhow::*;
-use chrono::{Local, TimeZone};
+use chrono::{TimeZone, Utc};
 use rivet_term::console::style;
 
 use gas::db::debug::{SignalData, SignalState};
@@ -22,7 +22,7 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 
 			println!("  {} {}", style("id").bold(), signal.signal_id);
 
-			let datetime = Local
+			let datetime = Utc
 				.timestamp_millis_opt(signal.create_ts)
 				.single()
 				.context("invalid ts")?;
@@ -31,7 +31,7 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
 			if let Some(ack_ts) = signal.ack_ts {
-				let datetime = Local
+				let datetime = Utc
 					.timestamp_millis_opt(ack_ts)
 					.single()
 					.context("invalid ts")?;
