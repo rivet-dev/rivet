@@ -19,6 +19,7 @@ import {
 	bufferToArrayBuffer,
 	EXTRA_ERROR_LOG,
 	getEnvUniversal,
+	idToStr,
 	promiseWithResolvers,
 	SinglePromiseQueue,
 } from "@/utils";
@@ -244,7 +245,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						lastSeen: conn.lastSeen,
 						stateEnabled: conn.__stateEnabled,
 						isHibernatable: conn.isHibernatable,
-						requestId: conn.__socket?.requestId,
+						hibernatableRequestId: conn.__persist
+							.hibernatableRequestId
+							? idToStr(conn.__persist.hibernatableRequestId)
+							: undefined,
 						driver: conn.__driverState
 							? getConnDriverKindFromState(conn.__driverState)
 							: undefined,
@@ -267,6 +271,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				const conn = await this.createConn(
 					{
 						requestId: requestId,
+						hibernatable: false,
 						driverState: { [ConnDriverKind.HTTP]: {} },
 					},
 					undefined,
@@ -1016,6 +1021,74 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
 		this.#assertReady();
 
+		// Check for hibernatable websocket reconnection
+		if (socket.requestIdBuf && socket.hibernatable) {
+			this.rLog.debug({
+				msg: "checking for hibernatable websocket connection",
+				requestId: socket.requestId,
+				existingConnectionsCount: this.#connections.size,
+			});
+
+			// Find existing connection with matching hibernatableRequestId
+			const existingConn = Array.from(this.#connections.values()).find(
+				(conn) =>
+					conn.__persist.hibernatableRequestId &&
+					arrayBuffersEqual(
+						conn.__persist.hibernatableRequestId,
+						socket.requestIdBuf!,
+					),
+			);
+
+			if (existingConn) {
+				this.rLog.debug({
+					msg: "reconnecting hibernatable websocket connection",
+					connectionId: existingConn.id,
+					requestId: socket.requestId,
+				});
+
+				// If there's an existing driver state, clean it up without marking as clean disconnect
+				if (existingConn.__driverState) {
+					this.#rLog.warn({
+						msg: "found existing driver state on hibernatable websocket",
+						connectionId: existingConn.id,
+						requestId: socket.requestId,
+					});
+					const driverKind = getConnDriverKindFromState(
+						existingConn.__driverState,
+					);
+					const driver = CONN_DRIVERS[driverKind];
+					if (driver.disconnect) {
+						// Call driver disconnect to clean up directly. Don't use Conn.disconnect since that will remove the connection entirely.
+						driver.disconnect(
+							this,
+							existingConn,
+							(existingConn.__driverState as any)[driverKind],
+							"Reconnecting hibernatable websocket with new driver state",
+						);
+					}
+				}
+
+				// Update with new driver state
+				existingConn.__socket = socket;
+				existingConn.__persist.lastSeen = Date.now();
+
+				// Update sleep timer since connection is now active
+				this.#resetSleepTimer();
+
+				this.inspector.emitter.emit("connectionUpdated");
+
+				// We don't need to send a new init message since this is a
+				// hibernated request that has already been initialized
+
+				return existingConn;
+			} else {
+				this.rLog.debug({
+					msg: "no existing hibernatable connection found, creating new connection",
+					requestId: socket.requestId,
+				});
+			}
+		}
+
 		// If connection ID and token are provided, try to reconnect
 		if (connectionId && connectionToken) {
 			this.rLog.debug({
@@ -1074,14 +1147,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				);
 
 				return existingConn;
+			} else {
+				this.rLog.debug({
+					msg: "connection not found or token mismatch, creating new connection",
+					connectionId,
+				});
 			}
-
-			// If we get here, either connection doesn't exist or token doesn't match
-			// Fall through to create new connection with new IDs
-			this.rLog.debug({
-				msg: "connection not found or token mismatch, creating new connection",
-				connectionId,
-			});
 		}
 
 		// Generate new connection ID and token if not provided or if reconnection failed
@@ -1147,6 +1218,19 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			lastSeen: Date.now(),
 			subscriptions: [],
 		};
+
+		// Check if this connection is for a hibernatable websocket
+		if (socket.requestIdBuf) {
+			const isHibernatable =
+				this.#persist.hibernatableWebSocket.findIndex((ws) =>
+					arrayBuffersEqual(ws.requestId, socket.requestIdBuf!),
+				) !== -1;
+
+			if (isHibernatable) {
+				persist.hibernatableRequestId = socket.requestIdBuf;
+			}
+		}
+
 		const conn = new Conn<S, CP, CS, V, I, DB>(this, persist);
 		conn.__socket = socket;
 		this.#connections.set(conn.id, conn);
@@ -2094,6 +2178,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Disconnect existing non-hibernatable connections
 		for (const connection of this.#connections.values()) {
 			if (!connection.isHibernatable) {
+				this.#rLog.debug({
+					msg: "disconnecting non-hibernatable connection on actor stop",
+					connId: connection.id,
+				});
 				promises.push(connection.disconnect());
 			}
 
@@ -2187,6 +2275,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					eventName: sub.eventName,
 				})),
 				lastSeen: BigInt(conn.lastSeen),
+				hibernatableRequestId: conn.hibernatableRequestId ?? null,
 			})),
 			scheduledEvents: persist.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
@@ -2225,6 +2314,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					eventName: sub.eventName,
 				})),
 				lastSeen: Number(conn.lastSeen),
+				hibernatableRequestId: conn.hibernatableRequestId ?? undefined,
 			})),
 			scheduledEvents: bareData.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
