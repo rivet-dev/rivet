@@ -190,14 +190,23 @@ export class WebSocketTunnelAdapter {
 	}
 
 	close(code?: number, reason?: string): void {
-		this.closeInner(code, reason);
+		this.closeInner(code, reason, false, true);
 	}
 
 	__closeWithRetry(code?: number, reason?: string): void {
-		this.closeInner(code, reason, true);
+		this.closeInner(code, reason, true, true);
 	}
 
-	closeInner(code?: number, reason?: string, retry: boolean = false): void {
+	__closeWithoutCallback(code?: number, reason?: string): void {
+		this.closeInner(code, reason, false, false);
+	}
+
+	closeInner(
+		code: number | undefined,
+		reason: string | undefined,
+		retry: boolean,
+		callback: boolean,
+	): void {
 		if (
 			this.#readyState === 2 || // CLOSING
 			this.#readyState === 3 // CLOSED
@@ -208,7 +217,9 @@ export class WebSocketTunnelAdapter {
 		this.#readyState = 2; // CLOSING
 
 		// Send close through tunnel
-		this.#closeCallback(code, reason, retry);
+		if (callback) {
+			this.#closeCallback(code, reason, retry);
+		}
 
 		// Update state and fire event
 		this.#readyState = 3; // CLOSED

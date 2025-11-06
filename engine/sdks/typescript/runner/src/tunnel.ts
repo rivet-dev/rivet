@@ -23,6 +23,12 @@ interface PendingTunnelMessage {
 	requestIdStr: string;
 }
 
+class RunnerShutdownError extends Error {
+	constructor() {
+		super("Runner shut down");
+	}
+}
+
 export class Tunnel {
 	#runner: Runner;
 
@@ -49,20 +55,31 @@ export class Tunnel {
 	}
 
 	shutdown() {
+		// NOTE: Pegboard WS already closed at this point, cannot send
+		// anything. All teardown logic is handled by pegboard-runner.
+
 		if (this.#gcInterval) {
 			clearInterval(this.#gcInterval);
 			this.#gcInterval = undefined;
 		}
 
 		// Reject all pending requests
+		//
+		// RunnerShutdownError will be explicitly ignored
 		for (const [_, request] of this.#actorPendingRequests) {
-			request.reject(new Error("Tunnel shutting down"));
+			request.reject(new RunnerShutdownError());
 		}
 		this.#actorPendingRequests.clear();
 
 		// Close all WebSockets
+		//
+		// The WebSocket close event with retry is automatically sent when the
+		// runner WS closes, so we only need to notify the client that the WS
+		// closed:
+		// https://github.com/rivet-dev/rivet/blob/00d4f6a22da178a6f8115e5db50d96c6f8387c2e/engine/packages/pegboard-runner/src/lib.rs#L157
 		for (const [_, ws] of this.#actorWebSockets) {
-			ws.__closeWithRetry();
+			// TODO: Trigger close event, but do not send anything over the tunnel
+			ws.__closeWithoutCallback(1000, "ws.tunnel_shutdown");
 		}
 		this.#actorWebSockets.clear();
 	}
@@ -407,8 +424,16 @@ export class Tunnel {
 				await this.#sendResponse(requestId, response);
 			}
 		} catch (error) {
-			this.log?.error({ msg: "error handling request", error });
-			this.#sendResponseError(requestId, 500, "Internal Server Error");
+			if (error instanceof RunnerShutdownError) {
+				this.log?.debug({ msg: "catught runner shutdown error" });
+			} else {
+				this.log?.error({ msg: "error handling request", error });
+				this.#sendResponseError(
+					requestId,
+					500,
+					"Internal Server Error",
+				);
+			}
 		} finally {
 			// Clean up request tracking
 			const actor = this.#runner.getActor(req.actorId);
