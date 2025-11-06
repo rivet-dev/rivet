@@ -28,3 +28,8 @@ website/**/*.js linguist-generated=true
 website/**/*.jsx linguist-generated=true
 examples/**/* linguist-generated=true
 
+frontend/**/*.ts linguist-generated=true
+frontend/**/*.tsx linguist-generated=true
+frontend/**/*.js linguist-generated=true
+frontend/**/*.jsx linguist-generated=true
+
