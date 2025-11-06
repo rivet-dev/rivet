@@ -213,11 +213,11 @@ export class Tunnel {
 		actor.requests.clear();
 
 		// Flush acks and close all WebSockets for this actor
-		for (const webSocketId of actor.webSockets) {
-			const ws = this.#actorWebSockets.get(webSocketId);
+		for (const requestIdStr of actor.webSockets) {
+			const ws = this.#actorWebSockets.get(requestIdStr);
 			if (ws) {
 				ws.__closeWithRetry(1000, "Actor stopped");
-				this.#actorWebSockets.delete(webSocketId);
+				this.#actorWebSockets.delete(requestIdStr);
 			}
 		}
 		actor.webSockets.clear();
@@ -498,7 +498,8 @@ export class Tunnel {
 		requestId: protocol.RequestId,
 		open: protocol.ToClientWebSocketOpen,
 	) {
-		const webSocketId = idToStr(requestId);
+		const requestIdStr = idToStr(requestId);
+
 		// Validate actor exists
 		const actor = this.#runner.getActor(open.actorId);
 		if (!actor) {
@@ -543,13 +544,13 @@ export class Tunnel {
 
 		// Track this WebSocket for the actor
 		if (actor) {
-			actor.webSockets.add(webSocketId);
+			actor.webSockets.add(requestIdStr);
 		}
 
 		try {
 			// Create WebSocket adapter
 			const adapter = new WebSocketTunnelAdapter(
-				webSocketId,
+				requestIdStr,
 				(data: ArrayBuffer | string, isBinary: boolean) => {
 					// Send message through tunnel
 					const dataBuffer =
@@ -578,17 +579,17 @@ export class Tunnel {
 					});
 
 					// Remove from map
-					this.#actorWebSockets.delete(webSocketId);
+					this.#actorWebSockets.delete(requestIdStr);
 
 					// Clean up actor tracking
 					if (actor) {
-						actor.webSockets.delete(webSocketId);
+						actor.webSockets.delete(requestIdStr);
 					}
 				},
 			);
 
 			// Store adapter
-			this.#actorWebSockets.set(webSocketId, adapter);
+			this.#actorWebSockets.set(requestIdStr, adapter);
 
 			// Convert headers to map
 			//
@@ -649,11 +650,11 @@ export class Tunnel {
 				},
 			});
 
-			this.#actorWebSockets.delete(webSocketId);
+			this.#actorWebSockets.delete(requestIdStr);
 
 			// Clean up actor tracking
 			if (actor) {
-				actor.webSockets.delete(webSocketId);
+				actor.webSockets.delete(requestIdStr);
 			}
 		}
 	}
@@ -663,8 +664,8 @@ export class Tunnel {
 		requestId: ArrayBuffer,
 		msg: protocol.ToClientWebSocketMessage,
 	): Promise<boolean> {
-		const webSocketId = idToStr(requestId);
-		const adapter = this.#actorWebSockets.get(webSocketId);
+		const requestIdStr = idToStr(requestId);
+		const adapter = this.#actorWebSockets.get(requestIdStr);
 		if (adapter) {
 			const data = msg.binary
 				? new Uint8Array(msg.data)
