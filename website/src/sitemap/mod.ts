@@ -218,6 +218,10 @@ export const sitemap = [
 										title: "Railway",
 										href: "/docs/self-hosting/railway",
 									},
+									{
+										title: "Kubernetes",
+										href: "/docs/self-hosting/kubernetes",
+									},
 								],
 							},
 							//{
