@@ -8,23 +8,43 @@ use pegboard_actor_kv as kv;
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use rivet_runner_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use std::sync::{Arc, atomic::Ordering};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 use universalpubsub::PublishOpts;
+use universalpubsub::Subscriber;
 use vbare::OwnedVersionedData;
 
-use crate::conn::Conn;
+use crate::{LifecycleResult, conn::Conn, errors};
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
-) -> Result<()> {
-	tracing::debug!("starting WebSocket to pubsub forwarding task");
-
+	mut eviction_sub2: Subscriber,
+	mut ws_to_tunnel_abort_rx: watch::Receiver<()>,
+) -> Result<LifecycleResult> {
 	let mut ws_rx = ws_rx.lock().await;
 
-	while let Some(msg) = ws_rx.try_next().await? {
+	loop {
+		let msg = tokio::select! {
+			res = ws_rx.try_next() => {
+				if let Some(msg) = res? {
+					msg
+				} else {
+					tracing::debug!("websocket closed");
+					return Ok(LifecycleResult::Closed);
+				}
+			}
+			_ = eviction_sub2.next() => {
+				tracing::debug!("runner evicted");
+				return Err(errors::WsError::Eviction.build());
+			}
+			_ = ws_to_tunnel_abort_rx.changed() => {
+				tracing::debug!("task aborted");
+				return Ok(LifecycleResult::Aborted);
+			}
+		};
+
 		match msg {
 			WsMessage::Binary(data) => {
 				tracing::trace!(
@@ -50,16 +70,14 @@ pub async fn task(
 					.context("failed to handle WebSocket message")?;
 			}
 			WsMessage::Close(_) => {
-				tracing::debug!(?conn.runner_id, "WebSocket closed");
-				break;
+				tracing::debug!("websocket closed");
+				return Ok(LifecycleResult::Closed);
 			}
 			_ => {
 				// Ignore other message types
 			}
 		}
 	}
-
-	Ok(())
 }
 
 #[tracing::instrument(skip_all)]

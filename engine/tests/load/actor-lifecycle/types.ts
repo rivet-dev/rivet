@@ -1,6 +1,6 @@
 export interface Config {
 	rivetEndpoint: string;
-	rivetNamepace: string;
+	rivetNamespace: string;
 	vus: number;
 	duration: string;
 	rampUpDuration: string;

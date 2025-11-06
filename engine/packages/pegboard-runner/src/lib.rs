@@ -11,18 +11,25 @@ use rivet_guard_core::{
 };
 use rivet_runner_protocol as protocol;
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-mod client_to_pubsub_task;
 mod conn;
 mod errors;
 mod ping_task;
-mod pubsub_to_client_task;
+mod tunnel_to_ws_task;
 mod utils;
+mod ws_to_tunnel_task;
 
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
+
+#[derive(Debug)]
+enum LifecycleResult {
+	Closed,
+	Aborted,
+}
 
 pub struct PegboardRunnerWsCustomServe {
 	ctx: StandaloneCtx,
@@ -79,52 +86,142 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.await
 			.context("failed to initialize runner connection")?;
 
-		// Subscribe to pubsub topic for this runner before accepting the client websocket so
-		// that failures can be retried by the proxy.
+		// Subscribe before accepting the client websocket so that failures can be retried by the proxy.
 		let topic =
 			pegboard::pubsub_subjects::RunnerReceiverSubject::new(conn.runner_id).to_string();
-		tracing::debug!(%topic, "subscribing to runner receiver topic");
+		let eviction_topic =
+			pegboard::pubsub_subjects::RunnerEvictionByIdSubject::new(conn.runner_id).to_string();
+		let eviction_topic2 = pegboard::pubsub_subjects::RunnerEvictionByNameSubject::new(
+			conn.namespace_id,
+			&conn.runner_name,
+			&conn.runner_key,
+		)
+		.to_string();
+
+		tracing::debug!(%topic, %eviction_topic, %eviction_topic2, "subscribing to runner topics");
 		let sub = ups
 			.subscribe(&topic)
 			.await
 			.with_context(|| format!("failed to subscribe to runner receiver topic: {}", topic))?;
+		let mut eviction_sub = ups.subscribe(&eviction_topic).await.with_context(|| {
+			format!(
+				"failed to subscribe to runner eviction topic: {}",
+				eviction_topic
+			)
+		})?;
+		let mut eviction_sub2 = ups.subscribe(&eviction_topic2).await.with_context(|| {
+			format!(
+				"failed to subscribe to runner eviction topic: {}",
+				eviction_topic2
+			)
+		})?;
 
-		// Forward pubsub -> WebSocket
-		let mut pubsub_to_client = tokio::spawn(pubsub_to_client_task::task(conn.clone(), sub));
+		// Publish eviction message to evict any currently connected runners with the same id or ns id +
+		// runner name + runner key. This happens after subscribing to prevent race conditions.
+		tokio::try_join!(
+			async {
+				ups.publish(&eviction_topic, &[], PublishOpts::broadcast())
+					.await?;
+				// Because we will receive our own message, skip the first message in the sub
+				eviction_sub.next().await
+			},
+			async {
+				ups.publish(&eviction_topic2, &[], PublishOpts::broadcast())
+					.await?;
+				eviction_sub2.next().await
+			},
+		)?;
 
-		// Forward WebSocket -> pubsub
-		let mut client_to_pubsub = tokio::spawn(client_to_pubsub_task::task(
+		let (tunnel_to_ws_abort_tx, tunnel_to_ws_abort_rx) = watch::channel(());
+		let (ws_to_tunnel_abort_tx, ws_to_tunnel_abort_rx) = watch::channel(());
+		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
+
+		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
+			conn.clone(),
+			sub,
+			eviction_sub,
+			tunnel_to_ws_abort_rx,
+		));
+
+		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
 			self.ctx.clone(),
 			conn.clone(),
 			ws_handle.recv(),
+			eviction_sub2,
+			ws_to_tunnel_abort_rx,
 		));
 
 		// Update pings
-		let mut ping = tokio::spawn(ping_task::task(self.ctx.clone(), conn.clone()));
+		let ping = tokio::spawn(ping_task::task(
+			self.ctx.clone(),
+			conn.clone(),
+			ping_abort_rx,
+		));
+		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
+		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
+		let ping_abort_tx2 = ping_abort_tx.clone();
 
-		// Wait for either task to complete
-		let lifecycle_res = tokio::select! {
-			res = &mut pubsub_to_client => {
-				let res = res?;
-				tracing::debug!(?res, "pubsub to WebSocket task completed");
+		// Wait for all tasks to complete
+		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) = tokio::join!(
+			async {
+				let res = tunnel_to_ws.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "tunnel to ws task completed, aborting others");
+
+					let _ = ping_abort_tx.send(());
+					let _ = ws_to_tunnel_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "tunnel to ws task completed");
+				}
+
+				res
+			},
+			async {
+				let res = ws_to_tunnel.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "ws to tunnel task completed, aborting others");
+
+					let _ = ping_abort_tx2.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "ws to tunnel task completed");
+				}
+
+				res
+			},
+			async {
+				let res = ping.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "ping task completed, aborting others");
+
+					let _ = ws_to_tunnel_abort_tx2.send(());
+					let _ = tunnel_to_ws_abort_tx2.send(());
+				} else {
+					tracing::debug!(?res, "ping task completed");
+				}
+
 				res
 			}
-			res = &mut client_to_pubsub => {
-				let res = res?;
-				tracing::debug!(?res, "WebSocket to pubsub task completed");
-				res
-			}
-			res = &mut ping => {
-				let res = res?;
-				tracing::debug!(?res, "ping task completed");
-				res
-			}
+		);
+
+		// Determine single result from both tasks
+		let lifecycle_res = match (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) {
+			// Prefer error
+			(Err(err), _, _) => Err(err),
+			(_, Err(err), _) => Err(err),
+			(_, _, Err(err)) => Err(err),
+			// Prefer non aborted result if both succeed
+			(Ok(res), Ok(LifecycleResult::Aborted), _) => Ok(res),
+			(Ok(LifecycleResult::Aborted), Ok(res), _) => Ok(res),
+			// Unlikely case
+			(res, _, _) => res,
 		};
-
-		// Abort remaining tasks
-		pubsub_to_client.abort();
-		client_to_pubsub.abort();
-		ping.abort();
 
 		// Make runner immediately ineligible when it disconnects
 		let update_alloc_res = self
@@ -177,10 +274,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.context("failed to serialize tunnel message for gateway")?;
 
 			// Publish message to UPS
-			let res = self
-				.ctx
-				.ups()
-				.context("failed to get UPS instance for tunnel message")?
+			let res = ups
 				.publish(&req.gateway_reply_to, &msg_serialized, PublishOpts::one())
 				.await;
 
