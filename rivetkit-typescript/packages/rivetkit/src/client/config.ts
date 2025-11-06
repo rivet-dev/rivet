@@ -38,7 +38,7 @@ export const ClientConfigSchema = z.object({
 	getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
 	/** Whether to automatically perform health checks when the client is created. */
-	disableHealthCheck: z.boolean().optional().default(false),
+	disableMetadataLookup: z.boolean().optional().default(false),
 });
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;
