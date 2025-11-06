@@ -573,6 +573,24 @@ export class Tunnel {
 			return;
 		}
 
+		// Close existing WebSocket if one already exists for this request ID.
+		// There should always be a close message sent before another open
+		// message for the same message ID.
+		//
+		// This should never occur if all is functioning correctly, but this
+		// prevents any edge case that would result in duplicate WebSockets for
+		// the same request.
+		const existingAdapter = this.#actorWebSockets.get(requestIdStr);
+		if (existingAdapter) {
+			this.log?.warn({
+				msg: "closing existing websocket for duplicate open event for the same request id",
+				requestId: requestIdStr,
+			});
+			// Close without sending a message through the tunnel since the server
+			// already knows about the new connection
+			existingAdapter.__closeWithoutCallback(1000, "ws.duplicate_open");
+		}
+
 		// Track this WebSocket for the actor
 		if (actor) {
 			actor.webSockets.add(requestIdStr);
