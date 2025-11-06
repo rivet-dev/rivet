@@ -2089,10 +2089,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			}
 		}
 
-		// Disconnect existing connections
 		const promises: Promise<unknown>[] = [];
+
+		// Disconnect existing non-hibernatable connections
 		for (const connection of this.#connections.values()) {
-			promises.push(connection.disconnect());
+			if (!connection.isHibernatable) {
+				promises.push(connection.disconnect());
+			}
 
 			// TODO: Figure out how to abort HTTP requests on shutdown. This
 			// might already be handled by the engine runner tunnel shutdown.
