@@ -3,12 +3,17 @@ export { assertUnreachable } from "./common/utils";
 
 import type { Context as HonoContext, Handler as HonoHandler } from "hono";
 import { stringify as uuidstringify } from "uuid";
-
+import { stringifyError } from "@/common/utils";
 import pkgJson from "../package.json" with { type: "json" };
+import { getLogger } from "./common/log";
 
 export const VERSION = pkgJson.version;
 
 let _userAgent: string | undefined;
+
+function logger() {
+	return getLogger("utils");
+}
 
 export function httpUserAgent(): string {
 	// Return cached value if already initialized
@@ -177,12 +182,16 @@ export class SinglePromiseQueue {
 
 				try {
 					await op();
-				} catch {
-					// Swallow errors: callers only await cycle completion, not success
+					// Notify all waiters for this cycle
+					resolver?.resolve();
+				} catch (err) {
+					logger().error({
+						msg: "error in SinglePromiseQueue drain loop",
+						error: stringifyError(err),
+					});
+					// Reject all waiters for this cycle
+					resolver?.reject(err);
 				}
-
-				// Notify all waiters for this cycle
-				resolver?.resolve();
 			}
 		} finally {
 			this.runningDrainLoop = undefined;
