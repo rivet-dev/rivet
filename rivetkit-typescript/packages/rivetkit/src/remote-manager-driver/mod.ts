@@ -4,6 +4,7 @@ import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 import { generateRandomString } from "@/actor/utils";
 import type { ClientConfig } from "@/client/client";
+import type { MetadataResponse } from "@/common/router";
 import { noopNext, stringifyError } from "@/common/utils";
 import type {
 	ActorOutput,
@@ -32,6 +33,7 @@ import {
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
 import { logger } from "./log";
+import { lookupMetadataCached } from "./metadata";
 import { createWebSocketProxy } from "./ws-proxy";
 
 // TODO:
@@ -48,9 +50,6 @@ import { createWebSocketProxy } from "./ws-proxy";
 // 	};
 // })();
 
-// Global cache to store metadata check promises for each endpoint
-const metadataCheckCache = new Map<string, Promise<void>>();
-
 export class RemoteManagerDriver implements ManagerDriver {
 	#config: ClientConfig;
 	#metadataPromise: Promise<void> | undefined;
@@ -63,64 +62,38 @@ export class RemoteManagerDriver implements ManagerDriver {
 			logger().info(
 				"detected next.js build phase, disabling health check",
 			);
-			runConfig.disableHealthCheck = true;
+			runConfig.disableMetadataLookup = true;
 		}
 
-		this.#config = runConfig;
+		// Clone config so we can mutate the endpoint in #metadataPromise
+		// NOTE: This is a shallow clone, so mutating nested properties will not do anything
+		this.#config = { ...runConfig };
 
 		// Perform metadata check if enabled
-		if (!runConfig.disableHealthCheck) {
-			this.#metadataPromise = this.#performMetadataCheck(runConfig);
-			this.#metadataPromise.catch((error) => {
-				logger().error({
-					msg: "metadata check failed",
-					error:
-						error instanceof Error ? error.message : String(error),
-				});
-			});
-		}
-	}
+		if (!runConfig.disableMetadataLookup) {
+			// This should never error, since it uses pRetry. If it does for
+			// any reason, we'll surface the error anywhere #metadataPromise is
+			// awaited.
+			this.#metadataPromise = lookupMetadataCached(this.#config).then(
+				(metadataData) => {
+					// Override endpoint for all future requests
+					if (metadataData.clientEndpoint) {
+						this.#config.endpoint = metadataData.clientEndpoint;
+						logger().info({
+							msg: "overriding cached client endpoint",
+							endpoint: metadataData.clientEndpoint,
+						});
+					}
 
-	async #performMetadataCheck(config: ClientConfig): Promise<void> {
-		const endpoint = getEndpoint(config);
-
-		// Check if metadata check is already in progress or completed for this endpoint
-		const existingPromise = metadataCheckCache.get(endpoint);
-		if (existingPromise) {
-			return existingPromise;
-		}
-
-		// Create and store the promise immediately to prevent racing requests
-		const metadataCheckPromise = (async () => {
-			try {
-				const metadataData = await getMetadata(config);
-
-				if (metadataData.clientEndpoint) {
 					logger().info({
-						msg: "received new client endpoint from metadata",
-						endpoint: metadataData.clientEndpoint,
+						msg: "connected to rivetkit manager",
+						runtime: metadataData.runtime,
+						version: metadataData.version,
+						runner: metadataData.runner,
 					});
-					this.#config.endpoint = metadataData.clientEndpoint;
-				}
-
-				// Log successful metadata check with runtime and version info
-				logger().info({
-					msg: "connected to rivetkit manager",
-					runtime: metadataData.runtime,
-					version: metadataData.version,
-					runner: metadataData.runner,
-				});
-			} catch (error) {
-				logger().error({
-					msg: "health check failed, validate the Rivet endpoint is configured correctly",
-					endpoint,
-					error: stringifyError(error),
-				});
-			}
-		})();
-
-		metadataCheckCache.set(endpoint, metadataCheckPromise);
-		return metadataCheckPromise;
+				},
+			);
+		}
 	}
 
 	async getForId({
