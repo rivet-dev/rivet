@@ -172,9 +172,14 @@ export class EngineActorDriver implements ActorDriver {
 				}
 
 				// Check for existing WS
-				const existingWs = handler.actor[
-					PERSIST_SYMBOL
-				].hibernatableWebSocket.find((ws) =>
+				const hibernatableArray =
+					handler.actor[PERSIST_SYMBOL].hibernatableWebSocket;
+				logger().debug({
+					msg: "checking hibernatable websockets",
+					requestId: idToStr(requestId),
+					existingHibernatableWebSockets: hibernatableArray.length,
+				});
+				const existingWs = hibernatableArray.find((ws) =>
 					arrayBuffersEqual(ws.requestId, requestId),
 				);
 
@@ -350,6 +355,12 @@ export class EngineActorDriver implements ActorDriver {
 
 		handler.persistedData = data;
 
+		logger().debug({
+			msg: "writing persisted data for actor",
+			actorId,
+			dataSize: data.byteLength,
+		});
+
 		await this.#runner.kvPut(actorId, [[KEYS.PERSIST_DATA, data]]);
 	}
 
@@ -424,6 +435,13 @@ export class EngineActorDriver implements ActorDriver {
 				persistedValue !== null
 					? persistedValue
 					: serializeEmptyPersistData(input);
+
+			logger().debug({
+				msg: "loaded persisted data for actor",
+				actorId,
+				dataSize: handler.persistedData?.byteLength,
+				wasInStorage: persistedValue !== null,
+			});
 		}
 
 		const name = actorConfig.name as string;
