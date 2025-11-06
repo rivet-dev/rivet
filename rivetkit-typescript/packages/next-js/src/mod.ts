@@ -117,7 +117,9 @@ async function handleRequestWithFileWatcher(
 		integrity: request.integrity,
 		// Override with new signal
 		signal: mergedController.signal,
-	});
+		// Required for streaming body
+		duplex: "half",
+	} as RequestInit);
 
 	// Handle request
 	const response = await fetch(newReq);
