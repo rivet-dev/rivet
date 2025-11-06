@@ -3,21 +3,43 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message as WsMessage;
 use rivet_runner_protocol::{self as protocol, versioned};
 use std::sync::Arc;
+use tokio::sync::watch;
 use universalpubsub::{NextOutput, Subscriber};
 use vbare::OwnedVersionedData;
 
 use crate::{
+	LifecycleResult,
 	conn::{Conn, TunnelActiveRequest},
 	errors,
 };
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
-pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
-	while let NextOutput::Message(ups_msg) = sub
-		.next()
-		.await
-		.context("pubsub_to_client_task sub failed")?
-	{
+pub async fn task(
+	conn: Arc<Conn>,
+	mut sub: Subscriber,
+	mut eviction_sub: Subscriber,
+	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
+) -> Result<LifecycleResult> {
+	loop {
+		let ups_msg = tokio::select! {
+			res = sub.next() => {
+				if let NextOutput::Message(ups_msg) = res.context("pubsub_to_client_task sub failed")? {
+					ups_msg
+				} else {
+					tracing::debug!("tunnel sub closed");
+					bail!("tunnel sub closed");
+				}
+			}
+			_ = eviction_sub.next() => {
+				tracing::debug!("runner evicted");
+				return Err(errors::WsError::Eviction.build());
+			}
+			_ = tunnel_to_ws_abort_rx.changed() => {
+				tracing::debug!("task aborted");
+				return Ok(LifecycleResult::Aborted);
+			}
+		};
+
 		tracing::debug!(
 			payload_len = ups_msg.payload.len(),
 			"received message from pubsub, forwarding to WebSocket"
@@ -105,6 +127,4 @@ pub async fn task(conn: Arc<Conn>, mut sub: Subscriber) -> Result<()> {
 			.await
 			.context("failed to send message to WebSocket")?
 	}
-
-	Ok(())
 }

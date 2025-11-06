@@ -57,25 +57,14 @@ struct CommandRow {
 
 #[workflow]
 pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
-	let init_res = ctx
-		.activity(InitInput {
-			runner_id: input.runner_id,
-			name: input.name.clone(),
-			key: input.key.clone(),
-			namespace_id: input.namespace_id,
-			create_ts: ctx.create_ts(),
-		})
-		.await?;
-
-	// Evict other workflow if there was a key conflict
-	if let Some(evict_workflow_id) = init_res.evict_workflow_id {
-		ctx.signal(Forward {
-			inner: protocol::ToServer::ToServerStopping,
-		})
-		.to_workflow_id(evict_workflow_id)
-		.send()
-		.await?;
-	}
+	ctx.activity(InitInput {
+		runner_id: input.runner_id,
+		name: input.name.clone(),
+		key: input.key.clone(),
+		namespace_id: input.namespace_id,
+		create_ts: ctx.create_ts(),
+	})
+	.await?;
 
 	ctx.loope(LifecycleState::new(), |ctx, state| {
 		let input = input.clone();
@@ -159,14 +148,14 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							}
 						}
 						protocol::ToServer::ToServerEvents(events) => {
+							// Ignore events that were already received
+							let new_events = events
+								.iter()
+								.filter(|event| event.index > state.last_event_idx);
+
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
-							for event in &events {
-								if event.index <= state.last_event_idx {
-									tracing::warn!(idx=%event.index, "event already received, ignoring");
-									continue;
-								}
-
+							for event in new_events.clone() {
 								let actor_id =
 									crate::utils::event_actor_id(&event.inner).to_string();
 								let res = ctx
@@ -192,9 +181,13 @@ pub async fn pegboard_runner(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 							}
 
 							// Check if events is empty
-							if let Some(last_event_idx) = events.last().map(|event| event.index) {
+							if let Some(last_event_idx) = new_events.last().map(|event| event.index)
+							{
 								ctx.activity(InsertEventsInput {
-									events: events.clone(),
+									events: events
+										.into_iter()
+										.filter(|event| event.index > state.last_event_idx)
+										.collect(),
 								})
 								.await?;
 
@@ -463,7 +456,7 @@ struct InitInput {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct InitOutput {
-	/// The workflow id of another runner that has the same key.
+	/// Deprecated.
 	evict_workflow_id: Option<Id>,
 }
 
@@ -473,8 +466,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 
 	*state = Some(State::new(input.namespace_id, input.create_ts));
 
-	let evict_workflow_id = ctx
-		.udb()?
+	ctx.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
@@ -483,12 +475,6 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 				input.name.clone(),
 				input.key.clone(),
 			);
-
-			// Read existing runner by key slot
-			let evict_workflow_id = tx
-				.read_opt(&runner_by_key_key, Serializable)
-				.await?
-				.map(|x| x.workflow_id);
 
 			// Allocate self
 			tx.write(
@@ -499,12 +485,14 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 				},
 			)?;
 
-			Ok(evict_workflow_id)
+			Ok(())
 		})
 		.custom_instrument(tracing::info_span!("runner_init_tx"))
 		.await?;
 
-	Ok(InitOutput { evict_workflow_id })
+	Ok(InitOutput {
+		evict_workflow_id: None,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -1071,7 +1059,7 @@ pub(crate) async fn allocate_pending_actors(
 					tx.add_conflict_key(&old_runner_alloc_key, ConflictRangeType::Read)?;
 					tx.delete(&old_runner_alloc_key);
 
-					// Add read conflict for the queue key
+					// Add read conflict and delete the queue key
 					tx.add_conflict_key(&queue_key, ConflictRangeType::Read)?;
 					tx.delete(&queue_key);
 
