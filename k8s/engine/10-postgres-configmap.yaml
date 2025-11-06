@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: rivet-engine
+data:
+  POSTGRES_DB: rivet
+  POSTGRES_USER: postgres
