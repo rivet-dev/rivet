@@ -13,7 +13,11 @@ export const ACTOR_STATUS_LABEL_MAP = {
 } satisfies Record<ActorStatus, string>;
 
 export const ActorStatusLabel = ({ status }: { status?: ActorStatus }) => {
-	return <span>{status ? ACTOR_STATUS_LABEL_MAP[status] : "Unknown"}</span>;
+	return (
+		<span data-slot="status-label">
+			{status ? ACTOR_STATUS_LABEL_MAP[status] : "Unknown"}
+		</span>
+	);
 };
 
 export const QueriedActorStatusLabel = ({ actorId }: { actorId: ActorId }) => {

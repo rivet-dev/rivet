@@ -4,6 +4,7 @@ import { memo, type ReactNode, Suspense } from "react";
 import {
 	cn,
 	Flex,
+	ScrollArea,
 	Tabs,
 	TabsContent,
 	TabsList,
@@ -52,7 +53,7 @@ export const ActorsActorDetails = memo(
 		return (
 			<GuardConnectableInspector actorId={actorId}>
 				<ActorDetailsSettingsProvider>
-					<div className="flex flex-col h-full flex-1">
+					<div className="flex flex-col h-full flex-1 @container/actor">
 						<ActorTabs
 							features={features}
 							actorId={actorId}
@@ -133,90 +134,98 @@ export function ActorTabs({
 			value={value}
 			onValueChange={onTabChange}
 			defaultValue={value}
-			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col ")}
+			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col")}
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
-				<div className="flex flex-1 items-center h-full w-full ">
-					<TabsList className="overflow-auto border-none h-full items-end">
-						{supportsState ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="state"
-								className="text-xs px-3 py-1 pb-2"
+				<ScrollArea
+					className="h-full items-end"
+					viewportProps={{
+						className: "h-full [&>div]:h-full",
+					}}
+				>
+					<div className="flex flex-1 items-center h-full w-full relative">
+						<TabsList className="border-none h-full items-safe-end w-full flex-nowrap mr-2.5">
+							{supportsState ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="state"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									State
+								</TabsTrigger>
+							) : null}
+							{supportsConnections ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="connections"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Connections
+								</TabsTrigger>
+							) : null}
+							{supportsEvents ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="events"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Events
+								</TabsTrigger>
+							) : null}
+							{supportsDatabase ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="database"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Database
+								</TabsTrigger>
+							) : null}
+							{supportsLogs ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="logs"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Logs
+								</TabsTrigger>
+							) : null}
+							{supportsMetadata ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="metadata"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Metadata
+								</TabsTrigger>
+							) : null}
+							{supportsMetrics ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="metrics"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Metrics
+								</TabsTrigger>
+							) : null}
+						</TabsList>
+						{actorId ? (
+							<Flex
+								gap="2"
+								justify="between"
+								items="center"
+								className="h-full pb-3 pt-2 pr-4 sticky right-0 bg-card"
 							>
-								State
-							</TabsTrigger>
+								<div className="w-4 bg-gradient-to-r from-transparent to-card absolute inset-y-0 left-0 -translate-x-full" />
+								<QueriedActorStatus
+									className="min-h-7 text-sm h-auto [&_[data-slot=status-label]]:hidden @lg:[&_[data-slot=status-label]]:inline-block"
+									actorId={actorId}
+								/>
+								<ActorStopButton actorId={actorId} />
+							</Flex>
 						) : null}
-						{supportsConnections ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="connections"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Connections
-							</TabsTrigger>
-						) : null}
-						{supportsEvents ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="events"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Events
-							</TabsTrigger>
-						) : null}
-						{supportsDatabase ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="database"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Database
-							</TabsTrigger>
-						) : null}
-						{supportsLogs ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="logs"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Logs
-							</TabsTrigger>
-						) : null}
-						{supportsMetadata ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="metadata"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Metadata
-							</TabsTrigger>
-						) : null}
-						{supportsMetrics ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="metrics"
-								className="text-xs px-3 py-1 pb-2"
-							>
-								Metrics
-							</TabsTrigger>
-						) : null}
-					</TabsList>
-					{actorId ? (
-						<Flex
-							gap="2"
-							justify="between"
-							items="center"
-							className="h-[36px] pb-3 pt-2 pr-4"
-						>
-							<QueriedActorStatus
-								className="text-sm h-auto"
-								actorId={actorId}
-							/>
-							<ActorStopButton actorId={actorId} />
-						</Flex>
-					) : null}
-				</div>
+					</div>
+				</ScrollArea>
 			</div>
 			{actorId ? (
 				<>
