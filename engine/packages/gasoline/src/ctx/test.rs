@@ -245,7 +245,7 @@ pub fn setup_logging() {
 	// Set up logging
 	let _ = tracing_subscriber::fmt()
 		.with_env_filter("debug")
-		.with_ansi(false)
+		.with_ansi(true)
 		.with_test_writer()
 		.try_init();
 }
