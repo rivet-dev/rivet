@@ -187,6 +187,7 @@ export function createActorRouter(
 					encoding,
 					connParams,
 					generateConnRequestId(),
+					undefined,
 					connIdRaw,
 					connTokenRaw,
 				);
@@ -303,6 +304,7 @@ export function createActorRouter(
 					pathWithQuery,
 					actorDriver,
 					c.env.actorId,
+					undefined,
 				);
 			})(c, noopNext());
 		} else {

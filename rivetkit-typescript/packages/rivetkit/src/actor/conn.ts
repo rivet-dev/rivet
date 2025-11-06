@@ -3,7 +3,7 @@ import invariant from "invariant";
 import { PersistedHibernatableWebSocket } from "@/schemas/actor-persist/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
-import { bufferToArrayBuffer } from "@/utils";
+import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
 import {
 	CONN_DRIVERS,
 	ConnDriverKind,
@@ -14,7 +14,7 @@ import {
 import type { ConnSocket } from "./conn-socket";
 import type { AnyDatabaseProvider } from "./database";
 import * as errors from "./errors";
-import type { ActorInstance } from "./instance";
+import { type ActorInstance, PERSIST_SYMBOL } from "./instance";
 import type { PersistedConn } from "./persisted";
 import { CachedSerializer } from "./protocol/serde";
 import { generateSecureToken } from "./utils";
@@ -69,7 +69,8 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	__socket?: ConnSocket;
 
 	get __status(): ConnectionStatus {
-		if (this.__socket) {
+		// TODO: isHibernatible might be true while the actual hibernatable websocket has disconnected
+		if (this.__socket || this.isHibernatable) {
 			return "connected";
 		} else {
 			return "reconnecting";
@@ -132,17 +133,17 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * If the underlying connection can hibernate.
 	 */
 	public get isHibernatable(): boolean {
-		if (this.__driverState) {
-			const driverKind = getConnDriverKindFromState(this.__driverState);
-			const driver = CONN_DRIVERS[driverKind];
-			return driver.isHibernatable(
-				this.#actor,
-				this,
-				(this.__driverState as any)[driverKind],
-			);
-		} else {
+		if (!this.__persist.hibernatableRequestId) {
 			return false;
 		}
+		return (
+			this.#actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex((x) =>
+				arrayBuffersEqual(
+					x.requestId,
+					this.__persist.hibernatableRequestId!,
+				),
+			) > -1
+		);
 	}
 
 	/**

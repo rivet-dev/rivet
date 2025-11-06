@@ -116,6 +116,7 @@ export async function handleWebSocketConnect(
 	encoding: Encoding,
 	parameters: unknown,
 	requestId: string,
+	requestIdBuf: ArrayBuffer | undefined,
 	connId: string | undefined,
 	connToken: string | undefined,
 ): Promise<UpgradeWebSocketArgs> {
@@ -184,9 +185,19 @@ export async function handleWebSocketConnect(
 						actorId,
 					});
 
+					// Check if this is a hibernatable websocket
+					const isHibernatable =
+						!!requestIdBuf &&
+						actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex(
+							(ws) =>
+								arrayBuffersEqual(ws.requestId, requestIdBuf),
+						) !== -1;
+
 					conn = await actor.createConn(
 						{
 							requestId: requestId,
+							requestIdBuf: requestIdBuf,
+							hibernatable: isHibernatable,
 							driverState: {
 								[ConnDriverKind.WEBSOCKET]: {
 									encoding,
@@ -365,6 +376,7 @@ export async function handleSseConnect(
 			conn = await actor.createConn(
 				{
 					requestId: requestId,
+					hibernatable: false,
 					driverState: {
 						[ConnDriverKind.SSE]: {
 							encoding,
@@ -479,6 +491,7 @@ export async function handleAction(
 		conn = await actor.createConn(
 			{
 				requestId: requestId,
+				hibernatable: false,
 				driverState: { [ConnDriverKind.HTTP]: {} },
 			},
 			parameters,
@@ -593,6 +606,7 @@ export async function handleRawWebSocketHandler(
 	path: string,
 	actorDriver: ActorDriver,
 	actorId: string,
+	requestIdBuf: ArrayBuffer | undefined,
 ): Promise<UpgradeWebSocketArgs> {
 	const actor = await actorDriver.loadActor(actorId);
 

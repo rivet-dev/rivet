@@ -562,6 +562,7 @@ export class EngineActorDriver implements ActorDriver {
 				encoding,
 				connParams,
 				requestId,
+				requestIdBuf,
 				// Extract connId and connToken from protocols if needed
 				undefined,
 				undefined,
@@ -572,6 +573,7 @@ export class EngineActorDriver implements ActorDriver {
 				url.pathname + url.search,
 				this,
 				actorId,
+				requestIdBuf,
 			);
 		} else {
 			throw new Error(`Unreachable path: ${url.pathname}`);

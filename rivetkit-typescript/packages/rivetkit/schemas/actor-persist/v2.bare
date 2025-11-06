@@ -12,6 +12,7 @@ type PersistedConnection struct {
 	state: data
 	subscriptions: list<PersistedSubscription>
 	lastSeen: i64
+	hibernatableRequestId: optional<data>
 }
 
 # MARK: Schedule Event

@@ -24,6 +24,10 @@ migrations.set(
 	1,
 	(v1Data: v1.PersistedActor): v2.PersistedActor => ({
 		...v1Data,
+		connections: v1Data.connections.map((conn) => ({
+			...conn,
+			hibernatableRequestId: null,
+		})),
 		hibernatableWebSocket: [],
 	}),
 );

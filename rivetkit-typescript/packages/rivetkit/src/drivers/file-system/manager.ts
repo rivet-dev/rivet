@@ -175,6 +175,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				encoding,
 				params,
 				generateConnRequestId(),
+				undefined,
 				connId,
 				connToken,
 			);
@@ -190,6 +191,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				path,
 				this.#actorDriver,
 				actorId,
+				undefined,
 			);
 			return new InlineWebSocketAdapter2(wsHandler);
 		} else {
@@ -234,6 +236,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				encoding,
 				connParams,
 				generateConnRequestId(),
+				undefined,
 				connId,
 				connToken,
 			);
@@ -249,6 +252,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				path,
 				this.#actorDriver,
 				actorId,
+				undefined,
 			);
 			return upgradeWebSocket(() => wsHandler)(c, noopNext());
 		} else {
