@@ -123,7 +123,7 @@ export async function handleWebSocketConnect(
 			onOpen: (_evt: any, ws: WSContext) => {
 				const { code } = deconstructError(
 					error,
-					actor.rLog,
+					loggerWithoutContext(),
 					{
 						wsEvent: "open",
 					},
