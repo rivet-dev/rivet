@@ -77,6 +77,7 @@ export function getInspectorUrl(runConfig: RunnerConfigInput | undefined) {
 
 export const isInspectorEnabled = (
 	runConfig: RunConfig,
+	// TODO(kacper): Remove context in favor of using the gateway, so only context is the actor
 	context: "actor" | "manager",
 ) => {
 	if (typeof runConfig.inspector?.enabled === "boolean") {
