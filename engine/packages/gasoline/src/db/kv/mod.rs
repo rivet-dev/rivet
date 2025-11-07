@@ -43,8 +43,8 @@ mod keys;
 const WORKER_INSTANCE_LOST_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
 /// How long before overwriting an existing metrics lock.
 const METRICS_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
-/// For pubsub wake mechanism.
-const WORKER_WAKE_SUBJECT: &str = "gasoline.worker.wake";
+/// For pubsub bump mechanism.
+const WORKER_BUMP_SUBJECT: &str = "gasoline.worker.bump";
 
 pub struct DatabaseKv {
 	pools: rivet_pools::Pools,
@@ -52,31 +52,31 @@ pub struct DatabaseKv {
 }
 
 impl DatabaseKv {
-	/// Spawns a new thread and publishes a worker wake message to pubsub.
-	fn wake_worker(&self) {
+	/// Spawns a new thread and publishes a worker bump message to pubsub.
+	fn bump_workers(&self) {
 		let Ok(pubsub) = self.pools.ups() else {
 			tracing::debug!("failed to acquire pubsub pool");
 			return;
 		};
 
-		let spawn_res = tokio::task::Builder::new().name("wake").spawn(
+		let spawn_res = tokio::task::Builder::new().name("bump").spawn(
 			async move {
 				// Fail gracefully
 				if let Err(err) = pubsub
 					.publish(
-						WORKER_WAKE_SUBJECT,
+						WORKER_BUMP_SUBJECT,
 						&Vec::new(),
 						universalpubsub::PublishOpts::broadcast(),
 					)
 					.await
 				{
-					tracing::warn!(?err, "failed to publish wake message");
+					tracing::warn!(?err, "failed to publish bump message");
 				}
 			}
-			.instrument(tracing::info_span!("wake_worker_publish")),
+			.instrument(tracing::info_span!("bump_worker_publish")),
 		);
 		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn wake task");
+			tracing::error!(?err, "failed to spawn bump task");
 		}
 	}
 }
@@ -424,12 +424,12 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
+	async fn bump_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
 		let mut subscriber = self
 			.pools
 			.ups()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.subscribe(WORKER_WAKE_SUBJECT)
+			.subscribe(WORKER_BUMP_SUBJECT)
 			.await
 			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
 
@@ -586,7 +586,7 @@ impl Database for DatabaseKv {
 				"handled failover",
 			);
 
-			self.wake_worker();
+			self.bump_workers();
 		}
 
 		Ok(())
@@ -815,7 +815,7 @@ impl Database for DatabaseKv {
 			.await
 			.map_err(WorkflowError::Udb)?;
 
-		self.wake_worker();
+		self.bump_workers();
 
 		Ok(workflow_id)
 	}
@@ -1028,7 +1028,7 @@ impl Database for DatabaseKv {
 						{
 							let wake_deadline_ts = key.condition.deadline_ts();
 
-							// Update wake deadline ts
+							// Update wake deadline ts if earlier
 							if last_wake_deadline_ts.is_none()
 								|| wake_deadline_ts < *last_wake_deadline_ts
 							{
@@ -1633,7 +1633,7 @@ impl Database for DatabaseKv {
 
 		// Wake worker again in case some other workflow was waiting for this one to complete
 		if wrote_to_wake_idx {
-			self.wake_worker();
+			self.bump_workers();
 		}
 
 		let dt = start_instant.elapsed().as_secs_f64();
@@ -1794,7 +1794,7 @@ impl Database for DatabaseKv {
 		//
 		// This will result in the workflow sleeping instead of immediately running again.
 		//
-		// Adding this wake_worker call ensures that if the workflow has a valid wake condition before commit
+		// Adding this bump_workers call ensures that if the workflow has a valid wake condition before commit
 		// then it will immediately wake up again.
 		//
 		// This is simpler than having this commit_workflow fn read wake conditions because:
@@ -1802,7 +1802,7 @@ impl Database for DatabaseKv {
 		// - would involve informing the worker to restart the workflow in memory instead of the usual
 		//   workflow lifecycle
 		// - the worker is already designed to pull wake conditions frequently
-		self.wake_worker();
+		self.bump_workers();
 
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::COMMIT_WORKFLOW_DURATION.record(
@@ -2111,7 +2111,7 @@ impl Database for DatabaseKv {
 			.await
 			.map_err(WorkflowError::Udb)?;
 
-		self.wake_worker();
+		self.bump_workers();
 
 		Ok(())
 	}
@@ -2163,7 +2163,7 @@ impl Database for DatabaseKv {
 			.await
 			.map_err(WorkflowError::Udb)?;
 
-		self.wake_worker();
+		self.bump_workers();
 
 		Ok(())
 	}
@@ -2219,7 +2219,7 @@ impl Database for DatabaseKv {
 			.await
 			.map_err(WorkflowError::Udb)?;
 
-		self.wake_worker();
+		self.bump_workers();
 
 		Ok(sub_workflow_id)
 	}

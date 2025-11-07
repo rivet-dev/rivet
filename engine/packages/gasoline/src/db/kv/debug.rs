@@ -718,7 +718,7 @@ impl DatabaseDebug for DatabaseKv {
 			.instrument(tracing::info_span!("wake_workflows_tx"))
 			.await?;
 
-		self.wake_worker();
+		self.bump_workers();
 
 		Ok(())
 	}
