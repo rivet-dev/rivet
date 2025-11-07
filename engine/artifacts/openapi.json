@@ -274,6 +274,49 @@
         ]
       }
     },
+    "/actors/{actor_id}/kv/keys/{key}": {
+      "get": {
+        "tags": [
+          "actors::kv_get"
+        ],
+        "operationId": "actors_kv_get",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorsKvGetResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/datacenters": {
       "get": {
         "tags": [
@@ -1017,6 +1060,22 @@
           },
           "created": {
             "type": "boolean"
+          }
+        }
+      },
+      "ActorsKvGetResponse": {
+        "type": "object",
+        "required": [
+          "value",
+          "update_ts"
+        ],
+        "properties": {
+          "update_ts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "value": {
+            "type": "string"
           }
         }
       },
