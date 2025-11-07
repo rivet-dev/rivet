@@ -5,4 +5,9 @@ registry.start({
 		origin: "http://localhost:5173",
 		credentials: true,
 	},
+	inspector: {
+		cors: {
+			origin: (c) => c,
+		},
+	},
 });

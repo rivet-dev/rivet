@@ -138,7 +138,7 @@ export function ActorTabs({
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
 				<ScrollArea
-					className="h-full items-end"
+					className="h-full items-end w-full"
 					viewportProps={{
 						className: "h-full [&>div]:h-full",
 					}}

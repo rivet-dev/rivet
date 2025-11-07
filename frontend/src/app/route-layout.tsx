@@ -1,5 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { H2, Skeleton } from "@/components";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
@@ -7,11 +7,21 @@ import * as Layout from "./layout";
 
 export function RouteLayout({
 	children = <Outlet />,
+	defaultCollapsed = false,
 }: {
 	children?: React.ReactNode;
+	defaultCollapsed?: boolean;
 }) {
 	const sidebarRef = useRef<ImperativePanelHandle>(null);
-	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+		() => defaultCollapsed,
+	);
+
+	useEffect(() => {
+		if (isSidebarCollapsed) {
+			sidebarRef.current?.collapse();
+		}
+	}, []);
 
 	return (
 		<Layout.Root>
