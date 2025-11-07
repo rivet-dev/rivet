@@ -16,10 +16,10 @@ export async function createAndPushTag(opts: ReleaseOpts) {
 	console.log(`Creating tag v${opts.version}...`);
 	try {
 		// Create tag and force update if it exists
-		await $({ cwd: opts.root })`git tag -f v${opts.version}`;
+		await $({ stdio: "inherit", cwd: opts.root })`git tag -f v${opts.version}`;
 
 		// Push tag with force to ensure it's updated
-		await $({ cwd: opts.root })`git push origin v${opts.version} -f`;
+		await $({ stdio: "inherit", cwd: opts.root })`git push origin v${opts.version} -f`;
 
 		console.log(`✅ Tag v${opts.version} created and pushed`);
 	} catch (err) {
@@ -54,6 +54,7 @@ export async function createGitHubRelease(opts: ReleaseOpts) {
 				`Updating release ${opts.version} to point to new tag ${tagName}`,
 			);
 			await $({
+				stdio: "inherit",
 				cwd: opts.root,
 			})`gh release edit ${existingRelease.tagName} --tag ${tagName}`;
 		} else {
@@ -61,12 +62,14 @@ export async function createGitHubRelease(opts: ReleaseOpts) {
 				`Creating new release ${opts.version} pointing to tag ${tagName}`,
 			);
 			await $({
+				stdio: "inherit",
 				cwd: opts.root,
 			})`gh release create ${tagName} --title ${opts.version} --generate-notes`;
 
 			// Check if this is a pre-release (contains -rc. or similar)
 			if (opts.version.includes("-")) {
 				await $({
+					stdio: "inherit",
 					cwd: opts.root,
 				})`gh release edit ${tagName} --prerelease`;
 			}
