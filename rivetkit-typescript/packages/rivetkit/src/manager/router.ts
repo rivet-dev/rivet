@@ -218,6 +218,7 @@ function addManagerRoutes(
 	managerDriver: ManagerDriver,
 	router: OpenAPIHono,
 ) {
+	// TODO(kacper): Remove this in favor of standard manager API
 	// Inspector
 	if (isInspectorEnabled(runConfig, "manager")) {
 		if (!managerDriver.inspector) {
