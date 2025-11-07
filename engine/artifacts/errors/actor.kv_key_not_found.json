@@ -1,0 +1,5 @@
+{
+  "code": "kv_key_not_found",
+  "group": "actor",
+  "message": "The KV key does not exist for this actor."
+}
