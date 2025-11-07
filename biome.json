@@ -5,6 +5,7 @@
 			"**/*.js",
 			"**/*.json",
 			"**/*.ts",
+			"rivetkit-typescript/packages/inspect/**/*",
 			"!engine/artifacts",
 			"!engine/sdks/typescript/api-full",
 			"!engine/sdks/typescript/runner-protocol",
