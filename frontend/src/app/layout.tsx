@@ -465,7 +465,7 @@ function HeaderButton({ children, className, ...props }: ButtonProps) {
 	);
 }
 
-function ConnectionStatus(): ReactNode {
+export function ConnectionStatus({ className }: { className?: string }) {
 	const endpoint = useSearch({
 		from: "/_context",
 		select: (s) => s.u,
@@ -478,7 +478,12 @@ function ConnectionStatus(): ReactNode {
 
 	if (isLoading) {
 		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
+			<div
+				className={cn(
+					"border text-sm p-2 rounded-md flex items-center bg-stripes",
+					className,
+				)}
+			>
 				<div className="flex-1">
 					<p>Connecting</p>
 					<p className="text-muted-foreground text-xs">{endpoint}</p>
@@ -490,7 +495,12 @@ function ConnectionStatus(): ReactNode {
 
 	if (isError) {
 		return (
-			<div className="text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ">
+			<div
+				className={cn(
+					"text-red-500 border p-2 rounded-md flex items-center text-sm justify-between bg-stripes-destructive ",
+					className,
+				)}
+			>
 				<div className="flex items-center">
 					<div>
 						<p>Disconnected</p>
@@ -515,7 +525,12 @@ function ConnectionStatus(): ReactNode {
 
 	if (isSuccess) {
 		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
+			<div
+				className={cn(
+					" border text-sm p-2 rounded-md flex items-center bg-stripes",
+					className,
+				)}
+			>
 				<div>
 					<p>Connected</p>
 					<p className="text-muted-foreground text-xs">{endpoint}</p>

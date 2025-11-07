@@ -20,6 +20,20 @@ export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
 	null,
 );
 
+const useConnectionDetails = () => {
+	return match(__APP_TYPE__)
+		.with("inspector", () => {
+			return { namespace: "", engineToken: "" };
+		})
+		.otherwise(() => {
+			const provider = useEngineCompatDataProvider();
+			return {
+				namespace: provider.engineNamespace,
+				engineToken: provider.engineToken,
+			};
+		});
+};
+
 export const useActorWorker = () => {
 	const value = useContext(ActorWorkerContext);
 	assertNonNullable(value);

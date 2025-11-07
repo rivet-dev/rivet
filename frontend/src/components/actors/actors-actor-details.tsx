@@ -136,13 +136,84 @@ export function ActorTabs({
 			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col ")}
 		>
 			<div className="flex justify-between items-center border-b h-[45px]">
-				<div className="flex flex-1 items-center h-full w-full ">
-					<TabsList className="overflow-auto border-none h-full items-end">
-						{supportsState ? (
-							<TabsTrigger
-								disabled={disabled}
-								value="state"
-								className="text-xs px-3 py-1 pb-2"
+				<ScrollArea
+					className="h-full items-end w-full"
+					viewportProps={{
+						className: "h-full [&>div]:h-full",
+					}}
+				>
+					<div className="flex flex-1 items-center h-full w-full relative">
+						<TabsList className="border-none h-full items-safe-end w-full flex-nowrap mr-2.5">
+							{supportsState ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="state"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									State
+								</TabsTrigger>
+							) : null}
+							{supportsConnections ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="connections"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Connections
+								</TabsTrigger>
+							) : null}
+							{supportsEvents ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="events"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Events
+								</TabsTrigger>
+							) : null}
+							{supportsDatabase ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="database"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Database
+								</TabsTrigger>
+							) : null}
+							{supportsLogs ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="logs"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Logs
+								</TabsTrigger>
+							) : null}
+							{supportsMetadata ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="metadata"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Metadata
+								</TabsTrigger>
+							) : null}
+							{supportsMetrics ? (
+								<TabsTrigger
+									disabled={disabled}
+									value="metrics"
+									className="text-xs px-3 py-1 pb-3"
+								>
+									Metrics
+								</TabsTrigger>
+							) : null}
+						</TabsList>
+						{actorId ? (
+							<Flex
+								gap="2"
+								justify="between"
+								items="center"
+								className="h-full pb-3 pt-2 pr-4 sticky right-0 bg-card"
 							>
 								State
 							</TabsTrigger>
