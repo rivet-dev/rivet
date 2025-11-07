@@ -14,13 +14,13 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 	let awsAccessKeyId = process.env.R2_RELEASES_ACCESS_KEY_ID;
 	if (!awsAccessKeyId) {
 		const result =
-			await $`op read ${"op://Engineering/rivet-releases R2 Upload/username"}`;
+			await $`op read "op://Engineering/rivet-releases R2 Upload/username"`;
 		awsAccessKeyId = result.stdout.trim();
 	}
 	let awsSecretAccessKey = process.env.R2_RELEASES_SECRET_ACCESS_KEY;
 	if (!awsSecretAccessKey) {
 		const result =
-			await $`op read ${"op://Engineering/rivet-releases R2 Upload/password"}`;
+			await $`op read "op://Engineering/rivet-releases R2 Upload/password"`;
 		awsSecretAccessKey = result.stdout.trim();
 	}
 
@@ -34,17 +34,30 @@ export async function updateArtifacts(opts: ReleaseOpts) {
 		AWS_DEFAULT_REGION: "auto",
 	};
 
+	// Determine which commit to use for source artifacts
+	let sourceCommit = opts.commit;
+	if (opts.reuseEngineVersion) {
+		console.log(`==> Reusing artifacts from version ${opts.reuseEngineVersion}`);
+		// Fetch tags to ensure we have the version tag
+		console.log(`==> Fetching tags...`);
+		await $({ stdio: "inherit" })`git fetch --tags`;
+		const result = await $`git rev-parse v${opts.reuseEngineVersion}`;
+		sourceCommit = result.stdout.trim().slice(0, 7);
+		console.log(`==> Source commit: ${sourceCommit}`);
+	}
+
 	// List all files under engine/{commit}/
-	const commitPrefix = `engine/${opts.commit}/`;
+	const commitPrefix = `engine/${sourceCommit}/`;
 	console.log(`==> Listing Original Files: ${commitPrefix}`);
 	const listResult = await $({
 		env: awsEnv,
 		shell: true,
+		stdio: ["pipe", "pipe", "inherit"],
 	})`aws s3api list-objects --bucket rivet-releases --prefix ${commitPrefix} --endpoint-url ${endpointUrl}`;
 	const commitFiles = JSON.parse(listResult.stdout);
 	assert(
 		Array.isArray(commitFiles?.Contents) && commitFiles.Contents.length > 0,
-		`No files found under engine/${opts.commit}/`,
+		`No files found under engine/${sourceCommit}/`,
 	);
 
 	// Copy files to version directory
@@ -71,6 +84,7 @@ async function copyFiles(
 	await $({
 		env: awsEnv,
 		shell: true,
+		stdio: "inherit",
 	})`aws s3 rm s3://rivet-releases/${targetPrefix} --recursive --endpoint-url ${endpointUrl}`;
 
 	// Copy new files using --recursive
@@ -78,6 +92,7 @@ async function copyFiles(
 	await $({
 		env: awsEnv,
 		shell: true,
+		stdio: "inherit",
 	})`aws s3 cp s3://rivet-releases/${sourcePrefix} s3://rivet-releases/${targetPrefix} --recursive --copy-props none --endpoint-url ${endpointUrl}`;
 }
 
@@ -104,6 +119,7 @@ async function generateInstallScripts(
 			env: awsEnv,
 			input: scriptContent,
 			shell: true,
+			stdio: ["pipe", "inherit", "inherit"],
 		})`aws s3 cp - s3://rivet-releases/${uploadKey} --endpoint-url ${endpointUrl}`;
 	}
 }

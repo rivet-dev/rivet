@@ -12,6 +12,10 @@ on:
         required: true
         type: boolean
         default: true
+      reuse_engine_version:
+        description: 'Reuse engine artifacts from this version (skips building)'
+        required: false
+        type: string
 
 defaults:
   run:
@@ -47,8 +51,10 @@ jobs:
 
       - name: Setup
         env:
-          # Required to authenticate with Git
+          # https://docs.github.com/en/actions/security-guides/automatic-token-authentication
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         working-directory: './rivet'
         run: |
           # Configure Git
@@ -66,15 +72,23 @@ jobs:
           # Install tsx globally
           npm install -g tsx
 
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase setup-ci
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase setup-ci
+          # Build command based on inputs
+          CMD="./scripts/release/main.ts --version \"${{ github.event.inputs.version }}\" --phase setup-ci"
+
+          if [ "${{ inputs.latest }}" != "true" ]; then
+            CMD="$CMD --no-latest"
           fi
+
+          if [ -n "${{ inputs.reuse_engine_version }}" ]; then
+            CMD="$CMD --reuse-engine-version \"${{ inputs.reuse_engine_version }}\""
+          fi
+
+          eval "$CMD"
 
   binaries:
     name: "Build & Push Binaries"
     needs: [setup]
+    if: ${{ !inputs.reuse_engine_version }}
     strategy:
       matrix:
         include:
@@ -158,6 +172,7 @@ jobs:
   docker:
     name: "Build & Push Docker Images"
     needs: [setup]
+    if: ${{ !inputs.reuse_engine_version }}
     strategy:
       matrix:
         include:
@@ -223,7 +238,8 @@ jobs:
 
   complete:
     name: "Complete"
-    needs: [docker, binaries]
+    needs: [setup, docker, binaries]
+    if: ${{ always() && !cancelled() && needs.setup.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped') && (needs.binaries.result == 'success' || needs.binaries.result == 'skipped') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -244,9 +260,10 @@ jobs:
 
       - name: Complete
         env:
+          # https://cli.github.com/manual/gh_help_environment
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
           R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Authenticate with NPM
           cat << EOF > ~/.npmrc
@@ -259,8 +276,15 @@ jobs:
           # Install tsx globally
           npm install -g tsx
 
-          if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --phase complete-ci --no-validate-git
-          else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --phase complete-ci --no-validate-git
+          # Build command based on inputs
+          CMD="./scripts/release/main.ts --version \"${{ github.event.inputs.version }}\" --phase complete-ci --no-validate-git"
+
+          if [ "${{ inputs.latest }}" != "true" ]; then
+            CMD="$CMD --no-latest"
           fi
+
+          if [ -n "${{ inputs.reuse_engine_version }}" ]; then
+            CMD="$CMD --reuse-engine-version \"${{ inputs.reuse_engine_version }}\""
+          fi
+
+          eval "$CMD"
