@@ -44,11 +44,13 @@ export interface ManagerDriver {
 		router: Hono,
 	) => void;
 
+	// TODO(kacper): Remove this in favor of standard manager API
 	/**
 	 * @internal
 	 */
 	readonly inspector?: ManagerInspector;
 
+	// TODO(kacper): Remove this in favor of ActorDriver.getinspectorToken
 	/**
 	 * Get or create the inspector access token.
 	 * @experimental

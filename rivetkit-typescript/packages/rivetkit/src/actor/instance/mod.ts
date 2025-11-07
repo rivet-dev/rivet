@@ -24,7 +24,7 @@ import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
 import { CachedSerializer } from "../protocol/serde";
 import { Schedule } from "../schedule";
-import { DeadlineError, deadline } from "../utils";
+import { DeadlineError, deadline, generateSecureToken } from "../utils";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./kv";
@@ -104,6 +104,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#schedule!: Schedule;
 
 	// MARK: - Inspector
+	#inspectorToken?: string;
 	#inspector = new ActorInspector(() => {
 		return {
 			isDbEnabled: async () => {
@@ -218,6 +219,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return this.#inspector;
 	}
 
+	get inspectorToken(): string | undefined {
+		return this.#inspectorToken;
+	}
+
 	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
 		return this.#connectionManager.connections;
 	}
@@ -308,6 +313,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Read and initialize state
 		await this.#initializeState();
+
+		// Generate or load inspector token
+		await this.#initializeInspectorToken();
 
 		// Initialize variables
 		if (this.#varsEnabled) {
@@ -828,6 +836,29 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Call onCreate lifecycle
 		if (this.#config.onCreate) {
 			await this.#config.onCreate(this.actorContext, persistData.input!);
+		}
+	}
+
+	async #initializeInspectorToken() {
+		// Try to load existing token
+		const [tokenBuffer] = await this.#actorDriver.kvBatchGet(
+			this.#actorId,
+			[KEYS.INSPECTOR_TOKEN],
+		);
+
+		if (tokenBuffer !== null) {
+			// Token exists, decode it
+			const decoder = new TextDecoder();
+			this.#inspectorToken = decoder.decode(tokenBuffer);
+			this.#rLog.debug({ msg: "loaded existing inspector token" });
+		} else {
+			// Generate new token
+			this.#inspectorToken = generateSecureToken();
+			const tokenBytes = new TextEncoder().encode(this.#inspectorToken);
+			await this.#actorDriver.kvBatchPut(this.#actorId, [
+				[KEYS.INSPECTOR_TOKEN, tokenBytes],
+			]);
+			this.#rLog.debug({ msg: "generated new inspector token" });
 		}
 	}
 
