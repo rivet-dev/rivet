@@ -46,12 +46,14 @@ import {
 	ActorsGetOrCreateRequestSchema,
 	type ActorsGetOrCreateResponse,
 	ActorsGetOrCreateResponseSchema,
+	type ActorsListNamesResponse,
+	ActorsListNamesResponseSchema,
 	type ActorsListResponse,
 	ActorsListResponseSchema,
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import type { AnyClient } from "@/mod";
-import type { RegistryConfig } from "@/registry/config";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { DriverConfig, RunnerConfig } from "@/registry/run-config";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
@@ -365,6 +367,27 @@ function addManagerRoutes(
 				actors: actors.map((actor) =>
 					createApiActor(actor, runConfig.runnerName),
 				),
+			});
+		});
+	}
+
+	// GET /actors/names
+	{
+		const route = createRoute({
+			method: "get",
+			path: "/actors/names",
+			request: {
+				query: z.object({
+					namespace: z.string(),
+				}),
+			},
+			responses: buildOpenApiResponses(ActorsListNamesResponseSchema),
+		});
+
+		router.openapi(route, async (c) => {
+			const names = buildActorNames(registryConfig);
+			return c.json<ActorsListNamesResponse>({
+				names,
 			});
 		});
 	}
