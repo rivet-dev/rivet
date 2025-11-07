@@ -63,6 +63,9 @@ pub enum Actor {
 		namespace: String,
 		runner_name: String,
 	},
+
+	#[error("kv_key_not_found", "The KV key does not exist for this actor.")]
+	KvKeyNotFound,
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+base64.workspace = true
 gas.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
@@ -27,6 +28,7 @@ tokio.workspace = true
 tracing.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
+pegboard-actor-kv.workspace = true
 universalpubsub.workspace = true
 uuid.workspace = true
 utoipa.workspace = true
