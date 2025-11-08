@@ -1,10 +1,10 @@
-# Multiplayer Game for RivetKit
+# Multiplayer Game for Rivet
 
-Example project demonstrating real-time multiplayer game mechanics with [RivetKit](https://rivetkit.org).
+Example project demonstrating real-time multiplayer game mechanics with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating real-time multiplayer game mechanics with [RivetKi
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/game
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/game
 npm install
 ```
 
@@ -50,7 +50,7 @@ This multiplayer game demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor managing game state and player positions
+- **Backend**: Rivet actor managing game state and player positions
 - **Frontend**: React canvas-based game with real-time input handling
 - **State Management**: Server-authoritative with client-side prediction
 - **Networking**: WebSocket-based real-time communication

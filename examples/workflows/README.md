@@ -1,10 +1,10 @@
-# Order Fulfillment State Machine for RivetKit
+# Order Fulfillment State Machine for Rivet
 
-Example project demonstrating a basic order state machine with [RivetKit](https://rivetkit.org).
+Example project demonstrating a basic order state machine with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating a basic order state machine with [RivetKit](https:
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/workflows
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/workflows
 npm install
 ```
 

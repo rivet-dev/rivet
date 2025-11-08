@@ -1,10 +1,10 @@
-# Stream Processor for RivetKit
+# Stream Processor for Rivet
 
-Example project demonstrating real-time top-K stream processing with [RivetKit](https://rivetkit.org).
+Example project demonstrating real-time top-K stream processing with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating real-time top-K stream processing with [RivetKit](
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/stream
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/stream
 npm install
 ```
 
@@ -49,7 +49,7 @@ This stream processor demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor managing stream state and top-K algorithm
+- **Backend**: Rivet actor managing stream state and top-K algorithm
 - **Frontend**: React application with real-time stream visualization
 - **State Management**: Server-side state with client-side event subscriptions
 - **Algorithm**: Insertion-based top-K maintenance with O(k) complexity

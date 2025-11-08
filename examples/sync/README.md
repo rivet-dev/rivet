@@ -1,10 +1,10 @@
-# Sync Contacts for RivetKit
+# Sync Contacts for Rivet
 
-Example project demonstrating offline-first contact synchronization with conflict resolution using [RivetKit](https://rivetkit.org).
+Example project demonstrating offline-first contact synchronization with conflict resolution using [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating offline-first contact synchronization with conflic
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/sync
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/sync
 npm install
 ```
 
@@ -52,7 +52,7 @@ This contact sync system demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor managing contact state and synchronization logic
+- **Backend**: Rivet actor managing contact state and synchronization logic
 - **Frontend**: React application with offline-first contact management
 - **Sync Strategy**: Timestamp-based conflict resolution with periodic reconciliation
 - **State Management**: Server-side persistence with client-side optimistic updates

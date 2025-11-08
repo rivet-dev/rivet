@@ -1,10 +1,10 @@
-# CRDT Collaborative Editor for RivetKit
+# CRDT Collaborative Editor for Rivet
 
-Example project demonstrating real-time collaborative editing using Conflict-free Replicated Data Types (CRDTs) with [RivetKit](https://rivetkit.org).
+Example project demonstrating real-time collaborative editing using Conflict-free Replicated Data Types (CRDTs) with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating real-time collaborative editing using Conflict-fre
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/crdt
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/crdt
 npm install
 ```
 
@@ -41,8 +41,8 @@ Open your browser to `http://localhost:3000`
 This example demonstrates how to build a collaborative editor using:
 
 1. **Yjs**: A high-performance CRDT implementation for building collaborative applications
-2. **RivetKit Actors**: Manage document state and synchronize changes between clients
-3. **Real-time Updates**: Use RivetKit's event system for instant synchronization
+2. **Rivet Actors**: Manage document state and synchronize changes between clients
+3. **Real-time Updates**: Use Rivet's event system for instant synchronization
 4. **Conflict-free Merging**: Yjs automatically handles concurrent edits without conflicts
 
 ## Usage
@@ -55,7 +55,7 @@ This example demonstrates how to build a collaborative editor using:
 
 ## Architecture
 
-- **Backend**: RivetKit actor that manages Yjs document state and broadcasts updates
+- **Backend**: Rivet actor that manages Yjs document state and broadcasts updates
 - **Frontend**: React application with Yjs integration for local document management
 - **Synchronization**: Binary diffs are sent between clients for efficient updates
 

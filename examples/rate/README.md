@@ -1,10 +1,10 @@
-# Rate Limiter for RivetKit
+# Rate Limiter for Rivet
 
-Example project demonstrating API rate limiting with [RivetKit](https://rivetkit.org).
+Example project demonstrating API rate limiting with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating API rate limiting with [RivetKit](https://rivetkit
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/rate
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/rate
 npm install
 ```
 
@@ -49,7 +49,7 @@ This rate limiter demonstrates:
 
 ## Architecture
 
-- **Backend**: RivetKit actor that maintains rate limit state per user
+- **Backend**: Rivet actor that maintains rate limit state per user
 - **Frontend**: React application with real-time rate limit status
 - **State Management**: Persistent rate limit counters with automatic window resets
 - **User Isolation**: Each user/API client gets independent rate limiting

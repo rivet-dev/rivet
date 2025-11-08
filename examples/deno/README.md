@@ -1,10 +1,10 @@
-# Deno Example for RivetKit
+# Deno Example for Rivet
 
-Example project demonstrating basic actor state management and RPC calls with [RivetKit](https://rivetkit.org) using Deno runtime.
+Example project demonstrating basic actor state management and RPC calls with [Rivet](https://www.rivet.dev/) using Deno runtime.
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating basic actor state management and RPC calls with [R
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/deno
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/deno
 pnpm install
 ```
 

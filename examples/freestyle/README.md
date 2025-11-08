@@ -1,10 +1,10 @@
-# Freestyle Deployment for RivetKit
+# Freestyle Deployment for Rivet
 
-Example project demonstrating serverless deployment of RivetKit actors to [Freestyle](https://freestyle.sh) with [RivetKit](https://rivetkit.org).
+Example project demonstrating serverless deployment of Rivet actors to [Freestyle](https://freestyle.sh) with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 
 ## What is this?
@@ -23,8 +23,8 @@ Freestyle is unique from other providers since it is built to deploy untrusted A
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/freestyle
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/freestyle
 pnpm install
 ```
 

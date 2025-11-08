@@ -1,10 +1,10 @@
-# Hono Integration for RivetKit
+# Hono Integration for Rivet
 
-Example project demonstrating Hono web framework integration with [RivetKit](https://rivetkit.org).
+Example project demonstrating Hono web framework integration with [Rivet](https://www.rivet.dev/).
 
-[Learn More →](https://github.com/rivet-dev/rivetkit)
+[Learn More →](https://github.com/rivet-dev/rivet)
 
-[Discord](https://rivet.dev/discord) — [Documentation](https://rivetkit.org) — [Issues](https://github.com/rivet-dev/rivetkit/issues)
+[Discord](https://rivet.dev/discord) — [Documentation](https://www.rivet.dev/) — [Issues](https://github.com/rivet-dev/rivet/issues)
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Example project demonstrating Hono web framework integration with [RivetKit](htt
 ### Installation
 
 ```sh
-git clone https://github.com/rivet-dev/rivetkit
-cd rivetkit/examples/hono
+git clone https://github.com/rivet-dev/rivet
+cd rivet/examples/hono
 npm install
 ```
 
@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Open your browser to http://localhost:3000 to see the Hono server with RivetKit integration.
+Open your browser to http://localhost:3000 to see the Hono server with Rivet integration.
 
 ## License
 
