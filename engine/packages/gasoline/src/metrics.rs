@@ -5,33 +5,33 @@ use rivet_metrics::{
 
 lazy_static::lazy_static! {
 	static ref METER: Meter = meter("rivet-gasoline");
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref WORKER_LAST_PING: Gauge<u64> = METER.u64_gauge("rivet_gasoline_worker_last_ping")
-		.with_description("Last ping of a worker instance as a unix ts.")
+		.with_description("Last ping of a worker as a unix ts.")
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref LAST_PULL_WORKFLOWS_DURATION: Gauge<f64> = METER.f64_gauge("rivet_gasoline_last_pull_workflows_duration")
 		.with_description("Last duration of pulling workflow data.")
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref LAST_PULL_WORKFLOWS_HISTORY_DURATION: Gauge<u64> = METER.u64_gauge("rivet_gasoline_last_pull_workflows_history_duration")
 		.with_description("Last duration of pulling workflow histories.")
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref LAST_PULL_WORKFLOWS_FULL_DURATION: Gauge<f64> = METER.f64_gauge("rivet_gasoline_last_pull_workflows_full_duration")
 		.with_description("Last duration of pulling workflow data and history.")
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref PULL_WORKFLOWS_DURATION: Histogram<f64> = METER.f64_histogram("rivet_gasoline_pull_workflows_duration")
 		.with_description("Duration of pulling workflow data.")
 		.with_boundaries(BUCKETS.to_vec())
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref PULL_WORKFLOWS_HISTORY_DURATION: Histogram<f64> = METER.f64_histogram("rivet_gasoline_pull_workflows_history_duration")
 		.with_description("Duration of pulling workflow histories.")
 		.with_boundaries(BUCKETS.to_vec())
 		.build();
-	/// Expected attributes: "worker_instance_id"
+	/// Expected attributes: "worker_id"
 	pub static ref PULL_WORKFLOWS_FULL_DURATION: Histogram<f64> = METER.f64_histogram("rivet_gasoline_pull_workflows_full_duration")
 		.with_description("Duration of pulling workflow data and history.")
 		.with_boundaries(BUCKETS.to_vec())

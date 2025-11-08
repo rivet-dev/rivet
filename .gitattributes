@@ -15,6 +15,11 @@ engine/sdks/** linguist-generated=true
 engine/sdks/typescript/runner/** linguist-generated=false
 engine/sdks/typescript/test-runner/** linguist-generated=false
 engine/sdks/schema/** linguist-generated=false
+engine/docker/dev/** linguist-generated=true
+engine/docker/dev-host/** linguist-generated=true
+engine/docker/dev-multidc/** linguist-generated=true
+engine/docker/dev-multidc-multinode/** linguist-generated=true
+engine/docker/dev-multinode/** linguist-generated=true
 
 website/public/llms.txt linguist-generated=true
 website/public/llms-full.txt linguist-generated=true

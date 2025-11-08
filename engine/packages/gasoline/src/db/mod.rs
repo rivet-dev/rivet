@@ -57,19 +57,25 @@ pub trait Database: Send {
 
 	// MARK: Worker fns
 
-	/// This function returns a subscription which should resolve once the worker should fetch the database
-	/// again.
-	async fn bump_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>>;
+	/// This function returns a subscription which should resolve once the expected event given the subject
+	/// occurs.
+	async fn bump_sub<'a, 'b>(
+		&'a self,
+		subject: BumpSubSubject,
+	) -> WorkflowResult<BoxStream<'b, ()>>;
 
 	/// Updates the last ping ts for this worker.
-	async fn update_worker_ping(&self, worker_instance_id: Id) -> WorkflowResult<()>;
+	async fn update_worker_ping(&self, worker_id: Id) -> WorkflowResult<()>;
+
+	/// Removes the worker from consideration for `pull_workflows` delegation.
+	async fn mark_worker_inactive(&self, worker_id: Id) -> WorkflowResult<()>;
 
 	/// Releases workflows that were leased by workers that have since expired (their last ping has passed
 	/// the expired threshold), making them eligible to be run again. Called periodically.
-	async fn clear_expired_leases(&self, worker_instance_id: Id) -> WorkflowResult<()>;
+	async fn clear_expired_leases(&self, worker_id: Id) -> WorkflowResult<()>;
 
 	/// Function to publish metrics. Called periodically.
-	async fn publish_metrics(&self, worker_instance_id: Id) -> WorkflowResult<()>;
+	async fn publish_metrics(&self, worker_id: Id) -> WorkflowResult<()>;
 
 	// MARK: Workflows/signals
 
@@ -96,10 +102,10 @@ pub trait Database: Send {
 	) -> WorkflowResult<Option<Id>>;
 
 	/// Pulls workflows for processing by the worker. Will only pull workflows with names matching the filter.
-	/// Should also update the ping of this worker instance.
+	/// Should also update the ping of this worker.
 	async fn pull_workflows(
 		&self,
-		worker_instance_id: Id,
+		worker_id: Id,
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflowData>>;
 
@@ -329,4 +335,10 @@ pub struct SignalData {
 	pub signal_name: String,
 	pub body: Box<serde_json::value::RawValue>,
 	pub create_ts: i64,
+}
+
+pub enum BumpSubSubject {
+	Worker,
+	WorkflowComplete { workflow_id: Id },
+	SignalPublish { to_workflow_id: Id },
 }
