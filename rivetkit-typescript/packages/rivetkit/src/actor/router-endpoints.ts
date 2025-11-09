@@ -392,7 +392,7 @@ export async function handleRawRequest(
 
 		createdConn = conn;
 
-		return await actor.handleRawRequest(req, {});
+		return await actor.handleRawRequest(conn, req);
 	} finally {
 		// Clean up the connection after the request completes
 		if (createdConn) {
@@ -474,7 +474,7 @@ export async function handleRawWebSocket(
 				createdConn = conn;
 
 				// Call the actor's onWebSocket handler with the adapted WebSocket
-				actor.handleRawWebSocket(adapter, {
+				actor.handleRawWebSocket(conn, adapter, {
 					request: newRequest,
 				});
 			} catch (error) {
