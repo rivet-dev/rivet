@@ -1,9 +1,9 @@
 import type { RegistryConfig } from "@/registry/config";
-import type { ActionContext } from "./action";
 import type { Actions, ActorConfig } from "./config";
-import type { ActorContext } from "./context";
+import type { ActionContext } from "./contexts/action";
+import type { ActorContext } from "./contexts/actor";
 import type { AnyDatabaseProvider } from "./database";
-import { ActorInstance } from "./instance";
+import { ActorInstance } from "./instance/mod";
 
 export type AnyActorDefinition = ActorDefinition<
 	any,
