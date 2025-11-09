@@ -3,9 +3,7 @@ import { EncodingSchema } from "@/actor/protocol/serde";
 import {
 	HEADER_ACTOR_ID,
 	HEADER_ACTOR_QUERY,
-	HEADER_CONN_ID,
 	HEADER_CONN_PARAMS,
-	HEADER_CONN_TOKEN,
 	HEADER_ENCODING,
 } from "@/common/actor-router-consts";
 
@@ -69,9 +67,7 @@ export const ConnectWebSocketRequestSchema = z.object({
 
 export const ConnMessageRequestSchema = z.object({
 	actorId: z.string().describe(HEADER_ACTOR_ID),
-	connId: z.string().describe(HEADER_CONN_ID),
 	encoding: EncodingSchema.describe(HEADER_ENCODING),
-	connToken: z.string().describe(HEADER_CONN_TOKEN),
 });
 
 export const ResolveRequestSchema = z.object({

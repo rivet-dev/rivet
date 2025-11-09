@@ -147,10 +147,7 @@ export function runActorConnStateTests(driverTestConfig: DriverTestConfig) {
 		});
 
 		describe("Connection Lifecycle", () => {
-			test.skipIf(
-				driverTestConfig.transport === "sse" &&
-					driverTestConfig.clientType === "inline",
-			)("should track connection and disconnection events", async (c) => {
+			test("should track connection and disconnection events", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				const debugHandle = client.connStateActor.getOrCreate(
