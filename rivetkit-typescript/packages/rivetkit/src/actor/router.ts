@@ -8,6 +8,7 @@ import {
 	type ConnectWebSocketOutput,
 	type ConnsMessageOpts,
 	handleAction,
+	handleRawHttpHandler,
 	handleRawWebSocketHandler,
 	handleWebSocketConnect,
 } from "@/actor/router-endpoints";
@@ -31,7 +32,6 @@ import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import type { RunnerConfig } from "@/registry/run-config";
 import { CONN_DRIVER_SYMBOL, generateConnRequestId } from "./conn/mod";
 import type { ActorDriver } from "./driver";
-import { InternalError } from "./errors";
 import { loggerWithoutContext } from "./log";
 
 export type {
@@ -173,12 +173,10 @@ export function createActorRouter(
 
 	// Raw HTTP endpoints - /request/*
 	router.all("/request/*", async (c) => {
-		const actor = await actorDriver.loadActor(c.env.actorId);
-
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
 		// Strip the /http prefix from the URL to get the original path
 		const url = new URL(c.req.url);
-		const originalPath = url.pathname.replace(/^\/raw\/http/, "") || "/";
+		const originalPath = url.pathname.replace(/^\/request/, "") || "/";
 
 		// Create a new request with the corrected URL
 		const correctedUrl = new URL(originalPath + url.search, url.origin);
@@ -195,15 +193,11 @@ export function createActorRouter(
 			to: correctedRequest.url,
 		});
 
-		// Call the actor's onRequest handler - it will throw appropriate errors
-		const response = await actor.handleRawRequest(correctedRequest, {});
-
-		// This should never happen now since handleFetch throws errors
-		if (!response) {
-			throw new InternalError("handleFetch returned void unexpectedly");
-		}
-
-		return response;
+		return await handleRawHttpHandler(
+			correctedRequest,
+			actorDriver,
+			c.env.actorId,
+		);
 	});
 
 	// Raw WebSocket endpoint - /websocket/*
