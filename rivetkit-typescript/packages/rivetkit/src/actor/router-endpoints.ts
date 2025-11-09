@@ -1,15 +1,8 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
-import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import type { WSContext } from "hono/ws";
-import invariant from "invariant";
 import { ActionContext } from "@/actor/action";
-import type { AnyConn } from "@/actor/conn";
-import {
-	generateConnId,
-	generateConnRequestId,
-	generateConnToken,
-} from "@/actor/conn";
+import { type AnyConn, generateConnRequestId } from "@/actor/conn";
 import { ConnDriverKind } from "@/actor/conn-drivers";
 import * as errors from "@/actor/errors";
 import { type AnyActorInstance, PERSIST_SYMBOL } from "@/actor/instance";
@@ -17,9 +10,7 @@ import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
 	HEADER_ACTOR_QUERY,
-	HEADER_CONN_ID,
 	HEADER_CONN_PARAMS,
-	HEADER_CONN_TOKEN,
 	HEADER_ENCODING,
 } from "@/common/actor-router-consts";
 import type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
@@ -47,8 +38,6 @@ import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
 import { parseMessage } from "./protocol/old";
 
-export const SSE_PING_INTERVAL = 1000;
-
 export interface ConnectWebSocketOpts {
 	req?: HonoRequest;
 	encoding: Encoding;
@@ -60,18 +49,6 @@ export interface ConnectWebSocketOutput {
 	onOpen: (ws: WSContext) => void;
 	onMessage: (message: protocol.ToServer) => void;
 	onClose: () => void;
-}
-
-export interface ConnectSseOpts {
-	req?: HonoRequest;
-	encoding: Encoding;
-	params: unknown;
-	actorId: string;
-}
-
-export interface ConnectSseOutput {
-	onOpen: (stream: SSEStreamingApi) => void;
-	onClose: () => Promise<void>;
 }
 
 export interface ActionOpts {
@@ -89,7 +66,6 @@ export interface ActionOutput {
 export interface ConnsMessageOpts {
 	req?: HonoRequest;
 	connId: string;
-	connToken: string;
 	message: protocol.ToServer;
 	actorId: string;
 }
@@ -117,8 +93,6 @@ export async function handleWebSocketConnect(
 	parameters: unknown,
 	requestId: string,
 	requestIdBuf: ArrayBuffer | undefined,
-	connId: string | undefined,
-	connToken: string | undefined,
 ): Promise<UpgradeWebSocketArgs> {
 	const exposeInternalError = req
 		? getRequestExposeInternalError(req)
@@ -176,12 +150,8 @@ export async function handleWebSocketConnect(
 				try {
 					let conn: AnyConn;
 
-					// Create or reconnect connection
 					actor.rLog.debug({
-						msg: connId
-							? "websocket reconnection attempt"
-							: "new websocket connection",
-						connId,
+						msg: "new websocket connection",
 						actorId,
 					});
 
@@ -208,8 +178,6 @@ export async function handleWebSocketConnect(
 						},
 						parameters,
 						req,
-						connId,
-						connToken,
 					);
 
 					// Store connection so we can clean on close
@@ -340,122 +308,6 @@ export async function handleWebSocketConnect(
 }
 
 /**
- * Creates an SSE connection handler
- */
-export async function handleSseConnect(
-	c: HonoContext,
-	_runConfig: RunnerConfig,
-	actorDriver: ActorDriver,
-	actorId: string,
-) {
-	c.header("Content-Encoding", "Identity");
-
-	const encoding = getRequestEncoding(c.req);
-	const parameters = getRequestConnParams(c.req);
-	const requestId = generateConnRequestId();
-
-	// Check for reconnection parameters
-	const connId = c.req.header(HEADER_CONN_ID);
-	const connToken = c.req.header(HEADER_CONN_TOKEN);
-
-	// Return the main handler with all async work inside
-	return streamSSE(c, async (stream) => {
-		let actor: AnyActorInstance | undefined;
-		let conn: AnyConn | undefined;
-
-		try {
-			// Do all async work inside the handler
-			actor = await actorDriver.loadActor(actorId);
-
-			// Create or reconnect connection
-			actor.rLog.debug({
-				msg: connId ? "sse reconnection attempt" : "sse open",
-				connId,
-			});
-
-			conn = await actor.createConn(
-				{
-					requestId: requestId,
-					hibernatable: false,
-					driverState: {
-						[ConnDriverKind.SSE]: {
-							encoding,
-							stream: stream,
-						},
-					},
-				},
-				parameters,
-				c.req.raw,
-				connId,
-				connToken,
-			);
-
-			// Wait for close
-			const abortResolver = promiseWithResolvers();
-
-			// HACK: This is required so the abort handler below works
-			//
-			// See https://github.com/honojs/hono/issues/1770#issuecomment-2461966225
-			stream.onAbort(() => {});
-
-			// Handle stream abort (when client closes the connection)
-			c.req.raw.signal.addEventListener("abort", async () => {
-				invariant(actor, "actor should exist");
-				const rLog = actor.rLog ?? loggerWithoutContext();
-				try {
-					rLog.debug("sse stream aborted");
-
-					// Cleanup
-					if (conn) {
-						actor.__connDisconnected(conn, false, requestId);
-					}
-
-					abortResolver.resolve(undefined);
-				} catch (error) {
-					rLog.error({ msg: "error closing sse connection", error });
-					abortResolver.resolve(undefined);
-				}
-			});
-
-			// // HACK: Will throw if not configured
-			// try {
-			// 	c.executionCtx.waitUntil(abortResolver.promise);
-			// } catch {}
-
-			// Send ping every second to keep the connection alive
-			//
-			// NOTE: This is required on Cloudflare Workers in order to detect when the connection is closed
-			while (true) {
-				if (stream.closed || stream.aborted) {
-					actor?.rLog.debug({
-						msg: "sse stream closed",
-						closed: stream.closed,
-						aborted: stream.aborted,
-					});
-					break;
-				}
-
-				await stream.writeSSE({ event: "ping", data: "" });
-				await stream.sleep(SSE_PING_INTERVAL);
-			}
-		} catch (error) {
-			loggerWithoutContext().error({
-				msg: "error in sse connection",
-				error,
-			});
-
-			// Cleanup on error
-			if (conn && actor !== undefined) {
-				actor.__connDisconnected(conn, false, requestId);
-			}
-
-			// Close the stream on error
-			stream.close();
-		}
-	});
-}
-
-/**
  * Creates an action handler
  */
 export async function handleAction(
@@ -522,83 +374,6 @@ export async function handleAction(
 	return c.body(serialized as Uint8Array as any, 200, {
 		"Content-Type": contentTypeForEncoding(encoding),
 	});
-}
-
-/**
- * Create a connection message handler
- */
-export async function handleConnectionMessage(
-	c: HonoContext,
-	_runConfig: RunnerConfig,
-	actorDriver: ActorDriver,
-	connId: string,
-	connToken: string,
-	actorId: string,
-) {
-	const encoding = getRequestEncoding(c.req);
-
-	// Validate incoming request
-	const arrayBuffer = await c.req.arrayBuffer();
-	const message = deserializeWithEncoding(
-		encoding,
-		new Uint8Array(arrayBuffer),
-		TO_SERVER_VERSIONED,
-	);
-
-	const actor = await actorDriver.loadActor(actorId);
-
-	// Find connection
-	const conn = actor.conns.get(connId);
-	if (!conn) {
-		throw new errors.ConnNotFound(connId);
-	}
-
-	// Authenticate connection
-	if (conn._token !== connToken) {
-		throw new errors.IncorrectConnToken();
-	}
-
-	// Process message
-	await actor.processMessage(message, conn);
-
-	return c.json({});
-}
-
-export async function handleConnectionClose(
-	c: HonoContext,
-	_runConfig: RunnerConfig,
-	actorDriver: ActorDriver,
-	connId: string,
-	connToken: string,
-	actorId: string,
-) {
-	const actor = await actorDriver.loadActor(actorId);
-
-	// Find connection
-	const conn = actor.conns.get(connId);
-	if (!conn) {
-		throw new errors.ConnNotFound(connId);
-	}
-
-	// Authenticate connection
-	if (conn._token !== connToken) {
-		throw new errors.IncorrectConnToken();
-	}
-
-	// Check if this is an SSE connection
-	if (
-		!conn.__socket?.driverState ||
-		!(ConnDriverKind.SSE in conn.__socket.driverState)
-	) {
-		throw new errors.UserError(
-			"Connection close is only supported for SSE connections",
-		);
-	}
-
-	// Close the SSE connection
-	await conn.disconnect("Connection closed by client request");
-
-	return c.json({});
 }
 
 export async function handleRawWebSocketHandler(
@@ -730,18 +505,18 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 }
 
 /**
- * Truncase the PATH_RAW_WEBSOCKET_PREFIX path prefix in order to pass a clean
+ * Truncase the PATH_WEBSOCKET_PREFIX path prefix in order to pass a clean
  * path to the onWebSocket handler.
  *
  * Example:
- * - `/raw/websocket/foo` -> `/foo`
- * - `/raw/websocket` -> `/`
+ * - `/websocket/foo` -> `/foo`
+ * - `/websocket` -> `/`
  */
 export function truncateRawWebSocketPathPrefix(path: string): string {
 	// Extract the path after prefix and preserve query parameters
 	// Use URL API for cleaner parsing
 	const url = new URL(path, "http://actor");
-	const pathname = url.pathname.replace(/^\/raw\/websocket\/?/, "") || "/";
+	const pathname = url.pathname.replace(/^\/websocket\/?/, "") || "/";
 	const normalizedPath =
 		(pathname.startsWith("/") ? pathname : "/" + pathname) + url.search;
 

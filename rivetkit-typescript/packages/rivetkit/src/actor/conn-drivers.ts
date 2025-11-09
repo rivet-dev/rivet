@@ -1,4 +1,3 @@
-import type { SSEStreamingApi } from "hono/streaming";
 import type { WSContext } from "hono/ws";
 import type { WebSocket } from "ws";
 import type { AnyConn } from "@/actor/conn";
@@ -11,7 +10,6 @@ import { assertUnreachable, type promiseWithResolvers } from "@/utils";
 
 export enum ConnDriverKind {
 	WEBSOCKET = 0,
-	SSE = 1,
 	HTTP = 2,
 }
 
@@ -29,16 +27,10 @@ export interface ConnDriverWebSocketState {
 	closePromise: ReturnType<typeof promiseWithResolvers<void>>;
 }
 
-export interface ConnDriverSseState {
-	encoding: Encoding;
-	stream: SSEStreamingApi;
-}
-
 export type ConnDriverHttpState = Record<never, never>;
 
 export type ConnDriverState =
 	| { [ConnDriverKind.WEBSOCKET]: ConnDriverWebSocketState }
-	| { [ConnDriverKind.SSE]: ConnDriverSseState }
 	| { [ConnDriverKind.HTTP]: ConnDriverHttpState };
 
 export interface ConnDriver<State> {
@@ -152,41 +144,6 @@ const WEBSOCKET_DRIVER: ConnDriver<ConnDriverWebSocketState> = {
 	},
 };
 
-// MARK: SSE
-const SSE_DRIVER: ConnDriver<ConnDriverSseState> = {
-	sendMessage: (
-		_actor: AnyActorInstance,
-		_conn: AnyConn,
-		state: ConnDriverSseState,
-		message: CachedSerializer<protocol.ToClient>,
-	) => {
-		state.stream.writeSSE({
-			data: encodeDataToString(message.serialize(state.encoding)),
-		});
-	},
-
-	disconnect: async (
-		_actor: AnyActorInstance,
-		_conn: AnyConn,
-		state: ConnDriverSseState,
-		_reason?: string,
-	) => {
-		state.stream.close();
-	},
-
-	getConnectionReadyState: (
-		_actor: AnyActorInstance,
-		_conn: AnyConn,
-		state: ConnDriverSseState,
-	): ConnReadyState | undefined => {
-		if (state.stream.aborted || state.stream.closed) {
-			return ConnReadyState.CLOSED;
-		}
-
-		return ConnReadyState.OPEN;
-	},
-};
-
 // MARK: HTTP
 const HTTP_DRIVER: ConnDriver<ConnDriverHttpState> = {
 	getConnectionReadyState(_actor, _conn) {
@@ -202,7 +159,6 @@ const HTTP_DRIVER: ConnDriver<ConnDriverHttpState> = {
 /** List of all connection drivers. */
 export const CONN_DRIVERS: Record<ConnDriverKind, ConnDriver<unknown>> = {
 	[ConnDriverKind.WEBSOCKET]: WEBSOCKET_DRIVER,
-	[ConnDriverKind.SSE]: SSE_DRIVER,
 	[ConnDriverKind.HTTP]: HTTP_DRIVER,
 };
 
@@ -210,7 +166,6 @@ export function getConnDriverKindFromState(
 	state: ConnDriverState,
 ): ConnDriverKind {
 	if (ConnDriverKind.WEBSOCKET in state) return ConnDriverKind.WEBSOCKET;
-	else if (ConnDriverKind.SSE in state) return ConnDriverKind.SSE;
 	else if (ConnDriverKind.HTTP in state) return ConnDriverKind.HTTP;
 	else assertUnreachable(state);
 }

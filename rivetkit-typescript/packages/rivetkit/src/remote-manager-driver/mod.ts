@@ -316,8 +316,6 @@ export class RemoteManagerDriver implements ManagerDriver {
 		actorId: string,
 		encoding: Encoding,
 		params: unknown,
-		connId?: string,
-		connToken?: string,
 	): Promise<UniversalWebSocket> {
 		// Wait for metadata check to complete if in progress
 		if (this.#metadataPromise) {
@@ -330,8 +328,6 @@ export class RemoteManagerDriver implements ManagerDriver {
 			actorId,
 			encoding,
 			params,
-			connId,
-			connToken,
 		);
 	}
 
@@ -358,8 +354,6 @@ export class RemoteManagerDriver implements ManagerDriver {
 		actorId: string,
 		encoding: Encoding,
 		params: unknown,
-		connId?: string,
-		connToken?: string,
 	): Promise<Response> {
 		// Wait for metadata check to complete if in progress
 		if (this.#metadataPromise) {
@@ -385,8 +379,6 @@ export class RemoteManagerDriver implements ManagerDriver {
 			this.#config,
 			encoding,
 			params,
-			connId,
-			connToken,
 		);
 		const args = await createWebSocketProxy(c, wsGuardUrl, protocols);
 

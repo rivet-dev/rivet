@@ -28,7 +28,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			// Create WebSocket connection with subprotocol
 // 			const ws = new WebSocket(wsUrl, [
@@ -79,7 +79,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			const ws = new WebSocket(wsUrl, [
 // 				queryProtocol,
@@ -138,7 +138,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			const ws = new WebSocket(wsUrl, [
 // 				queryProtocol,
@@ -191,7 +191,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			const ws = new WebSocket(wsUrl, [
 // 				queryProtocol,
@@ -247,7 +247,7 @@
 // 			const paths = ["chat/room1", "updates/feed", "stream/events"];
 //
 // 			for (const path of paths) {
-// 				const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/${path}`;
+// 				const wsUrl = `${wsEndpoint}/registry/actors/websocket/${path}`;
 // 				const ws = new WebSocket(wsUrl, [
 // 					queryProtocol,
 // 					// HACK: See packages/drivers/cloudflare-workers/src/websocket.ts
@@ -295,7 +295,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			const ws = new WebSocket(wsUrl, [
 // 				queryProtocol,
@@ -329,7 +329,7 @@
 // 			const wsEndpoint = endpoint
 // 				.replace(/^http:/, "ws:")
 // 				.replace(/^https:/, "wss:");
-// 			const wsUrl = `${wsEndpoint}/registry/actors/raw/websocket/`;
+// 			const wsUrl = `${wsEndpoint}/registry/actors/websocket/`;
 //
 // 			const ws = new WebSocket(wsUrl, [
 // 				queryProtocol,

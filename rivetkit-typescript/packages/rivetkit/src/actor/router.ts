@@ -1,33 +1,21 @@
-import { Hono, type Context as HonoContext } from "hono";
+import { Hono } from "hono";
 import invariant from "invariant";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import {
 	type ActionOpts,
 	type ActionOutput,
-	type ConnectSseOpts,
-	type ConnectSseOutput,
 	type ConnectWebSocketOpts,
 	type ConnectWebSocketOutput,
 	type ConnsMessageOpts,
 	handleAction,
-	handleConnectionClose,
-	handleConnectionMessage,
 	handleRawWebSocketHandler,
-	handleSseConnect,
 	handleWebSocketConnect,
 } from "@/actor/router-endpoints";
 import {
-	HEADER_CONN_ID,
-	HEADER_CONN_PARAMS,
-	HEADER_CONN_TOKEN,
-	HEADER_ENCODING,
-	PATH_CONNECT_WEBSOCKET,
-	PATH_RAW_WEBSOCKET_PREFIX,
-	WS_PROTOCOL_CONN_ID,
+	PATH_CONNECT,
+	PATH_WEBSOCKET_PREFIX,
 	WS_PROTOCOL_CONN_PARAMS,
-	WS_PROTOCOL_CONN_TOKEN,
 	WS_PROTOCOL_ENCODING,
-	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
 import {
 	handleRouteError,
@@ -50,8 +38,6 @@ import { loggerWithoutContext } from "./log";
 export type {
 	ConnectWebSocketOpts,
 	ConnectWebSocketOutput,
-	ConnectSseOpts,
-	ConnectSseOutput,
 	ActionOpts,
 	ActionOutput,
 	ConnsMessageOpts,
@@ -114,25 +100,20 @@ export function createActorRouter(
 				return c.text(`Connection not found: ${connId}`, 404);
 			}
 
-			// Force close the websocket/SSE connection without clean shutdown
+			// Force close the connection without clean shutdown
 			const driverState = conn.__driverState;
 			if (driverState && ConnDriverKind.WEBSOCKET in driverState) {
 				const ws = driverState[ConnDriverKind.WEBSOCKET].websocket;
 
 				// Force close without sending close frame
 				(ws.raw as any).terminate();
-			} else if (driverState && ConnDriverKind.SSE in driverState) {
-				const stream = driverState[ConnDriverKind.SSE].stream;
-
-				// Force close the SSE stream
-				stream.abort();
 			}
 
 			return c.json({ success: true });
 		});
 	}
 
-	router.get(PATH_CONNECT_WEBSOCKET, async (c) => {
+	router.get(PATH_CONNECT, async (c) => {
 		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
 		if (upgradeWebSocket) {
 			return upgradeWebSocket(async (c) => {
@@ -140,8 +121,6 @@ export function createActorRouter(
 				const protocols = c.req.header("sec-websocket-protocol");
 				let encodingRaw: string | undefined;
 				let connParamsRaw: string | undefined;
-				let connIdRaw: string | undefined;
-				let connTokenRaw: string | undefined;
 
 				if (protocols) {
 					const protocolList = protocols
@@ -159,16 +138,6 @@ export function createActorRouter(
 								protocol.substring(
 									WS_PROTOCOL_CONN_PARAMS.length,
 								),
-							);
-						} else if (protocol.startsWith(WS_PROTOCOL_CONN_ID)) {
-							connIdRaw = protocol.substring(
-								WS_PROTOCOL_CONN_ID.length,
-							);
-						} else if (
-							protocol.startsWith(WS_PROTOCOL_CONN_TOKEN)
-						) {
-							connTokenRaw = protocol.substring(
-								WS_PROTOCOL_CONN_TOKEN.length,
 							);
 						}
 					}
@@ -188,20 +157,11 @@ export function createActorRouter(
 					connParams,
 					generateConnRequestId(),
 					undefined,
-					connIdRaw,
-					connTokenRaw,
 				);
 			})(c, noopNext());
 		} else {
-			return c.text(
-				"WebSockets are not enabled for this driver. Use SSE instead.",
-				400,
-			);
+			return c.text("WebSockets are not enabled for this driver.", 400);
 		}
-	});
-
-	router.get("/connect/sse", async (c) => {
-		return handleSseConnect(c, runConfig, actorDriver, c.env.actorId);
 	});
 
 	router.post("/action/:action", async (c) => {
@@ -216,40 +176,8 @@ export function createActorRouter(
 		);
 	});
 
-	router.post("/connections/message", async (c) => {
-		const connId = c.req.header(HEADER_CONN_ID);
-		const connToken = c.req.header(HEADER_CONN_TOKEN);
-		if (!connId || !connToken) {
-			throw new Error("Missing required parameters");
-		}
-		return handleConnectionMessage(
-			c,
-			runConfig,
-			actorDriver,
-			connId,
-			connToken,
-			c.env.actorId,
-		);
-	});
-
-	router.post("/connections/close", async (c) => {
-		const connId = c.req.header(HEADER_CONN_ID);
-		const connToken = c.req.header(HEADER_CONN_TOKEN);
-		if (!connId || !connToken) {
-			throw new Error("Missing required parameters");
-		}
-		return handleConnectionClose(
-			c,
-			runConfig,
-			actorDriver,
-			connId,
-			connToken,
-			c.env.actorId,
-		);
-	});
-
-	// Raw HTTP endpoints - /http/*
-	router.all("/raw/http/*", async (c) => {
+	// Raw HTTP endpoints - /request/*
+	router.all("/request/*", async (c) => {
 		const actor = await actorDriver.loadActor(c.env.actorId);
 
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
@@ -284,7 +212,7 @@ export function createActorRouter(
 	});
 
 	// Raw WebSocket endpoint - /websocket/*
-	router.get(`${PATH_RAW_WEBSOCKET_PREFIX}*`, async (c) => {
+	router.get(`${PATH_WEBSOCKET_PREFIX}*`, async (c) => {
 		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
 		if (upgradeWebSocket) {
 			return upgradeWebSocket(async (c) => {
@@ -308,10 +236,7 @@ export function createActorRouter(
 				);
 			})(c, noopNext());
 		} else {
-			return c.text(
-				"WebSockets are not enabled for this driver. Use SSE instead.",
-				400,
-			);
+			return c.text("WebSockets are not enabled for this driver.", 400);
 		}
 	});
 

@@ -6,11 +6,9 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
 import {
-	HEADER_CONN_ID,
 	HEADER_CONN_PARAMS,
-	HEADER_CONN_TOKEN,
 	HEADER_ENCODING,
-	PATH_CONNECT_WEBSOCKET,
+	PATH_CONNECT,
 } from "@/common/actor-router-consts";
 import { importEventSource } from "@/common/eventsource";
 import type {
@@ -40,7 +38,7 @@ import {
 } from "@/utils";
 import type { ActorDefinitionActions } from "./actor-common";
 import { queryActor } from "./actor-query";
-import { ACTOR_CONNS_SYMBOL, type ClientRaw, TRANSPORT_SYMBOL } from "./client";
+import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { logger } from "./log";
 import {
@@ -79,10 +77,6 @@ export interface SendHttpMessageOpts {
 	signal?: AbortSignal;
 }
 
-export type ConnTransport =
-	| { websocket: UniversalWebSocket }
-	| { sse: UniversalEventSource };
-
 export const CONNECT_SYMBOL = Symbol("connect");
 
 /**
@@ -96,15 +90,10 @@ export class ActorConnRaw {
 	/* Will be aborted on dispose. */
 	#abortController = new AbortController();
 
-	/** If attempting to connect. Helpful for knowing if in a retry loop when reconnecting. */
 	#connecting = false;
 
-	// Connection info, used for reconnection and HTTP requests
 	#actorId?: string;
 	#connectionId?: string;
-	#connectionToken?: string;
-
-	#transport?: ConnTransport;
 
 	#messageQueue: protocol.ToServer[] = [];
 	#actionsInFlight = new Map<number, ActionInFlight>();
@@ -125,6 +114,8 @@ export class ActorConnRaw {
 
 	/** Promise used to indicate the socket has connected successfully. This will be rejected if the connection fails. */
 	#onOpenPromise?: ReturnType<typeof promiseWithResolvers<undefined>>;
+
+	#websocket?: UniversalWebSocket;
 
 	#client: ClientRaw;
 	#driver: ManagerDriver;
@@ -264,14 +255,7 @@ enc
 				throw new Error("#onOpenPromise already defined");
 			this.#onOpenPromise = promiseWithResolvers();
 
-			// Connect transport
-			if (this.#client[TRANSPORT_SYMBOL] === "websocket") {
-				await this.#connectWebSocket();
-			} else if (this.#client[TRANSPORT_SYMBOL] === "sse") {
-				await this.#connectSse();
-			} else {
-				assertUnreachable(this.#client[TRANSPORT_SYMBOL]);
-			}
+			await this.#connectWebSocket();
 
 			// Wait for result
 			await this.#onOpenPromise.promise;
@@ -287,31 +271,19 @@ enc
 			this.#driver,
 		);
 
-		// Check if we have connection info for reconnection
-		const isReconnection = this.#connectionId && this.#connectionToken;
-		if (isReconnection) {
-			logger().debug({
-				msg: "attempting websocket reconnection",
-				connectionId: this.#connectionId,
-			});
-		}
-
 		const ws = await this.#driver.openWebSocket(
-			PATH_CONNECT_WEBSOCKET,
+			PATH_CONNECT,
 			actorId,
 			this.#encoding,
 			this.#params,
-			// Pass connection ID and token for reconnection if available
-			isReconnection ? this.#connectionId : undefined,
-			isReconnection ? this.#connectionToken : undefined,
 		);
 		logger().debug({
-			msg: "transport set to new websocket",
+			msg: "opened websocket",
 			connectionId: this.#connectionId,
 			readyState: ws.readyState,
 			messageQueueLength: this.#messageQueue.length,
 		});
-		this.#transport = { websocket: ws };
+		this.#websocket = ws;
 		ws.addEventListener("open", () => {
 			logger().debug({
 				msg: "client websocket open",
@@ -347,70 +319,6 @@ enc
 					error: stringifyError(err),
 				});
 			}
-		});
-	}
-
-	async #connectSse() {
-		const EventSource = await importEventSource();
-
-		// Get the actor ID
-		const { actorId } = await queryActor(
-			undefined,
-			this.#actorQuery,
-			this.#driver,
-		);
-		logger().debug({ msg: "found actor for sse connection", actorId });
-		invariant(actorId, "Missing actor ID");
-
-		logger().debug({
-			msg: "opening sse connection",
-			actorId,
-			encoding: this.#encoding,
-		});
-
-		const isReconnection = this.#connectionId && this.#connectionToken;
-
-		const eventSource = new EventSource("http://actor/connect/sse", {
-			fetch: (input, init) => {
-				return this.#driver.sendRequest(
-					actorId,
-					new Request(input, {
-						...init,
-						headers: {
-							...init?.headers,
-							"User-Agent": httpUserAgent(),
-							[HEADER_ENCODING]: this.#encoding,
-							...(this.#params !== undefined
-								? {
-										[HEADER_CONN_PARAMS]: JSON.stringify(
-											this.#params,
-										),
-									}
-								: {}),
-							...(isReconnection
-								? {
-										[HEADER_CONN_ID]: this.#connectionId,
-										[HEADER_CONN_TOKEN]:
-											this.#connectionToken,
-									}
-								: {}),
-						},
-					}),
-				);
-			},
-		}) as UniversalEventSource;
-
-		this.#transport = { sse: eventSource };
-
-		eventSource.addEventListener("message", (ev: UniversalMessageEvent) => {
-			// Ignore pings
-			if (ev.type === "ping") return;
-
-			this.#handleOnMessage(ev.data);
-		});
-
-		eventSource.addEventListener("error", (ev: UniversalErrorEvent) => {
-			this.#handleOnError();
 		});
 	}
 
@@ -470,10 +378,9 @@ enc
 		);
 
 		if (response.body.tag === "Init") {
-			// Store connection info for reconnection
+			// Store connection info
 			this.#actorId = response.body.val.actorId;
 			this.#connectionId = response.body.val.connectionId;
-			this.#connectionToken = response.body.val.connectionToken;
 			logger().trace({
 				msg: "received init message",
 				actorId: this.#actorId,
@@ -607,7 +514,7 @@ enc
 			this.#actionsInFlight.clear();
 		}
 
-		this.#transport = undefined;
+		this.#websocket = undefined;
 
 		// Automatically reconnect. Skip if already attempting to connect.
 		if (!this.#disposed && !this.#connecting) {
@@ -763,12 +670,8 @@ enc
 		}
 
 		let queueMessage = false;
-		if (!this.#transport) {
-			// No transport connected yet
-			logger().debug({ msg: "no transport, queueing message" });
-			queueMessage = true;
-		} else if ("websocket" in this.#transport) {
-			const readyState = this.#transport.websocket.readyState;
+		if (this.#websocket) {
+			const readyState = this.#websocket.readyState;
 			logger().debug({
 				msg: "websocket send attempt",
 				readyState,
@@ -791,7 +694,7 @@ enc
 						message,
 						TO_SERVER_VERSIONED,
 					);
-					this.#transport.websocket.send(messageSerialized);
+					this.#websocket.send(messageSerialized);
 					logger().trace({
 						msg: "sent websocket message",
 						len: messageLength(messageSerialized),
@@ -813,15 +716,10 @@ enc
 				});
 				queueMessage = true;
 			}
-		} else if ("sse" in this.#transport) {
-			if (this.#transport.sse.readyState === 1) {
-				// Spawn in background since #sendMessage cannot be async
-				this.#sendHttpMessage(message, opts);
-			} else {
-				queueMessage = true;
-			}
 		} else {
-			assertUnreachable(this.#transport);
+			// No websocket connected yet
+			logger().debug({ msg: "no websocket, queueing message" });
+			queueMessage = true;
 		}
 
 		if (!opts?.ephemeral && queueMessage) {
@@ -836,83 +734,8 @@ enc
 		}
 	}
 
-	async #sendHttpMessage(
-		message: protocol.ToServer,
-		opts?: SendHttpMessageOpts,
-	) {
-		try {
-			if (!this.#actorId || !this.#connectionId || !this.#connectionToken)
-				throw new errors.InternalError(
-					"Missing connection ID or token.",
-				);
-
-			logger().trace(
-				getEnvUniversal("_RIVETKIT_LOG_MESSAGE")
-					? {
-							msg: "sent http message",
-							message: `${jsonStringifyCompat(message).substring(0, 100)}...`,
-						}
-					: { msg: "sent http message" },
-			);
-
-			logger().debug({
-				msg: "sending http message",
-				actorId: this.#actorId,
-				connectionId: this.#connectionId,
-			});
-
-			// Send an HTTP request to the connections endpoint
-			await sendHttpRequest({
-				url: "http://actor/connections/message",
-				method: "POST",
-				headers: {
-					[HEADER_ENCODING]: this.#encoding,
-					[HEADER_CONN_ID]: this.#connectionId,
-					[HEADER_CONN_TOKEN]: this.#connectionToken,
-				},
-				body: message,
-				encoding: this.#encoding,
-				skipParseResponse: true,
-				customFetch: this.#driver.sendRequest.bind(
-					this.#driver,
-					this.#actorId,
-				),
-				requestVersionedDataHandler: TO_SERVER_VERSIONED,
-				responseVersionedDataHandler: TO_CLIENT_VERSIONED,
-			});
-		} catch (error) {
-			// TODO: This will not automatically trigger a re-broadcast of HTTP events since SSE is separate from the HTTP action
-
-			logger().warn({
-				msg: "failed to send message, added to queue",
-				error,
-			});
-
-			// Assuming the socket is disconnected and will be reconnected soon
-			//
-			// Will attempt to resend soon
-			if (!opts?.ephemeral) {
-				this.#messageQueue.unshift(message);
-			}
-		}
-	}
-
 	async #parseMessage(data: ConnMessage): Promise<protocol.ToClient> {
-		invariant(this.#transport, "transport must be defined");
-
-		// Decode base64 since SSE sends raw strings
-		if (encodingIsBinary(this.#encoding) && "sse" in this.#transport) {
-			if (typeof data === "string") {
-				const binaryString = atob(data);
-				data = new Uint8Array(
-					[...binaryString].map((char) => char.charCodeAt(0)),
-				);
-			} else {
-				throw new errors.InternalError(
-					`Expected data to be a string for SSE, got ${data}.`,
-				);
-			}
-		}
+		invariant(this.#websocket, "websocket must be defined");
 
 		const buffer = await inputDataToBuffer(data);
 
@@ -964,13 +787,11 @@ enc
 		// Remove from registry
 		this.#client[ACTOR_CONNS_SYMBOL].delete(this);
 
-		// Disconnect transport cleanly
-		if (!this.#transport) {
-			// Nothing to do
-		} else if ("websocket" in this.#transport) {
+		// Disconnect websocket cleanly
+		if (this.#websocket) {
 			logger().debug("closing ws");
 
-			const ws = this.#transport.websocket;
+			const ws = this.#websocket;
 			// Check if WebSocket is already closed or closing
 			if (
 				ws.readyState === 2 /* CLOSING */ ||
@@ -986,41 +807,8 @@ enc
 				ws.close(1000, "Normal closure");
 				await promise;
 			}
-		} else if ("sse" in this.#transport) {
-			logger().debug("closing sse");
-
-			// Send close request to server for SSE connections
-			if (this.#connectionId && this.#connectionToken) {
-				try {
-					await sendHttpRequest({
-						url: "http://actor/connections/close",
-						method: "POST",
-						headers: {
-							[HEADER_CONN_ID]: this.#connectionId,
-							[HEADER_CONN_TOKEN]: this.#connectionToken,
-						},
-						encoding: this.#encoding,
-						skipParseResponse: true,
-						customFetch: this.#driver.sendRequest.bind(
-							this.#driver,
-							this.#actorId!,
-						),
-						requestVersionedDataHandler: TO_SERVER_VERSIONED,
-						responseVersionedDataHandler: TO_CLIENT_VERSIONED,
-					});
-				} catch (error) {
-					// Ignore errors when closing - connection may already be closed
-					logger().warn({
-						msg: "failed to send close request",
-						error,
-					});
-				}
-			}
-			this.#transport.sse.close();
-		} else {
-			assertUnreachable(this.#transport);
 		}
-		this.#transport = undefined;
+		this.#websocket = undefined;
 	}
 
 	#sendSubscription(eventName: string, subscribe: boolean) {
