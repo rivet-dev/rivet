@@ -633,7 +633,7 @@ export class EngineActorDriver implements ActorDriver {
 				if (hibernatableWs) {
 					// Update msgIndex for next WebSocket open msgIndex restoration
 					const oldMsgIndex = hibernatableWs.msgIndex;
-					hibernatableWs.msgIndex = BigInt(event.rivetMessageIndex);
+					hibernatableWs.msgIndex = event.rivetMessageIndex;
 					hibernatableWs.lastSeenTimestamp = Date.now();
 
 					logger().debug({
@@ -743,7 +743,8 @@ export class EngineActorDriver implements ActorDriver {
 		const actorHandler = this.#actors.get(actorId);
 		if (actorHandler?.actor) {
 			const hibernatableArray =
-				actorHandler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL].hibernatableConns;
+				actorHandler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL]
+					.hibernatableConns;
 			const wsIndex = hibernatableArray.findIndex((conn: any) =>
 				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
 			);
