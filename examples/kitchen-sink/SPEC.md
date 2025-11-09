@@ -45,7 +45,7 @@ Comprehensive example demonstrating all RivetKit features with a simple React fr
 #### 4. Sleep
 - `sleep()` button
 - Sleep timeout configuration
-- Lifecycle event display (`onStart`, `onStop`)
+- Lifecycle event display (`onWake`, `onSleep`)
 
 #### 5. Connections (Only visible in Connection Mode)
 - Connection state display
@@ -83,7 +83,7 @@ Comprehensive example demonstrating all RivetKit features with a simple React fr
 - Scheduling capabilities (`schedule.at()`, `schedule.after()`)
 - Sleep functionality with configurable timeout
 - Connection state support
-- Lifecycle hooks (`onStart`, `onStop`, `onConnect`, `onDisconnect`)
+- Lifecycle hooks (`onWake`, `onSleep`, `onConnect`, `onDisconnect`)
 - Metadata access
 
 ### 2. `http` - Raw HTTP handling
@@ -104,7 +104,7 @@ Comprehensive example demonstrating all RivetKit features with a simple React fr
 - **State Management**: actor state + per-connection state
 - **Scheduling**: `schedule.at()`, `schedule.after()` with alarm handlers
 - **Force Sleep**: `sleep()` method with configurable sleep timeout
-- **Lifecycle Hooks**: `onStart`, `onStop`, `onConnect`, `onDisconnect`
+- **Lifecycle Hooks**: `onWake`, `onSleep`, `onConnect`, `onDisconnect`
 
 ### Configuration Options
 - **Transport**: WebSocket vs Server-Sent Events

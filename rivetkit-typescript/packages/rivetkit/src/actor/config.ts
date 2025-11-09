@@ -38,8 +38,8 @@ export interface ActorTypes<
 export const ActorConfigSchema = z
 	.object({
 		onCreate: z.function().optional(),
-		onStart: z.function().optional(),
-		onStop: z.function().optional(),
+		onWake: z.function().optional(),
+		onSleep: z.function().optional(),
 		onStateChange: z.function().optional(),
 		onBeforeConnect: z.function().optional(),
 		onConnect: z.function().optional(),
@@ -255,7 +255,7 @@ interface BaseActorConfig<
 	 *
 	 * @returns Void or a Promise that resolves when startup is complete
 	 */
-	onStart?: (
+	onWake?: (
 		c: ActorContext<
 			TState,
 			TConnParams,
@@ -276,7 +276,7 @@ interface BaseActorConfig<
 	 *
 	 * @returns Void or a Promise that resolves when shutdown is complete
 	 */
-	onStop?: (
+	onSleep?: (
 		c: ActorContext<
 			TState,
 			TConnParams,
@@ -471,7 +471,7 @@ export type ActorConfig<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
 	| "onCreate"
-	| "onStart"
+	| "onWake"
 	| "onStateChange"
 	| "onBeforeConnect"
 	| "onConnect"
@@ -530,8 +530,8 @@ export type ActorConfigInput<
 	z.input<typeof ActorConfigSchema>,
 	| "actions"
 	| "onCreate"
-	| "onStart"
-	| "onStop"
+	| "onWake"
+	| "onSleep"
 	| "onStateChange"
 	| "onBeforeConnect"
 	| "onConnect"

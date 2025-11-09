@@ -12,7 +12,7 @@ const gameRoom = actor({
 
 	createVars: (): GameVars => ({}),
 
-	onStart: (c) => {
+	onWake: (c) => {
 		// Set up game update loop
 		c.vars.gameLoopInterval = setInterval(() => {
 			const playerList: Player[] = [];
@@ -49,7 +49,7 @@ const gameRoom = actor({
 		}, 50);
 	},
 
-	onStop: (c) => {
+	onSleep: (c) => {
 		if (c.vars.gameLoopInterval) {
 			clearInterval(c.vars.gameLoopInterval);
 		}
