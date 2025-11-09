@@ -643,29 +643,29 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - HTTP/WebSocket Handlers
-	async handleFetch(
+	async handleRawRequest(
 		request: Request,
 		opts: Record<never, never>,
 	): Promise<Response> {
 		this.#assertReady();
 
-		if (!this.#config.onFetch) {
-			throw new errors.FetchHandlerNotDefined();
+		if (!this.#config.onRequest) {
+			throw new errors.RequestHandlerNotDfeined();
 		}
 
 		try {
-			const response = await this.#config.onFetch(
+			const response = await this.#config.onRequest(
 				this.actorContext,
 				request,
 				opts,
 			);
 			if (!response) {
-				throw new errors.InvalidFetchResponse();
+				throw new errors.InvalidRequestHandlerResponse();
 			}
 			return response;
 		} catch (error) {
 			this.#rLog.error({
-				msg: "onFetch error",
+				msg: "onRequest error",
 				error: stringifyError(error),
 			});
 			throw error;
@@ -674,7 +674,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	async handleWebSocket(
+	async handleRawWebSocket(
 		websocket: UniversalWebSocket,
 		opts: { request: Request },
 	): Promise<void> {

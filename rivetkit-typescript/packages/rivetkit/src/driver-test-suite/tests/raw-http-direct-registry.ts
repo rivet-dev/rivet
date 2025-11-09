@@ -129,7 +129,7 @@
 // 			expect(data).toEqual({ message: "Hello from actor!" });
 // 		});
 //
-// 		test("should return 404 for actors without onFetch handler", async (c) => {
+// 		test("should return 404 for actors without onRequest handler", async (c) => {
 // 			const { endpoint } = await setupDriverTest(c, driverTestConfig);
 //
 // 			const actorQuery: ActorQuery = {

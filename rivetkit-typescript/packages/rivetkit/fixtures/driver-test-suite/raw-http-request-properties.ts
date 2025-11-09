@@ -2,7 +2,10 @@ import { type ActorContext, actor } from "rivetkit";
 
 export const rawHttpRequestPropertiesActor = actor({
 	actions: {},
-	onFetch(ctx: ActorContext<any, any, any, any, any, any>, request: Request) {
+	onRequest(
+		ctx: ActorContext<any, any, any, any, any, any>,
+		request: Request,
+	) {
 		// Extract all relevant Request properties
 		const url = new URL(request.url);
 		const method = request.method;
