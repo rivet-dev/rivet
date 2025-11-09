@@ -4,7 +4,10 @@ import type { OnConnectOptions } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import {
 	CONN_DRIVER_SYMBOL,
+	CONN_MARK_SAVED_SYMBOL,
+	CONN_PERSIST_RAW_SYMBOL,
 	CONN_PERSIST_SYMBOL,
+	CONN_STATE_ENABLED_SYMBOL,
 	Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -202,9 +205,9 @@ export class ConnectionManager<
 		for (const connId of this.#changedConnections) {
 			const conn = this.#connections.get(connId);
 			if (conn) {
-				const connData = cbor.encode(conn.persistRaw);
+				const connData = cbor.encode(conn[CONN_PERSIST_RAW_SYMBOL]);
 				entries.push([makeConnKey(connId), connData]);
-				conn.markSaved();
+				conn[CONN_MARK_SAVED_SYMBOL]();
 			}
 		}
 
