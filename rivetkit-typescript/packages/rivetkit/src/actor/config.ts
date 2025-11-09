@@ -3,6 +3,8 @@ import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Conn } from "./conn/mod";
 import type { ActionContext } from "./contexts/action";
 import type { ActorContext } from "./contexts/actor";
+import type { RequestContext } from "./contexts/request";
+import type { WebSocketContext } from "./contexts/websocket";
 import type { AnyDatabaseProvider } from "./database";
 
 export type InitContext = ActorContext<
@@ -407,11 +409,13 @@ interface BaseActorConfig<
 	 * This handler receives raw HTTP requests made to `/actors/{actorName}/http/*` endpoints.
 	 * Use this hook to handle custom HTTP patterns, REST APIs, or other HTTP-based protocols.
 	 *
+	 * @param c The request context with access to the connection
 	 * @param request The raw HTTP request object
+	 * @param opts Additional options
 	 * @returns A Response object to send back, or void to continue with default routing
 	 */
 	onRequest?: (
-		c: ActorContext<
+		c: RequestContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -420,7 +424,6 @@ interface BaseActorConfig<
 			TDatabase
 		>,
 		request: Request,
-		opts: {},
 	) => Response | Promise<Response>;
 
 	/**
@@ -429,11 +432,12 @@ interface BaseActorConfig<
 	 * This handler receives WebSocket connections made to `/actors/{actorName}/websocket/*` endpoints.
 	 * Use this hook to handle custom WebSocket protocols, binary streams, or other WebSocket-based communication.
 	 *
+	 * @param c The WebSocket context with access to the connection
 	 * @param websocket The raw WebSocket connection
-	 * @param request The original HTTP upgrade request
+	 * @param opts Additional options including the original HTTP upgrade request
 	 */
 	onWebSocket?: (
-		c: ActorContext<
+		c: WebSocketContext<
 			TState,
 			TConnParams,
 			TConnState,

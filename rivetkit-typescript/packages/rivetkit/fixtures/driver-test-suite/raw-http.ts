@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import { type ActorContext, actor } from "rivetkit";
+import { actor, type RequestContext } from "rivetkit";
 
 export const rawHttpActor = actor({
 	state: {
 		requestCount: 0,
 	},
 	onRequest(
-		ctx: ActorContext<any, any, any, any, any, any>,
+		ctx: RequestContext<any, any, any, any, any, any>,
 		request: Request,
 	) {
 		const url = new URL(request.url);
@@ -111,7 +111,7 @@ export const rawHttpHonoActor = actor({
 		return { router };
 	},
 	onRequest(
-		ctx: ActorContext<any, any, any, any, any, any>,
+		ctx: RequestContext<any, any, any, any, any, any>,
 		request: Request,
 	) {
 		// Use the Hono router from vars
