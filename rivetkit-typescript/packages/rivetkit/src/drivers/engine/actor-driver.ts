@@ -12,6 +12,7 @@ import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
 import { PERSIST_SYMBOL } from "@/actor/instance";
 import { deserializeActorKey } from "@/actor/keys";
+import { KEYS } from "@/actor/kv";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -49,7 +50,6 @@ import {
 	setLongTimeout,
 	stringifyError,
 } from "@/utils";
-import { KEYS } from "./kv";
 import { logger } from "./log";
 
 const RUNNER_SSE_PING_INTERVAL = 1000;
@@ -57,7 +57,6 @@ const RUNNER_SSE_PING_INTERVAL = 1000;
 interface ActorHandler {
 	actor?: AnyActorInstance;
 	actorStartPromise?: ReturnType<typeof promiseWithResolvers<void>>;
-	persistedData?: Uint8Array;
 }
 
 export type DriverContext = {};
@@ -171,14 +170,14 @@ export class EngineActorDriver implements ActorDriver {
 
 				// Check for existing WS
 				const hibernatableArray =
-					handler.actor[PERSIST_SYMBOL].hibernatableWebSocket;
+					handler.actor[PERSIST_SYMBOL].hibernatableConns;
 				logger().debug({
 					msg: "checking hibernatable websockets",
 					requestId: idToStr(requestId),
 					existingHibernatableWebSockets: hibernatableArray.length,
 				});
-				const existingWs = hibernatableArray.find((ws) =>
-					arrayBuffersEqual(ws.requestId, requestId),
+				const existingWs = hibernatableArray.find((conn) =>
+					arrayBuffersEqual(conn.hibernatableRequestId, requestId),
 				);
 
 				// Determine configuration for new WS
@@ -269,17 +268,16 @@ export class EngineActorDriver implements ActorDriver {
 						msg: "updated existing hibernatable websocket timestamp",
 						requestId: idToStr(requestId),
 					});
-					existingWs.lastSeenTimestamp = BigInt(Date.now());
-				} else {
+					existingWs.lastSeenTimestamp = Date.now();
+				} else if (path === PATH_CONNECT) {
+					// For new hibernatable connections, we'll create a placeholder entry
+					// The actual connection data will be populated when the connection is created
 					logger().debug({
-						msg: "created new hibernatable websocket entry",
+						msg: "will create hibernatable conn when connection is created",
 						requestId: idToStr(requestId),
 					});
-					handler.actor[PERSIST_SYMBOL].hibernatableWebSocket.push({
-						requestId,
-						lastSeenTimestamp: BigInt(Date.now()),
-						msgIndex: -1n,
-					});
+					// Note: The actual hibernatable connection is created in instance.ts
+					// when createConn is called with a hibernatable requestId
 				}
 
 				return hibernationConfig;
@@ -339,29 +337,6 @@ export class EngineActorDriver implements ActorDriver {
 		return {};
 	}
 
-	async readPersistedData(actorId: string): Promise<Uint8Array | undefined> {
-		const handler = this.#actors.get(actorId);
-		if (!handler) throw new Error(`Actor ${actorId} not loaded`);
-
-		// This was loaded during actor startup
-		return handler.persistedData;
-	}
-
-	async writePersistedData(actorId: string, data: Uint8Array): Promise<void> {
-		const handler = this.#actors.get(actorId);
-		if (!handler) throw new Error(`Actor ${actorId} not loaded`);
-
-		handler.persistedData = data;
-
-		logger().debug({
-			msg: "writing persisted data for actor",
-			actorId,
-			dataSize: data.byteLength,
-		});
-
-		await this.#runner.kvPut(actorId, [[KEYS.PERSIST_DATA, data]]);
-	}
-
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {
 		// Clear prev timeout
 		if (this.#alarmTimeout) {
@@ -392,6 +367,56 @@ export class EngineActorDriver implements ActorDriver {
 		return undefined;
 	}
 
+	// Batch KV operations
+	async kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		logger().debug({
+			msg: "batch writing KV entries",
+			actorId,
+			entryCount: entries.length,
+		});
+
+		await this.#runner.kvPut(actorId, entries);
+	}
+
+	async kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		logger().debug({
+			msg: "batch reading KV entries",
+			actorId,
+			keyCount: keys.length,
+		});
+
+		return await this.#runner.kvGet(actorId, keys);
+	}
+
+	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
+		logger().debug({
+			msg: "batch deleting KV entries",
+			actorId,
+			keyCount: keys.length,
+		});
+
+		await this.#runner.kvDelete(actorId, keys);
+	}
+
+	async kvListPrefix(
+		actorId: string,
+		prefix: Uint8Array,
+	): Promise<[Uint8Array, Uint8Array][]> {
+		logger().debug({
+			msg: "listing KV entries with prefix",
+			actorId,
+			prefixLength: prefix.length,
+		});
+
+		return await this.#runner.kvListPrefix(actorId, prefix);
+	}
+
 	// Runner lifecycle callbacks
 	async #runnerOnActorStart(
 		actorId: string,
@@ -420,26 +445,8 @@ export class EngineActorDriver implements ActorDriver {
 			// create the same handler simultaneously.
 			handler = {
 				actorStartPromise: promiseWithResolvers(),
-				persistedData: undefined,
 			};
 			this.#actors.set(actorId, handler);
-
-			// Load persisted data from storage
-			const [persistedValue] = await this.#runner.kvGet(actorId, [
-				KEYS.PERSIST_DATA,
-			]);
-
-			handler.persistedData =
-				persistedValue !== null
-					? persistedValue
-					: serializeEmptyPersistData(input);
-
-			logger().debug({
-				msg: "loaded persisted data for actor",
-				actorId,
-				dataSize: handler.persistedData?.byteLength,
-				wasInStorage: persistedValue !== null,
-			});
 		}
 
 		const name = actorConfig.name as string;

@@ -1,1 +1,1 @@
-export * from "../../../dist/schemas/file-system-driver/v1";
+export * from "../../../dist/schemas/file-system-driver/v2";

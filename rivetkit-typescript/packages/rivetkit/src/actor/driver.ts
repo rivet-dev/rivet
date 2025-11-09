@@ -19,10 +19,27 @@ export interface ActorDriver {
 
 	getContext(actorId: string): unknown;
 
-	readPersistedData(actorId: string): Promise<Uint8Array | undefined>;
+	// Batch KV operations
+	/** Batch write multiple key-value pairs. Keys and values are Uint8Arrays. */
+	kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void>;
 
-	/** ActorInstance ensure that only one instance of writePersistedData is called in parallel at a time. */
-	writePersistedData(actorId: string, data: Uint8Array): Promise<void>;
+	/** Batch read multiple keys. Returns null for keys that don't exist. */
+	kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]>;
+
+	/** Batch delete multiple keys. */
+	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
+
+	/** List all keys with a given prefix. */
+	kvListPrefix(
+		actorId: string,
+		prefix: Uint8Array,
+	): Promise<[Uint8Array, Uint8Array][]>;
 
 	// Schedule
 	/** ActorInstance ensure that only one instance of setAlarm is called in parallel at a time. */

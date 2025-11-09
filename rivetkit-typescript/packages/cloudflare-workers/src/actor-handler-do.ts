@@ -20,7 +20,13 @@ export const KEYS = {
 	NAME: "rivetkit:name",
 	KEY: "rivetkit:key",
 	PERSIST_DATA: "rivetkit:data",
+	CONN_PREFIX: "rivetkit:conn:",
 };
+
+// Helper to create a connection key for Cloudflare
+export function makeCloudflareConnKey(connId: string): string {
+	return `${KEYS.CONN_PREFIX}${connId}`;
+}
 
 export interface ActorHandlerInterface extends DurableObject {
 	initialize(req: ActorInitRequest): Promise<void>;

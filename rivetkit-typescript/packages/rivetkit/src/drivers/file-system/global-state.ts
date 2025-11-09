@@ -21,6 +21,7 @@ import {
 	ACTOR_STATE_VERSIONED,
 } from "@/schemas/file-system-driver/versioned";
 import {
+	arrayBuffersEqual,
 	bufferToArrayBuffer,
 	type LongTimeoutHandle,
 	promiseWithResolvers,
@@ -213,14 +214,22 @@ export class FileSystemGlobalState {
 		}
 
 		const entry = this.#upsertEntry(actorId);
+
+		// Initialize kvStorage with the initial persist data
+		const kvStorage: schema.ActorKvEntry[] = [];
+		const persistData = serializeEmptyPersistData(input);
+		// Store under key [1]
+		kvStorage.push({
+			key: bufferToArrayBuffer(new Uint8Array([1])),
+			value: bufferToArrayBuffer(persistData),
+		});
+
 		entry.state = {
 			actorId,
 			name,
 			key,
 			createdAt: BigInt(Date.now()),
-			persistedData: bufferToArrayBuffer(
-				serializeEmptyPersistData(input),
-			),
+			kvStorage,
 		};
 		await this.writeActor(actorId, entry.state);
 		return entry;
@@ -292,14 +301,21 @@ export class FileSystemGlobalState {
 
 		// If no state for this actor, then create & write state
 		if (!entry.state) {
+			// Initialize kvStorage with the initial persist data
+			const kvStorage: schema.ActorKvEntry[] = [];
+			const persistData = serializeEmptyPersistData(input);
+			// Store under key [1]
+			kvStorage.push({
+				key: bufferToArrayBuffer(new Uint8Array([1])),
+				value: bufferToArrayBuffer(persistData),
+			});
+
 			entry.state = {
 				actorId,
 				name,
 				key: key as readonly string[],
 				createdAt: BigInt(Date.now()),
-				persistedData: bufferToArrayBuffer(
-					serializeEmptyPersistData(input),
-				),
+				kvStorage,
 			};
 			await this.writeActor(actorId, entry.state);
 		}
@@ -403,7 +419,7 @@ export class FileSystemGlobalState {
 				name: state.name,
 				key: state.key,
 				createdAt: state.createdAt,
-				persistedData: state.persistedData,
+				kvStorage: state.kvStorage,
 			};
 
 			// Perform atomic write
@@ -715,5 +731,145 @@ export class FileSystemGlobalState {
 				error: err,
 			});
 		}
+	}
+
+	/**
+	 * Batch put KV entries for an actor.
+	 */
+	async kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		const entry = await this.loadActor(actorId);
+		if (!entry.state) {
+			throw new Error(`Actor ${actorId} state not loaded`);
+		}
+
+		// Create a mutable copy of kvStorage
+		const newKvStorage = [...entry.state.kvStorage];
+
+		// Update kvStorage with new entries
+		for (const [key, value] of entries) {
+			// Find existing entry with the same key
+			const existingIndex = newKvStorage.findIndex((e) =>
+				arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
+			);
+
+			if (existingIndex >= 0) {
+				// Replace existing entry with new one
+				newKvStorage[existingIndex] = {
+					key: bufferToArrayBuffer(key),
+					value: bufferToArrayBuffer(value),
+				};
+			} else {
+				// Add new entry
+				newKvStorage.push({
+					key: bufferToArrayBuffer(key),
+					value: bufferToArrayBuffer(value),
+				});
+			}
+		}
+
+		// Update state with new kvStorage
+		entry.state = {
+			...entry.state,
+			kvStorage: newKvStorage,
+		};
+
+		// Save state to disk
+		await this.writeActor(actorId, entry.state);
+	}
+
+	/**
+	 * Batch get KV entries for an actor.
+	 */
+	async kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		const entry = await this.loadActor(actorId);
+		if (!entry.state) {
+			throw new Error(`Actor ${actorId} state not loaded`);
+		}
+
+		const results: (Uint8Array | null)[] = [];
+		for (const key of keys) {
+			// Find entry with the same key
+			const foundEntry = entry.state.kvStorage.find((e) =>
+				arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
+			);
+
+			if (foundEntry) {
+				results.push(new Uint8Array(foundEntry.value));
+			} else {
+				results.push(null);
+			}
+		}
+		return results;
+	}
+
+	/**
+	 * Batch delete KV entries for an actor.
+	 */
+	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
+		const entry = await this.loadActor(actorId);
+		if (!entry.state) {
+			throw new Error(`Actor ${actorId} state not loaded`);
+		}
+
+		// Create a mutable copy of kvStorage
+		const newKvStorage = [...entry.state.kvStorage];
+
+		// Delete entries from kvStorage
+		for (const key of keys) {
+			const indexToDelete = newKvStorage.findIndex((e) =>
+				arrayBuffersEqual(e.key, bufferToArrayBuffer(key)),
+			);
+
+			if (indexToDelete >= 0) {
+				newKvStorage.splice(indexToDelete, 1);
+			}
+		}
+
+		// Update state with new kvStorage
+		entry.state = {
+			...entry.state,
+			kvStorage: newKvStorage,
+		};
+
+		// Save state to disk
+		await this.writeActor(actorId, entry.state);
+	}
+
+	/**
+	 * List KV entries with a given prefix for an actor.
+	 */
+	async kvListPrefix(
+		actorId: string,
+		prefix: Uint8Array,
+	): Promise<[Uint8Array, Uint8Array][]> {
+		const entry = await this.loadActor(actorId);
+		if (!entry.state) {
+			throw new Error(`Actor ${actorId} state not loaded`);
+		}
+
+		const results: [Uint8Array, Uint8Array][] = [];
+		for (const kvEntry of entry.state.kvStorage) {
+			const keyBytes = new Uint8Array(kvEntry.key);
+			// Check if key starts with prefix
+			if (keyBytes.length >= prefix.length) {
+				let hasPrefix = true;
+				for (let i = 0; i < prefix.length; i++) {
+					if (keyBytes[i] !== prefix[i]) {
+						hasPrefix = false;
+						break;
+					}
+				}
+				if (hasPrefix) {
+					results.push([keyBytes, new Uint8Array(kvEntry.value)]);
+				}
+			}
+		}
+		return results;
 	}
 }
