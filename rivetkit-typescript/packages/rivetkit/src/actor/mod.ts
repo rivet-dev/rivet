@@ -55,8 +55,8 @@ export function actor<
 export type { Encoding } from "@/actor/protocol/serde";
 export {
 	ALLOWED_PUBLIC_HEADERS,
-	PATH_CONNECT_WEBSOCKET,
-	PATH_RAW_WEBSOCKET_PREFIX,
+	PATH_CONNECT,
+	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
 export type {
 	UniversalErrorEvent,
@@ -74,12 +74,7 @@ export type {
 export type { ActorKey } from "@/manager/protocol/query";
 export type { ActionContext } from "./action";
 export type * from "./config";
-export type {
-	Conn,
-	ConnectionStatus,
-	generateConnId,
-	generateConnToken,
-} from "./conn";
+export type { Conn } from "./conn";
 export type { ActorContext } from "./context";
 export type {
 	ActionContextOf,

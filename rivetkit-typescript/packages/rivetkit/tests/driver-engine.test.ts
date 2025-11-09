@@ -8,8 +8,6 @@ runDriverTests({
 	// Use real timers for engine-runner tests
 	useRealTimers: true,
 	skip: {
-		// SSE is not implemented on Rivet Guard yet
-		sse: true,
 		// The inline client is the same as the remote client driver on Rivet
 		inline: true,
 	},

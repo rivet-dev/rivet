@@ -2,52 +2,80 @@ import {
 	createVersionedDataHandler,
 	type MigrationFn,
 } from "@/common/versioned-data";
-import * as v1 from "../../../dist/schemas/client-protocol/v1";
+import type * as v1 from "../../../dist/schemas/client-protocol/v1";
+import * as v2 from "../../../dist/schemas/client-protocol/v2";
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
+
+export type CurrentToServer = v2.ToServer;
+export type CurrentToClient = v2.ToClient;
+export type CurrentHttpActionRequest = v2.HttpActionRequest;
+export type CurrentHttpActionResponse = v2.HttpActionResponse;
+export type CurrentHttpResponseError = v2.HttpResponseError;
+export type CurrentHttpResolveRequest = v2.HttpResolveRequest;
+export type CurrentHttpResolveResponse = v2.HttpResolveResponse;
 
 const migrations = new Map<number, MigrationFn<any, any>>();
 
-export const TO_SERVER_VERSIONED = createVersionedDataHandler<v1.ToServer>({
-	currentVersion: CURRENT_VERSION,
-	migrations,
-	serializeVersion: (data) => v1.encodeToServer(data),
-	deserializeVersion: (bytes) => v1.decodeToServer(bytes),
+// Migration from v1 to v2: Remove connectionToken from Init message
+migrations.set(1, (v1Data: v1.ToClient): v2.ToClient => {
+	// Handle Init message specifically to remove connectionToken
+	if (v1Data.body.tag === "Init") {
+		const { actorId, connectionId } = v1Data.body.val as v1.Init;
+		return {
+			body: {
+				tag: "Init",
+				val: {
+					actorId,
+					connectionId,
+				},
+			},
+		};
+	}
+	// All other messages are unchanged
+	return v1Data as unknown as v2.ToClient;
 });
 
-export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v1.ToClient>({
+export const TO_SERVER_VERSIONED = createVersionedDataHandler<v2.ToServer>({
 	currentVersion: CURRENT_VERSION,
 	migrations,
-	serializeVersion: (data) => v1.encodeToClient(data),
-	deserializeVersion: (bytes) => v1.decodeToClient(bytes),
+	serializeVersion: (data) => v2.encodeToServer(data),
+	deserializeVersion: (bytes) => v2.decodeToServer(bytes),
+});
+
+export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v2.ToClient>({
+	currentVersion: CURRENT_VERSION,
+	migrations,
+	serializeVersion: (data) => v2.encodeToClient(data),
+	deserializeVersion: (bytes) => v2.decodeToClient(bytes),
 });
 
 export const HTTP_ACTION_REQUEST_VERSIONED =
-	createVersionedDataHandler<v1.HttpActionRequest>({
+	createVersionedDataHandler<v2.HttpActionRequest>({
 		currentVersion: CURRENT_VERSION,
 		migrations,
-		serializeVersion: (data) => v1.encodeHttpActionRequest(data),
-		deserializeVersion: (bytes) => v1.decodeHttpActionRequest(bytes),
+		serializeVersion: (data) => v2.encodeHttpActionRequest(data),
+		deserializeVersion: (bytes) => v2.decodeHttpActionRequest(bytes),
 	});
 
 export const HTTP_ACTION_RESPONSE_VERSIONED =
-	createVersionedDataHandler<v1.HttpActionResponse>({
+	createVersionedDataHandler<v2.HttpActionResponse>({
 		currentVersion: CURRENT_VERSION,
 		migrations,
-		serializeVersion: (data) => v1.encodeHttpActionResponse(data),
-		deserializeVersion: (bytes) => v1.decodeHttpActionResponse(bytes),
+		serializeVersion: (data) => v2.encodeHttpActionResponse(data),
+		deserializeVersion: (bytes) => v2.decodeHttpActionResponse(bytes),
 	});
 
 export const HTTP_RESPONSE_ERROR_VERSIONED =
-	createVersionedDataHandler<v1.HttpResponseError>({
+	createVersionedDataHandler<v2.HttpResponseError>({
 		currentVersion: CURRENT_VERSION,
 		migrations,
-		serializeVersion: (data) => v1.encodeHttpResponseError(data),
-		deserializeVersion: (bytes) => v1.decodeHttpResponseError(bytes),
+		serializeVersion: (data) => v2.encodeHttpResponseError(data),
+		deserializeVersion: (bytes) => v2.decodeHttpResponseError(bytes),
 	});
 
 export const HTTP_RESOLVE_REQUEST_VERSIONED =
-	createVersionedDataHandler<v1.HttpResolveRequest>({
+	createVersionedDataHandler<v2.HttpResolveRequest>({
 		currentVersion: CURRENT_VERSION,
 		migrations,
 		serializeVersion: (_) => new Uint8Array(),
@@ -55,9 +83,9 @@ export const HTTP_RESOLVE_REQUEST_VERSIONED =
 	});
 
 export const HTTP_RESOLVE_RESPONSE_VERSIONED =
-	createVersionedDataHandler<v1.HttpResolveResponse>({
+	createVersionedDataHandler<v2.HttpResolveResponse>({
 		currentVersion: CURRENT_VERSION,
 		migrations,
-		serializeVersion: (data) => v1.encodeHttpResolveResponse(data),
-		deserializeVersion: (bytes) => v1.decodeHttpResolveResponse(bytes),
+		serializeVersion: (data) => v2.encodeHttpResolveResponse(data),
+		deserializeVersion: (bytes) => v2.decodeHttpResolveResponse(bytes),
 	});

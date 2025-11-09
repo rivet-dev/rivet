@@ -1,5 +1,4 @@
 import type { AnyActorDefinition } from "@/actor/definition";
-import type { Transport } from "@/actor/protocol/old";
 import type { Encoding } from "@/actor/protocol/serde";
 import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
@@ -149,7 +148,6 @@ export interface Region {
 
 export const ACTOR_CONNS_SYMBOL = Symbol("actorConns");
 export const CREATE_ACTOR_CONN_PROXY = Symbol("createActorConnProxy");
-export const TRANSPORT_SYMBOL = Symbol("transport");
 
 /**
  * Client for managing & connecting to actors.
@@ -164,7 +162,6 @@ export class ClientRaw {
 
 	#driver: ManagerDriver;
 	#encodingKind: Encoding;
-	[TRANSPORT_SYMBOL]: Transport;
 
 	/**
 	 * Creates an instance of Client.
@@ -173,7 +170,6 @@ export class ClientRaw {
 		this.#driver = driver;
 
 		this.#encodingKind = config.encoding ?? "bare";
-		this[TRANSPORT_SYMBOL] = config.transport ?? "websocket";
 	}
 
 	/**

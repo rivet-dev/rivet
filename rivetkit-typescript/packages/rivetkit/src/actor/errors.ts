@@ -133,22 +133,6 @@ export class InvalidEncoding extends ActorError {
 	}
 }
 
-export class ConnNotFound extends ActorError {
-	constructor(id?: string) {
-		super("connection", "not_found", `Connection not found for ID: ${id}`, {
-			public: true,
-		});
-	}
-}
-
-export class IncorrectConnToken extends ActorError {
-	constructor() {
-		super("connection", "incorrect_token", "Incorrect connection token.", {
-			public: true,
-		});
-	}
-}
-
 export class MessageTooLong extends ActorError {
 	constructor() {
 		super(

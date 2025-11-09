@@ -141,7 +141,7 @@ export function runRequestAccessTests(driverTestConfig: DriverTestConfig) {
 		// 		},
 		// 	};
 		//
-		// 	const url = `${endpoint}/registry/actors/raw/http/test-path`;
+		// 	const url = `${endpoint}/registry/actors/request/test-path`;
 		// 	const response = await fetch(url, {
 		// 		method: "POST",
 		// 		headers: {
@@ -200,7 +200,7 @@ export function runRequestAccessTests(driverTestConfig: DriverTestConfig) {
 		// 			.replace("http://", "ws://")
 		// 			.replace("https://", "wss://");
 		// 		const ws = new WebSocket(
-		// 			`${wsUrl}/registry/actors/raw/websocket/test-path`,
+		// 			`${wsUrl}/registry/actors/websocket/test-path`,
 		// 			[
 		// 				queryProtocol,
 		// 				"rivetkit", // Required protocol

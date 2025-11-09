@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { TransportSchema } from "@/actor/protocol/old";
 import { ActorQuerySchema } from "./query";
 
 export * from "./query";
@@ -10,7 +9,6 @@ export const ActorsRequestSchema = z.object({
 
 export const ActorsResponseSchema = z.object({
 	actorId: z.string(),
-	supportedTransports: z.array(TransportSchema),
 });
 
 //export const RivetConfigResponseSchema = z.object({
