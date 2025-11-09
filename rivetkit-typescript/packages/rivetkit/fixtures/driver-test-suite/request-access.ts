@@ -18,7 +18,7 @@ export const requestAccessActor = actor({
 			requestMethod: null as string | null,
 			requestHeaders: {} as Record<string, string>,
 		},
-		onFetchRequest: {
+		onRequestRequest: {
 			hasRequest: false,
 			requestUrl: null as string | null,
 			requestMethod: null as string | null,
@@ -74,18 +74,18 @@ export const requestAccessActor = actor({
 			}
 		}
 	},
-	onFetch: (c, request) => {
+	onRequest: (c, request) => {
 		// Store request info
-		c.state.onFetchRequest.hasRequest = true;
-		c.state.onFetchRequest.requestUrl = request.url;
-		c.state.onFetchRequest.requestMethod = request.method;
+		c.state.onRequestRequest.hasRequest = true;
+		c.state.onRequestRequest.requestUrl = request.url;
+		c.state.onRequestRequest.requestMethod = request.method;
 
 		// Store select headers
 		const headers: Record<string, string> = {};
 		request.headers.forEach((value, key) => {
 			headers[key] = value;
 		});
-		c.state.onFetchRequest.requestHeaders = headers;
+		c.state.onRequestRequest.requestHeaders = headers;
 
 		// Return response with request info
 		return new Response(
@@ -134,7 +134,7 @@ export const requestAccessActor = actor({
 			return {
 				onBeforeConnect: c.state.onBeforeConnectRequest,
 				createConnState: c.state.createConnStateRequest,
-				onFetch: c.state.onFetchRequest,
+				onRequest: c.state.onRequestRequest,
 				onWebSocket: c.state.onWebSocketRequest,
 			};
 		},
