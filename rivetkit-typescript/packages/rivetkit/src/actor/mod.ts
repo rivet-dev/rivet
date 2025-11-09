@@ -90,6 +90,6 @@ export {
 	createActorRouter,
 } from "./router";
 export {
-	handleRawWebSocketHandler,
+	handleRawWebSocket as handleRawWebSocketHandler,
 	handleWebSocketConnect,
 } from "./router-endpoints";

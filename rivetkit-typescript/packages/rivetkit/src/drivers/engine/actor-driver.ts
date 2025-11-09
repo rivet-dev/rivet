@@ -16,7 +16,7 @@ import { deserializeActorKey } from "@/actor/keys";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
-	handleRawWebSocketHandler,
+	handleRawWebSocket,
 	handleWebSocketConnect,
 	truncateRawWebSocketPathPrefix,
 } from "@/actor/router-endpoints";
@@ -582,7 +582,7 @@ export class EngineActorDriver implements ActorDriver {
 				requestIdBuf,
 			);
 		} else if (url.pathname.startsWith(PATH_WEBSOCKET_PREFIX)) {
-			wsHandlerPromise = handleRawWebSocketHandler(
+			wsHandlerPromise = handleRawWebSocket(
 				request,
 				url.pathname + url.search,
 				this,
