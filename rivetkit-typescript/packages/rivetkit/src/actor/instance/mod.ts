@@ -24,6 +24,8 @@ import {
 } from "../conn/mod";
 import { ActionContext } from "../contexts/action";
 import { ActorContext } from "../contexts/actor";
+import { RequestContext } from "../contexts/request";
+import { WebSocketContext } from "../contexts/websocket";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
 import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
@@ -646,8 +648,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - HTTP/WebSocket Handlers
 	async handleRawRequest(
+		conn: Conn<S, CP, CS, V, I, DB>,
 		request: Request,
-		opts: Record<never, never>,
 	): Promise<Response> {
 		this.#assertReady();
 
@@ -656,11 +658,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		try {
-			const response = await this.#config.onRequest(
-				this.actorContext,
-				request,
-				opts,
-			);
+			const ctx = new RequestContext(this.actorContext, conn);
+			const response = await this.#config.onRequest(ctx, request);
 			if (!response) {
 				throw new errors.InvalidRequestHandlerResponse();
 			}
@@ -677,6 +676,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	async handleRawWebSocket(
+		conn: Conn<S, CP, CS, V, I, DB>,
 		websocket: UniversalWebSocket,
 		opts: { request: Request },
 	): Promise<void> {
@@ -693,7 +693,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#resetSleepTimer();
 
 			// Handle WebSocket
-			await this.#config.onWebSocket(this.actorContext, websocket, opts);
+			const ctx = new WebSocketContext(this.actorContext, conn);
+			await this.#config.onWebSocket(ctx, websocket, opts);
 
 			// Save state if changed
 			if (this.#stateManager.persistChanged && !stateBeforeHandler) {
