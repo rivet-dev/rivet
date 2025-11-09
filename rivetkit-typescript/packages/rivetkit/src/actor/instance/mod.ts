@@ -864,8 +864,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #callOnStart() {
 		this.#rLog.info({ msg: "actor starting" });
-		if (this.#config.onStart) {
-			const result = this.#config.onStart(this.actorContext);
+		if (this.#config.onWake) {
+			const result = this.#config.onWake(this.actorContext);
 			if (result instanceof Promise) {
 				await result;
 			}
@@ -873,10 +873,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	async #callOnStop() {
-		if (this.#config.onStop) {
+		if (this.#config.onSleep) {
 			try {
 				this.#rLog.debug({ msg: "calling onStop" });
-				const result = this.#config.onStop(this.actorContext);
+				const result = this.#config.onSleep(this.actorContext);
 				if (result instanceof Promise) {
 					await deadline(result, this.#config.options.onStopTimeout);
 				}

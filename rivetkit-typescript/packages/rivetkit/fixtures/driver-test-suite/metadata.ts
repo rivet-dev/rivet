@@ -11,7 +11,7 @@ export const metadataActor = actor({
 		storedTags: {} as Record<string, string>,
 		storedRegion: null as string | null,
 	},
-	onStart: (c) => {
+	onWake: (c) => {
 		// Store the actor name during initialization
 		c.state.actorName = c.name;
 	},
@@ -62,7 +62,7 @@ export const metadataActor = actor({
 			return c.state.storedRegion;
 		},
 
-		// Get the stored actor name (from onStart)
+		// Get the stored actor name (from onWake)
 		getStoredActorName: (c) => {
 			return c.state.actorName;
 		},

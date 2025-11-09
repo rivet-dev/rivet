@@ -261,7 +261,7 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 				// Verify lifecycle events were triggered
 				const events = await connection.getEvents();
 				expect(events).toEqual([
-					"onStart",
+					"onWake",
 					"onBeforeConnect",
 					"onConnect",
 				]);
@@ -279,18 +279,18 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 						expect(finalEvents).toBeOneOf([
 							// Still active
 							[
-								"onStart",
+								"onWake",
 								"onBeforeConnect",
 								"onConnect",
 								"onDisconnect",
 							],
 							// Went to sleep and woke back up
 							[
-								"onStart",
+								"onWake",
 								"onBeforeConnect",
 								"onConnect",
 								"onDisconnect",
-								"onStart",
+								"onWake",
 							],
 						]);
 					},
