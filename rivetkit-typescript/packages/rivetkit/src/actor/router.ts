@@ -8,8 +8,8 @@ import {
 	type ConnectWebSocketOutput,
 	type ConnsMessageOpts,
 	handleAction,
-	handleRawHttpHandler,
-	handleRawWebSocketHandler,
+	handleRawRequest,
+	handleRawWebSocket,
 	handleWebSocketConnect,
 } from "@/actor/router-endpoints";
 import {
@@ -171,7 +171,6 @@ export function createActorRouter(
 		);
 	});
 
-	// Raw HTTP endpoints - /request/*
 	router.all("/request/*", async (c) => {
 		// TODO: This is not a clean way of doing this since `/http/` might exist mid-path
 		// Strip the /http prefix from the URL to get the original path
@@ -193,14 +192,13 @@ export function createActorRouter(
 			to: correctedRequest.url,
 		});
 
-		return await handleRawHttpHandler(
+		return await handleRawRequest(
 			correctedRequest,
 			actorDriver,
 			c.env.actorId,
 		);
 	});
 
-	// Raw WebSocket endpoint - /websocket/*
 	router.get(`${PATH_WEBSOCKET_PREFIX}*`, async (c) => {
 		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
 		if (upgradeWebSocket) {
@@ -216,7 +214,7 @@ export function createActorRouter(
 					pathWithQuery,
 				});
 
-				return await handleRawWebSocketHandler(
+				return await handleRawWebSocket(
 					c.req.raw,
 					pathWithQuery,
 					actorDriver,
