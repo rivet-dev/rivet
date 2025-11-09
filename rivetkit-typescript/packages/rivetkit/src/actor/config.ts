@@ -45,7 +45,7 @@ export const ActorConfigSchema = z
 		onConnect: z.function().optional(),
 		onDisconnect: z.function().optional(),
 		onBeforeActionResponse: z.function().optional(),
-		onFetch: z.function().optional(),
+		onRequest: z.function().optional(),
 		onWebSocket: z.function().optional(),
 		actions: z.record(z.function()).default({}),
 		state: z.any().optional(),
@@ -410,7 +410,7 @@ interface BaseActorConfig<
 	 * @param request The raw HTTP request object
 	 * @returns A Response object to send back, or void to continue with default routing
 	 */
-	onFetch?: (
+	onRequest?: (
 		c: ActorContext<
 			TState,
 			TConnParams,
@@ -477,7 +477,7 @@ export type ActorConfig<
 	| "onConnect"
 	| "onDisconnect"
 	| "onBeforeActionResponse"
-	| "onFetch"
+	| "onRequest"
 	| "onWebSocket"
 	| "state"
 	| "createState"
@@ -537,7 +537,7 @@ export type ActorConfigInput<
 	| "onConnect"
 	| "onDisconnect"
 	| "onBeforeActionResponse"
-	| "onFetch"
+	| "onRequest"
 	| "onWebSocket"
 	| "state"
 	| "createState"

@@ -129,7 +129,7 @@ export function createTestInlineClientDriver(
 					if (errorData.error) {
 						// Handle both error formats:
 						// 1. { error: { code, message, metadata } } - structured format
-						// 2. { error: "message" } - simple string format (from custom onFetch handlers)
+						// 2. { error: "message" } - simple string format (from custom onRequest handlers)
 						if (typeof errorData.error === "object") {
 							throw new ClientActorError(
 								errorData.error.code,
@@ -138,7 +138,7 @@ export function createTestInlineClientDriver(
 							);
 						}
 						// For simple string errors, just return the response as-is
-						// This allows custom onFetch handlers to return their own error formats
+						// This allows custom onRequest handlers to return their own error formats
 					}
 				} catch (e) {
 					// If it's not our error format, just return the response as-is
@@ -452,7 +452,7 @@ export function createTestInlineClientDriver(
 		// 			if (errorData.error) {
 		// 				// Handle both error formats:
 		// 				// 1. { error: { code, message, metadata } } - structured format
-		// 				// 2. { error: "message" } - simple string format (from custom onFetch handlers)
+		// 				// 2. { error: "message" } - simple string format (from custom onRequest handlers)
 		// 				if (typeof errorData.error === "object") {
 		// 					throw new ClientActorError(
 		// 						errorData.error.code,
@@ -461,7 +461,7 @@ export function createTestInlineClientDriver(
 		// 					);
 		// 				}
 		// 				// For simple string errors, just return the response as-is
-		// 				// This allows custom onFetch handlers to return their own error formats
+		// 				// This allows custom onRequest handlers to return their own error formats
 		// 			}
 		// 		} catch (e) {
 		// 			// If it's not our error format, just return the response as-is
