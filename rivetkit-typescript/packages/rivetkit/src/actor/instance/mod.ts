@@ -41,7 +41,6 @@ enum CanSleep {
 	NotReady,
 	ActiveConns,
 	ActiveHonoHttpRequests,
-	ActiveRawWebSockets,
 }
 
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
@@ -100,7 +99,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - HTTP/WebSocket Tracking
 	#activeHonoHttpRequests = 0;
-	#activeRawWebSockets = new Set<UniversalWebSocket>();
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -673,12 +671,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		try {
 			const stateBeforeHandler = this.#stateManager.persistChanged;
 
-			// Track active websocket
-			this.#activeRawWebSockets.add(websocket);
+			// Reset sleep timer when handling WebSocket
 			this.#resetSleepTimer();
-
-			// Setup WebSocket event handlers (simplified for brevity)
-			this.#setupWebSocketHandlers(websocket);
 
 			// Handle WebSocket
 			await this.#config.onWebSocket(this.actorContext, websocket, opts);
@@ -958,18 +952,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	#setupWebSocketHandlers(websocket: UniversalWebSocket) {
-		// Simplified WebSocket handler setup
-		// Full implementation would track hibernatable websockets
-		const onSocketClosed = () => {
-			this.#activeRawWebSockets.delete(websocket);
-			this.#resetSleepTimer();
-		};
-
-		websocket.addEventListener("close", onSocketClosed);
-		websocket.addEventListener("error", onSocketClosed);
-	}
-
 	#resetSleepTimer() {
 		if (this.#config.options.noSleep || !this.#sleepingSupported) return;
 		if (this.#stopCalled) return;
@@ -1001,8 +983,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!this.#ready) return CanSleep.NotReady;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
-		if (this.#activeRawWebSockets.size > 0)
-			return CanSleep.ActiveRawWebSockets;
 
 		for (const _conn of this.#connectionManager.connections.values()) {
 			return CanSleep.ActiveConns;
