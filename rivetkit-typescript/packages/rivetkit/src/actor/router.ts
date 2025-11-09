@@ -29,8 +29,7 @@ import {
 } from "@/inspector/actor";
 import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import type { RunnerConfig } from "@/registry/run-config";
-import { generateConnRequestId } from "./conn";
-import { ConnDriverKind } from "./conn-drivers";
+import { CONN_DRIVER_SYMBOL, generateConnRequestId } from "./conn/mod";
 import type { ActorDriver } from "./driver";
 import { InternalError } from "./errors";
 import { loggerWithoutContext } from "./log";
@@ -66,11 +65,11 @@ export function createActorRouter(
 	// Track all HTTP requests to prevent actor from sleeping during active requests
 	router.use("*", async (c, next) => {
 		const actor = await actorDriver.loadActor(c.env.actorId);
-		actor.__beginHonoHttpRequest();
+		actor.beginHonoHttpRequest();
 		try {
 			await next();
 		} finally {
-			actor.__endHonoHttpRequest();
+			actor.endHonoHttpRequest();
 		}
 	});
 
@@ -94,19 +93,15 @@ export function createActorRouter(
 			}
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
-			const conn = actor.__getConnForId(connId);
+			const conn = actor.getConnForId(connId);
 
 			if (!conn) {
 				return c.text(`Connection not found: ${connId}`, 404);
 			}
 
 			// Force close the connection without clean shutdown
-			const driverState = conn.__driverState;
-			if (driverState && ConnDriverKind.WEBSOCKET in driverState) {
-				const ws = driverState[ConnDriverKind.WEBSOCKET].websocket;
-
-				// Force close without sending close frame
-				(ws.raw as any).terminate();
+			if (conn[CONN_DRIVER_SYMBOL]?.terminate) {
+				conn[CONN_DRIVER_SYMBOL].terminate(actor, conn);
 			}
 
 			return c.json({ success: true });

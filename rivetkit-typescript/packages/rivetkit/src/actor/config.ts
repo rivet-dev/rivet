@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { ActionContext } from "./action";
-import type { Conn } from "./conn";
-import type { ActorContext } from "./context";
+import type { Conn } from "./conn/mod";
+import type { ActionContext } from "./contexts/action";
+import type { ActorContext } from "./contexts/actor";
 import type { AnyDatabaseProvider } from "./database";
 
 export type InitContext = ActorContext<

@@ -1,4 +1,4 @@
-import type { AnyActorInstance } from "./instance";
+import type { AnyActorInstance } from "./instance/mod";
 
 export class Schedule {
 	#actor: AnyActorInstance;

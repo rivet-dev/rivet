@@ -5,7 +5,7 @@ import * as path from "node:path";
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
 import { ActorAlreadyExists } from "@/actor/errors";
-import type { AnyActorInstance } from "@/actor/instance";
+import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
@@ -341,7 +341,7 @@ export class FileSystemGlobalState {
 
 		// Stop actor
 		invariant(actor.actor, "actor should be loaded");
-		await actor.actor._onStop();
+		await actor.actor.onStop();
 
 		// Remove from map after stop is complete
 		this.#actors.delete(actorId);
@@ -672,7 +672,7 @@ export class FileSystemGlobalState {
 				}
 
 				invariant(loaded.actor, "actor should be loaded after wake");
-				await loaded.actor._onAlarm();
+				await loaded.actor.onAlarm();
 			} catch (err) {
 				logger().error({
 					msg: "failed to handle alarm",

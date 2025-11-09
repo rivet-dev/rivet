@@ -72,10 +72,10 @@ export type {
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
-export type { ActionContext } from "./action";
 export type * from "./config";
-export type { Conn } from "./conn";
-export type { ActorContext } from "./context";
+export type { Conn } from "./conn/mod";
+export type { ActionContext } from "./contexts/action";
+export type { ActorContext } from "./contexts/actor";
 export type {
 	ActionContextOf,
 	ActorContextOf,
@@ -84,7 +84,7 @@ export type {
 } from "./definition";
 export { lookupInRegistry } from "./definition";
 export { UserError, type UserErrorOptions } from "./errors";
-export type { AnyActorInstance } from "./instance";
+export type { AnyActorInstance } from "./instance/mod";
 export {
 	type ActorRouter,
 	createActorRouter,

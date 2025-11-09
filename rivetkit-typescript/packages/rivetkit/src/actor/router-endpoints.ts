@@ -1,11 +1,13 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
 import type { WSContext } from "hono/ws";
-import { ActionContext } from "@/actor/action";
-import { type AnyConn, generateConnRequestId } from "@/actor/conn";
-import { ConnDriverKind } from "@/actor/conn-drivers";
+import type { AnyConn } from "@/actor/conn/mod";
+import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
-import { type AnyActorInstance, PERSIST_SYMBOL } from "@/actor/instance";
+import {
+	ACTOR_INSTANCE_PERSIST_SYMBOL,
+	type AnyActorInstance,
+} from "@/actor/instance/mod";
 import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
@@ -22,7 +24,6 @@ import type * as protocol from "@/schemas/client-protocol/mod";
 import {
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
-	TO_SERVER_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
 import {
 	contentTypeForEncoding,
@@ -34,6 +35,8 @@ import {
 	bufferToArrayBuffer,
 	promiseWithResolvers,
 } from "@/utils";
+import { createHttpSocket } from "./conn/drivers/http";
+import { createWebSocketSocket } from "./conn/drivers/websocket";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
 import { parseMessage } from "./protocol/old";
@@ -136,7 +139,7 @@ export async function handleWebSocketConnect(
 	}
 
 	// Promise used to wait for the websocket close in `disconnect`
-	const closePromise = promiseWithResolvers<void>();
+	const closePromiseResolvers = promiseWithResolvers<void>();
 
 	// Track connection outside of scope for cleanup
 	let createdConn: AnyConn | undefined;
@@ -158,27 +161,24 @@ export async function handleWebSocketConnect(
 					// Check if this is a hibernatable websocket
 					const isHibernatable =
 						!!requestIdBuf &&
-						actor[PERSIST_SYMBOL].hibernatableConns.findIndex(
-							(conn) =>
-								arrayBuffersEqual(
-									conn.hibernatableRequestId,
-									requestIdBuf,
-								),
+						actor[
+							ACTOR_INSTANCE_PERSIST_SYMBOL
+						].hibernatableConns.findIndex((conn) =>
+							arrayBuffersEqual(
+								conn.hibernatableRequestId,
+								requestIdBuf,
+							),
 						) !== -1;
 
 					conn = await actor.createConn(
-						{
-							requestId: requestId,
-							requestIdBuf: requestIdBuf,
-							hibernatable: isHibernatable,
-							driverState: {
-								[ConnDriverKind.WEBSOCKET]: {
-									encoding,
-									websocket: ws,
-									closePromise,
-								},
-							},
-						},
+						createWebSocketSocket(
+							requestId,
+							requestIdBuf,
+							isHibernatable,
+							encoding,
+							ws,
+							closePromiseResolvers.promise,
+						),
 						parameters,
 						req,
 					);
@@ -264,7 +264,7 @@ export async function handleWebSocketConnect(
 		) => {
 			handlersReject(`WebSocket closed (${event.code}): ${event.reason}`);
 
-			closePromise.resolve();
+			closePromiseResolvers.resolve();
 
 			if (event.wasClean) {
 				actor.rLog.info({
@@ -290,7 +290,7 @@ export async function handleWebSocketConnect(
 			handlersPromise.finally(() => {
 				if (createdConn) {
 					const wasClean = event.wasClean || event.code === 1000;
-					actor.__connDisconnected(createdConn, wasClean, requestId);
+					actor.connDisconnected(createdConn, wasClean);
 				}
 			});
 		},
@@ -331,7 +331,6 @@ export async function handleAction(
 		HTTP_ACTION_REQUEST_VERSIONED,
 	);
 	const actionArgs = cbor.decode(new Uint8Array(request.args));
-	const requestId = generateConnRequestId();
 
 	// Invoke the action
 	let actor: AnyActorInstance | undefined;
@@ -344,11 +343,7 @@ export async function handleAction(
 
 		// Create conn
 		conn = await actor.createConn(
-			{
-				requestId: requestId,
-				hibernatable: false,
-				driverState: { [ConnDriverKind.HTTP]: {} },
-			},
+			createHttpSocket(),
 			parameters,
 			c.req.raw,
 		);
@@ -359,7 +354,7 @@ export async function handleAction(
 	} finally {
 		if (conn) {
 			// HTTP connections don't have persistent sockets, so no socket ID needed
-			actor?.__connDisconnected(conn, true, requestId);
+			actor?.connDisconnected(conn, true);
 		}
 	}
 
@@ -394,7 +389,9 @@ export async function handleRawWebSocketHandler(
 			// Extract rivetRequestId provided by engine runner
 			const rivetRequestId = evt?.rivetRequestId;
 			const isHibernatable =
-				actor[PERSIST_SYMBOL].hibernatableConns.findIndex((conn) =>
+				actor[
+					ACTOR_INSTANCE_PERSIST_SYMBOL
+				].hibernatableConns.findIndex((conn) =>
 					arrayBuffersEqual(
 						conn.hibernatableRequestId,
 						rivetRequestId,
