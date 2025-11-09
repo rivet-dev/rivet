@@ -33,9 +33,11 @@ import {
 import {
 	arrayBuffersEqual,
 	bufferToArrayBuffer,
+	idToStr,
 	promiseWithResolvers,
 } from "@/utils";
 import { createHttpSocket } from "./conn/drivers/http";
+import { createRawHttpSocket } from "./conn/drivers/raw-http";
 import { createRawWebSocketSocket } from "./conn/drivers/raw-websocket";
 import { createWebSocketSocket } from "./conn/drivers/websocket";
 import type { ActorDriver } from "./driver";
@@ -394,22 +396,18 @@ export async function handleRawWebSocketHandler(
 	return {
 		onOpen: async (evt: any, ws: any) => {
 			// Extract rivetRequestId provided by engine runner
-			const rivetRequestId = evt?.rivetRequestId;
 			const isHibernatable =
-				!!rivetRequestId &&
+				!!requestIdBuf &&
 				actor[
 					ACTOR_INSTANCE_PERSIST_SYMBOL
 				].hibernatableConns.findIndex((conn) =>
-					arrayBuffersEqual(
-						conn.hibernatableRequestId,
-						rivetRequestId,
-					),
+					arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
 				) !== -1;
 
 			// Wrap the Hono WebSocket in our adapter
 			const adapter = new HonoWebSocketAdapter(
 				ws,
-				rivetRequestId,
+				requestIdBuf,
 				isHibernatable,
 			);
 
@@ -434,13 +432,13 @@ export async function handleRawWebSocketHandler(
 
 			try {
 				// Create connection using actor.createConn - this handles deduplication for hibernatable connections
-				const requestId = rivetRequestId
-					? String(rivetRequestId)
+				const requestIdStr = requestIdBuf
+					? idToStr(requestIdBuf)
 					: crypto.randomUUID();
 				const conn = await actor.createConn(
 					createRawWebSocketSocket(
-						requestId,
-						rivetRequestId,
+						requestIdStr,
+						requestIdBuf,
 						isHibernatable,
 						adapter,
 						closePromiseResolvers.promise,
@@ -547,6 +545,30 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 		throw new errors.InvalidParams(
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
+	}
+}
+
+export async function handleRawHttpHandler(
+	req: Request,
+	actorDriver: ActorDriver,
+	actorId: string,
+): Promise<Response> {
+	const actor = await actorDriver.loadActor(actorId);
+
+	// Track connection outside of scope for cleanup
+	let createdConn: AnyConn | undefined;
+
+	try {
+		const conn = await actor.createConn(createRawHttpSocket(), {}, req);
+
+		createdConn = conn;
+
+		return await actor.handleRawRequest(req, {});
+	} finally {
+		// Clean up the connection after the request completes
+		if (createdConn) {
+			actor.connDisconnected(createdConn, true);
+		}
 	}
 }
 
