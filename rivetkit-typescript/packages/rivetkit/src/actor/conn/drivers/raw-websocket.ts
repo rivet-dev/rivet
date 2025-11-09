@@ -19,6 +19,7 @@ export function createRawWebSocketSocket(
 	closePromise: Promise<void>,
 ): ConnDriver {
 	return {
+		type: "raw-websocket",
 		requestId,
 		requestIdBuf,
 		hibernatable,

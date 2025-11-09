@@ -16,6 +16,7 @@ export function createWebSocketSocket(
 	closePromise: Promise<void>,
 ): ConnDriver {
 	return {
+		type: "websocket",
 		requestId,
 		requestIdBuf,
 		hibernatable,

@@ -15,6 +15,7 @@ import type { ActorConfig, InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpSocket } from "../conn/drivers/http";
 import {
+	CONN_DRIVER_SYMBOL,
 	CONN_PERSIST_SYMBOL,
 	CONN_SEND_MESSAGE_SYMBOL,
 	CONN_STATE_ENABLED_SYMBOL,
@@ -138,6 +139,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				return Array.from(
 					this.#connectionManager.connections.entries(),
 				).map(([id, conn]) => ({
+					type: conn[CONN_DRIVER_SYMBOL]?.type,
 					id,
 					params: conn.params as any,
 					state: conn[CONN_STATE_ENABLED_SYMBOL]

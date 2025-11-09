@@ -3,7 +3,7 @@ import invariant from "invariant";
 import { generateConnRequestId } from "@/actor/conn/mod";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
-	handleRawWebSocketHandler,
+	handleRawWebSocket,
 	handleWebSocketConnect,
 } from "@/actor/router-endpoints";
 import { createClientWithDriver } from "@/client/client";
@@ -182,7 +182,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		) {
 			// Handle websocket proxy
 			// Use the full path with query parameters
-			const wsHandler = await handleRawWebSocketHandler(
+			const wsHandler = await handleRawWebSocket(
 				undefined,
 				path,
 				this.#actorDriver,
@@ -239,7 +239,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		) {
 			// Handle websocket proxy
 			// Use the full path with query parameters
-			const wsHandler = await handleRawWebSocketHandler(
+			const wsHandler = await handleRawWebSocket(
 				c.req.raw,
 				path,
 				this.#actorDriver,
