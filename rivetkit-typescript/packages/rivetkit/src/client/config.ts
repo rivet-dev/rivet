@@ -1,5 +1,4 @@
 import z from "zod";
-import { TransportSchema } from "@/actor/protocol/old";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type GetUpgradeWebSocket, getEnvUniversal } from "@/utils";
 
@@ -32,8 +31,6 @@ export const ClientConfigSchema = z.object({
 		.default(() => getEnvUniversal("RIVET_RUNNER") ?? "default"),
 
 	encoding: EncodingSchema.default("bare"),
-
-	transport: TransportSchema.default("websocket"),
 
 	headers: z.record(z.string()).optional().default({}),
 

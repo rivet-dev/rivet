@@ -287,7 +287,6 @@ async function configureServerlessRunner(config: RunnerConfig): Promise<void> {
 			namespace: config.namespace,
 			runnerName: config.runnerName,
 			encoding: config.encoding,
-			transport: config.transport,
 			headers: config.headers,
 			getUpgradeWebSocket: config.getUpgradeWebSocket,
 			disableHealthCheck: true, // We don't need health check for this operation

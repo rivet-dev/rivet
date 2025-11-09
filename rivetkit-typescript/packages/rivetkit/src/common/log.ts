@@ -147,7 +147,7 @@ export async function configureDefaultLogger(
 		},
 		hooks: {
 			logMethod(inputArgs, method, level) {
-				// TODO: This is a hack to not implement our own transport target. We can get better perf if we have our own transport target.
+				// TODO: This is a hack to not implement our own Pino transport target. We can get better perf if we have our own transport target.
 
 				const levelMap: Record<number, string> = {
 					10: "trace",

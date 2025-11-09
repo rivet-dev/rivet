@@ -25,8 +25,8 @@ import type { ManagerDisplayInformation } from "@/manager/driver";
 import {
 	type DriverConfig,
 	type Encoding,
-	PATH_CONNECT_WEBSOCKET,
-	PATH_RAW_WEBSOCKET_PREFIX,
+	PATH_CONNECT,
+	PATH_WEBSOCKET_PREFIX,
 	type RegistryConfig,
 	type RunConfig,
 	type UniversalWebSocket,
@@ -157,15 +157,13 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorId: string,
 		encoding: Encoding,
 		params: unknown,
-		connId?: string,
-		connToken?: string,
 	): Promise<UniversalWebSocket> {
 		// Handle raw WebSocket paths
 		const pathOnly = path.split("?")[0];
 		const normalizedPath = pathOnly.startsWith("/")
 			? pathOnly
 			: `/${pathOnly}`;
-		if (normalizedPath === PATH_CONNECT_WEBSOCKET) {
+		if (normalizedPath === PATH_CONNECT) {
 			// Handle standard connect
 			const wsHandler = await handleWebSocketConnect(
 				undefined,
@@ -176,13 +174,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				params,
 				generateConnRequestId(),
 				undefined,
-				connId,
-				connToken,
 			);
 			return new InlineWebSocketAdapter2(wsHandler);
 		} else if (
-			normalizedPath.startsWith(PATH_RAW_WEBSOCKET_PREFIX) ||
-			normalizedPath === "/raw/websocket"
+			normalizedPath.startsWith(PATH_WEBSOCKET_PREFIX) ||
+			normalizedPath === "/websocket"
 		) {
 			// Handle websocket proxy
 			// Use the full path with query parameters
@@ -215,8 +211,6 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		actorId: string,
 		encoding: Encoding,
 		connParams: unknown,
-		connId?: string,
-		connToken?: string,
 	): Promise<Response> {
 		const upgradeWebSocket = this.#runConfig.getUpgradeWebSocket?.();
 		invariant(upgradeWebSocket, "missing getUpgradeWebSocket");
@@ -226,7 +220,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const normalizedPath = pathOnly.startsWith("/")
 			? pathOnly
 			: `/${pathOnly}`;
-		if (normalizedPath === PATH_CONNECT_WEBSOCKET) {
+		if (normalizedPath === PATH_CONNECT) {
 			// Handle standard connect
 			const wsHandler = await handleWebSocketConnect(
 				c.req.raw,
@@ -237,13 +231,11 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				connParams,
 				generateConnRequestId(),
 				undefined,
-				connId,
-				connToken,
 			);
 			return upgradeWebSocket(() => wsHandler)(c, noopNext());
 		} else if (
-			normalizedPath.startsWith(PATH_RAW_WEBSOCKET_PREFIX) ||
-			normalizedPath === "/raw/websocket"
+			normalizedPath.startsWith(PATH_WEBSOCKET_PREFIX) ||
+			normalizedPath === "/websocket"
 		) {
 			// Handle websocket proxy
 			// Use the full path with query parameters

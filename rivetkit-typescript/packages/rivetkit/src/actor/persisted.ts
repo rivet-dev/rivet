@@ -11,7 +11,6 @@ export interface PersistedActor<S, CP, CS, I> {
 /** Object representing connection that gets persisted to storage. */
 export interface PersistedConn<CP, CS> {
 	connId: string;
-	token: string;
 	params: CP;
 	state: CS;
 	subscriptions: PersistedSubscription[];

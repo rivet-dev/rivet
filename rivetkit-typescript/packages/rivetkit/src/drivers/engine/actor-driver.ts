@@ -21,16 +21,14 @@ import {
 } from "@/actor/router-endpoints";
 import type { Client } from "@/client/client";
 import {
-	PATH_CONNECT_WEBSOCKET,
-	PATH_RAW_WEBSOCKET_PREFIX,
+	PATH_CONNECT,
+	PATH_WEBSOCKET_PREFIX,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
-	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
 import type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
 import { getLogger } from "@/common/log";
 import type {
-	RivetEvent,
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
@@ -200,12 +198,12 @@ export class EngineActorDriver implements ActorDriver {
 						msg: "no existing hibernatable websocket found",
 						requestId: idToStr(requestId),
 					});
-					if (path === PATH_CONNECT_WEBSOCKET) {
+					if (path === PATH_CONNECT) {
 						hibernationConfig = {
 							enabled: true,
 							lastMsgIndex: undefined,
 						};
-					} else if (path.startsWith(PATH_RAW_WEBSOCKET_PREFIX)) {
+					} else if (path.startsWith(PATH_WEBSOCKET_PREFIX)) {
 						// Find actor config
 						const definition = lookupInRegistry(
 							this.#registryConfig,
@@ -553,7 +551,7 @@ export class EngineActorDriver implements ActorDriver {
 		//
 		// We store the promise since we need to add WebSocket event listeners immediately that will wait for the promise to resolve
 		let wsHandlerPromise: Promise<UpgradeWebSocketArgs>;
-		if (url.pathname === PATH_CONNECT_WEBSOCKET) {
+		if (url.pathname === PATH_CONNECT) {
 			wsHandlerPromise = handleWebSocketConnect(
 				request,
 				this.#runConfig,
@@ -563,11 +561,8 @@ export class EngineActorDriver implements ActorDriver {
 				connParams,
 				requestId,
 				requestIdBuf,
-				// Extract connId and connToken from protocols if needed
-				undefined,
-				undefined,
 			);
-		} else if (url.pathname.startsWith(PATH_RAW_WEBSOCKET_PREFIX)) {
+		} else if (url.pathname.startsWith(PATH_WEBSOCKET_PREFIX)) {
 			wsHandlerPromise = handleRawWebSocketHandler(
 				request,
 				url.pathname + url.search,
