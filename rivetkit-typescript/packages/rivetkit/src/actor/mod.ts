@@ -76,6 +76,8 @@ export type * from "./config";
 export type { Conn } from "./conn/mod";
 export type { ActionContext } from "./contexts/action";
 export type { ActorContext } from "./contexts/actor";
+export type { RequestContext } from "./contexts/request";
+export type { WebSocketContext } from "./contexts/websocket";
 export type {
 	ActionContextOf,
 	ActorContextOf,
