@@ -5,7 +5,6 @@ import type {
 	ManagerDriver,
 } from "@/driver-helpers/mod";
 import type { RegistryConfig, RunConfig } from "@/mod";
-import { bufferToArrayBuffer } from "@/utils";
 import type { FileSystemGlobalState } from "./global-state";
 
 export type ActorDriverContext = Record<never, never>;
@@ -55,20 +54,29 @@ export class FileSystemActorDriver implements ActorDriver {
 		return {};
 	}
 
-	async readPersistedData(actorId: string): Promise<Uint8Array | undefined> {
-		return new Uint8Array(
-			(await this.#state.loadActorStateOrError(actorId)).persistedData,
-		);
+	async kvBatchPut(
+		actorId: string,
+		entries: [Uint8Array, Uint8Array][],
+	): Promise<void> {
+		await this.#state.kvBatchPut(actorId, entries);
 	}
 
-	async writePersistedData(actorId: string, data: Uint8Array): Promise<void> {
-		const state = await this.#state.loadActorStateOrError(actorId);
+	async kvBatchGet(
+		actorId: string,
+		keys: Uint8Array[],
+	): Promise<(Uint8Array | null)[]> {
+		return await this.#state.kvBatchGet(actorId, keys);
+	}
 
-		// Save state to disk
-		await this.#state.writeActor(actorId, {
-			...state,
-			persistedData: bufferToArrayBuffer(data),
-		});
+	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
+		await this.#state.kvBatchDelete(actorId, keys);
+	}
+
+	async kvListPrefix(
+		actorId: string,
+		prefix: Uint8Array,
+	): Promise<[Uint8Array, Uint8Array][]> {
+		return await this.#state.kvListPrefix(actorId, prefix);
 	}
 
 	async setAlarm(actor: AnyActorInstance, timestamp: number): Promise<void> {

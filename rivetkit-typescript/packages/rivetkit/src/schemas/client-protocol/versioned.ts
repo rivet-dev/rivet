@@ -7,14 +7,6 @@ import * as v2 from "../../../dist/schemas/client-protocol/v2";
 
 export const CURRENT_VERSION = 2;
 
-export type CurrentToServer = v2.ToServer;
-export type CurrentToClient = v2.ToClient;
-export type CurrentHttpActionRequest = v2.HttpActionRequest;
-export type CurrentHttpActionResponse = v2.HttpActionResponse;
-export type CurrentHttpResponseError = v2.HttpResponseError;
-export type CurrentHttpResolveRequest = v2.HttpResolveRequest;
-export type CurrentHttpResolveResponse = v2.HttpResolveResponse;
-
 const migrations = new Map<number, MigrationFn<any, any>>();
 
 // Migration from v1 to v2: Remove connectionToken from Init message
