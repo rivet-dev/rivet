@@ -2,18 +2,15 @@ import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import type { Logger } from "@/common/log";
 import type { Registry } from "@/registry/mod";
-import type { Conn, ConnId } from "./conn";
-import type { ActorContext } from "./context";
-import type { AnyDatabaseProvider, InferDatabaseClient } from "./database";
-import type { SaveStateOptions } from "./instance";
-import type { Schedule } from "./schedule";
+import type { Conn, ConnId } from "../conn/mod";
+import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
+import type { ActorInstance, SaveStateOptions } from "../instance/mod";
+import type { Schedule } from "../schedule";
 
 /**
- * Context for a remote procedure call.
- *
- * @typeParam A Actor this action belongs to
+ * ActorContext class that provides access to actor methods and state
  */
-export class ActionContext<
+export class ActorContext<
 	TState,
 	TConnParams,
 	TConnState,
@@ -21,7 +18,7 @@ export class ActionContext<
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 > {
-	#actorContext: ActorContext<
+	#actor: ActorInstance<
 		TState,
 		TConnParams,
 		TConnState,
@@ -30,22 +27,8 @@ export class ActionContext<
 		TDatabase
 	>;
 
-	/**
-	 * Should not be called directly.
-	 *
-	 * @param actorContext - The actor context
-	 * @param conn - The connection associated with the action
-	 */
 	constructor(
-		actorContext: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		public readonly conn: Conn<
+		actor: ActorInstance<
 			TState,
 			TConnParams,
 			TConnState,
@@ -54,70 +37,73 @@ export class ActionContext<
 			TDatabase
 		>,
 	) {
-		this.#actorContext = actorContext;
+		this.#actor = actor;
 	}
 
 	/**
 	 * Get the actor state
 	 */
 	get state(): TState {
-		return this.#actorContext.state;
+		return this.#actor.state;
 	}
 
 	/**
 	 * Get the actor variables
 	 */
 	get vars(): TVars {
-		return this.#actorContext.vars;
+		return this.#actor.vars;
 	}
 
 	/**
 	 * Broadcasts an event to all connected clients.
+	 * @param name - The name of the event.
+	 * @param args - The arguments to send with the event.
 	 */
-	broadcast(name: string, ...args: any[]): void {
-		this.#actorContext.broadcast(name, ...args);
+	broadcast<Args extends Array<unknown>>(name: string, ...args: Args): void {
+		this.#actor.broadcast(name, ...args);
+		return;
 	}
 
 	/**
 	 * Gets the logger instance.
 	 */
 	get log(): Logger {
-		return this.#actorContext.log;
+		return this.#actor.log;
 	}
 
 	/**
 	 * Gets actor ID.
 	 */
 	get actorId(): string {
-		return this.#actorContext.actorId;
+		return this.#actor.id;
 	}
 
 	/**
 	 * Gets the actor name.
 	 */
 	get name(): string {
-		return this.#actorContext.name;
+		return this.#actor.name;
 	}
 
 	/**
 	 * Gets the actor key.
 	 */
 	get key(): ActorKey {
-		return this.#actorContext.key;
+		return this.#actor.key;
 	}
 
 	/**
 	 * Gets the region.
 	 */
 	get region(): string {
-		return this.#actorContext.region;
+		return this.#actor.region;
 	}
 
 	/**
 	 * Gets the scheduler.
 	 */
 	get schedule(): Schedule {
-		return this.#actorContext.schedule;
+		return this.#actor.schedule;
 	}
 
 	/**
@@ -127,42 +113,46 @@ export class ActionContext<
 		ConnId,
 		Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>
 	> {
-		return this.#actorContext.conns;
+		return this.#actor.conns;
 	}
 
 	/**
 	 * Returns the client for the given registry.
 	 */
 	client<R extends Registry<any>>(): Client<R> {
-		return this.#actorContext.client<R>();
+		return this.#actor.inlineClient as Client<R>;
 	}
 
 	/**
+	 * Gets the database.
 	 * @experimental
+	 * @throws {DatabaseNotEnabled} If the database is not enabled.
 	 */
 	get db(): InferDatabaseClient<TDatabase> {
-		return this.#actorContext.db;
+		return this.#actor.db;
 	}
 
 	/**
 	 * Forces the state to get saved.
+	 *
+	 * @param opts - Options for saving the state.
 	 */
 	async saveState(opts: SaveStateOptions): Promise<void> {
-		return this.#actorContext.saveState(opts);
+		return this.#actor.saveState(opts);
 	}
 
 	/**
 	 * Prevents the actor from sleeping until promise is complete.
 	 */
 	waitUntil(promise: Promise<void>): void {
-		this.#actorContext.waitUntil(promise);
+		this.#actor.waitUntil(promise);
 	}
 
 	/**
 	 * AbortSignal that fires when the actor is stopping.
 	 */
 	get abortSignal(): AbortSignal {
-		return this.#actorContext.abortSignal;
+		return this.#actor.abortSignal;
 	}
 
 	/**
@@ -173,6 +163,6 @@ export class ActionContext<
 	 * @experimental
 	 */
 	sleep() {
-		this.#actorContext.sleep();
+		this.#actor.startSleep();
 	}
 }

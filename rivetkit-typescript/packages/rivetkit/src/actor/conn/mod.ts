@@ -4,17 +4,15 @@ import { isCborSerializable } from "@/common/utils";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
+import type { AnyDatabaseProvider } from "../database";
+import * as errors from "../errors";
 import {
-	CONN_DRIVERS,
-	type ConnDriverState,
-	getConnDriverKindFromState,
-} from "./conn-drivers";
-import type { ConnSocket } from "./conn-socket";
-import type { AnyDatabaseProvider } from "./database";
-import * as errors from "./errors";
-import { type ActorInstance, PERSIST_SYMBOL } from "./instance";
-import type { PersistedConn } from "./persisted";
-import { CachedSerializer } from "./protocol/serde";
+	ACTOR_INSTANCE_PERSIST_SYMBOL,
+	type ActorInstance,
+} from "../instance/mod";
+import type { PersistedConn } from "../instance/persisted";
+import { CachedSerializer } from "../protocol/serde";
+import type { ConnDriver } from "./driver";
 
 export function generateConnRequestId(): string {
 	return crypto.randomUUID();
@@ -23,6 +21,9 @@ export function generateConnRequestId(): string {
 export type ConnId = string;
 
 export type AnyConn = Conn<any, any, any, any, any, any>;
+
+export const CONN_PERSIST_SYMBOL = Symbol("persist");
+export const CONN_DRIVER_SYMBOL = Symbol("driver");
 
 /**
  * Represents a client connection to a actor.
@@ -46,7 +47,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * This will only be persisted if using hibernatable WebSockets. If not,
 	 * this is just used to hole state.
 	 */
-	__persist!: PersistedConn<CP, CS>;
+	[CONN_PERSIST_SYMBOL]!: PersistedConn<CP, CS>;
 
 	/** Raw persist object without the proxy wrapper */
 	#persistRaw: PersistedConn<CP, CS>;
@@ -54,22 +55,16 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	/** Track if this connection's state has changed */
 	#changed = false;
 
-	get __driverState(): ConnDriverState | undefined {
-		return this.__socket?.driverState;
-	}
-
 	/**
-	 * Socket connected to this connection.
-	 *
 	 * If undefined, then nothing is connected to this.
 	 */
-	__socket?: ConnSocket;
+	[CONN_DRIVER_SYMBOL]?: ConnDriver;
 
 	public get params(): CP {
-		return this.__persist.params;
+		return this[CONN_PERSIST_SYMBOL].params;
 	}
 
-	public get __stateEnabled() {
+	public get stateEnabled() {
 		return this.#actor.connStateEnabled;
 	}
 
@@ -80,8 +75,9 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	public get state(): CS {
 		this.#validateStateEnabled();
-		if (!this.__persist.state) throw new Error("state should exists");
-		return this.__persist.state;
+		if (!this[CONN_PERSIST_SYMBOL].state)
+			throw new Error("state should exists");
+		return this[CONN_PERSIST_SYMBOL].state;
 	}
 
 	/**
@@ -91,14 +87,14 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	public set state(value: CS) {
 		this.#validateStateEnabled();
-		this.__persist.state = value;
+		this[CONN_PERSIST_SYMBOL].state = value;
 	}
 
 	/**
 	 * Unique identifier for the connection.
 	 */
 	public get id(): ConnId {
-		return this.__persist.connId;
+		return this[CONN_PERSIST_SYMBOL].connId;
 	}
 
 	/**
@@ -107,14 +103,16 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * If the underlying connection can hibernate.
 	 */
 	public get isHibernatable(): boolean {
-		if (!this.__persist.hibernatableRequestId) {
+		if (!this[CONN_PERSIST_SYMBOL].hibernatableRequestId) {
 			return false;
 		}
 		return (
-			this.#actor[PERSIST_SYMBOL].hibernatableConns.findIndex((conn) =>
+			(this.#actor as any)[
+				ACTOR_INSTANCE_PERSIST_SYMBOL
+			].hibernatableConns.findIndex((conn: any) =>
 				arrayBuffersEqual(
 					conn.hibernatableRequestId,
-					this.__persist.hibernatableRequestId!,
+					this[CONN_PERSIST_SYMBOL].hibernatableRequestId!,
 				),
 			) > -1
 		);
@@ -124,7 +122,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * Timestamp of the last time the connection was seen, i.e. the last time the connection was active and checked for liveness.
 	 */
 	public get lastSeen(): number {
-		return this.__persist.lastSeen;
+		return this[CONN_PERSIST_SYMBOL].lastSeen;
 	}
 
 	/**
@@ -149,12 +147,12 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#setupPersistProxy(persist: PersistedConn<CP, CS>) {
 		// If this can't be proxied, return raw value
 		if (persist === null || typeof persist !== "object") {
-			this.__persist = persist;
+			this[CONN_PERSIST_SYMBOL] = persist;
 			return;
 		}
 
 		// Listen for changes to the object
-		this.__persist = onChange(
+		this[CONN_PERSIST_SYMBOL] = onChange(
 			persist,
 			(
 				path: string,
@@ -188,7 +186,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 
 				// Notify actor that this connection has changed
-				this.#actor.__markConnChanged(this);
+				this.#actor.markConnChanged(this);
 			},
 			{ ignoreDetached: true },
 		);
@@ -216,29 +214,16 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	#validateStateEnabled() {
-		if (!this.__stateEnabled) {
+		if (!this.stateEnabled) {
 			throw new errors.ConnStateNotEnabled();
 		}
 	}
 
-	/**
-	 * Sends a WebSocket message to the client.
-	 *
-	 * @param message - The message to send.
-	 *
-	 * @protected
-	 */
-	public _sendMessage(message: CachedSerializer<protocol.ToClient>) {
-		if (this.__driverState) {
-			const driverKind = getConnDriverKindFromState(this.__driverState);
-			const driver = CONN_DRIVERS[driverKind];
+	public sendMessage(message: CachedSerializer<protocol.ToClient>) {
+		if (this[CONN_DRIVER_SYMBOL]) {
+			const driver = this[CONN_DRIVER_SYMBOL];
 			if (driver.sendMessage) {
-				driver.sendMessage(
-					this.#actor,
-					this,
-					(this.__driverState as any)[driverKind],
-					message,
-				);
+				driver.sendMessage(this.#actor, this, message);
 			} else {
 				this.#actor.rLog.debug({
 					msg: "conn driver does not support sending messages",
@@ -267,7 +252,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			args,
 			connId: this.id,
 		});
-		this._sendMessage(
+		this.sendMessage(
 			new CachedSerializer<protocol.ToClient>(
 				{
 					body: {
@@ -289,16 +274,10 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * @param reason - The reason for disconnection.
 	 */
 	public async disconnect(reason?: string) {
-		if (this.__socket && this.__driverState) {
-			const driverKind = getConnDriverKindFromState(this.__driverState);
-			const driver = CONN_DRIVERS[driverKind];
+		if (this[CONN_DRIVER_SYMBOL]) {
+			const driver = this[CONN_DRIVER_SYMBOL];
 			if (driver.disconnect) {
-				driver.disconnect(
-					this.#actor,
-					this,
-					(this.__driverState as any)[driverKind],
-					reason,
-				);
+				driver.disconnect(this.#actor, this, reason);
 			} else {
 				this.#actor.rLog.debug({
 					msg: "no disconnect handler for conn driver",
@@ -306,7 +285,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 			}
 
-			this.#actor.__connDisconnected(this, true, this.__socket.requestId);
+			this.#actor.connDisconnected(this, true);
 		} else {
 			this.#actor.rLog.warn({
 				msg: "missing connection driver state for disconnect",
@@ -314,6 +293,6 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 		}
 
-		this.__socket = undefined;
+		this[CONN_DRIVER_SYMBOL] = undefined;
 	}
 }

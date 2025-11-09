@@ -3,7 +3,7 @@ import type { AnyClient } from "@/client/client";
 import type { ManagerDriver } from "@/manager/driver";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
-import type { AnyActorInstance } from "./instance";
+import type { AnyActorInstance } from "./instance/mod";
 
 export type ActorDriverBuilder = (
 	registryConfig: RegistryConfig,

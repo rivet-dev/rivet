@@ -15,9 +15,9 @@ import {
 } from "@/schemas/client-protocol/versioned";
 import { deserializeWithEncoding } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "../../utils";
-import { ActionContext } from "../action";
-import type { Conn } from "../conn";
-import type { ActorInstance } from "../instance";
+import type { Conn } from "../conn/mod";
+import { ActionContext } from "../contexts/action";
+import type { ActorInstance } from "../instance/mod";
 
 interface MessageEventOpts {
 	encoding: Encoding;
@@ -160,7 +160,7 @@ export async function processMessage<
 			});
 
 			// Send the response back to the client
-			conn._sendMessage(
+			conn.sendMessage(
 				new CachedSerializer<protocol.ToClient>(
 					{
 						body: {
@@ -229,7 +229,7 @@ export async function processMessage<
 		});
 
 		// Build response
-		conn._sendMessage(
+		conn.sendMessage(
 			new CachedSerializer<protocol.ToClient>(
 				{
 					body: {

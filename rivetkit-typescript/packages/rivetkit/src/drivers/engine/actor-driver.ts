@@ -10,9 +10,9 @@ import { streamSSE } from "hono/streaming";
 import { WSContext } from "hono/ws";
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
-import { PERSIST_SYMBOL } from "@/actor/instance";
+import { KEYS } from "@/actor/instance/kv";
+import { ACTOR_INSTANCE_PERSIST_SYMBOL } from "@/actor/instance/mod";
 import { deserializeActorKey } from "@/actor/keys";
-import { KEYS } from "@/actor/kv";
 import { EncodingSchema } from "@/actor/protocol/serde";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -170,7 +170,8 @@ export class EngineActorDriver implements ActorDriver {
 
 				// Check for existing WS
 				const hibernatableArray =
-					handler.actor[PERSIST_SYMBOL].hibernatableConns;
+					handler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL]
+						.hibernatableConns;
 				logger().debug({
 					msg: "checking hibernatable websockets",
 					requestId: idToStr(requestId),
@@ -347,7 +348,7 @@ export class EngineActorDriver implements ActorDriver {
 		// Set alarm
 		const delay = Math.max(0, timestamp - Date.now());
 		this.#alarmTimeout = setLongTimeout(() => {
-			actor._onAlarm();
+			actor.onAlarm();
 			this.#alarmTimeout = undefined;
 		}, delay);
 
@@ -358,7 +359,7 @@ export class EngineActorDriver implements ActorDriver {
 		// Instead, it just wakes the actor on the alarm (if not
 		// already awake).
 		//
-		// _onAlarm is automatically called on `ActorInstance.start` when waking
+		// onAlarm is automatically called on `ActorInstance.start` when waking
 		// again.
 		this.#runner.setAlarm(actor.id, timestamp);
 	}
@@ -486,10 +487,10 @@ export class EngineActorDriver implements ActorDriver {
 		const handler = this.#actors.get(actorId);
 		if (handler?.actor) {
 			try {
-				await handler.actor._onStop();
+				await handler.actor.onStop();
 			} catch (err) {
 				logger().error({
-					msg: "error in _onStop, proceeding with removing actor",
+					msg: "error in onStop, proceeding with removing actor",
 					err: stringifyError(err),
 				});
 			}
@@ -663,14 +664,14 @@ export class EngineActorDriver implements ActorDriver {
 		//    reschedule
 		//
 		// This means that:
-		// - All actors on this runner are bricked until the slowest _onStop finishes
+		// - All actors on this runner are bricked until the slowest onStop finishes
 		// - Guard will not gracefully handle requests bc it's not receiving a 503
 		// - Actors can still be scheduled to this runner while the other
-		//   actors are stopping, meaning that those actors will NOT get _onStop
+		//   actors are stopping, meaning that those actors will NOT get onStop
 		//   and will potentiall corrupt their state
 		//
 		// HACK: Stop all actors to allow state to be saved
-		// NOTE: _onStop is only supposed to be called by the runner, we're
+		// NOTE: onStop is only supposed to be called by the runner, we're
 		// abusing it here
 		logger().debug({
 			msg: "stopping all actors before shutdown",
@@ -680,9 +681,9 @@ export class EngineActorDriver implements ActorDriver {
 		for (const [_actorId, handler] of this.#actors.entries()) {
 			if (handler.actor) {
 				stopPromises.push(
-					handler.actor._onStop().catch((err) => {
+					handler.actor.onStop().catch((err) => {
 						handler.actor?.rLog.error({
-							msg: "_onStop errored",
+							msg: "onStop errored",
 							error: stringifyError(err),
 						});
 					}),
