@@ -317,12 +317,12 @@ export class DatabaseNotEnabled extends ActorError {
 	}
 }
 
-export class FetchHandlerNotDefined extends ActorError {
+export class RequestHandlerNotDfeined extends ActorError {
 	constructor() {
 		super(
 			"handler",
-			"fetch_not_defined",
-			"Raw HTTP handler not defined. Actor must implement `onFetch` to handle raw HTTP requests. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
+			"request_not_defined",
+			"Raw request handler not defined. Actor must implement `onRequest` to handle raw HTTP requests. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
 			{ public: true },
 		);
 		this.statusCode = 404;
@@ -341,12 +341,12 @@ export class WebSocketHandlerNotDefined extends ActorError {
 	}
 }
 
-export class InvalidFetchResponse extends ActorError {
+export class InvalidRequestHandlerResponse extends ActorError {
 	constructor() {
 		super(
 			"handler",
-			"invalid_fetch_response",
-			"Actor's onFetch handler must return a Response object. Returning void/undefined is not allowed. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
+			"invalid_request_handler_response",
+			"Actor's onRequest handler must return a Response object. Returning void/undefined is not allowed. (https://www.rivet.dev/docs/actors/fetch-and-websocket-handler/)",
 			{ public: true },
 		);
 		this.statusCode = 500;

@@ -452,7 +452,7 @@ export async function handleRawWebSocketHandler(
 				createdConn = conn;
 
 				// Call the actor's onWebSocket handler with the adapted WebSocket
-				actor.handleWebSocket(adapter, {
+				actor.handleRawWebSocket(adapter, {
 					request: newRequest,
 				});
 			} catch (error) {

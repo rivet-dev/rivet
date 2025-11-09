@@ -195,8 +195,8 @@ export function createActorRouter(
 			to: correctedRequest.url,
 		});
 
-		// Call the actor's onFetch handler - it will throw appropriate errors
-		const response = await actor.handleFetch(correctedRequest, {});
+		// Call the actor's onRequest handler - it will throw appropriate errors
+		const response = await actor.handleRawRequest(correctedRequest, {});
 
 		// This should never happen now since handleFetch throws errors
 		if (!response) {

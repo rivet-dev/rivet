@@ -8,7 +8,7 @@ export function runRawHttpRequestPropertiesTests(
 	driverTestConfig: DriverTestConfig,
 ) {
 	describe("raw http request properties", () => {
-		test("should pass all Request properties correctly to onFetch", async (c) => {
+		test("should pass all Request properties correctly to onRequest", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawHttpRequestPropertiesActor.getOrCreate([
 				"test",

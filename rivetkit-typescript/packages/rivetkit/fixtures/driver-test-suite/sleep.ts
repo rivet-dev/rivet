@@ -72,7 +72,7 @@ export const sleepWithRawHttp = actor({
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
-	onFetch: async (c, request) => {
+	onRequest: async (c, request) => {
 		c.state.requestCount += 1;
 		const url = new URL(request.url);
 

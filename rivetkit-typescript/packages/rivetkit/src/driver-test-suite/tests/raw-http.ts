@@ -79,7 +79,7 @@ export function runRawHttpTests(driverTestConfig: DriverTestConfig) {
 			expect(response.status).toBe(404);
 		});
 
-		test("should return 404 when no onFetch handler defined", async (c) => {
+		test("should return 404 when no onRequest handler defined", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawHttpNoHandlerActor.getOrCreate([
 				"no-handler",
@@ -89,10 +89,10 @@ export function runRawHttpTests(driverTestConfig: DriverTestConfig) {
 			expect(response.ok).toBe(false);
 			expect(response.status).toBe(404);
 
-			// No actions available without onFetch handler
+			// No actions available without onRequest handler
 		});
 
-		test("should return 500 error when onFetch returns void", async (c) => {
+		test("should return 500 error when onRequest returns void", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawHttpVoidReturnActor.getOrCreate([
 				"void-return",
@@ -108,14 +108,14 @@ export function runRawHttpTests(driverTestConfig: DriverTestConfig) {
 					message: string;
 				};
 				expect(errorData.message).toContain(
-					"onFetch handler must return a Response",
+					"onRequest handler must return a Response",
 				);
 			} catch {
 				// If JSON parsing fails, just check that we got a 500 error
 				// The error details are already validated by the status code
 			}
 
-			// No actions available when onFetch returns void
+			// No actions available when onRequest returns void
 		});
 
 		test("should handle different HTTP methods", async (c) => {
