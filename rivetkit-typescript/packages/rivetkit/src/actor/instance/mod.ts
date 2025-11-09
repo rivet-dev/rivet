@@ -14,7 +14,13 @@ import { EXTRA_ERROR_LOG, idToStr } from "@/utils";
 import type { ActorConfig, InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import { createHttpSocket } from "../conn/drivers/http";
-import { CONN_PERSIST_SYMBOL, type Conn, type ConnId } from "../conn/mod";
+import {
+	CONN_PERSIST_SYMBOL,
+	CONN_SEND_MESSAGE_SYMBOL,
+	CONN_STATE_ENABLED_SYMBOL,
+	type Conn,
+	type ConnId,
+} from "../conn/mod";
 import { ActionContext } from "../contexts/action";
 import { ActorContext } from "../contexts/actor";
 import type { AnyDatabaseProvider, InferDatabaseClient } from "../database";
@@ -134,10 +140,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				).map(([id, conn]) => ({
 					id,
 					params: conn.params as any,
-					state: conn.stateEnabled ? conn.state : undefined,
+					state: conn[CONN_STATE_ENABLED_SYMBOL]
+						? conn.state
+						: undefined,
 					subscriptions: conn.subscriptions.size,
 					lastSeen: conn.lastSeen,
-					stateEnabled: conn.stateEnabled,
+					stateEnabled: conn[CONN_STATE_ENABLED_SYMBOL],
 					isHibernatable: conn.isHibernatable,
 					hibernatableRequestId: conn[CONN_PERSIST_SYMBOL]
 						.hibernatableRequestId
@@ -498,7 +506,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this.saveState({ immediate: true });
 
 		// Send init message
-		conn.sendMessage(
+		conn[CONN_SEND_MESSAGE_SYMBOL](
 			new CachedSerializer<protocol.ToClient>(
 				{
 					body: {
