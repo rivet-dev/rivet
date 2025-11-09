@@ -36,6 +36,7 @@ import {
 	promiseWithResolvers,
 } from "@/utils";
 import { createHttpSocket } from "./conn/drivers/http";
+import { createRawWebSocketSocket } from "./conn/drivers/raw-websocket";
 import { createWebSocketSocket } from "./conn/drivers/websocket";
 import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
@@ -383,12 +384,19 @@ export async function handleRawWebSocketHandler(
 ): Promise<UpgradeWebSocketArgs> {
 	const actor = await actorDriver.loadActor(actorId);
 
+	// Promise used to wait for the websocket close in `disconnect`
+	const closePromiseResolvers = promiseWithResolvers<void>();
+
+	// Track connection outside of scope for cleanup
+	let createdConn: AnyConn | undefined;
+
 	// Return WebSocket event handlers
 	return {
-		onOpen: (evt: any, ws: any) => {
+		onOpen: async (evt: any, ws: any) => {
 			// Extract rivetRequestId provided by engine runner
 			const rivetRequestId = evt?.rivetRequestId;
 			const isHibernatable =
+				!!rivetRequestId &&
 				actor[
 					ACTOR_INSTANCE_PERSIST_SYMBOL
 				].hibernatableConns.findIndex((conn) =>
@@ -424,10 +432,36 @@ export async function handleRawWebSocketHandler(
 				toUrl: newRequest.url,
 			});
 
-			// Call the actor's onWebSocket handler with the adapted WebSocket
-			actor.handleWebSocket(adapter, {
-				request: newRequest,
-			});
+			try {
+				// Create connection using actor.createConn - this handles deduplication for hibernatable connections
+				const requestId = rivetRequestId
+					? String(rivetRequestId)
+					: crypto.randomUUID();
+				const conn = await actor.createConn(
+					createRawWebSocketSocket(
+						requestId,
+						rivetRequestId,
+						isHibernatable,
+						adapter,
+						closePromiseResolvers.promise,
+					),
+					{}, // No parameters for raw WebSocket
+					newRequest,
+				);
+
+				createdConn = conn;
+
+				// Call the actor's onWebSocket handler with the adapted WebSocket
+				actor.handleWebSocket(adapter, {
+					request: newRequest,
+				});
+			} catch (error) {
+				actor.rLog.error({
+					msg: "failed to create raw WebSocket connection",
+					error: String(error),
+				});
+				ws.close(1011, "Failed to create connection");
+			}
 		},
 		onMessage: (event: any, ws: any) => {
 			// Find the adapter for this WebSocket
@@ -441,6 +475,15 @@ export async function handleRawWebSocketHandler(
 			const adapter = (ws as any).__adapter;
 			if (adapter) {
 				adapter._handleClose(evt?.code || 1006, evt?.reason || "");
+			}
+
+			// Resolve the close promise
+			closePromiseResolvers.resolve();
+
+			// Clean up the connection
+			if (createdConn) {
+				const wasClean = evt?.wasClean || evt?.code === 1000;
+				actor.connDisconnected(createdConn, wasClean);
 			}
 		},
 		onError: (error: any, ws: any) => {
