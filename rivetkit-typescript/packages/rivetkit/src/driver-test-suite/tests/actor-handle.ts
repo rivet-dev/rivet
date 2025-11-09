@@ -183,25 +183,25 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 			test("should trigger lifecycle hooks on actor creation", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
-				// Get or create a new actor - this should trigger onStart
+				// Get or create a new actor - this should trigger onWake
 				const handle = client.counterWithLifecycle.getOrCreate([
 					"test-lifecycle-handle",
 				]);
 
-				// Verify onStart was triggered
+				// Verify onWake was triggered
 				const initialEvents = await handle.getEvents();
-				expect(initialEvents).toContain("onStart");
+				expect(initialEvents).toContain("onWake");
 
 				// Create a separate handle to the same actor
 				const sameHandle = client.counterWithLifecycle.getOrCreate([
 					"test-lifecycle-handle",
 				]);
 
-				// Verify events still include onStart but don't duplicate it
-				// (onStart should only be called once when the actor is first created)
+				// Verify events still include onWake but don't duplicate it
+				// (onWake should only be called once when the actor is first created)
 				const events = await sameHandle.getEvents();
-				expect(events).toContain("onStart");
-				expect(events.filter((e) => e === "onStart").length).toBe(1);
+				expect(events).toContain("onWake");
+				expect(events.filter((e) => e === "onWake").length).toBe(1);
 			});
 
 			test("should trigger lifecycle hooks for each Action call", async (c) => {
@@ -212,9 +212,9 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 					"test-lifecycle-action",
 				]);
 
-				// Initial state should only have onStart
+				// Initial state should only have onWake
 				const initialEvents = await viewHandle.getEvents();
-				expect(initialEvents).toContain("onStart");
+				expect(initialEvents).toContain("onWake");
 				expect(initialEvents).not.toContain("onBeforeConnect");
 				expect(initialEvents).not.toContain("onConnect");
 				expect(initialEvents).not.toContain("onDisconnect");
@@ -297,8 +297,8 @@ export function runActorHandleTests(driverTestConfig: DriverTestConfig) {
 				// Check lifecycle hooks
 				const events = await viewHandle.getEvents();
 
-				// Should have 1 onStart, 2 each of onBeforeConnect, onConnect, and onDisconnect
-				expect(events.filter((e) => e === "onStart").length).toBe(1);
+				// Should have 1 onWake, 2 each of onBeforeConnect, onConnect, and onDisconnect
+				expect(events.filter((e) => e === "onWake").length).toBe(1);
 				expect(
 					events.filter((e) => e === "onBeforeConnect").length,
 				).toBe(2);
