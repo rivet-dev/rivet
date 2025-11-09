@@ -2,7 +2,11 @@ import * as cbor from "cbor-x";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { bufferToArrayBuffer } from "@/utils";
-import { CONN_PERSIST_SYMBOL, type Conn } from "../conn/mod";
+import {
+	CONN_PERSIST_SYMBOL,
+	CONN_SEND_MESSAGE_SYMBOL,
+	type Conn,
+} from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
 import { CachedSerializer } from "../protocol/serde";
 import type { ActorInstance } from "./mod";
@@ -192,7 +196,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		let sentCount = 0;
 		for (const connection of subscribers) {
 			try {
-				connection.sendMessage(toClientSerializer);
+				connection[CONN_SEND_MESSAGE_SYMBOL](toClientSerializer);
 				sentCount++;
 			} catch (error) {
 				this.#actor.rLog.error({
