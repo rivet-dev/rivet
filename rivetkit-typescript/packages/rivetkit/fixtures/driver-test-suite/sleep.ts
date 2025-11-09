@@ -5,10 +5,10 @@ export const SLEEP_TIMEOUT = 1000;
 
 export const sleep = actor({
 	state: { startCount: 0, sleepCount: 0 },
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
 	actions: {
@@ -37,10 +37,10 @@ export const sleepWithLongRpc = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	createVars: () =>
 		({}) as { longRunningResolve: PromiseWithResolvers<void> },
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
 	actions: {
@@ -66,10 +66,10 @@ export const sleepWithLongRpc = actor({
 
 export const sleepWithRawHttp = actor({
 	state: { startCount: 0, sleepCount: 0, requestCount: 0 },
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
 	onFetch: async (c, request) => {
@@ -106,10 +106,10 @@ export const sleepWithRawHttp = actor({
 
 export const sleepWithRawWebSocket = actor({
 	state: { startCount: 0, sleepCount: 0, connectionCount: 0 },
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
 	onWebSocket: (c, websocket: UniversalWebSocket, opts) => {
@@ -175,10 +175,10 @@ export const sleepWithRawWebSocket = actor({
 
 export const sleepWithNoSleepOption = actor({
 	state: { startCount: 0, sleepCount: 0 },
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
 	actions: {

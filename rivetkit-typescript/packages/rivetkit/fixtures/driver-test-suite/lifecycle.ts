@@ -10,8 +10,8 @@ export const counterWithLifecycle = actor({
 	createConnState: (c, opts, params: ConnParams) => ({
 		joinTime: Date.now(),
 	}),
-	onStart: (c) => {
-		c.state.events.push("onStart");
+	onWake: (c) => {
+		c.state.events.push("onWake");
 	},
 	onBeforeConnect: (c, opts, params: ConnParams) => {
 		if (params?.trackLifecycle) c.state.events.push("onBeforeConnect");

@@ -13,7 +13,7 @@ export const yjsDocument = actor({
 		doc: new Y.Doc(),
 	}),
 
-	onStart: (c) => {
+	onWake: (c) => {
 		if (c.state.docData.length > 0) {
 			applyUpdate(c.vars.doc, c.state.docData);
 		}
