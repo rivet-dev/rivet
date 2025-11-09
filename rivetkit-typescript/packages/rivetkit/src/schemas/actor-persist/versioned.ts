@@ -8,10 +8,6 @@ import * as v3 from "../../../dist/schemas/actor-persist/v3";
 
 export const CURRENT_VERSION = 3;
 
-export type CurrentPersistedActor = v3.PersistedActor;
-export type CurrentPersistedHibernatableConn = v3.PersistedHibernatableConn;
-export type CurrentPersistedScheduleEvent = v3.PersistedScheduleEvent;
-
 const migrations = new Map<number, MigrationFn<any, any>>([
 	[
 		1,
@@ -26,9 +22,9 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 	],
 	[
 		2,
-		(v2Data: v2.PersistedActor): v3.PersistedActor => {
+		(v2Data: v2.PersistedActor): v3.Actor => {
 			// Merge connections and hibernatableWebSocket into hibernatableConns
-			const hibernatableConns: v3.PersistedHibernatableConn[] = [];
+			const hibernatableConns: v3.HibernatableConn[] = [];
 
 			// Convert connections with hibernatable request IDs to hibernatable conns
 			for (const conn of v2Data.connections) {
@@ -45,6 +41,9 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 							id: conn.id,
 							parameters: conn.parameters,
 							state: conn.state,
+							subscriptions: conn.subscriptions.map((sub) => ({
+								eventName: sub.eventName,
+							})),
 							hibernatableRequestId: conn.hibernatableRequestId,
 							lastSeenTimestamp: ws.lastSeenTimestamp,
 							msgIndex: ws.msgIndex,
@@ -54,7 +53,7 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 			}
 
 			// Transform scheduled events from nested structure to flat structure
-			const scheduledEvents: v3.PersistedScheduleEvent[] =
+			const scheduledEvents: v3.ScheduleEvent[] =
 				v2Data.scheduledEvents.map((event) => {
 					// Extract action and args from the kind wrapper
 					if (event.kind.tag === "GenericPersistedScheduleEvent") {
@@ -82,10 +81,9 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 	],
 ]);
 
-export const PERSISTED_ACTOR_VERSIONED =
-	createVersionedDataHandler<CurrentPersistedActor>({
-		currentVersion: CURRENT_VERSION,
-		migrations,
-		serializeVersion: (data) => v3.encodePersistedActor(data),
-		deserializeVersion: (bytes) => v3.decodePersistedActor(bytes),
-	});
+export const ACTOR_VERSIONED = createVersionedDataHandler<v3.Actor>({
+	currentVersion: CURRENT_VERSION,
+	migrations,
+	serializeVersion: (data) => v3.encodeActor(data),
+	deserializeVersion: (bytes) => v3.decodeActor(bytes),
+});
