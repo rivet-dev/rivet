@@ -335,11 +335,13 @@ export async function handleAction(
 }
 
 export async function handleRawRequest(
+	c: HonoContext,
 	req: Request,
 	actorDriver: ActorDriver,
 	actorId: string,
 ): Promise<Response> {
 	const actor = await actorDriver.loadActor(actorId);
+	const parameters = getRequestConnParams(c.req);
 
 	// Track connection outside of scope for cleanup
 	let createdConn: AnyConn | undefined;
@@ -347,7 +349,7 @@ export async function handleRawRequest(
 	try {
 		const conn = await actor.connectionManager.prepareAndConnectConn(
 			createRawRequestSocket(),
-			{},
+			parameters,
 			req,
 		);
 
@@ -368,6 +370,7 @@ export async function handleRawWebSocket(
 	actorDriver: ActorDriver,
 	actorId: string,
 	requestIdBuf: ArrayBuffer | undefined,
+	connParams: unknown | undefined,
 ): Promise<UpgradeWebSocketArgs> {
 	const exposeInternalError = req
 		? getRequestExposeInternalError(req)
@@ -414,7 +417,7 @@ export async function handleRawWebSocket(
 		);
 		const conn = await actor.connectionManager.prepareAndConnectConn(
 			driver,
-			{},
+			connParams ?? {},
 			newRequest,
 		);
 		createdConn = conn;

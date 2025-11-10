@@ -562,6 +562,7 @@ export class EngineActorDriver implements ActorDriver {
 				this,
 				actorId,
 				requestIdBuf,
+				connParams,
 			);
 		} else {
 			throw new Error(`Unreachable path: ${url.pathname}`);
