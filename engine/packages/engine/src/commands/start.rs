@@ -108,7 +108,7 @@ async fn verify_engine_version(
 	config: &rivet_config::Config,
 	pools: &rivet_pools::Pools,
 ) -> Result<()> {
-	if config.allow_version_rollback {
+	if config.runtime.allow_version_rollback() {
 		return Ok(());
 	}
 

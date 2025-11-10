@@ -78,20 +78,30 @@ impl TestCtx {
 			let pools = pools.clone();
 			async move {
 				let services = vec![
-					Service::new("api-peer", ServiceKind::ApiPeer, |config, pools| {
-						Box::pin(rivet_api_peer::start(config, pools))
-					}),
-					Service::new("guard", ServiceKind::Standalone, |config, pools| {
-						Box::pin(rivet_guard::start(config, pools))
-					}),
+					Service::new(
+						"api-peer",
+						ServiceKind::ApiPeer,
+						|config, pools| Box::pin(rivet_api_peer::start(config, pools)),
+						false,
+					),
+					Service::new(
+						"guard",
+						ServiceKind::Standalone,
+						|config, pools| Box::pin(rivet_guard::start(config, pools)),
+						true,
+					),
 					Service::new(
 						"workflow-worker",
 						ServiceKind::Standalone,
 						|config, pools| Box::pin(rivet_workflow_worker::start(config, pools)),
+						true,
 					),
-					Service::new("bootstrap", ServiceKind::Oneshot, |config, pools| {
-						Box::pin(rivet_bootstrap::start(config, pools))
-					}),
+					Service::new(
+						"bootstrap",
+						ServiceKind::Oneshot,
+						|config, pools| Box::pin(rivet_bootstrap::start(config, pools)),
+						false,
+					),
 				];
 
 				rivet_service_manager::start(config, pools, services).await
