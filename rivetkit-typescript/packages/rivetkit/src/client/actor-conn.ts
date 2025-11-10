@@ -2,6 +2,10 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
 import type { CloseEvent } from "ws";
+import {
+	ToClientSchema,
+	ToServerSchema,
+} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
@@ -693,6 +697,7 @@ enc
 						this.#encoding,
 						message,
 						TO_SERVER_VERSIONED,
+						ToServerSchema,
 					);
 					this.#websocket.send(messageSerialized);
 					logger().trace({
@@ -743,6 +748,7 @@ enc
 			this.#encoding,
 			buffer,
 			TO_CLIENT_VERSIONED,
+			ToClientSchema,
 		);
 	}
 
