@@ -5,7 +5,7 @@ import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { type ConnDriver, DriverReadyState } from "../driver";
 
-export type ConnDriverWebSocketState = {};
+export type ConnDriverWebSocketState = Record<never, never>;
 
 export function createWebSocketSocket(
 	requestId: string,

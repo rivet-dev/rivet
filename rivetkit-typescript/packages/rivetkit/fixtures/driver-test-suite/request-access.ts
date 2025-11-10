@@ -31,19 +31,19 @@ export const requestAccessActor = actor({
 			requestHeaders: {} as Record<string, string>,
 		},
 	},
-	createConnState: (c, { request }, params: { trackRequest?: boolean }) => {
+	createConnState: (c, params: { trackRequest?: boolean }) => {
 		// In createConnState, the state isn't available yet.
 
 		return {
 			trackRequest: params?.trackRequest || false,
 			requestInfo:
-				params?.trackRequest && request
+				params?.trackRequest && c.request
 					? {
 							hasRequest: true,
-							requestUrl: request.url,
-							requestMethod: request.method,
+							requestUrl: c.request.url,
+							requestMethod: c.request.method,
 							requestHeaders: Object.fromEntries(
-								request.headers.entries(),
+								c.request.headers.entries(),
 							),
 						}
 					: null,
@@ -55,16 +55,16 @@ export const requestAccessActor = actor({
 			c.state.createConnStateRequest = conn.state.requestInfo;
 		}
 	},
-	onBeforeConnect: (c, { request }, params) => {
+	onBeforeConnect: (c, params) => {
 		if (params?.trackRequest) {
-			if (request) {
+			if (c.request) {
 				c.state.onBeforeConnectRequest.hasRequest = true;
-				c.state.onBeforeConnectRequest.requestUrl = request.url;
-				c.state.onBeforeConnectRequest.requestMethod = request.method;
+				c.state.onBeforeConnectRequest.requestUrl = c.request.url;
+				c.state.onBeforeConnectRequest.requestMethod = c.request.method;
 
 				// Store select headers
 				const headers: Record<string, string> = {};
-				request.headers.forEach((value, key) => {
+				c.request.headers.forEach((value, key) => {
 					headers[key] = value;
 				});
 				c.state.onBeforeConnectRequest.requestHeaders = headers;
@@ -101,15 +101,16 @@ export const requestAccessActor = actor({
 			},
 		);
 	},
-	onWebSocket: (c, websocket, { request }) => {
+	onWebSocket: (c, websocket) => {
+		if (!c.request) throw "Missing request";
 		// Store request info
 		c.state.onWebSocketRequest.hasRequest = true;
-		c.state.onWebSocketRequest.requestUrl = request.url;
-		c.state.onWebSocketRequest.requestMethod = request.method;
+		c.state.onWebSocketRequest.requestUrl = c.request.url;
+		c.state.onWebSocketRequest.requestMethod = c.request.method;
 
 		// Store select headers
 		const headers: Record<string, string> = {};
-		request.headers.forEach((value, key) => {
+		c.request.headers.forEach((value, key) => {
 			headers[key] = value;
 		});
 		c.state.onWebSocketRequest.requestHeaders = headers;
@@ -118,8 +119,8 @@ export const requestAccessActor = actor({
 		websocket.send(
 			JSON.stringify({
 				hasRequest: true,
-				requestUrl: request.url,
-				requestMethod: request.method,
+				requestUrl: c.request.url,
+				requestMethod: c.request.method,
 				requestHeaders: headers,
 			}),
 		);
