@@ -1,26 +1,8 @@
 use anyhow::Result;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
+use rivet_api_types::actors::delete::*;
 use rivet_util::Id;
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
-
-#[derive(Debug, Deserialize, Serialize, IntoParams)]
-#[serde(deny_unknown_fields)]
-#[into_params(parameter_in = Query)]
-pub struct DeleteQuery {
-	pub namespace: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[schema(as = ActorsDeleteResponse)]
-pub struct DeleteResponse {}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DeletePath {
-	pub actor_id: Id,
-}
 
 #[utoipa::path(
 	delete,

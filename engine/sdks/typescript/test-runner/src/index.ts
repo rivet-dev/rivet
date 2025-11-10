@@ -24,8 +24,8 @@ const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
 const AUTOSTART_SERVER = process.env.NO_AUTOSTART_SERVER === undefined;
 const AUTOSTART_RUNNER = process.env.NO_AUTOSTART_RUNNER === undefined;
 
-let runnerStarted = Promise.withResolvers();
-let runnerStopped = Promise.withResolvers();
+const runnerStarted = Promise.withResolvers<Runner>();
+const runnerStopped = Promise.withResolvers<Runner>();
 let runner: Runner | null = null;
 const websocketLastMsgIndexes: Map<string, number> = new Map();
 
@@ -56,8 +56,8 @@ function loggerMiddleware(logger: Logger) {
 app.use("*", loggerMiddleware(getLogger()));
 
 app.get("/wait-ready", async (c) => {
-	await runnerStarted.promise;
-	return c.json(runner?.runnerId);
+	const runner = await runnerStarted.promise;
+	return c.json(runner.runnerId);
 });
 
 app.get("/has-actor", async (c) => {
@@ -78,11 +78,11 @@ app.get("/shutdown", async (c) => {
 
 app.get("/start", async (c) => {
 	return streamSSE(c, async (stream) => {
-		const [runner, runnerStarted, runnerStopped] = await startRunner();
+		runner = await startRunner(runnerStarted, runnerStopped);
 
 		c.req.raw.signal.addEventListener("abort", () => {
 			getLogger().debug("SSE aborted, shutting down runner");
-			runner.shutdown(true);
+			runner!.shutdown(true);
 		});
 
 		await runnerStarted.promise;
@@ -104,7 +104,7 @@ if (AUTOSTART_SERVER) {
 }
 
 if (AUTOSTART_RUNNER) {
-	[runner, runnerStarted, runnerStopped] = await startRunner();
+	runner = await startRunner(runnerStarted, runnerStopped);
 } else await autoConfigureServerless();
 
 async function autoConfigureServerless() {
@@ -138,14 +138,12 @@ async function autoConfigureServerless() {
 	}
 }
 
-async function startRunner(): Promise<
-	[Runner, PromiseWithResolvers<unknown>, PromiseWithResolvers<unknown>]
-> {
+async function startRunner(
+	runnerStarted: PromiseWithResolvers<Runner>,
+	runnerStopped: PromiseWithResolvers<Runner>,
+): Promise<Runner> {
 	getLogger().info("Starting runner");
-
-	const runnerStarted = Promise.withResolvers();
-	const runnerStopped = Promise.withResolvers();
-
+	let runner: Runner;
 	const config: RunnerConfig = {
 		logger: getLogger(),
 		version: RIVET_RUNNER_VERSION,
@@ -158,11 +156,11 @@ async function startRunner(): Promise<
 		totalSlots: RIVET_RUNNER_TOTAL_SLOTS,
 		prepopulateActorNames: {},
 		onConnected: () => {
-			runnerStarted.resolve(undefined);
+			runnerStarted.resolve(runner);
 		},
 		onDisconnected: () => { },
 		onShutdown: () => {
-			runnerStopped.resolve(undefined);
+			runnerStopped.resolve(runner);
 		},
 		fetch: async (
 			runner: Runner,
@@ -266,7 +264,7 @@ async function startRunner(): Promise<
 		},
 	};
 
-	const runner = new Runner(config);
+	runner = new Runner(config);
 
 	// Start runner
 	await runner.start();
@@ -277,7 +275,7 @@ async function startRunner(): Promise<
 
 	getLogger().info("Runner started");
 
-	return [runner, runnerStarted, runnerStopped];
+	return runner;
 }
 
 export default app;
