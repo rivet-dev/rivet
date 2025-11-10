@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
 import { cn, Dd, DiscreteCopyButton, Dl, Dt, Flex } from "@/components";
 import { ActorRegion } from "./actor-region";
+import { QueriedActorStatus } from "./actor-status";
+import { QueriedActorStatusAdditionalInfo } from "./actor-status-label";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
@@ -47,6 +49,15 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 						>
 							{actorId}
 						</DiscreteCopyButton>
+					</Dd>
+					<Dt>Status</Dt>
+					<Dd className="flex flex-col gap-1">
+						<div>
+							<div className="inline-block">
+								<QueriedActorStatus actorId={actorId} />
+							</div>
+						</div>
+						<QueriedActorStatusAdditionalInfo actorId={actorId} />
 					</Dd>
 					<Dt>Keys</Dt>
 					<Dd>

@@ -694,6 +694,9 @@ function transformActor(a: Rivet.Actor): Actor {
 			: undefined,
 		crashPolicy: a.crashPolicy as CrashPolicy,
 		runner: a.runnerNameSelector,
+		rescheduleAt: a.rescheduleTs
+			? new Date(a.rescheduleTs).toISOString()
+			: undefined,
 		features: [
 			ActorFeature.Config,
 			ActorFeature.Connections,
