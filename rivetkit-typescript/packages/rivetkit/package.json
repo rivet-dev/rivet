@@ -157,7 +157,8 @@
 		"check-types": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"dump-openapi": "tsx scripts/dump-openapi.ts"
+		"dump-openapi": "tsx scripts/dump-openapi.ts",
+		"dump-asyncapi": "tsx scripts/dump-asyncapi.ts"
 	},
 	"dependencies": {
 		"@bare-ts/lib": "~0.3.0",
@@ -190,7 +191,8 @@
 		"tsx": "^4.19.4",
 		"typescript": "^5.7.3",
 		"vitest": "^3.1.1",
-		"ws": "^8.18.1"
+		"ws": "^8.18.1",
+		"zod-to-json-schema": "^3.24.6"
 	},
 	"peerDependencies": {
 		"@hono/node-server": "^1.14.0",
