@@ -13,14 +13,21 @@ import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import { Navigate, useNavigate, useSearch } from "@tanstack/react-router";
-import { Suspense, useCallback } from "react";
+import {
+	Navigate,
+	useNavigate,
+	useRouterState,
+	useSearch,
+} from "@tanstack/react-router";
+import { memo, Suspense, useCallback, useEffect } from "react";
+import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
 	DocsSheet,
 	FilterCreator,
 	FiltersDisplay,
+	ls,
 	type OnFiltersChange,
 	ScrollArea,
 	ShimmerLine,
@@ -107,7 +114,8 @@ function LoadingIndicator() {
 		from: "/_context",
 		select: (state) => state.n,
 	});
-	const filters = useFiltersValue({ includeEphemeral: false });
+
+	const filters = useFiltersValue({ onlyStatic: true });
 	const { isLoading } = useInfiniteQuery(
 		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
@@ -118,7 +126,7 @@ function LoadingIndicator() {
 }
 
 function List() {
-	const filters = useFiltersValue({ includeEphemeral: false });
+	const filters = useFiltersValue({ onlyStatic: true });
 	const { actorId, n } = useSearch({
 		from: "/_context",
 	});
@@ -147,7 +155,7 @@ function ActorIdPrefiller() {
 			actorId: state.actorId,
 		}),
 	});
-	const filters = useFiltersValue({ includeEphemeral: false });
+	const filters = useFiltersValue({ onlyStatic: true });
 	const { data } = useSuspenseInfiniteQuery(
 		useDataProvider().actorsListQueryOptions({
 			n,
@@ -173,7 +181,7 @@ function Pagination() {
 		from: "/_context",
 		select: (state) => state.n,
 	});
-	const filters = useFiltersValue({ includeEphemeral: false });
+	const filters = useFiltersValue({ onlyStatic: true });
 	const { hasNextPage, isFetchingNextPage, fetchNextPage, data } =
 		useSuspenseInfiniteQuery(
 			useDataProvider().actorsListPaginationQueryOptions({
@@ -211,7 +219,7 @@ function EmptyState({ count }: { count: number }) {
 		from: "/_context",
 		select: (state) => state.n,
 	});
-	const { copy, links } = useActorsView();
+	const { copy } = useActorsView();
 	const { remove, pick } = useActorsFilters();
 
 	const { data: availableNamesCount = 0 } = useInfiniteQuery(
@@ -221,7 +229,7 @@ function EmptyState({ count }: { count: number }) {
 	const filtersCount = useSearch({
 		from: "/_context",
 		select: (state) =>
-			Object.values(pick(state, { includeEphemeral: false })).length,
+			Object.values(pick(state, { onlyStatic: true })).length,
 	});
 
 	const clearFilters = () => {
@@ -322,6 +330,14 @@ function EmptyState({ count }: { count: number }) {
 function useFiltersChangeCallback(): OnFiltersChange {
 	const navigate = useNavigate();
 	const { pick, remove } = useActorsFilters();
+	const [value, setLs] = useLocalStorage(
+		ls.actorsEphemeralFilters.key,
+		() => ({ wakeOnSelect: { value: ["1"] } }),
+		{
+			deserializer: (value) => JSON.parse(value),
+			serializer: (value) => JSON.stringify(value),
+		},
+	);
 
 	return useCallback(
 		(fnOrValue) => {
@@ -329,31 +345,38 @@ function useFiltersChangeCallback(): OnFiltersChange {
 				navigate({
 					to: ".",
 					search: (old) => {
-						const filters = pick(old || {});
+						const filters = pick(old || {}, { onlyStatic: true });
 						const prev = remove(old || {});
 
 						return {
 							...prev,
 							...Object.fromEntries(
-								Object.entries(fnOrValue(filters)).filter(
+								Object.entries(
+									pick(fnOrValue(filters), {
+										onlyStatic: true,
+									}),
+								).filter(
 									([, filter]) => filter.value.length > 0,
 								),
 							),
 						};
 					},
 				});
+
+				setLs(fnOrValue(value));
 			} else {
 				navigate({
 					to: ".",
 					search: (value) => ({
 						...remove(value || {}),
 						...Object.fromEntries(
-							Object.entries(fnOrValue).filter(
-								([, filter]) => filter.value.length > 0,
-							),
+							Object.entries(
+								pick(fnOrValue, { onlyStatic: true }),
+							).filter(([, filter]) => filter.value.length > 0),
 						),
 					}),
 				});
+				setLs(fnOrValue || {});
 			}
 		},
 		[navigate, pick],
@@ -382,10 +405,12 @@ function Display() {
 	const onFiltersChange = useFiltersChangeCallback();
 
 	return (
-		<FiltersDisplay
-			value={filters}
-			definitions={definitions}
-			onChange={onFiltersChange}
-		/>
+		<>
+			<FiltersDisplay
+				value={filters}
+				definitions={definitions}
+				onChange={onFiltersChange}
+			/>
+		</>
 	);
 }

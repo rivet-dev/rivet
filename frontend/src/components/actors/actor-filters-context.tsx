@@ -1,6 +1,8 @@
 import { faHashtag, faKey } from "@rivet-gg/icons";
 import { useSearch } from "@tanstack/react-router";
 import { createContext, useContext } from "react";
+import { useReadLocalStorage } from "usehooks-ts";
+import { ls } from "../lib/utils";
 import {
 	createFiltersPicker,
 	createFiltersRemover,
@@ -81,20 +83,25 @@ export const useActorsFilters = () => {
 	return context;
 };
 
-export const useFilters = (
-	fn: (filters: Record<string, any>) => any = (state) => state,
-): any => {
-	const { pick } = useActorsFilters();
-	return useSearch({
-		strict: false,
-		select: (state) => fn(pick(state || {})),
-	}) as Record<string, FilterValue | undefined>;
-};
-
 export function useFiltersValue(opts: PickFiltersOptions = {}) {
 	const { pick } = useActorsFilters();
-	return useSearch({
+	const search = useSearch({
 		from: "/_context",
-		select: (state) => pick(state, opts),
+		select: (state) => pick(state, { onlyStatic: true }),
 	}) as Record<string, FilterValue | undefined>;
+
+	const state = useReadLocalStorage(ls.actorsEphemeralFilters.key, {
+		deserializer: (value) => JSON.parse(value),
+		initializeWithValue: true,
+	}) || { wakeOnSelect: { value: ["1"] } };
+
+	if (opts.onlyEphemeral) {
+		return state as Record<string, FilterValue | undefined>;
+	}
+
+	if (opts.onlyStatic) {
+		return search as Record<string, FilterValue | undefined>;
+	}
+
+	return { ...search, ...state } as Record<string, FilterValue | undefined>;
 }

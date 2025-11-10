@@ -1,10 +1,10 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { compare } from "fast-json-patch";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import type { ActorId, RecordedRealtimeEvent } from "rivetkit/inspector";
-import { useActor } from "../actor-queries-context";
 import { useAsyncMemo } from "@/components/hooks/use-async-memo";
+import { useActor } from "../actor-queries-context";
 
 export const useActorClearEventsMutation = (
 	actorId: ActorId,
@@ -95,7 +95,6 @@ function useStream<T = unknown>(
 	const queries = useActor();
 
 	useEffect(() => {
-		
 		const controller = new AbortController();
 		if (!opts.enabled || !url) {
 			controller.abort();
@@ -103,14 +102,17 @@ function useStream<T = unknown>(
 		}
 
 		async function establishConnection() {
-			if(!url){
+			if (!url) {
 				return;
 			}
 			fetchEventSource(url, {
 				signal: controller.signal,
 				headers: await getHeaders(
-					(await queries.createActorInspectorFetchConfiguration(actorId))
-						?.headers || {},
+					(
+						await queries.createActorInspectorFetchConfiguration(
+							actorId,
+						)
+					)?.headers || {},
 				),
 				onmessage: (event) => {
 					const msg = JSON.parse(event.data);
@@ -151,7 +153,9 @@ export const useActorStateStream = (
 		),
 		useAsyncMemo(
 			async () =>
-				(await queries.createActorInspector(actorId)).state.stream.$url().href,
+				(
+					await queries.createActorInspector(actorId)
+				).state.stream.$url().href,
 			[actorId, queries],
 		),
 		opts,
@@ -175,8 +179,9 @@ export const useActorConnectionsStream = (actorId: ActorId) => {
 		),
 		useAsyncMemo(
 			async () =>
-				(await queries.createActorInspector(actorId)).connections.stream.$url()
-					.href,
+				(
+					await queries.createActorInspector(actorId)
+				).connections.stream.$url().href,
 			[actorId, queries],
 		),
 	);
@@ -204,7 +209,9 @@ export const useActorEventsStream = (
 		),
 		useAsyncMemo(
 			async () =>
-				(await queries.createActorInspector(actorId)).events.stream.$url().href,
+				(
+					await queries.createActorInspector(actorId)
+				).events.stream.$url().href,
 			[actorId, queries],
 		),
 		opts,

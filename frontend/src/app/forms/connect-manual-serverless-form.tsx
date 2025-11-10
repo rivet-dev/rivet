@@ -448,7 +448,9 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 			...dataProvider.runnerHealthCheckQueryOptions({
 				runnerUrl: debouncedEndpoint,
 				headers: Object.fromEntries(
-					debouncedHeaders.filter(([k, v]) => k && v).map(([k, v]) => [k, v]),
+					debouncedHeaders
+						.filter(([k, v]) => k && v)
+						.map(([k, v]) => [k, v]),
 				),
 			}),
 			enabled,

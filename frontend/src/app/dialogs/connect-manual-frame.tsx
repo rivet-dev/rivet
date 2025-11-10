@@ -34,7 +34,10 @@ export default function CreateProjectFrameContent({
 						className="border rounded-md gap-0"
 						value={mode}
 						onValueChange={(mode) => {
-							setMode(mode === "serverfull" ? "serverless" : "serverfull");
+							if (!mode) {
+								return;
+							}
+							setMode(mode);
 						}}
 					>
 						<ToggleGroupItem
