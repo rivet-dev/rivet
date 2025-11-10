@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { ClientConfigSchema } from "@/client/config";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
 import type { ManagerDriver } from "@/manager/driver";
@@ -11,6 +12,10 @@ import {
 	setup,
 } from "@/mod";
 import { type RunnerConfig, RunnerConfigSchema } from "@/registry/run-config";
+import {
+	HttpActionRequestSchema,
+	HttpActionResponseSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { VERSION } from "@/utils";
 
 function main() {
@@ -46,7 +51,7 @@ function main() {
 		ClientConfigSchema.parse({}),
 	);
 
-	const { openapi } = createManagerRouter(
+	const { openapi: managerOpenapi } = createManagerRouter(
 		registryConfig,
 		driverConfig,
 		managerDriver,
@@ -54,13 +59,17 @@ function main() {
 		client,
 	);
 
-	const openApiDoc = openapi.getOpenAPIDocument({
+	// Get OpenAPI document
+	const managerOpenApiDoc = managerOpenapi.getOpenAPIDocument({
 		openapi: "3.0.0",
 		info: {
 			version: VERSION,
 			title: "RivetKit API",
 		},
 	});
+
+	// Inject actor router paths
+	injectActorRouter(managerOpenApiDoc);
 
 	const outputPath = resolve(
 		import.meta.dirname,
@@ -71,8 +80,134 @@ function main() {
 		"rivetkit-openapi",
 		"openapi.json",
 	);
-	fs.writeFile(outputPath, JSON.stringify(openApiDoc, null, 2));
+	fs.writeFile(outputPath, JSON.stringify(managerOpenApiDoc, null, 2));
 	console.log("Dumped OpenAPI to", outputPath);
+}
+
+/**
+ * Manually inject actor router paths into the OpenAPI spec.
+ *
+ * We do this manually instead of extracting from the actual router since the
+ * actor routes support multiple encodings (JSON, CBOR, bare), but OpenAPI
+ * specs are JSON-focused and don't cleanly represent multi-encoding routes.
+ */
+function injectActorRouter(openApiDoc: any) {
+	if (!openApiDoc.paths) {
+		openApiDoc.paths = {};
+	}
+
+	// Convert Zod schemas to JSON Schema and remove $schema property
+	const actionRequestSchema = zodToJsonSchema(HttpActionRequestSchema, {
+		$refStrategy: "none",
+	});
+	delete (actionRequestSchema as any).$schema;
+
+	const actionResponseSchema = zodToJsonSchema(HttpActionResponseSchema, {
+		$refStrategy: "none",
+	});
+	delete (actionResponseSchema as any).$schema;
+
+	// Common actorId parameter
+	const actorIdParam = {
+		name: "actorId",
+		in: "path" as const,
+		required: true,
+		schema: {
+			type: "string",
+		},
+		description: "The ID of the actor to target",
+	};
+
+	// GET /gateway/{actorId}/health
+	openApiDoc.paths["/gateway/{actorId}/health"] = {
+		get: {
+			parameters: [actorIdParam],
+			responses: {
+				200: {
+					description: "Health check",
+					content: {
+						"text/plain": {
+							schema: {
+								type: "string",
+							},
+						},
+					},
+				},
+			},
+		},
+	};
+
+	// POST /gateway/{actorId}/action/{action}
+	openApiDoc.paths["/gateway/{actorId}/action/{action}"] = {
+		post: {
+			parameters: [
+				actorIdParam,
+				{
+					name: "action",
+					in: "path" as const,
+					required: true,
+					schema: {
+						type: "string",
+					},
+					description: "The name of the action to execute",
+				},
+			],
+			requestBody: {
+				content: {
+					"application/json": {
+						schema: actionRequestSchema,
+					},
+				},
+			},
+			responses: {
+				200: {
+					description: "Action executed successfully",
+					content: {
+						"application/json": {
+							schema: actionResponseSchema,
+						},
+					},
+				},
+				400: {
+					description: "Invalid action",
+				},
+				500: {
+					description: "Internal error",
+				},
+			},
+		},
+	};
+
+	// ALL /gateway/{actorId}/request/{path}
+	const requestPath = {
+		parameters: [
+			actorIdParam,
+			{
+				name: "path",
+				in: "path" as const,
+				required: true,
+				schema: {
+					type: "string",
+				},
+				description: "The HTTP path to forward to the actor",
+			},
+		],
+		responses: {
+			200: {
+				description: "Response from actor's raw HTTP handler",
+			},
+		},
+	};
+
+	openApiDoc.paths["/gateway/{actorId}/request/{path}"] = {
+		get: requestPath,
+		post: requestPath,
+		put: requestPath,
+		delete: requestPath,
+		patch: requestPath,
+		head: requestPath,
+		options: requestPath,
+	};
 }
 
 function unimplemented(): never {
