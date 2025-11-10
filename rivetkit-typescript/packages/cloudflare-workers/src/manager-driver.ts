@@ -7,6 +7,7 @@ import {
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
 	generateRandomString,
+	type ListActorsInput,
 	type ManagerDisplayInformation,
 	type ManagerDriver,
 	WS_PROTOCOL_ACTOR,
@@ -346,6 +347,14 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			name,
 			key,
 		};
+	}
+
+	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
+		logger().warn({
+			msg: "listActors not fully implemented for Cloudflare Workers",
+			name,
+		});
+		return [];
 	}
 
 	// Helper method to build actor output from an ID

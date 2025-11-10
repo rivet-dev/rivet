@@ -25,7 +25,7 @@ export async function getActor(
 	);
 }
 
-// MARK: Get actor by id
+// MARK: Get actor by key
 export async function getActorByKey(
 	config: ClientConfig,
 	name: string,
@@ -36,6 +36,18 @@ export async function getActorByKey(
 		config,
 		"GET",
 		`/actors?name=${encodeURIComponent(name)}&key=${encodeURIComponent(serializedKey)}`,
+	);
+}
+
+// MARK: List actors by name
+export async function listActorsByName(
+	config: ClientConfig,
+	name: string,
+): Promise<ActorsListResponse> {
+	return apiCall<never, ActorsListResponse>(
+		config,
+		"GET",
+		`/actors?name=${encodeURIComponent(name)}`,
 	);
 }
 

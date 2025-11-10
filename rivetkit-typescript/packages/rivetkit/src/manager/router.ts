@@ -289,17 +289,7 @@ function addManagerRoutes(
 			if (key && !name) {
 				return c.json(
 					{
-						error: "When providing 'key', 'name' must also be provided.",
-					},
-					400,
-				);
-			}
-
-			// Validate: must provide either actor_ids or (name + key)
-			if (!actorIdsParsed && !key) {
-				return c.json(
-					{
-						error: "Must provide either 'actor_ids' or both 'name' and 'key'.",
+						error: "Name is required when key is provided.",
 					},
 					400,
 				);
@@ -351,16 +341,33 @@ function addManagerRoutes(
 						}
 					}
 				}
-			} else if (key) {
-				// At this point, name is guaranteed to be defined due to validation above
+			} else if (key && name) {
 				const actorOutput = await managerDriver.getWithKey({
 					c,
-					name: name!,
+					name,
 					key: [key], // Convert string to ActorKey array
 				});
 				if (actorOutput) {
 					actors.push(actorOutput);
 				}
+			} else {
+				if (!name) {
+					return c.json(
+						{
+							error: "Name is required when not using actor_ids.",
+						},
+						400,
+					);
+				}
+
+				// List all actors with the given name
+				const actorOutputs = await managerDriver.listActors({
+					c,
+					name,
+					key,
+					includeDestroyed: false,
+				});
+				actors.push(...actorOutputs);
 			}
 
 			return c.json<ActorsListResponse>({
@@ -722,7 +729,7 @@ function createApiActor(
 		key: serializeActorKey(actor.key),
 		namespace_id: "default", // Assert default namespace
 		runner_name_selector: runnerName,
-		create_ts: Date.now(),
+		create_ts: actor.createTs ?? Date.now(),
 		connectable_ts: null,
 		destroy_ts: null,
 		sleep_ts: null,
