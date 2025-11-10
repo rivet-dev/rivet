@@ -3,6 +3,7 @@ import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
 import type * as protocol from "@/schemas/client-protocol/mod";
+import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
 
 export type ConnDriverWebSocketState = Record<never, never>;
@@ -12,10 +13,12 @@ export function createWebSocketSocket(
 	requestIdBuf: ArrayBuffer | undefined,
 	hibernatable: boolean,
 	encoding: Encoding,
-	websocket: WSContext,
 	closePromise: Promise<void>,
-): ConnDriver {
-	return {
+): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
+	// Wait for WS to open
+	let websocket: WSContext | undefined;
+
+	const driver: ConnDriver = {
 		type: "websocket",
 		requestId,
 		requestIdBuf,
@@ -25,6 +28,13 @@ export function createWebSocketSocket(
 			conn: AnyConn,
 			message: CachedSerializer<any, any, any>,
 		) => {
+			if (!websocket) {
+				actor.rLog.warn({
+					msg: "websocket not open",
+					connId: conn.id,
+				});
+				return;
+			}
 			if (websocket.readyState !== DriverReadyState.OPEN) {
 				actor.rLog.warn({
 					msg: "attempting to send message to closed websocket, this is likely a bug in RivetKit",
@@ -83,6 +93,13 @@ export function createWebSocketSocket(
 			_conn: AnyConn,
 			reason?: string,
 		) => {
+			if (!websocket) {
+				loggerWithoutContext().warn(
+					"disconnecting ws without websocket",
+				);
+				return;
+			}
+
 			// Close socket
 			websocket.close(1000, reason);
 
@@ -98,7 +115,14 @@ export function createWebSocketSocket(
 			_actor: AnyActorInstance,
 			_conn: AnyConn,
 		): DriverReadyState | undefined => {
-			return websocket.readyState;
+			return websocket?.readyState ?? DriverReadyState.CONNECTING;
+		},
+	};
+
+	return {
+		driver,
+		setWebSocket(ws) {
+			websocket = ws;
 		},
 	};
 }

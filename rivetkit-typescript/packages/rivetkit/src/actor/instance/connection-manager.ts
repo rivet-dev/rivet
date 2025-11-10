@@ -1,12 +1,16 @@
 import * as cbor from "cbor-x";
-import { arrayBuffersEqual, idToStr, stringifyError } from "@/utils";
+import invariant from "invariant";
+import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
+import { arrayBuffersEqual, stringifyError } from "@/utils";
 import type { ConnDriver } from "../conn/driver";
 import {
+	CONN_CONNECTED_SYMBOL,
 	CONN_DRIVER_SYMBOL,
 	CONN_MARK_SAVED_SYMBOL,
 	CONN_PERSIST_RAW_SYMBOL,
 	CONN_PERSIST_SYMBOL,
-	CONN_STATE_ENABLED_SYMBOL,
+	CONN_SEND_MESSAGE_SYMBOL,
 	Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -14,10 +18,10 @@ import { CreateConnStateContext } from "../contexts/create-conn-state";
 import { OnBeforeConnectContext } from "../contexts/on-before-connect";
 import { OnConnectContext } from "../contexts/on-connect";
 import type { AnyDatabaseProvider } from "../database";
-import type { ActorDriver } from "../driver";
+import { CachedSerializer } from "../protocol/serde";
 import { deadline } from "../utils";
 import { makeConnKey } from "./kv";
-import { ACTOR_INSTANCE_PERSIST_SYMBOL, type ActorInstance } from "./mod";
+import type { ActorInstance } from "./mod";
 import type { PersistedConn } from "./persisted";
 
 /**
@@ -68,15 +72,16 @@ export class ConnectionManager<
 	}
 
 	// MARK: - Connection Lifecycle
-
 	/**
-	 * Creates a new connection or reconnects an existing hibernatable connection.
+	 * Handles pre-connection logic (i.e. auth & create state) before actually connecting the connection.
 	 */
-	async createConn(
+	async prepareConn(
 		driver: ConnDriver,
 		params: CP,
 		request: Request | undefined,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
+		this.#actor.assertReady();
+
 		// Check for hibernatable websocket reconnection
 		if (driver.requestIdBuf && driver.hibernatable) {
 			const existingConn = this.#findHibernatableConn(
@@ -89,76 +94,121 @@ export class ConnectionManager<
 		}
 
 		// Create new connection
-		return await this.#createNewConn(driver, params, request);
+		const persist = this.#actor.persist;
+		if (this.#actor.config.onBeforeConnect) {
+			const ctx = new OnBeforeConnectContext(this.#actor, request);
+			await this.#actor.config.onBeforeConnect(ctx, params);
+		}
+
+		// Create connection state if enabled
+		let connState: CS | undefined;
+		if (this.#actor.connStateEnabled) {
+			connState = await this.#createConnState(params, request);
+		}
+
+		// Create connection persist data
+		const connPersist: PersistedConn<CP, CS> = {
+			connId: crypto.randomUUID(),
+			params: params,
+			state: connState as CS,
+			lastSeen: Date.now(),
+			subscriptions: [],
+		};
+
+		// Check if hibernatable
+		if (driver.requestIdBuf) {
+			const isHibernatable = this.#isHibernatableRequest(
+				driver.requestIdBuf,
+			);
+			if (isHibernatable) {
+				connPersist.hibernatableRequestId = driver.requestIdBuf;
+			}
+		}
+
+		// Create connection instance
+		const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, connPersist);
+		conn[CONN_DRIVER_SYMBOL] = driver;
+
+		return conn;
+	}
+
+	/**
+	 * Adds a connection form prepareConn to the actor and calls onConnect.
+	 *
+	 * This method is intentionally not async since it needs to be called in
+	 * `onOpen` for WebSockets. If this is async, the order of open events will
+	 * be messed up and cause race conditions that can drop WebSocket messages.
+	 * So all async work in prepareConn.
+	 */
+	connectConn(conn: Conn<S, CP, CS, V, I, DB>) {
+		invariant(!this.#connections.has(conn.id), "conn already connected");
+
+		this.#connections.set(conn.id, conn);
+
+		this.#changedConnections.add(conn.id);
+
+		this.#callOnConnect(conn);
+
+		this.#actor.inspector.emitter.emit("connectionUpdated");
+
+		this.#actor.resetSleepTimer();
+
+		conn[CONN_CONNECTED_SYMBOL] = true;
+
+		// TODO: Only do this for action messages
+		// Send init message
+		const initData = { actorId: this.#actor.id, connectionId: conn.id };
+		conn[CONN_SEND_MESSAGE_SYMBOL](
+			new CachedSerializer(
+				initData,
+				TO_CLIENT_VERSIONED,
+				ToClientSchema,
+				// JSON: identity conversion (no nested data to encode)
+				(value) => ({
+					body: {
+						tag: "Init" as const,
+						val: value,
+					},
+				}),
+				// BARE/CBOR: identity conversion (no nested data to encode)
+				(value) => ({
+					body: {
+						tag: "Init" as const,
+						val: value,
+					},
+				}),
+			),
+		);
 	}
 
 	/**
 	 * Handle connection disconnection.
-	 * Clean disconnects remove the connection immediately.
-	 * Unclean disconnects keep the connection for potential reconnection.
+	 *
+	 * This is called by `Conn.disconnect`. This should not call `Conn.disconnect.`
 	 */
-	async connDisconnected(
-		conn: Conn<S, CP, CS, V, I, DB>,
-		wasClean: boolean,
-		actorDriver: ActorDriver,
-		eventManager: any, // EventManager type
-	) {
-		if (wasClean) {
-			// Clean disconnect - remove immediately
-			await this.removeConn(conn, actorDriver, eventManager);
-		} else {
-			// Unclean disconnect - keep for reconnection
-			this.#handleUncleanDisconnect(conn);
-		}
-	}
-
-	/**
-	 * Removes a connection and cleans up its resources.
-	 */
-	async removeConn(
-		conn: Conn<S, CP, CS, V, I, DB>,
-		actorDriver: ActorDriver,
-		eventManager: any, // EventManager type
-	) {
-		// Remove from KV storage
-		const key = makeConnKey(conn.id);
-		try {
-			await actorDriver.kvBatchDelete(this.#actor.id, [key]);
-			this.#actor.rLog.debug({
-				msg: "removed connection from KV",
-				connId: conn.id,
-			});
-		} catch (err) {
-			this.#actor.rLog.error({
-				msg: "kvBatchDelete failed for conn",
-				err: stringifyError(err),
-			});
-		}
-
+	async connDisconnected(conn: Conn<S, CP, CS, V, I, DB>) {
 		// Remove from tracking
 		this.#connections.delete(conn.id);
 		this.#changedConnections.delete(conn.id);
 		this.#actor.rLog.debug({ msg: "removed conn", connId: conn.id });
 
-		// Clean up subscriptions via EventManager
-		if (eventManager) {
-			for (const eventName of [...conn.subscriptions.values()]) {
-				eventManager.removeSubscription(eventName, conn, true);
-			}
+		for (const eventName of [...conn.subscriptions.values()]) {
+			this.#actor.eventManager.removeSubscription(eventName, conn, true);
 		}
 
-		// Emit events and call lifecycle hooks
+		this.#actor.resetSleepTimer();
+
 		this.#actor.inspector.emitter.emit("connectionUpdated");
 
-		const config = (this.#actor as any).config;
-		if (config?.onDisconnect) {
+		// Trigger disconnect
+		if (this.#actor.config.onDisconnect) {
 			try {
-				const result = config.onDisconnect(
+				const result = this.#actor.config.onDisconnect(
 					this.#actor.actorContext,
 					conn,
 				);
 				if (result instanceof Promise) {
-					result.catch((error: any) => {
+					result.catch((error) => {
 						this.#actor.rLog.error({
 							msg: "error in `onDisconnect`",
 							error: stringifyError(error),
@@ -172,6 +222,34 @@ export class ConnectionManager<
 				});
 			}
 		}
+
+		// Remove from KV storage
+		const key = makeConnKey(conn.id);
+		try {
+			await this.#actor.driver.kvBatchDelete(this.#actor.id, [key]);
+			this.#actor.rLog.debug({
+				msg: "removed connection from KV",
+				connId: conn.id,
+			});
+		} catch (err) {
+			this.#actor.rLog.error({
+				msg: "kvBatchDelete failed for conn",
+				err: stringifyError(err),
+			});
+		}
+	}
+
+	/**
+	 * Utilify funtion for call sites that don't need a separate prepare and connect phase.
+	 */
+	async prepareAndConnectConn(
+		driver: ConnDriver,
+		params: CP,
+		request: Request | undefined,
+	): Promise<Conn<S, CP, CS, V, I, DB>> {
+		const conn = await this.prepareConn(driver, params, request);
+		this.connectConn(conn);
+		return conn;
 	}
 
 	// MARK: - Persistence
@@ -179,10 +257,7 @@ export class ConnectionManager<
 	/**
 	 * Restores connections from persisted data during actor initialization.
 	 */
-	restoreConnections(
-		connections: PersistedConn<CP, CS>[],
-		eventManager: any, // EventManager type
-	) {
+	restoreConnections(connections: PersistedConn<CP, CS>[]) {
 		for (const connPersist of connections) {
 			// Create connection instance
 			const conn = new Conn<S, CP, CS, V, I, DB>(
@@ -193,7 +268,11 @@ export class ConnectionManager<
 
 			// Restore subscriptions
 			for (const sub of connPersist.subscriptions) {
-				eventManager.addSubscription(sub.eventName, conn, true);
+				this.#actor.eventManager.addSubscription(
+					sub.eventName,
+					conn,
+					true,
+				);
 			}
 		}
 	}
@@ -266,82 +345,25 @@ export class ConnectionManager<
 		}
 	}
 
-	async #createNewConn(
-		driver: ConnDriver,
-		params: CP,
-		request: Request | undefined,
-	): Promise<Conn<S, CP, CS, V, I, DB>> {
-		const config = this.#actor.config;
-		const persist = (this.#actor as any)[ACTOR_INSTANCE_PERSIST_SYMBOL];
-		// Prepare connection state
-		let connState: CS | undefined;
-
-		// Call onBeforeConnect hook
-		if (config.onBeforeConnect) {
-			const ctx = new OnBeforeConnectContext(this.#actor, request);
-			await config.onBeforeConnect(ctx, params);
-		}
-
-		// Create connection state if enabled
-		if ((this.#actor as any).connStateEnabled) {
-			connState = await this.#createConnState(config, params, request);
-		}
-
-		// Create connection persist data
-		const connPersist: PersistedConn<CP, CS> = {
-			connId: crypto.randomUUID(),
-			params: params,
-			state: connState as CS,
-			lastSeen: Date.now(),
-			subscriptions: [],
-		};
-
-		// Check if hibernatable
-		if (driver.requestIdBuf) {
-			const isHibernatable = this.#isHibernatableRequest(
-				driver.requestIdBuf,
-				persist,
-			);
-			if (isHibernatable) {
-				connPersist.hibernatableRequestId = driver.requestIdBuf;
-			}
-		}
-
-		// Create connection instance
-		const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, connPersist);
-		conn[CONN_DRIVER_SYMBOL] = driver;
-		this.#connections.set(conn.id, conn);
-
-		// Mark as changed for persistence
-		this.#changedConnections.add(conn.id);
-
-		// Call onConnect lifecycle hook
-		if (config.onConnect) {
-			this.#callOnConnect(config, conn, request);
-		}
-
-		this.#actor.inspector.emitter.emit("connectionUpdated");
-
-		return conn;
-	}
-
 	async #createConnState(
-		config: any,
 		params: CP,
 		request: Request | undefined,
 	): Promise<CS | undefined> {
-		if ("createConnState" in config) {
+		if ("createConnState" in this.#actor.config) {
 			const ctx = new CreateConnStateContext(this.#actor, request);
-			const dataOrPromise = config.createConnState(ctx, params);
+			const dataOrPromise = this.#actor.config.createConnState(
+				ctx,
+				params,
+			);
 			if (dataOrPromise instanceof Promise) {
 				return await deadline(
 					dataOrPromise,
-					config.options.createConnStateTimeout,
+					this.#actor.config.options.createConnStateTimeout,
 				);
 			}
 			return dataOrPromise;
-		} else if ("connState" in config) {
-			return structuredClone(config.connState);
+		} else if ("connState" in this.#actor.config) {
+			return structuredClone(this.#actor.config.connState);
 		}
 
 		throw new Error(
@@ -349,51 +371,38 @@ export class ConnectionManager<
 		);
 	}
 
-	#isHibernatableRequest(requestIdBuf: ArrayBuffer, persist: any): boolean {
+	#isHibernatableRequest(requestIdBuf: ArrayBuffer): boolean {
 		return (
-			persist.hibernatableConns.findIndex((conn: any) =>
+			this.#actor.persist.hibernatableConns.findIndex((conn) =>
 				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
 			) !== -1
 		);
 	}
 
-	#callOnConnect(
-		config: any,
-		conn: Conn<S, CP, CS, V, I, DB>,
-		request: Request | undefined,
-	) {
-		try {
-			const ctx = new OnConnectContext(this.#actor, request);
-			const result = config.onConnect(ctx, conn);
-			if (result instanceof Promise) {
-				deadline(result, config.options.onConnectTimeout).catch(
-					(error: any) => {
+	#callOnConnect(conn: Conn<S, CP, CS, V, I, DB>) {
+		if (this.#actor.config.onConnect) {
+			try {
+				const ctx = new OnConnectContext(this.#actor, conn);
+				const result = this.#actor.config.onConnect(ctx, conn);
+				if (result instanceof Promise) {
+					deadline(
+						result,
+						this.#actor.config.options.onConnectTimeout,
+					).catch((error) => {
 						this.#actor.rLog.error({
 							msg: "error in `onConnect`, closing socket",
 							error,
 						});
 						conn?.disconnect("`onConnect` failed");
-					},
-				);
+					});
+				}
+			} catch (error) {
+				this.#actor.rLog.error({
+					msg: "error in `onConnect`",
+					error: stringifyError(error),
+				});
+				conn?.disconnect("`onConnect` failed");
 			}
-		} catch (error) {
-			this.#actor.rLog.error({
-				msg: "error in `onConnect`",
-				error: stringifyError(error),
-			});
-			conn?.disconnect("`onConnect` failed");
 		}
-	}
-
-	#handleUncleanDisconnect(conn: Conn<S, CP, CS, V, I, DB>) {
-		if (!conn[CONN_DRIVER_SYMBOL]) {
-			this.#actor.rLog.warn("called conn disconnected without driver");
-		}
-
-		// Update last seen for cleanup tracking
-		conn[CONN_PERSIST_SYMBOL].lastSeen = Date.now();
-
-		// Remove socket
-		conn[CONN_DRIVER_SYMBOL] = undefined;
 	}
 }
