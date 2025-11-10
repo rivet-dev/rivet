@@ -63,6 +63,7 @@ export type Actor = Omit<InspectorActor, "id" | "key"> & {
 	connectableAt?: string | null;
 	pendingAllocationAt?: string | null;
 	datacenter?: string | null;
+	rescheduleAt?: string | null;
 } & { id: ActorId };
 
 export enum CrashPolicy {
@@ -97,6 +98,7 @@ export type ActorStatus =
 	| "crashed"
 	| "sleeping"
 	| "pending"
+	| "crash-loop"
 	| "unknown";
 
 export function getActorStatus(
@@ -107,6 +109,7 @@ export function getActorStatus(
 		| "destroyedAt"
 		| "sleepingAt"
 		| "pendingAllocationAt"
+		| "rescheduleAt"
 	>,
 ): ActorStatus {
 	const {
@@ -115,7 +118,12 @@ export function getActorStatus(
 		destroyedAt,
 		sleepingAt,
 		pendingAllocationAt,
+		rescheduleAt,
 	} = actor;
+
+	if (rescheduleAt) {
+		return "crash-loop";
+	}
 
 	if (pendingAllocationAt && !startedAt && !destroyedAt) {
 		return "pending";

@@ -188,6 +188,15 @@ const defaultContext = {
 		});
 	},
 
+	actorStatusAdditionalInfoQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			...this.actorQueryOptions(actorId),
+			select: ({ rescheduleAt }) => ({
+				rescheduleAt,
+			}),
+		});
+	},
+
 	actorFeaturesQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),

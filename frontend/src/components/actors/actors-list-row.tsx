@@ -58,9 +58,12 @@ export const ActorsListRow = memo(
 									</div>
 								}
 								content={
-									<QueriedActorStatusLabel
-										actorId={actorId}
-									/>
+									<div className="flex flex-col">
+										<QueriedActorStatusLabel
+											actorId={actorId}
+											showAdditionalInfo
+										/>
+									</div>
 								}
 							/>
 							<div className="min-w-0 flex items-center">
