@@ -7,10 +7,8 @@ import {
 } from "@/schemas/client-protocol-zod/mod";
 import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
-import {
-	ACTOR_INSTANCE_PERSIST_SYMBOL,
-	type ActorInstance,
-} from "../instance/mod";
+import { InternalError } from "../errors";
+import type { ActorInstance } from "../instance/mod";
 import type { PersistedConn } from "../instance/persisted";
 import { CachedSerializer } from "../protocol/serde";
 import type { ConnDriver } from "./driver";
@@ -24,6 +22,7 @@ export type ConnId = string;
 
 export type AnyConn = Conn<any, any, any, any, any, any>;
 
+export const CONN_CONNECTED_SYMBOL = Symbol("connected");
 export const CONN_PERSIST_SYMBOL = Symbol("persist");
 export const CONN_DRIVER_SYMBOL = Symbol("driver");
 export const CONN_ACTOR_SYMBOL = Symbol("actor");
@@ -58,6 +57,16 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	get [CONN_ACTOR_SYMBOL](): ActorInstance<S, CP, CS, V, I, DB> {
 		return this.#actor;
+	}
+
+	/** Connections exist before being connected to an actor. If true, this connection has been connected. */
+	[CONN_CONNECTED_SYMBOL] = false;
+
+	#assertConnected() {
+		if (!this[CONN_CONNECTED_SYMBOL])
+			throw new InternalError(
+				"Connection not connected yet. This happens when trying to use the connection in onBeforeConnect or createConnState.",
+			);
 	}
 
 	get [CONN_PERSIST_SYMBOL](): PersistedConn<CP, CS> {
@@ -109,9 +118,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			return false;
 		}
 		return (
-			(this.#actor as any)[
-				ACTOR_INSTANCE_PERSIST_SYMBOL
-			].hibernatableConns.findIndex((conn: any) =>
+			this.#actor.persist.hibernatableConns.findIndex((conn: any) =>
 				arrayBuffersEqual(
 					conn.hibernatableRequestId,
 					hibernatableRequestId,
@@ -191,6 +198,8 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * @see {@link https://rivet.dev/docs/events|Events Documentation}
 	 */
 	send(eventName: string, ...args: unknown[]) {
+		this.#assertConnected();
+
 		this.#actor.inspector.emitter.emit("eventFired", {
 			type: "event",
 			eventName,
@@ -244,7 +253,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				});
 			}
 
-			this.#actor.connDisconnected(this, true);
+			this.#actor.connectionManager.connDisconnected(this);
 		} else {
 			this.#actor.rLog.warn({
 				msg: "missing connection driver state for disconnect",

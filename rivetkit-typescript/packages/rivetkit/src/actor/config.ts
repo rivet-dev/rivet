@@ -330,7 +330,14 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when connection handling is complete
 	 */
 	onConnect?: (
-		c: OnConnectContext<TState, TVars, TInput, TDatabase>,
+		c: OnConnectContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
 		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	) => void | Promise<void>;
 
