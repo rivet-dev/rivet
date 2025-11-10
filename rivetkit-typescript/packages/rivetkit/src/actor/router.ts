@@ -91,7 +91,7 @@ export function createActorRouter(
 			}
 
 			const actor = await actorDriver.loadActor(c.env.actorId);
-			const conn = actor.getConnForId(connId);
+			const conn = actor.connectionManager.getConnForId(connId);
 
 			if (!conn) {
 				return c.text(`Connection not found: ${connId}`, 404);

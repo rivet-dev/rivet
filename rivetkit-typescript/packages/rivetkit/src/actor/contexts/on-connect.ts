@@ -1,5 +1,5 @@
 import type { AnyDatabaseProvider } from "../database";
-import { ConnInitContext } from "./conn-init";
+import { ConnContext } from "./conn";
 
 /**
  * Context for the onConnect lifecycle hook.
@@ -7,7 +7,16 @@ import { ConnInitContext } from "./conn-init";
  */
 export class OnConnectContext<
 	TState,
+	TConnParams,
+	TConnState,
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-> extends ConnInitContext<TState, TVars, TInput, TDatabase> {}
+> extends ConnContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase
+> {}

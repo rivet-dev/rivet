@@ -51,16 +51,17 @@ export const rawWebSocketActor = actor({
 							}),
 						);
 					} else if (parsed.type === "getRequestInfo") {
-						throw "TODO";
-						// Send back the request URL info
-						// websocket.send(
-						// 	JSON.stringify({
-						// 		type: "requestInfo",
-						// 		url: opts.request.url,
-						// 		pathname: new URL(opts.request.url).pathname,
-						// 		search: new URL(opts.request.url).search,
-						// 	}),
-						// );
+						// Send back the request URL info if available
+						const url = ctx.request?.url || "ws://actor/websocket";
+						const urlObj = new URL(url);
+						websocket.send(
+							JSON.stringify({
+								type: "requestInfo",
+								url: url,
+								pathname: urlObj.pathname,
+								search: urlObj.search,
+							}),
+						);
 					} else {
 						// Echo back
 						websocket.send(data);

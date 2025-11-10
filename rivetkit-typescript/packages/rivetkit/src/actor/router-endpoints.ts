@@ -4,10 +4,7 @@ import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
-import {
-	ACTOR_INSTANCE_PERSIST_SYMBOL,
-	type AnyActorInstance,
-} from "@/actor/instance/mod";
+import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { InputData } from "@/actor/protocol/serde";
 import { type Encoding, EncodingSchema } from "@/actor/protocol/serde";
 import {
@@ -112,136 +109,59 @@ export async function handleWebSocketConnect(
 		? getRequestExposeInternalError(req)
 		: false;
 
-	// Setup promise for the init handlers since all other behavior depends on this
-	const {
-		promise: handlersPromise,
-		resolve: handlersResolve,
-		reject: handlersReject,
-	} = promiseWithResolvers<{
-		conn: AnyConn;
-		actor: AnyActorInstance;
-		connId: string;
-	}>();
-
-	// Pre-load the actor to catch errors early
-	let actor: AnyActorInstance;
-	try {
-		actor = await actorDriver.loadActor(actorId);
-	} catch (error) {
-		// Return handler that immediately closes with error
-		return {
-			onOpen: (_evt: any, ws: WSContext) => {
-				const { code } = deconstructError(
-					error,
-					loggerWithoutContext(),
-					{
-						wsEvent: "open",
-					},
-					exposeInternalError,
-				);
-				ws.close(1011, code);
-			},
-			onMessage: (_evt: { data: any }, ws: WSContext) => {
-				ws.close(1011, "Actor not loaded");
-			},
-			onClose: (_event: any, _ws: WSContext) => {},
-			onError: (_error: unknown) => {},
-		};
-	}
-
-	// Promise used to wait for the websocket close in `disconnect`
-	const closePromiseResolvers = promiseWithResolvers<void>();
-
-	// Track connection outside of scope for cleanup
 	let createdConn: AnyConn | undefined;
+	try {
+		const actor = await actorDriver.loadActor(actorId);
 
-	return {
-		onOpen: (_evt: any, ws: WSContext) => {
-			actor.rLog.debug("actor websocket open");
+		// Promise used to wait for the websocket close in `disconnect`
+		const closePromiseResolvers = promiseWithResolvers<void>();
 
-			// Run async operations in background
-			(async () => {
-				try {
-					let conn: AnyConn;
+		actor.rLog.debug({
+			msg: "new websocket connection",
+			actorId,
+		});
 
-					actor.rLog.debug({
-						msg: "new websocket connection",
-						actorId,
-					});
+		// Check if this is a hibernatable websocket
+		const isHibernatable =
+			!!requestIdBuf &&
+			actor.persist.hibernatableConns.findIndex((conn) =>
+				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+			) !== -1;
 
-					// Check if this is a hibernatable websocket
-					const isHibernatable =
-						!!requestIdBuf &&
-						actor[
-							ACTOR_INSTANCE_PERSIST_SYMBOL
-						].hibernatableConns.findIndex((conn) =>
-							arrayBuffersEqual(
-								conn.hibernatableRequestId,
-								requestIdBuf,
-							),
-						) !== -1;
+		const { driver, setWebSocket } = createWebSocketSocket(
+			requestId,
+			requestIdBuf,
+			isHibernatable,
+			encoding,
+			closePromiseResolvers.promise,
+		);
+		const conn = await actor.connectionManager.prepareConn(
+			driver,
+			parameters,
+			req,
+		);
+		createdConn = conn;
 
-					conn = await actor.createConn(
-						createWebSocketSocket(
-							requestId,
-							requestIdBuf,
-							isHibernatable,
-							encoding,
-							ws,
-							closePromiseResolvers.promise,
-						),
-						parameters,
-						req,
-					);
+		return {
+			// NOTE: onOpen cannot be async since this messes up the open event listener order
+			onOpen: (_evt: any, ws: WSContext) => {
+				actor.rLog.debug("actor websocket open");
 
-					// Store connection so we can clean on close
-					createdConn = conn;
+				setWebSocket(ws);
 
-					// Unblock other handlers
-					handlersResolve({ conn, actor, connId: conn.id });
-				} catch (error) {
-					handlersReject(error);
+				actor.connectionManager.connectConn(conn);
+			},
+			onMessage: (evt: { data: any }, ws: WSContext) => {
+				// Handle message asynchronously
+				actor.rLog.debug({ msg: "received message" });
 
-					const { code } = deconstructError(
-						error,
-						actor.rLog,
-						{
-							wsEvent: "open",
-						},
-						exposeInternalError,
-					);
-					ws.close(1011, code);
-				}
-			})();
-		},
-		onMessage: (evt: { data: any }, ws: WSContext) => {
-			// Handle message asynchronously
-			handlersPromise
-				.then(({ conn, actor }) => {
-					actor.rLog.debug({ msg: "received message" });
-
-					const value = evt.data.valueOf() as InputData;
-					parseMessage(value, {
-						encoding: encoding,
-						maxIncomingMessageSize:
-							runConfig.maxIncomingMessageSize,
-					})
-						.then((message) => {
-							actor
-								.processMessage(message, conn)
-								.catch((error) => {
-									const { code } = deconstructError(
-										error,
-										actor.rLog,
-										{
-											wsEvent: "message",
-										},
-										exposeInternalError,
-									);
-									ws.close(1011, code);
-								});
-						})
-						.catch((error) => {
+				const value = evt.data.valueOf() as InputData;
+				parseMessage(value, {
+					encoding: encoding,
+					maxIncomingMessageSize: runConfig.maxIncomingMessageSize,
+				})
+					.then((message) => {
+						actor.processMessage(message, conn).catch((error) => {
 							const { code } = deconstructError(
 								error,
 								actor.rLog,
@@ -252,73 +172,93 @@ export async function handleWebSocketConnect(
 							);
 							ws.close(1011, code);
 						});
-				})
-				.catch((error) => {
-					const { code } = deconstructError(
+					})
+					.catch((error) => {
+						const { code } = deconstructError(
+							error,
+							actor.rLog,
+							{
+								wsEvent: "message",
+							},
+							exposeInternalError,
+						);
+						ws.close(1011, code);
+					});
+			},
+			onClose: (
+				event: {
+					wasClean: boolean;
+					code: number;
+					reason: string;
+				},
+				ws: WSContext,
+			) => {
+				closePromiseResolvers.resolve();
+
+				if (event.wasClean) {
+					actor.rLog.info({
+						msg: "websocket closed",
+						code: event.code,
+						reason: event.reason,
+						wasClean: event.wasClean,
+					});
+				} else {
+					actor.rLog.warn({
+						msg: "websocket closed",
+						code: event.code,
+						reason: event.reason,
+						wasClean: event.wasClean,
+					});
+				}
+
+				// HACK: Close socket in order to fix bug with Cloudflare leaving WS in closing state
+				// https://github.com/cloudflare/workerd/issues/2569
+				ws.close(1000, "hack_force_close");
+
+				// Wait for actor.createConn to finish before removing the connection
+				if (createdConn) {
+					createdConn.disconnect(event?.reason);
+				}
+			},
+			onError: (_error: unknown) => {
+				try {
+					// Actors don't need to know about this, since it's abstracted away
+					actor.rLog.warn({ msg: "websocket error" });
+				} catch (error) {
+					deconstructError(
 						error,
 						actor.rLog,
-						{
-							wsEvent: "message",
-						},
+						{ wsEvent: "error" },
 						exposeInternalError,
 					);
-					ws.close(1011, code);
-				});
-		},
-		onClose: (
-			event: {
-				wasClean: boolean;
-				code: number;
-				reason: string;
-			},
-			ws: WSContext,
-		) => {
-			handlersReject(`WebSocket closed (${event.code}): ${event.reason}`);
-
-			closePromiseResolvers.resolve();
-
-			if (event.wasClean) {
-				actor.rLog.info({
-					msg: "websocket closed",
-					code: event.code,
-					reason: event.reason,
-					wasClean: event.wasClean,
-				});
-			} else {
-				actor.rLog.warn({
-					msg: "websocket closed",
-					code: event.code,
-					reason: event.reason,
-					wasClean: event.wasClean,
-				});
-			}
-
-			// HACK: Close socket in order to fix bug with Cloudflare leaving WS in closing state
-			// https://github.com/cloudflare/workerd/issues/2569
-			ws.close(1000, "hack_force_close");
-
-			// Wait for actor.createConn to finish before removing the connection
-			handlersPromise.finally(() => {
-				if (createdConn) {
-					const wasClean = event.wasClean || event.code === 1000;
-					actor.connDisconnected(createdConn, wasClean);
 				}
-			});
-		},
-		onError: (_error: unknown) => {
-			try {
-				// Actors don't need to know about this, since it's abstracted away
-				actor.rLog.warn({ msg: "websocket error" });
-			} catch (error) {
-				deconstructError(
-					error,
-					actor.rLog,
-					{ wsEvent: "error" },
-					exposeInternalError,
-				);
-			}
-		},
-	};
+			},
+		};
+	} catch (error) {
+		const { group, code } = deconstructError(
+			error,
+			loggerWithoutContext(),
+			{},
+			exposeInternalError,
+		);
+
+		// Clean up connection
+		if (createdConn) {
+			createdConn.disconnect(`${group}.${code}`);
+		}
+
+		// Return handler that immediately closes with error
+		return {
+			onOpen: (_evt: any, ws: WSContext) => {
+				ws.close(1011, code);
+			},
+			onMessage: (_evt: { data: any }, ws: WSContext) => {
+				ws.close(1011, "Actor not loaded");
+			},
+			onClose: (_event: any, _ws: WSContext) => {},
+			onError: (_error: unknown) => {},
+		};
+	}
 }
 
 /**
@@ -359,7 +299,7 @@ export async function handleAction(
 		actor.rLog.debug({ msg: "handling action", actionName, encoding });
 
 		// Create conn
-		conn = await actor.createConn(
+		conn = await actor.connectionManager.prepareAndConnectConn(
 			createHttpSocket(),
 			parameters,
 			c.req.raw,
@@ -370,8 +310,7 @@ export async function handleAction(
 		output = await actor.executeAction(ctx, actionName, actionArgs);
 	} finally {
 		if (conn) {
-			// HTTP connections don't have persistent sockets, so no socket ID needed
-			actor?.connDisconnected(conn, true);
+			conn.disconnect();
 		}
 	}
 
@@ -406,7 +345,11 @@ export async function handleRawRequest(
 	let createdConn: AnyConn | undefined;
 
 	try {
-		const conn = await actor.createConn(createRawRequestSocket(), {}, req);
+		const conn = await actor.connectionManager.prepareAndConnectConn(
+			createRawRequestSocket(),
+			{},
+			req,
+		);
 
 		createdConn = conn;
 
@@ -414,7 +357,7 @@ export async function handleRawRequest(
 	} finally {
 		// Clean up the connection after the request completes
 		if (createdConn) {
-			actor.connDisconnected(createdConn, true);
+			createdConn.disconnect();
 		}
 	}
 }
@@ -426,112 +369,135 @@ export async function handleRawWebSocket(
 	actorId: string,
 	requestIdBuf: ArrayBuffer | undefined,
 ): Promise<UpgradeWebSocketArgs> {
-	const actor = await actorDriver.loadActor(actorId);
+	const exposeInternalError = req
+		? getRequestExposeInternalError(req)
+		: false;
 
-	// Promise used to wait for the websocket close in `disconnect`
-	const closePromiseResolvers = promiseWithResolvers<void>();
-
-	// Track connection outside of scope for cleanup
 	let createdConn: AnyConn | undefined;
+	try {
+		const actor = await actorDriver.loadActor(actorId);
 
-	// Return WebSocket event handlers
-	return {
-		onOpen: async (evt: any, ws: any) => {
-			// Extract rivetRequestId provided by engine runner
-			const isHibernatable =
-				!!requestIdBuf &&
-				actor[
-					ACTOR_INSTANCE_PERSIST_SYMBOL
-				].hibernatableConns.findIndex((conn) =>
-					arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-				) !== -1;
+		// Promise used to wait for the websocket close in `disconnect`
+		const closePromiseResolvers = promiseWithResolvers<void>();
 
-			// Wrap the Hono WebSocket in our adapter
-			const adapter = new HonoWebSocketAdapter(
-				ws,
-				requestIdBuf,
-				isHibernatable,
-			);
+		// Extract rivetRequestId provided by engine runner
+		const isHibernatable =
+			!!requestIdBuf &&
+			actor.persist.hibernatableConns.findIndex((conn) =>
+				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+			) !== -1;
 
-			// Store adapter reference on the WebSocket for event handlers
-			(ws as any).__adapter = adapter;
-
-			const newPath = truncateRawWebSocketPathPrefix(path);
-			let newRequest: Request;
-			if (req) {
-				newRequest = new Request(`http://actor${newPath}`, req);
-			} else {
-				newRequest = new Request(`http://actor${newPath}`, {
-					method: "GET",
-				});
-			}
-
-			actor.rLog.debug({
-				msg: "rewriting websocket url",
-				fromPath: path,
-				toUrl: newRequest.url,
+		const newPath = truncateRawWebSocketPathPrefix(path);
+		let newRequest: Request;
+		if (req) {
+			newRequest = new Request(`http://actor${newPath}`, req);
+		} else {
+			newRequest = new Request(`http://actor${newPath}`, {
+				method: "GET",
 			});
+		}
 
-			try {
-				// Create connection using actor.createConn - this handles deduplication for hibernatable connections
-				const requestIdStr = requestIdBuf
-					? idToStr(requestIdBuf)
-					: crypto.randomUUID();
-				const conn = await actor.createConn(
-					createRawWebSocketSocket(
-						requestIdStr,
-						requestIdBuf,
-						isHibernatable,
-						adapter,
-						closePromiseResolvers.promise,
-					),
-					{}, // No parameters for raw WebSocket
-					newRequest,
+		actor.rLog.debug({
+			msg: "rewriting websocket url",
+			fromPath: path,
+			toUrl: newRequest.url,
+		});
+		// Create connection using actor.createConn - this handles deduplication for hibernatable connections
+		const requestIdStr = requestIdBuf
+			? idToStr(requestIdBuf)
+			: crypto.randomUUID();
+		const { driver, setWebSocket } = createRawWebSocketSocket(
+			requestIdStr,
+			requestIdBuf,
+			isHibernatable,
+			closePromiseResolvers.promise,
+		);
+		const conn = await actor.connectionManager.prepareAndConnectConn(
+			driver,
+			{},
+			newRequest,
+		);
+		createdConn = conn;
+
+		// Return WebSocket event handlers
+		return {
+			// NOTE: onOpen cannot be async since this will cause the client's open
+			// event to be called before this completes. Do all async work in
+			// handleRawWebSocket root.
+			onOpen: (_evt: any, ws: any) => {
+				// Wrap the Hono WebSocket in our adapter
+				const adapter = new HonoWebSocketAdapter(
+					ws,
+					requestIdBuf,
+					isHibernatable,
 				);
 
-				createdConn = conn;
+				// Store adapter reference on the WebSocket for event handlers
+				(ws as any).__adapter = adapter;
+
+				setWebSocket(adapter);
 
 				// Call the actor's onWebSocket handler with the adapted WebSocket
+				//
+				// NOTE: onWebSocket is called inside this function. Make sure
+				// this is called synchronously within onOpen.
 				actor.handleRawWebSocket(conn, adapter, newRequest);
-			} catch (error) {
-				actor.rLog.error({
-					msg: "failed to create raw WebSocket connection",
-					error: String(error),
-				});
-				ws.close(1011, "Failed to create connection");
-			}
-		},
-		onMessage: (event: any, ws: any) => {
-			// Find the adapter for this WebSocket
-			const adapter = (ws as any).__adapter;
-			if (adapter) {
-				adapter._handleMessage(event);
-			}
-		},
-		onClose: (evt: any, ws: any) => {
-			// Find the adapter for this WebSocket
-			const adapter = (ws as any).__adapter;
-			if (adapter) {
-				adapter._handleClose(evt?.code || 1006, evt?.reason || "");
-			}
+			},
+			onMessage: (event: any, ws: any) => {
+				// Find the adapter for this WebSocket
+				const adapter = (ws as any).__adapter;
+				if (adapter) {
+					adapter._handleMessage(event);
+				}
+			},
+			onClose: (evt: any, ws: any) => {
+				// Find the adapter for this WebSocket
+				const adapter = (ws as any).__adapter;
+				if (adapter) {
+					adapter._handleClose(evt?.code || 1006, evt?.reason || "");
+				}
 
-			// Resolve the close promise
-			closePromiseResolvers.resolve();
+				// Resolve the close promise
+				closePromiseResolvers.resolve();
 
-			// Clean up the connection
-			if (createdConn) {
-				const wasClean = evt?.wasClean || evt?.code === 1000;
-				actor.connDisconnected(createdConn, wasClean);
-			}
-		},
-		onError: (error: any, ws: any) => {
-			// Find the adapter for this WebSocket
-			const adapter = (ws as any).__adapter;
-			if (adapter) {
-				adapter._handleError(error);
-			}
-		},
-	};
+				// Clean up the connection
+				if (createdConn) {
+					createdConn.disconnect(evt?.reason);
+				}
+			},
+			onError: (error: any, ws: any) => {
+				// Find the adapter for this WebSocket
+				const adapter = (ws as any).__adapter;
+				if (adapter) {
+					adapter._handleError(error);
+				}
+			},
+		};
+	} catch (error) {
+		const { group, code } = deconstructError(
+			error,
+			loggerWithoutContext(),
+			{},
+			exposeInternalError,
+		);
+
+		// Clean up connection
+		if (createdConn) {
+			createdConn.disconnect(`${group}.${code}`);
+		}
+
+		// Return handler that immediately closes with error
+		return {
+			onOpen: (_evt: any, ws: WSContext) => {
+				ws.close(1011, code);
+			},
+			onMessage: (_evt: { data: any }, ws: WSContext) => {
+				ws.close(1011, "Actor not loaded");
+			},
+			onClose: (_event: any, _ws: WSContext) => {},
+			onError: (_error: unknown) => {},
+		};
+	}
 }
 
 // Helper to get the connection encoding from a request

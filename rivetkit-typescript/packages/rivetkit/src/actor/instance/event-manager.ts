@@ -165,6 +165,8 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * @param args - The arguments to send with the event
 	 */
 	broadcast<Args extends Array<unknown>>(name: string, ...args: Args) {
+		this.#actor.assertReady();
+
 		// Emit to inspector
 		this.#actor.inspector.emitter.emit("eventFired", {
 			type: "broadcast",

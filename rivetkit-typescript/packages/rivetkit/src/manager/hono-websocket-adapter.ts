@@ -38,7 +38,7 @@ export class HonoWebSocketAdapter implements UniversalWebSocket {
 		// The WSContext is already open when we receive it
 		this.#readyState = this.OPEN;
 
-		// Immediately fire the open event
+		// Fire open event on next tick so the runtime has time to schedule event listeners
 		setTimeout(() => {
 			this.#fireEvent("open", {
 				type: "open",

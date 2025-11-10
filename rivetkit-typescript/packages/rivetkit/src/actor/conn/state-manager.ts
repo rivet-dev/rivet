@@ -134,6 +134,8 @@ export class StateManager<CP, CS> {
 		});
 
 		// Notify actor that this connection has changed
-		this.#conn[CONN_ACTOR_SYMBOL].markConnChanged(this.#conn);
+		this.#conn[CONN_ACTOR_SYMBOL].connectionManager.markConnChanged(
+			this.#conn,
+		);
 	}
 }

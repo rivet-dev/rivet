@@ -1,7 +1,8 @@
 import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { ConnDriver, DriverReadyState } from "../driver";
+import { loggerWithoutContext } from "../../log";
+import { type ConnDriver, DriverReadyState } from "../driver";
 
 /**
  * Creates a raw WebSocket connection driver.
@@ -15,10 +16,11 @@ export function createRawWebSocketSocket(
 	requestId: string,
 	requestIdBuf: ArrayBuffer | undefined,
 	hibernatable: boolean,
-	websocket: UniversalWebSocket,
 	closePromise: Promise<void>,
-): ConnDriver {
-	return {
+): { driver: ConnDriver; setWebSocket(ws: UniversalWebSocket): void } {
+	let websocket: UniversalWebSocket | undefined;
+
+	const driver: ConnDriver = {
 		type: "raw-websocket",
 		requestId,
 		requestIdBuf,
@@ -32,6 +34,13 @@ export function createRawWebSocketSocket(
 			_conn: AnyConn,
 			reason?: string,
 		) => {
+			if (!websocket) {
+				loggerWithoutContext().warn(
+					"disconnecting raw ws without websocket",
+				);
+				return;
+			}
+
 			// Close socket
 			websocket.close(1000, reason);
 
@@ -40,14 +49,21 @@ export function createRawWebSocketSocket(
 		},
 
 		terminate: () => {
-			(websocket as any).terminate?.();
+			(websocket as any)?.terminate?.();
 		},
 
 		getConnectionReadyState: (
 			_actor: AnyActorInstance,
 			_conn: AnyConn,
 		): DriverReadyState | undefined => {
-			return websocket.readyState;
+			return websocket?.readyState ?? DriverReadyState.CONNECTING;
+		},
+	};
+
+	return {
+		driver,
+		setWebSocket(ws) {
+			websocket = ws;
 		},
 	};
 }

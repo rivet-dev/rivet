@@ -11,7 +11,6 @@ import { WSContext } from "hono/ws";
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
 import { KEYS } from "@/actor/instance/kv";
-import { ACTOR_INSTANCE_PERSIST_SYMBOL } from "@/actor/instance/mod";
 import { deserializeActorKey } from "@/actor/keys";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
@@ -168,8 +167,7 @@ export class EngineActorDriver implements ActorDriver {
 
 				// Check for existing WS
 				const hibernatableArray =
-					handler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL]
-						.hibernatableConns;
+					handler.actor.persist.hibernatableConns;
 				logger().debug({
 					msg: "checking hibernatable websockets",
 					requestId: idToStr(requestId),
@@ -599,11 +597,14 @@ export class EngineActorDriver implements ActorDriver {
 			// - Queue WS acks
 			const actorHandler = this.#actors.get(actorId);
 			if (actorHandler?.actor) {
-				const hibernatableWs = actorHandler.actor[
-					ACTOR_INSTANCE_PERSIST_SYMBOL
-				].hibernatableConns.find((conn: any) =>
-					arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-				);
+				const hibernatableWs =
+					actorHandler.actor.persist.hibernatableConns.find(
+						(conn: any) =>
+							arrayBuffersEqual(
+								conn.hibernatableRequestId,
+								requestIdBuf,
+							),
+					);
 
 				if (hibernatableWs) {
 					// Track msgIndex for sending acks
@@ -734,8 +735,7 @@ export class EngineActorDriver implements ActorDriver {
 		const actorHandler = this.#actors.get(actorId);
 		if (actorHandler?.actor) {
 			const hibernatableArray =
-				actorHandler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL]
-					.hibernatableConns;
+				actorHandler.actor.persist.hibernatableConns;
 			const wsIndex = hibernatableArray.findIndex((conn: any) =>
 				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
 			);

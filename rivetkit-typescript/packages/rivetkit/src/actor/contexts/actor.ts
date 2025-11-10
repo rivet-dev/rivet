@@ -60,7 +60,7 @@ export class ActorContext<
 	 * @param args - The arguments to send with the event.
 	 */
 	broadcast<Args extends Array<unknown>>(name: string, ...args: Args): void {
-		this.#actor.broadcast(name, ...args);
+		this.#actor.eventManager.broadcast(name, ...args);
 		return;
 	}
 
