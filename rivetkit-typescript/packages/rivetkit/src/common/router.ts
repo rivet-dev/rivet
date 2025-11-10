@@ -7,7 +7,6 @@ import {
 } from "@/actor/router-endpoints";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
-import { getEndpoint } from "@/remote-manager-driver/api-utils";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {
@@ -139,12 +138,10 @@ export function handleMetadataRequest(
 					: { normal: {} },
 		},
 		actorNames: buildActorNames(registryConfig),
-		// Do not return client endpoint if default server disabled
-		clientEndpoint:
-			runConfig.overrideServerAddress ??
-			(runConfig.disableDefaultServer
-				? undefined
-				: getEndpoint(runConfig)),
+		// If server address is changed, return a different client endpoint.
+		// Otherwise, return null indicating the client should use the current
+		// endpoint it's already configured with.
+		clientEndpoint: runConfig.overrideServerAddress,
 	};
 
 	return c.json(response);
