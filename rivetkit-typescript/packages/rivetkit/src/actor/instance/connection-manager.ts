@@ -11,6 +11,7 @@ import {
 	CONN_PERSIST_RAW_SYMBOL,
 	CONN_PERSIST_SYMBOL,
 	CONN_SEND_MESSAGE_SYMBOL,
+	CONN_SPEAKS_RIVETKIT_SYMBOL,
 	Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -155,30 +156,31 @@ export class ConnectionManager<
 
 		conn[CONN_CONNECTED_SYMBOL] = true;
 
-		// TODO: Only do this for action messages
 		// Send init message
-		const initData = { actorId: this.#actor.id, connectionId: conn.id };
-		conn[CONN_SEND_MESSAGE_SYMBOL](
-			new CachedSerializer(
-				initData,
-				TO_CLIENT_VERSIONED,
-				ToClientSchema,
-				// JSON: identity conversion (no nested data to encode)
-				(value) => ({
-					body: {
-						tag: "Init" as const,
-						val: value,
-					},
-				}),
-				// BARE/CBOR: identity conversion (no nested data to encode)
-				(value) => ({
-					body: {
-						tag: "Init" as const,
-						val: value,
-					},
-				}),
-			),
-		);
+		if (conn[CONN_SPEAKS_RIVETKIT_SYMBOL]) {
+			const initData = { actorId: this.#actor.id, connectionId: conn.id };
+			conn[CONN_SEND_MESSAGE_SYMBOL](
+				new CachedSerializer(
+					initData,
+					TO_CLIENT_VERSIONED,
+					ToClientSchema,
+					// JSON: identity conversion (no nested data to encode)
+					(value) => ({
+						body: {
+							tag: "Init" as const,
+							val: value,
+						},
+					}),
+					// BARE/CBOR: identity conversion (no nested data to encode)
+					(value) => ({
+						body: {
+							tag: "Init" as const,
+							val: value,
+						},
+					}),
+				),
+			);
+		}
 	}
 
 	/**
