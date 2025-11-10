@@ -143,7 +143,9 @@ function Row({
 				<WithTooltip
 					content={config.serverless?.url || "-"}
 					trigger={
-						<DiscreteCopyButton value={config.serverless?.url || ""}>
+						<DiscreteCopyButton
+							value={config.serverless?.url || ""}
+						>
 							<span>
 								{config.serverless?.url &&
 								config.serverless.url.length > 32
@@ -160,7 +162,8 @@ function Row({
 
 			<TableCell>
 				<div className="flex gap-2 justify-end">
-					{config.serverless && hasMetadataProvider(config.metadata) ? (
+					{config.serverless &&
+					hasMetadataProvider(config.metadata) ? (
 						<WithTooltip
 							content="Edit provider settings"
 							trigger={

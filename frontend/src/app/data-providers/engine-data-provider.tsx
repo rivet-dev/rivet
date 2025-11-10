@@ -3,10 +3,11 @@ import { fetcher } from "@rivetkit/engine-api-full/core";
 import {
 	infiniteQueryOptions,
 	mutationOptions,
-	QueryKey,
+	type QueryKey,
 	queryOptions,
 	UseQueryOptions,
 } from "@tanstack/react-query";
+import z from "zod";
 import { getConfig, ls } from "@/components";
 import {
 	type Actor,
@@ -18,12 +19,11 @@ import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
-	ActorQueryOptions,
+	type ActorQueryOptions,
 	ActorQueryOptionsSchema,
 	createDefaultGlobalContext,
 	RECORDS_PER_PAGE,
 } from "./default-data-provider";
-import z from "zod";
 
 const mightRequireAuth = __APP_TYPE__ === "engine";
 
@@ -132,9 +132,7 @@ export const createNamespaceContext = ({
 	namespace,
 	client,
 	...parent
-}: { namespace: string; } & ReturnType<
-	typeof createGlobalContext
->) => {
+}: { namespace: string } & ReturnType<typeof createGlobalContext>) => {
 	const def = createDefaultGlobalContext();
 	const dataProvider = {
 		...def,
@@ -146,10 +144,7 @@ export const createNamespaceContext = ({
 		statusQueryOptions() {
 			return queryOptions({
 				...def.statusQueryOptions(),
-				queryKey: [
-					{ namespace },
-					...def.statusQueryOptions().queryKey,
-				],
+				queryKey: [{ namespace }, ...def.statusQueryOptions().queryKey],
 				enabled: true,
 				queryFn: async () => {
 					return true;
@@ -321,10 +316,7 @@ export const createNamespaceContext = ({
 		buildsQueryOptions() {
 			return infiniteQueryOptions({
 				...def.buildsQueryOptions(),
-				queryKey: [
-					{ namespace },
-					...def.buildsQueryOptions().queryKey,
-				],
+				queryKey: [{ namespace }, ...def.buildsQueryOptions().queryKey],
 				enabled: true,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const data = await client.actorsListNames(
@@ -405,15 +397,14 @@ export const createNamespaceContext = ({
 				queryKey: ["runner", "healthcheck", opts] as QueryKey,
 				enabled: !!opts.runnerUrl,
 				queryFn: async ({ signal: abortSignal }) => {
-					const res =
-						await client.runnerConfigsServerlessHealthCheck(
-							{
-								url: opts.runnerUrl,
-								headers: opts.headers,
-								namespace,
-							},
-							{ abortSignal },
-						);
+					const res = await client.runnerConfigsServerlessHealthCheck(
+						{
+							url: opts.runnerUrl,
+							headers: opts.headers,
+							namespace,
+						},
+						{ abortSignal },
+					);
 
 					if ("success" in res) {
 						return res.success;
@@ -517,7 +508,11 @@ export const createNamespaceContext = ({
 		},
 		runnerByNameQueryOptions(opts: { runnerName: string | undefined }) {
 			return queryOptions({
-				queryKey: [{ namespace }, "runner", opts.runnerName] as QueryKey,
+				queryKey: [
+					{ namespace },
+					"runner",
+					opts.runnerName,
+				] as QueryKey,
 				enabled: !!opts.runnerName,
 				queryFn: async ({ signal: abortSignal }) => {
 					const data = await client.runners.list(
@@ -544,7 +539,7 @@ export const createNamespaceContext = ({
 		) {
 			return mutationOptions({
 				...opts,
-				mutationKey: ["runner-config"]  as QueryKey,
+				mutationKey: ["runner-config"] as QueryKey,
 				mutationFn: async ({
 					name,
 					config,
@@ -583,7 +578,12 @@ export const createNamespaceContext = ({
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return infiniteQueryOptions({
-				queryKey: [{ namespace }, "runners", "configs", opts] as QueryKey,
+				queryKey: [
+					{ namespace },
+					"runners",
+					"configs",
+					opts,
+				] as QueryKey,
 				initialPageParam: undefined as string | undefined,
 				queryFn: async ({ signal: abortSignal, pageParam }) => {
 					const response = await client.runnerConfigsList(
@@ -626,7 +626,12 @@ export const createNamespaceContext = ({
 			variant?: Rivet.RunnerConfigVariant;
 		}) {
 			return queryOptions({
-				queryKey: [{ namespace }, "runners", "config", opts] as QueryKey,
+				queryKey: [
+					{ namespace },
+					"runners",
+					"config",
+					opts,
+				] as QueryKey,
 				enabled: !!opts.name,
 				queryFn: async ({ signal: abortSignal }) => {
 					const response = await client.runnerConfigsList(
@@ -658,7 +663,8 @@ export const createNamespaceContext = ({
 				gcTime: 1000,
 				queryKey: [{ namespace }, "tokens", "engine-admin"] as QueryKey,
 				queryFn: async () => {
-					return (ls.engineCredentials.get(getConfig().apiUrl) || "") as string;
+					return (ls.engineCredentials.get(getConfig().apiUrl) ||
+						"") as string;
 				},
 				meta: {
 					mightRequireAuth,
@@ -706,19 +712,26 @@ type RunnerConfig = [
 	},
 ];
 
-export function hasMetadataProvider(metadata: unknown): metadata is { provider?: string } {
-	return z.object({ provider: z.string().optional() }).safeParse(metadata).success;
+export function hasMetadataProvider(
+	metadata: unknown,
+): metadata is { provider?: string } {
+	return z.object({ provider: z.string().optional() }).safeParse(metadata)
+		.success;
 }
 
 export function hasProvider(
-	configs: [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][] | undefined,
+	configs:
+		| [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][]
+		| undefined,
 	providers: string[],
 ): boolean {
 	if (!configs) return false;
 	return configs.some(([, config]) =>
 		Object.values(config.datacenters).some(
 			(datacenter) =>
-				datacenter.metadata && hasMetadataProvider(datacenter.metadata) && datacenter.metadata.provider &&
+				datacenter.metadata &&
+				hasMetadataProvider(datacenter.metadata) &&
+				datacenter.metadata.provider &&
 				providers.includes(datacenter.metadata.provider),
 		),
 	);

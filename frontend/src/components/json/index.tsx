@@ -21,9 +21,9 @@ import {
 	useState,
 } from "react";
 import { CopyButton } from "../copy-area";
+import { cn } from "../lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { WithTooltip } from "../ui/tooltip";
-import { cn } from "../lib/utils";
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -664,7 +664,7 @@ function Editable({
 	}, [isEditing]);
 
 	if (isEditing) {
-		const Comp = as as 'input';
+		const Comp = as as "input";
 		return (
 			<Comp
 				ref={ref}
@@ -682,7 +682,10 @@ function Editable({
 				}}
 				name={path}
 				defaultValue={value}
-				className={cn("bg-transparent field-sizing-content font-mono-console text-foreground outline-none focus:ring-0 w-full focus:border-0 focus:ring focus:ring-1 focus:ring-primary/40 rounded-sm border-primary selection-primary", className)}
+				className={cn(
+					"bg-transparent field-sizing-content font-mono-console text-foreground outline-none focus:ring-0 w-full focus:border-0 focus:ring focus:ring-1 focus:ring-primary/40 rounded-sm border-primary selection-primary",
+					className,
+				)}
 			/>
 		);
 	}

@@ -6,6 +6,7 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
+import { useMemo } from "react";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import {
 	Accordion,
@@ -19,9 +20,11 @@ import {
 import { type Region, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
+import {
+	EnvVariablesStep,
+	useSelectedDatacenter,
+} from "./connect-railway-frame";
 import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
-import { EnvVariablesStep, useSelectedDatacenter } from "./connect-railway-frame";
-import { useMemo } from "react";
 
 const { stepper } = ConnectVercelForm;
 
@@ -139,30 +142,26 @@ function FormStepper({
 const useVercelTemplateLink = () => {
 	const dataProvider = useEngineCompatDataProvider();
 	const { data: token } = useQuery(
-			dataProvider.engineAdminTokenQueryOptions(),
-		);
+		dataProvider.engineAdminTokenQueryOptions(),
+	);
 	const endpoint = useSelectedDatacenter();
 
-
 	return useMemo(() => {
-	const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
-	const env = [
-		"NEXT_PUBLIC_RIVET_ENDPOINT",
-		"NEXT_PUBLIC_RIVET_TOKEN",
-		"NEXT_PUBLIC_RIVET_NAMESPACE",
-	].join(",");
-	const projectName = "rivetkit-vercel";
-	const envDefaults = {
-		NEXT_PUBLIC_RIVET_ENDPOINT: endpoint,
-		NEXT_PUBLIC_RIVET_TOKEN: token,
-		NEXT_PUBLIC_RIVET_NAMESPACE: dataProvider.engineNamespace,
-	};
+		const repositoryUrl = "https://github.com/rivet-dev/template-vercel";
+		const env = [
+			"NEXT_PUBLIC_RIVET_ENDPOINT",
+			"NEXT_PUBLIC_RIVET_TOKEN",
+			"NEXT_PUBLIC_RIVET_NAMESPACE",
+		].join(",");
+		const projectName = "rivetkit-vercel";
+		const envDefaults = {
+			NEXT_PUBLIC_RIVET_ENDPOINT: endpoint,
+			NEXT_PUBLIC_RIVET_TOKEN: token,
+			NEXT_PUBLIC_RIVET_NAMESPACE: dataProvider.engineNamespace,
+		};
 
-	return (
-		`https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`
-	);
+		return `https://vercel.com/new/clone?repository-url=${encodeURIComponent(repositoryUrl)}&env=${env}&project-name=${projectName}&repository-name=${projectName}&envDefaults=${encodeURIComponent(JSON.stringify(envDefaults))}`;
 	}, [dataProvider.engineNamespace, endpoint, token]);
-
 };
 
 function StepInitialInfo() {
@@ -170,9 +169,7 @@ function StepInitialInfo() {
 	return (
 		<>
 			<div className="space-y-4">
-				<p>
-					Deploy the Rivet Vercel template to get started quickly.
-				</p>
+				<p>Deploy the Rivet Vercel template to get started quickly.</p>
 				<ExternalLinkCard
 					href={vercelTemplateLink}
 					icon={faVercel}
@@ -180,9 +177,7 @@ function StepInitialInfo() {
 				/>
 			</div>
 			<div className="space-y-4">
-				<p>
-					Set the following environment variables:
-				</p>
+				<p>Set the following environment variables:</p>
 				<EnvVariablesStep />
 			</div>
 		</>

@@ -20,7 +20,12 @@ import {
 	Frame,
 	getConfig,
 } from "@/components";
-import { type Region, useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
+import {
+	type Region,
+	useCloudNamespaceDataProvider,
+	useEngineCompatDataProvider,
+	useEngineNamespaceDataProvider,
+} from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
@@ -31,7 +36,7 @@ type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
 export const VERCEL_SERVERLESS_MAX_DURATION = 300;
 
-interface CreateProjectFrameContentProps extends DialogContentProps { }
+interface CreateProjectFrameContentProps extends DialogContentProps {}
 
 function usePublishableToken() {
 	return match(__APP_TYPE__)
@@ -146,7 +151,13 @@ function FormStepper({
 			content={{
 				// "initial-info": () => <StepInitialInfo />,
 				"api-route": () => <StepApiRoute />,
-				frontend: () => <StepFrontend token={token} endpoint={endpoint} namespace={namespace} />,
+				frontend: () => (
+					<StepFrontend
+						token={token}
+						endpoint={endpoint}
+						namespace={namespace}
+					/>
+				),
 				deploy: () => <StepDeploy />,
 			}}
 			onSubmit={async ({ values }) => {
@@ -234,7 +245,13 @@ function StepFrontend({
 	endpoint: string;
 	namespace: string;
 }) {
-	return <ConnectVercelForm.FrontendIntegrationCode token={token} endpoint={endpoint} namespace={namespace} />;
+	return (
+		<ConnectVercelForm.FrontendIntegrationCode
+			token={token}
+			endpoint={endpoint}
+			namespace={namespace}
+		/>
+	);
 }
 
 function StepDeploy() {

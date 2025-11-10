@@ -1,8 +1,10 @@
 import { isClerkAPIResponseError } from "@clerk/clerk-js";
 import { useOrganization, useSignIn, useSignUp } from "@clerk/clerk-react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { useEffect, useState } from "react";
 import { useIsMounted } from "usehooks-ts";
+import z from "zod";
 import * as OrgSignUpForm from "@/app/forms/org-sign-up-form";
 import { Logo } from "@/app/logo";
 import {
@@ -16,16 +18,16 @@ import {
 	toast,
 } from "@/components";
 import { clerk } from "@/lib/auth";
-import { zodValidator } from "@tanstack/zod-adapter";
-import z from "zod";
 
 export const Route = createFileRoute("/onboarding/accept-invitation")({
 	component: RouteComponent,
 	validateSearch: zodValidator(
-		z.object({
-			__clerk_ticket: z.string().optional(),
-			__clerk_status: z.string().optional(),
-		}).optional(),
+		z
+			.object({
+				__clerk_ticket: z.string().optional(),
+				__clerk_status: z.string().optional(),
+			})
+			.optional(),
 	),
 });
 
@@ -33,7 +35,11 @@ function RouteComponent() {
 	const search = Route.useSearch();
 	const { organization } = useOrganization();
 
-	if (search?.__clerk_status === "sign_up" && search.__clerk_ticket && !organization) {
+	if (
+		search?.__clerk_status === "sign_up" &&
+		search.__clerk_ticket &&
+		!organization
+	) {
 		// display sign up flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -45,7 +51,11 @@ function RouteComponent() {
 		);
 	}
 
-	if (search?.__clerk_status === "sign_in" && search.__clerk_ticket && !organization) {
+	if (
+		search?.__clerk_status === "sign_in" &&
+		search.__clerk_ticket &&
+		!organization
+	) {
 		// complete sign in flow
 		return (
 			<div className="flex min-h-screen flex-col items-center justify-center bg-background py-4">
@@ -57,7 +67,11 @@ function RouteComponent() {
 		);
 	}
 
-	if (search?.__clerk_status === "sign_in"&& search.__clerk_ticket && organization) {
+	if (
+		search?.__clerk_status === "sign_in" &&
+		search.__clerk_ticket &&
+		organization
+	) {
 		// if we get here, the user is already signed in but maybe not to the right org
 		return <AcceptInvitation ticket={search.__clerk_ticket} />;
 	}
