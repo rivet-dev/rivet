@@ -189,6 +189,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				this.#actorDriver,
 				actorId,
 				undefined,
+				params,
 			);
 			return new InlineWebSocketAdapter2(wsHandler);
 		} else {
@@ -246,6 +247,7 @@ export class FileSystemManagerDriver implements ManagerDriver {
 				this.#actorDriver,
 				actorId,
 				undefined,
+				connParams,
 			);
 			return upgradeWebSocket(() => wsHandler)(c, noopNext());
 		} else {
