@@ -22,23 +22,29 @@ export type Encoding = z.infer<typeof EncodingSchema>;
 /**
  * Helper class that helps serialize data without re-serializing for the same encoding.
  */
-export class CachedSerializer<T, TJson = T> {
-	#data: T | TJson;
+export class CachedSerializer<TBare, TJson, T = TBare> {
+	#data: T;
 	#cache = new Map<Encoding, OutputData>();
-	#versionedDataHandler: VersionedDataHandler<T>;
+	#versionedDataHandler: VersionedDataHandler<TBare>;
 	#zodSchema: z.ZodType<TJson>;
+	#toJson: (value: T) => TJson;
+	#toBare: (value: T) => TBare;
 
 	constructor(
-		data: T | TJson,
-		versionedDataHandler: VersionedDataHandler<T>,
+		data: T,
+		versionedDataHandler: VersionedDataHandler<TBare>,
 		zodSchema: z.ZodType<TJson>,
+		toJson: (value: T) => TJson,
+		toBare: (value: T) => TBare,
 	) {
 		this.#data = data;
 		this.#versionedDataHandler = versionedDataHandler;
 		this.#zodSchema = zodSchema;
+		this.#toJson = toJson;
+		this.#toBare = toBare;
 	}
 
-	public get rawData(): T | TJson {
+	public get rawData(): T {
 		return this.#data;
 	}
 
@@ -52,6 +58,8 @@ export class CachedSerializer<T, TJson = T> {
 				this.#data,
 				this.#versionedDataHandler,
 				this.#zodSchema,
+				this.#toJson,
+				this.#toBare,
 			);
 			this.#cache.set(encoding, serialized);
 			return serialized;

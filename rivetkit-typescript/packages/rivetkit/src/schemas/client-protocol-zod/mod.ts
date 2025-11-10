@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Helper schemas for ArrayBuffer handling in JSON
-const ArrayBufferSchema = z.instanceof(ArrayBuffer);
-const OptionalArrayBufferSchema = ArrayBufferSchema.nullable();
+// Helper schemas
 const UintSchema = z.bigint();
 const OptionalUintSchema = UintSchema.nullable();
 
@@ -17,20 +15,20 @@ export const ErrorSchema = z.object({
 	group: z.string(),
 	code: z.string(),
 	message: z.string(),
-	metadata: OptionalArrayBufferSchema,
+	metadata: z.unknown().nullable(),
 	actionId: OptionalUintSchema,
 });
 export type Error = z.infer<typeof ErrorSchema>;
 
 export const ActionResponseSchema = z.object({
 	id: UintSchema,
-	output: ArrayBufferSchema,
+	output: z.unknown(),
 });
 export type ActionResponse = z.infer<typeof ActionResponseSchema>;
 
 export const EventSchema = z.object({
 	name: z.string(),
-	args: ArrayBufferSchema,
+	args: z.unknown(),
 });
 export type Event = z.infer<typeof EventSchema>;
 
@@ -51,7 +49,7 @@ export type ToClient = z.infer<typeof ToClientSchema>;
 export const ActionRequestSchema = z.object({
 	id: UintSchema,
 	name: z.string(),
-	args: ArrayBufferSchema,
+	args: z.unknown(),
 });
 export type ActionRequest = z.infer<typeof ActionRequestSchema>;
 
@@ -77,12 +75,12 @@ export type ToServer = z.infer<typeof ToServerSchema>;
 
 // MARK: HTTP Action
 export const HttpActionRequestSchema = z.object({
-	args: ArrayBufferSchema,
+	args: z.unknown(),
 });
 export type HttpActionRequest = z.infer<typeof HttpActionRequestSchema>;
 
 export const HttpActionResponseSchema = z.object({
-	output: ArrayBufferSchema,
+	output: z.unknown(),
 });
 export type HttpActionResponse = z.infer<typeof HttpActionResponseSchema>;
 
@@ -91,7 +89,7 @@ export const HttpResponseErrorSchema = z.object({
 	group: z.string(),
 	code: z.string(),
 	message: z.string(),
-	metadata: OptionalArrayBufferSchema,
+	metadata: z.unknown().nullable(),
 });
 export type HttpResponseError = z.infer<typeof HttpResponseErrorSchema>;
 

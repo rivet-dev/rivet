@@ -1,9 +1,5 @@
 import * as cbor from "cbor-x";
 import { z } from "zod";
-import {
-	ToClientSchema,
-	ToServerSchema,
-} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyDatabaseProvider } from "@/actor/database";
 import * as errors from "@/actor/errors";
 import {
@@ -17,6 +13,12 @@ import {
 	TO_CLIENT_VERSIONED,
 	TO_SERVER_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
+import {
+	type ToClient as ToClientJson,
+	ToClientSchema,
+	type ToServer as ToServerJson,
+	ToServerSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { deserializeWithEncoding } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "../../utils";
 import { CONN_SEND_MESSAGE_SYMBOL, type Conn } from "../conn/mod";
@@ -67,7 +69,17 @@ export async function inputDataToBuffer(
 export async function parseMessage(
 	value: InputData,
 	opts: MessageEventOpts,
-): Promise<protocol.ToServer> {
+): Promise<{
+	body:
+		| {
+				tag: "ActionRequest";
+				val: { id: bigint; name: string; args: unknown };
+		  }
+		| {
+				tag: "SubscriptionRequest";
+				val: { eventName: string; subscribe: boolean };
+		  };
+}> {
 	// Validate value length
 	const length = getValueLength(value);
 	if (length > opts.maxIncomingMessageSize) {
@@ -90,6 +102,28 @@ export async function parseMessage(
 		buffer,
 		TO_SERVER_VERSIONED,
 		ToServerSchema,
+		// JSON: values are already the correct type
+		(json: ToServerJson): any => json,
+		// BARE: need to decode ArrayBuffer fields back to unknown
+		(bare: protocol.ToServer): any => {
+			if (bare.body.tag === "ActionRequest") {
+				return {
+					body: {
+						tag: "ActionRequest",
+						val: {
+							id: bare.body.val.id,
+							name: bare.body.val.name,
+							args: cbor.decode(
+								new Uint8Array(bare.body.val.args),
+							),
+						},
+					},
+				};
+			} else {
+				// SubscriptionRequest has no ArrayBuffer fields
+				return bare;
+			}
+		},
 	);
 }
 
@@ -124,7 +158,17 @@ export async function processMessage<
 	I,
 	DB extends AnyDatabaseProvider,
 >(
-	message: protocol.ToServer,
+	message: {
+		body:
+			| {
+					tag: "ActionRequest";
+					val: { id: bigint; name: string; args: unknown };
+			  }
+			| {
+					tag: "SubscriptionRequest";
+					val: { eventName: string; subscribe: boolean };
+			  };
+	},
 	actor: ActorInstance<S, CP, CS, V, I, DB>,
 	conn: Conn<S, CP, CS, V, I, DB>,
 	handler: ProcessMessageHandler<S, CP, CS, V, I, DB>,
@@ -140,10 +184,9 @@ export async function processMessage<
 				throw new errors.Unsupported("Action");
 			}
 
-			const { id, name, args: argsRaw } = message.body.val;
+			const { id, name, args } = message.body.val;
 			actionId = id;
 			actionName = name;
-			const args = cbor.decode(new Uint8Array(argsRaw));
 
 			actor.rLog.debug({
 				msg: "processing action request",
@@ -155,7 +198,11 @@ export async function processMessage<
 
 			// Process the action request and wait for the result
 			// This will wait for async actions to complete
-			const output = await handler.onExecuteAction(ctx, name, args);
+			const output = await handler.onExecuteAction(
+				ctx,
+				name,
+				args as unknown[],
+			);
 
 			actor.rLog.debug({
 				msg: "sending action response",
@@ -167,20 +214,30 @@ export async function processMessage<
 
 			// Send the response back to the client
 			conn[CONN_SEND_MESSAGE_SYMBOL](
-				new CachedSerializer<protocol.ToClient>(
-					{
-						body: {
-							tag: "ActionResponse",
-							val: {
-								id: id,
-								output: bufferToArrayBuffer(
-									cbor.encode(output),
-								),
-							},
-						},
-					},
+				new CachedSerializer(
+					output,
 					TO_CLIENT_VERSIONED,
 					ToClientSchema,
+					// JSON: output is the raw value
+					(value): ToClientJson => ({
+						body: {
+							tag: "ActionResponse" as const,
+							val: {
+								id: id,
+								output: value,
+							},
+						},
+					}),
+					// BARE/CBOR: output needs to be CBOR-encoded to ArrayBuffer
+					(value): protocol.ToClient => ({
+						body: {
+							tag: "ActionResponse" as const,
+							val: {
+								id: id,
+								output: bufferToArrayBuffer(cbor.encode(value)),
+							},
+						},
+					}),
 				),
 			);
 
@@ -236,24 +293,42 @@ export async function processMessage<
 		});
 
 		// Build response
+		const errorData = { group, code, message, metadata, actionId };
 		conn[CONN_SEND_MESSAGE_SYMBOL](
-			new CachedSerializer<protocol.ToClient>(
-				{
-					body: {
-						tag: "Error",
-						val: {
-							group,
-							code,
-							message,
-							metadata: bufferToArrayBuffer(
-								cbor.encode(metadata),
-							),
-							actionId: actionId ?? null,
-						},
-					},
-				},
+			new CachedSerializer(
+				errorData,
 				TO_CLIENT_VERSIONED,
 				ToClientSchema,
+				// JSON: metadata is the raw value
+				(value): ToClientJson => ({
+					body: {
+						tag: "Error" as const,
+						val: {
+							group: value.group,
+							code: value.code,
+							message: value.message,
+							metadata: value.metadata ?? null,
+							actionId: value.actionId ?? null,
+						},
+					},
+				}),
+				// BARE/CBOR: metadata needs to be CBOR-encoded to ArrayBuffer
+				(value): protocol.ToClient => ({
+					body: {
+						tag: "Error" as const,
+						val: {
+							group: value.group,
+							code: value.code,
+							message: value.message,
+							metadata: value.metadata
+								? bufferToArrayBuffer(
+										cbor.encode(value.metadata),
+									)
+								: null,
+							actionId: value.actionId ?? null,
+						},
+					},
+				}),
 			),
 		);
 

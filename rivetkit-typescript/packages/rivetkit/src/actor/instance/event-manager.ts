@@ -1,7 +1,10 @@
 import * as cbor from "cbor-x";
-import { ToClientSchema } from "@/actor/client-protocol-schema-json/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	type ToClient as ToClientJson,
+	ToClientSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { bufferToArrayBuffer } from "@/utils";
 import {
 	CONN_PERSIST_SYMBOL,
@@ -180,18 +183,31 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		// Create serialized message
-		const toClientSerializer = new CachedSerializer<protocol.ToClient>(
-			{
-				body: {
-					tag: "Event",
-					val: {
-						name,
-						args: bufferToArrayBuffer(cbor.encode(args)),
-					},
-				},
-			},
+		const eventData = { name, args };
+		const toClientSerializer = new CachedSerializer(
+			eventData,
 			TO_CLIENT_VERSIONED,
 			ToClientSchema,
+			// JSON: args is the raw value (array of arguments)
+			(value): ToClientJson => ({
+				body: {
+					tag: "Event" as const,
+					val: {
+						name: value.name,
+						args: value.args,
+					},
+				},
+			}),
+			// BARE/CBOR: args needs to be CBOR-encoded to ArrayBuffer
+			(value): protocol.ToClient => ({
+				body: {
+					tag: "Event" as const,
+					val: {
+						name: value.name,
+						args: bufferToArrayBuffer(cbor.encode(value.args)),
+					},
+				},
+			}),
 		);
 
 		// Send to all subscribers

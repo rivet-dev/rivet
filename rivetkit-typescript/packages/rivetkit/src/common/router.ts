@@ -1,6 +1,5 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
-import { HttpResponseErrorSchema } from "@/actor/client-protocol-schema-json/mod";
 import type { Encoding } from "@/actor/protocol/serde";
 import {
 	getRequestEncoding,
@@ -9,8 +8,12 @@ import {
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import { getEndpoint } from "@/remote-manager-driver/api-utils";
-import { HttpResponseError } from "@/schemas/client-protocol/mod";
+import type * as protocol from "@/schemas/client-protocol/mod";
 import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	type HttpResponseError as HttpResponseErrorJson,
+	HttpResponseErrorSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { encodingIsBinary, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, getEnvUniversal, VERSION } from "@/utils";
 import { getLogger, type Logger } from "./log";
@@ -69,19 +72,28 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 		encoding = "json";
 	}
 
+	const errorData = { group, code, message, metadata };
 	const output = serializeWithEncoding(
 		encoding,
-		{
-			group,
-			code,
-			message,
-			// TODO: Cannot serialize non-binary meta since it requires ArrayBuffer atm
-			metadata: encodingIsBinary(encoding)
-				? bufferToArrayBuffer(cbor.encode(metadata))
-				: null,
-		},
+		errorData,
 		HTTP_RESPONSE_ERROR_VERSIONED,
 		HttpResponseErrorSchema,
+		// JSON: metadata is the raw value (will be serialized by jsonStringifyCompat)
+		(value): HttpResponseErrorJson => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata ?? null,
+		}),
+		// BARE/CBOR: metadata needs to be CBOR-encoded to ArrayBuffer
+		(value): protocol.HttpResponseError => ({
+			group: value.group,
+			code: value.code,
+			message: value.message,
+			metadata: value.metadata
+				? bufferToArrayBuffer(cbor.encode(value.metadata))
+				: null,
+		}),
 	);
 
 	// TODO: Remove any

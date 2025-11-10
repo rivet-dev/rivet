@@ -1,7 +1,10 @@
 import * as cbor from "cbor-x";
-import { ToClientSchema } from "@/actor/client-protocol-schema-json/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import {
+	type ToClient as ToClientJson,
+	ToClientSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
 import type { AnyDatabaseProvider } from "../database";
 import {
@@ -161,7 +164,7 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return this.#stateManager.persistRaw;
 	}
 
-	[CONN_SEND_MESSAGE_SYMBOL](message: CachedSerializer<protocol.ToClient>) {
+	[CONN_SEND_MESSAGE_SYMBOL](message: CachedSerializer<any, any, any>) {
 		if (this[CONN_DRIVER_SYMBOL]) {
 			const driver = this[CONN_DRIVER_SYMBOL];
 			if (driver.sendMessage) {
@@ -194,19 +197,32 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			args,
 			connId: this.id,
 		});
+		const eventData = { name: eventName, args };
 		this[CONN_SEND_MESSAGE_SYMBOL](
-			new CachedSerializer<protocol.ToClient>(
-				{
-					body: {
-						tag: "Event",
-						val: {
-							name: eventName,
-							args: bufferToArrayBuffer(cbor.encode(args)),
-						},
-					},
-				},
+			new CachedSerializer(
+				eventData,
 				TO_CLIENT_VERSIONED,
 				ToClientSchema,
+				// JSON: args is the raw value (array of arguments)
+				(value): ToClientJson => ({
+					body: {
+						tag: "Event" as const,
+						val: {
+							name: value.name,
+							args: value.args,
+						},
+					},
+				}),
+				// BARE/CBOR: args needs to be CBOR-encoded to ArrayBuffer
+				(value): protocol.ToClient => ({
+					body: {
+						tag: "Event" as const,
+						val: {
+							name: value.name,
+							args: bufferToArrayBuffer(cbor.encode(value.args)),
+						},
+					},
+				}),
 			),
 		);
 	}
