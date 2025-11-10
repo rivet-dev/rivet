@@ -1,103 +1,16 @@
-#![allow(dead_code, unused_variables)]
+#![allow(dead_code, unused_variables, unused_imports)]
+use std::str::FromStr;
 
 use serde_json::json;
 use url::Url;
 
-#[derive(Clone)]
-pub struct CreateActorOptions {
-	pub namespace: String,
-	pub name: String,
-	pub key: Option<String>,
-	pub input: Option<String>,
-	pub runner_name_selector: Option<String>,
-	pub durable: bool,
-	pub datacenter: Option<String>,
-}
-
-impl Default for CreateActorOptions {
-	fn default() -> Self {
-		Self {
-			namespace: "test".to_string(),
-			name: "test-actor".to_string(),
-			key: Some(rand::random::<u16>().to_string()),
-			input: Some(base64::Engine::encode(
-				&base64::engine::general_purpose::STANDARD,
-				"hello",
-			)),
-			runner_name_selector: Some("test-runner".to_string()),
-			durable: false,
-			datacenter: None,
-		}
-	}
-}
-
-pub async fn create_actor_with_options(options: CreateActorOptions, guard_port: u16) -> String {
-	tracing::info!(?options.namespace, ?options.name, "creating actor");
-
-	let mut body = json!({
-		"name": options.name,
-		"key": options.key,
-		"crash_policy": if options.durable {
-			"restart"
-		} else {
-			"destroy"
-		},
-	});
-
-	if let Some(input) = options.input {
-		body["input"] = json!(input);
-	}
-	if let Some(runner_name_selector) = options.runner_name_selector {
-		body["runner_name_selector"] = json!(runner_name_selector);
-	}
-	let mut url = format!(
-		"http://127.0.0.1:{}/actors?namespace={}",
-		guard_port, options.namespace
-	);
-
-	if let Some(datacenter) = &options.datacenter {
-		url.push_str(&format!("&datacenter={}", datacenter));
-	}
-
-	let client = reqwest::Client::new();
-	let response = client
-		.post(url)
-		.json(&body)
-		.send()
-		.await
-		.expect("Failed to send actor creation request");
-
-	if !response.status().is_success() {
-		let text = response.text().await.expect("Failed to read response text");
-		panic!("Failed to create actor: {}", text);
-	}
-
-	let body: serde_json::Value = response
-		.json()
-		.await
-		.expect("Failed to parse JSON response");
-	let actor_id = body["actor"]["actor_id"]
-		.as_str()
-		.expect("Missing actor_id in response");
-
-	tracing::info!(?actor_id, "actor created");
-
-	actor_id.to_string()
-}
-
-pub async fn create_actor(namespace_name: &str, guard_port: u16) -> String {
-	create_actor_with_options(
-		CreateActorOptions {
-			namespace: namespace_name.to_string(),
-			..Default::default()
-		},
-		guard_port,
-	)
-	.await
-}
+use super::{TEST_RUNNER_NAME, TestDatacenter, api, api_types};
+use anyhow::{Result, anyhow};
 
 /// Pings actor via Guard.
-pub async fn ping_actor_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
+pub async fn ping_actor_via_guard(dc: &TestDatacenter, actor_id: &str) -> serde_json::Value {
+	let guard_port = dc.guard_port();
+
 	tracing::info!(?guard_port, ?actor_id, "sending request to actor via guard");
 
 	let client = reqwest::Client::new();
@@ -124,236 +37,27 @@ pub async fn ping_actor_via_guard(guard_port: u16, actor_id: &str) -> serde_json
 	response
 }
 
-pub async fn destroy_actor(actor_id: &str, namespace_name: &str, guard_port: u16) {
-	let client = reqwest::Client::new();
-	let url = format!(
-		"http://127.0.0.1:{}/actors/{}?namespace={}",
-		guard_port, actor_id, namespace_name
-	);
-
-	tracing::info!(?url, "sending delete request");
-
-	let response = client
-		.delete(&url)
-		.send()
-		.await
-		.expect("Failed to send delete request");
-
-	let status = response.status();
-	let headers = response.headers().clone();
-	let text = response.text().await.expect("Failed to read response text");
-
-	tracing::info!(?status, ?headers, ?text, "received response");
-
-	if !status.is_success() {
-		panic!("Failed to destroy actor: {}", text);
-	}
-}
-
-pub async fn destroy_actor_without_namespace(actor_id: &str, guard_port: u16) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let url = format!("http://127.0.0.1:{}/actors/{}", guard_port, actor_id);
-
-	tracing::info!(?url, "sending delete request without namespace");
-
-	client
-		.delete(&url)
-		.send()
-		.await
-		.expect("Failed to send delete request")
-}
-
-pub async fn get_actor(
+pub async fn try_get_actor(
+	port: u16,
 	actor_id: &str,
-	namespace: Option<&str>,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let url = if let Some(ns) = namespace {
-		format!(
-			"http://127.0.0.1:{}/actors/{}?namespace={}",
-			guard_port, actor_id, ns
-		)
-	} else {
-		format!("http://127.0.0.1:{}/actors/{}", guard_port, actor_id)
-	};
-
-	tracing::info!(?url, "getting actor");
-
-	client
-		.get(&url)
-		.send()
-		.await
-		.expect("Failed to send get request")
-}
-
-pub async fn get_actor_by_id(
 	namespace: &str,
-	name: &str,
-	key: &str,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let url = format!("http://127.0.0.1:{}/actors/by-id", guard_port);
-
-	tracing::info!(?url, ?namespace, ?name, ?key, "getting actor by id");
-
-	client
-		.get(&url)
-		.query(&[("namespace", namespace), ("name", name), ("key", key)])
-		.send()
-		.await
-		.expect("Failed to send get by id request")
-}
-
-pub async fn get_or_create_actor(
-	namespace: &str,
-	name: &str,
-	key: Option<String>,
-	durable: bool,
-	datacenter: Option<&str>,
-	input: Option<String>,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let url = format!(
-		"http://127.0.0.1:{}/actors?namespace={}",
-		guard_port, namespace
-	);
-
-	let mut body = json!({
-		"name": name,
-		"key": key,
-		"crash_policy": if durable {
-			"restart"
-		} else {
-			"destroy"
+) -> Result<Option<rivet_types::actors::Actor>> {
+	let res = api::public::actors_list(
+		port,
+		api_types::actors::list::ListQuery {
+			actor_ids: Some(actor_id.to_string()),
+			actor_id: vec![],
+			namespace: namespace.to_string(),
+			name: None,
+			key: None,
+			include_destroyed: Some(true),
+			limit: None,
+			cursor: None,
 		},
-		"runner_name_selector": "test-runner",
-	});
+	)
+	.await?;
 
-	if let Some(input) = input {
-		body["input"] = json!(input);
-	}
-	if let Some(datacenter) = datacenter {
-		body["datacenter"] = json!(datacenter);
-	}
-
-	tracing::info!(?url, ?body, "get or create actor");
-
-	client
-		.put(&url)
-		.json(&body)
-		.send()
-		.await
-		.expect("Failed to send get or create request")
-}
-
-pub async fn get_or_create_actor_by_id(
-	namespace: &str,
-	name: &str,
-	key: Option<String>,
-	datacenter: Option<&str>,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let url = format!(
-		"http://127.0.0.1:{}/actors/by-id?namespace={}",
-		guard_port, namespace
-	);
-
-	let mut body = json!({
-		"name": name,
-		"key": key,
-		"runner_name_selector": "test-runner",
-	});
-
-	if let Some(datacenter) = datacenter {
-		body["datacenter"] = json!(datacenter);
-	}
-
-	tracing::info!(?url, ?body, "get or create actor by id");
-
-	client
-		.put(&url)
-		.json(&body)
-		.send()
-		.await
-		.expect("Failed to send get or create by id request")
-}
-
-pub async fn list_actors(
-	namespace: &str,
-	name: Option<&str>,
-	key: Option<String>,
-	actor_ids: Option<Vec<String>>,
-	include_destroyed: Option<bool>,
-	limit: Option<u32>,
-	cursor: Option<&str>,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let mut url = Url::parse(&format!("http://127.0.0.1:{guard_port}/actors")).unwrap();
-	let mut query = url.query_pairs_mut();
-
-	query.append_pair("namespace", namespace);
-
-	if let Some(name) = name {
-		query.append_pair("name", name);
-	}
-	if let Some(key) = key {
-		query.append_pair("key", &key);
-	}
-	for actor_id in actor_ids.into_iter().flatten() {
-		query.append_pair("actor_id", &actor_id);
-	}
-	if let Some(include_destroyed) = include_destroyed {
-		query.append_pair("include_destroyed", &include_destroyed.to_string());
-	}
-	if let Some(limit) = limit {
-		query.append_pair("limit", &limit.to_string());
-	}
-	if let Some(cursor) = cursor {
-		query.append_pair("cursor", cursor);
-	}
-
-	drop(query);
-
-	tracing::info!(?url, "listing actors");
-
-	client
-		.get(url)
-		.send()
-		.await
-		.expect("Failed to send list request")
-}
-
-pub async fn list_actor_names(
-	namespace: &str,
-	limit: Option<u32>,
-	cursor: Option<&str>,
-	guard_port: u16,
-) -> reqwest::Response {
-	let client = reqwest::Client::new();
-	let mut url = format!(
-		"http://127.0.0.1:{}/actors/names?namespace={}",
-		guard_port, namespace
-	);
-
-	if let Some(limit) = limit {
-		url.push_str(&format!("&limit={}", limit));
-	}
-	if let Some(cursor) = cursor {
-		url.push_str(&format!("&cursor={}", cursor));
-	}
-
-	tracing::info!(?url, "listing actor names");
-
-	client
-		.get(&url)
-		.send()
-		.await
-		.expect("Failed to send list names request")
+	Ok(res.actors.first().map(|f| f.clone()))
 }
 
 // Test helper functions
@@ -380,7 +84,8 @@ pub async fn assert_error_response(
 		.await
 		.expect("Failed to parse error response");
 
-	let error_code = body["error"]["code"]
+	// Error is at root level, not under "error" key
+	let error_code = body["code"]
 		.as_str()
 		.expect("Missing error code in response");
 	assert_eq!(
@@ -397,43 +102,52 @@ pub fn generate_unique_key() -> String {
 }
 
 pub async fn bulk_create_actors(
+	port: u16,
 	namespace: &str,
 	prefix: &str,
 	count: usize,
-	guard_port: u16,
-) -> Vec<String> {
+) -> Vec<rivet_util::Id> {
 	let mut actor_ids = Vec::new();
 	for i in 0..count {
-		let actor_id = create_actor_with_options(
-			CreateActorOptions {
+		let res = api::public::actors_create(
+			port,
+			api_types::actors::create::CreateQuery {
 				namespace: namespace.to_string(),
+			},
+			api_types::actors::create::CreateRequest {
+				datacenter: None,
 				name: format!("{}-{}", prefix, i),
 				key: Some(generate_unique_key()),
-				..Default::default()
+				input: None,
+				runner_name_selector: TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
 			},
-			guard_port,
 		)
-		.await;
-		actor_ids.push(actor_id);
+		.await
+		.expect("failed to create actor");
+		actor_ids.push(res.actor.actor_id.clone());
 	}
 	actor_ids
 }
 
 /// Tests WebSocket connection to actor via Guard using a simple ping pong.
-pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> serde_json::Value {
+pub async fn ping_actor_websocket_via_guard(
+	dc: &TestDatacenter,
+	actor_id: &str,
+) -> serde_json::Value {
 	use tokio_tungstenite::{
 		connect_async,
 		tungstenite::{Message, client::IntoClientRequest},
 	};
 
 	tracing::info!(
-		?guard_port,
+		guard_port=%dc.guard_port(),
 		?actor_id,
 		"testing websocket connection to actor via guard"
 	);
 
 	// Build WebSocket URL and request with protocols for routing
-	let ws_url = format!("ws://127.0.0.1:{}/ws", guard_port);
+	let ws_url = format!("ws://127.0.0.1:{}/ws", dc.guard_port());
 	let mut request = ws_url
 		.clone()
 		.into_client_request()
@@ -483,7 +197,7 @@ pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> 
 		.expect("WebSocket stream ended unexpectedly");
 
 	// Verify response
-	let response_text = match response {
+	let response_text = match response.map_err(|e| anyhow!("{}", e)) {
 		Ok(Message::Text(text)) => {
 			let text_str = text.to_string();
 			tracing::info!(?text_str, "received response from actor");
@@ -517,7 +231,8 @@ pub async fn ping_actor_websocket_via_guard(guard_port: u16, actor_id: &str) -> 
 	let response2 = tokio::time::timeout(tokio::time::Duration::from_secs(5), read.next())
 		.await
 		.expect("Timeout waiting for second WebSocket response")
-		.expect("WebSocket stream ended unexpectedly");
+		.expect("WebSocket stream ended unexpectedly")
+		.map_err(anyhow::Error::msg);
 
 	// Verify second response
 	let response2_text = match response2 {
