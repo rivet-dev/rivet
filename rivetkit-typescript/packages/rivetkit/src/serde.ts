@@ -53,35 +53,43 @@ export function wsBinaryTypeForEncoding(
 	}
 }
 
-export function serializeWithEncoding<T, TJson = T>(
+export function serializeWithEncoding<TBare, TJson, T = TBare>(
 	encoding: Encoding,
-	value: T | TJson,
-	versionedDataHandler: VersionedDataHandler<T> | undefined,
+	value: T,
+	versionedDataHandler: VersionedDataHandler<TBare> | undefined,
 	zodSchema: z.ZodType<TJson>,
+	toJson: (value: T) => TJson,
+	toBare: (value: T) => TBare,
 ): Uint8Array | string {
 	if (encoding === "json") {
-		const validated = zodSchema.parse(value);
+		const jsonValue = toJson(value);
+		const validated = zodSchema.parse(jsonValue);
 		return jsonStringifyCompat(validated);
 	} else if (encoding === "cbor") {
-		return cbor.encode(value);
+		const jsonValue = toJson(value);
+		const validated = zodSchema.parse(jsonValue);
+		return cbor.encode(validated);
 	} else if (encoding === "bare") {
 		if (!versionedDataHandler) {
 			throw new Error(
 				"VersionedDataHandler is required for 'bare' encoding",
 			);
 		}
-		return versionedDataHandler.serializeWithEmbeddedVersion(value as T);
+		const bareValue = toBare(value);
+		return versionedDataHandler.serializeWithEmbeddedVersion(bareValue);
 	} else {
 		assertUnreachable(encoding);
 	}
 }
 
-export function deserializeWithEncoding<T, TJson = T>(
+export function deserializeWithEncoding<TBare, TJson, T = TBare>(
 	encoding: Encoding,
 	buffer: Uint8Array | string,
-	versionedDataHandler: VersionedDataHandler<T> | undefined,
+	versionedDataHandler: VersionedDataHandler<TBare> | undefined,
 	zodSchema: z.ZodType<TJson>,
-): T | TJson {
+	fromJson: (value: TJson) => T,
+	fromBare: (value: TBare) => T,
+): T {
 	if (encoding === "json") {
 		let parsed: unknown;
 		if (typeof buffer === "string") {
@@ -91,13 +99,19 @@ export function deserializeWithEncoding<T, TJson = T>(
 			const jsonString = decoder.decode(buffer);
 			parsed = jsonParseCompat(jsonString);
 		}
-		return zodSchema.parse(parsed);
+		const validated = zodSchema.parse(parsed);
+		return fromJson(validated);
 	} else if (encoding === "cbor") {
 		invariant(
 			typeof buffer !== "string",
 			"buffer cannot be string for cbor encoding",
 		);
-		return cbor.decode(buffer);
+		// Decode CBOR to get JavaScript values (similar to JSON.parse)
+		const decoded: unknown = cbor.decode(buffer);
+		// Validate with Zod schema (CBOR produces same structure as JSON)
+		const validated = zodSchema.parse(decoded);
+		// CBOR decoding produces JS objects, use fromJson
+		return fromJson(validated);
 	} else if (encoding === "bare") {
 		invariant(
 			typeof buffer !== "string",
@@ -108,7 +122,9 @@ export function deserializeWithEncoding<T, TJson = T>(
 				"VersionedDataHandler is required for 'bare' encoding",
 			);
 		}
-		return versionedDataHandler.deserializeWithEmbeddedVersion(buffer);
+		const bareValue =
+			versionedDataHandler.deserializeWithEmbeddedVersion(buffer);
+		return fromBare(bareValue);
 	} else {
 		assertUnreachable(encoding);
 	}
