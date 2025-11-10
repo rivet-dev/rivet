@@ -15,7 +15,7 @@ export const ErrorSchema = z.object({
 	group: z.string(),
 	code: z.string(),
 	message: z.string(),
-	metadata: z.unknown().nullable(),
+	metadata: z.unknown().optional(),
 	actionId: OptionalUintSchema,
 });
 export type Error = z.infer<typeof ErrorSchema>;
@@ -89,7 +89,7 @@ export const HttpResponseErrorSchema = z.object({
 	group: z.string(),
 	code: z.string(),
 	message: z.string(),
-	metadata: z.unknown().nullable(),
+	metadata: z.unknown().optional(),
 });
 export type HttpResponseError = z.infer<typeof HttpResponseErrorSchema>;
 
