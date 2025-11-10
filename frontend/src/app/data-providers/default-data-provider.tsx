@@ -1,8 +1,8 @@
 import {
 	infiniteQueryOptions,
-	mutationOptions,
 	type MutationOptions,
-	QueryKey,
+	mutationOptions,
+	type QueryKey,
 	queryOptions,
 	UseInfiniteQueryOptions,
 } from "@tanstack/react-query";
@@ -185,6 +185,15 @@ const defaultContext = {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
 			select: (data) => getActorStatus(data),
+		});
+	},
+
+	actorStatusAdditionalInfoQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			...this.actorQueryOptions(actorId),
+			select: ({ rescheduleAt }) => ({
+				rescheduleAt,
+			}),
 		});
 	},
 

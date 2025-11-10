@@ -125,26 +125,26 @@ function CloudModals() {
 					},
 				}}
 			/>
-		<ConnectQuickRailwayDialog
-			dialogContentProps={{
-				className: "max-w-xl",
-			}}
-			dialogProps={{
-				open: search.modal === "connect-q-railway",
-				// FIXME
-				onOpenChange: (value: any) => {
-					if (!value) {
-						navigate({
-							to: ".",
-							search: (old) => ({
-								...old,
-								modal: undefined,
-							}),
-						});
-					}
-				},
-			}}
-		/>
+			<ConnectQuickRailwayDialog
+				dialogContentProps={{
+					className: "max-w-xl",
+				}}
+				dialogProps={{
+					open: search.modal === "connect-q-railway",
+					// FIXME
+					onOpenChange: (value: any) => {
+						if (!value) {
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: undefined,
+								}),
+							});
+						}
+					},
+				}}
+			/>
 			<ConnectRailwayDialog
 				dialogContentProps={{
 					className: "max-w-xl",

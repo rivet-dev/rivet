@@ -71,7 +71,6 @@ export const Route = createFileRoute("/_context")({
 			.with({ __type: "cloud" }, () => async () => {
 				await waitForClerk(route.context.clerk);
 
-
 				if (
 					route.search.__clerk_ticket &&
 					route.search.__clerk_status
