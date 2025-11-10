@@ -299,20 +299,29 @@ export async function processMessage<
 				errorData,
 				TO_CLIENT_VERSIONED,
 				ToClientSchema,
-				// JSON: metadata is the raw value
-				(value): ToClientJson => ({
-					body: {
-						tag: "Error" as const,
-						val: {
-							group: value.group,
-							code: value.code,
-							message: value.message,
-							metadata: value.metadata ?? null,
-							actionId: value.actionId ?? null,
+				// JSON: metadata is the raw value (keep as undefined if not present)
+				(value): ToClientJson => {
+					const val: any = {
+						group: value.group,
+						code: value.code,
+						message: value.message,
+						actionId:
+							value.actionId !== undefined
+								? value.actionId
+								: null,
+					};
+					if (value.metadata !== undefined) {
+						val.metadata = value.metadata;
+					}
+					return {
+						body: {
+							tag: "Error" as const,
+							val,
 						},
-					},
-				}),
+					};
+				},
 				// BARE/CBOR: metadata needs to be CBOR-encoded to ArrayBuffer
+				// Note: protocol.Error expects `| null` for optional fields (BARE protocol)
 				(value): protocol.ToClient => ({
 					body: {
 						tag: "Error" as const,
@@ -325,7 +334,10 @@ export async function processMessage<
 										cbor.encode(value.metadata),
 									)
 								: null,
-							actionId: value.actionId ?? null,
+							actionId:
+								value.actionId !== undefined
+									? value.actionId
+									: null,
 						},
 					},
 				}),
