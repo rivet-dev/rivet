@@ -12,6 +12,7 @@ import type {
 	GetForIdInput,
 	GetOrCreateWithKeyInput,
 	GetWithKeyInput,
+	ListActorsInput,
 	ManagerDisplayInformation,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
@@ -30,6 +31,7 @@ import {
 	getActorByKey,
 	getMetadata,
 	getOrCreateActor,
+	listActorsByName,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
 import { logger } from "./log";
@@ -253,6 +255,24 @@ export class RemoteManagerDriver implements ManagerDriver {
 			name,
 			key,
 		};
+	}
+
+	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
+		// Wait for metadata check to complete if in progress
+		if (this.#metadataPromise) {
+			await this.#metadataPromise;
+		}
+
+		logger().debug({ msg: "listing actors via engine api", name });
+
+		const response = await listActorsByName(this.#config, name);
+
+		return response.actors.map((actor) => ({
+			actorId: actor.actor_id,
+			name: actor.name,
+			key: deserializeActorKey(actor.key),
+			createTs: actor.create_ts,
+		}));
 	}
 
 	async destroyActor(actorId: string): Promise<void> {

@@ -32,6 +32,7 @@ function main() {
 		getWithKey: unimplemented,
 		getOrCreateWithKey: unimplemented,
 		createActor: unimplemented,
+		listActors: unimplemented,
 		sendRequest: unimplemented,
 		openWebSocket: unimplemented,
 		proxyRequest: unimplemented,
