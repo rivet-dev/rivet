@@ -1,18 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import {
 	Button,
 	cn,
 	DiscreteCopyButton,
-	type FilterValue,
 	RelativeTime,
 	Skeleton,
 	SmallText,
 	WithTooltip,
 } from "@/components";
 import { VisibilitySensor } from "../visibility-sensor";
-import { useActorsFilters } from "./actor-filters-context";
+import { useFiltersValue } from "./actor-filters-context";
 import {
 	ActorStatusIndicator,
 	QueriedActorStatusIndicator,
@@ -86,12 +85,7 @@ export const ActorsListRow = memo(
 );
 
 function Id({ actorId }: { actorId: ActorId }) {
-	const { pick } = useActorsFilters();
-	const showIds = useSearch({
-		strict: false,
-		select: (search) =>
-			(pick(search || {}).showIds as FilterValue)?.value?.includes("1"),
-	});
+	const showIds = useFiltersValue().showIds?.value.includes("1");
 
 	if (!showIds) {
 		return <div />;
@@ -112,15 +106,11 @@ function Id({ actorId }: { actorId: ActorId }) {
 }
 
 function Datacenter({ actorId }: { actorId: ActorId }) {
-	const { pick } = useActorsFilters();
-	const { data: datacenter } = useQuery(
-		useDataProvider().actorDatacenterQueryOptions(actorId),
-	);
-
-	const showDatacenter = useSearch({
-		strict: false,
-		select: (search) =>
-			(pick(search || {}).showDatacenter as FilterValue)?.value?.includes("1"),
+	const showDatacenter =
+		useFiltersValue().showDatacenter?.value.includes("1");
+	const { data: datacenter } = useQuery({
+		...useDataProvider().actorDatacenterQueryOptions(actorId),
+		enabled: showDatacenter,
 	});
 
 	if (!showDatacenter) {

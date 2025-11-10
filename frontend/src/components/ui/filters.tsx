@@ -1332,16 +1332,21 @@ export function createFiltersSchema(definitions: FilterDefinitions) {
 export function createFiltersPicker(definitions: FilterDefinitions) {
 	return (
 		object: Record<string, unknown>,
-		opts: PickFiltersOptions = {},
+		opts: PickFiltersOptions = { onlyStatic: true },
 	): Record<string, FilterValue> => {
-		const defs =
-			(opts.includeEphemeral ?? true)
-				? definitions
-				: Object.fromEntries(
+		const defs = opts.onlyEphemeral
+			? Object.fromEntries(
+					Object.entries(definitions).filter(
+						([, def]) => def.ephemeral,
+					),
+				)
+			: opts.onlyStatic
+				? Object.fromEntries(
 						Object.entries(definitions).filter(
 							([, def]) => !def.ephemeral,
 						),
-					);
+					)
+				: definitions;
 		const keys = Object.keys(defs);
 
 		const filtersWithDefaultValues = Object.fromEntries(
@@ -1364,7 +1369,8 @@ export function createFiltersPicker(definitions: FilterDefinitions) {
 }
 
 export type PickFiltersOptions = {
-	includeEphemeral?: boolean;
+	onlyStatic?: boolean;
+	onlyEphemeral?: boolean;
 };
 
 export function createFiltersRemover(definitions: FilterDefinitions) {

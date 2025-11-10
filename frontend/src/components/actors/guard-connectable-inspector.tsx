@@ -232,20 +232,23 @@ function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 
 	const actorContext = useMemo(() => {
 		return createInspectorActorContext({
-					url: getConfig().apiUrl,
-					token: async () => {
-						const runner = await queryClient.fetchQuery(
-							provider.runnerByNameQueryOptions({
-								runnerName: actor?.runner || "",
-							}),
-						);
-						return (
-							(runner?.metadata?.inspectorToken as string) || ""
-						);
-					},
-					engineToken,
-				});
-	}, [actorId, actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
+			url: getConfig().apiUrl,
+			token: async () => {
+				const runner = await queryClient.fetchQuery(
+					provider.runnerByNameQueryOptions({
+						runnerName: actor?.runner || "",
+					}),
+				);
+				return (runner?.metadata?.inspectorToken as string) || "";
+			},
+			engineToken,
+		});
+	}, [
+		actorId,
+		actor?.runner,
+		provider.runnerByNameQueryOptions,
+		engineToken,
+	]);
 
 	return { actorContext, actor, runner, isLoading };
 }
@@ -351,7 +354,7 @@ function InspectorGuard({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const filters = useFiltersValue({ includeEphemeral: true });
+	const filters = useFiltersValue({ onlyEphemeral: true });
 
 	const { data: { sleepingAt } = {} } = useQuery({
 		...useDataProvider().actorQueryOptions(actorId),
