@@ -14,6 +14,7 @@ export interface ManagerDriver {
 	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
 	getOrCreateWithKey(input: GetOrCreateWithKeyInput): Promise<ActorOutput>;
 	createActor(input: CreateInput): Promise<ActorOutput>;
+	listActors(input: ListActorsInput): Promise<ActorOutput[]>;
 
 	sendRequest(actorId: string, actorRequest: Request): Promise<Response>;
 	openWebSocket(
@@ -92,8 +93,16 @@ export interface CreateInput<E extends Env = any> {
 	region?: string;
 }
 
+export interface ListActorsInput<E extends Env = any> {
+	c?: HonoContext | undefined;
+	name: string;
+	key?: string;
+	includeDestroyed?: boolean;
+}
+
 export interface ActorOutput {
 	actorId: string;
 	name: string;
 	key: ActorKey;
+	createTs?: number;
 }

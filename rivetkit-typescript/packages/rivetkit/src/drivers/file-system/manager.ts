@@ -17,6 +17,7 @@ import type {
 	GetForIdInput,
 	GetOrCreateWithKeyInput,
 	GetWithKeyInput,
+	ListActorsInput,
 	ManagerDriver,
 } from "@/driver-helpers/mod";
 import { ManagerInspector } from "@/inspector/manager";
@@ -331,6 +332,31 @@ export class FileSystemManagerDriver implements ManagerDriver {
 			name,
 			key,
 		};
+	}
+
+	async listActors({ name }: ListActorsInput): Promise<ActorOutput[]> {
+		const actors: ActorOutput[] = [];
+		const itr = this.#state.getActorsIterator({});
+
+		for await (const actor of itr) {
+			if (actor.name === name) {
+				actors.push({
+					actorId: actor.actorId,
+					name: actor.name,
+					key: actor.key as string[],
+					createTs: Number(actor.createdAt),
+				});
+			}
+		}
+
+		// Sort by create ts desc (most recent first)
+		actors.sort((a, b) => {
+			const aTs = a.createTs ?? 0;
+			const bTs = b.createTs ?? 0;
+			return bTs - aTs;
+		});
+
+		return actors;
 	}
 
 	displayInformation(): ManagerDisplayInformation {
