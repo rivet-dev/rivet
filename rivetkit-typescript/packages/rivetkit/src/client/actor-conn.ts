@@ -2,10 +2,6 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
 import type { CloseEvent } from "ws";
-import {
-	ToClientSchema,
-	ToServerSchema,
-} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyActorDefinition } from "@/actor/definition";
 import { inputDataToBuffer } from "@/actor/protocol/old";
 import { type Encoding, jsonStringifyCompat } from "@/actor/protocol/serde";
@@ -30,6 +26,12 @@ import {
 	TO_SERVER_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
 import {
+	type ToClient as ToClientJson,
+	ToClientSchema,
+	type ToServer as ToServerJson,
+	ToServerSchema,
+} from "@/schemas/client-protocol-zod/mod";
+import {
 	deserializeWithEncoding,
 	encodingIsBinary,
 	serializeWithEncoding,
@@ -53,7 +55,7 @@ import {
 
 interface ActionInFlight {
 	name: string;
-	resolve: (response: protocol.ActionResponse) => void;
+	resolve: (response: { id: bigint; output: unknown }) => void;
 	reject: (error: Error) => void;
 }
 
@@ -99,7 +101,17 @@ export class ActorConnRaw {
 	#actorId?: string;
 	#connectionId?: string;
 
-	#messageQueue: protocol.ToServer[] = [];
+	#messageQueue: Array<{
+		body:
+			| {
+					tag: "ActionRequest";
+					val: { id: bigint; name: string; args: unknown };
+			  }
+			| {
+					tag: "SubscriptionRequest";
+					val: { eventName: string; subscribe: boolean };
+			  };
+	}> = [];
 	#actionsInFlight = new Map<number, ActionInFlight>();
 
 	// biome-ignore lint/suspicious/noExplicitAny: Unknown subscription type
@@ -176,8 +188,10 @@ export class ActorConnRaw {
 		const actionId = this.#actionIdCounter;
 		this.#actionIdCounter += 1;
 
-		const { promise, resolve, reject } =
-			promiseWithResolvers<protocol.ActionResponse>();
+		const { promise, resolve, reject } = promiseWithResolvers<{
+			id: bigint;
+			output: unknown;
+		}>();
 		this.#actionsInFlight.set(actionId, {
 			name: opts.name,
 			resolve,
@@ -190,10 +204,10 @@ export class ActorConnRaw {
 				val: {
 					id: BigInt(actionId),
 					name: opts.name,
-					args: bufferToArrayBuffer(cbor.encode(opts.args)),
+					args: opts.args,
 				},
 			},
-		} satisfies protocol.ToServer);
+		});
 
 		// TODO: Throw error if disconnect is called
 
@@ -203,7 +217,7 @@ export class ActorConnRaw {
 				`Request ID ${actionId} does not match response ID ${responseId}`,
 			);
 
-		return cbor.decode(new Uint8Array(output)) as Response;
+		return output as Response;
 	}
 
 	/**
@@ -553,16 +567,15 @@ enc
 		return inFlight;
 	}
 
-	#dispatchEvent(event: protocol.Event) {
-		const { name, args: argsRaw } = event;
-		const args = cbor.decode(new Uint8Array(argsRaw));
+	#dispatchEvent(event: { name: string; args: unknown }) {
+		const { name, args } = event;
 
 		const listeners = this.#eventSubscriptions.get(name);
 		if (!listeners) return;
 
 		// Create a new array to avoid issues with listeners being removed during iteration
 		for (const listener of [...listeners]) {
-			listener.callback(...args);
+			listener.callback(...(args as unknown[]));
 
 			// Remove if this was a one-time listener
 			if (listener.once) {
@@ -668,7 +681,20 @@ enc
 		};
 	}
 
-	#sendMessage(message: protocol.ToServer, opts?: SendHttpMessageOpts) {
+	#sendMessage(
+		message: {
+			body:
+				| {
+						tag: "ActionRequest";
+						val: { id: bigint; name: string; args: unknown };
+				  }
+				| {
+						tag: "SubscriptionRequest";
+						val: { eventName: string; subscribe: boolean };
+				  };
+		},
+		opts?: SendHttpMessageOpts,
+	) {
 		if (this.#disposed) {
 			throw new errors.ActorConnDisposed();
 		}
@@ -698,6 +724,27 @@ enc
 						message,
 						TO_SERVER_VERSIONED,
 						ToServerSchema,
+						// JSON: args is the raw value
+						(msg): ToServerJson => msg as ToServerJson,
+						// BARE: args needs to be CBOR-encoded to ArrayBuffer
+						(msg): protocol.ToServer => {
+							if (msg.body.tag === "ActionRequest") {
+								return {
+									body: {
+										tag: "ActionRequest",
+										val: {
+											id: msg.body.val.id,
+											name: msg.body.val.name,
+											args: bufferToArrayBuffer(
+												cbor.encode(msg.body.val.args),
+											),
+										},
+									},
+								};
+							} else {
+								return msg as protocol.ToServer;
+							}
+						},
 					);
 					this.#websocket.send(messageSerialized);
 					logger().trace({
@@ -739,7 +786,22 @@ enc
 		}
 	}
 
-	async #parseMessage(data: ConnMessage): Promise<protocol.ToClient> {
+	async #parseMessage(data: ConnMessage): Promise<{
+		body:
+			| { tag: "Init"; val: { actorId: string; connectionId: string } }
+			| {
+					tag: "Error";
+					val: {
+						group: string;
+						code: string;
+						message: string;
+						metadata: unknown;
+						actionId: bigint | null;
+					};
+			  }
+			| { tag: "ActionResponse"; val: { id: bigint; output: unknown } }
+			| { tag: "Event"; val: { name: string; args: unknown } };
+	}> {
 		invariant(this.#websocket, "websocket must be defined");
 
 		const buffer = await inputDataToBuffer(data);
@@ -749,6 +811,58 @@ enc
 			buffer,
 			TO_CLIENT_VERSIONED,
 			ToClientSchema,
+			// JSON: values are already the correct type
+			(msg): ToClientJson => msg as ToClientJson,
+			// BARE: need to decode ArrayBuffer fields back to unknown
+			(msg): any => {
+				if (msg.body.tag === "Error") {
+					return {
+						body: {
+							tag: "Error",
+							val: {
+								group: msg.body.val.group,
+								code: msg.body.val.code,
+								message: msg.body.val.message,
+								metadata: msg.body.val.metadata
+									? cbor.decode(
+											new Uint8Array(
+												msg.body.val.metadata,
+											),
+										)
+									: null,
+								actionId: msg.body.val.actionId,
+							},
+						},
+					};
+				} else if (msg.body.tag === "ActionResponse") {
+					return {
+						body: {
+							tag: "ActionResponse",
+							val: {
+								id: msg.body.val.id,
+								output: cbor.decode(
+									new Uint8Array(msg.body.val.output),
+								),
+							},
+						},
+					};
+				} else if (msg.body.tag === "Event") {
+					return {
+						body: {
+							tag: "Event",
+							val: {
+								name: msg.body.val.name,
+								args: cbor.decode(
+									new Uint8Array(msg.body.val.args),
+								),
+							},
+						},
+					};
+				} else {
+					// Init has no ArrayBuffer fields
+					return msg;
+				}
+			},
 		);
 	}
 

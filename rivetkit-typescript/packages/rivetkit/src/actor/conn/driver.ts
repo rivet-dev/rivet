@@ -32,7 +32,7 @@ export interface ConnDriver {
 	sendMessage?(
 		actor: AnyActorInstance,
 		conn: AnyConn,
-		message: CachedSerializer<protocol.ToClient>,
+		message: CachedSerializer<any, any, any>,
 	): void;
 
 	/**
