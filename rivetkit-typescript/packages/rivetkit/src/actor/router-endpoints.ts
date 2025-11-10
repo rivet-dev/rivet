@@ -14,6 +14,8 @@ import {
 	HEADER_ACTOR_QUERY,
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
+	WS_PROTOCOL_CONN_PARAMS,
+	WS_PROTOCOL_ENCODING,
 } from "@/common/actor-router-consts";
 import type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
 import { deconstructError, stringifyError } from "@/common/utils";
@@ -517,10 +519,12 @@ export async function handleRawWebSocket(
 }
 
 // Helper to get the connection encoding from a request
+//
+// Defaults to JSON if not provided so we can support vanilla curl requests easily.
 export function getRequestEncoding(req: HonoRequest): Encoding {
 	const encodingParam = req.header(HEADER_ENCODING);
 	if (!encodingParam) {
-		throw new errors.InvalidEncoding("undefined");
+		return "json";
 	}
 
 	const result = EncodingSchema.safeParse(encodingParam);
@@ -568,6 +572,35 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
 	}
+}
+
+/**
+ * Parse encoding and connection parameters from WebSocket Sec-WebSocket-Protocol header
+ */
+export function parseWebSocketProtocols(protocols: string | null | undefined): {
+	encoding: Encoding;
+	connParams: unknown;
+} {
+	let encodingRaw: string | undefined;
+	let connParamsRaw: string | undefined;
+
+	if (protocols) {
+		const protocolList = protocols.split(",").map((p) => p.trim());
+		for (const protocol of protocolList) {
+			if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
+				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
+			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
+				connParamsRaw = decodeURIComponent(
+					protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
+				);
+			}
+		}
+	}
+
+	const encoding = EncodingSchema.parse(encodingRaw);
+	const connParams = connParamsRaw ? JSON.parse(connParamsRaw) : undefined;
+
+	return { encoding, connParams };
 }
 
 /**
