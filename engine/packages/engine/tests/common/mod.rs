@@ -1,14 +1,15 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 
 pub mod actors;
+pub mod api;
 pub mod ctx;
-pub mod ns;
 pub mod runner;
 pub mod test_helpers;
 
 pub use actors::*;
 pub use ctx::*;
-pub use ns::*;
+pub use rivet_api_types as api_types;
+pub use runner::TEST_RUNNER_NAME;
 pub use test_helpers::*;
 
 use std::future::Future;

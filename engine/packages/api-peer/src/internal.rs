@@ -10,7 +10,7 @@ pub struct CachePurgeRequest {
 	pub keys: Vec<rivet_cache::RawCacheKey>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CachePurgeResponse {}
 
@@ -29,7 +29,7 @@ pub async fn cache_purge(
 	Ok(CachePurgeResponse {})
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BumpServerlessAutoscalerResponse {}
 
@@ -55,7 +55,7 @@ pub struct SetTracingConfigRequest {
 	pub sampler_ratio: Option<Option<f64>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SetTracingConfigResponse {}
 
@@ -83,11 +83,11 @@ pub async fn set_tracing_config(
 	Ok(SetTracingConfigResponse {})
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicaReconfigureRequest {}
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplicaReconfigureResponse {}
 
@@ -114,7 +114,7 @@ pub async fn epoxy_replica_reconfigure(
 	Ok(ReplicaReconfigureResponse {})
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GetEpoxyStateResponse {
 	pub config: epoxy::types::ClusterConfig,
@@ -143,13 +143,13 @@ pub async fn get_epoxy_state(ctx: ApiCtx, _path: (), _query: ()) -> Result<GetEp
 	})
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SetEpoxyStateRequest {
 	pub config: epoxy::types::ClusterConfig,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SetEpoxyStateResponse {}
 
