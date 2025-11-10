@@ -1,8 +1,8 @@
 import {
 	infiniteQueryOptions,
-	mutationOptions,
 	type MutationOptions,
-	QueryKey,
+	mutationOptions,
+	type QueryKey,
 	queryOptions,
 	UseInfiniteQueryOptions,
 } from "@tanstack/react-query";

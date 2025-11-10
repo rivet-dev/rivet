@@ -25,6 +25,7 @@ import {
 	Link as RouterLink,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
+import { hasProvider } from "@/app/data-providers/engine-data-provider";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
@@ -44,9 +45,12 @@ import {
 	H3,
 	Skeleton,
 } from "@/components";
-import { useCloudNamespaceDataProvider, useEngineCompatDataProvider, useEngineNamespaceDataProvider } from "@/components/actors";
+import {
+	useCloudNamespaceDataProvider,
+	useEngineCompatDataProvider,
+	useEngineNamespaceDataProvider,
+} from "@/components/actors";
 import { cloudEnv, engineEnv } from "@/lib/env";
-import { hasProvider } from "@/app/data-providers/engine-data-provider";
 
 export const Route = createFileRoute(
 	"/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/connect",
@@ -434,12 +438,14 @@ function Runners() {
 function usePublishableToken() {
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
-			return useSuspenseQuery(useCloudNamespaceDataProvider().publishableTokenQueryOptions())
-				.data;
+			return useSuspenseQuery(
+				useCloudNamespaceDataProvider().publishableTokenQueryOptions(),
+			).data;
 		})
 		.with("engine", () => {
-			return useSuspenseQuery(useEngineNamespaceDataProvider().engineAdminTokenQueryOptions())
-				.data;
+			return useSuspenseQuery(
+				useEngineNamespaceDataProvider().engineAdminTokenQueryOptions(),
+			).data;
 		})
 		.otherwise(() => {
 			throw new Error("Not in a valid context");

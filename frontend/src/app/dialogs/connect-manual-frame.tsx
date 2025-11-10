@@ -34,7 +34,7 @@ export default function CreateProjectFrameContent({
 						className="border rounded-md gap-0"
 						value={mode}
 						onValueChange={(mode) => {
-							if(!mode) {
+							if (!mode) {
 								return;
 							}
 							setMode(mode);

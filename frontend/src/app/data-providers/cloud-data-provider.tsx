@@ -1,7 +1,12 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { type Rivet, RivetClient } from "@rivet-gg/cloud";
 import { fetcher } from "@rivetkit/engine-api-full/core";
-import { infiniteQueryOptions, QueryKey, queryOptions, UseQueryOptions } from "@tanstack/react-query";
+import {
+	infiniteQueryOptions,
+	type QueryKey,
+	queryOptions,
+	type UseQueryOptions,
+} from "@tanstack/react-query";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { RECORDS_PER_PAGE } from "./default-data-provider";
@@ -28,7 +33,7 @@ function createClient({ clerk }: { clerk: Clerk }) {
 			});
 			return await fetcher(
 				// @ts-expect-error
-				args
+				args,
 			);
 		},
 	});
@@ -209,9 +214,7 @@ export const createOrganizationContext = ({
 		} = {}) {
 			return {
 				mutationKey: ["projects"],
-				mutationFn: async (data: {
-					displayName: string;
-				}) => {
+				mutationFn: async (data: { displayName: string }) => {
 					const response = await client.projects.create({
 						displayName: data.displayName,
 						org: organization,
