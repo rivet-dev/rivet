@@ -5,7 +5,7 @@ export const rawWebSocketActor = actor({
 		connectionCount: 0,
 		messageCount: 0,
 	},
-	onWebSocket(ctx, websocket, opts) {
+	onWebSocket(ctx, websocket) {
 		ctx.state.connectionCount = ctx.state.connectionCount + 1;
 		console.log(
 			`[ACTOR] New connection, count: ${ctx.state.connectionCount}`,
@@ -51,15 +51,16 @@ export const rawWebSocketActor = actor({
 							}),
 						);
 					} else if (parsed.type === "getRequestInfo") {
+						throw "TODO";
 						// Send back the request URL info
-						websocket.send(
-							JSON.stringify({
-								type: "requestInfo",
-								url: opts.request.url,
-								pathname: new URL(opts.request.url).pathname,
-								search: new URL(opts.request.url).search,
-							}),
-						);
+						// websocket.send(
+						// 	JSON.stringify({
+						// 		type: "requestInfo",
+						// 		url: opts.request.url,
+						// 		pathname: new URL(opts.request.url).pathname,
+						// 		search: new URL(opts.request.url).search,
+						// 	}),
+						// );
 					} else {
 						// Echo back
 						websocket.send(data);
@@ -93,7 +94,7 @@ export const rawWebSocketActor = actor({
 });
 
 export const rawWebSocketBinaryActor = actor({
-	onWebSocket(ctx, websocket, opts) {
+	onWebSocket(ctx, websocket) {
 		// Handle binary data
 		websocket.addEventListener("message", (event: any) => {
 			const data = event.data;

@@ -1713,7 +1713,7 @@ For HTTP requests, the router expects these headers:
 
 ```typescript
 // Direct HTTP request to actor
-const response = await fetch("http://localhost:8080/registry/actors/myActor/raw/http/api/hello", 
+const response = await fetch("http://localhost:8080/registry/actors/myActor/request/api/hello", 
         }),
         "X-RivetKit-Encoding": "json",
         "X-RivetKit-Conn-Params": JSON.stringify()
@@ -1724,7 +1724,7 @@ const data = await response.json();
 console.log(data); // 
 
 // POST request with data
-const postResponse = await fetch("http://localhost:8080/registry/actors/myActor/raw/http/api/echo", 
+const postResponse = await fetch("http://localhost:8080/registry/actors/myActor/request/api/echo", 
         }),
         "X-RivetKit-Encoding": "json",
         "X-RivetKit-Conn-Params": JSON.stringify(),
@@ -6341,6 +6341,11 @@ kubectl -n rivet-engine wait --for=condition=ready pod -l app=postgres --timeout
 
 ### 3. Deploy Rivet Engine
 
+The Rivet Engine deployment consists of two components:
+
+- **Main Engine Deployment**: Runs all services except singleton services. Configured with Horizontal Pod Autoscaling (HPA) to automatically scale between 2-10 replicas based on CPU and memory utilization.
+- **Singleton Engine Deployment**: Runs singleton services that must have exactly 1 replica (e.g., schedulers, coordinators).
+
 Save as `rivet-engine.yaml`:
 
 ```yaml
@@ -6382,7 +6387,7 @@ metadata:
   name: rivet-engine
   namespace: rivet-engine
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: rivet-engine
@@ -6396,6 +6401,8 @@ spec:
         image: rivetkit/engine:latest
         args:
         - start
+        - --except-services
+        - singleton
         env:
         - name: RIVET_CONFIG_PATH
           value: /etc/rivet/config.jsonc
@@ -6410,16 +6417,16 @@ spec:
           readOnly: true
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
-          limits:
             cpu: 2000m
             memory: 4Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
         startupProbe:
           httpGet:
             path: /health
             port: 6421
-          initialDelaySeconds: 10
+          initialDelaySeconds: 30
           periodSeconds: 10
           failureThreshold: 30
         readinessProbe:
@@ -6427,11 +6434,104 @@ spec:
             path: /health
             port: 6421
           periodSeconds: 5
+          failureThreshold: 2
         livenessProbe:
           httpGet:
             path: /health
             port: 6421
           periodSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: engine-config
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rivet-engine
+  namespace: rivet-engine
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rivet-engine
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rivet-engine-singleton
+  namespace: rivet-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rivet-engine-singleton
+  template:
+    metadata:
+      labels:
+        app: rivet-engine-singleton
+    spec:
+      containers:
+      - name: rivet-engine
+        image: rivetkit/engine:latest
+        args:
+        - start
+        - --services
+        - singleton
+        - --services
+        - api-peer
+        env:
+        - name: RIVET_CONFIG_PATH
+          value: /etc/rivet/config.jsonc
+        ports:
+        - containerPort: 6421
+          name: api-peer
+        volumeMounts:
+        - name: config
+          mountPath: /etc/rivet
+          readOnly: true
+        resources:
+          requests:
+            cpu: 2000m
+            memory: 4Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          periodSeconds: 5
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6421
+          periodSeconds: 10
+          failureThreshold: 3
       volumes:
       - name: config
         configMap:
@@ -6443,9 +6543,21 @@ Apply and wait for the engine to be ready:
 ```bash
 kubectl apply -f rivet-engine.yaml
 kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine --timeout=300s
+kubectl -n rivet-engine wait --for=condition=ready pod -l app=rivet-engine-singleton --timeout=300s
 ```
 
-### 4. Access the Engine
+**Note**: The HPA requires a metrics server to be running in your cluster. Most Kubernetes distributions (including k3d, GKE, EKS, AKS) include this by default.
+
+### 4. Verify Deployment
+
+Check that all pods are running (you should see 2+ engine pods and 1 singleton pod):
+
+```bash
+kubectl -n rivet-engine get pods
+kubectl -n rivet-engine get hpa
+```
+
+### 5. Access the Engine
 
 Get the service URL:
 
@@ -6528,14 +6640,44 @@ k3d cluster delete rivet
 
 ### Scaling
 
-For horizontal scaling, update the deployment:
+The engine is configured with Horizontal Pod Autoscaling (HPA) by default, automatically scaling between 2-10 replicas based on CPU (60%) and memory (80%) utilization.
+
+To adjust the scaling parameters, modify the HPA configuration:
 
 ```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rivet-engine
+  namespace: rivet-engine
 spec:
-  replicas: 3  # Multiple replicas
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rivet-engine
+  minReplicas: 2  # Adjust minimum replicas
+  maxReplicas: 20 # Adjust maximum replicas
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Adjust CPU threshold
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Adjust memory threshold
 ```
 
-See our [HPA set up on github](https://github.com/rivet-gg/rivet/tree/main/k8s/engines/05-rivet-engine-hpa.yaml) for info on configuring automatic horizontal scaling.
+Monitor HPA status:
+
+```bash
+kubectl -n rivet-engine get hpa
+kubectl -n rivet-engine describe hpa rivet-engine
+```
 
 ## Next Steps
 

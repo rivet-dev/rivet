@@ -76,6 +76,10 @@ export type * from "./config";
 export type { Conn } from "./conn/mod";
 export type { ActionContext } from "./contexts/action";
 export type { ActorContext } from "./contexts/actor";
+export type { ConnInitContext } from "./contexts/conn-init";
+export type { CreateConnStateContext } from "./contexts/create-conn-state";
+export type { OnBeforeConnectContext } from "./contexts/on-before-connect";
+export type { OnConnectContext } from "./contexts/on-connect";
 export type { RequestContext } from "./contexts/request";
 export type { WebSocketContext } from "./contexts/websocket";
 export type {

@@ -2,7 +2,7 @@ import { actor } from "rivetkit";
 
 export const counterWithParams = actor({
 	state: { count: 0, initializers: [] as string[] },
-	createConnState: (c, opts, params: { name?: string }) => {
+	createConnState: (c, params: { name?: string }) => {
 		return {
 			name: params.name || "anonymous",
 		};

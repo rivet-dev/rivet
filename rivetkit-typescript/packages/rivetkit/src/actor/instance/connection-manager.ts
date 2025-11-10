@@ -1,6 +1,5 @@
 import * as cbor from "cbor-x";
 import { arrayBuffersEqual, idToStr, stringifyError } from "@/utils";
-import type { OnConnectOptions } from "../config";
 import type { ConnDriver } from "../conn/driver";
 import {
 	CONN_DRIVER_SYMBOL,
@@ -11,6 +10,9 @@ import {
 	Conn,
 	type ConnId,
 } from "../conn/mod";
+import { CreateConnStateContext } from "../contexts/create-conn-state";
+import { OnBeforeConnectContext } from "../contexts/on-before-connect";
+import { OnConnectContext } from "../contexts/on-connect";
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorDriver } from "../driver";
 import { deadline } from "../utils";
@@ -73,7 +75,7 @@ export class ConnectionManager<
 	async createConn(
 		driver: ConnDriver,
 		params: CP,
-		request?: Request,
+		request: Request | undefined,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
 		// Check for hibernatable websocket reconnection
 		if (driver.requestIdBuf && driver.hibernatable) {
@@ -274,26 +276,15 @@ export class ConnectionManager<
 		// Prepare connection state
 		let connState: CS | undefined;
 
-		const onBeforeConnectOpts = {
-			request,
-		} satisfies OnConnectOptions;
-
 		// Call onBeforeConnect hook
 		if (config.onBeforeConnect) {
-			await config.onBeforeConnect(
-				this.#actor.actorContext,
-				onBeforeConnectOpts,
-				params,
-			);
+			const ctx = new OnBeforeConnectContext(this.#actor, request);
+			await config.onBeforeConnect(ctx, params);
 		}
 
 		// Create connection state if enabled
 		if ((this.#actor as any).connStateEnabled) {
-			connState = await this.#createConnState(
-				config,
-				onBeforeConnectOpts,
-				params,
-			);
+			connState = await this.#createConnState(config, params, request);
 		}
 
 		// Create connection persist data
@@ -326,7 +317,7 @@ export class ConnectionManager<
 
 		// Call onConnect lifecycle hook
 		if (config.onConnect) {
-			this.#callOnConnect(config, conn);
+			this.#callOnConnect(config, conn, request);
 		}
 
 		this.#actor.inspector.emitter.emit("connectionUpdated");
@@ -336,15 +327,12 @@ export class ConnectionManager<
 
 	async #createConnState(
 		config: any,
-		opts: OnConnectOptions,
 		params: CP,
+		request: Request | undefined,
 	): Promise<CS | undefined> {
 		if ("createConnState" in config) {
-			const dataOrPromise = config.createConnState(
-				this.#actor.actorContext,
-				opts,
-				params,
-			);
+			const ctx = new CreateConnStateContext(this.#actor, request);
+			const dataOrPromise = config.createConnState(ctx, params);
 			if (dataOrPromise instanceof Promise) {
 				return await deadline(
 					dataOrPromise,
@@ -369,9 +357,14 @@ export class ConnectionManager<
 		);
 	}
 
-	#callOnConnect(config: any, conn: Conn<S, CP, CS, V, I, DB>) {
+	#callOnConnect(
+		config: any,
+		conn: Conn<S, CP, CS, V, I, DB>,
+		request: Request | undefined,
+	) {
 		try {
-			const result = config.onConnect(this.#actor.actorContext, conn);
+			const ctx = new OnConnectContext(this.#actor, request);
+			const result = config.onConnect(ctx, conn);
 			if (result instanceof Promise) {
 				deadline(result, config.options.onConnectTimeout).catch(
 					(error: any) => {

@@ -24,8 +24,11 @@ https://rivet.dev/blog/2025-10-01-railway-selfhost
 https://rivet.dev/blog/2025-10-05-weekly-updates
 https://rivet.dev/blog/2025-10-09-rivet-cloud-launch
 https://rivet.dev/blog/2025-10-17-rivet-actors-vercel
+https://rivet.dev/blog/2025-10-19-weekly-updates
 https://rivet.dev/blog/2025-10-20-how-we-built-websocket-servers-for-vercel-functions
 https://rivet.dev/blog/2025-10-20-weekly-updates
+https://rivet.dev/blog/2025-10-24-weekly-updates
+https://rivet.dev/blog/2025-11-02-weekly-updates
 https://rivet.dev/blog/godot-multiplayer-compared-to-unity
 https://rivet.dev/changelog
 https://rivet.dev/changelog.json
@@ -50,8 +53,11 @@ https://rivet.dev/changelog/2025-10-01-railway-selfhost
 https://rivet.dev/changelog/2025-10-05-weekly-updates
 https://rivet.dev/changelog/2025-10-09-rivet-cloud-launch
 https://rivet.dev/changelog/2025-10-17-rivet-actors-vercel
+https://rivet.dev/changelog/2025-10-19-weekly-updates
 https://rivet.dev/changelog/2025-10-20-how-we-built-websocket-servers-for-vercel-functions
 https://rivet.dev/changelog/2025-10-20-weekly-updates
+https://rivet.dev/changelog/2025-10-24-weekly-updates
+https://rivet.dev/changelog/2025-11-02-weekly-updates
 https://rivet.dev/changelog/godot-multiplayer-compared-to-unity
 https://rivet.dev/cloud
 https://rivet.dev/docs/actors

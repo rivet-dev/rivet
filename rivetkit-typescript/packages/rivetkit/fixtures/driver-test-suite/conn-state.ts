@@ -16,7 +16,6 @@ export const connStateActor = actor({
 	// Define connection state
 	createConnState: (
 		c,
-		opts,
 		params: { username?: string; role?: string; noCount?: boolean },
 	): ConnState => {
 		return {

@@ -175,7 +175,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 				try {
 					return await this.executeAction(
-						new ActionContext(this.actorContext, conn),
+						new ActionContext(this, conn),
 						name,
 						params || [],
 					);
@@ -493,7 +493,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async createConn(
 		driver: ConnDriver,
 		params: any,
-		request?: Request,
+		request: Request | undefined,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
 		this.#assertReady();
 
@@ -658,7 +658,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		try {
-			const ctx = new RequestContext(this.actorContext, conn);
+			const ctx = new RequestContext(this, conn, request);
 			const response = await this.#config.onRequest(ctx, request);
 			if (!response) {
 				throw new errors.InvalidRequestHandlerResponse();
@@ -678,7 +678,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	async handleRawWebSocket(
 		conn: Conn<S, CP, CS, V, I, DB>,
 		websocket: UniversalWebSocket,
-		opts: { request: Request },
+		request?: Request,
 	): Promise<void> {
 		this.#assertReady();
 
@@ -693,8 +693,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			this.#resetSleepTimer();
 
 			// Handle WebSocket
-			const ctx = new WebSocketContext(this.actorContext, conn);
-			await this.#config.onWebSocket(ctx, websocket, opts);
+			const ctx = new WebSocketContext(this, conn, request);
+			await this.#config.onWebSocket(ctx, websocket);
 
 			// Save state if changed
 			if (this.#stateManager.persistChanged && !stateBeforeHandler) {

@@ -352,7 +352,7 @@ export async function handleAction(
 		);
 
 		// Call action
-		const ctx = new ActionContext(actor.actorContext!, conn!);
+		const ctx = new ActionContext(actor, conn!);
 		output = await actor.executeAction(ctx, actionName, actionArgs);
 	} finally {
 		if (conn) {
@@ -474,9 +474,7 @@ export async function handleRawWebSocket(
 				createdConn = conn;
 
 				// Call the actor's onWebSocket handler with the adapted WebSocket
-				actor.handleRawWebSocket(conn, adapter, {
-					request: newRequest,
-				});
+				actor.handleRawWebSocket(conn, adapter, newRequest);
 			} catch (error) {
 				actor.rLog.error({
 					msg: "failed to create raw WebSocket connection",

@@ -112,7 +112,7 @@ export const sleepWithRawWebSocket = actor({
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
-	onWebSocket: (c, websocket: UniversalWebSocket, opts) => {
+	onWebSocket: (c, websocket: UniversalWebSocket) => {
 		c.state.connectionCount += 1;
 		c.log.info({
 			msg: "websocket connected",
