@@ -47,19 +47,19 @@ export function StudioSection() {
 			name: "Live State Inspection",
 			icon: faEye,
 			description:
-				"View and edit your actor state in real-time as messages are sent and processed",
+				"View and edit your actor state in realtime as messages are sent and processed",
 		},
 		{
 			name: "Event Monitoring",
 			icon: faChartLine,
 			description:
-				"See all events happening in your actor in real-time - track every state change and action as it happens",
+				"See all events happening in your actor in realtime - track every state change and action as it happens",
 		},
 		{
 			name: "REPL",
 			icon: faTerminal,
 			description:
-				"Debug your actor in real-time - call actions, subscribe to events, and interact directly with your code",
+				"Debug your actor in realtime - call actions, subscribe to events, and interact directly with your code",
 		},
 		{
 			name: "Connection Inspection",

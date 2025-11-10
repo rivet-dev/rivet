@@ -39,7 +39,7 @@ export const useCases: UseCase[] = [
 		href: "/docs/use-cases/workflows",
 		icon: faDiagramNext,
 		description:
-			"Durable multi-step workflows with automatic state management",
+			"Durable multi-step workflows with flexible state management",
 	},
 	{
 		title: "Local-First Sync",
@@ -92,13 +92,13 @@ export const useCases: UseCase[] = [
 		href: "/docs/use-cases/ai-agent",
 		icon: faRobot,
 		description:
-			"Build AI agents with Model Context Protocol and persistent state",
+			"Build AI agents with persistence and stateful Model Context Protocol",
 	},
 	{
 		title: "Multiplayer Apps",
 		href: "/docs/use-cases/game",
 		icon: faNetworkWired,
 		description:
-			"Build realtime multiplayer applications with authoritative state",
+			"Build realtime multiplayer applications with server-authoritative state",
 	},
 ];
