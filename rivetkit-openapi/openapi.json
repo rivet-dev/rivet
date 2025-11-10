@@ -331,6 +331,337 @@
           }
         }
       }
+    },
+    "/actors/names": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "namespace",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "names": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "metadata": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "metadata"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "names"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User error"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/gateway/{actorId}/health": {
+      "get": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Health check",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gateway/{actorId}/action/{action}": {
+      "post": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name of the action to execute"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "args": {}
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "output": {}
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid action"
+          },
+          "500": {
+            "description": "Internal error"
+          }
+        }
+      }
+    },
+    "/gateway/{actorId}/request/{path}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "post": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "put": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "patch": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "head": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      },
+      "options": {
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ID of the actor to target"
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The HTTP path to forward to the actor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response from actor's raw HTTP handler"
+          }
+        }
+      }
     }
   }
 }
