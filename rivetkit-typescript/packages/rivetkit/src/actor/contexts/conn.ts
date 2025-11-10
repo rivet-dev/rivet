@@ -1,19 +1,20 @@
 import type { Conn } from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
 import type { ActorInstance } from "../instance/mod";
-import { ConnContext } from "./conn";
+import { ActorContext } from "./actor";
 
 /**
- * Context for raw HTTP request handlers (onRequest).
+ * Base context for connection-based handlers.
+ * Extends ActorContext with connection-specific functionality.
  */
-export class RequestContext<
+export abstract class ConnContext<
 	TState,
 	TConnParams,
 	TConnState,
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
-> extends ConnContext<
+> extends ActorContext<
 	TState,
 	TConnParams,
 	TConnState,
@@ -21,12 +22,6 @@ export class RequestContext<
 	TInput,
 	TDatabase
 > {
-	/**
-	 * The incoming HTTP request.
-	 * May be undefined for request contexts initiated without a direct HTTP request.
-	 */
-	public readonly request: Request | undefined;
-
 	/**
 	 * @internal
 	 */
@@ -39,10 +34,15 @@ export class RequestContext<
 			TInput,
 			TDatabase
 		>,
-		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
-		request?: Request,
+		public readonly conn: Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
 	) {
-		super(actor, conn);
-		this.request = request;
+		super(actor);
 	}
 }
