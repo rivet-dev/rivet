@@ -1,4 +1,5 @@
 import * as cbor from "cbor-x";
+import { ToClientSchema } from "@/actor/client-protocol-schema-json/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { bufferToArrayBuffer } from "@/utils";
@@ -190,6 +191,7 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				},
 			},
 			TO_CLIENT_VERSIONED,
+			ToClientSchema,
 		);
 
 		// Send to all subscribers
