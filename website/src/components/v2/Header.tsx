@@ -269,7 +269,7 @@ function DocsMobileNavigation({ tree }) {
 
 	const sections = [
 		{ id: "overview", label: "Overview", href: "/docs" },
-		{ id: "quickstart", label: "Quickstart", href: "/docs/quickstart" },
+		{ id: "quickstart", label: "Quickstart", href: "/docs" },
 		{ id: "actors", label: "Actors", href: "/docs/actors" },
 		{ id: "integrations", label: "Integrations", href: "/docs/integrations" },
 		{ id: "api", label: "API Reference", href: "/docs/api" },

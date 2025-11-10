@@ -1,4 +1,4 @@
-// Shared example metadata used by both generateExamples.mjs and generateReadme.mjs
+// Shared example metadata used by both generateExamples.mjs
 
 export const EXAMPLE_METADATA = {
   "ai-agent": {
