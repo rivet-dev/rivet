@@ -157,7 +157,7 @@ export async function sendHttpRequest<
 					message: bare.message,
 					metadata: bare.metadata
 						? cbor.decode(new Uint8Array(bare.metadata))
-						: undefined,
+						: null,
 				}),
 			);
 		} catch (error) {

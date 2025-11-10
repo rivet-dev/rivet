@@ -82,7 +82,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			group: value.group,
 			code: value.code,
 			message: value.message,
-			metadata: value.metadata,
+			metadata: value.metadata ?? null,
 		}),
 		// BARE/CBOR: metadata needs to be CBOR-encoded to ArrayBuffer
 		(value): protocol.HttpResponseError => ({
