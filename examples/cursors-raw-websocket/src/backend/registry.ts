@@ -56,7 +56,7 @@ export const cursorRoom = actor({
 	},
 
 	// Handle WebSocket connections
-	onWebSocket: async (c, websocket: UniversalWebSocket, { request }) => {
+	onWebSocket: async (c, websocket: UniversalWebSocket) => {
 		const url = new URL(request.url);
 		const sessionId = url.searchParams.get("sessionId");
 
