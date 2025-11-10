@@ -1,7 +1,6 @@
 import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer } from "@/actor/protocol/serde";
-import type * as protocol from "@/schemas/client-protocol/mod";
 
 export enum DriverReadyState {
 	UNKNOWN = -1,
@@ -16,6 +15,22 @@ export interface ConnDriver {
 	type: string;
 
 	/**
+	 * If defined, this connection driver talks the RivetKit client driver (see
+	 * schemas/client-protocol/).
+	 *
+	 * If enabled, events like `Init`, subscription events, etc. will be sent
+	 * to this connection.
+	 */
+	rivetKitProtocol?: {
+		/** Sends a RivetKit client message. */
+		sendMessage(
+			actor: AnyActorInstance,
+			conn: AnyConn,
+			message: CachedSerializer<any, any, any>,
+		): void;
+	};
+
+	/**
 	 * Unique request ID provided by the underlying provider. If none is
 	 * available for this conn driver, a random UUID is generated.
 	 **/
@@ -28,12 +43,6 @@ export interface ConnDriver {
 	 * If the connection can be hibernated. If true, this will allow the actor to go to sleep while the connection is still active.
 	 **/
 	hibernatable: boolean;
-
-	sendMessage?(
-		actor: AnyActorInstance,
-		conn: AnyConn,
-		message: CachedSerializer<any, any, any>,
-	): void;
 
 	/**
 	 * This returns a promise since we commonly disconnect at the end of a program, and not waiting will cause the socket to not close cleanly.
