@@ -422,6 +422,11 @@ export const sitemap = [
 							},
 						],
 					},
+					{
+						title: "API Reference",
+						href: "/docs/actors/api-reference",
+						// icon: faCode,
+					},
 				]
 			},
 		],
