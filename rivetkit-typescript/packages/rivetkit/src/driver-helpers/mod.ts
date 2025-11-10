@@ -24,6 +24,7 @@ export type {
 	GetForIdInput,
 	GetOrCreateWithKeyInput,
 	GetWithKeyInput,
+	ListActorsInput,
 	ManagerDisplayInformation,
 	ManagerDriver,
 } from "@/manager/driver";
