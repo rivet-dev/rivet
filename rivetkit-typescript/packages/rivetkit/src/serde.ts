@@ -1,5 +1,6 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import type { z } from "zod";
 import { assertUnreachable } from "@/common/utils";
 import type { VersionedDataHandler } from "@/common/versioned-data";
 import type { Encoding } from "@/mod";
@@ -52,13 +53,15 @@ export function wsBinaryTypeForEncoding(
 	}
 }
 
-export function serializeWithEncoding<T>(
+export function serializeWithEncoding<T, TJson = T>(
 	encoding: Encoding,
-	value: T,
+	value: T | TJson,
 	versionedDataHandler: VersionedDataHandler<T> | undefined,
+	zodSchema: z.ZodType<TJson>,
 ): Uint8Array | string {
 	if (encoding === "json") {
-		return jsonStringifyCompat(value);
+		const validated = zodSchema.parse(value);
+		return jsonStringifyCompat(validated);
 	} else if (encoding === "cbor") {
 		return cbor.encode(value);
 	} else if (encoding === "bare") {
@@ -67,25 +70,28 @@ export function serializeWithEncoding<T>(
 				"VersionedDataHandler is required for 'bare' encoding",
 			);
 		}
-		return versionedDataHandler.serializeWithEmbeddedVersion(value);
+		return versionedDataHandler.serializeWithEmbeddedVersion(value as T);
 	} else {
 		assertUnreachable(encoding);
 	}
 }
 
-export function deserializeWithEncoding<T>(
+export function deserializeWithEncoding<T, TJson = T>(
 	encoding: Encoding,
 	buffer: Uint8Array | string,
 	versionedDataHandler: VersionedDataHandler<T> | undefined,
-): T {
+	zodSchema: z.ZodType<TJson>,
+): T | TJson {
 	if (encoding === "json") {
+		let parsed: unknown;
 		if (typeof buffer === "string") {
-			return jsonParseCompat(buffer);
+			parsed = jsonParseCompat(buffer);
 		} else {
 			const decoder = new TextDecoder("utf-8");
 			const jsonString = decoder.decode(buffer);
-			return jsonParseCompat(jsonString);
+			parsed = jsonParseCompat(jsonString);
 		}
+		return zodSchema.parse(parsed);
 	} else if (encoding === "cbor") {
 		invariant(
 			typeof buffer !== "string",

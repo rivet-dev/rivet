@@ -1,5 +1,9 @@
 import * as cbor from "cbor-x";
 import { z } from "zod";
+import {
+	ToClientSchema,
+	ToServerSchema,
+} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyDatabaseProvider } from "@/actor/database";
 import * as errors from "@/actor/errors";
 import {
@@ -81,7 +85,12 @@ export async function parseMessage(
 	}
 
 	// Deserialize message
-	return deserializeWithEncoding(opts.encoding, buffer, TO_SERVER_VERSIONED);
+	return deserializeWithEncoding(
+		opts.encoding,
+		buffer,
+		TO_SERVER_VERSIONED,
+		ToServerSchema,
+	);
 }
 
 export interface ProcessMessageHandler<
@@ -171,6 +180,7 @@ export async function processMessage<
 						},
 					},
 					TO_CLIENT_VERSIONED,
+					ToClientSchema,
 				),
 			);
 
@@ -243,6 +253,7 @@ export async function processMessage<
 					},
 				},
 				TO_CLIENT_VERSIONED,
+				ToClientSchema,
 			),
 		);
 

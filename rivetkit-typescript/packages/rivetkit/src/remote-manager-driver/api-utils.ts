@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
 import { combineUrlPath } from "@/utils";
@@ -51,5 +52,7 @@ export async function apiCall<TInput = unknown, TOutput = unknown>(
 		skipParseResponse: false,
 		requestVersionedDataHandler: undefined,
 		responseVersionedDataHandler: undefined,
+		requestZodSchema: z.any() as z.ZodType<TInput>,
+		responseZodSchema: z.any() as z.ZodType<TOutput>,
 	});
 }

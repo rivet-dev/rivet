@@ -1,5 +1,6 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
+import { HttpResponseErrorSchema } from "@/actor/client-protocol-schema-json/mod";
 import type { Encoding } from "@/actor/protocol/serde";
 import {
 	getRequestEncoding,
@@ -80,6 +81,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 				: null,
 		},
 		HTTP_RESPONSE_ERROR_VERSIONED,
+		HttpResponseErrorSchema,
 	);
 
 	// TODO: Remove any

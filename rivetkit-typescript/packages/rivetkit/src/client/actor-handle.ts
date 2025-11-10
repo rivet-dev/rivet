@@ -1,5 +1,9 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import {
+	HttpActionRequestSchema,
+	HttpActionResponseSchema,
+} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/actor/utils";
@@ -122,6 +126,8 @@ export class ActorHandleRaw {
 				signal: opts?.signal,
 				requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
 				responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
+				requestZodSchema: HttpActionRequestSchema,
+				responseZodSchema: HttpActionResponseSchema,
 			});
 
 			return cbor.decode(new Uint8Array(responseData.output));

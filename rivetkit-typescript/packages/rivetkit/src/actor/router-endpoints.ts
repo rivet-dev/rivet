@@ -1,6 +1,10 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
 import type { WSContext } from "hono/ws";
+import {
+	HttpActionRequestSchema,
+	HttpActionResponseSchema,
+} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
@@ -334,6 +338,7 @@ export async function handleAction(
 		encoding,
 		new Uint8Array(arrayBuffer),
 		HTTP_ACTION_REQUEST_VERSIONED,
+		HttpActionRequestSchema,
 	);
 	const actionArgs = cbor.decode(new Uint8Array(request.args));
 
@@ -371,6 +376,7 @@ export async function handleAction(
 		encoding,
 		responseData,
 		HTTP_ACTION_RESPONSE_VERSIONED,
+		HttpActionResponseSchema,
 	);
 
 	// TODO: Remvoe any, Hono is being a dumbass
