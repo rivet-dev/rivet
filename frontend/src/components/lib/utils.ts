@@ -53,6 +53,21 @@ export const ls = {
 		getWidth: () => ls.get("actors-list-preview-width"),
 		getFolded: () => ls.get("actors-list-preview-folded"),
 	},
+	actorsEphemeralFilters: {
+		key: "actors-ephemeral-filters",
+		set: (filters: Record<string, unknown>) => {
+			ls.set(ls.actorsEphemeralFilters.key, JSON.stringify(filters));
+		},
+		get: () => {
+			try {
+				return JSON.parse(
+					ls.get(ls.actorsEphemeralFilters.key),
+				) as Record<string, unknown> | null;
+			} catch {
+				return {};
+			}
+		},
+	},
 };
 
 export function toRecord(value: unknown) {
