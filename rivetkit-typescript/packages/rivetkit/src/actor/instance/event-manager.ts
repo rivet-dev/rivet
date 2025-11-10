@@ -9,6 +9,7 @@ import { bufferToArrayBuffer } from "@/utils";
 import {
 	CONN_PERSIST_SYMBOL,
 	CONN_SEND_MESSAGE_SYMBOL,
+	CONN_SPEAKS_RIVETKIT_SYMBOL,
 	type Conn,
 } from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
@@ -215,17 +216,21 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Send to all subscribers
 		let sentCount = 0;
 		for (const connection of subscribers) {
-			try {
-				connection[CONN_SEND_MESSAGE_SYMBOL](toClientSerializer);
-				sentCount++;
-			} catch (error) {
-				this.#actor.rLog.error({
-					msg: "failed to send event to connection",
-					eventName: name,
-					connId: connection.id,
-					error:
-						error instanceof Error ? error.message : String(error),
-				});
+			if (connection[CONN_SPEAKS_RIVETKIT_SYMBOL]) {
+				try {
+					connection[CONN_SEND_MESSAGE_SYMBOL](toClientSerializer);
+					sentCount++;
+				} catch (error) {
+					this.#actor.rLog.error({
+						msg: "failed to send event to connection",
+						eventName: name,
+						connId: connection.id,
+						error:
+							error instanceof Error
+								? error.message
+								: String(error),
+					});
+				}
 			}
 		}
 
