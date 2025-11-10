@@ -178,6 +178,36 @@ function incrementCount(c: ActionContextOf)
 ```
 
 See [helper types](/docs/actors/helper-types) for more details on using `ActionContextOf` and other utility types.
+## API Reference
+
+# API Reference
+
+For comprehensive API documentation, please refer to the TypeDoc generated documentation for each package:
+
+## Core Packages
+
+- [**rivetkit**](/typedoc/rivetkit/) - Main RivetKit package with full actor framework
+- [**@rivetkit/actor**](/typedoc/actor/) - Core actor primitives
+- [**@rivetkit/core**](/typedoc/core/) - Core utilities and types
+
+## Platform Adapters
+
+- [**@rivetkit/cloudflare-workers**](/typedoc/cloudflare-workers/) - Cloudflare Workers adapter
+- [**@rivetkit/next-js**](/typedoc/next-js/) - Next.js integration
+- [**@rivetkit/react**](/typedoc/react/) - React hooks and components
+
+## Additional Packages
+
+- [**@rivetkit/db**](/typedoc/db/) - Database integration utilities
+
+---
+
+The TypeDoc documentation provides detailed information about:
+
+- All exported types and interfaces
+- Function signatures and parameters
+- Class methods and properties
+- Return types and examples
 ## Authentication
 
 # Authentication

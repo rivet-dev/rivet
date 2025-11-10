@@ -19,6 +19,7 @@ engine/sdks/schema/** linguist-generated=false
 website/public/llms.txt linguist-generated=true
 website/public/llms-full.txt linguist-generated=true
 website/public/docs/**/*.md linguist-generated=true
+website/public/typedoc/**/* linguist-generated=true
 **/Cargo.lock linguist-generated=true
 
 # I refuse to admit there's more TypeScript than Rust in the codebase

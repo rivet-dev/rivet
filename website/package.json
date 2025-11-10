@@ -14,6 +14,7 @@
 		"gen:examples": "node scripts/generateExamples.mjs",
 		"gen:markdown": "tsx scripts/generateMarkdownAndLlms.ts",
 		"gen:readme": "node scripts/generateReadme.mjs",
+		"gen:typedoc": "tsx scripts/gen-typedoc.ts",
 		"gen": "pnpm gen:navigation && pnpm gen:examples && pnpm gen:markdown && pnpm gen:readme"
 	},
 	"browserslist": "defaults, not ie <= 11",
@@ -22,7 +23,6 @@
 		"@fortawesome/free-brands-svg-icons": "^6.7.2",
 		"@fortawesome/free-solid-svg-icons": "^6.7.2",
 		"@fortawesome/react-fontawesome": "^0.2.6",
-		"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2",
 		"@giscus/react": "^3.1.0",
 		"@headlessui/react": "^2.2.7",
 		"@heroicons/react": "^2.2.0",
@@ -32,6 +32,7 @@
 		"@next/mdx": "^15.5.2",
 		"@next/third-parties": "latest",
 		"@rivet-gg/api": "0.0.1-rc8",
+		"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@bf2ebb2",
 		"@rivet-gg/components": "workspace:*",
 		"@rivet-gg/icons": "workspace:^",
 		"@shikijs/transformers": "^1.29.2",
@@ -97,6 +98,7 @@
 		"prettier": "^2.8.8",
 		"prettier-plugin-tailwindcss": "^0.3.0",
 		"tsx": "^4.20.5",
+		"typedoc": "^0.28.14",
 		"typescript": "^5.9.2",
 		"vite-node": "^2.1.9",
 		"yaml": "^2.8.1"
