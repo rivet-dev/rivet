@@ -45,10 +45,10 @@ pub async fn bump_serverless_autoscaler(
 	_query: (),
 	body: BumpServerlessAutoscalerRequest,
 ) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.signal(pegboard::workflows::serverless::pool::BumpConfig {})
+	ctx.signal(pegboard::workflows::serverless::pool::Bump {})
 		.to_workflow::<pegboard::workflows::serverless::pool::Workflow>()
-		.tag("runner_name", body.runner_name)
 		.tag("namespace_id", body.namespace_id)
+		.tag("runner_name", body.runner_name)
 		.send()
 		.await?;
 
