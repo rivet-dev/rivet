@@ -36,10 +36,6 @@ pub async fn router(
 			// MARK: Internal
 			.route("/cache/purge", post(internal::cache_purge))
 			.route(
-				"/bump-serverless-autoscaler",
-				post(internal::bump_serverless_autoscaler),
-			)
-			.route(
 				"/epoxy/coordinator/replica-reconfigure",
 				post(internal::epoxy_replica_reconfigure),
 			)
