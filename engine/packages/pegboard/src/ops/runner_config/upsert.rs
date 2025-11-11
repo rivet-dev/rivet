@@ -11,14 +11,14 @@ pub struct Input {
 	pub config: RunnerConfig,
 }
 
+struct UpsertOutput {
+	endpoint_config_changed: bool,
+	serverless_runner_created: bool,
+}
+
 #[operation]
 pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<bool> {
-	struct UpsertOutput {
-		endpoint_config_changed: bool,
-		serverless_runner_created: bool,
-	}
-
-	let res: UpsertOutput = ctx
+	let res = ctx
 		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(namespace::keys::subspace());
@@ -167,14 +167,14 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 			namespace_id: input.namespace_id,
 			runner_name: input.name.clone(),
 		})
-		.tag("runner_name", input.name.clone())
 		.tag("namespace_id", input.namespace_id)
+		.tag("runner_name", input.name.clone())
 		.unique()
 		.dispatch()
 		.await?;
 	} else if input.config.affects_autoscaler() {
 		// Maybe scale it
-		ctx.signal(crate::workflows::serverless::pool::BumpConfig {})
+		ctx.signal(crate::workflows::serverless::pool::Bump {})
 			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())

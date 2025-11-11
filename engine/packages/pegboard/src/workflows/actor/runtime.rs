@@ -193,6 +193,7 @@ impl From<AllocateActorOutputV1> for AllocateActorOutputV2 {
 				} => AllocateActorStatus::Allocated {
 					runner_id,
 					runner_workflow_id,
+					runner_protocol_version: None,
 				},
 				AllocateActorOutputV1::Pending {
 					pending_allocation_ts,
@@ -638,13 +639,28 @@ pub async fn spawn_actor(
 
 			// Bump the autoscaler so it can scale up
 			if allocate_res.serverless {
-				ctx.v(2)
+				let res = ctx
+					.v(2)
 					.signal(crate::workflows::serverless::pool::Bump {})
 					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
 					.tag("namespace_id", input.namespace_id)
 					.tag("runner_name", input.runner_name_selector.clone())
 					.send()
-					.await?;
+					.await;
+
+				if let Some(WorkflowError::WorkflowNotFound) = res
+					.as_ref()
+					.err()
+					.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+				{
+					tracing::warn!(
+						namespace_id=%input.namespace_id,
+						runner_name=%input.runner_name_selector,
+						"serverless pool workflow not found, respective runner config likely deleted"
+					);
+				} else {
+					res?;
+				}
 			}
 
 			if protocol::is_mk2(runner_protocol_version) {
@@ -714,13 +730,28 @@ pub async fn spawn_actor(
 
 			// Bump the autoscaler so it can scale up
 			if allocate_res.serverless {
-				ctx.v(2)
+				let res = ctx
+					.v(2)
 					.signal(crate::workflows::serverless::pool::Bump {})
 					.to_workflow::<crate::workflows::serverless::pool::Workflow>()
 					.tag("namespace_id", input.namespace_id)
 					.tag("runner_name", input.runner_name_selector.clone())
 					.send()
-					.await?;
+					.await;
+
+				if let Some(WorkflowError::WorkflowNotFound) = res
+					.as_ref()
+					.err()
+					.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+				{
+					tracing::warn!(
+						namespace_id=%input.namespace_id,
+						runner_name=%input.runner_name_selector,
+						"serverless pool workflow not found, respective runner config likely deleted"
+					);
+				} else {
+					res?;
+				}
 			}
 
 			let signal = if let AllocationOverride::DontSleep {

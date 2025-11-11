@@ -84,3 +84,10 @@ pub enum RunnerConfig {
 	#[error("not_found", "No config for this runner exists.")]
 	NotFound,
 }
+
+#[derive(RivetError, Debug, Deserialize, Serialize)]
+#[error("serverless_runner_pool")]
+pub enum ServerlessRunnerPool {
+	#[error("not_found", "No serverless pool for this runner exists.")]
+	NotFound,
+}
