@@ -3443,6 +3443,7 @@ dependencies = [
  "universaldb",
  "universalpubsub",
  "utoipa",
+ "uuid",
  "vbare",
 ]
 

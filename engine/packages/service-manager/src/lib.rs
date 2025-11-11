@@ -318,7 +318,7 @@ pub async fn start(
 		let join_fut = async {
 			let mut handle_futs = running_services
 				.iter_mut()
-				.map(|(_, handle)| handle)
+				.filter_map(|(_, handle)| (!handle.is_finished()).then_some(handle))
 				.collect::<FuturesUnordered<_>>();
 
 			while let Some(_) = handle_futs.next().await {}
@@ -344,7 +344,7 @@ pub async fn start(
 				if abort {
 					// Give time for services to handle final abort
 					tokio::time::sleep(Duration::from_millis(50)).await;
-					rivet_runtime::shutdown().await;
+					rivet_runtime::shutdown().await; // TODO: Fix `JoinHandle polled after completion` error
 
 					break;
 				}

@@ -50,6 +50,12 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub runner_lost_threshold: Option<i64>,
+	/// How long after last ping before considering a hibernating request disconnected.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub hibernating_request_eligible_threshold: Option<i64>,
 }
 
 impl Pegboard {
@@ -79,5 +85,10 @@ impl Pegboard {
 
 	pub fn runner_lost_threshold(&self) -> i64 {
 		self.runner_lost_threshold.unwrap_or(15_000)
+	}
+
+	pub fn hibernating_request_eligible_threshold(&self) -> i64 {
+		self.hibernating_request_eligible_threshold
+			.unwrap_or(90_000)
 	}
 }

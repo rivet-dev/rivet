@@ -1845,6 +1845,7 @@ impl ProxyService {
 					async move {
 						let request_id = Uuid::new_v4();
 						let mut ws_hibernation_close = false;
+						let mut after_hibernation = false;
 						let mut attempts = 0u32;
 
 						let ws_handle = WebSocketHandle::new(client_ws)
@@ -1859,6 +1860,7 @@ impl ProxyService {
 									&req_path,
 									&mut request_context,
 									request_id,
+									after_hibernation,
 								)
 								.await
 							{
@@ -1926,8 +1928,13 @@ impl ProxyService {
 										// - the gateway will continue reading messages from the client ws
 										//   (starting with the message that caused the hibernation to end)
 										let res = handler
-											.handle_websocket_hibernation(ws_handle.clone())
+											.handle_websocket_hibernation(
+												ws_handle.clone(),
+												request_id,
+											)
 											.await?;
+
+										after_hibernation = true;
 
 										// Despite receiving a close frame from the client during hibernation
 										// we are going to reconnect to the actor so that it knows the

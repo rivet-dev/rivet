@@ -50,23 +50,59 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 
 impl NamespaceRunnerConfig {
 	fn v1_to_v2(self) -> Result<Self> {
-		match self {
-			NamespaceRunnerConfig::V1(namespace_runner_config_v1::Data::Serverless(serverless)) => {
-				let namespace_runner_config_v1::Serverless {
-					url,
-					headers,
-					request_lifespan,
-					slots_per_runner,
-					min_runners,
-					max_runners,
-					runners_margin,
-				} = serverless;
+		if let NamespaceRunnerConfig::V1(namespace_runner_config_v1::Data::Serverless(serverless)) =
+			self
+		{
+			let namespace_runner_config_v1::Serverless {
+				url,
+				headers,
+				request_lifespan,
+				slots_per_runner,
+				min_runners,
+				max_runners,
+				runners_margin,
+			} = serverless;
 
-				Ok(NamespaceRunnerConfig::V2(
-					namespace_runner_config_v2::RunnerConfig {
-						metadata: None,
-						kind: namespace_runner_config_v2::RunnerConfigKind::Serverless(
-							namespace_runner_config_v2::Serverless {
+			Ok(NamespaceRunnerConfig::V2(
+				namespace_runner_config_v2::RunnerConfig {
+					metadata: None,
+					kind: namespace_runner_config_v2::RunnerConfigKind::Serverless(
+						namespace_runner_config_v2::Serverless {
+							url,
+							headers,
+							request_lifespan,
+							slots_per_runner,
+							min_runners,
+							max_runners,
+							runners_margin,
+						},
+					),
+				},
+			))
+		} else {
+			bail!("unexpected version");
+		}
+	}
+
+	fn v2_to_v1(self) -> Result<Self> {
+		if let NamespaceRunnerConfig::V2(config) = self {
+			let namespace_runner_config_v2::RunnerConfig { kind, .. } = config;
+
+			match kind {
+				namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
+					let namespace_runner_config_v2::Serverless {
+						url,
+						headers,
+						request_lifespan,
+						slots_per_runner,
+						min_runners,
+						max_runners,
+						runners_margin,
+					} = serverless;
+
+					Ok(NamespaceRunnerConfig::V1(
+						namespace_runner_config_v1::Data::Serverless(
+							namespace_runner_config_v1::Serverless {
 								url,
 								headers,
 								request_lifespan,
@@ -76,50 +112,14 @@ impl NamespaceRunnerConfig {
 								runners_margin,
 							},
 						),
-					},
-				))
-			}
-			value @ NamespaceRunnerConfig::V2(_) => Ok(value),
-		}
-	}
-
-	fn v2_to_v1(self) -> Result<Self> {
-		match self {
-			NamespaceRunnerConfig::V1(_) => Ok(self),
-			NamespaceRunnerConfig::V2(config) => {
-				let namespace_runner_config_v2::RunnerConfig { kind, .. } = config;
-
-				match kind {
-					namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
-						let namespace_runner_config_v2::Serverless {
-							url,
-							headers,
-							request_lifespan,
-							slots_per_runner,
-							min_runners,
-							max_runners,
-							runners_margin,
-						} = serverless;
-
-						Ok(NamespaceRunnerConfig::V1(
-							namespace_runner_config_v1::Data::Serverless(
-								namespace_runner_config_v1::Serverless {
-									url,
-									headers,
-									request_lifespan,
-									slots_per_runner,
-									min_runners,
-									max_runners,
-									runners_margin,
-								},
-							),
-						))
-					}
-					namespace_runner_config_v2::RunnerConfigKind::Normal => {
-						bail!("namespace runner config v1 does not support normal runner config")
-					}
+					))
+				}
+				namespace_runner_config_v2::RunnerConfigKind::Normal => {
+					bail!("namespace runner config v1 does not support normal runner config")
 				}
 			}
+		} else {
+			bail!("unexpected version");
 		}
 	}
 }

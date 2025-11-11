@@ -15,6 +15,7 @@ use crate::{
 
 #[tracing::instrument(skip_all, fields(runner_id=?conn.runner_id, workflow_id=?conn.workflow_id, protocol_version=%conn.protocol_version))]
 pub async fn task(
+	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
 	mut sub: Subscriber,
 	mut eviction_sub: Subscriber,
@@ -57,6 +58,26 @@ pub async fn task(
 
 		match &mut msg {
 			protocol::ToClient::ToClientClose => return Err(errors::WsError::Eviction.build()),
+			// Dynamically populate hibernating request ids
+			protocol::ToClient::ToClientCommands(command_wrappers) => {
+				for command_wrapper in command_wrappers {
+					if let protocol::Command::CommandStartActor(protocol::CommandStartActor {
+						actor_id,
+						hibernating_request_ids,
+						..
+					}) = &mut command_wrapper.inner
+					{
+						let ids = ctx
+							.op(pegboard::ops::actor::hibernating_request::list::Input {
+								actor_id: Id::parse(actor_id)?,
+							})
+							.await?;
+
+						*hibernating_request_ids =
+							ids.into_iter().map(|x| x.into_bytes().to_vec()).collect();
+					}
+				}
+			}
 			// Handle tunnel messages
 			protocol::ToClient::ToClientTunnelMessage(tunnel_msg) => {
 				match tunnel_msg.message_kind {

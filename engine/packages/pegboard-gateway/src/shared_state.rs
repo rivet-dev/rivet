@@ -17,13 +17,8 @@ const GC_INTERVAL: Duration = Duration::from_secs(15);
 const MESSAGE_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_PENDING_MSGS_SIZE_PER_REQ: u64 = util::size::mebibytes(1);
 
-pub enum TunnelMessageData {
-	Message(protocol::ToServerTunnelMessageKind),
-	Timeout,
-}
-
 pub struct InFlightRequestHandle {
-	pub msg_rx: mpsc::Receiver<TunnelMessageData>,
+	pub msg_rx: mpsc::Receiver<protocol::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	///
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
@@ -35,7 +30,7 @@ struct InFlightRequest {
 	/// UPS subject to send messages to for this request.
 	receiver_subject: String,
 	/// Sender for incoming messages to this request.
-	msg_tx: mpsc::Sender<TunnelMessageData>,
+	msg_tx: mpsc::Sender<protocol::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	drop_tx: watch::Sender<()>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
@@ -260,10 +255,7 @@ impl SharedState {
 							request_id=?Uuid::from_bytes(msg.request_id),
 							"forwarding message to request handler"
 						);
-						let _ = in_flight
-							.msg_tx
-							.send(TunnelMessageData::Message(msg.message_kind))
-							.await;
+						let _ = in_flight.msg_tx.send(msg.message_kind).await;
 
 						// Send ack back to runner
 						let ups_clone = self.ups.clone();
@@ -330,11 +322,7 @@ impl SharedState {
 		Ok(())
 	}
 
-	pub async fn resend_pending_websocket_messages(
-		&self,
-		request_id: RequestId,
-		last_msg_index: i64,
-	) -> Result<()> {
+	pub async fn resend_pending_websocket_messages(&self, request_id: RequestId) -> Result<()> {
 		let Some(mut req) = self.in_flight_requests.get_async(&request_id).await else {
 			bail!("request not in flight");
 		};
@@ -343,45 +331,12 @@ impl SharedState {
 
 		if let Some(hs) = &mut req.hibernation_state {
 			if !hs.pending_ws_msgs.is_empty() {
-				tracing::debug!(request_id=?Uuid::from_bytes(request_id.clone()), len=?hs.pending_ws_msgs.len(), ?last_msg_index, "resending pending messages");
+				tracing::debug!(request_id=?Uuid::from_bytes(request_id.clone()), len=?hs.pending_ws_msgs.len(), "resending pending messages");
 
-				let len = hs.pending_ws_msgs.len().try_into()?;
-
-				for (iter_index, pending_msg) in hs.pending_ws_msgs.iter().enumerate() {
-					let msg_index = hs
-						.last_ws_msg_index
-						.wrapping_sub(len)
-						.wrapping_add(1)
-						.wrapping_add(iter_index.try_into()?);
-
-					if last_msg_index < 0 || wrapping_gt(msg_index, last_msg_index.try_into()?) {
-						self.ups
-							.publish(&receiver_subject, &pending_msg.payload, PublishOpts::one())
-							.await?;
-					}
-				}
-
-				// Perform ack
-				if last_msg_index >= 0 {
-					let last_msg_index = last_msg_index.try_into()?;
-					let mut iter_index = 0;
-
-					hs.pending_ws_msgs.retain(|_| {
-						let msg_index = hs
-							.last_ws_msg_index
-							.wrapping_sub(len)
-							.wrapping_add(1)
-							.wrapping_add(iter_index);
-						let keep = wrapping_gt(msg_index, last_msg_index);
-
-						iter_index += 1;
-
-						keep
-					});
-
-					if hs.pending_ws_msgs.is_empty() {
-						hs.last_ws_msg_index = last_msg_index;
-					}
+				for pending_msg in &hs.pending_ws_msgs {
+					self.ups
+						.publish(&receiver_subject, &pending_msg.payload, PublishOpts::one())
+						.await?;
 				}
 			}
 		}
@@ -517,7 +472,9 @@ impl SharedState {
 						"gc stopping in flight request"
 					);
 
-					let _ = req.msg_tx.send(TunnelMessageData::Timeout);
+					if req.drop_tx.send(()).is_err() {
+						tracing::debug!(request_id=?Uuid::from_bytes(*request_id), "failed to send timeout msg to tunnel");
+					}
 
 					// Mark req as stopping to skip this loop next time the gc is run
 					req.stopping = true;

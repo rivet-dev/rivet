@@ -5,6 +5,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode};
+use rand::Rng;
 use rivet_error::*;
 use rivet_guard_core::{
 	WebSocketHandle,
@@ -20,13 +21,16 @@ use rivet_guard_core::{
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{Mutex, watch};
+use tokio::{
+	sync::{Mutex, watch},
+	task::JoinHandle,
+};
 use tokio_tungstenite::tungstenite::{
 	Message,
 	protocol::frame::{CloseFrame, coding::CloseCode},
 };
 
-use crate::shared_state::{InFlightRequestHandle, SharedState, TunnelMessageData};
+use crate::shared_state::{InFlightRequestHandle, SharedState};
 
 pub mod shared_state;
 
@@ -156,7 +160,7 @@ impl CustomServeTrait for PegboardGateway {
 		let request_id = Uuid::new_v4().into_bytes();
 		let InFlightRequestHandle {
 			mut msg_rx,
-			drop_rx: _drop_rx,
+			mut drop_rx,
 		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject, request_id)
@@ -182,30 +186,39 @@ impl CustomServeTrait for PegboardGateway {
 		// Wait for response
 		tracing::debug!("gateway waiting for response from tunnel");
 		let fut = async {
-			while let Some(msg) = msg_rx.recv().await {
-				match msg {
-					TunnelMessageData::Message(msg) => match msg {
-						protocol::ToServerTunnelMessageKind::ToServerResponseStart(
-							response_start,
-						) => {
-							return anyhow::Ok(response_start);
+			loop {
+				tokio::select! {
+					res = msg_rx.recv() => {
+						if let Some(msg) = res {
+							match msg {
+								protocol::ToServerTunnelMessageKind::ToServerResponseStart(
+									response_start,
+								) => {
+									return anyhow::Ok(response_start);
+								}
+								protocol::ToServerTunnelMessageKind::ToServerResponseAbort => {
+									tracing::warn!("request aborted");
+									return Err(ServiceUnavailable.build());
+								}
+								_ => {
+									tracing::warn!("received non-response message from pubsub");
+								}
+							}
+						} else {
+							tracing::warn!(
+								request_id=?Uuid::from_bytes(request_id),
+								"received no message response during request init",
+							);
+							break;
 						}
-						protocol::ToServerTunnelMessageKind::ToServerResponseAbort => {
-							tracing::warn!("request aborted");
-							return Err(ServiceUnavailable.build());
-						}
-						_ => {
-							tracing::warn!("received non-response message from pubsub");
-						}
-					},
-					TunnelMessageData::Timeout => {
+					}
+					_ = drop_rx.changed() => {
 						tracing::warn!("tunnel message timeout");
 						return Err(ServiceUnavailable.build());
 					}
 				}
 			}
 
-			tracing::warn!(request_id=?Uuid::from_bytes(request_id), "received no message response during request init");
 			Err(ServiceUnavailable.build())
 		};
 		let response_start = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
@@ -252,6 +265,7 @@ impl CustomServeTrait for PegboardGateway {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		unique_request_id: Uuid,
+		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
@@ -272,73 +286,87 @@ impl CustomServeTrait for PegboardGateway {
 		let request_id = unique_request_id.into_bytes();
 		let InFlightRequestHandle {
 			mut msg_rx,
-			drop_rx: _drop_rx,
+			mut drop_rx,
 		} = self
 			.shared_state
 			.start_in_flight_request(tunnel_subject.clone(), request_id)
 			.await;
 
-		// Send WebSocket open message
-		let open_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(
-			protocol::ToClientWebSocketOpen {
-				actor_id: actor_id.clone(),
-				path: self.path.clone(),
-				headers: request_headers,
-			},
-		);
+		// If we are reconnecting after hibernation, don't send an open message
+		let can_hibernate = if after_hibernation {
+			true
+		} else {
+			// Send WebSocket open message
+			let open_message = protocol::ToClientTunnelMessageKind::ToClientWebSocketOpen(
+				protocol::ToClientWebSocketOpen {
+					actor_id: actor_id.clone(),
+					path: self.path.clone(),
+					headers: request_headers,
+				},
+			);
 
-		self.shared_state
-			.send_message(request_id, open_message)
-			.await?;
+			self.shared_state
+				.send_message(request_id, open_message)
+				.await?;
 
-		tracing::debug!("gateway waiting for websocket open from tunnel");
+			tracing::debug!("gateway waiting for websocket open from tunnel");
 
-		// Wait for WebSocket open acknowledgment
-		let fut = async {
-			while let Some(msg) = msg_rx.recv().await {
-				match msg {
-					TunnelMessageData::Message(
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg),
-					) => {
-						return anyhow::Ok(msg);
-					}
-					TunnelMessageData::Message(
-						protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
-					) => {
-						tracing::warn!(?close, "websocket closed before opening");
-						return Err(WebSocketServiceUnavailable.build());
-					}
-					TunnelMessageData::Timeout => {
-						tracing::warn!("websocket open timeout");
-						return Err(WebSocketServiceUnavailable.build());
-					}
-					_ => {
-						tracing::warn!(
-							"received unexpected message while waiting for websocket open"
-						);
+			// Wait for WebSocket open acknowledgment
+			let fut = async {
+				loop {
+					tokio::select! {
+						res = msg_rx.recv() => {
+							if let Some(msg) = res {
+								match msg {
+									protocol::ToServerTunnelMessageKind::ToServerWebSocketOpen(msg) => {
+										return anyhow::Ok(msg);
+									}
+									protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
+										tracing::warn!(?close, "websocket closed before opening");
+										return Err(WebSocketServiceUnavailable.build());
+									}
+									_ => {
+										tracing::warn!(
+											"received unexpected message while waiting for websocket open"
+										);
+									}
+								}
+							} else {
+								tracing::warn!(
+									request_id=?Uuid::from_bytes(request_id),
+									"received no message response during ws init",
+								);
+								break;
+							}
+						}
+						_ = drop_rx.changed() => {
+							tracing::warn!("websocket open timeout");
+							return Err(WebSocketServiceUnavailable.build());
+						}
 					}
 				}
-			}
 
-			tracing::warn!(request_id=?Uuid::from_bytes(request_id), "received no message response during ws init");
-			Err(WebSocketServiceUnavailable.build())
+				Err(WebSocketServiceUnavailable.build())
+			};
+
+			let open_msg = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
+				.await
+				.map_err(|_| {
+					tracing::warn!("timed out waiting for tunnel ack");
+
+					WebSocketServiceUnavailable.build()
+				})??;
+
+			self.shared_state
+				.toggle_hibernation(request_id, open_msg.can_hibernate)
+				.await?;
+
+			open_msg.can_hibernate
 		};
-
-		let open_msg = tokio::time::timeout(TUNNEL_ACK_TIMEOUT, fut)
-			.await
-			.map_err(|_| {
-				tracing::warn!("timed out waiting for tunnel ack");
-
-				WebSocketServiceUnavailable.build()
-			})??;
-
-		self.shared_state
-			.toggle_hibernation(request_id, open_msg.can_hibernate)
-			.await?;
 
 		// Send reclaimed messages
 		self.shared_state
-			.resend_pending_websocket_messages(request_id, open_msg.last_msg_index)
+			.resend_pending_websocket_messages(request_id)
 			.await?;
 
 		let ws_rx = client_ws.recv();
@@ -355,9 +383,7 @@ impl CustomServeTrait for PegboardGateway {
 						res = msg_rx.recv() => {
 							if let Some(msg) = res {
 								match msg {
-									TunnelMessageData::Message(
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg),
-									) => {
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessage(ws_msg) => {
 										let msg = if ws_msg.binary {
 											Message::Binary(ws_msg.data.into())
 										} else {
@@ -367,28 +393,20 @@ impl CustomServeTrait for PegboardGateway {
 										};
 										client_ws.send(msg).await?;
 									}
-									TunnelMessageData::Message(
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack),
-									) => {
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketMessageAck(ack) => {
 										shared_state
 											.ack_pending_websocket_messages(request_id, ack.index)
 											.await?;
 									}
-									TunnelMessageData::Message(
-										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close),
-									) => {
+										protocol::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 										tracing::debug!(?close, "server closed websocket");
 
-										if open_msg.can_hibernate && close.retry {
+										if can_hibernate && close.retry {
 											// Successful closure
 											return Err(WebSocketServiceHibernate.build());
 										} else {
 											return Ok(LifecycleResult::ServerClose(close));
 										}
-									}
-									TunnelMessageData::Timeout => {
-										tracing::warn!("websocket message timeout");
-										return Err(WebSocketServiceTimeout.build());
 									}
 									_ => {}
 								}
@@ -396,6 +414,10 @@ impl CustomServeTrait for PegboardGateway {
 								tracing::debug!("tunnel sub closed");
 								return Err(WebSocketServiceHibernate.build());
 							}
+						}
+						_ = drop_rx.changed() => {
+							tracing::warn!("websocket message timeout");
+							return Err(WebSocketServiceTimeout.build());
 						}
 						_ = tunnel_to_ws_abort_rx.changed() => {
 							tracing::debug!("task aborted");
@@ -555,22 +577,77 @@ impl CustomServeTrait for PegboardGateway {
 	async fn handle_websocket_hibernation(
 		&self,
 		client_ws: WebSocketHandle,
+		unique_request_id: Uuid,
+	) -> Result<HibernationResult> {
+		// Start keepalive task
+		let ctx = self.ctx.clone();
+		let actor_id = self.actor_id;
+		let keepalive_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+			let mut ping_interval = tokio::time::interval(Duration::from_millis(
+				(ctx.config()
+					.pegboard()
+					.hibernating_request_eligible_threshold()
+					/ 2)
+				.try_into()?,
+			));
+			ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				ping_interval.tick().await;
+
+				// Jitter sleep to prevent stampeding herds
+				let jitter = { rand::thread_rng().gen_range(0..128) };
+				tokio::time::sleep(Duration::from_millis(jitter)).await;
+
+				ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+					actor_id,
+					request_id: unique_request_id,
+				})
+				.await?;
+			}
+		});
+
+		let res = self.handle_websocket_hibernation_inner(client_ws).await;
+
+		keepalive_handle.abort();
+
+		match &res {
+			Ok(HibernationResult::Continue) => {}
+			Ok(HibernationResult::Close) | Err(_) => {
+				// No longer an active hibernating request, delete entry
+				self.ctx
+					.op(pegboard::ops::actor::hibernating_request::delete::Input {
+						actor_id: self.actor_id,
+						request_id: unique_request_id,
+					})
+					.await?;
+			}
+		}
+
+		res
+	}
+}
+
+impl PegboardGateway {
+	async fn handle_websocket_hibernation_inner(
+		&self,
+		client_ws: WebSocketHandle,
 	) -> Result<HibernationResult> {
 		let mut ready_sub = self
 			.ctx
 			.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", self.actor_id))
 			.await?;
 
-		let close = tokio::select! {
+		let res = tokio::select! {
 			_ = ready_sub.next() => {
 				tracing::debug!("actor became ready during hibernation");
 
 				HibernationResult::Continue
 			}
 			hibernation_res = hibernate_ws(client_ws.recv()) => {
-				let res = hibernation_res?;
+				let hibernation_res = hibernation_res?;
 
-				match &res {
+				match &hibernation_res {
 					HibernationResult::Continue => {
 						tracing::debug!("received message during hibernation");
 					}
@@ -579,11 +656,11 @@ impl CustomServeTrait for PegboardGateway {
 					}
 				}
 
-				res
+				hibernation_res
 			}
 		};
 
-		Ok(close)
+		Ok(res)
 	}
 }
 

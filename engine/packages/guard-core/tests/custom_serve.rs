@@ -72,6 +72,7 @@ impl CustomServeTrait for TestCustomServe {
 		_path: &str,
 		_request_context: &mut RequestContext,
 		_unique_request_id: Uuid,
+		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Track this WebSocket call
 		self.tracker
@@ -115,6 +116,7 @@ impl CustomServeTrait for TestCustomServe {
 	async fn handle_websocket_hibernation(
 		&self,
 		_websocket: WebSocketHandle,
+		_unique_request_id: Uuid,
 	) -> Result<HibernationResult> {
 		// Track this WebSocket call
 		self.tracker

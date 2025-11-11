@@ -65,7 +65,7 @@ define_keys! {
 	(37, TOTAL_MEMORY, "total_memory"),
 	(38, TOTAL_CPU, "total_cpu"),
 	(39, NAMESPACE, "namespace"),
-	// 40
+	(40, HIBERNATING_REQUEST, "hibernating_request"),
 	(41, DISPLAY_NAME, "display_name"),
 	(42, CONNECTABLE, "connectable"),
 	(43, SLEEP_TS, "sleep_ts"),
