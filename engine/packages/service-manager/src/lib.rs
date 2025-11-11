@@ -160,9 +160,9 @@ pub async fn start(
 
 						loop {
 							match (service.run)(config.clone(), pools.clone()).await {
-								Result::Ok(res) => {
+								Result::Ok(_) => {
 									if shutting_down.load(Ordering::SeqCst) {
-										tracing::info!(service=%service.name, ?res, "service exited");
+										tracing::info!(service=%service.name, "service exited");
 										break;
 									} else {
 										tracing::error!(service=%service.name, "service exited unexpectedly");

@@ -4,15 +4,16 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use crate::cert_resolver::{CertResolverFn, create_tls_config};
-use crate::metrics;
-use crate::proxy_service::{CacheKeyFn, MiddlewareFn, ProxyServiceFactory, RoutingFn};
 use anyhow::Result;
 use futures_util::FutureExt;
 use hyper::service::service_fn;
 use rivet_runtime::TermSignal;
 use tokio_rustls::TlsAcceptor;
 use tracing::Instrument;
+
+use crate::cert_resolver::{CertResolverFn, create_tls_config};
+use crate::metrics;
+use crate::proxy_service::{CacheKeyFn, MiddlewareFn, ProxyServiceFactory, RoutingFn};
 
 // Start the server
 #[tracing::instrument(skip_all)]
@@ -72,11 +73,8 @@ pub async fn run_server(
 		(None, None, None, None)
 	};
 
-	// Set up server builder and graceful shutdown
 	let server = hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new());
 	let graceful = hyper_util::server::graceful::GracefulShutdown::new();
-
-	// Set up signal handling for graceful shutdown
 	let mut term_signal = TermSignal::new().await;
 
 	tracing::info!("HTTP server listening on {}", http_addr);
@@ -252,11 +250,23 @@ pub async fn run_server(
 	let shutdown_duration = config.runtime.guard_shutdown_duration();
 	tracing::info!(duration=?shutdown_duration, "starting guard shutdown");
 
-	let mut graceful_fut = async move { graceful.shutdown().await }.boxed();
+	let mut complete_fut = async move {
+		// Wait until remaining requests finish
+		graceful.shutdown().await;
+
+		// Wait until remaining tasks finish
+		http_factory.wait_idle().await;
+
+		if let Some(https_factory) = https_factory {
+			https_factory.wait_idle().await;
+		}
+	}
+	.boxed();
+
 	let shutdown_start = Instant::now();
 	loop {
 		tokio::select! {
-			_ = &mut graceful_fut => {
+			_ = &mut complete_fut => {
 				tracing::info!("all guard requests completed");
 				break;
 			}
