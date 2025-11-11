@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
-use super::runner;
 use futures_util::FutureExt;
 use gas::{db::WorkflowData, prelude::*};
 use rivet_types::{keys, runner_configs::RunnerConfigKind};
+
+use super::runner;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Input {
@@ -11,79 +10,22 @@ pub struct Input {
 	pub runner_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ServerlessRunnerConfig {
-	url: String,
-	headers: HashMap<String, String>,
-	request_lifespan: u32,
-	slots_per_runner: u32,
-	min_runners: u32,
-	max_runners: u32,
-	runners_margin: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct LifecycleState {
 	runners: Vec<Id>,
-	config: ServerlessRunnerConfig,
-	first_loop: bool,
-}
-
-impl LifecycleState {
-	fn new(config: ServerlessRunnerConfig) -> Self {
-		Self {
-			runners: Vec::new(),
-			config: config,
-			first_loop: true,
-		}
-	}
 }
 
 #[workflow]
 pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
-	let namespace_name = ctx
-		.activity(ReadNamespaceNameInput {
-			namespace_id: input.namespace_id,
-		})
-		.await?;
-
-	let config = ctx
-		.activity(ReadConfigInput {
-			namespace_id: input.namespace_id,
-			runner_name: input.runner_name.clone(),
-		})
-		.await?;
-
-	ctx.loope(LifecycleState::new(config), |ctx, state| {
+	ctx.loope(LifecycleState::default(), |ctx, state| {
 		let input = input.clone();
-		let namespace_name = namespace_name.clone();
-
 		async move {
-			if state.first_loop {
-				state.first_loop = false
-			} else {
-				// Wait for Bump or runner update signals until we tick
-				match ctx.listen::<Main>().await? {
-					Main::RunnerDrainStarted(sig) => {
-						let pos_to_drain = state
-							.runners
-							.iter()
-							.position(|wf_id| *wf_id == sig.runner_wf_id);
-						if let Some(pos_to_drain) = pos_to_drain {
-							state.runners.remove(pos_to_drain);
-						}
-					}
-					Main::BumpConfig(_) => {
-						// Update config
-						state.config = ctx
-							.activity(ReadConfigInput {
-								namespace_id: input.namespace_id,
-								runner_name: input.runner_name.clone(),
-							})
-							.await?;
-					}
-					Main::Bump(_) => {}
+			// Wait for Bump or runner update signals until we tick
+			match ctx.listen::<Main>().await? {
+				Main::RunnerDrainStarted(sig) => {
+					state.runners.retain(|wf_id| *wf_id != sig.runner_wf_id);
 				}
+				Main::Bump(_) => {}
 			}
 
 			// 1. Remove completed connections
@@ -96,16 +38,15 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 			state.runners.retain(|r| !completed_runners.contains(r));
 
 			// 2. Get desired count -> drain and start counts
-			let desired_count = ctx
+			let ReadDesiredOutput::Desired(desired_count) = ctx
 				.activity(ReadDesiredInput {
 					namespace_id: input.namespace_id,
 					runner_name: input.runner_name.clone(),
-					slots_per_runner: state.config.slots_per_runner as i64,
-					min_runners: state.config.min_runners as i64,
-					max_runners: state.config.max_runners as i64,
-					runners_margin: state.config.runners_margin as i64,
 				})
-				.await?;
+				.await?
+			else {
+				return Ok(Loop::Break(()));
+			};
 
 			let drain_count = state.runners.len().saturating_sub(desired_count);
 			let start_count = desired_count.saturating_sub(state.runners.len());
@@ -130,12 +71,7 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 						.workflow(runner::Input {
 							pool_wf_id: ctx.workflow_id(),
 							namespace_id: input.namespace_id,
-							namespace_name: namespace_name.clone(),
 							runner_name: input.runner_name.clone(),
-							url: state.config.url.clone(),
-							headers: state.config.headers.clone(),
-							request_lifespan: state.config.request_lifespan,
-							slots_per_runner: state.config.slots_per_runner,
 						})
 						.tag("namespace_id", input.namespace_id)
 						.tag("runner_name", input.runner_name.clone())
@@ -146,82 +82,13 @@ pub async fn pegboard_serverless_pool(ctx: &mut WorkflowCtx, input: &Input) -> R
 				}
 			}
 
-			Ok(Loop::<()>::Continue)
+			Ok(Loop::Continue)
 		}
 		.boxed()
 	})
 	.await?;
 
 	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct ReadNamespaceNameInput {
-	namespace_id: Id,
-}
-
-#[activity(ReadNamespaceName)]
-async fn read_namespace_name(ctx: &ActivityCtx, input: &ReadNamespaceNameInput) -> Result<String> {
-	let res = ctx
-		.op(namespace::ops::get_global::Input {
-			namespace_ids: vec![input.namespace_id],
-		})
-		.await?;
-
-	let namespace = res.first().context("runner namespace not found")?;
-
-	Ok(namespace.name.clone())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct ReadConfigInput {
-	namespace_id: Id,
-	runner_name: String,
-}
-
-#[activity(ReadConfig)]
-async fn read_config(ctx: &ActivityCtx, input: &ReadConfigInput) -> Result<ServerlessRunnerConfig> {
-	let run_configs = ctx
-		.op(crate::ops::runner_config::get::Input {
-			runners: vec![(input.namespace_id, input.runner_name.clone())],
-			bypass_cache: false,
-		})
-		.await?;
-
-	let res = run_configs
-		.first()
-		.context("couldn't find own runner config")?;
-
-	match &res.config.kind {
-		&RunnerConfigKind::Normal {} => {
-			tracing::error!(
-				namespace_id = ?input.namespace_id,
-				runner_name = ?input.runner_name,
-				"serverless pool running for non-serverless runner config"
-			);
-
-			Err(anyhow!(
-				"serverless pool running for non-serverless runner config"
-			))
-		}
-		&RunnerConfigKind::Serverless {
-			ref url,
-			ref headers,
-			request_lifespan,
-			slots_per_runner,
-			min_runners,
-			max_runners,
-			runners_margin,
-		} => Ok(ServerlessRunnerConfig {
-			url: url.clone(),
-			headers: headers.clone(),
-			request_lifespan,
-			slots_per_runner,
-			min_runners,
-			max_runners,
-			runners_margin,
-		}),
-	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -244,14 +111,37 @@ async fn get_completed(ctx: &ActivityCtx, input: &GetCompletedInput) -> Result<V
 struct ReadDesiredInput {
 	namespace_id: Id,
 	runner_name: String,
-	slots_per_runner: i64,
-	min_runners: i64,
-	max_runners: i64,
-	runners_margin: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum ReadDesiredOutput {
+	Desired(usize),
+	Stop,
 }
 
 #[activity(ReadDesired)]
-async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<usize> {
+async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<ReadDesiredOutput> {
+	let runner_config_res = ctx
+		.op(crate::ops::runner_config::get::Input {
+			runners: vec![(input.namespace_id, input.runner_name.clone())],
+			bypass_cache: false,
+		})
+		.await?;
+	let Some(runner_config) = runner_config_res.into_iter().next() else {
+		return Ok(ReadDesiredOutput::Stop);
+	};
+
+	let RunnerConfigKind::Serverless {
+		slots_per_runner,
+		min_runners,
+		max_runners,
+		runners_margin,
+		..
+	} = runner_config.config.kind
+	else {
+		return Ok(ReadDesiredOutput::Stop);
+	};
+
 	let desired_slots = ctx
 		.udb()?
 		.run(|tx| async move {
@@ -270,8 +160,8 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<usi
 
 	let adjusted_desired_slots = if desired_slots < 0 {
 		tracing::error!(
-			namespace_id = ?input.namespace_id,
-			runner_name = ?input.runner_name,
+			namespace_id=%input.namespace_id,
+			runner_name=%input.runner_name,
 			?desired_slots,
 			"negative desired slots, scaling to 0"
 		);
@@ -281,22 +171,18 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<usi
 	};
 
 	// Won't overflow as these values are all in u32 range
-	let desired_count: usize = (input.runners_margin
-		+ rivet_util::math::div_ceil_i64(adjusted_desired_slots, input.slots_per_runner)
-			.max(input.min_runners))
-	.min(input.max_runners)
+	let desired_count = (runners_margin
+		+ (adjusted_desired_slots as u32).div_ceil(slots_per_runner))
+	.max(min_runners)
+	.min(max_runners)
 	.try_into()?;
 
-	Ok(desired_count)
+	Ok(ReadDesiredOutput::Desired(desired_count))
 }
 
 #[signal("pegboard_serverless_bump")]
 #[derive(Debug)]
 pub struct Bump {}
-
-#[signal("pegboard_serverless_bump_config")]
-#[derive(Debug)]
-pub struct BumpConfig {}
 
 #[signal("pegboard_serverless_runner_drain_started")]
 pub struct RunnerDrainStarted {
@@ -305,6 +191,5 @@ pub struct RunnerDrainStarted {
 
 join_signal!(Main {
 	Bump,
-	BumpConfig,
 	RunnerDrainStarted,
 });

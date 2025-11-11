@@ -615,6 +615,7 @@ pub async fn spawn_actor(
 		} => {
 			ctx.removed::<Message<super::BumpServerlessAutoscalerStub>>()
 				.await?;
+
 			// Bump the autoscaler so it can scale up
 			if allocate_res.serverless {
 				ctx.v(2)

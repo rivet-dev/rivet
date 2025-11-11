@@ -19,7 +19,7 @@ pub struct RunnerConfig {
 }
 
 #[operation]
-pub async fn pegboard_runner_config__get(
+pub async fn pegboard_runner_config_get(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<RunnerConfig>> {
