@@ -44,7 +44,7 @@ pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) ->
 
 	// Bump autoscaler when a serverless config is modified
 	if delete_workflow {
-		ctx.signal(crate::workflows::serverless::pool::BumpConfig {})
+		ctx.signal(crate::workflows::serverless::pool::Bump {})
 			.to_workflow::<crate::workflows::serverless::pool::Workflow>()
 			.tag("namespace_id", input.namespace_id)
 			.tag("runner_name", input.name.clone())

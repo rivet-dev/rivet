@@ -45,12 +45,23 @@ pub async fn bump_serverless_autoscaler(
 	_query: (),
 	body: BumpServerlessAutoscalerRequest,
 ) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.signal(pegboard::workflows::serverless::pool::BumpConfig {})
+	let res = ctx
+		.signal(pegboard::workflows::serverless::pool::Bump {})
 		.to_workflow::<pegboard::workflows::serverless::pool::Workflow>()
-		.tag("runner_name", body.runner_name)
 		.tag("namespace_id", body.namespace_id)
+		.tag("runner_name", body.runner_name.clone())
 		.send()
-		.await?;
+		.await;
+
+	if let Some(WorkflowError::WorkflowNotFound) = res
+		.as_ref()
+		.err()
+		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+	{
+		return Err(pegboard::errors::ServerlessRunnerPool::NotFound.build());
+	} else {
+		res?;
+	}
 
 	Ok(BumpServerlessAutoscalerResponse {})
 }
