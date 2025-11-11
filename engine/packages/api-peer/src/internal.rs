@@ -30,32 +30,6 @@ pub async fn cache_purge(
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BumpServerlessAutoscalerRequest {
-	pub namespace_id: Id,
-	pub runner_name: String,
-}
-
-#[derive(Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct BumpServerlessAutoscalerResponse {}
-
-pub async fn bump_serverless_autoscaler(
-	ctx: ApiCtx,
-	_path: (),
-	_query: (),
-	body: BumpServerlessAutoscalerRequest,
-) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.signal(pegboard::workflows::serverless::pool::BumpConfig {})
-		.to_workflow::<pegboard::workflows::serverless::pool::Workflow>()
-		.tag("runner_name", body.runner_name)
-		.tag("namespace_id", body.namespace_id)
-		.send()
-		.await?;
-
-	Ok(BumpServerlessAutoscalerResponse {})
-}
-
-#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SetTracingConfigRequest {
 	#[serde(default, skip_serializing_if = "Option::is_none")]

@@ -56,6 +56,25 @@ pub struct Pegboard {
 	///
 	/// **Experimental**
 	pub hibernating_request_eligible_threshold: Option<i64>,
+	/// Time to delay a serverless runner from attempting a new outbound connection after a connection failure.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub serverless_base_retry_timeout: Option<usize>,
+	/// How long a serverless runner goes without connection failures before it's retry count is reset to 0,
+	/// effectively resetting its backoff to 0.
+	///
+	/// Unit is in milliseconds.
+	///
+	/// **Experimental**
+	pub serverless_retry_reset_duration: Option<i64>,
+	/// Maximum exponent for the serverless backoff calculation.
+	///
+	/// This controls the maximum backoff duration when serverlessly connecting to runners.
+	///
+	/// **Experimental**
+	pub serverless_backoff_max_exponent: Option<usize>,
 }
 
 impl Pegboard {
@@ -90,5 +109,18 @@ impl Pegboard {
 	pub fn hibernating_request_eligible_threshold(&self) -> i64 {
 		self.hibernating_request_eligible_threshold
 			.unwrap_or(90_000)
+	}
+
+	pub fn serverless_base_retry_timeout(&self) -> usize {
+		self.serverless_base_retry_timeout.unwrap_or(2000)
+	}
+
+	pub fn serverless_retry_reset_duration(&self) -> i64 {
+		self.serverless_retry_reset_duration
+			.unwrap_or(10 * 60 * 1000)
+	}
+
+	pub fn serverless_backoff_max_exponent(&self) -> usize {
+		self.serverless_backoff_max_exponent.unwrap_or(8)
 	}
 }

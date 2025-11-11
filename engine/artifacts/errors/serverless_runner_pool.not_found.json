@@ -1,0 +1,5 @@
+{
+  "code": "not_found",
+  "group": "serverless_runner_pool",
+  "message": "No serverless pool for this runner exists."
+}

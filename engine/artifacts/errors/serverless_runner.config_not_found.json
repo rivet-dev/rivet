@@ -1,5 +1,0 @@
-{
-  "code": "config_not_found",
-  "group": "serverless_runner",
-  "message": "No config for this runner exists."
-}
