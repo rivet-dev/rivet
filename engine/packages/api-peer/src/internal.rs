@@ -29,6 +29,12 @@ pub async fn cache_purge(
 	Ok(CachePurgeResponse {})
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct BumpServerlessAutoscalerRequest {
+	pub namespace_id: Id,
+	pub runner_name: String,
+}
+
 #[derive(Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BumpServerlessAutoscalerResponse {}
@@ -37,11 +43,25 @@ pub async fn bump_serverless_autoscaler(
 	ctx: ApiCtx,
 	_path: (),
 	_query: (),
-	_body: (),
+	body: BumpServerlessAutoscalerRequest,
 ) -> Result<BumpServerlessAutoscalerResponse> {
-	ctx.msg(rivet_types::msgs::pegboard::BumpServerlessAutoscaler {})
+	let res = ctx
+		.signal(pegboard::workflows::serverless::pool::Bump {})
+		.to_workflow::<pegboard::workflows::serverless::pool::Workflow>()
+		.tag("namespace_id", body.namespace_id)
+		.tag("runner_name", body.runner_name.clone())
 		.send()
-		.await?;
+		.await;
+
+	if let Some(WorkflowError::WorkflowNotFound) = res
+		.as_ref()
+		.err()
+		.and_then(|x| x.chain().find_map(|x| x.downcast_ref::<WorkflowError>()))
+	{
+		return Err(pegboard::errors::ServerlessRunnerPool::NotFound.build());
+	} else {
+		res?;
+	}
 
 	Ok(BumpServerlessAutoscalerResponse {})
 }

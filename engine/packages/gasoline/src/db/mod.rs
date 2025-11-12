@@ -309,6 +309,10 @@ impl WorkflowData {
 			.transpose()
 			.map_err(WorkflowError::DeserializeWorkflowOutput)
 	}
+
+	pub fn has_output(&self) -> bool {
+		self.output.is_some()
+	}
 }
 
 #[derive(Debug)]

@@ -88,7 +88,7 @@ async fn refresh_metadata_inner(
 		.collect();
 
 	let runner_configs = ctx
-		.op(namespace::ops::runner_config::get::Input {
+		.op(pegboard::ops::runner_config::get::Input {
 			runners,
 			bypass_cache: true,
 		})

@@ -73,7 +73,7 @@ async fn find_dc_with_runner_inner(ctx: &OperationCtx, input: &Input) -> Result<
 
 	// Check if a serverless runner config with a max runners > 0 exists
 	let res = ctx
-		.op(namespace::ops::runner_config::get::Input {
+		.op(crate::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
 			bypass_cache: false,
 		})
