@@ -79,6 +79,17 @@ function buildOpenApiResponses<T>(schema: T) {
 	};
 }
 
+function buildOpenApiRequestBody<T>(schema: T) {
+	return {
+		required: true,
+		content: {
+			"application/json": {
+				schema,
+			},
+		},
+	};
+}
+
 export function createManagerRouter(
 	registryConfig: RegistryConfig,
 	runConfig: RunnerConfig,
@@ -405,13 +416,7 @@ function addManagerRoutes(
 			method: "put",
 			path: "/actors",
 			request: {
-				body: {
-					content: {
-						"application/json": {
-							schema: ActorsGetOrCreateRequestSchema,
-						},
-					},
-				},
+				body: buildOpenApiRequestBody(ActorsGetOrCreateRequestSchema),
 			},
 			responses: buildOpenApiResponses(ActorsGetOrCreateResponseSchema),
 		});
@@ -457,13 +462,7 @@ function addManagerRoutes(
 			method: "post",
 			path: "/actors",
 			request: {
-				body: {
-					content: {
-						"application/json": {
-							schema: ActorsCreateRequestSchema,
-						},
-					},
-				},
+				body: buildOpenApiRequestBody(ActorsCreateRequestSchema),
 			},
 			responses: buildOpenApiResponses(ActorsCreateResponseSchema),
 		});
