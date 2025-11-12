@@ -12,7 +12,10 @@ import type {
 	ManagerDriver,
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
-import { KEYS } from "./actor-handler-do";
+import { buildActorId, parseActorId } from "./actor-id";
+import { GLOBAL_KV_KEYS } from "./global_kv";
+import { getCloudflareAmbientEnv } from "./handler";
+import { kvDelete, kvGet, kvListPrefix, kvPut } from "./kv_query";
 
 interface DurableObjectGlobalState {
 	ctx: DurableObjectState;
@@ -25,11 +28,14 @@ interface DurableObjectGlobalState {
  * This allows for storing the actor context globally and looking it up by ID in `CloudflareActorsActorDriver`.
  */
 export class CloudflareDurableObjectGlobalState {
-	// Single map for all actor state
+	// Map of actor ID -> DO state
 	#dos: Map<string, DurableObjectGlobalState> = new Map();
 
-	getDOState(actorId: string): DurableObjectGlobalState {
-		const state = this.#dos.get(actorId);
+	// Map of DO ID -> ActorHandler
+	#actors: Map<string, ActorHandler> = new Map();
+
+	getDOState(doId: string): DurableObjectGlobalState {
+		const state = this.#dos.get(doId);
 		invariant(
 			state !== undefined,
 			"durable object state not in global state",
@@ -37,8 +43,12 @@ export class CloudflareDurableObjectGlobalState {
 		return state;
 	}
 
-	setDOState(actorId: string, state: DurableObjectGlobalState) {
-		this.#dos.set(actorId, state);
+	setDOState(doId: string, state: DurableObjectGlobalState) {
+		this.#dos.set(doId, state);
+	}
+
+	get actors() {
+		return this.#actors;
 	}
 }
 
@@ -51,6 +61,15 @@ class ActorHandler {
 	actor?: AnyActorInstance;
 	actorPromise?: ReturnType<typeof promiseWithResolvers<void>> =
 		promiseWithResolvers();
+
+	/**
+	 * Indicates if `startDestroy` has been called.
+	 *
+	 * This is stored in memory instead of SQLite since the destroy may be cancelled.
+	 *
+	 * See the corresponding `destroyed` property in SQLite metadata.
+	 */
+	destroying: boolean = false;
 }
 
 export class CloudflareActorsActorDriver implements ActorDriver {
@@ -59,7 +78,6 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 	#managerDriver: ManagerDriver;
 	#inlineClient: Client<any>;
 	#globalState: CloudflareDurableObjectGlobalState;
-	#actors: Map<string, ActorHandler> = new Map();
 
 	constructor(
 		registryConfig: RegistryConfig,
@@ -76,12 +94,17 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 	}
 
 	#getDOCtx(actorId: string) {
-		return this.#globalState.getDOState(actorId).ctx;
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+		return this.#globalState.getDOState(doId).ctx;
 	}
 
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
+		// Parse actor ID to get DO ID and generation
+		const [doId, expectedGeneration] = parseActorId(actorId);
+
 		// Check if actor is already loaded
-		let handler = this.#actors.get(actorId);
+		let handler = this.#globalState.actors.get(doId);
 		if (handler) {
 			if (handler.actorPromise) await handler.actorPromise.promise;
 			if (!handler.actor) throw new Error("Actor should be loaded");
@@ -90,26 +113,38 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 
 		// Create new actor handler
 		handler = new ActorHandler();
-		this.#actors.set(actorId, handler);
+		this.#globalState.actors.set(doId, handler);
 
 		// Get the actor metadata from Durable Object storage
-		const doState = this.#globalState.getDOState(actorId);
-		const storage = doState.ctx.storage;
+		const doState = this.#globalState.getDOState(doId);
+		const sql = doState.ctx.storage.sql;
 
-		// Load actor metadata
-		const [name, key] = await Promise.all([
-			storage.get<string>(KEYS.NAME),
-			storage.get<string[]>(KEYS.KEY),
-		]);
+		// Load actor metadata from SQL table
+		const cursor = sql.exec(
+			"SELECT name, key, destroyed, generation FROM _rivetkit_metadata LIMIT 1",
+		);
+		const result = cursor.raw().next();
 
-		if (!name) {
+		if (result.done || !result.value) {
 			throw new Error(
-				`Actor ${actorId} is not initialized - missing name`,
+				`Actor ${actorId} is not initialized - missing metadata`,
 			);
 		}
-		if (!key) {
+
+		const name = result.value[0] as string;
+		const key = JSON.parse(result.value[1] as string) as string[];
+		const destroyed = result.value[2] as number;
+		const generation = result.value[3] as number;
+
+		// Check if actor is destroyed
+		if (destroyed) {
+			throw new Error(`Actor ${actorId} is destroyed`);
+		}
+
+		// Check if generation matches
+		if (generation !== expectedGeneration) {
 			throw new Error(
-				`Actor ${actorId} is not initialized - missing key`,
+				`Actor ${actorId} generation mismatch - expected ${expectedGeneration}, got ${generation}`,
 			);
 		}
 
@@ -135,7 +170,9 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 	}
 
 	getContext(actorId: string): DriverContext {
-		const state = this.#globalState.getDOState(actorId);
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+		const state = this.#globalState.getDOState(doId);
 		return { state: state.ctx };
 	}
 
@@ -147,97 +184,85 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		return this.#getDOCtx(actorId).storage.sql;
 	}
 
-	// Batch KV operations - convert between Uint8Array and Cloudflare's string-based API
+	// Batch KV operations
 	async kvBatchPut(
 		actorId: string,
 		entries: [Uint8Array, Uint8Array][],
 	): Promise<void> {
-		const storage = this.#getDOCtx(actorId).storage;
-		const encoder = new TextDecoder();
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert Uint8Array entries to object for Cloudflare batch put
-		const storageObj: Record<string, Uint8Array> = {};
 		for (const [key, value] of entries) {
-			// Convert key from Uint8Array to string
-			const keyStr = this.#uint8ArrayToKey(key);
-			storageObj[keyStr] = value;
+			kvPut(sql, key, value);
 		}
-
-		await storage.put(storageObj);
 	}
 
 	async kvBatchGet(
 		actorId: string,
 		keys: Uint8Array[],
 	): Promise<(Uint8Array | null)[]> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert keys to strings
-		const keyStrs = keys.map((k) => this.#uint8ArrayToKey(k));
+		const results: (Uint8Array | null)[] = [];
+		for (const key of keys) {
+			results.push(kvGet(sql, key));
+		}
 
-		// Get values from storage
-		const results = await storage.get<Uint8Array>(keyStrs);
-
-		// Convert Map results to array in same order as input keys
-		return keyStrs.map((k) => results.get(k) ?? null);
+		return results;
 	}
 
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert keys to strings
-		const keyStrs = keys.map((k) => this.#uint8ArrayToKey(k));
-
-		await storage.delete(keyStrs);
+		for (const key of keys) {
+			kvDelete(sql, key);
+		}
 	}
 
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert prefix to string
-		const prefixStr = this.#uint8ArrayToKey(prefix);
-
-		// List with prefix
-		const results = await storage.list<Uint8Array>({ prefix: prefixStr });
-
-		// Convert Map to array of [key, value] tuples
-		const entries: [Uint8Array, Uint8Array][] = [];
-		for (const [key, value] of results) {
-			entries.push([this.#keyToUint8Array(key), value]);
-		}
-
-		return entries;
+		return kvListPrefix(sql, prefix);
 	}
 
-	// Helper to convert Uint8Array key to string for Cloudflare storage
-	#uint8ArrayToKey(key: Uint8Array): string {
-		// Check if this is a connection key (starts with [2])
-		if (key.length > 0 && key[0] === 2) {
-			// Connection key - extract connId
-			const connId = new TextDecoder().decode(key.slice(1));
-			return `${KEYS.CONN_PREFIX}${connId}`;
-		}
-		// Otherwise, treat as persist data key [1]
-		return KEYS.PERSIST_DATA;
-	}
+	startDestroy(actorId: string): void {
+		// Parse actor ID to get DO ID and generation
+		const [doId, generation] = parseActorId(actorId);
 
-	// Helper to convert string key back to Uint8Array
-	#keyToUint8Array(key: string): Uint8Array {
-		if (key.startsWith(KEYS.CONN_PREFIX)) {
-			// Connection key
-			const connId = key.slice(KEYS.CONN_PREFIX.length);
-			const encoder = new TextEncoder();
-			const connIdBytes = encoder.encode(connId);
-			const result = new Uint8Array(1 + connIdBytes.length);
-			result[0] = 2; // Connection prefix
-			result.set(connIdBytes, 1);
-			return result;
+		const handler = this.#globalState.actors.get(doId);
+
+		// Actor not loaded, nothing to destroy
+		if (!handler || !handler.actor) {
+			return;
 		}
-		// Persist data key
-		return Uint8Array.from([1]);
+
+		// Check if already destroying
+		if (handler.destroying) {
+			return;
+		}
+		handler.destroying = true;
+
+		// Stop
+		handler.actor.onStop("destroy");
+
+		// Remove state
+		const doState = this.#globalState.getDOState(doId);
+		const sql = doState.ctx.storage.sql;
+		sql.exec("UPDATE _rivetkit_metadata SET destroyed = 1 WHERE 1=1");
+		sql.exec("DELETE FROM _rivetkit_kv_storage");
+
+		// Clear any scheduled alarms
+		doState.ctx.storage.deleteAlarm();
+
+		// Delete from ACTOR_KV in the background - use full actorId including generation
+		const env = getCloudflareAmbientEnv();
+		doState.ctx.waitUntil(
+			env.ACTOR_KV.delete(GLOBAL_KV_KEYS.actorMetadata(actorId)),
+		);
+
+		this.#globalState.actors.delete(doId);
 	}
 }
 

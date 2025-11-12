@@ -4,7 +4,6 @@ import type { RegistryConfig } from "@/registry/config";
 import type { DriverConfig, RunnerConfig } from "@/registry/run-config";
 import { RemoteManagerDriver } from "@/remote-manager-driver/mod";
 import { EngineActorDriver } from "./actor-driver";
-import { type EngineConfigInput, EngingConfigSchema } from "./config";
 
 export { EngineActorDriver } from "./actor-driver";
 export {

@@ -1,6 +1,7 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { generateConnRequestId } from "@/actor/conn/mod";
+import { ActorDestroying } from "@/actor/errors";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
 	handleRawWebSocket,
@@ -262,6 +263,9 @@ export class FileSystemManagerDriver implements ManagerDriver {
 		const actor = await this.#state.loadActor(actorId);
 		if (!actor.state) {
 			return undefined;
+		}
+		if (actor.destroying) {
+			throw new ActorDestroying(actorId);
 		}
 
 		try {

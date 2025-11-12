@@ -43,6 +43,7 @@ export interface ActorTypes<
 export const ActorConfigSchema = z
 	.object({
 		onCreate: z.function().optional(),
+		onDestroy: z.function().optional(),
 		onWake: z.function().optional(),
 		onSleep: z.function().optional(),
 		onStateChange: z.function().optional(),
@@ -66,7 +67,8 @@ export const ActorConfigSchema = z
 				createConnStateTimeout: z.number().positive().default(5000),
 				onConnectTimeout: z.number().positive().default(5000),
 				// This must be less than ACTOR_STOP_THRESHOLD_MS
-				onStopTimeout: z.number().positive().default(5000),
+				onSleepTimeout: z.number().positive().default(5000),
+				onDestroyTimeout: z.number().positive().default(5000),
 				stateSaveInterval: z.number().positive().default(10_000),
 				actionTimeout: z.number().positive().default(60_000),
 				// Max time to wait for waitUntil background promises during shutdown
@@ -240,6 +242,20 @@ interface BaseActorConfig<
 			TDatabase
 		>,
 		input: TInput,
+	) => void | Promise<void>;
+
+	/**
+	 * Called when the actor is destroyed.
+	 */
+	onDestroy?: (
+		c: ActorContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase
+		>,
 	) => void | Promise<void>;
 
 	/**
@@ -459,6 +475,7 @@ export type ActorConfig<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
 	| "onCreate"
+	| "onDestroy"
 	| "onWake"
 	| "onStateChange"
 	| "onBeforeConnect"
@@ -518,6 +535,7 @@ export type ActorConfigInput<
 	z.input<typeof ActorConfigSchema>,
 	| "actions"
 	| "onCreate"
+	| "onDestroy"
 	| "onWake"
 	| "onSleep"
 	| "onStateChange"
