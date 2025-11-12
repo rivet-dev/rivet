@@ -39,7 +39,7 @@ Name | Type | Description  | Required | Notes
 
 ## namespaces_list
 
-> models::NamespaceListResponse namespaces_list(limit, cursor, name, namespace_ids)
+> models::NamespaceListResponse namespaces_list(limit, cursor, name, namespace_ids, namespace_id)
 
 
 ### Parameters
@@ -50,7 +50,8 @@ Name | Type | Description  | Required | Notes
 **limit** | Option<**i32**> |  |  |
 **cursor** | Option<**String**> |  |  |
 **name** | Option<**String**> |  |  |
-**namespace_ids** | Option<**String**> |  |  |
+**namespace_ids** | Option<**String**> | Deprecated. |  |
+**namespace_id** | Option<[**Vec<String>**](String.md)> |  |  |
 
 ### Return type
 

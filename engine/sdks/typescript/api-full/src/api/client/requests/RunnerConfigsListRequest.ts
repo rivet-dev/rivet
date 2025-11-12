@@ -15,5 +15,9 @@ export interface RunnerConfigsListRequest {
     limit?: number;
     cursor?: string;
     variant?: Rivet.RunnerConfigVariant;
+    /**
+     * Deprecated.
+     */
     runnerNames?: string;
+    runnerName?: string | string[];
 }

@@ -1403,7 +1403,7 @@ export function FiltersDisplay({
 
 	return (
 		<Popover>
-			<PopoverTrigger>
+			<PopoverTrigger asChild>
 				<Button
 					variant="outline"
 					size="sm"

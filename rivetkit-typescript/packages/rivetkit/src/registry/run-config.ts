@@ -125,6 +125,12 @@ const RunnerConfigSchemaUnmerged = z
 		// (specifically Node.js) can sometimes only be specified after the router is
 		// created or must be imported async using `await import(...)`
 		getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
+
+		/** @experimental */
+		token: z
+			.string()
+			.optional()
+			.transform((v) => v || getEnvUniversal("RIVET_TOKEN")),
 	})
 	.merge(EngineConfigSchema.removeDefault());
 

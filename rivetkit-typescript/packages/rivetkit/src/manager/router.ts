@@ -1,17 +1,12 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
-import {
-	Hono,
-	type Context as HonoContext,
-	type MiddlewareHandler,
-	type Next,
-} from "hono";
+import type { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import invariant from "invariant";
 import { z } from "zod";
-import { ActorNotFound, InvalidRequest, Unsupported } from "@/actor/errors";
+import { Forbidden, InvalidRequest, RestrictedFeature } from "@/actor/errors";
 import { serializeActorKey } from "@/actor/keys";
-import type { Client, Encoding } from "@/client/mod";
+import type { Encoding } from "@/client/mod";
 import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
@@ -37,8 +32,6 @@ import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
 } from "@/driver-test-suite/test-inline-client-driver";
-import { createManagerInspectorRouter } from "@/inspector/manager";
-import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -46,6 +39,8 @@ import {
 	ActorsGetOrCreateRequestSchema,
 	type ActorsGetOrCreateResponse,
 	ActorsGetOrCreateResponseSchema,
+	type ActorsKvGetResponse,
+	ActorsKvGetResponseSchema,
 	type ActorsListNamesResponse,
 	ActorsListNamesResponseSchema,
 	type ActorsListResponse,
@@ -59,6 +54,8 @@ import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import { logger } from "./log";
 import { ServerlessStartHeadersSchema } from "./router-schema";
+import { getEnvUniversal } from "@/utils";
+import { compareSecrets } from "@/inspector/utils";
 
 function buildOpenApiResponses<T>(schema: T) {
 	return {
@@ -231,24 +228,6 @@ function addManagerRoutes(
 	managerDriver: ManagerDriver,
 	router: OpenAPIHono,
 ) {
-	// TODO(kacper): Remove this in favor of standard manager API
-	// Inspector
-	if (isInspectorEnabled(runConfig, "manager")) {
-		if (!managerDriver.inspector) {
-			throw new Unsupported("inspector");
-		}
-		router.route(
-			"/inspect",
-			new Hono<{ Variables: { inspector: any } }>()
-				.use(secureInspector(runConfig))
-				.use((c, next) => {
-					c.set("inspector", managerDriver.inspector!);
-					return next();
-				})
-				.route("/", createManagerInspectorRouter()),
-		);
-	}
-
 	// Actor gateway
 	router.use("*", actorGateway.bind(undefined, runConfig, managerDriver));
 
@@ -406,6 +385,53 @@ function addManagerRoutes(
 			const names = buildActorNames(registryConfig);
 			return c.json<ActorsListNamesResponse>({
 				names,
+			});
+		});
+	}
+
+	// GET /actors/{actor_id}/kv/keys/{key}
+	{
+		const route = createRoute({
+			method: "get",
+			path: "/actors/{actor_id}/kv/keys/{key}",
+			request: {
+				params: z.object({
+					actor_id: z.string(),
+					key: z.string(),
+				}),
+			},
+			responses: buildOpenApiResponses(ActorsKvGetResponseSchema),
+		});
+
+		router.openapi(route, async (c) => {
+			const isDev = getEnvUniversal("NODE_ENV") !== "production";
+
+			if(isDev && !runConfig.token){
+				logger().warn({
+					msg: "RIVET_TOKEN is not set, skipping KV store access checks in development mode. This endpoint will be disabled in production, unless you set the token.",
+				});
+			}
+			
+			if(!isDev){
+				if(!runConfig.token){
+					throw new RestrictedFeature("KV store access");
+				}
+				if (compareSecrets(runConfig.token, c.req.header("x-rivet-token") || "") === false) {
+					throw new Forbidden();
+				}
+			}
+
+			const { actor_id, key } = c.req.valid("param");
+
+			const response = await managerDriver.kvGet(
+				actor_id,
+				Buffer.from(key, "base64")
+			);
+
+			return c.json<ActorsKvGetResponse>({
+				value: response
+					? Buffer.from(response).toString("base64")
+					: null,
 			});
 		});
 	}

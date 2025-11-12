@@ -84,6 +84,10 @@ export function assertNonNullable<V>(v: V): asserts v is Exclude<V, null> {
 	}
 }
 
+export function assertUnreachable(_x: never): never {
+	throw new Error("Didn't expect to get here");
+}
+
 export function endWithSlash(url: string) {
 	return url.endsWith("/") ? url : `${url}/`;
 }

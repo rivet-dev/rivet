@@ -4,8 +4,8 @@
 
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
-import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
+import urlJoin from "url-join";
 import * as errors from "../../../../errors/index";
 
 export declare namespace Runners {
@@ -45,7 +45,7 @@ export class Runners {
         request: Rivet.RunnersListRequest,
         requestOptions?: Runners.RequestOptions,
     ): Promise<Rivet.RunnersListResponse> {
-        const { namespace, name, runnerIds, includeStopped, limit, cursor } = request;
+        const { namespace, name, runnerIds, runnerId, includeStopped, limit, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         if (name != null) {
@@ -54,6 +54,16 @@ export class Runners {
 
         if (runnerIds != null) {
             _queryParams["runner_ids"] = runnerIds;
+        }
+
+        if (runnerId != null) {
+            if (Array.isArray(runnerId)) {
+                _queryParams["runner_id"] = runnerId.map((item) =>
+                    serializers.RivetId.jsonOrThrow(item, { unrecognizedObjectKeys: "strip" }),
+                );
+            } else {
+                _queryParams["runner_id"] = runnerId;
+            }
         }
 
         if (includeStopped != null) {

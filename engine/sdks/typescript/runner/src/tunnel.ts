@@ -10,7 +10,7 @@ import {
 	stringify as uuidstringify,
 	v4 as uuidv4,
 } from "uuid";
-import { RunnerShutdownError, type Runner, type RunnerActor } from "./mod";
+import { type Runner, type RunnerActor, RunnerShutdownError } from "./mod";
 import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,

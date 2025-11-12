@@ -29,7 +29,7 @@ export function Connect({
 				<CardContent>
 					<p>Get started with one of our quick start guides:</p>
 					<div className="flex-1 flex flex-col gap-2 mt-4">
-						<div className="flex flex-row justify-stretch items-center gap-2">
+						<div className="flex flex-row flex-wrap justify-stretch items-center gap-2">
 							<DocsSheet
 								path={docsLinks.gettingStarted.js}
 								title="Node.js & Bun Quickstart"
@@ -78,15 +78,14 @@ export function Connect({
 				</CardHeader>
 				<CardContent>
 					<p className="mb-4">
-						Connect to your RivetKit project by entering the URL and
-						access token.
+						Connect to your Rivet Project by entering your RivetKit
+						URL.
 					</p>
 
 					<ConnectionForm
 						ref={formRef}
 						defaultValues={{
-							username: search.u || "http://localhost:6420",
-							token: search.t || "",
+							url: search.u || "http://localhost:6420",
 						}}
 						onSubmit={onSubmit}
 					/>

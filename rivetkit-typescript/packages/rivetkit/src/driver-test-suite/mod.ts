@@ -4,7 +4,6 @@ import invariant from "invariant";
 import { describe } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import type { Encoding } from "@/client/mod";
-import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
 import {
 	createClientWithDriver,
@@ -220,7 +219,6 @@ export async function createTestRuntime(
 			managerDriver,
 			ClientConfigSchema.parse({}),
 		);
-		configureInspectorAccessToken(config, managerDriver);
 		const { router } = createManagerRouter(
 			registry.config,
 			config,

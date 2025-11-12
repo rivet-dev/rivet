@@ -49,6 +49,9 @@ func (c *Client) List(ctx context.Context, request *sdk.NamespacesListRequest) (
 	if request.NamespaceIds != nil {
 		queryParams.Add("namespace_ids", fmt.Sprintf("%v", *request.NamespaceIds))
 	}
+	for _, value := range request.NamespaceId {
+		queryParams.Add("namespace_id", fmt.Sprintf("%v", *value))
+	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}

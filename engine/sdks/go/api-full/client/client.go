@@ -85,6 +85,9 @@ func (c *Client) ActorsList(ctx context.Context, request *sdk.ActorsListRequest)
 	if request.ActorIds != nil {
 		queryParams.Add("actor_ids", fmt.Sprintf("%v", *request.ActorIds))
 	}
+	for _, value := range request.ActorId {
+		queryParams.Add("actor_id", fmt.Sprintf("%v", *value))
+	}
 	if request.IncludeDestroyed != nil {
 		queryParams.Add("include_destroyed", fmt.Sprintf("%v", *request.IncludeDestroyed))
 	}
@@ -326,6 +329,9 @@ func (c *Client) RunnerConfigsList(ctx context.Context, request *sdk.RunnerConfi
 	}
 	if request.RunnerNames != nil {
 		queryParams.Add("runner_names", fmt.Sprintf("%v", *request.RunnerNames))
+	}
+	for _, value := range request.RunnerName {
+		queryParams.Add("runner_name", fmt.Sprintf("%v", *value))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
