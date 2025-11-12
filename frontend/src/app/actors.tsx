@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
-	ActorFeature,
 	type ActorId,
 	ActorNotFound,
 	ActorsActorDetails,
@@ -13,17 +12,7 @@ import {
 export function Actors({ actorId }: { actorId: string | undefined }) {
 	return (
 		<ActorsListPreview showDetails={!!actorId}>
-			{actorId ? (
-				<Actor />
-			) : (
-				<ActorsActorEmptyDetails
-					features={[
-						ActorFeature.Config,
-						ActorFeature.State,
-						ActorFeature.Connections,
-					]}
-				/>
-			)}
+			{actorId ? <Actor /> : <ActorsActorEmptyDetails />}
 		</ActorsListPreview>
 	);
 }
@@ -37,16 +26,7 @@ function Actor() {
 	);
 
 	if (!data || isError) {
-		return (
-			<ActorNotFound
-				actorId={actorId as ActorId}
-				features={[
-					ActorFeature.Config,
-					ActorFeature.State,
-					ActorFeature.Connections,
-				]}
-			/>
-		);
+		return <ActorNotFound actorId={actorId as ActorId} />;
 	}
 
 	return (

@@ -17,6 +17,7 @@ import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
+import { handleWebSocketInspectorConnect } from "@/inspector/handler";
 import type { RunnerConfig } from "@/registry/run-config";
 import { promiseWithResolvers } from "@/utils";
 import type { ConnDriver } from "./conn/driver";
@@ -113,7 +114,7 @@ export async function routeWebSocket(
 		} else if (requestPath === PATH_INSPECTOR_CONNECT) {
 			// This returns raw UpgradeWebSocketArgs instead of accepting a
 			// Conn since this does not need a Conn
-			return await handleWebSocketInspectorConnect();
+			return await handleWebSocketInspectorConnect({ actor });
 		} else {
 			throw `WebSocket Path Not Found: ${requestPath}`;
 		}
@@ -331,31 +332,6 @@ export async function handleRawWebSocket(
 			conn.disconnect(evt?.reason);
 		},
 		onError: (error: any, ws: any) => {},
-	};
-}
-
-export async function handleWebSocketInspectorConnect(): Promise<UpgradeWebSocketArgs> {
-	return {
-		// NOTE: onOpen cannot be async since this messes up the open event listener order
-		onOpen: (_evt: any, ws: WSContext) => {
-			ws.send("Hello world");
-		},
-		onMessage: (evt: RivetMessageEvent, ws: WSContext) => {
-			ws.send("Pong");
-		},
-		onClose: (
-			event: {
-				wasClean: boolean;
-				code: number;
-				reason: string;
-			},
-			ws: WSContext,
-		) => {
-			// TODO:
-		},
-		onError: (_error: unknown) => {
-			// TODO:
-		},
 	};
 }
 

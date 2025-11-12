@@ -12,6 +12,8 @@ docs/ActorsDeleteApi.md
 docs/ActorsGetOrCreateApi.md
 docs/ActorsGetOrCreateRequest.md
 docs/ActorsGetOrCreateResponse.md
+docs/ActorsKvGetApi.md
+docs/ActorsKvGetResponse.md
 docs/ActorsListApi.md
 docs/ActorsListNamesApi.md
 docs/ActorsListNamesResponse.md
@@ -70,6 +72,7 @@ git_push.sh
 src/apis/actors_create_api.rs
 src/apis/actors_delete_api.rs
 src/apis/actors_get_or_create_api.rs
+src/apis/actors_kv_get_api.rs
 src/apis/actors_list_api.rs
 src/apis/actors_list_names_api.rs
 src/apis/configuration.rs
@@ -90,6 +93,7 @@ src/models/actors_create_request.rs
 src/models/actors_create_response.rs
 src/models/actors_get_or_create_request.rs
 src/models/actors_get_or_create_response.rs
+src/models/actors_kv_get_response.rs
 src/models/actors_list_names_response.rs
 src/models/actors_list_response.rs
 src/models/crash_policy.rs

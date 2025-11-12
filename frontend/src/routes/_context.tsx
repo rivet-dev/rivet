@@ -42,7 +42,7 @@ const searchSchema = z
 export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
-	context: ({ location: { search }, context }) => {
+	context: ({ location: { search, state }, context }) => {
 		return match(__APP_TYPE__)
 			.with("engine", () => ({
 				dataProvider: createGlobalEngineContext({
@@ -60,8 +60,8 @@ export const Route = createFileRoute("/_context")({
 			.with("inspector", () => ({
 				dataProvider: createGlobalInspectorContext({
 					url: (search as z.infer<typeof searchSchema>).u,
-					token: (search as z.infer<typeof searchSchema>).t,
 				}),
+				connectedInPreflight: state?.connectedInForm || false,
 				__type: "inspector" as const,
 			}))
 			.exhaustive();
@@ -106,7 +106,6 @@ function RouteComponent() {
 function Modals() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
-	const params = useParams({ strict: false });
 
 	const CreateActorDialog = useDialog.CreateActor.Dialog;
 	const FeedbackDialog = useDialog.Feedback.Dialog;

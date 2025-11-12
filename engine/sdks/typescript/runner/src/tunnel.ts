@@ -1,11 +1,7 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
-import {
-	parse as uuidparse,
-	stringify as uuidstringify,
-	v4 as uuidv4,
-} from "uuid";
+import { stringify as uuidstringify, v4 as uuidv4 } from "uuid";
 import type { Runner, RunnerActor } from "./mod";
 import {
 	stringifyToClientTunnelMessageKind,

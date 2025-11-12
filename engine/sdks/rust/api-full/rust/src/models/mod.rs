@@ -10,6 +10,8 @@ pub mod actors_get_or_create_request;
 pub use self::actors_get_or_create_request::ActorsGetOrCreateRequest;
 pub mod actors_get_or_create_response;
 pub use self::actors_get_or_create_response::ActorsGetOrCreateResponse;
+pub mod actors_kv_get_response;
+pub use self::actors_kv_get_response::ActorsKvGetResponse;
 pub mod actors_list_names_response;
 pub use self::actors_list_names_response::ActorsListNamesResponse;
 pub mod actors_list_response;

@@ -5,11 +5,7 @@ import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
 import type { ActorDriver } from "@/driver-helpers/mod";
 import { chooseDefaultDriver } from "@/drivers/default";
 import { ENGINE_ENDPOINT, ensureEngineProcess } from "@/engine-process/mod";
-import {
-	configureInspectorAccessToken,
-	getInspectorUrl,
-	isInspectorEnabled,
-} from "@/inspector/utils";
+import { getInspectorUrl } from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
 import {
 	getDatacenters,
@@ -122,6 +118,9 @@ export class Registry<A extends RegistryActors> {
 			config.defaultServerPort = 8080;
 			config.overrideServerAddress = config.endpoint;
 			config.disableActorDriver = true;
+			// Disable inspector for serverless runners, as they don't run actors directly
+			// users can still use cloud-based inspection if needed
+			config.inspector.enabled = false;
 		}
 
 		// Configure logger
@@ -139,15 +138,12 @@ export class Registry<A extends RegistryActors> {
 
 		// Set defaults based on the driver
 		if (driver.name === "engine") {
-			config.inspector.enabled = { manager: false, actor: true };
-
 			// We need to leave the default server enabled for dev
 			if (config.runnerKind !== "serverless") {
 				config.disableDefaultServer = true;
 			}
 		}
 		if (driver.name === "cloudflare-workers") {
-			config.inspector.enabled = { manager: false, actor: true };
 			config.disableDefaultServer = true;
 			config.disableActorDriver = true;
 			config.noWelcome = true;
@@ -161,7 +157,6 @@ export class Registry<A extends RegistryActors> {
 
 		// Create router
 		const managerDriver = driver.manager(this.#config, config);
-		configureInspectorAccessToken(config, managerDriver);
 
 		// Create client
 		const client = createClientWithDriver<this>(managerDriver, config);
@@ -173,7 +168,7 @@ export class Registry<A extends RegistryActors> {
 			definitions: Object.keys(this.#config.use).length,
 			...driverLog,
 		});
-		if (isInspectorEnabled(config, "manager") && managerDriver.inspector) {
+		if (config.inspector.enabled) {
 			logger().info({
 				msg: "inspector ready",
 				url: getInspectorUrl(config),
@@ -200,10 +195,7 @@ export class Registry<A extends RegistryActors> {
 				const padding = " ".repeat(Math.max(0, 13 - k.length));
 				console.log(`  - ${k}:${padding}${v}`);
 			}
-			if (
-				isInspectorEnabled(config, "manager") &&
-				managerDriver.inspector
-			) {
+			if (config.inspector.enabled) {
 				console.log(`  - Inspector:    ${getInspectorUrl(config)}`);
 			}
 			console.log();

@@ -229,6 +229,36 @@ func (a *ActorsGetOrCreateResponse) String() string {
 	return fmt.Sprintf("%#v", a)
 }
 
+type ActorsKvGetResponse struct {
+	UpdateTs int64  `json:"update_ts"`
+	Value    string `json:"value"`
+
+	_rawJSON json.RawMessage
+}
+
+func (a *ActorsKvGetResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ActorsKvGetResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = ActorsKvGetResponse(value)
+	a._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *ActorsKvGetResponse) String() string {
+	if len(a._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
 type ActorsListNamesResponse struct {
 	Names      map[string]*ActorName `json:"names,omitempty"`
 	Pagination *Pagination           `json:"pagination,omitempty"`

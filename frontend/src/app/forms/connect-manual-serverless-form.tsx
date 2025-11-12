@@ -105,7 +105,7 @@ export const RunnerName = function RunnerName() {
 export const Datacenters = function Datacenter() {
 	const { control } = useFormContext();
 	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	return (
