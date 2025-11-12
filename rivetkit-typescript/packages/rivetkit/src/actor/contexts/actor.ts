@@ -165,4 +165,15 @@ export class ActorContext<
 	sleep() {
 		this.#actor.startSleep();
 	}
+
+	/**
+	 * Forces the actor to destroy.
+	 *
+	 * This will return immediately, then call `onStop` and `onDestroy`.
+	 *
+	 * @experimental
+	 */
+	destroy() {
+		this.#actor.startDestroy();
+	}
 }
