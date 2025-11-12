@@ -724,7 +724,9 @@
 			"id": 25,
 			"options": {
 				"legend": {
-					"calcs": ["mean"],
+					"calcs": [
+						"mean"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -845,7 +847,9 @@
 			"id": 28,
 			"options": {
 				"legend": {
-					"calcs": ["mean"],
+					"calcs": [
+						"mean"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -966,7 +970,9 @@
 			"id": 31,
 			"options": {
 				"legend": {
-					"calcs": ["mean"],
+					"calcs": [
+						"mean"
+					],
 					"displayMode": "table",
 					"placement": "bottom",
 					"showLegend": true,
@@ -1147,7 +1153,9 @@
 			{
 				"current": {
 					"text": "All",
-					"value": ["$__all"]
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -1167,7 +1175,9 @@
 			{
 				"current": {
 					"text": "All",
-					"value": ["$__all"]
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -1187,7 +1197,9 @@
 			{
 				"current": {
 					"text": "All",
-					"value": ["$__all"]
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
@@ -1208,19 +1220,21 @@
 			{
 				"current": {
 					"text": "All",
-					"value": ["$__all"]
+					"value": [
+						"$__all"
+					]
 				},
 				"datasource": {
 					"type": "grafana-clickhouse-datasource",
 					"uid": "clickhouse"
 				},
-				"definition": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
+				"definition": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND Attributes['path'] IN array($path) ORDER BY method",
 				"includeAll": true,
 				"label": "Method",
 				"multi": true,
 				"name": "method",
 				"options": [],
-				"query": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND $__conditionalAll(Attributes['path'], $path) ORDER BY method",
+				"query": "SELECT DISTINCT Attributes['method'] as method FROM otel.otel_metrics_sum WHERE MetricName = 'rivet_api_request_total' AND ResourceAttributes['rivet.datacenter'] IN array($datacenter) AND Attributes['path'] IN array($path) ORDER BY method",
 				"refresh": 1,
 				"regex": "",
 				"type": "query"
