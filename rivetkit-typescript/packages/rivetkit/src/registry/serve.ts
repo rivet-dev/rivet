@@ -1,14 +1,11 @@
-import { Hono } from "hono";
+import type { Hono } from "hono";
 import { logger } from "./log";
 import type { RunnerConfig } from "./run-config";
 
 export async function crossPlatformServe(
 	runConfig: RunnerConfig,
-	rivetKitRouter: Hono<any>,
-	userRouter: Hono | undefined,
+	app: Hono<any>,
 ) {
-	const app = userRouter ?? new Hono();
-
 	// Import @hono/node-server using string variable to prevent static analysis
 	const nodeServerModule = "@hono/node-server";
 	let serve: any;
@@ -24,10 +21,6 @@ export async function crossPlatformServe(
 		);
 		process.exit(1);
 	}
-
-	// Mount registry
-	// app.route("/registry", rivetKitRouter);
-	app.route("/", rivetKitRouter);
 
 	// Import @hono/node-ws using string variable to prevent static analysis
 	const nodeWsModule = "@hono/node-ws";
@@ -47,7 +40,7 @@ export async function crossPlatformServe(
 
 	// Inject WS
 	const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({
-		app,
+		app: app,
 	});
 
 	// Start server
