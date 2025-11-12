@@ -1,8 +1,6 @@
 import { faBooks, Icon } from "@rivet-gg/icons";
 import { Button, DocsSheet, ScrollArea } from "@/components";
 import { ActorGeneral } from "./actor-general";
-import { ActorNetwork } from "./actor-network";
-import { ActorRuntime } from "./actor-runtime";
 import type { ActorId } from "./queries";
 
 interface ActorConfigTabProps {
@@ -24,8 +22,6 @@ export function ActorConfigTab(props: ActorConfigTabProps) {
 				</DocsSheet>
 			</div>
 			<ActorGeneral {...props} />
-			<ActorNetwork {...props} />
-			<ActorRuntime {...props} />
 		</ScrollArea>
 	);
 }

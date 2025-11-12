@@ -48,17 +48,17 @@ export function QueriedActorStatusAdditionalInfo({
 }: {
 	actorId: ActorId;
 }) {
-	const { data: { rescheduleAt } = {} } = useQuery(
+	const { data: { rescheduleTs } = {} } = useQuery(
 		useDataProvider().actorStatusAdditionalInfoQueryOptions(actorId),
 	);
 
-	if (rescheduleAt) {
+	if (rescheduleTs) {
 		return (
 			<span>
 				Will try to start again{" "}
 				<span>
-					<RelativeTime time={new Date(rescheduleAt)} /> (
-					{formatISO(rescheduleAt)}){" "}
+					<RelativeTime time={new Date(rescheduleTs)} /> (
+					{formatISO(rescheduleTs)}){" "}
 				</span>
 			</span>
 		);

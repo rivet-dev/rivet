@@ -1,34 +1,23 @@
-import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import { ActorInspector } from "@/inspector/actor";
+import { ActorInspector } from "@/inspector/actor-inspector";
 import type { Registry } from "@/mod";
 import {
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
-import type * as protocol from "@/schemas/client-protocol/mod";
-import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
-import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import type { ActorConfig, InitContext } from "../config";
-import type { ConnDriver } from "../conn/driver";
-import { createHttpDriver } from "../conn/drivers/http";
-import {
-	CONN_DRIVER_SYMBOL,
-	CONN_STATE_MANAGER_SYMBOL,
-	type Conn,
-	type ConnId,
-} from "../conn/mod";
+import type { Conn, ConnId } from "../conn/mod";
 import {
 	convertConnFromBarePersistedConn,
 	type PersistedConn,
 } from "../conn/persisted";
-import { ActionContext } from "../contexts/action";
+import type { ActionContext } from "../contexts/action";
 import { ActorContext } from "../contexts/actor";
 import { RequestContext } from "../contexts/request";
 import { WebSocketContext } from "../contexts/websocket";
@@ -37,7 +26,6 @@ import type { ActorDriver } from "../driver";
 import * as errors from "../errors";
 import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
-import { CachedSerializer } from "../protocol/serde";
 import { Schedule } from "../schedule";
 import {
 	assertUnreachable,
@@ -142,78 +130,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Inspector
 	#inspectorToken?: string;
-	#inspector = new ActorInspector(() => {
-		return {
-			isDbEnabled: async () => {
-				return this.#db !== undefined;
-			},
-			getDb: async () => {
-				return this.db;
-			},
-			isStateEnabled: async () => {
-				return this.stateEnabled;
-			},
-			getState: async () => {
-				if (!this.stateEnabled) {
-					throw new errors.StateNotEnabled();
-				}
-				return this.stateManager.persistRaw.state as Record<
-					string,
-					any
-				> as unknown;
-			},
-			getRpcs: async () => {
-				return Object.keys(this.#config.actions);
-			},
-			getConnections: async () => {
-				return Array.from(
-					this.connectionManager.connections.entries(),
-				).map(([id, conn]) => {
-					const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
-					return {
-						type: conn[CONN_DRIVER_SYMBOL]?.type,
-						id,
-						params: conn.params as any,
-						stateEnabled: connStateManager.stateEnabled,
-						state: connStateManager.stateEnabled
-							? connStateManager.state
-							: undefined,
-						subscriptions: conn.subscriptions.size,
-						isHibernatable: conn.isHibernatable,
-						// TODO: Include underlying hibernatable metadata +
-						// path + headers
-					};
-				});
-			},
-			setState: async (state: unknown) => {
-				if (!this.stateEnabled) {
-					throw new errors.StateNotEnabled();
-				}
-				this.stateManager.state = { ...(state as S) };
-				await this.stateManager.saveState({ immediate: true });
-			},
-			executeAction: async (name, params) => {
-				const conn = await this.connectionManager.prepareAndConnectConn(
-					createHttpDriver(),
-					// TODO: This may cause issues
-					undefined as unknown as CP,
-					undefined,
-					undefined,
-					undefined,
-				);
-
-				try {
-					return await this.executeAction(
-						new ActionContext(this, conn),
-						name,
-						params || [],
-					);
-				} finally {
-					conn.disconnect();
-				}
-			},
-		};
-	});
+	#inspector = new ActorInspector(this);
 
 	// MARK: - Constructor
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB>) {

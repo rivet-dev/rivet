@@ -1,21 +1,20 @@
 import {
 	CatchBoundary,
+	useLocation,
 	useNavigate,
 	useRouteContext,
 	useSearch,
 } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import { match } from "ts-pattern";
 import { Actors } from "./actors";
 import { BuildPrefiller } from "./build-prefiller";
 import { Connect } from "./connect";
-import { InspectorCredentialsProvider } from "./credentials-context";
-import { createClient } from "./data-providers/inspector-data-provider";
 import { Logo } from "./logo";
 import { RouteLayout } from "./route-layout";
 
 export function InspectorRoot() {
-	const alreadyConnected = useRouteContext({
+	const connectedInPreflight = useRouteContext({
 		from: "/_context/",
 		select: (ctx) =>
 			match(ctx)
@@ -26,40 +25,31 @@ export function InspectorRoot() {
 				)
 				.otherwise(() => null),
 	});
+	const connectedInForm = useLocation({
+		select: (loc) =>
+			"connectedInForm" in loc.state
+				? (loc.state.connectedInForm ?? false)
+				: false,
+	});
+
+	const alreadyConnected = connectedInPreflight || connectedInForm;
+
 	const navigate = useNavigate();
 	const search = useSearch({ from: "/_context" });
-	const [credentials, setCredentials] = useState<null | {
-		url: string;
-		token: string;
-	}>(alreadyConnected ? { url: search.u!, token: search.t! } : null);
 
 	const formRef = useRef<HTMLFormElement>(null);
 
-	useEffect(() => {
-		if (search.t) {
-			formRef.current?.requestSubmit();
-		}
-	}, [search.t]);
-
-	const ctxValue = useMemo(() => {
-		return { credentials, setCredentials };
-	}, [credentials]);
-
-	if (credentials || alreadyConnected) {
+	if (alreadyConnected) {
 		return (
-			<InspectorCredentialsProvider value={ctxValue}>
-				<RouteLayout>
-					<Actors actorId={search.actorId} />
-					<CatchBoundary
-						getResetKey={() =>
-							search.n?.join(",") ?? "no-build-name"
-						}
-						errorComponent={() => null}
-					>
-						{!search.n ? <BuildPrefiller /> : null}
-					</CatchBoundary>
-				</RouteLayout>
-			</InspectorCredentialsProvider>
+			<RouteLayout>
+				<Actors actorId={search.actorId} />
+				<CatchBoundary
+					getResetKey={() => search.n?.join(",") ?? "no-build-name"}
+					errorComponent={() => null}
+				>
+					{!search.n ? <BuildPrefiller /> : null}
+				</CatchBoundary>
+			</RouteLayout>
 		);
 	}
 
@@ -71,32 +61,29 @@ export function InspectorRoot() {
 					formRef={formRef}
 					onSubmit={async (values, form) => {
 						try {
-							const client = createClient({
-								url: values.username,
-								token: values.token,
+							const response = await fetch(values.url, {
+								method: "OPTIONS",
 							});
-							const resp = await client.ping.$get();
-							if (!resp.ok) {
-								throw resp;
+							if (!response.ok) {
+								throw new Error("CORS preflight failed");
 							}
 							await navigate({
 								to: "/",
 								search: (old) => {
 									return {
 										...old,
-										u: values.username,
-										t: values.token,
+										u: values.url,
 									};
 								},
-							});
-							setCredentials({
-								url: values.username,
-								token: values.token,
+								state: (old) => ({
+									...old,
+									connectedInForm: true,
+								}),
 							});
 						} catch {
-							form.setError("token", {
+							form.setError("url", {
 								message:
-									"Failed to connect. Please check your URL and token.",
+									"Failed to connect. Please check your URL, and CORS settings.",
 							});
 						}
 					}}

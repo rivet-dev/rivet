@@ -1,17 +1,12 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
-import {
-	Hono,
-	type Context as HonoContext,
-	type MiddlewareHandler,
-	type Next,
-} from "hono";
+import type { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import invariant from "invariant";
 import { z } from "zod";
-import { ActorNotFound, InvalidRequest, Unsupported } from "@/actor/errors";
+import { InvalidRequest } from "@/actor/errors";
 import { serializeActorKey } from "@/actor/keys";
-import type { Client, Encoding } from "@/client/mod";
+import type { Encoding } from "@/client/mod";
 import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
@@ -37,8 +32,6 @@ import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
 } from "@/driver-test-suite/test-inline-client-driver";
-import { createManagerInspectorRouter } from "@/inspector/manager";
-import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -231,24 +224,6 @@ function addManagerRoutes(
 	managerDriver: ManagerDriver,
 	router: OpenAPIHono,
 ) {
-	// TODO(kacper): Remove this in favor of standard manager API
-	// Inspector
-	if (isInspectorEnabled(runConfig, "manager")) {
-		if (!managerDriver.inspector) {
-			throw new Unsupported("inspector");
-		}
-		router.route(
-			"/inspect",
-			new Hono<{ Variables: { inspector: any } }>()
-				.use(secureInspector(runConfig))
-				.use((c, next) => {
-					c.set("inspector", managerDriver.inspector!);
-					return next();
-				})
-				.route("/", createManagerInspectorRouter()),
-		);
-	}
-
 	// Actor gateway
 	router.use("*", actorGateway.bind(undefined, runConfig, managerDriver));
 

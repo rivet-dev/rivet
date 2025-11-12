@@ -43,12 +43,16 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		category: "display",
 		ephemeral: true,
 	},
-	showDatacenter: {
-		type: "boolean",
-		label: "Show Actors Datacenter",
-		category: "display",
-		ephemeral: true,
-	},
+	...(__APP_TYPE__ === "engine" || __APP_TYPE__ === "cloud"
+		? {
+				showDatacenter: {
+					type: "boolean",
+					label: "Show Actors Datacenter",
+					category: "display",
+					ephemeral: true,
+				},
+			}
+		: {}),
 	wakeOnSelect: {
 		type: "boolean",
 		label: "Auto-wake Actors on select",

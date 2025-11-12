@@ -44,8 +44,8 @@ export const Route = createFileRoute("/_context/")({
 				}
 			})
 			.with({ __type: "inspector" }, async (ctx) => {
-				if (!search.t || !search.u) {
-					return { connectedInPreflight: false };
+				if (!search.u) {
+					return { connectedInPreflight: ctx.connectedInPreflight };
 				}
 
 				try {
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/_context/")({
 
 					return { connectedInPreflight: result === true };
 				} catch {
-					return { connectedInPreflight: false };
+					return { connectedInPreflight: ctx.connectedInPreflight };
 				}
 			})
 			.exhaustive();

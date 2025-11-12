@@ -1,25 +1,13 @@
+import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	infiniteQueryOptions,
 	type MutationOptions,
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
-	UseInfiniteQueryOptions,
 } from "@tanstack/react-query";
-import type {
-	ActorId,
-	ActorLogEntry,
-	CreateActor as InspectorCreateActor,
-} from "rivetkit/inspector";
 import { z } from "zod";
-import {
-	type Actor,
-	type ActorMetrics,
-	type Build,
-	type CrashPolicy,
-	getActorStatus,
-	type Region,
-} from "@/components/actors";
+import { type ActorId, getActorStatus } from "@/components/actors";
 import { queryClient } from "@/queries/global";
 
 export const ActorQueryOptionsSchema = z
@@ -53,20 +41,7 @@ export type ActorQueryOptions = z.infer<typeof ActorQueryOptionsSchema>;
 
 export const RECORDS_PER_PAGE = 10;
 
-type PaginatedResponse<T, Field extends string> = {
-	pagination: { cursor?: string };
-} & Record<Field, T[]>;
-
-type PaginatedActorResponse = PaginatedResponse<Actor, "actors">;
-type PaginatedBuildsResponse = PaginatedResponse<Build, "builds">;
-type PaginatedRegionsResponse = PaginatedResponse<Region, "regions">;
-
-type CreateActor = Omit<InspectorCreateActor, "keys" | "key"> & {
-	runnerNameSelector: string;
-	key: string;
-	crashPolicy: CrashPolicy;
-	datacenter?: string;
-};
+type CreateActor = Omit<Rivet.ActorsCreateRequest, "namespace">;
 
 const defaultContext = {
 	endpoint: "",
@@ -82,6 +57,8 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return {} as Rivet.ActorsListResponse;
 			},
 			getNextPageParam: (lastPage) => {
 				if (lastPage.pagination.cursor) {
@@ -96,7 +73,7 @@ const defaultContext = {
 					return undefined;
 				}
 
-				return lastPage.actors[lastPage.actors.length - 1].id;
+				return lastPage.actors[lastPage.actors.length - 1].actorId;
 			},
 		});
 	},
@@ -109,12 +86,21 @@ const defaultContext = {
 			refetchInterval: 2000,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return {} as Rivet.ActorsListNamesResponse;
 			},
 			getNextPageParam: () => {
 				return undefined;
 			},
 			select: (data) => {
-				return data.pages.flatMap((page) => page.builds);
+				return data.pages.flatMap((page) =>
+					Array.from(
+						Object.entries(page.names).map(([id, name]) => ({
+							id,
+							name,
+						})),
+					),
+				);
 			},
 		});
 	},
@@ -124,7 +110,7 @@ const defaultContext = {
 			...this.buildsQueryOptions(),
 			select: (data) => {
 				return data.pages.reduce((acc, page) => {
-					return acc + page.builds.length;
+					return acc + Object.keys(page.names).length;
 				}, 0);
 			},
 		});
@@ -137,7 +123,7 @@ const defaultContext = {
 			refetchInterval: 5000,
 			select: (data) => {
 				return data.pages.flatMap((page) =>
-					page.actors.map((actor) => actor.id),
+					page.actors.map((actor) => actor.actorId),
 				);
 			},
 		});
@@ -148,7 +134,7 @@ const defaultContext = {
 			...this.actorsQueryOptions(opts),
 			select: (data) => {
 				return data.pages.flatMap((page) =>
-					page.actors.map((actor) => actor.id),
+					page.actors.map((actor) => actor.actorId),
 				).length;
 			},
 		});
@@ -158,16 +144,9 @@ const defaultContext = {
 	actorQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			queryFn: async () => {
-				return {} as Actor;
+				return {} as Rivet.Actor;
 			},
 			queryKey: ["actor", actorId] as QueryKey,
-		});
-	},
-
-	actorRegionQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			...this.actorQueryOptions(actorId),
-			select: (data) => data.region,
 		});
 	},
 
@@ -175,7 +154,7 @@ const defaultContext = {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
 			select: (data) =>
-				data.destroyedAt ? new Date(data.destroyedAt) : null,
+				data.destroyTs ? new Date(data.destroyTs) : null,
 		});
 	},
 
@@ -189,16 +168,9 @@ const defaultContext = {
 	actorStatusAdditionalInfoQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
-			select: ({ rescheduleAt }) => ({
-				rescheduleAt,
+			select: ({ rescheduleTs }) => ({
+				rescheduleTs,
 			}),
-		});
-	},
-
-	actorFeaturesQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			...this.actorQueryOptions(actorId),
-			select: (data) => data.features ?? [],
 		});
 	},
 
@@ -206,21 +178,18 @@ const defaultContext = {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
 			select: (data) => ({
-				tags: data.tags,
 				keys: data.key,
-				createdAt: data.createdAt ? new Date(data.createdAt) : null,
-				destroyedAt: data.destroyedAt
-					? new Date(data.destroyedAt)
+				createTs: data.createTs ? new Date(data.createTs) : null,
+				destroyTs: data.destroyTs ? new Date(data.destroyTs) : null,
+				connectableTs: data.connectableTs
+					? new Date(data.connectableTs)
 					: null,
-				connectableAt: data.connectableAt
-					? new Date(data.connectableAt)
+				pendingAllocationTs: data.pendingAllocationTs
+					? new Date(data.pendingAllocationTs)
 					: null,
-				pendingAllocationAt: data.pendingAllocationAt
-					? new Date(data.pendingAllocationAt)
-					: null,
-				sleepingAt: data.sleepingAt ? new Date(data.sleepingAt) : null,
-				region: data.region,
-				runner: data.runner,
+				sleepTs: data.sleepTs ? new Date(data.sleepTs) : null,
+				datacenter: data.datacenter,
+				runner: data.runnerNameSelector,
 				crashPolicy: data.crashPolicy,
 			}),
 		});
@@ -228,15 +197,6 @@ const defaultContext = {
 	actorBuildQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			queryKey: ["actor", actorId, "build"] as QueryKey,
-			queryFn: async () => {
-				throw new Error("Not implemented");
-			},
-			enabled: false,
-		});
-	},
-	actorMetricsQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			queryKey: ["actor", actorId, "metrics"] as QueryKey,
 			queryFn: async () => {
 				throw new Error("Not implemented");
 			},
@@ -279,77 +239,47 @@ const defaultContext = {
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return [];
 			},
 			getNextPageParam: () => null,
-		});
-	},
-	actorNetworkQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			...this.actorQueryOptions(actorId),
-			select: (data) => data.network,
-		});
-	},
-	actorNetworkPortsQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			...this.actorNetworkQueryOptions(actorId),
-			select: (data) => data.network?.ports,
-		});
-	},
-	actorRuntimeQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			...this.actorQueryOptions(actorId),
-			select: ({ runtime, lifecycle, tags }) => ({
-				runtime,
-				lifecycle,
-				tags,
-			}),
 		});
 	},
 	actorWorkerQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			...this.actorQueryOptions(actorId),
 			select: (data) => ({
-				features: data.features ?? [],
 				name: data.name ?? null,
 				endpoint: this.endpoint ?? null,
-				destroyedAt: data.destroyedAt
-					? new Date(data.destroyedAt)
-					: null,
-				runner: data.runner ?? undefined,
-				sleepingAt: data.sleepingAt ? new Date(data.sleepingAt) : null,
-				startedAt: data.startedAt ? new Date(data.startedAt) : null,
+				destroyedAt: data.destroyTs ? new Date(data.destroyTs) : null,
+				runner: data.runnerNameSelector ?? undefined,
+				sleepingAt: data.sleepTs ? new Date(data.sleepTs) : null,
+				startedAt: data.startTs ? new Date(data.startTs) : null,
 			}),
 		});
 	},
 	// #endregion
-	regionsQueryOptions() {
+	datacentersQueryOptions() {
 		return infiniteQueryOptions({
 			queryKey: ["actor", "regions"] as QueryKey,
 			initialPageParam: null as string | null,
 			queryFn: async () => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return {} as Rivet.DatacentersListResponse;
 			},
 			getNextPageParam: () => null,
-			select: (data) => data.pages.flatMap((page) => page.regions),
+			select: (data) => data.pages.flatMap((page) => page.datacenters),
 		});
 	},
-	regionQueryOptions(regionId: string | undefined) {
+	datacenterQueryOptions(regionId: string | undefined) {
 		return queryOptions({
 			queryKey: ["actor", "region", regionId] as QueryKey,
 			enabled: !!regionId,
 			queryFn: async () => {
 				throw new Error("Not implemented");
-			},
-		});
-	},
-	statusQueryOptions() {
-		return queryOptions({
-			queryKey: ["status"] as QueryKey,
-			refetchInterval: 1000,
-			enabled: false,
-			retry: 0,
-			queryFn: async () => {
-				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return {} as Rivet.Datacenter;
 			},
 		});
 	},
@@ -358,6 +288,8 @@ const defaultContext = {
 			mutationKey: ["createActor"] as QueryKey,
 			mutationFn: async (_: CreateActor) => {
 				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return "";
 			},
 			onSuccess: () => {
 				const keys = this.actorsQueryOptions({}).queryKey.filter(
@@ -368,6 +300,35 @@ const defaultContext = {
 						return keys.every((k) => query.queryKey.includes(k));
 					},
 				});
+			},
+		});
+	},
+
+	actorInspectorTokenQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: 1000,
+			gcTime: 1000,
+			queryKey: ["tokens", actorId, "inspector"] as QueryKey,
+			queryFn: async () => {
+				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return "" as string | null;
+			},
+		});
+	},
+
+	statusQueryOptions() {
+		return queryOptions({
+			queryKey: ["status"] as QueryKey,
+			queryFn: async () => {
+				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return true as boolean;
+			},
+			enabled: false,
+			refetchInterval: 5000,
+			meta: {
+				statusCheck: true,
 			},
 		});
 	},

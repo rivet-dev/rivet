@@ -1,3 +1,2 @@
-export * from "./protocol/common";
-export * from "./protocol/mod";
-export * from "./utils";
+export * from "../schemas/actor-inspector/mod";
+export * from "../schemas/actor-inspector/versioned";

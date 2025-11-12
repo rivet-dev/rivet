@@ -4,8 +4,8 @@
 
 import * as core from "./core";
 import * as Rivet from "./api/index";
-import urlJoin from "url-join";
 import * as serializers from "./serialization/index";
+import urlJoin from "url-join";
 import * as errors from "./errors/index";
 import { Datacenters } from "./api/resources/datacenters/client/Client";
 import { Health } from "./api/resources/health/client/Client";
@@ -99,7 +99,7 @@ export class RivetClient {
         request: Rivet.ActorsListRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.ActorsListResponse> {
-        const { namespace, name, key, actorIds, includeDestroyed, limit, cursor } = request;
+        const { namespace, name, key, actorIds, actorId, includeDestroyed, limit, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         if (name != null) {
@@ -112,6 +112,16 @@ export class RivetClient {
 
         if (actorIds != null) {
             _queryParams["actor_ids"] = actorIds;
+        }
+
+        if (actorId != null) {
+            if (Array.isArray(actorId)) {
+                _queryParams["actor_id"] = actorId.map((item) =>
+                    serializers.RivetId.jsonOrThrow(item, { unrecognizedObjectKeys: "strip" }),
+                );
+            } else {
+                _queryParams["actor_id"] = actorId;
+            }
         }
 
         if (includeDestroyed != null) {
@@ -608,7 +618,7 @@ export class RivetClient {
         request: Rivet.RunnerConfigsListRequest,
         requestOptions?: RivetClient.RequestOptions,
     ): Promise<Rivet.RunnerConfigsListResponse> {
-        const { namespace, limit, cursor, variant, runnerNames } = request;
+        const { namespace, limit, cursor, variant, runnerNames, runnerName } = request;
         const _queryParams: Record<string, string | string[] | object | object[] | null> = {};
         _queryParams["namespace"] = namespace;
         if (limit != null) {
@@ -627,6 +637,14 @@ export class RivetClient {
 
         if (runnerNames != null) {
             _queryParams["runner_names"] = runnerNames;
+        }
+
+        if (runnerName != null) {
+            if (Array.isArray(runnerName)) {
+                _queryParams["runner_name"] = runnerName.map((item) => item);
+            } else {
+                _queryParams["runner_name"] = runnerName;
+            }
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

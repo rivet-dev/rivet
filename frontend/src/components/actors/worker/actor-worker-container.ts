@@ -1,6 +1,7 @@
 import { CancelledError } from "@tanstack/react-query";
 import ActorWorker from "./actor-repl.worker?worker";
 import {
+	type ActionResponse,
 	type CodeMessage,
 	type FormattedCode,
 	type InitMessage,
@@ -41,7 +42,8 @@ interface Meta {
 	engineToken?: string | (() => Promise<string>) | (() => string);
 	runnerName?: string;
 	namespace?: string;
-	inspectorToken?: string;
+	inspectorToken?: string | null;
+	invokeAction?: (action: string, params: unknown[]) => Promise<unknown>;
 }
 
 export class ActorWorkerContainer {
@@ -69,11 +71,6 @@ export class ActorWorkerContainer {
 		this.#update();
 		try {
 			signal.throwIfAborted();
-
-			// FIXME(RVT-4553)
-			// if (actor.resources.cpu !== 125 || actor.resources.memory !== 128) {
-			// 	throw new Error("Unsupported actor resources");
-			// }
 
 			// If we reached this point, the actor is supported
 			// check if we still operate on the same actor
@@ -261,6 +258,25 @@ export class ActorWorkerContainer {
 				this.#state.commands = [...this.#state.commands];
 				this.#update();
 			}
+		}
+
+		if (msg.type === "invokeAction") {
+			this.#meta
+				?.invokeAction?.(msg.data.name, msg.data.args)
+				.then((result) => {
+					this.#worker?.postMessage({
+						type: "actionResponse",
+						id: msg.id,
+						data: { success: true, result },
+					} satisfies ActionResponse);
+				})
+				.catch((error) => {
+					this.#worker?.postMessage({
+						type: "actionResponse",
+						id: msg.id,
+						data: { success: false, error: String(error) },
+					} satisfies ActionResponse);
+				});
 		}
 
 		if (msg.type === "ready") {

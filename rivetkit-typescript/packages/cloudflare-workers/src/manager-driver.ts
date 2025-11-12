@@ -416,8 +416,4 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			properties: {},
 		};
 	}
-
-	getOrCreateInspectorAccessToken() {
-		return generateRandomString();
-	}
 }

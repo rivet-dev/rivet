@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import invariant from "invariant";
 import {
 	type ActionOpts,
 	type ActionOutput,
@@ -18,11 +17,6 @@ import {
 	loggerMiddleware,
 } from "@/common/router";
 import { noopNext } from "@/common/utils";
-import {
-	type ActorInspectorRouterEnv,
-	createActorInspectorRouter,
-} from "@/inspector/actor";
-import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
 import type { RunnerConfig } from "@/registry/run-config";
 import { CONN_DRIVER_SYMBOL } from "./conn/mod";
 import type { ActorDriver } from "./driver";
@@ -180,28 +174,6 @@ export function createActorRouter(
 			c.env.actorId,
 		);
 	});
-
-	if (isInspectorEnabled(runConfig, "actor")) {
-		router.route(
-			"/inspect",
-			new Hono<
-				ActorInspectorRouterEnv & { Bindings: ActorRouterBindings }
-			>()
-				.use(secureInspector(runConfig), async (c, next) => {
-					const inspector = (
-						await actorDriver.loadActor(c.env.actorId)
-					).inspector;
-					invariant(
-						inspector,
-						"inspector not supported on this platform",
-					);
-
-					c.set("inspector", inspector);
-					return next();
-				})
-				.route("/", createActorInspectorRouter()),
-		);
-	}
 
 	router.notFound(handleRouteNotFound);
 	router.onError(handleRouteError);

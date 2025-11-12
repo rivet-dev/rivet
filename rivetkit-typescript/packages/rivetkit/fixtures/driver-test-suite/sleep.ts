@@ -1,5 +1,5 @@
-import { actor, type UniversalWebSocket } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
+import { actor, type UniversalWebSocket } from "@/mod";
 
 export const SLEEP_TIMEOUT = 1000;
 

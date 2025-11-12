@@ -50,6 +50,7 @@ export const ActorsListRow = memo(
 					{isVisible ? (
 						<>
 							<WithTooltip
+								delayDuration={0}
 								trigger={
 									<div className="w-full flex justify-center">
 										<QueriedActorStatusIndicator
@@ -142,11 +143,11 @@ function Tags({ actorId }: { actorId: ActorId }) {
 }
 
 function Timestamp({ actorId }: { actorId: ActorId }) {
-	const { data: { createdAt, destroyedAt } = {} } = useQuery(
+	const { data: { createTs, destroyTs } = {} } = useQuery(
 		useDataProvider().actorQueryOptions(actorId),
 	);
 
-	const ts = destroyedAt || createdAt;
+	const ts = destroyTs || createTs;
 
 	const timestamp = ts ? new Date(ts) : null;
 

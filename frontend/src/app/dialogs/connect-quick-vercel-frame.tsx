@@ -31,12 +31,12 @@ export default function ConnectQuickVercelFrameContent({
 	onClose,
 }: ConnectQuickVercelFrameContentProps) {
 	usePrefetchInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
 
 	const { data: datacenters } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	return (

@@ -1,11 +1,10 @@
-import { useClerk } from "@clerk/clerk-react";
 import {
 	faArrowUpRight,
 	faBolt,
 	faHome,
 	faKey,
 	faLink,
-	faServer,
+	faLinkSlash,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -42,19 +41,14 @@ import {
 	ResizablePanelGroup,
 	ScrollArea,
 	Skeleton,
+	WithTooltip,
 } from "@/components";
-import {
-	useDataProvider,
-	useDataProviderCheck,
-	useInspectorDataProvider,
-} from "@/components/actors";
+import { useDataProvider, useDataProviderCheck } from "@/components/actors";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorBuildsList } from "./actor-builds-list";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
-import { useInspectorCredentials } from "./credentials-context";
-import { HelpDropdown } from "./help-dropdown";
 import { NamespaceSelect } from "./namespace-select";
 import { UserDropdown } from "./user-dropdown";
 
@@ -415,14 +409,12 @@ const Subnav = () => {
 					Overview
 				</HeaderLink>
 			) : null}
-			{hasDataProvider && hasQuery ? (
-				<div className="w-full">
-					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
-						Actors
-					</span>
-					<ActorBuildsList />
-				</div>
-			) : null}
+			<div className="w-full">
+				<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
+					Instances
+				</span>
+				<ActorBuildsList />
+			</div>
 		</div>
 	);
 };
@@ -470,11 +462,11 @@ function ConnectionStatus(): ReactNode {
 		from: "/_context",
 		select: (s) => s.u,
 	});
-	const data = useInspectorDataProvider();
-	const { setCredentials } = useInspectorCredentials();
+	const data = useDataProvider();
 	const { isLoading, isError, isSuccess } = useQuery(
 		data.statusQueryOptions(),
 	);
+	const navigate = useNavigate();
 
 	if (isLoading) {
 		return (
@@ -504,7 +496,7 @@ function ConnectionStatus(): ReactNode {
 					variant="outline"
 					size="xs"
 					className="ml-2 text-foreground"
-					onClick={() => setCredentials(null)}
+					onClick={() => navigate({ to: ".", state: {} })}
 					startIcon={<Icon icon={faLink} />}
 				>
 					Reconnect
@@ -515,11 +507,26 @@ function ConnectionStatus(): ReactNode {
 
 	if (isSuccess) {
 		return (
-			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes">
+			<div className=" border text-sm p-2 rounded-md flex items-center bg-stripes justify-between">
 				<div>
 					<p>Connected</p>
 					<p className="text-muted-foreground text-xs">{endpoint}</p>
 				</div>
+
+				<WithTooltip
+					delayDuration={0}
+					trigger={
+						<Button
+							variant="outline"
+							size="icon-sm"
+							className="ml-2 text-foreground"
+							onClick={() => navigate({ to: ".", state: {} })}
+						>
+							<Icon icon={faLinkSlash} />
+						</Button>
+					}
+					content="Disconnect"
+				/>
 			</div>
 		);
 	}

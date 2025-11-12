@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ActorEvents } from "./actor-events";
-import { useActor } from "./actor-queries-context";
 import { Info } from "./actor-state-tab";
 import { useDataProvider } from "./data-provider";
+import { useActorInspector } from "./inspector-context";
 import type { ActorId } from "./queries";
 
 export type EventsTypeFilter = "action" | "subscription" | "broadcast" | "send";
@@ -17,7 +17,7 @@ export function ActorEventsTab({ actorId }: ActorEventsTabProps) {
 	);
 
 	const { isError, isLoading } = useQuery(
-		useActor().actorEventsQueryOptions(actorId),
+		useActorInspector().actorEventsQueryOptions(actorId),
 	);
 
 	if (destroyedAt) {

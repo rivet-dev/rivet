@@ -63,11 +63,11 @@ export default function ConnectRailwayFrameContent({
 	onClose,
 }: ConnectRailwayFrameContentProps) {
 	usePrefetchInfiniteQuery({
-		...useEngineCompatDataProvider().regionsQueryOptions(),
+		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
 	});
 	const { data } = useSuspenseInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	const prefferedRegionForRailway =

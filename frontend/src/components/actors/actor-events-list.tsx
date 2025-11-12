@@ -9,10 +9,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { type PropsWithChildren, useEffect, useRef } from "react";
-import type { RecordedRealtimeEvent } from "rivetkit/inspector";
 import { Badge } from "../ui/badge";
-import { useActor } from "./actor-queries-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
+import { useActorInspector } from "./inspector-context";
 import type { ActorId } from "./queries";
 
 interface ActorEventsListProps {
@@ -26,9 +25,9 @@ export function ActorEventsList({
 	search,
 	filter,
 }: ActorEventsListProps) {
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const { data, isLoading, isError } = useQuery(
-		actorQueries.actorEventsQueryOptions(actorId),
+		actorInspector.actorEventsQueryOptions(actorId),
 	);
 
 	if (isLoading) {
@@ -45,7 +44,7 @@ export function ActorEventsList({
 		);
 	}
 
-	const filteredEvents = data?.events.filter?.((event) => {
+	const filteredEvents = data?.filter?.((event) => {
 		const constraints = [];
 
 		if ("name" in event) {

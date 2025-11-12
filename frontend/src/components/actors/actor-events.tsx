@@ -22,8 +22,8 @@ import { ActorClearEventsLogButton } from "./actor-clear-events-log-button";
 import { useActorDetailsSettings } from "./actor-details-settings";
 import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
 import { ActorEventsList } from "./actor-events-list";
-import { useActor } from "./actor-queries-context";
-import { type ActorId, useActorEventsStream } from "./queries";
+import { useActorInspector } from "./inspector-context";
+import type { ActorId } from "./queries";
 
 export type EventsTypeFilter = "action" | "subscription" | "broadcast" | "send";
 
@@ -42,10 +42,9 @@ export function ActorEvents({ actorId }: ActorEventsProps) {
 
 	const [isLive, setIsLive] = useState(true);
 	const ref = useRef<HTMLDivElement>(null);
-	// useActorEventsStream(actorId, { enabled: isLive });
 	const [settings] = useActorDetailsSettings();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
 	const { data } = useQuery(actorQueries.actorEventsQueryOptions(actorId));
 	const { onScroll } = useScrollToBottom(ref, [data]);
 

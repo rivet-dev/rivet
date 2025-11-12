@@ -1663,6 +1663,9 @@ importers:
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.16(tailwindcss@3.4.17)
+      '@tanstack/history':
+        specifier: ^1.133.28
+        version: 1.133.28
       '@tanstack/query-core':
         specifier: ^5.87.1
         version: 5.87.1
@@ -1726,6 +1729,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.2.2(@types/react@19.2.2)
+      '@types/reconnectingwebsocket':
+        specifier: ^1.0.10
+        version: 1.0.10
       '@uiw/codemirror-extensions-basic-setup':
         specifier: ^4.25.1
         version: 4.25.1(@codemirror/autocomplete@6.18.7)(@codemirror/commands@6.8.1)(@codemirror/language@6.11.3)(@codemirror/lint@6.8.5)(@codemirror/search@6.5.11)(@codemirror/state@6.5.2)(@codemirror/view@6.38.2)
@@ -1750,6 +1756,9 @@ importers:
       canvas-confetti:
         specifier: ^1.9.3
         version: 1.9.3
+      cbor-x:
+        specifier: ^1.6.0
+        version: 1.6.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1822,6 +1831,9 @@ importers:
       recharts:
         specifier: ^2.15.4
         version: 2.15.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      reconnectingwebsocket:
+        specifier: ^1.0.0
+        version: 1.0.0
       rivetkit:
         specifier: workspace:*
         version: link:../rivetkit-typescript/packages/rivetkit
@@ -6951,6 +6963,10 @@ packages:
     resolution: {integrity: sha512-cs1WKawpXIe+vSTeiZUuSBy8JFjEuDgdMKZFRLKwQysKo8y2q6Q1HvS74Yw+m5IhOW1nTZooa6rlgdfXcgFAaw==}
     engines: {node: '>=12'}
 
+  '@tanstack/history@1.133.28':
+    resolution: {integrity: sha512-B7+x7eP2FFvi3fgd3rNH9o/Eixt+pp0zCIdGhnQbAJjFrlwIKGjGnwyJjhWJ5fMQlGks/E2LdDTqEV4W9Plx7g==}
+    engines: {node: '>=12'}
+
   '@tanstack/query-core@5.87.1':
     resolution: {integrity: sha512-HOFHVvhOCprrWvtccSzc7+RNqpnLlZ5R6lTmngb8aq7b4rc2/jDT0w+vLdQ4lD9bNtQ+/A4GsFXy030Gk4ollA==}
 
@@ -7313,6 +7329,9 @@ packages:
 
   '@types/readable-stream@4.0.21':
     resolution: {integrity: sha512-19eKVv9tugr03IgfXlA9UVUVRbW6IuqRO5B92Dl4a6pT7K8uaGrNS0GkxiZD0BOk6PLuXl5FhWl//eX/pzYdTQ==}
+
+  '@types/reconnectingwebsocket@1.0.10':
+    resolution: {integrity: sha512-30Pq4D3o8BKcdY53dzr0elGFyB/ChYpGrHiRH/GuaZKXXGWq/CsD1QBEu1b8IgdHReOKpo9tjk80UaxSbuXoTQ==}
 
   '@types/retry@0.12.2':
     resolution: {integrity: sha512-XISRgDJ2Tc5q4TRqvgJtzsRkFYNJzZrhTdtMoGVBttwzzQJkPnS3WWTFc7kuDRoPtPakl+T+OfdEUjYJj7Jbow==}
@@ -12420,6 +12439,9 @@ packages:
 
   recma-stringify@1.0.0:
     resolution: {integrity: sha512-cjwII1MdIIVloKvC9ErQ+OgAtwHBmcZ0Bg4ciz78FtbT8In39aAYbaA7zvxQ61xVMSPE8WxhLwLbhif4Js2C+g==}
+
+  reconnectingwebsocket@1.0.0:
+    resolution: {integrity: sha512-r7H/dwkkfBu9x5eMGIt8td5WLqNbqy675x8Xg0+SoXaUS3xzniVlmfO7t7HSYmN/ZGzYjOKa9G2W4xCgCo7Zlg==}
 
   reflect.getprototypeof@1.0.10:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
@@ -19061,6 +19083,8 @@ snapshots:
 
   '@tanstack/history@1.131.2': {}
 
+  '@tanstack/history@1.133.28': {}
+
   '@tanstack/query-core@5.87.1': {}
 
   '@tanstack/query-devtools@5.87.3': {}
@@ -19495,6 +19519,8 @@ snapshots:
   '@types/readable-stream@4.0.21':
     dependencies:
       '@types/node': 22.18.1
+
+  '@types/reconnectingwebsocket@1.0.10': {}
 
   '@types/retry@0.12.2': {}
 
@@ -25871,6 +25897,8 @@ snapshots:
       estree-util-to-js: 2.0.0
       unified: 11.0.5
       vfile: 6.0.3
+
+  reconnectingwebsocket@1.0.0: {}
 
   reflect.getprototypeof@1.0.10:
     dependencies:

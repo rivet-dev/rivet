@@ -5,16 +5,10 @@ import {
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
-	UseQueryOptions,
 } from "@tanstack/react-query";
 import z from "zod";
 import { getConfig, ls } from "@/components";
-import {
-	type Actor,
-	ActorFeature,
-	type ActorId,
-	type CrashPolicy,
-} from "@/components/actors";
+import type { ActorId } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
@@ -141,39 +135,17 @@ export const createNamespaceContext = ({
 			canCreateActors: true,
 			canDeleteActors: true,
 		},
-		statusQueryOptions() {
-			return queryOptions({
-				...def.statusQueryOptions(),
-				queryKey: [{ namespace }, ...def.statusQueryOptions().queryKey],
-				enabled: true,
-				queryFn: async () => {
-					return true;
-				},
-				retry: shouldRetryAllExpect403,
-				throwOnError: noThrow,
-				meta: {
-					mightRequireAuth,
-				},
-			});
-		},
-		regionsQueryOptions() {
+		datacentersQueryOptions() {
 			return infiniteQueryOptions({
-				...def.regionsQueryOptions(),
+				...def.datacentersQueryOptions(),
 				enabled: true,
 				queryKey: [
 					{ namespace },
-					...def.regionsQueryOptions().queryKey,
+					...def.datacentersQueryOptions().queryKey,
 				] as QueryKey,
 				queryFn: async () => {
 					const data = await client.datacenters.list();
-					return {
-						regions: data.datacenters.map((dc) => ({
-							id: dc.name,
-							name: dc.name,
-							url: dc.url,
-						})),
-						pagination: data.pagination,
-					};
+					return data;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
@@ -182,27 +154,27 @@ export const createNamespaceContext = ({
 				},
 			});
 		},
-		regionQueryOptions(regionId: string | undefined) {
+		datacenterQueryOptions(name: string | undefined) {
 			return queryOptions({
-				...def.regionQueryOptions(regionId),
+				...def.datacenterQueryOptions(name),
 				queryKey: [
 					{ namespace },
-					...def.regionQueryOptions(regionId).queryKey,
+					...def.datacenterQueryOptions(name).queryKey,
 				],
 				queryFn: async ({ client }) => {
 					const regions = await client.ensureInfiniteQueryData(
-						this.regionsQueryOptions(),
+						this.datacentersQueryOptions(),
 					);
 
 					for (const page of regions.pages) {
-						for (const region of page.regions) {
-							if (region.id === regionId) {
+						for (const region of page.datacenters) {
+							if (region.name === name) {
 								return region;
 							}
 						}
 					}
 
-					throw new Error(`Region not found: ${regionId}`);
+					throw new Error(`Region not found: ${name}`);
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
@@ -229,7 +201,7 @@ export const createNamespaceContext = ({
 						throw new Error("Actor not found");
 					}
 
-					return transformActor(data.actors[0]);
+					return data.actors[0];
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
@@ -293,12 +265,7 @@ export const createNamespaceContext = ({
 						{ abortSignal },
 					);
 
-					return {
-						...data,
-						actors: data.actors.map((actor) =>
-							transformActor(actor),
-						),
-					};
+					return data;
 				},
 				getNextPageParam: (lastPage) => {
 					if (lastPage.actors.length < RECORDS_PER_PAGE) {
@@ -328,22 +295,9 @@ export const createNamespaceContext = ({
 						{ abortSignal },
 					);
 
-					return {
-						pagination: data.pagination,
-						builds: Object.keys(data.names)
-							.sort()
-							.map((build) => ({
-								id: build,
-								name: build,
-							})),
-					};
+					return data;
 				},
-				getNextPageParam: (lastPage) => {
-					if (lastPage.builds.length < RECORDS_PER_PAGE) {
-						return undefined;
-					}
-					return lastPage.pagination.cursor;
-				},
+				getNextPageParam: (lastPage) => lastPage.pagination?.cursor,
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,
 				meta: {
@@ -411,6 +365,32 @@ export const createNamespaceContext = ({
 					}
 
 					throw res.failure;
+				},
+			});
+		},
+		actorInspectorTokenQueryOptions(actorId: ActorId) {
+			return queryOptions({
+				queryKey: [
+					{ namespace },
+					"actors",
+					actorId,
+					"inspector-token",
+				] as QueryKey,
+				enabled: !!actorId,
+				queryFn: async ({ signal: abortSignal }) => {
+					// todo: check metadata if we're running serverless or not
+					const response = await client.actorsKvGet(
+						actorId,
+						// NOTE: MUST match key used in engine for actor inspector tokens
+						Buffer.from(Uint8Array.from([3])).toString("base64"),
+						{ abortSignal },
+					);
+
+					if (!response.value) {
+						return null;
+					}
+
+					return response.value;
 				},
 			});
 		},
@@ -673,47 +653,6 @@ export const createNamespaceContext = ({
 		},
 	};
 };
-
-function transformActor(a: Rivet.Actor): Actor {
-	return {
-		id: a.actorId as ActorId,
-		name: a.name,
-		key: a.key ? a.key : undefined,
-		connectableAt: a.connectableTs
-			? new Date(a.connectableTs).toISOString()
-			: undefined,
-		region: a.datacenter,
-		createdAt: new Date(a.createTs).toISOString(),
-		startedAt: a.startTs ? new Date(a.startTs).toISOString() : undefined,
-		destroyedAt: a.destroyTs
-			? new Date(a.destroyTs).toISOString()
-			: undefined,
-		sleepingAt: a.sleepTs ? new Date(a.sleepTs).toISOString() : undefined,
-		pendingAllocationAt: a.pendingAllocationTs
-			? new Date(a.pendingAllocationTs).toISOString()
-			: undefined,
-		crashPolicy: a.crashPolicy as CrashPolicy,
-		runner: a.runnerNameSelector,
-		rescheduleAt: a.rescheduleTs
-			? new Date(a.rescheduleTs).toISOString()
-			: undefined,
-		features: [
-			ActorFeature.Config,
-			ActorFeature.Connections,
-			ActorFeature.State,
-			ActorFeature.Console,
-			ActorFeature.Database,
-			ActorFeature.EventsMonitoring,
-		],
-	};
-}
-
-type RunnerConfig = [
-	string,
-	{
-		datacenters: Record<string, { metadata?: { provider?: string } }>;
-	},
-];
 
 export function hasMetadataProvider(
 	metadata: unknown,
