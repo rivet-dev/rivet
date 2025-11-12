@@ -19,6 +19,7 @@ import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
+import { runActorDestroyTests } from "./tests/actor-destroy";
 import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
@@ -103,6 +104,8 @@ export function runDriverTests(
 					runActorConnTests(driverTestConfig);
 
 					runActorConnStateTests(driverTestConfig);
+
+					runActorDestroyTests(driverTestConfig);
 
 					runActorReconnectTests(driverTestConfig);
 
