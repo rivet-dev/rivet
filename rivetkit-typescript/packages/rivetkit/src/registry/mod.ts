@@ -220,7 +220,7 @@ export class Registry<A extends RegistryActors> {
 		// Start server
 		if (!config.disableDefaultServer) {
 			const serverPromise = (async () => {
-				const out = await crossPlatformServe(config, hono, undefined);
+				const out = await crossPlatformServe(config, hono);
 				upgradeWebSocket = out.upgradeWebSocket;
 			})();
 			readyPromises.push(serverPromise);
