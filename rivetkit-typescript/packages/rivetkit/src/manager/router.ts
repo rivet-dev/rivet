@@ -1,10 +1,13 @@
 import { createRoute } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
-import { Hono } from "hono";
+
+import type { Hono } from "hono";
 import invariant from "invariant";
 import { z } from "zod";
-import { Unsupported } from "@/actor/errors";
+import { Forbidden, RestrictedFeature, Unsupported } from "@/actor/errors";
+
 import { serializeActorKey } from "@/actor/keys";
+
 import type { Encoding } from "@/client/mod";
 import {
 	WS_PROTOCOL_ACTOR,
@@ -19,8 +22,7 @@ import type {
 	TestInlineDriverCallRequest,
 	TestInlineDriverCallResponse,
 } from "@/driver-test-suite/test-inline-client-driver";
-import { createManagerInspectorRouter } from "@/inspector/manager";
-import { isInspectorEnabled, secureInspector } from "@/inspector/utils";
+import { compareSecrets } from "@/inspector/utils";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -28,6 +30,8 @@ import {
 	ActorsGetOrCreateRequestSchema,
 	type ActorsGetOrCreateResponse,
 	ActorsGetOrCreateResponseSchema,
+	type ActorsKvGetResponse,
+	ActorsKvGetResponseSchema,
 	type ActorsListNamesResponse,
 	ActorsListNamesResponseSchema,
 	type ActorsListResponse,
@@ -35,15 +39,16 @@ import {
 	type Actor as ApiActor,
 } from "@/manager-api/actors";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
+import { type GetUpgradeWebSocket, getEnvUniversal } from "@/utils";
+import { getNodeEnv } from "@/utils/env-vars";
+import {
+	buildOpenApiRequestBody,
+	buildOpenApiResponses,
+	createRouter,
+} from "@/utils/router";
 import type { ActorOutput, ManagerDriver } from "./driver";
 import { actorGateway, createTestWebSocketProxy } from "./gateway";
 import { logger } from "./log";
-import {
-	createRouter,
-	buildOpenApiRequestBody,
-	buildOpenApiResponses,
-} from "@/utils/router";
-import { GetUpgradeWebSocket } from "@/utils";
 
 export function buildManagerRouter(
 	config: RegistryConfig,
@@ -51,24 +56,6 @@ export function buildManagerRouter(
 	getUpgradeWebSocket: GetUpgradeWebSocket | undefined,
 ) {
 	return createRouter(config.managerBasePath, (router) => {
-		// TODO(kacper): Remove this in favor of standard manager API
-		// Inspector
-		if (isInspectorEnabled(config, "manager")) {
-			if (!managerDriver.inspector) {
-				throw new Unsupported("inspector");
-			}
-			router.route(
-				"/inspect",
-				new Hono<{ Variables: { inspector: any } }>()
-					.use(secureInspector(config))
-					.use((c, next) => {
-						c.set("inspector", managerDriver.inspector!);
-						return next();
-					})
-					.route("/", createManagerInspectorRouter()),
-			);
-		}
-
 		// Actor gateway
 		router.use(
 			"*",
@@ -314,6 +301,56 @@ export function buildManagerRouter(
 				const actor = createApiActor(actorOutput);
 
 				return c.json<ActorsCreateResponse>({ actor });
+			});
+		}
+
+		// GET /actors/{actor_id}/kv/keys/{key}
+		{
+			const route = createRoute({
+				method: "get",
+				path: "/actors/{actor_id}/kv/keys/{key}",
+				request: {
+					params: z.object({
+						actor_id: z.string(),
+						key: z.string(),
+					}),
+				},
+				responses: buildOpenApiResponses(ActorsKvGetResponseSchema),
+			});
+
+			router.openapi(route, async (c) => {
+				if (getNodeEnv() === "development" && !config.token) {
+					logger().warn({
+						msg: "RIVET_TOKEN is not set, skipping KV store access checks in development mode. This endpoint will be disabled in production, unless you set the token.",
+					});
+				}
+
+				if (getNodeEnv() !== "development") {
+					if (!config.token) {
+						throw new RestrictedFeature("KV store access");
+					}
+					if (
+						compareSecrets(
+							config.token,
+							c.req.header("x-rivet-token") || "",
+						) === false
+					) {
+						throw new Forbidden();
+					}
+				}
+
+				const { actor_id: actorId, key } = c.req.valid("param");
+
+				const response = await managerDriver.kvGet(
+					actorId,
+					Buffer.from(key, "base64"),
+				);
+
+				return c.json<ActorsKvGetResponse>({
+					value: response
+						? Buffer.from(response).toString("base64")
+						: null,
+				});
 			});
 		}
 

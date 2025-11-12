@@ -105,7 +105,7 @@ export const RunnerName = function RunnerName() {
 export const Datacenters = function Datacenter() {
 	const { control } = useFormContext();
 	const { data, hasNextPage, fetchNextPage } = useInfiniteQuery(
-		useEngineCompatDataProvider().regionsQueryOptions(),
+		useEngineCompatDataProvider().datacentersQueryOptions(),
 	);
 
 	return (
@@ -118,21 +118,21 @@ export const Datacenters = function Datacenter() {
 			<div className="space-y-4">
 				{data?.map((region) => (
 					<FormField
-						key={region.id}
+						key={region.name}
 						control={control}
-						name={`datacenters.${region.id}`}
+						name={`datacenters.${region.name}`}
 						render={({ field }) => (
 							<div className="flex items-start gap-3">
 								<Checkbox
-									id={region.id}
+									id={region.name}
 									checked={field.value}
 									name={field.name}
 									onCheckedChange={field.onChange}
 								/>
 								<div className="grid gap-2">
-									<Label htmlFor={region.id}>
+									<Label htmlFor={region.name}>
 										<ActorRegion
-											regionId={region.id}
+											regionId={region.name}
 											showLabel
 										/>
 									</Label>

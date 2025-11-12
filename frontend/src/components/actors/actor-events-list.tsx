@@ -3,15 +3,17 @@ import {
 	faLink,
 	faMegaphone,
 	faTowerBroadcast,
-	faUnlink,
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { type PropsWithChildren, useEffect, useRef } from "react";
-import type { RecordedRealtimeEvent } from "rivetkit/inspector";
+import { match, P } from "ts-pattern";
 import { Badge } from "../ui/badge";
-import { useActor } from "./actor-queries-context";
+import {
+	type TransformedInspectorEvent,
+	useActorInspector,
+} from "./actor-inspector-context";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import type { ActorId } from "./queries";
 
@@ -26,9 +28,9 @@ export function ActorEventsList({
 	search,
 	filter,
 }: ActorEventsListProps) {
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const { data, isLoading, isError } = useQuery(
-		actorQueries.actorEventsQueryOptions(actorId),
+		actorInspector.actorEventsQueryOptions(actorId),
 	);
 
 	if (isLoading) {
@@ -45,30 +47,29 @@ export function ActorEventsList({
 		);
 	}
 
-	const filteredEvents =
-		data?.events?.filter?.((event) => {
-			const constraints = [];
+	const filteredEvents = data?.filter?.((event) => {
+		const constraints = [];
 
-			if ("name" in event) {
-				constraints.push(
-					event.name.toLowerCase().includes(search.toLowerCase()),
-				);
-			}
-			if ("eventName" in event) {
-				constraints.push(
-					event.eventName
-						.toLowerCase()
-						.includes(search.toLowerCase()),
-				);
-			}
-			if (filter.length > 0) {
-				const type = event.type.includes("subscribe")
-					? "subscription"
-					: event.type;
-				constraints.push(filter.includes(type));
-			}
-			return constraints.every(Boolean);
-		}) ?? [];
+		if ("name" in event.body.val) {
+			constraints.push(
+				event.body.val.name
+					.toLowerCase()
+					.includes(search.toLowerCase()),
+			);
+		}
+		if ("eventName" in event.body.val) {
+			constraints.push(
+				event.body.val.eventName
+					.toLowerCase()
+					.includes(search.toLowerCase()),
+			);
+		}
+		if (filter.length > 0) {
+			const type = event.body.tag;
+			constraints.push(filter.includes(type));
+		}
+		return constraints.every(Boolean);
+	});
 
 	if (filteredEvents?.length === 0) {
 		return <Info>No events found.</Info>;
@@ -79,11 +80,11 @@ export function ActorEventsList({
 	});
 }
 
-function Event(props: RecordedRealtimeEvent) {
+function Event(props: TransformedInspectorEvent) {
 	const ref = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		if (ref.current && props.timestamp > Date.now() - 1000) {
+		if (ref.current && props.timestamp.getTime() > Date.now() - 1000) {
 			ref.current.animate(
 				[
 					{ backgroundColor: "transparent" },
@@ -99,117 +100,123 @@ function Event(props: RecordedRealtimeEvent) {
 		}
 	}, [props.timestamp]);
 
-	if (props.type === "action") {
-		return (
-			<EventContainer ref={ref}>
-				<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
-					{props.timestamp
-						? format(
-								props.timestamp,
-								"LLL dd HH:mm:ss",
-							).toUpperCase()
-						: null}
-				</div>
-				<div className="font-mono-console">
-					{props.connId.split("-")[0]}
-				</div>
-				<div>
-					<Badge variant="outline">
-						<Icon className="mr-1" icon={faHammer} />
-						Action
-					</Badge>
-				</div>
-				<div className="font-mono-console">{props.name}</div>
-				<div>
-					<ActorObjectInspector data={props.args} />
-				</div>
-			</EventContainer>
-		);
-	}
-	if (props.type === "subscribe" || props.type === "unsubscribe") {
-		return (
-			<EventContainer ref={ref}>
-				<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
-					{props.timestamp
-						? format(
-								props.timestamp,
-								"LLL dd HH:mm:ss",
-							).toUpperCase()
-						: null}
-				</div>
-				<div className="font-mono-console">
-					{props.connId.split("-")[0]}
-				</div>
-				<div>
-					<Badge variant="outline">
-						<Icon
-							className="mr-1"
-							icon={
-								props.type === "subscribe" ? faLink : faUnlink
-							}
-						/>
-						{props.type === "subscribe"
-							? "Subscribe"
-							: "Unsubscribe"}
-					</Badge>
-				</div>
-				<div className="font-mono-console">{props.eventName}</div>
-				<div />
-			</EventContainer>
-		);
-	}
-	if (props.type === "broadcast") {
-		return (
-			<EventContainer ref={ref}>
-				<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
-					{props.timestamp
-						? format(
-								props.timestamp,
-								"LLL dd HH:mm:ss",
-							).toUpperCase()
-						: null}
-				</div>
-				<div />
-				<div>
-					<Badge variant="outline">
-						<Icon className="mr-1" icon={faTowerBroadcast} />
-						Broadcast
-					</Badge>
-				</div>
-				<div className="font-mono-console">{props.eventName}</div>
-				<div>
-					<ActorObjectInspector data={props.args} />
-				</div>
-			</EventContainer>
-		);
-	}
-	if (props.type === "event") {
-		return (
-			<EventContainer ref={ref}>
-				<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
-					{props.timestamp
-						? format(
-								props.timestamp,
-								"LLL dd HH:mm:ss",
-							).toUpperCase()
-						: null}
-				</div>
-				<div className="font-mono-console">
-					{props.connId.split("-")[0]}
-				</div>
-				<div>
-					<Badge variant="outline">
-						<Icon className="mr-1" icon={faMegaphone} />
-						Send
-					</Badge>
-				</div>
-				<div className="font-mono-console">{props.eventName}</div>
-				<div>
-					<ActorObjectInspector data={props.args} />
-				</div>
-			</EventContainer>
-		);
-	}
+	return match(props.body)
+		.with({ tag: "ActionEvent" }, (body) => {
+			return (
+				<EventContainer ref={ref}>
+					<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
+						{props.timestamp
+							? format(
+									props.timestamp,
+									"LLL dd HH:mm:ss",
+								).toUpperCase()
+							: null}
+					</div>
+					<div className="font-mono-console">
+						{body.val.connId.split("-")[0]}
+					</div>
+					<div>
+						<Badge variant="outline">
+							<Icon className="mr-1" icon={faHammer} />
+							Action
+						</Badge>
+					</div>
+					<div className="font-mono-console">{body.val.name}</div>
+					<div>
+						<ActorObjectInspector data={body.val.args} />
+					</div>
+				</EventContainer>
+			);
+		})
+		.with(
+			{ tag: P.union("SubscribeEvent", "UnSubscribeEvent") },
+			(body) => {
+				return (
+					<EventContainer ref={ref}>
+						<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
+							{props.timestamp
+								? format(
+										props.timestamp,
+										"LLL dd HH:mm:ss",
+									).toUpperCase()
+								: null}
+						</div>
+						<div className="font-mono-console">
+							{body.val.connId.split("-")[0]}
+						</div>
+						<div>
+							<Badge variant="outline">
+								<Icon className="mr-1" icon={faLink} />
+								{body.tag === "SubscribeEvent"
+									? "Subscribe"
+									: "Unsubscribe"}
+							</Badge>
+						</div>
+						<div className="font-mono-console">
+							{body.val.eventName}
+						</div>
+						<div />
+					</EventContainer>
+				);
+			},
+		)
+		.with({ tag: "BroadcastEvent" }, (body) => {
+			return (
+				<EventContainer ref={ref}>
+					<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
+						{props.timestamp
+							? format(
+									props.timestamp,
+									"LLL dd HH:mm:ss",
+								).toUpperCase()
+							: null}
+					</div>
+					<div />
+					<div>
+						<Badge variant="outline">
+							<Icon className="mr-1" icon={faTowerBroadcast} />
+							Broadcast
+						</Badge>
+					</div>
+					<div className="font-mono-console">
+						{body.val.eventName}
+					</div>
+					<div>
+						<ActorObjectInspector data={body.val.args} />
+					</div>
+				</EventContainer>
+			);
+		})
+		.with({ tag: "FiredEvent" }, (body) => {
+			return (
+				<EventContainer ref={ref}>
+					<div className="min-h-4 text-foreground/30 flex-shrink-0 [[data-show-timestamps]_&]:block hidden">
+						{props.timestamp
+							? format(
+									props.timestamp,
+									"LLL dd HH:mm:ss",
+								).toUpperCase()
+							: null}
+					</div>
+					<div className="font-mono-console">
+						{body.val.connId.split("-")[0]}
+					</div>
+					<div>
+						<Badge variant="outline">
+							<Icon className="mr-1" icon={faMegaphone} />
+							Send
+						</Badge>
+					</div>
+					<div className="font-mono-console">
+						{body.val.eventName}
+					</div>
+					<div>
+						<ActorObjectInspector data={body.val.args} />
+					</div>
+				</EventContainer>
+			);
+		})
+		.exhaustive();
 }
 
 function EventContainer({

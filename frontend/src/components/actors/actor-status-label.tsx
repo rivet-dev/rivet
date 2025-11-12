@@ -1,8 +1,18 @@
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
+import { isObject } from "lodash";
 import { match, P } from "ts-pattern";
+import { CodePreview } from "../code-preview/code-preview";
 import { RelativeTime } from "../relative-time";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "../ui/accordion";
+import { ScrollArea } from "../ui/scroll-area";
+import { Code } from "../ui/typography";
 import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
 
@@ -32,9 +42,10 @@ export const QueriedActorStatusLabel = ({
 	actorId: ActorId;
 	showAdditionalInfo?: boolean;
 }) => {
-	const { data: status, isError } = useQuery(
+	const { data: status = "unknown", isError } = useQuery(
 		useDataProvider().actorStatusQueryOptions(actorId),
 	);
+	console.log(status);
 	return (
 		<>
 			<ActorStatusLabel status={isError ? "unknown" : status} />
@@ -50,17 +61,17 @@ export function QueriedActorStatusAdditionalInfo({
 }: {
 	actorId: ActorId;
 }) {
-	const { data: { rescheduleAt, error } = {} } = useQuery(
+	const { data: { rescheduleTs, error } = {} } = useQuery(
 		useDataProvider().actorStatusAdditionalInfoQueryOptions(actorId),
 	);
 
-	if (rescheduleAt) {
+	if (rescheduleTs) {
 		return (
 			<span>
 				Will try to start again{" "}
 				<span>
-					<RelativeTime time={new Date(rescheduleAt)} /> (
-					{formatISO(rescheduleAt)}){" "}
+					<RelativeTime time={new Date(rescheduleTs)} /> (
+					{formatISO(rescheduleTs)}){" "}
 				</span>
 			</span>
 		);
@@ -83,10 +94,7 @@ export function ActorError({ error }: { error: Rivet.ActorError }) {
 				.otherwise(() => <p>Unknown error: {errMsg}</p>),
 		)
 		.with(P.shape({ runnerPoolError: P.any }), (err) => (
-			<p>
-				Runner Pool Error:{" "}
-				<RunnerPoolError error={err.runnerPoolError} />
-			</p>
+			<RunnerPoolError error={err.runnerPoolError} />
 		))
 		.with(P.shape({ runnerNoResponse: P.any }), (err) => (
 			<p>
@@ -135,36 +143,95 @@ export function RunnerPoolError({
 		.with(P.nullish, () => null)
 		.with(P.string, (errStr) =>
 			match(errStr)
-				.with(
-					"internal_error",
-					() => "Internal error occurred in runner pool",
-				)
-				.with(
-					"serverless_invalid_base64",
-					() => "Invalid base64 encoding in serverless response",
-				)
-				.with(
-					"serverless_stream_ended_early",
-					() => "Connection terminated unexpectedly",
-				)
-				.otherwise(() => "Unknown runner pool error"),
+				.with("internal_error", () => (
+					<p>Internal error occurred in runner pool</p>
+				))
+				.with("serverless_invalid_base64", () => (
+					<p>Invalid base64 encoding in serverless response</p>
+				))
+				.with("serverless_stream_ended_early", () => (
+					<p>Connection terminated unexpectedly</p>
+				))
+				.otherwise(() => <p>Unknown runner pool error</p>),
 		)
 		.with(P.shape({ serverlessHttpError: P.any }), (errObj) => {
 			const { statusCode, body } = errObj.serverlessHttpError;
 			const code = statusCode ?? "unknown";
-			return body ? `HTTP ${code} error: ${body}` : `HTTP ${code} error`;
+			return (
+				<>
+					<p>Serverless HTTP error with status code {code}</p>
+					{body ? <ErrorDetails error={body} /> : null}
+				</>
+			);
 		})
 		.with(P.shape({ serverlessConnectionError: P.any }), (errObj) => {
 			const message = errObj.serverlessConnectionError?.message;
-			return message
-				? `Connection failed: ${message}`
-				: "Unable to connect to serverless endpoint";
+			return (
+				<>
+					<p>Unable to connect to serverless endpoint</p>
+					{message ? <ErrorDetails error={message} /> : null}
+				</>
+			);
 		})
 		.with(P.shape({ serverlessInvalidPayload: P.any }), (errObj) => {
 			const message = errObj.serverlessInvalidPayload?.message;
-			return message
-				? `Invalid request payload: ${message}`
-				: "Request payload validation failed";
+			return (
+				<>
+					<p>Request payload validation failed</p>
+					{message ? <ErrorDetails error={message} /> : null}
+				</>
+			);
 		})
 		.exhaustive();
 }
+
+export function ErrorDetails({ error }: { error: unknown }) {
+	const json =
+		typeof error === "string"
+			? tryJsonParse(error)
+			: isObject(error)
+				? error
+				: null;
+	return (
+		<Accordion
+			type="single"
+			collapsible
+			className="mt-4 max-w-full min-w-0"
+		>
+			<AccordionItem value="error-details">
+				<AccordionTrigger className="gap-1 p-0 max-w-full min-w-0">
+					View Error Details
+				</AccordionTrigger>
+				<AccordionContent className="max-w-full min-w-0 ">
+					{json ? (
+						<div className="not-prose my-4 rounded-lg border p-1 bg-background">
+							<ScrollArea className="w-full">
+								<CodePreview
+									language="json"
+									className="text-left"
+									code={
+										json
+											? JSON.stringify(json, null, 2)
+											: String(error)
+									}
+								/>
+							</ScrollArea>
+						</div>
+					) : (
+						<Code className="block whitespace-pre-wrap text-left">
+							{String(error)}
+						</Code>
+					)}
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
+const tryJsonParse = (str: string) => {
+	try {
+		return JSON.parse(str);
+	} catch {
+		return null;
+	}
+};

@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/correctness/useHookAtTopLevel: safe guarded by build consts */
+
 import {
 	faExclamationTriangle,
 	faPowerOff,
@@ -11,22 +12,28 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useMatch, useRouteContext } from "@tanstack/react-router";
+import { useRouteContext, useSearch } from "@tanstack/react-router";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { match, P } from "ts-pattern";
 import { useLocalStorage } from "usehooks-ts";
-import { useInspectorCredentials } from "@/app/credentials-context";
-import { createInspectorActorContext } from "@/queries/actor-inspector";
-import { queryClient } from "@/queries/global";
+import { isRivetApiError } from "@/lib/errors";
 import { DiscreteCopyButton } from "../copy-area";
-import { getConfig } from "../lib/config";
+import { getConfig, useConfig } from "../lib/config";
 import { ls } from "../lib/utils";
+import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
+import { Code } from "../ui/typography";
 import { useFiltersValue } from "./actor-filters-context";
-import { ActorProvider, useActor } from "./actor-queries-context";
+import {
+	actorWakeUpMutationOptions,
+	actorWakeUpQueryOptions,
+	ActorInspectorProvider as InspectorProvider,
+	useActorInspector,
+} from "./actor-inspector-context";
 import { Info } from "./actor-state-tab";
-import { QueriedActorError } from "./actor-status-label";
+import { ErrorDetails, QueriedActorError } from "./actor-status-label";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
+import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId, ActorStatus } from "./queries";
 
 const InspectorGuardContext = createContext<ReactNode | null>(null);
@@ -48,7 +55,7 @@ export function GuardConnectableInspector({
 	});
 
 	return match(status)
-		.with(P.union("running", "sleeping"), () => (
+		.with(P.union("running"), () => (
 			<ActorContextProvider actorId={actorId}>
 				{children}
 			</ActorContextProvider>
@@ -87,6 +94,15 @@ function UnavailableInfo({
 				<p>Actor has been destroyed.</p>
 			</Info>
 		))
+		.with("sleeping", () => <SleepingActor actorId={actorId} />)
+		.with("starting", () => (
+			<Info>
+				<div className="flex items-center">
+					<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+					Actor is starting...
+				</div>
+			</Info>
+		))
 		.otherwise(() => {
 			return (
 				<Info>
@@ -94,6 +110,16 @@ function UnavailableInfo({
 				</Info>
 			);
 		});
+}
+
+function SleepingActor({ actorId }: { actorId: ActorId }) {
+	const { wakeOnSelect } = useFiltersValue({ onlyEphemeral: true });
+
+	if (wakeOnSelect?.value[0] === "1") {
+		return <AutoWakeUpActor actorId={actorId} />;
+	}
+
+	return <WakeUpActorButton actorId={actorId} />;
 }
 
 function NoRunners() {
@@ -127,72 +153,73 @@ function ActorContextProvider(props: {
 	actorId: ActorId;
 	children: ReactNode;
 }) {
+	const { token, metadata, isError, error } = useActorInspectorData(
+		props.actorId,
+	);
+
+	if (isError) {
+		return (
+			<InspectorGuardContext.Provider
+				value={
+					<Info>
+						<p>Unable to retrieve the Actor's Inspector token.</p>
+						<p>
+							Please ensure the Inspector is enabled for your
+							Actor and that you're using RivetKit version{" "}
+							<b className="font-mono-console">2.0.34</b> or
+							newer.
+						</p>
+						<p>
+							Current RivetKit version:{" "}
+							<DiscreteCopyButton
+								value={metadata?.version || "unknown"}
+								className="inline-block p-0 h-auto px-0.5"
+							>
+								<span className="font-mono-console text-lg font-bold">
+									{metadata?.version || "unknown"}
+								</span>
+							</DiscreteCopyButton>
+						</p>
+						<ErrorDetails
+							error={isRivetApiError(error) ? error.body : error}
+						/>
+					</Info>
+				}
+			>
+				{props.children}
+			</InspectorGuardContext.Provider>
+		);
+	}
+
 	return __APP_TYPE__ === "inspector" ? (
-		<ActorInspectorProvider {...props} />
+		<ActorInspectorProvider {...props} inspectorToken={token} />
 	) : (
-		<ActorEngineProvider {...props} />
+		<ActorEngineProvider {...props} inspectorToken={token} />
 	);
 }
 
 function ActorInspectorProvider({
 	actorId,
+	inspectorToken,
 	children,
 }: {
 	actorId: ActorId;
+	inspectorToken: string;
 	children: ReactNode;
 }) {
-	const { credentials } = useInspectorCredentials();
-
-	if (!credentials?.url || !credentials?.token) {
-		throw new Error("Missing inspector credentials");
-	}
-
-	const actorContext = useMemo(() => {
-		return createInspectorActorContext({
-			...credentials,
-		});
-	}, [credentials]);
-
-	return (
-		<ActorProvider value={actorContext}>
-			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
-		</ActorProvider>
-	);
-}
-
-function useRunner(runnerName: string | undefined) {
-	// check if its running
-	const {
-		data: hasRunner,
-		isLoading,
-		isSuccess,
-	} = useQuery({
-		...useEngineCompatDataProvider().runnerByNameQueryOptions({
-			runnerName,
-		}),
-		enabled: !!runnerName,
-		select: (data) => !!data,
-		retryDelay: 10_000,
-		refetchInterval: 1000,
+	const url = useSearch({
+		from: "/_context",
+		select: (s) => s.u || "https://localhost:6420",
 	});
 
-	// if not, check if its serverless
-	const { data: hasServerlessRunner, isLoading: isLoadingServerlessRunners } =
-		useQuery({
-			...useEngineCompatDataProvider().runnerConfigQueryOptions({
-				name: runnerName,
-			}),
-			enabled: !isSuccess && !!runnerName,
-			retryDelay: 10_000,
-			refetchInterval: 1000,
-			select: (data) =>
-				Object.values(data.datacenters).some((dc) => dc.serverless),
-		});
-
-	return {
-		hasRunner: hasRunner || hasServerlessRunner,
-		isLoading: isLoading || isLoadingServerlessRunners,
-	};
+	return (
+		<InspectorProvider
+			credentials={{ url: url, inspectorToken, token: "" }}
+			actorId={actorId}
+		>
+			<InspectorGuard>{children}</InspectorGuard>
+		</InspectorProvider>
+	);
 }
 
 function useActorRunner({ actorId }: { actorId: ActorId }) {
@@ -200,25 +227,13 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 		useDataProvider().actorQueryOptions(actorId),
 	);
 
-	const match = useMatch({
-		from:
-			__APP_TYPE__ === "engine"
-				? "/_context/_engine/ns/$namespace"
-				: "/_context/_cloud/orgs/$organization/projects/$project/ns/$namespace/",
-		shouldThrow: false,
-	});
-
-	if (!match?.params.namespace || !actor.runner) {
-		throw new Error("Actor is missing required fields");
-	}
-
 	const {
 		data: runner,
 		isLoading: isLoadingRunner,
 		isSuccess,
 	} = useQuery({
 		...useEngineCompatDataProvider().runnerByNameQueryOptions({
-			runnerName: actor.runner,
+			runnerName: actor.runnerNameSelector,
 		}),
 		retryDelay: 10_000,
 		refetchInterval: 1000,
@@ -241,49 +256,59 @@ function useEngineToken() {
 		);
 		return data;
 	}
+	if (__APP_TYPE__ === "inspector") {
+		return "";
+	}
 	const [data] = useLocalStorage(
 		ls.engineCredentials.key(getConfig().apiUrl),
 		"",
 		{ serializer: JSON.stringify, deserializer: JSON.parse },
 	);
-	return data;
+	return data?.token || "";
+}
+
+function useEngineUrl() {
+	if (__APP_TYPE__ === "inspector") {
+		return (
+			useSearch({
+				from: "/_context",
+				select: (s) => s.u,
+			}) || "https://localhost:6420"
+		);
+	}
+
+	return useConfig().apiUrl;
 }
 
 function useActorEngineContext({ actorId }: { actorId: ActorId }) {
 	const { actor, runner, isLoading } = useActorRunner({ actorId });
 	const engineToken = useEngineToken();
-	const provider = useEngineCompatDataProvider();
+	const url = useEngineUrl();
 
-	const actorContext = useMemo(() => {
-		return createInspectorActorContext({
-			url: getConfig().apiUrl,
-			token: async () => {
-				const runner = await queryClient.fetchQuery(
-					provider.runnerByNameQueryOptions({
-						runnerName: actor?.runner || "",
-					}),
-				);
-				return (runner?.metadata?.inspectorToken as string) || "";
-			},
-			engineToken,
-		});
-	}, [actor?.runner, provider.runnerByNameQueryOptions, engineToken]);
+	const credentials = useMemo(() => {
+		return {
+			url,
+			token: engineToken,
+		};
+	}, [url, engineToken]);
 
-	return { actorContext, actor, runner, isLoading };
+	return { actor, runner, isLoading, credentials };
 }
 
 function ActorEngineProvider({
 	actorId,
+	inspectorToken,
 	children,
 }: {
 	actorId: ActorId;
 	children: ReactNode;
+	inspectorToken: string;
 }) {
-	const { actorContext, actor } = useActorEngineContext({
+	const { credentials, actor } = useActorEngineContext({
 		actorId,
 	});
 
-	if (!actor.runner) {
+	if (!actor.runnerNameSelector) {
 		return (
 			<InspectorGuardContext.Provider
 				value={<NoRunnerInfo runner={"unknown"} />}
@@ -294,9 +319,12 @@ function ActorEngineProvider({
 	}
 
 	return (
-		<ActorProvider value={actorContext}>
-			<InspectorGuard actorId={actorId}>{children}</InspectorGuard>
-		</ActorProvider>
+		<InspectorProvider
+			credentials={{ ...credentials, inspectorToken }}
+			actorId={actorId}
+		>
+			<InspectorGuard>{children}</InspectorGuard>
+		</InspectorProvider>
 	);
 }
 
@@ -319,42 +347,43 @@ function NoRunnerInfo({ runner }: { runner: string }) {
 }
 
 function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
-	const actorContext = useActor();
-	const { runner } = useActorRunner({ actorId });
+	const { credentials } = useActorEngineContext({
+		actorId,
+	});
 
-	const { mutate, isPending } = useMutation(
-		actorContext.actorWakeUpMutationOptions(actorId),
-	);
-	if (!runner) return null;
+	const { mutate, isPending } = useMutation(actorWakeUpMutationOptions());
+
 	return (
-		<Button
-			variant="outline"
-			size="sm"
-			onClick={() => mutate()}
-			isLoading={isPending}
-			startIcon={<Icon icon={faPowerOff} />}
-		>
-			Wake up Actor
-		</Button>
+		<Info>
+			<p>Actor is sleeping.</p>
+			<Button
+				variant="outline"
+				size="sm"
+				onClick={() =>
+					mutate({
+						actorId,
+						credentials,
+					})
+				}
+				isLoading={isPending}
+				startIcon={<Icon icon={faPowerOff} />}
+			>
+				Wake up Actor
+			</Button>
+		</Info>
 	);
 }
 
 function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
-	const actorContext = useActor();
+	const { credentials } = useActorEngineContext({
+		actorId,
+	});
 
-	const { actor, runner } = useActorRunner({ actorId });
-	const { hasRunner } = useRunner(actor.runner);
-
-	useQuery(
-		actorContext.actorAutoWakeUpQueryOptions(actorId, {
-			enabled: hasRunner,
-		}),
-	);
-
-	if (!hasRunner) return <NoRunnerInfo runner={actor.runner || "unknown"} />;
-
-	if (runner?.drainTs)
-		return <NoRunnerInfo runner={actor.runner || "unknown"} />;
+	useQuery({
+		...actorWakeUpQueryOptions({ actorId, credentials }),
+		retryDelay: 10_000,
+		refetchInterval: 1_000,
+	});
 
 	return (
 		<Info>
@@ -366,71 +395,9 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 	);
 }
 
-function InspectorGuard({
-	actorId,
-	children,
-}: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	const filters = useFiltersValue({ onlyEphemeral: true });
-
-	const { data: { sleepingAt } = {} } = useQuery({
-		...useDataProvider().actorQueryOptions(actorId),
-		refetchInterval: 1000,
-		select: (data) => ({
-			destroyedAt: data.destroyedAt,
-			sleepingAt: data.sleepingAt,
-			pendingAllocationAt: data.pendingAllocationAt,
-			startedAt: data.startedAt,
-		}),
-	});
-
-	if (sleepingAt) {
-		if (filters.wakeOnSelect?.value?.[0] === "1") {
-			return (
-				<InspectorGuardContext.Provider
-					value={
-						<Info>
-							<AutoWakeUpActor actorId={actorId} />
-						</Info>
-					}
-				>
-					{children}
-				</InspectorGuardContext.Provider>
-			);
-		}
-		return (
-			<InspectorGuardContext.Provider
-				value={
-					<Info>
-						<p>Unavailable for sleeping Actors.</p>
-						<WakeUpActorButton actorId={actorId} />
-					</Info>
-				}
-			>
-				{children}
-			</InspectorGuardContext.Provider>
-		);
-	}
-	return (
-		<InspectorGuardInner actorId={actorId}>{children}</InspectorGuardInner>
-	);
-}
-
-function InspectorGuardInner({
-	actorId,
-	children,
-}: {
-	actorId: ActorId;
-	children: ReactNode;
-}) {
-	const { isError } = useQuery({
-		...useActor().actorPingQueryOptions(actorId),
-		retryDelay: 10_000,
-		enabled: true,
-	});
-	if (isError) {
+function InspectorGuard({ children }: { children: ReactNode }) {
+	const { connectionStatus } = useActorInspector();
+	if (connectionStatus === "error") {
 		return (
 			<InspectorGuardContext.Provider
 				value={
@@ -449,5 +416,10 @@ function InspectorGuardInner({
 		);
 	}
 
-	return children;
+	return (
+		<>
+			{connectionStatus !== "connected" && <ShimmerLine />}
+			{children}
+		</>
+	);
 }

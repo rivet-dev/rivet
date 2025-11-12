@@ -1,14 +1,7 @@
 import { faNextjs, faNodeJs, faReact, Icon } from "@rivet-gg/icons";
 import { useSearch } from "@tanstack/react-router";
 import type { ComponentProps, Ref } from "react";
-import {
-	Button,
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-	DocsSheet,
-} from "@/components";
+import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components";
 import { ConnectionForm } from "@/components/connection-form";
 import { docsLinks } from "@/content/data";
 
@@ -29,44 +22,49 @@ export function Connect({
 				<CardContent>
 					<p>Get started with one of our quick start guides:</p>
 					<div className="flex-1 flex flex-col gap-2 mt-4">
-						<div className="flex flex-row justify-stretch items-center gap-2">
-							<DocsSheet
-								path={docsLinks.gettingStarted.js}
-								title="Node.js & Bun Quickstart"
+						<div className="flex flex-row flex-wrap justify-stretch items-center gap-2">
+							<Button
+								asChild
+								className="flex-1"
+								variant="outline"
+								startIcon={<Icon icon={faNodeJs} />}
 							>
-								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faNodeJs} />}
+								<a
+									href={docsLinks.gettingStarted.js}
+									target="_blank"
+									rel="noopener noreferrer"
 								>
 									Node.js & Bun
-								</Button>
-							</DocsSheet>
-							<DocsSheet
-								path={docsLinks.gettingStarted.react}
-								title="React Quickstart"
+								</a>
+							</Button>
+							<Button
+								className="flex-1"
+								variant="outline"
+								startIcon={<Icon icon={faReact} />}
+								asChild
 							>
-								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faReact} />}
+								<a
+									href={docsLinks.gettingStarted.react}
+									target="_blank"
+									rel="noopener noreferrer"
 								>
 									React
-								</Button>
-							</DocsSheet>
-
-							<DocsSheet
-								path={docsLinks.gettingStarted.nextjs}
-								title="Next.js Quickstart"
+								</a>
+							</Button>
+							<Button
+								className="flex-1"
+								variant="outline"
+								startIcon={<Icon icon={faNextjs} />}
+								asChild
 							>
-								<Button
-									className="flex-1"
-									variant="outline"
-									startIcon={<Icon icon={faNextjs} />}
+								<a
+									href={docsLinks.gettingStarted.react}
+									target="_blank"
+									rel="noopener noreferrer"
 								>
 									Next.js
-								</Button>
-							</DocsSheet>
+								</a>
+							</Button>
 						</div>
 					</div>
 				</CardContent>
@@ -78,15 +76,14 @@ export function Connect({
 				</CardHeader>
 				<CardContent>
 					<p className="mb-4">
-						Connect to your RivetKit project by entering the URL and
-						access token.
+						Connect to your Rivet Project by entering your RivetKit
+						URL.
 					</p>
 
 					<ConnectionForm
 						ref={formRef}
 						defaultValues={{
-							username: search.u || "http://localhost:6420",
-							token: search.t || "",
+							url: search.u || "http://localhost:6420",
 						}}
 						onSubmit={onSubmit}
 					/>

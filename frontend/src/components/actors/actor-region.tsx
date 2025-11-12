@@ -20,14 +20,14 @@ export function ActorRegion({
 	className,
 }: ActorRegionProps) {
 	const { data: region } = useQuery(
-		useDataProvider().regionQueryOptions(regionId),
+		useDataProvider().datacenterQueryOptions(regionId),
 	);
 
 	if (!regionId || !region) {
 		return null;
 	}
 
-	const regionKey = getRegionKey(region?.id);
+	const regionKey = getRegionKey(region?.name);
 
 	if (showLabel) {
 		return (

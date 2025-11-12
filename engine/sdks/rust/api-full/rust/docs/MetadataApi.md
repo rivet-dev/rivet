@@ -4,7 +4,7 @@ All URIs are relative to *http://localhost*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**metadata_get**](MetadataApi.md#metadata_get) | **DELETE** /metadata | Returns metadata about the API including runtime and version
+[**metadata_get**](MetadataApi.md#metadata_get) | **GET** /metadata | Returns metadata about the API including runtime and version
 
 
 

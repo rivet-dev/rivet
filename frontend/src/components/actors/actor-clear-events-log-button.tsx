@@ -1,10 +1,14 @@
 import { faBroomWide, Icon } from "@rivet-gg/icons";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "../ui/button";
 import { WithTooltip } from "../ui/tooltip";
-import { type ActorId, useActorClearEventsMutation } from "./queries";
+import { useActorInspector } from "./actor-inspector-context";
+import type { ActorId } from "./queries";
 
 export function ActorClearEventsLogButton({ actorId }: { actorId: ActorId }) {
-	const { mutate, isPending } = useActorClearEventsMutation(actorId);
+	const { mutate, isPending } = useMutation(
+		useActorInspector().actorClearEventsMutationOptions(actorId),
+	);
 
 	return (
 		<WithTooltip

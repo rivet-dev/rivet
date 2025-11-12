@@ -196,7 +196,7 @@ export class ConnectionManager<
 
 		this.#callOnConnect(conn);
 
-		this.#actor.inspector.emitter.emit("connectionUpdated");
+		this.#actor.inspector.emitter.emit("connectionsUpdated");
 
 		this.#actor.resetSleepTimer();
 
@@ -260,7 +260,7 @@ export class ConnectionManager<
 		// Mark connection as connected
 		existingConn[CONN_CONNECTED_SYMBOL] = true;
 
-		this.#actor.inspector.emitter.emit("connectionUpdated");
+		this.#actor.inspector.emitter.emit("connectionsUpdated");
 
 		return existingConn;
 	}
@@ -298,7 +298,7 @@ export class ConnectionManager<
 
 		this.#actor.resetSleepTimer();
 
-		this.#actor.inspector.emitter.emit("connectionUpdated");
+		this.#actor.inspector.emitter.emit("connectionsUpdated");
 
 		// Trigger disconnect
 		if (this.#actor.config.onDisconnect) {

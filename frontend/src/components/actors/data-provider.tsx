@@ -6,6 +6,9 @@ import {
 	useRouteContext,
 } from "@tanstack/react-router";
 import { match } from "ts-pattern";
+import type { createNamespaceContext } from "@/app/data-providers/cloud-data-provider";
+import type { createNamespaceContext as createNamespaceEngineContext } from "@/app/data-providers/engine-data-provider";
+import type { createGlobalContext } from "@/app/data-providers/inspector-data-provider";
 
 export const useDataProvider = () => {
 	return match(__APP_TYPE__)
@@ -112,11 +115,17 @@ export const useEngineCompatDataProvider = () => {
 		.with("engine", () => {
 			return "/_context/_engine/ns/$namespace" as const;
 		})
+		.with("inspector", () => {
+			return "/_context" as const;
+		})
 		.otherwise(() => {
 			throw new Error("Not in an engine-like context");
 		});
 
 	return useRouteContext({
 		from: routePath,
-	}).dataProvider;
+	}).dataProvider as
+		| ReturnType<typeof createNamespaceEngineContext>
+		| ReturnType<typeof createNamespaceContext>
+		| ReturnType<typeof createGlobalContext>;
 };

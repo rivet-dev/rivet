@@ -20,6 +20,13 @@ const queryCache = new QueryCache({
 			return;
 		}
 	},
+	onSuccess(data, query) {
+		if (query.meta?.statusCheck) {
+			queryClient.invalidateQueries({
+				predicate: (q) => q.state.error !== null,
+			});
+		}
+	},
 });
 
 const mutationCache = new MutationCache({

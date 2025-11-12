@@ -9,11 +9,12 @@ import {
 import { InspectorConfigSchema } from "@/inspector/config";
 import type { ManagerDriverBuilder } from "@/manager/driver";
 import type { GetUpgradeWebSocket } from "@/utils";
-import { VERSION } from "@/utils";
+import { getEnvUniversal, VERSION } from "@/utils";
 import {
 	getRivetRunEngine,
 	getRivetRunEngineVersion,
 	getRivetRunnerKind,
+	getRivetToken,
 } from "@/utils/env-vars";
 
 export const LegacyDriverConfigSchema = z.object({
@@ -55,9 +56,7 @@ const LegacyRunnerConfigSchemaUnmerged = z
 		runEngineVersion: z
 			.string()
 			.optional()
-			.default(
-				() => getRivetRunEngineVersion() ?? VERSION,
-			),
+			.default(() => getRivetRunEngineVersion() ?? VERSION),
 
 		/** @experimental */
 		overrideServerAddress: z.string().optional(),
@@ -75,9 +74,7 @@ const LegacyRunnerConfigSchemaUnmerged = z
 			.enum(["serverless", "normal"])
 			.optional()
 			.default(() =>
-				getRivetRunnerKind() === "serverless"
-					? "serverless"
-					: "normal",
+				getRivetRunnerKind() === "serverless" ? "serverless" : "normal",
 			),
 		totalSlots: z.number().optional(),
 
@@ -136,6 +133,12 @@ const LegacyRunnerConfigSchemaUnmerged = z
 		// (specifically Node.js) can sometimes only be specified after the router is
 		// created or must be imported async using `await import(...)`
 		getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
+
+		/** @experimental */
+		token: z
+			.string()
+			.optional()
+			.transform((v) => v || getRivetToken()),
 	})
 	.merge(EngineConfigSchemaBase);
 
@@ -145,9 +148,10 @@ const LegacyRunnerConfigSchemaTransformed =
 		...transformEngineConfig(config, ctx),
 	}));
 
-export const LegacyRunnerConfigSchema = LegacyRunnerConfigSchemaTransformed.default(
-	() => LegacyRunnerConfigSchemaTransformed.parse({}),
-);
+export const LegacyRunnerConfigSchema =
+	LegacyRunnerConfigSchemaTransformed.default(() =>
+		LegacyRunnerConfigSchemaTransformed.parse({}),
+	);
 
 export type LegacyRunnerConfig = z.infer<typeof LegacyRunnerConfigSchema>;
 export type LegacyRunnerConfigInput = z.input<typeof LegacyRunnerConfigSchema>;

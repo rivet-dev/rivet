@@ -39,7 +39,7 @@ func (c *Client) Get(ctx context.Context) (*sdk.MetadataGetResponse, error) {
 		ctx,
 		&core.CallParams{
 			URL:      endpointURL,
-			Method:   http.MethodDelete,
+			Method:   http.MethodGet,
 			Headers:  c.header,
 			Response: &response,
 		},

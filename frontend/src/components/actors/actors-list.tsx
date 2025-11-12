@@ -13,18 +13,12 @@ import {
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import {
-	Navigate,
-	useNavigate,
-	useRouterState,
-	useSearch,
-} from "@tanstack/react-router";
-import { memo, Suspense, useCallback, useEffect } from "react";
+import { Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Suspense, useCallback } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
-	DocsSheet,
 	FilterCreator,
 	FiltersDisplay,
 	ls,
@@ -64,7 +58,7 @@ function TopBar() {
 	const { isDetailsColCollapsed, detailsRef } = useActorsLayout();
 
 	return (
-		<div className="col-span-full border-b flex px-2 py-2 gap-1 relative @lg/h-[45px]">
+		<div className="col-span-full border-b flex px-2 py-2 gap-1 @lg/h-[45px] sticky top-0 bg-card z-[1]">
 			{isSidebarCollapsed ? (
 				<WithTooltip
 					trigger={
@@ -234,7 +228,7 @@ function EmptyState({ count }: { count: number }) {
 	});
 
 	const clearFilters = () => {
-		navigate({
+		return navigate({
 			to: ".",
 			search: (prev) => ({
 				...remove(prev || {}),
@@ -269,43 +263,49 @@ function EmptyState({ count }: { count: number }) {
 								started.
 							</SmallText>
 							<div className="flex gap-2">
-								<DocsSheet
-									path={docsLinks.gettingStarted.js}
-									title="Node.js & Bun Quickstart"
+								<Button
+									className="flex-1"
+									variant="outline"
+									startIcon={<Icon icon={faTs} />}
+									asChild
 								>
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faTs} />}
+									<a
+										href={docsLinks.gettingStarted.js}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										JavaScript
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path={docsLinks.gettingStarted.react}
-									title="React Quickstart"
+									</a>
+								</Button>
+								<Button
+									className="flex-1"
+									variant="outline"
+									startIcon={<Icon icon={faReact} />}
+									asChild
 								>
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faReact} />}
+									<a
+										href={docsLinks.gettingStarted.react}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										React
-									</Button>
-								</DocsSheet>
+									</a>
+								</Button>
 
-								<DocsSheet
-									path={docsLinks.gettingStarted.nextjs}
-									title="Next.js Quickstart"
+								<Button
+									className="flex-1"
+									variant="outline"
+									startIcon={<Icon icon={faNextjs} />}
+									asChild
 								>
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faNextjs} />}
+									<a
+										href={docsLinks.gettingStarted.nextjs}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										Next.js
-									</Button>
-								</DocsSheet>
+									</a>
+								</Button>
 							</div>
 						</div>
 					</div>
