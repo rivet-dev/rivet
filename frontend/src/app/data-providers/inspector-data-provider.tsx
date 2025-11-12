@@ -1,15 +1,12 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
-import {
-	createManagerInspectorClient,
-	type Actor as InspectorActor,
-} from "rivetkit/inspector";
-import type { Actor, ActorId } from "@/components/actors";
-import { ensureTrailingSlash } from "@/lib/utils";
+
+import type { ActorId } from "@/components/actors";
 
 import {
 	createDefaultGlobalContext,
 	type DefaultDataProvider,
 } from "./default-data-provider";
+import { createClient } from "./engine-data-provider";
 
 export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 	const def = createDefaultGlobalContext();
@@ -25,7 +22,7 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 		};
 	}
 
-	const client = createClient({ url: opts.url, token: opts.token });
+	const client = createClient(opts.url, { token: opts.token });
 	return {
 		...def,
 		endpoint: opts.url,
@@ -46,9 +43,9 @@ export const createGlobalContext = (opts: { url?: string; token?: string }) => {
 				},
 			};
 		},
-		regionsQueryOptions() {
+		datacentersQueryOptions() {
 			return infiniteQueryOptions({
-				...def.regionsQueryOptions(),
+				...def.datacentersQueryOptions(),
 				enabled: true,
 				queryFn: async () => {
 					return {
@@ -173,15 +170,4 @@ function transformActor(a: InspectorActor): Actor {
 			: undefined,
 		features: a.features,
 	};
-}
-
-export function createClient({ url, token }: { url: string; token: string }) {
-	const newUrl = new URL(url);
-	if (!newUrl.pathname.endsWith("inspect")) {
-		newUrl.pathname = `${ensureTrailingSlash(newUrl.pathname)}inspect`;
-	}
-
-	return createManagerInspectorClient(newUrl.href, {
-		headers: { Authorization: `Bearer ${token}` },
-	});
 }

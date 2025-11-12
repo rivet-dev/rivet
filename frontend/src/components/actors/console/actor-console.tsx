@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Button, cn } from "@/components";
-import { useActor } from "../actor-queries-context";
 import { useDataProvider } from "../data-provider";
+import { useActorInspector } from "../inspector-context";
 import type { ActorId } from "../queries";
 import { useActorWorkerStatus } from "../worker/actor-worker-context";
 import { ActorWorkerStatus } from "../worker/actor-worker-status";
@@ -20,12 +20,12 @@ export function ActorConsole({ actorId }: ActorConsoleProps) {
 
 	const status = useActorWorkerStatus();
 	const managerQueries = useDataProvider();
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const { data: { destroyedAt, sleepingAt } = {} } = useQuery(
 		managerQueries.actorWorkerQueryOptions(actorId),
 	);
 	const { isSuccess, isError, isLoading } = useQuery(
-		actorQueries.actorPingQueryOptions(actorId, {
+		actorInspector.actorPingQueryOptions(actorId, {
 			enabled: true,
 			refetchInterval: false,
 		}),

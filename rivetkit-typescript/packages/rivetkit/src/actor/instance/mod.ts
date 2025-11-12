@@ -149,22 +149,25 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				return Array.from(
 					this.connectionManager.connections.entries(),
 				).map(([id, conn]) => ({
-					type: conn[CONN_DRIVER_SYMBOL]?.type,
 					id,
-					params: conn.params as any,
-					state: conn[CONN_STATE_ENABLED_SYMBOL]
-						? conn.state
-						: undefined,
-					subscriptions: conn.subscriptions.size,
-					lastSeen: conn.lastSeen,
-					stateEnabled: conn[CONN_STATE_ENABLED_SYMBOL],
-					isHibernatable: conn.isHibernatable,
-					hibernatableRequestId: conn[CONN_PERSIST_SYMBOL]
-						.hibernatableRequestId
-						? idToStr(
-								conn[CONN_PERSIST_SYMBOL].hibernatableRequestId,
-							)
-						: undefined,
+					details: {
+						type: conn[CONN_DRIVER_SYMBOL]?.type || null,
+						params: conn.params as any,
+						state: conn[CONN_STATE_ENABLED_SYMBOL]
+							? conn.state
+							: null,
+						subscriptions: conn.subscriptions.size,
+						lastSeen: conn.lastSeen,
+						stateEnabled: conn[CONN_STATE_ENABLED_SYMBOL],
+						isHibernatable: conn.isHibernatable,
+						hibernatableRequestId: conn[CONN_PERSIST_SYMBOL]
+							.hibernatableRequestId
+							? idToStr(
+									conn[CONN_PERSIST_SYMBOL]
+										.hibernatableRequestId,
+								)
+							: null,
+					},
 				}));
 			},
 			setState: async (state: unknown) => {

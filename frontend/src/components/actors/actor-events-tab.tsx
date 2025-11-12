@@ -17,7 +17,7 @@ export function ActorEventsTab({ actorId }: ActorEventsTabProps) {
 	);
 
 	const { isError, isLoading } = useQuery(
-		useActor().actorEventsQueryOptions(actorId),
+		useActorInspector().actorEventsQueryOptions(actorId),
 	);
 
 	if (destroyedAt) {

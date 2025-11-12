@@ -1,6 +1,5 @@
 // import crypto from "node:crypto";
 import { createMiddleware } from "hono/factory";
-import type { ManagerDriver } from "@/driver-helpers/mod";
 import type { RunConfig } from "@/mod";
 import type { RunnerConfigInput } from "@/registry/run-config";
 import { inspectorLogger } from "./log";
@@ -75,26 +74,3 @@ export function getInspectorUrl(runConfig: RunnerConfigInput | undefined) {
 
 	return url.href;
 }
-
-export const isInspectorEnabled = (
-	runConfig: RunConfig,
-	// TODO(kacper): Remove context in favor of using the gateway, so only context is the actor
-	context: "actor" | "manager",
-) => {
-	if (typeof runConfig.inspector?.enabled === "boolean") {
-		return runConfig.inspector.enabled;
-	} else if (typeof runConfig.inspector?.enabled === "object") {
-		return runConfig.inspector.enabled[context];
-	}
-	return false;
-};
-
-export const configureInspectorAccessToken = (
-	runConfig: RunConfig,
-	managerDriver: ManagerDriver,
-) => {
-	if (!runConfig.inspector?.token()) {
-		const token = managerDriver.getOrCreateInspectorAccessToken();
-		runConfig.inspector.token = () => token;
-	}
-};

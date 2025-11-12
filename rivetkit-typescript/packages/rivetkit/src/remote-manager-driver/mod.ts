@@ -381,8 +381,4 @@ export class RemoteManagerDriver implements ManagerDriver {
 	displayInformation(): ManagerDisplayInformation {
 		return { name: "Remote", properties: {} };
 	}
-
-	getOrCreateInspectorAccessToken() {
-		return generateRandomString();
-	}
 }
