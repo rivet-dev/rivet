@@ -180,7 +180,7 @@ async function setupProject(projectPath: string) {
 		],
 		migrations: [
 			{
-				new_classes: ["ActorHandler"],
+				new_sqlite_classes: ["ActorHandler"],
 				tag: "v1",
 			},
 		],

@@ -57,11 +57,12 @@ export function createHandler<R extends Registry<any>>(
 	const ActorHandler = createActorDurableObject(registry, runConfig);
 
 	// Create server
-	const serverOutput = registry.start(runConfig);
+	const serverOutputPromise = registry.start(runConfig);
 
 	// Create Cloudflare handler
 	const handler = {
-		fetch: (request, cfEnv, ctx) => {
+		fetch: async (request, cfEnv, ctx) => {
+			const serverOutput = await serverOutputPromise;
 			const url = new URL(request.url);
 
 			// Inject Rivet env
