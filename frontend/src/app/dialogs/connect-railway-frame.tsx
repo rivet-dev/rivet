@@ -20,7 +20,6 @@ import {
 	DiscreteInput,
 	Frame,
 	Label,
-	Skeleton,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
@@ -28,6 +27,7 @@ import { engineEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { useRailwayTemplateLink } from "@/utils/use-railway-template-link";
 import { StepperForm } from "../forms/stepper-form";
+import { usePublishableToken } from "./connect-vercel-frame";
 
 const stepper = defineStepper(
 	{
@@ -272,9 +272,7 @@ function RivetRunnerEnv() {
 }
 
 function RivetTokenEnv() {
-	const { data, isLoading } = useQuery(
-		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
-	);
+	const token = usePublishableToken();
 	return (
 		<>
 			<DiscreteInput
@@ -282,15 +280,11 @@ function RivetTokenEnv() {
 				value="NEXT_PUBLIC_RIVET_TOKEN"
 				show
 			/>
-			{isLoading ? (
-				<Skeleton className="w-full h-10" />
-			) : (
-				<DiscreteInput
-					aria-label="environment variable value"
-					value={(data as string) || ""}
-					show
-				/>
-			)}
+			<DiscreteInput
+				aria-label="environment variable value"
+				value={token}
+				show
+			/>
 		</>
 	);
 }

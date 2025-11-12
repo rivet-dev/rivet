@@ -1,7 +1,9 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: guarded by build constant */
 import { faVercel, Icon } from "@rivet-gg/icons";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
+	useQuery,
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -28,17 +30,15 @@ import {
 } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
-import { type JoinStepSchemas, StepperForm } from "../forms/stepper-form";
+import { StepperForm } from "../forms/stepper-form";
 
 const { stepper } = ConnectVercelForm;
-
-type FormValues = z.infer<JoinStepSchemas<typeof stepper.steps>>;
 
 export const VERCEL_SERVERLESS_MAX_DURATION = 300;
 
 interface CreateProjectFrameContentProps extends DialogContentProps {}
 
-function usePublishableToken() {
+export function usePublishableToken() {
 	return match(__APP_TYPE__)
 		.with("cloud", () => {
 			return useSuspenseQuery(

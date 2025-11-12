@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: <explanation> */
 import { faVercel, Icon } from "@rivet-gg/icons";
 import {
 	useMutation,
@@ -7,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { useMemo } from "react";
+import { match } from "ts-pattern";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import {
 	Accordion,
@@ -17,14 +19,22 @@ import {
 	ExternalLinkCard,
 	Frame,
 } from "@/components";
-import { type Region, useEngineCompatDataProvider } from "@/components/actors";
+import {
+	type Region,
+	useCloudDataProvider,
+	useCloudNamespaceDataProvider,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
 import { queryClient } from "@/queries/global";
 import { StepperForm } from "../forms/stepper-form";
 import {
 	EnvVariablesStep,
 	useSelectedDatacenter,
 } from "./connect-railway-frame";
-import { VERCEL_SERVERLESS_MAX_DURATION } from "./connect-vercel-frame";
+import {
+	usePublishableToken,
+	VERCEL_SERVERLESS_MAX_DURATION,
+} from "./connect-vercel-frame";
 
 const { stepper } = ConnectVercelForm;
 
@@ -141,9 +151,7 @@ function FormStepper({
 
 const useVercelTemplateLink = () => {
 	const dataProvider = useEngineCompatDataProvider();
-	const { data: token } = useQuery(
-		dataProvider.engineAdminTokenQueryOptions(),
-	);
+	const token = usePublishableToken();
 	const endpoint = useSelectedDatacenter();
 
 	return useMemo(() => {
