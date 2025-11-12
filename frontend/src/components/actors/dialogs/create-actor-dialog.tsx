@@ -1,3 +1,4 @@
+import { Rivet } from "@rivetkit/engine-api-full";
 import { useMutation } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { DialogContentProps } from "@/components/hooks";
@@ -18,7 +19,6 @@ import { Flex } from "../../ui/flex";
 import { useActorsView } from "../actors-view-context-provider";
 import { useDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
-import { CrashPolicy } from "../queries";
 
 interface ContentProps extends DialogContentProps {}
 
@@ -40,8 +40,9 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					name: values.name,
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
-					datacenter: values.datacenter,
-					crashPolicy: values.crashPolicy || CrashPolicy.Sleep,
+					datacenter:
+						__APP_TYPE__ === "inspector" ? "" : values.datacenter,
+					crashPolicy: values.crashPolicy || Rivet.CrashPolicy.Sleep,
 					runnerNameSelector: values.runnerNameSelector || "default",
 				});
 				onClose?.();
@@ -49,7 +50,7 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 			defaultValues={{
 				name,
 				key: getRandomKey(),
-				crashPolicy: CrashPolicy.Sleep,
+				crashPolicy: Rivet.CrashPolicy.Sleep,
 			}}
 		>
 			<DialogHeader>

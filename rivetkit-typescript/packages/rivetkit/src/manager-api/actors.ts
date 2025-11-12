@@ -94,3 +94,9 @@ export const ActorsListNamesResponseSchema = z.object({
 export type ActorsListNamesResponse = z.infer<
 	typeof ActorsListNamesResponseSchema
 >;
+
+// MARK: GET /actors/{actor_id}/kv/keys/{key}
+export const ActorsKvGetResponseSchema = z.object({
+	value: z.string().nullable(),
+});
+export type ActorsKvGetResponse = z.infer<typeof ActorsKvGetResponseSchema>;

@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { LiveBadge, ScrollArea } from "@/components";
-import { useActor } from "./actor-queries-context";
+import { useActorInspector } from "./actor-inspector-context";
+import { Info } from "./actor-state-tab";
 import { ActorObjectInspector } from "./console/actor-inspector";
 import { useDataProvider } from "./data-provider";
-import { type ActorId, useActorConnectionsStream } from "./queries";
+import type { ActorId } from "./queries";
 
 interface ActorConnectionsTabProps {
 	actorId: ActorId;
@@ -14,14 +15,10 @@ export function ActorConnectionsTab({ actorId }: ActorConnectionsTabProps) {
 		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
-	const actorQueries = useActor();
-	const {
-		data: { connections } = {},
-		isError,
-		isLoading,
-	} = useQuery(actorQueries.actorConnectionsQueryOptions(actorId));
-
-	// useActorConnectionsStream(actorId);
+	const inspector = useActorInspector();
+	const { data = [], isLoading } = useQuery(
+		inspector.actorConnectionsQueryOptions(actorId),
+	);
 
 	if (destroyedAt) {
 		return (
@@ -31,22 +28,8 @@ export function ActorConnectionsTab({ actorId }: ActorConnectionsTabProps) {
 		);
 	}
 
-	if (isError) {
-		return (
-			<div className="flex-1 flex items-center justify-center h-full text-center">
-				Connections Preview is currently unavailable.
-				<br />
-				See console/logs for more details.
-			</div>
-		);
-	}
-
 	if (isLoading) {
-		return (
-			<div className="flex-1 flex items-center justify-center h-full text-center">
-				Loading connections...
-			</div>
-		);
+		return <Info>Loading connections...</Info>;
 	}
 
 	return (
@@ -57,7 +40,7 @@ export function ActorConnectionsTab({ actorId }: ActorConnectionsTabProps) {
 			<div className="p-2">
 				<ActorObjectInspector
 					name="connections"
-					data={connections}
+					data={data}
 					expandPaths={["$"]}
 				/>
 			</div>

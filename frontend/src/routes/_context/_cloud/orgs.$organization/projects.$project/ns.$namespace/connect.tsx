@@ -35,8 +35,8 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 	Button,
+	Code,
 	cn,
-	DocsSheet,
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -44,12 +44,14 @@ import {
 	H1,
 	H2,
 	H3,
+	H4,
 	Ping,
 	Skeleton,
 	WithTooltip,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { useRootLayout } from "@/components/actors/root-layout-context";
+import { docsLinks } from "@/content/data";
 import { useEndpoint, usePublishableToken } from "@/queries/accessors";
 
 export const Route = createFileRoute(
@@ -177,45 +179,51 @@ export function RouteComponent() {
 						<div className="px-6 mb-8">
 							<H3>Quickstart Guides</H3>
 							<div className="grid grid-cols-2 @4xl:grid-cols-3 gap-2 my-4">
-								<DocsSheet
-									path="/docs/actors/quickstart/backend"
-									title={"JavaScript Quickstart"}
+								<Button
+									size="lg"
+									variant="outline"
+									className="min-w-48 h-auto min-h-28 text-xl"
+									startIcon={<Icon icon={faNodeJs} />}
+									asChild
 								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faNodeJs} />}
+									<a
+										href={docsLinks.quickstart.backend}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										Node.js & Bun
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path="/docs/actors/quickstart/react"
-									title={"React Quickstart"}
+									</a>
+								</Button>
+								<Button
+									size="lg"
+									variant="outline"
+									className="min-w-48 h-auto min-h-28 text-xl"
+									startIcon={<Icon icon={faReact} />}
+									asChild
 								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faReact} />}
+									<a
+										href={docsLinks.quickstart.react}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										React
-									</Button>
-								</DocsSheet>
-								<DocsSheet
-									path="/docs/actors/quickstart/next-js"
-									title={"Next.js Quickstart"}
+									</a>
+								</Button>
+								<Button
+									size="lg"
+									variant="outline"
+									className="min-w-48 h-auto min-h-28 text-xl"
+									startIcon={<Icon icon={faNextjs} />}
+									asChild
 								>
-									<Button
-										size="lg"
-										variant="outline"
-										className="min-w-48 h-auto min-h-28 text-xl"
-										startIcon={<Icon icon={faNextjs} />}
+									<a
+										href={docsLinks.quickstart.nextjs}
+										target="_blank"
+										rel="noopener noreferrer"
 									>
 										Next.js
-									</Button>
-								</DocsSheet>
+									</a>
+								</Button>
 							</div>
 						</div>
 					</div>
@@ -612,11 +620,11 @@ function DatacentersStatus() {
 	const dataProvider = useEngineCompatDataProvider();
 
 	usePrefetchInfiniteQuery({
-		...dataProvider.regionsQueryOptions(),
+		...dataProvider.datacentersQueryOptions(),
 		maxPages: Infinity,
 	});
 
-	const { data } = useInfiniteQuery(dataProvider.regionsQueryOptions());
+	const { data } = useInfiniteQuery(dataProvider.datacentersQueryOptions());
 
 	return (
 		<div className="pb-4 px-6 max-w-5xl mx-auto my-8 @6xl:px-0">
@@ -625,39 +633,35 @@ function DatacentersStatus() {
 					<AccordionTrigger className="text-muted-foreground hover:text-foreground">
 						Advanced
 					</AccordionTrigger>
-					<AccordionContent className="@6xl:border @6xl:rounded-lg bg-muted/10 p-4">
-						<WithTooltip
-							trigger={
-								<p className="inline-block">
-									{data?.length} datacenters are currently
-									active and available.
-								</p>
-							}
-							content={
-								<div className="max-w-sm">
-									<ul className="list-outside list-disc">
-										{data?.map((region) => (
-											<li
-												key={region.id}
-												className="flex items-center"
-											>
-												<div className="inline-flex gap-2 items-center h-full">
-													<ActorRegion
-														showLabel
-														regionId={region.id}
-													/>{" "}
-													({region.name})
-													<Ping
-														variant="success"
-														className="relative left-0 right-0 top-0"
-													/>
-												</div>
-											</li>
-										))}
-									</ul>
-								</div>
-							}
-						/>
+					<AccordionContent className="border rounded-lg bg-muted/10 p-4">
+						<div>
+							<H4 className="mb-2">Datacenters Status</H4>
+							<p className="mb-4 text-muted-foreground">
+								These are the datacenters where Rivet Engine is
+								currently running and available to run your
+								Rivet Actors.
+							</p>
+
+							<ul className="flex flex-col gap-1">
+								{data?.map((region) => (
+									<li key={region.name}>
+										<div className="inline-flex gap-2 items-center h-full">
+											<Ping
+												variant="success"
+												className="relative left-0 right-0 top-0"
+											/>
+											<ActorRegion
+												showLabel
+												regionId={region.name}
+											/>{" "}
+											<Code className="text-xs">
+												{region.name}
+											</Code>
+										</div>
+									</li>
+								))}
+							</ul>
+						</div>
 					</AccordionContent>
 				</AccordionItem>
 			</Accordion>

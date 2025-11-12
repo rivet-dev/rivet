@@ -4,8 +4,13 @@ import invariant from "invariant";
 import { describe } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
 import type { Encoding } from "@/client/mod";
-import { configureInspectorAccessToken } from "@/inspector/utils";
+import { buildManagerRouter } from "@/manager/router";
 import { createClientWithDriver, type Registry } from "@/mod";
+import {
+	type DriverConfig,
+	RegistryConfig,
+	RegistryConfigSchema,
+} from "@/registry/config";
 import { getPort } from "@/test/mod";
 import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
@@ -26,9 +31,6 @@ import { runRawHttpTests } from "./tests/raw-http";
 import { runRawHttpRequestPropertiesTests } from "./tests/raw-http-request-properties";
 import { runRawWebSocketTests } from "./tests/raw-websocket";
 import { runRequestAccessTests } from "./tests/request-access";
-import { DriverConfig } from "@/registry/config";
-import { RegistryConfig, RegistryConfigSchema } from "@/registry/config";
-import { buildManagerRouter } from "@/manager/router";
 
 export interface SkipTests {
 	schedule?: boolean;
@@ -213,7 +215,6 @@ export async function createTestRuntime(
 		// 	managerDriver,
 		// 	ClientConfigSchema.parse({}),
 		// );
-		configureInspectorAccessToken(registry.config, managerDriver);
 		const { router } = buildManagerRouter(
 			registry.config,
 			managerDriver,

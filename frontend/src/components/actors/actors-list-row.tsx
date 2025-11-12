@@ -12,6 +12,7 @@ import {
 } from "@/components";
 import { VisibilitySensor } from "../visibility-sensor";
 import { useFiltersValue } from "./actor-filters-context";
+import { ActorRegion } from "./actor-region";
 import {
 	ActorStatusIndicator,
 	QueriedActorStatusIndicator,
@@ -50,6 +51,7 @@ export const ActorsListRow = memo(
 					{isVisible ? (
 						<>
 							<WithTooltip
+								delayDuration={0}
 								trigger={
 									<div className="w-full flex justify-center">
 										<QueriedActorStatusIndicator
@@ -66,7 +68,7 @@ export const ActorsListRow = memo(
 									</div>
 								}
 							/>
-							<div className="min-w-0 flex items-center">
+							<div className="min-w-0 flex items-center gap-1">
 								<Id actorId={actorId} />
 								<Datacenter actorId={actorId} />
 								<Tags actorId={actorId} />
@@ -96,7 +98,7 @@ function Id({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<SmallText
-			className="text-muted-foreground tabular-nums font-mono-console mr-2 inline-flex my-0 py-0 border-0 h-auto"
+			className="text-muted-foreground tabular-nums font-mono-console inline-flex my-0 py-0 border-0 h-auto"
 			asChild
 		>
 			<DiscreteCopyButton value={actorId} size="xs">
@@ -111,7 +113,7 @@ function Id({ actorId }: { actorId: ActorId }) {
 function Datacenter({ actorId }: { actorId: ActorId }) {
 	const showDatacenter =
 		useFiltersValue().showDatacenter?.value.includes("1");
-	const { data: datacenter } = useQuery({
+	const { data: datacenter, isLoading } = useQuery({
 		...useDataProvider().actorDatacenterQueryOptions(actorId),
 		enabled: showDatacenter,
 	});
@@ -120,39 +122,45 @@ function Datacenter({ actorId }: { actorId: ActorId }) {
 		return <div />;
 	}
 
-	if (!datacenter) {
-		return <SmallText className="text-foreground mr-2">-</SmallText>;
-	}
-
 	return (
-		<SmallText className="text-muted-foreground mr-2">
-			{datacenter}
+		<SmallText className="text-foreground">
+			{isLoading ? (
+				<Skeleton className=" h-5 w-10" />
+			) : datacenter ? (
+				<ActorRegion regionId={datacenter} />
+			) : (
+				"-"
+			)}
 		</SmallText>
 	);
 }
 
 function Tags({ actorId }: { actorId: ActorId }) {
-	const { data } = useQuery(useDataProvider().actorKeysQueryOptions(actorId));
+	const { data, isLoading } = useQuery(
+		useDataProvider().actorKeysQueryOptions(actorId),
+	);
 
 	return (
 		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-block">
-			{data || "-"}
+			{isLoading ? <Skeleton className="h-5 w-10" /> : data || "-"}
 		</SmallText>
 	);
 }
 
 function Timestamp({ actorId }: { actorId: ActorId }) {
-	const { data: { createdAt, destroyedAt } = {} } = useQuery(
+	const { data: { createTs, destroyTs } = {}, isLoading } = useQuery(
 		useDataProvider().actorQueryOptions(actorId),
 	);
 
-	const ts = destroyedAt || createdAt;
+	const ts = destroyTs || createTs;
 
 	const timestamp = ts ? new Date(ts) : null;
 
 	return (
-		<SmallText className="mx-1 text-right text-muted-foreground">
-			{timestamp ? (
+		<SmallText className="text-right text-muted-foreground flex justify-end">
+			{isLoading ? (
+				<Skeleton className="h-5 w-10" />
+			) : timestamp ? (
 				<WithTooltip
 					trigger={<RelativeTime time={timestamp} />}
 					content={timestamp.toLocaleString()}
@@ -165,14 +173,20 @@ function Timestamp({ actorId }: { actorId: ActorId }) {
 }
 
 function SkeletonContent() {
+	const showIds = useFiltersValue().showIds?.value.includes("1");
+
 	return (
 		<>
 			<div className="size-full items-center justify-center flex">
 				<ActorStatusIndicator status="unknown" />
 			</div>
-			<Skeleton className="h-full w-1/3" />
+			<div className="min-w-0 flex items-center gap-1">
+				{showIds ? <Skeleton className="h-5 w-10" /> : <div />}
+				<Skeleton className="h-5 w-10" />
+				<Skeleton className="h-5 w-10" />
+			</div>
 			<div className="size-full flex justify-end">
-				<Skeleton className="h-full w-1/3" />
+				<Skeleton className="h-5 w-10" />
 			</div>
 		</>
 	);

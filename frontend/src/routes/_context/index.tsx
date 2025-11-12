@@ -1,11 +1,11 @@
 import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
+import { InspectorContextProvider } from "@/app/inspector-context";
 import { InspectorRoot } from "@/app/inspector-root";
 import { Logo } from "@/app/logo";
 import { Card } from "@/components";
 import { redirectToOrganization } from "@/lib/auth";
-import { askForLocalNetworkAccess } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_context/")({
 	component: () =>
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_context/")({
 			.with("engine", () => <EngineRoute />)
 			.with("inspector", () => <InspectorRoute />)
 			.exhaustive(),
-	beforeLoad: async ({ context, search }) => {
+	beforeLoad: async ({ context }) => {
 		return await match(context)
 			.with({ __type: "cloud" }, async () => {
 				if (!(await redirectToOrganization(context.clerk))) {
@@ -47,26 +47,8 @@ export const Route = createFileRoute("/_context/")({
 					return;
 				}
 			})
-			.with({ __type: "inspector" }, async (ctx) => {
-				if (!search.t || !search.u) {
-					return { connectedInPreflight: false };
-				}
-
-				const hasLocalNetworkAccess = await askForLocalNetworkAccess();
-
-				if (!hasLocalNetworkAccess) {
-					return { connectedInPreflight: false };
-				}
-
-				try {
-					const result = await ctx.queryClient.fetchQuery(
-						ctx.dataProvider.statusQueryOptions(),
-					);
-
-					return { connectedInPreflight: result === true };
-				} catch {
-					return { connectedInPreflight: false };
-				}
+			.with({ __type: "inspector" }, async () => {
+				return {};
 			})
 			.exhaustive();
 	},
@@ -90,5 +72,9 @@ function EngineRoute() {
 }
 
 function InspectorRoute() {
-	return <InspectorRoot />;
+	return (
+		<InspectorContextProvider>
+			<InspectorRoot />
+		</InspectorContextProvider>
+	);
 }

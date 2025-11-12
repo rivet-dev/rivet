@@ -384,3 +384,22 @@ export class RouteNotFound extends ActorError {
 		this.statusCode = 404;
 	}
 }
+
+export class RestrictedFeature extends ActorError {
+	constructor(feature: string) {
+		super(
+			"feature",
+			"restricted",
+			`Run this actor locally or set the token in run config to use the ${feature}`,
+			{ public: true },
+		);
+		this.statusCode = 403;
+	}
+}
+
+export class Forbidden extends ActorError {
+	constructor() {
+		super("auth", "forbidden", "Forbidden", { public: true });
+		this.statusCode = 403;
+	}
+}

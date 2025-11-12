@@ -11,12 +11,16 @@ import {
 	PATH_WEBSOCKET_PREFIX,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
+	WS_PROTOCOL_INSPECTOR_TOKEN,
 } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
 import type {
 	RivetMessageEvent,
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
+import { handleWebSocketInspectorConnect } from "@/inspector/handler";
+import { compareSecrets } from "@/inspector/utils";
+import type { RegistryConfig } from "@/registry/config";
 import { promiseWithResolvers } from "@/utils";
 import type { ConnDriver } from "./conn/driver";
 import { createRawWebSocketDriver } from "./conn/drivers/raw-websocket";
@@ -25,7 +29,6 @@ import type { ActorDriver } from "./driver";
 import { loggerWithoutContext } from "./log";
 import { parseMessage } from "./protocol/old";
 import { getRequestExposeInternalError } from "./router-endpoints";
-import { RegistryConfig } from "@/registry/config";
 
 // TODO: Merge with ConnectWebSocketOutput interface
 export interface UpgradeWebSocketArgs {
@@ -112,9 +115,28 @@ export async function routeWebSocket(
 			handler = handleRawWebSocket.bind(undefined, setWebSocket);
 			connDriver = driver;
 		} else if (requestPath === PATH_INSPECTOR_CONNECT) {
+			if (!actor.inspectorToken) {
+				throw "WebSocket Inspector Unauthorized: actor does not provide inspector access";
+			}
+
+			const inspectorToken = requestHeaders["sec-websocket-protocol"]
+				.split(",")
+				.map((p) => p.trim())
+				.find((protocol) =>
+					protocol.startsWith(WS_PROTOCOL_INSPECTOR_TOKEN),
+				)
+				// skip token prefix
+				?.split(".")[1];
+
+			if (
+				!inspectorToken ||
+				!compareSecrets(actor.inspectorToken, inspectorToken)
+			) {
+				throw "WebSocket Inspector Unauthorized: invalid token";
+			}
 			// This returns raw UpgradeWebSocketArgs instead of accepting a
 			// Conn since this does not need a Conn
-			return await handleWebSocketInspectorConnect();
+			return await handleWebSocketInspectorConnect({ actor });
 		} else {
 			throw `WebSocket Path Not Found: ${requestPath}`;
 		}
@@ -335,38 +357,17 @@ export async function handleRawWebSocket(
 	};
 }
 
-export async function handleWebSocketInspectorConnect(): Promise<UpgradeWebSocketArgs> {
-	return {
-		// NOTE: onOpen cannot be async since this messes up the open event listener order
-		onOpen: (_evt: any, ws: WSContext) => {
-			ws.send("Hello world");
-		},
-		onMessage: (evt: RivetMessageEvent, ws: WSContext) => {
-			ws.send("Pong");
-		},
-		onClose: (
-			event: {
-				wasClean: boolean;
-				code: number;
-				reason: string;
-			},
-			ws: WSContext,
-		) => {
-			// TODO:
-		},
-		onError: (_error: unknown) => {
-			// TODO:
-		},
-	};
+export interface WebSocketCustomProtocols {
+	encoding: Encoding;
+	connParams: unknown;
 }
 
 /**
  * Parse encoding and connection parameters from WebSocket Sec-WebSocket-Protocol header
  */
-export function parseWebSocketProtocols(protocols: string | null | undefined): {
-	encoding: Encoding;
-	connParams: unknown;
-} {
+export function parseWebSocketProtocols(
+	protocols: string | null | undefined,
+): WebSocketCustomProtocols {
 	let encodingRaw: string | undefined;
 	let connParamsRaw: string | undefined;
 

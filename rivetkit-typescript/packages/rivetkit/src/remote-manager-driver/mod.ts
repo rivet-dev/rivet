@@ -2,10 +2,8 @@ import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
-import { generateRandomString } from "@/actor/utils";
 import type { ClientConfig } from "@/client/client";
-import type { MetadataResponse } from "@/common/router";
-import { noopNext, stringifyError } from "@/common/utils";
+import { noopNext } from "@/common/utils";
 import type {
 	ActorOutput,
 	CreateInput,
@@ -19,7 +17,7 @@ import type {
 import type { Actor as ApiActor } from "@/manager-api/actors";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { uint8ArrayToBase64 } from "@/serde";
-import { combineUrlPath, GetUpgradeWebSocket } from "@/utils";
+import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
 import { sendHttpRequestToActor } from "./actor-http-client";
 import {
@@ -31,8 +29,8 @@ import {
 	destroyActor,
 	getActor,
 	getActorByKey,
-	getMetadata,
 	getOrCreateActor,
+	kvGet,
 	listActorsByName,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
@@ -355,12 +353,25 @@ export class RemoteManagerDriver implements ManagerDriver {
 		return await upgradeWebSocket(() => args)(c, noopNext());
 	}
 
-	displayInformation(): ManagerDisplayInformation {
-		return { properties: {} };
+	async kvGet(actorId: string, key: Uint8Array): Promise<string | null> {
+		// Wait for metadata check to complete if in progress
+		if (this.#metadataPromise) {
+			await this.#metadataPromise;
+		}
+
+		logger().debug({ msg: "getting kv value via engine api", key });
+
+		const response = await kvGet(
+			this.#config,
+			actorId,
+			new TextDecoder("utf8").decode(key),
+		);
+
+		return response.value;
 	}
 
-	getOrCreateInspectorAccessToken() {
-		return generateRandomString();
+	displayInformation(): ManagerDisplayInformation {
+		return { properties: {} };
 	}
 
 	setGetUpgradeWebSocket(getUpgradeWebSocket: GetUpgradeWebSocket): void {

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ActorDatabase } from "./actor-database";
-import { useActor } from "./actor-queries-context";
+import { useActorInspector } from "./actor-inspector-context";
 import { Info } from "./actor-state-tab";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
@@ -14,12 +14,12 @@ export function ActorDatabaseTab({ actorId }: ActorDatabaseTabProps) {
 		useDataProvider().actorDestroyedAtQueryOptions(actorId),
 	);
 
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const {
 		data: isEnabled,
 		isLoading,
 		isError,
-	} = useQuery(actorQueries.actorDatabaseEnabledQueryOptions(actorId));
+	} = useQuery(actorInspector.actorDatabaseEnabledQueryOptions(actorId));
 
 	if (destroyedAt) {
 		return <Info>Database Studio is unavailable for inactive Actors.</Info>;
