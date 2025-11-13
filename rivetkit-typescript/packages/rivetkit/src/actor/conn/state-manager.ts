@@ -1,8 +1,40 @@
 import onChange from "on-change";
+import * as cbor from "cbor-x";
 import { isCborSerializable } from "@/common/utils";
 import * as errors from "../errors";
-import type { PersistedConn } from "../instance/persisted";
-import { CONN_ACTOR_SYMBOL, CONN_STATE_ENABLED_SYMBOL, type Conn } from "./mod";
+import { CONN_ACTOR_SYMBOL, type Conn } from "./mod";
+import type { PersistedConn } from "./persisted";
+import { assertUnreachable } from "../utils";
+import { HibernatingWebSocketMetadata } from "@rivetkit/engine-runner";
+import invariant from "invariant";
+import type * as persistSchema from "@/schemas/actor-persist/mod";
+import { bufferToArrayBuffer } from "@/utils";
+
+/** Pick a subset of persisted data used to represent ephemeral connections */
+export type EphemeralConn<CP, CS> = Pick<
+	PersistedConn<CP, CS>,
+	"id" | "parameters" | "state"
+>;
+
+export type ConnDataInput<CP, CS> =
+	| { ephemeral: EphemeralConn<CP, CS> }
+	| { hibernatable: PersistedConn<CP, CS> };
+
+export type ConnData<CP, CS> =
+	| {
+			ephemeral: {
+				/** In-memory data representing this connection */
+				data: EphemeralConn<CP, CS>;
+			};
+	  }
+	| {
+			hibernatable: {
+				/** Persisted data with on-change proxy */
+				data: PersistedConn<CP, CS>;
+				/** Raw persisted data without proxy */
+				dataRaw: PersistedConn<CP, CS>;
+			};
+	  };
 
 /**
  * Manages connection state persistence, proxying, and change tracking.
@@ -11,27 +43,84 @@ import { CONN_ACTOR_SYMBOL, CONN_STATE_ENABLED_SYMBOL, type Conn } from "./mod";
 export class StateManager<CP, CS> {
 	#conn: Conn<any, CP, CS, any, any, any>;
 
-	// State tracking
-	#persist!: PersistedConn<CP, CS>;
-	#persistRaw!: PersistedConn<CP, CS>;
-	#changed = false;
+	/**
+	 * Data representing this connection.
+	 *
+	 * This is stored as a struct for both ephemeral and hibernatable conns in
+	 * order to keep the separation clear between the two.
+	 */
+	#data!: ConnData<CP, CS>;
 
-	constructor(conn: Conn<any, CP, CS, any, any, any>) {
+	/** Flagged by on-change if persisted data changes */
+	hibernatableDataChanged = false;
+
+	constructor(
+		conn: Conn<any, CP, CS, any, any, any>,
+		data: ConnDataInput<CP, CS>,
+	) {
 		this.#conn = conn;
+
+		if ("ephemeral" in data) {
+			this.#data = { ephemeral: { data: data.ephemeral } };
+		} else if ("hibernatable" in data) {
+			// Listen for changes to the object
+			const persistRaw = data.hibernatable;
+			const persist = onChange(
+				persistRaw,
+				(
+					path: string,
+					value: any,
+					_previousValue: any,
+					_applyData: any,
+				) => {
+					this.#handleChange(path, value);
+				},
+				{ ignoreDetached: true },
+			);
+			this.#data = {
+				hibernatable: { data: persist, dataRaw: persistRaw },
+			};
+		} else {
+			assertUnreachable(data);
+		}
 	}
 
-	// MARK: - Public API
-
-	get persist(): PersistedConn<CP, CS> {
-		return this.#persist;
+	/**
+	 * Returns the ephemeral or persisted data for this connectioned.
+	 *
+	 * This property is used to be able to treat both memory & persist conns
+	 * identical by looking up the correct underlying data structure.
+	 */
+	get ephemeralData(): EphemeralConn<CP, CS> {
+		if ("hibernatable" in this.#data) {
+			return this.#data.hibernatable.data;
+		} else if ("ephemeral" in this.#data) {
+			return this.#data.ephemeral.data;
+		} else {
+			return assertUnreachable(this.#data);
+		}
 	}
 
-	get persistRaw(): PersistedConn<CP, CS> {
-		return this.#persistRaw;
+	get hibernatableData(): PersistedConn<CP, CS> | undefined {
+		if ("hibernatable" in this.#data) {
+			return this.#data.hibernatable.data;
+		} else {
+			return undefined;
+		}
 	}
 
-	get changed(): boolean {
-		return this.#changed;
+	hibernatableDataOrError(): PersistedConn<CP, CS> {
+		const hibernatable = this.hibernatableData;
+		invariant(hibernatable, "missing hibernatable data");
+		return hibernatable;
+	}
+
+	get hibernatableDataRaw(): PersistedConn<CP, CS> | undefined {
+		if ("hibernatable" in this.#data) {
+			return this.#data.hibernatable.dataRaw;
+		} else {
+			return undefined;
+		}
 	}
 
 	get stateEnabled(): boolean {
@@ -40,69 +129,22 @@ export class StateManager<CP, CS> {
 
 	get state(): CS {
 		this.#validateStateEnabled();
-		if (!this.#persist.state) throw new Error("state should exists");
-		return this.#persist.state;
+		const state = this.ephemeralData.state;
+		if (!state) throw new Error("state should exists");
+		return state;
 	}
 
 	set state(value: CS) {
 		this.#validateStateEnabled();
-		this.#persist.state = value;
+		this.ephemeralData.state = value;
 	}
 
-	get params(): CP {
-		return this.#persist.params;
-	}
-
-	// MARK: - Initialization
-
-	/**
-	 * Creates proxy for persist object that handles automatic state change detection.
-	 */
-	initPersistProxy(target: PersistedConn<CP, CS>) {
-		// Set raw persist object
-		this.#persistRaw = target;
-
-		// If this can't be proxied, return raw value
-		if (target === null || typeof target !== "object") {
-			this.#persist = target;
-			return;
-		}
-
-		// Listen for changes to the object
-		this.#persist = onChange(
-			target,
-			(
-				path: string,
-				value: any,
-				_previousValue: any,
-				_applyData: any,
-			) => {
-				this.#handleChange(path, value);
-			},
-			{ ignoreDetached: true },
-		);
-	}
-
-	// MARK: - Change Management
-
-	/**
-	 * Returns whether this connection has unsaved changes
-	 */
-	hasChanges(): boolean {
-		return this.#changed;
-	}
-
-	/**
-	 * Marks changes as saved
-	 */
 	markSaved() {
-		this.#changed = false;
+		this.hibernatableDataChanged = false;
 	}
-
-	// MARK: - Private Helpers
 
 	#validateStateEnabled() {
-		if (!this.stateEnabled) {
+		if (!this.#conn[CONN_ACTOR_SYMBOL].connStateEnabled) {
 			throw new errors.ConnStateNotEnabled();
 		}
 	}
@@ -126,7 +168,7 @@ export class StateManager<CP, CS> {
 			}
 		}
 
-		this.#changed = true;
+		this.hibernatableDataChanged = true;
 		this.#conn[CONN_ACTOR_SYMBOL].rLog.debug({
 			msg: "conn onChange triggered",
 			connId: this.#conn.id,
@@ -137,5 +179,35 @@ export class StateManager<CP, CS> {
 		this.#conn[CONN_ACTOR_SYMBOL].connectionManager.markConnChanged(
 			this.#conn,
 		);
+	}
+
+	addSubscription({ eventName }: { eventName: string }) {
+		const hibernatable = this.hibernatableData;
+		if (!hibernatable) return;
+		hibernatable.subscriptions.push({
+			eventName,
+		});
+	}
+
+	removeSubscription({ eventName }: { eventName: string }) {
+		const hibernatable = this.hibernatableData;
+		if (!hibernatable) return;
+		const subIdx = hibernatable.subscriptions.findIndex(
+			(s) => s.eventName === eventName,
+		);
+		if (subIdx !== -1) {
+			hibernatable.subscriptions.splice(subIdx, 1);
+		}
+		return subIdx !== -1;
+	}
+
+	buildHwsMeta(): HibernatingWebSocketMetadata {
+		const hibernatable = this.hibernatableDataOrError();
+		return {
+			requestId: hibernatable.hibernatableRequestId,
+			path: hibernatable.requestPath,
+			headers: hibernatable.requestHeaders,
+			messageIndex: hibernatable.msgIndex,
+		};
 	}
 }

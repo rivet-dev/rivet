@@ -9,17 +9,26 @@ import {
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
 import { unreachable } from "./utils";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import {
+	WebSocketTunnelAdapter,
+	HIBERNATABLE_SYMBOL,
+} from "./websocket-tunnel-adapter";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
-const WEBSOCKET_STATE_PERSIST_TIMEOUT = 30000; // 30 seconds
 
 interface PendingRequest {
 	resolve: (response: Response) => void;
 	reject: (error: Error) => void;
 	streamController?: ReadableStreamDefaultController<Uint8Array>;
 	actorId?: string;
+}
+
+export interface HibernatingWebSocketMetadata {
+	requestId: RequestId;
+	path: string;
+	headers: Record<string, string>;
+	messageIndex: number;
 }
 
 interface PendingTunnelMessage {
@@ -84,11 +93,200 @@ export class Tunnel {
 		for (const [_, ws] of this.#actorWebSockets) {
 			// Only close non-hibernatable websockets to prevent sending
 			// unnecessary close messages for websockets that will be hibernated
-			if (!ws.canHibernate) {
-				ws.__closeWithoutCallback(1000, "ws.tunnel_shutdown");
+			if (!ws[HIBERNATABLE_SYMBOL]) {
+				ws._closeWithoutCallback(1000, "ws.tunnel_shutdown");
 			}
 		}
 		this.#actorWebSockets.clear();
+	}
+
+	restoreHibernatingRequests(
+		actorId: string,
+		requestIds: readonly RequestId[],
+	) {
+		// Load all persisted metadata
+		const metaEntries =
+			this.#runner.config.hibernatableWebSocket.loadAll(actorId);
+
+		// Create maps for efficient lookup
+		const requestIdMap = new Map<string, RequestId>();
+		for (const requestId of requestIds) {
+			requestIdMap.set(idToStr(requestId), requestId);
+		}
+
+		const metaMap = new Map<string, HibernatingWebSocketMetadata>();
+		for (const meta of metaEntries) {
+			metaMap.set(idToStr(meta.requestId), meta);
+		}
+
+		// Process connected WebSockets
+		let connectedButNotLoadedCount = 0;
+		let restoredCount = 0;
+		for (const [requestIdStr, requestId] of requestIdMap) {
+			const meta = metaMap.get(requestIdStr);
+
+			if (!meta) {
+				// Connected but not loaded (not persisted) - close it
+				//
+				// This may happen if
+				this.log?.warn({
+					msg: "closing websocket that is not persisted",
+					requestId: requestIdStr,
+				});
+
+				this.#sendMessage(requestId, {
+					tag: "ToServerWebSocketClose",
+					val: {
+						code: 1000,
+						reason: "ws.meta_not_found_during_restore",
+						retry: false,
+					},
+				});
+
+				connectedButNotLoadedCount++;
+			} else {
+				// Both connected and persisted - restore it
+				const request = buildRequestForWebSocket(
+					meta.path,
+					meta.headers,
+				);
+
+				// This will call `runner.config.websocket` under the hood to
+				// attach the event listeners to the WebSocket.
+				this.#createWebSocket(
+					actorId,
+					requestId,
+					requestIdStr,
+					true,
+					meta.messageIndex,
+					request,
+					false,
+				);
+
+				restoredCount++;
+			}
+		}
+
+		// Process loaded but not connected (stale) - remove them
+		let loadedButNotConnectedCount = 0;
+		for (const [requestIdStr, meta] of metaMap) {
+			if (!requestIdMap.has(requestIdStr)) {
+				this.log?.warn({
+					msg: "removing stale persisted websocket",
+					requestId: requestIdStr,
+				});
+
+				const request = buildRequestForWebSocket(meta.path, meta.headers);
+
+				// Create adapter to register user's event listeners.
+				// Pass engineAlreadyClosed=true so close callback won't send tunnel message.
+				const adapter = this.#createWebSocket(
+					actorId,
+					meta.requestId,
+					requestIdStr,
+					true,
+					meta.messageIndex,
+					request,
+					true,
+				);
+
+				// Close the adapter normally - this will fire user's close event handler
+				// (which should clean up persistence) and trigger the close callback
+				// (which will clean up maps but skip sending tunnel message)
+				adapter.close(1000, "ws.stale_metadata");
+
+				loadedButNotConnectedCount++;
+			}
+		}
+
+		this.log?.info({
+			msg: "restored hibernatable websockets",
+			actorId,
+			restoredCount,
+			connectedButNotLoadedCount,
+			loadedButNotConnectedCount,
+		});
+	}
+
+	/**
+	 * Called from WebSocketOpen message and when restoring hibernatable WebSockets.
+	 */
+	#createWebSocket(
+		actorId: string,
+		requestId: RequestId,
+		requestIdStr: string,
+		hibernatable: boolean,
+		messageIndex: number,
+		request: Request,
+		engineAlreadyClosed: boolean,
+	): WebSocketTunnelAdapter {
+		// Create WebSocket adapter
+		const adapter = new WebSocketTunnelAdapter(
+			this,
+			actorId,
+			requestIdStr,
+			hibernatable,
+			messageIndex,
+			request,
+			(messageIndex: number) => {
+				this.#runner.config.hibernatableWebSocket.persistMessageIndex(
+					actorId,
+					requestId,
+					messageIndex,
+				);
+			},
+			(data: ArrayBuffer | string, isBinary: boolean) => {
+				// Send message through tunnel
+				const dataBuffer =
+					typeof data === "string"
+						? (new TextEncoder().encode(data).buffer as ArrayBuffer)
+						: data;
+
+				this.#sendMessage(requestId, {
+					tag: "ToServerWebSocketMessage",
+					val: {
+						data: dataBuffer,
+						binary: isBinary,
+					},
+				});
+			},
+			(code?: number, reason?: string, retry: boolean = false) => {
+				// Send close through tunnel if engine doesn't already know it's closed
+				if (!engineAlreadyClosed) {
+					this.#sendMessage(requestId, {
+						tag: "ToServerWebSocketClose",
+						val: {
+							code: code || null,
+							reason: reason || null,
+							retry,
+						},
+					});
+				}
+
+				// Remove from map
+				this.#actorWebSockets.delete(requestIdStr);
+
+				// Clean up actor tracking
+				const actor = this.#runner.getActor(actorId);
+				if (actor) {
+					actor.webSockets.delete(requestIdStr);
+				}
+			},
+		);
+
+		this.#actorWebSockets.set(requestIdStr, adapter);
+
+		// Call WebSocket handler. This handler will add event listeners
+		// for `open`, etc.
+		this.#runner.config.websocket(
+			this.#runner,
+			actorId,
+			adapter,
+			requestId,
+			request,
+		);
+
+		return adapter;
 	}
 
 	#sendMessage(
@@ -202,7 +400,7 @@ export class Tunnel {
 				const webSocket = this.#actorWebSockets.get(requestIdStr);
 				if (webSocket) {
 					// Close the WebSocket connection
-					webSocket.__closeWithRetry(
+					webSocket._closeWithRetry(
 						1000,
 						"Message acknowledgment timeout",
 					);
@@ -242,7 +440,7 @@ export class Tunnel {
 		for (const requestIdStr of actor.webSockets) {
 			const ws = this.#actorWebSockets.get(requestIdStr);
 			if (ws) {
-				ws.__closeWithRetry(1000, "Actor stopped");
+				ws._closeWithRetry(1000, "Actor stopped");
 				this.#actorWebSockets.delete(requestIdStr);
 			}
 		}
@@ -343,7 +541,7 @@ export class Tunnel {
 				case "ToClientWebSocketMessage": {
 					this.#sendAck(message.requestId, message.messageId);
 
-					const _unhandled = await this.#handleWebSocketMessage(
+					this.#handleWebSocketMessage(
 						message.requestId,
 						message.messageKind.val,
 					);
@@ -532,6 +730,12 @@ export class Tunnel {
 		requestId: protocol.RequestId,
 		open: protocol.ToClientWebSocketOpen,
 	) {
+		// NOTE: This method is safe to be async since we will not receive any
+		// further WebSocket events until we send a ToServerWebSocketOpen
+		// tunnel message. We can do any async logic we need to between thoes two events.
+		//
+		// Sedning a ToServerWebSocketClose will terminate the WebSocket early.
+
 		const requestIdStr = idToStr(requestId);
 
 		// Validate actor exists
@@ -558,31 +762,9 @@ export class Tunnel {
 			return;
 		}
 
-		const websocketHandler = this.#runner.config.websocket;
-
-		if (!websocketHandler) {
-			this.log?.error({
-				msg: "no websocket handler configured for tunnel",
-			});
-			// Send close immediately
-			this.#sendMessage(requestId, {
-				tag: "ToServerWebSocketClose",
-				val: {
-					code: 1011,
-					reason: "Not Implemented",
-					retry: false,
-				},
-			});
-			return;
-		}
-
 		// Close existing WebSocket if one already exists for this request ID.
-		// There should always be a close message sent before another open
-		// message for the same message ID.
-		//
-		// This should never occur if all is functioning correctly, but this
-		// prevents any edge case that would result in duplicate WebSockets for
-		// the same request.
+		// This should never happen, but prevents any potential duplicate
+		// WebSockets from retransmits.
 		const existingAdapter = this.#actorWebSockets.get(requestIdStr);
 		if (existingAdapter) {
 			this.log?.warn({
@@ -591,109 +773,56 @@ export class Tunnel {
 			});
 			// Close without sending a message through the tunnel since the server
 			// already knows about the new connection
-			existingAdapter.__closeWithoutCallback(1000, "ws.duplicate_open");
+			existingAdapter._closeWithoutCallback(1000, "ws.duplicate_open");
 		}
 
-		// Track this WebSocket for the actor
-		if (actor) {
-			actor.webSockets.add(requestIdStr);
-		}
-
+		// Create WebSocket
 		try {
-			// Create WebSocket adapter
-			const adapter = new WebSocketTunnelAdapter(
-				requestIdStr,
-				(data: ArrayBuffer | string, isBinary: boolean) => {
-					// Send message through tunnel
-					const dataBuffer =
-						typeof data === "string"
-							? (new TextEncoder().encode(data)
-									.buffer as ArrayBuffer)
-							: data;
+			actor.webSockets.add(requestIdStr);
 
-					this.#sendMessage(requestId, {
-						tag: "ToServerWebSocketMessage",
-						val: {
-							data: dataBuffer,
-							binary: isBinary,
-						},
-					});
-				},
-				(code?: number, reason?: string, retry: boolean = false) => {
-					// Send close through tunnel
-					this.#sendMessage(requestId, {
-						tag: "ToServerWebSocketClose",
-						val: {
-							code: code || null,
-							reason: reason || null,
-							retry,
-						},
-					});
-
-					// Remove from map
-					this.#actorWebSockets.delete(requestIdStr);
-
-					// Clean up actor tracking
-					if (actor) {
-						actor.webSockets.delete(requestIdStr);
-					}
-				},
+			const request = buildRequestForWebSocket(
+				open.path,
+				Object.fromEntries(open.headers),
 			);
 
-			// Store adapter
-			this.#actorWebSockets.set(requestIdStr, adapter);
-
-			// Convert headers to map
-			//
-			// We need to manually ensure the original Upgrade/Connection WS
-			// headers are present
-			const headerInit: Record<string, string> = {};
-			if (open.headers) {
-				for (const [k, v] of open.headers as ReadonlyMap<
-					string,
-					string
-				>) {
-					headerInit[k] = v;
-				}
-			}
-			headerInit["Upgrade"] = "websocket";
-			headerInit["Connection"] = "Upgrade";
-
-			const request = new Request(`http://localhost${open.path}`, {
-				method: "GET",
-				headers: headerInit,
-			});
-
-			// Send open confirmation
-			const hibernationConfig =
-				this.#runner.config.getActorHibernationConfig(
+			const canHibernate =
+				this.#runner.config.hibernatableWebSocket.canHibernate(
 					actor.actorId,
 					requestId,
 					request,
 				);
-			adapter.canHibernate = hibernationConfig.enabled;
 
+			// #createWebSocket will call `runner.config.websocket` under the
+			// hood to add the event listeners for open, etc. If this handler
+			// throws, then the WebSocket will be closed before sending the
+			// open event.
+			const adapter = this.#createWebSocket(
+				actor.actorId,
+				requestId,
+				requestIdStr,
+				canHibernate,
+				-1,
+				request,
+				false,
+			);
+
+			// Open the WebSocket after `config.socket` so (a) the event
+			// handlers can be added and (b) any errors in `config.websocket`
+			// will cause the WebSocket to terminate before the open event.
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketOpen",
 				val: {
-					canHibernate: hibernationConfig.enabled,
-					lastMsgIndex: BigInt(hibernationConfig.lastMsgIndex ?? -1),
+					canHibernate,
 				},
 			});
 
-			// Notify adapter that connection is open
+			// Dispatch open event
 			adapter._handleOpen(requestId);
-
-			// Call websocket handler
-			await websocketHandler(
-				this.#runner,
-				open.actorId,
-				adapter,
-				requestId,
-				request,
-			);
 		} catch (error) {
 			this.log?.error({ msg: "error handling websocket open", error });
+
+			// TODO: Call close event on adapter if needed
+
 			// Send close on error
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketClose",
@@ -713,11 +842,13 @@ export class Tunnel {
 		}
 	}
 
-	/// Returns false if the message was sent off
-	async #handleWebSocketMessage(
+	#handleWebSocketMessage(
 		requestId: ArrayBuffer,
 		msg: protocol.ToClientWebSocketMessage,
-	): Promise<boolean> {
+	) {
+		// NOTE: This method cannot be async in order to ensure in-order
+		// message processing.
+
 		const requestIdStr = idToStr(requestId);
 		const adapter = this.#actorWebSockets.get(requestIdStr);
 		if (adapter) {
@@ -725,18 +856,16 @@ export class Tunnel {
 				? new Uint8Array(msg.data)
 				: new TextDecoder().decode(new Uint8Array(msg.data));
 
-			return adapter._handleMessage(
-				requestId,
-				data,
-				msg.index,
-				msg.binary,
-			);
+			adapter._handleMessage(requestId, data, msg.index, msg.binary);
 		} else {
-			return true;
+			this.log?.warn({
+				msg: "missing websocket for incoming websocket message",
+				requestId,
+			});
 		}
 	}
 
-	__ackWebsocketMessage(requestId: ArrayBuffer, index: number) {
+	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
 		this.log?.debug({
 			msg: "ack ws msg",
 			requestId: idToStr(requestId),
@@ -781,4 +910,33 @@ function generateUuidBuffer(): ArrayBuffer {
 
 function idToStr(id: ArrayBuffer): string {
 	return uuidstringify(new Uint8Array(id));
+}
+
+/**
+ * Builds a request that represents the incoming request for a given WebSocket.
+ *
+ * This request is not a real request and will never be sent. It's used to be passed to the actor to behave like a real incoming request.
+ */
+function buildRequestForWebSocket(
+	path: string,
+	headers: Record<string, string>,
+): Request {
+	// We need to manually ensure the original Upgrade/Connection WS
+	// headers are present
+	const fullHeaders = {
+		...headers,
+		Upgrade: "websocket",
+		Connection: "Upgrade",
+	};
+
+	if (!path.startsWith("/")) {
+		throw new Error("path must start with leading slash");
+	}
+
+	const request = new Request(`http://actor${path}`, {
+		method: "GET",
+		headers: fullHeaders,
+	});
+
+	return request;
 }

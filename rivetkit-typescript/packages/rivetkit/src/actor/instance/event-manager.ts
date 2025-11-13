@@ -7,9 +7,9 @@ import {
 } from "@/schemas/client-protocol-zod/mod";
 import { bufferToArrayBuffer } from "@/utils";
 import {
-	CONN_PERSIST_SYMBOL,
 	CONN_SEND_MESSAGE_SYMBOL,
 	CONN_SPEAKS_RIVETKIT_SYMBOL,
+	CONN_STATE_MANAGER_SYMBOL,
 	type Conn,
 } from "../conn/mod";
 import type { AnyDatabaseProvider } from "../database";
@@ -65,7 +65,9 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Persist subscription if not restoring from persistence
 		if (!fromPersist) {
-			connection[CONN_PERSIST_SYMBOL].subscriptions.push({ eventName });
+			connection[CONN_STATE_MANAGER_SYMBOL].addSubscription({
+				eventName,
+			});
 
 			// Mark connection as changed for persistence
 			const connectionManager = (this.#actor as any).connectionManager;
@@ -125,12 +127,10 @@ export class EventManager<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Update persistence if not part of connection removal
 		if (!fromRemoveConn) {
 			// Remove from persisted subscriptions
-			const subIdx = connection[
-				CONN_PERSIST_SYMBOL
-			].subscriptions.findIndex((s) => s.eventName === eventName);
-			if (subIdx !== -1) {
-				connection[CONN_PERSIST_SYMBOL].subscriptions.splice(subIdx, 1);
-			} else {
+			const removed = connection[
+				CONN_STATE_MANAGER_SYMBOL
+			].removeSubscription({ eventName });
+			if (!removed) {
 				this.#actor.rLog.warn({
 					msg: "subscription does not exist in persist",
 					eventName,
