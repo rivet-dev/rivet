@@ -93,8 +93,12 @@ pub struct ServiceUnavailable;
 pub struct WebSocketServiceUnavailable;
 
 #[derive(RivetError, Serialize, Deserialize)]
-#[error("guard", "websocket_service_retry", "WebSocket service retry.")]
-pub struct WebSocketServiceRetry;
+#[error(
+	"guard",
+	"websocket_service_hibernate",
+	"Initiate WebSocket service hibernation."
+)]
+pub struct WebSocketServiceHibernate;
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error("guard", "websocket_service_timeout", "WebSocket service timed out.")]

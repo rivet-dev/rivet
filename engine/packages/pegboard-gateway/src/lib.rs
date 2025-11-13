@@ -8,18 +8,19 @@ use hyper::{Request, Response, StatusCode};
 use rivet_error::*;
 use rivet_guard_core::{
 	WebSocketHandle,
-	custom_serve::CustomServeTrait,
+	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{
-		ServiceUnavailable, WebSocketServiceRetry, WebSocketServiceTimeout,
+		ServiceUnavailable, WebSocketServiceHibernate, WebSocketServiceTimeout,
 		WebSocketServiceUnavailable,
 	},
 	proxy_service::ResponseBody,
 	request_context::RequestContext,
+	websocket_handle::WebSocketReceiver,
 };
 use rivet_runner_protocol as protocol;
 use rivet_util::serde::HashableMap;
-use std::time::Duration;
-use tokio::sync::watch;
+use std::{sync::Arc, time::Duration};
+use tokio::sync::{Mutex, watch};
 use tokio_tungstenite::tungstenite::{
 	Message,
 	protocol::frame::{CloseFrame, coding::CloseCode},
@@ -47,6 +48,7 @@ enum LifecycleResult {
 }
 
 pub struct PegboardGateway {
+	ctx: StandaloneCtx,
 	shared_state: SharedState,
 	runner_id: Id,
 	actor_id: Id,
@@ -55,8 +57,15 @@ pub struct PegboardGateway {
 
 impl PegboardGateway {
 	#[tracing::instrument(skip_all, fields(?actor_id, ?runner_id, ?path))]
-	pub fn new(shared_state: SharedState, runner_id: Id, actor_id: Id, path: String) -> Self {
+	pub fn new(
+		ctx: StandaloneCtx,
+		shared_state: SharedState,
+		runner_id: Id,
+		actor_id: Id,
+		path: String,
+	) -> Self {
 		Self {
+			ctx,
 			shared_state,
 			runner_id,
 			actor_id,
@@ -372,7 +381,7 @@ impl CustomServeTrait for PegboardGateway {
 
 										if open_msg.can_hibernate && close.retry {
 											// Successful closure
-											return Err(WebSocketServiceRetry.build());
+											return Err(WebSocketServiceHibernate.build());
 										} else {
 											return Ok(LifecycleResult::ServerClose(close));
 										}
@@ -385,7 +394,7 @@ impl CustomServeTrait for PegboardGateway {
 								}
 							} else {
 								tracing::debug!("tunnel sub closed");
-								return Err(WebSocketServiceRetry.build());
+								return Err(WebSocketServiceHibernate.build());
 							}
 						}
 						_ = tunnel_to_ws_abort_rx.changed() => {
@@ -539,6 +548,65 @@ impl CustomServeTrait for PegboardGateway {
 			}
 			Ok(_) => Ok(None),
 			Err(err) => Err(err),
+		}
+	}
+
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id))]
+	async fn handle_websocket_hibernation(
+		&self,
+		client_ws: WebSocketHandle,
+	) -> Result<HibernationResult> {
+		let mut ready_sub = self
+			.ctx
+			.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", self.actor_id))
+			.await?;
+
+		let close = tokio::select! {
+			_ = ready_sub.next() => {
+				tracing::debug!("actor became ready during hibernation");
+
+				HibernationResult::Continue
+			}
+			hibernation_res = hibernate_ws(client_ws.recv()) => {
+				let res = hibernation_res?;
+
+				match &res {
+					HibernationResult::Continue => {
+						tracing::debug!("received message during hibernation");
+					}
+					HibernationResult::Close => {
+						tracing::debug!("websocket stream closed during hibernation");
+					}
+				}
+
+				res
+			}
+		};
+
+		Ok(close)
+	}
+}
+
+async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<HibernationResult> {
+	let mut guard = ws_rx.lock().await;
+	let mut pinned = std::pin::Pin::new(&mut *guard);
+
+	loop {
+		if let Some(msg) = pinned.as_mut().peek().await {
+			match msg {
+				Ok(Message::Binary(_)) | Ok(Message::Text(_)) => {
+					return Ok(HibernationResult::Continue);
+				}
+				// We don't care about the close frame because we're currently hibernating; there is no
+				// downstream to send the close frame to.
+				Ok(Message::Close(_)) => return Ok(HibernationResult::Close),
+				// Ignore rest
+				_ => {
+					pinned.try_next().await?;
+				}
+			}
+		} else {
+			return Ok(HibernationResult::Close);
 		}
 	}
 }

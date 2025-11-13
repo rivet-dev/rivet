@@ -235,6 +235,7 @@ async fn route_request_inner(
 
 	// Return pegboard-gateway instance with path
 	let gateway = pegboard_gateway::PegboardGateway::new(
+		ctx.clone(),
 		shared_state.pegboard_gateway.clone(),
 		runner_id,
 		actor_id,

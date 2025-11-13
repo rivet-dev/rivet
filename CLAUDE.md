@@ -125,7 +125,7 @@ Key points:
 - Add `Serialize, Deserialize` derives for errors with metadata fields
 - Always return anyhow errors from failable functions
 	- For example: `fn foo() -> Result<i64> { /* ... */ }`
-- Import anyhow using `use anyhow::*` instead of importing individual types
+- Do not glob import (`::*`) from anyhow. Instead, import individual types and traits
 
 **Dependency Management**
 - When adding a dependency, check for a workspace dependency in Cargo.toml
