@@ -14,13 +14,13 @@ export function HeroSection() {
 					<div className="max-w-7xl mx-auto text-center">
 						{/* Title */}
 						<h1 className="hero-bg-exclude text-4xl md:text-5xl font-normal text-white leading-[1.3] sm:leading-[1.1] tracking-[-0.03em] max-w-full">
-							The Primitive for Real-Time and Agent Applications
+							The Primitive for Realtime and Agent Applications
 						</h1>
 
 						<div className="h-5" />
 
 						<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
-							Rivet Actors are a simple primitive that provides in-memory state with WebSockets, fault-tolerance, and hibernation.
+							Rivet Actors are a simple primitive that provides in-memory state with WebSockets, fault-tolerance, and hibernation. Open-source and self-hostable.
 						</p>
 
 						{/*<p className="hero-bg-exclude max-w-3xl text-lg sm:text-xl leading-7 font-light text-white/40 mx-auto transition-colors duration-200">
@@ -91,7 +91,7 @@ export function HeroSection() {
 						{/* CTA Buttons */}
 						<div className="hero-bg-exclude flex flex-col sm:flex-row items-center justify-center gap-4">
 							<MarketingButton
-								href="/docs/quickstart/"
+								href="/docs"
 								primary
 							>
 								Get Started

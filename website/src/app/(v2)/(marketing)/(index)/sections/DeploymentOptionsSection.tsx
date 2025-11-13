@@ -84,7 +84,7 @@ export function DeploymentOptionsSection() {
 					>
 						<div className="flex flex-col gap-3 mt-4">
 							<Link
-								href="/docs/quickstart/"
+								href="/docs"
 								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors text-sm group"
 							>
 								Quickstart

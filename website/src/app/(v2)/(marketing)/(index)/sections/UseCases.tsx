@@ -74,7 +74,7 @@ function UseCaseCard({
 
 						{/* Checkmarks */}
 						<div className="space-y-2 mt-6">
-							{["Cloud & on-prem", "Supports realtime", "Works with AI SDK"].map((item) => (
+							{["Cloud or on-prem", "Realtime", "Supports your agent SDK"].map((item) => (
 								<div key={item} className="flex items-center gap-2">
 									<svg
 										className="w-4 h-4 text-white/60"
@@ -142,8 +142,8 @@ export function UseCases() {
 	// Map the use cases we want to display
 	const selectedUseCases = [
 		useCases.find((uc) => uc.title === "Agent Orchestration & MCP")!, // agent orchestration & mcp
-		useCases.find((uc) => uc.title === "Workflows")!, // workflows
 		useCases.find((uc) => uc.title === "Multiplayer Apps")!, // multiplayer apps
+		useCases.find((uc) => uc.title === "Workflows")!, // workflows
 		useCases.find((uc) => uc.title === "Local-First Sync")!, // local-first sync
 		useCases.find((uc) => uc.title === "Background Jobs")!, // background jobs
 		useCases.find((uc) => uc.title === "Per-Tenant Databases")!, // per-tenant databases
@@ -169,17 +169,17 @@ export function UseCases() {
 		const descriptionMap: { [key: string]: React.ReactNode } = {
 			"Agent Orchestration & MCP": (
 				<>
-					Build <span className="text-white/90">AI agents</span> with Model Context Protocol and persistent state
+					Build <span className="text-white/90">AI agents</span> with persistence and stateful Model Context Protocol
 				</>
 			),
 			"Workflows": (
 				<>
-					<span className="text-white/90">Durable multi-step workflows</span> with automatic state management
+					<span className="text-white/90">Durable multi-step workflows</span> with flexible state management
 				</>
 			),
 			"Multiplayer Apps": (
 				<>
-					Build <span className="text-white/90">realtime multiplayer</span> applications with authoritative state
+					Build <span className="text-white/90">realtime multiplayer</span> applications with server-authoritative state
 				</>
 			),
 			"Local-First Sync": (
