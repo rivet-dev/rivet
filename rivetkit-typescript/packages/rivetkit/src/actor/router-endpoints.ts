@@ -37,7 +37,7 @@ import {
 	promiseWithResolvers,
 } from "@/utils";
 import { createHttpSocket } from "./conn/drivers/http";
-import { createRawHttpSocket } from "./conn/drivers/raw-http";
+import { createRawRequestSocket } from "./conn/drivers/raw-request";
 import { createRawWebSocketSocket } from "./conn/drivers/raw-websocket";
 import { createWebSocketSocket } from "./conn/drivers/websocket";
 import type { ActorDriver } from "./driver";
@@ -377,7 +377,31 @@ export async function handleAction(
 	});
 }
 
-export async function handleRawWebSocketHandler(
+export async function handleRawRequest(
+	req: Request,
+	actorDriver: ActorDriver,
+	actorId: string,
+): Promise<Response> {
+	const actor = await actorDriver.loadActor(actorId);
+
+	// Track connection outside of scope for cleanup
+	let createdConn: AnyConn | undefined;
+
+	try {
+		const conn = await actor.createConn(createRawRequestSocket(), {}, req);
+
+		createdConn = conn;
+
+		return await actor.handleRawRequest(req, {});
+	} finally {
+		// Clean up the connection after the request completes
+		if (createdConn) {
+			actor.connDisconnected(createdConn, true);
+		}
+	}
+}
+
+export async function handleRawWebSocket(
 	req: Request | undefined,
 	path: string,
 	actorDriver: ActorDriver,
@@ -545,30 +569,6 @@ export function getRequestConnParams(req: HonoRequest): unknown {
 		throw new errors.InvalidParams(
 			`Invalid params JSON: ${stringifyError(err)}`,
 		);
-	}
-}
-
-export async function handleRawHttpHandler(
-	req: Request,
-	actorDriver: ActorDriver,
-	actorId: string,
-): Promise<Response> {
-	const actor = await actorDriver.loadActor(actorId);
-
-	// Track connection outside of scope for cleanup
-	let createdConn: AnyConn | undefined;
-
-	try {
-		const conn = await actor.createConn(createRawHttpSocket(), {}, req);
-
-		createdConn = conn;
-
-		return await actor.handleRawRequest(req, {});
-	} finally {
-		// Clean up the connection after the request completes
-		if (createdConn) {
-			actor.connDisconnected(createdConn, true);
-		}
 	}
 }
 
