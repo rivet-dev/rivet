@@ -40,9 +40,6 @@ cargo test -- --nocapture
 
 # Check for linting issues
 cargo clippy -- -W warnings
-
-# When adding a new package to the workspace
-deno run -A scripts/cargo/update_workspace.ts
 ```
 
 ### Docker Development Environment
