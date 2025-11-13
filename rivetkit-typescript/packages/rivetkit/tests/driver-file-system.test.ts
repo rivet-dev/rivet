@@ -10,7 +10,7 @@ runDriverTests({
 			join(__dirname, "../fixtures/driver-test-suite/registry.ts"),
 			async () => {
 				return {
-					driver: createFileSystemOrMemoryDriver(
+					driver: await createFileSystemOrMemoryDriver(
 						true,
 						`/tmp/test-${crypto.randomUUID()}`,
 					),
