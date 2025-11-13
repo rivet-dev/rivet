@@ -125,7 +125,7 @@ export function runRequestAccessTests(driverTestConfig: DriverTestConfig) {
 		});
 
 		// TODO: re-expose this once we can have actor queries on the gateway
-		// test("should have access to request object in onFetch", async (c) => {
+		// test("should have access to request object in onRequest", async (c) => {
 		// 	const { client, endpoint } = await setupDriverTest(c, driverTestConfig);
 		//
 		// 	// Create actor
@@ -163,7 +163,7 @@ export function runRequestAccessTests(driverTestConfig: DriverTestConfig) {
 		// 	expect(response.ok).toBe(true);
 		// 	const data = await response.json();
 		//
-		// 	// Verify request info from onFetch
+		// 	// Verify request info from onRequest
 		// 	expect((data as any).hasRequest).toBe(true);
 		// 	expect((data as any).requestUrl).toContain("/test-path");
 		// 	expect((data as any).requestMethod).toBe("POST");

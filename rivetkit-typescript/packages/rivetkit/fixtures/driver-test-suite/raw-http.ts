@@ -5,7 +5,10 @@ export const rawHttpActor = actor({
 	state: {
 		requestCount: 0,
 	},
-	onFetch(ctx: ActorContext<any, any, any, any, any, any>, request: Request) {
+	onRequest(
+		ctx: ActorContext<any, any, any, any, any, any>,
+		request: Request,
+	) {
 		const url = new URL(request.url);
 		const method = request.method;
 
@@ -57,7 +60,7 @@ export const rawHttpNoHandlerActor = actor({
 });
 
 export const rawHttpVoidReturnActor = actor({
-	onFetch(ctx, request) {
+	onRequest(ctx, request) {
 		// Intentionally return void to test error handling
 		return undefined as any;
 	},
@@ -107,7 +110,10 @@ export const rawHttpHonoActor = actor({
 		// Return the router as a var
 		return { router };
 	},
-	onFetch(ctx: ActorContext<any, any, any, any, any, any>, request: Request) {
+	onRequest(
+		ctx: ActorContext<any, any, any, any, any, any>,
+		request: Request,
+	) {
 		// Use the Hono router from vars
 		return ctx.vars.router.fetch(request);
 	},
