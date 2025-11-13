@@ -78,7 +78,7 @@ export const ActorConfigSchema = z
 				noSleep: z.boolean().default(false),
 				sleepTimeout: z.number().positive().default(30_000),
 				/** @experimental */
-				canHibernatWebSocket: z
+				canHibernateWebSocket: z
 					.union([
 						z.boolean(),
 						z

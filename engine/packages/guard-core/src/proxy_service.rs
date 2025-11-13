@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
@@ -31,7 +31,9 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-	WebSocketHandle, custom_serve::CustomServeTrait, errors, metrics,
+	WebSocketHandle,
+	custom_serve::{CustomServeTrait, HibernationResult},
+	errors, metrics,
 	request_context::RequestContext,
 };
 
@@ -1828,7 +1830,7 @@ impl ProxyService {
 				);
 			}
 			ResolveRouteOutput::Response(_) => unreachable!(),
-			ResolveRouteOutput::CustomServe(mut handlers) => {
+			ResolveRouteOutput::CustomServe(mut handler) => {
 				tracing::debug!(%req_path, "Spawning task to handle WebSocket communication");
 				let mut request_context = request_context.clone();
 				let req_headers = req_headers.clone();
@@ -1838,6 +1840,7 @@ impl ProxyService {
 				tokio::spawn(
 					async move {
 						let request_id = Uuid::new_v4();
+						let mut ws_hibernation_close = false;
 						let mut attempts = 0u32;
 
 						let ws_handle = WebSocketHandle::new(client_ws)
@@ -1845,7 +1848,7 @@ impl ProxyService {
 							.context("failed initiating websocket handle")?;
 
 						loop {
-							match handlers
+							match handler
 								.handle_websocket(
 									ws_handle.clone(),
 									&req_headers,
@@ -1895,18 +1898,43 @@ impl ProxyService {
 								Err(err) => {
 									tracing::debug!(?err, "websocket handler error");
 
-									// Denotes that the connection did not fail, but needs to be retried to
-									// resole a new target
-									let ws_retry = is_ws_retry(&err);
+									// Denotes that the connection did not fail, but the downstream has closed
+									let ws_hibernate = is_ws_hibernate(&err);
 
-									if ws_retry {
+									if ws_hibernate {
 										attempts = 0;
 									} else {
 										attempts += 1;
 									}
 
-									if attempts > max_attempts
-										|| (!is_retryable_ws_error(&err) && !ws_retry)
+									if ws_hibernate {
+										// This should be unreachable because as soon as the actor is
+										// reconnected to after hibernation the gateway will consume the close
+										// frame from the client ws stream
+										ensure!(
+											!ws_hibernation_close,
+											"should not be hibernating again after receiving a close frame during hibernation"
+										);
+
+										// After this function returns:
+										// - the route will be resolved again
+										// - the websocket will connect to the new downstream target
+										// - the gateway will continue reading messages from the client ws
+										//   (starting with the message that caused the hibernation to end)
+										let res = handler
+											.handle_websocket_hibernation(ws_handle.clone())
+											.await?;
+
+										// Despite receiving a close frame from the client during hibernation
+										// we are going to reconnect to the actor so that it knows the
+										// connection has closed
+										if let HibernationResult::Close = res {
+											tracing::debug!("starting hibernating websocket close");
+
+											ws_hibernation_close = true;
+										}
+									} else if attempts > max_attempts
+										|| !is_retryable_ws_error(&err)
 									{
 										tracing::debug!(
 											?attempts,
@@ -1929,79 +1957,79 @@ impl ProxyService {
 
 										break;
 									} else {
-										if !ws_retry {
-											let backoff = ProxyService::calculate_backoff(
-												attempts,
-												initial_interval,
-											);
+										let backoff = ProxyService::calculate_backoff(
+											attempts,
+											initial_interval,
+										);
 
-											tracing::debug!(
-												?backoff,
-												"WebSocket attempt {attempts} failed (service unavailable)"
-											);
+										tracing::debug!(
+											?backoff,
+											"WebSocket attempt {attempts} failed (service unavailable)"
+										);
 
-											tokio::time::sleep(backoff).await;
+										// Apply backoff for retryable error
+										tokio::time::sleep(backoff).await;
+									}
+
+									// Retry route resolution
+									match state
+										.resolve_route(
+											&req_host,
+											&req_path,
+											&req_method,
+											state.port_type.clone(),
+											&req_headers,
+											true,
+										)
+										.await
+									{
+										Ok(ResolveRouteOutput::CustomServe(new_handler)) => {
+											handler = new_handler;
+											continue;
 										}
+										Ok(ResolveRouteOutput::Response(response)) => {
+											ws_handle
+												.send(to_hyper_close(Some(str_to_close_frame(
+													response.message.as_ref(),
+												))))
+												.await?;
 
-										match state
-											.resolve_route(
-												&req_host,
-												&req_path,
-												&req_method,
-												state.port_type.clone(),
-												&req_headers,
-												true,
-											)
-											.await
-										{
-											Ok(ResolveRouteOutput::CustomServe(new_handlers)) => {
-												handlers = new_handlers;
-												continue;
-											}
-											Ok(ResolveRouteOutput::Response(response)) => {
-												ws_handle
-													.send(to_hyper_close(Some(str_to_close_frame(
-														response.message.as_ref(),
-													))))
-													.await?;
+											// Flush to ensure close frame is sent
+											ws_handle.flush().await?;
 
-												// Flush to ensure close frame is sent
-												ws_handle.flush().await?;
+											// Keep TCP connection open briefly to allow client to process close
+											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+										}
+										Ok(ResolveRouteOutput::Target(_)) => {
+											ws_handle
+												.send(to_hyper_close(Some(err_to_close_frame(
+													errors::WebSocketTargetChanged.build(),
+													ray_id,
+												))))
+												.await?;
 
-												// Keep TCP connection open briefly to allow client to process close
-												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
-											}
-											Ok(ResolveRouteOutput::Target(_)) => {
-												ws_handle
-													.send(to_hyper_close(Some(err_to_close_frame(
-														errors::WebSocketTargetChanged.build(),
-														ray_id,
-													))))
-													.await?;
+											// Flush to ensure close frame is sent
+											ws_handle.flush().await?;
 
-												// Flush to ensure close frame is sent
-												ws_handle.flush().await?;
+											// Keep TCP connection open briefly to allow client to process close
+											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 
-												// Keep TCP connection open briefly to allow client to process close
-												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											break;
+										}
+										Err(err) => {
+											ws_handle
+												.send(to_hyper_close(Some(err_to_close_frame(
+													err, ray_id,
+												))))
+												.await?;
 
-												break;
-											}
-											Err(err) => {
-												ws_handle
-													.send(to_hyper_close(Some(err_to_close_frame(
-														err, ray_id,
-													))))
-													.await?;
+											// Flush to ensure close frame is sent
+											ws_handle.flush().await?;
 
-												// Flush to ensure close frame is sent
-												ws_handle.flush().await?;
+											// Keep TCP connection open briefly to allow client to process close
+											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
 
-												// Keep TCP connection open briefly to allow client to process close
-												tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
-
-												break;
-											}
+											break;
 										}
 									}
 								}
@@ -2509,9 +2537,9 @@ fn is_retryable_ws_error(err: &anyhow::Error) -> bool {
 	}
 }
 
-fn is_ws_retry(err: &anyhow::Error) -> bool {
+fn is_ws_hibernate(err: &anyhow::Error) -> bool {
 	if let Some(rivet_err) = err.chain().find_map(|x| x.downcast_ref::<RivetError>()) {
-		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_retry"
+		rivet_err.group() == "guard" && rivet_err.code() == "websocket_service_hibernate"
 	} else {
 		false
 	}
