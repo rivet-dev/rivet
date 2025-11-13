@@ -65,7 +65,9 @@ export function importNodeDependencies(): void {
 			/* webpackIgnore: true */ "node:child_process",
 		);
 		// @ts-ignore
-		nodeStream = requireFn(/* webpackIgnore: true */ "node:stream/promises");
+		nodeStream = requireFn(
+			/* webpackIgnore: true */ "node:stream/promises",
+		);
 
 		hasImportedDependencies = true;
 	} catch (err) {

@@ -35,7 +35,7 @@ export const demo = actor({
 	onDisconnect: (c) => {
 		c.log.info("client disconnected");
 	},
-	onFetch: handleHttpRequest,
+	onRequest: handleHttpRequest,
 	onWebSocket: handleWebSocket,
 	actions: {
 		// Sync actions
