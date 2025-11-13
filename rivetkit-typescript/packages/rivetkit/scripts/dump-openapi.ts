@@ -20,7 +20,7 @@ async function main() {
 	const registry = setup(registryConfig);
 
 	const driverConfig: RunnerConfig = RunnerConfigSchema.parse({
-		driver: await createFileSystemOrMemoryDriver(false),
+		driver: createFileSystemOrMemoryDriver(false),
 		getUpgradeWebSocket: () => () => unimplemented(),
 		inspector: {
 			enabled: false,
@@ -38,6 +38,7 @@ async function main() {
 		proxyWebSocket: unimplemented,
 		displayInformation: unimplemented,
 		getOrCreateInspectorAccessToken: unimplemented,
+		listActors: unimplemented,
 	};
 
 	const client = createClientWithDriver(
