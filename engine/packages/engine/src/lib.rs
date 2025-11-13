@@ -36,6 +36,8 @@ pub enum SubCommand {
 	},
 	/// Allows inspection of UDB data
 	Udb(udb::Opts),
+	/// UDB key utilities
+	UdbKeys(udb_keys::Opts),
 }
 
 impl SubCommand {
@@ -47,6 +49,7 @@ impl SubCommand {
 			SubCommand::Config { command } => command.execute(config).await,
 			SubCommand::Tracing { command } => command.execute(config).await,
 			SubCommand::Udb(opts) => opts.execute(config).await,
+			SubCommand::UdbKeys(opts) => opts.execute(),
 		}
 	}
 }
