@@ -33,8 +33,8 @@ import type {
 import {
 	type ActorDriver,
 	type AnyActorInstance,
+	getInitialActorKvState,
 	type ManagerDriver,
-	serializeEmptyPersistData,
 } from "@/driver-helpers/mod";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
@@ -471,14 +471,11 @@ export class EngineActorDriver implements ActorDriver {
 			KEYS.PERSIST_DATA,
 		]);
 		if (persistDataBuffer === null) {
-			const persistData = serializeEmptyPersistData(input);
-			await this.#runner.kvPut(actorId, [
-				[KEYS.PERSIST_DATA, persistData],
-			]);
+			const initialKvState = getInitialActorKvState(input);
+			await this.#runner.kvPut(actorId, initialKvState);
 			logger().debug({
 				msg: "initialized persist data for new actor",
 				actorId,
-				dataSize: persistData.byteLength,
 			});
 		} else {
 			logger().debug({
