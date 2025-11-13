@@ -62,6 +62,7 @@ https://rivet.dev/changelog/godot-multiplayer-compared-to-unity
 https://rivet.dev/cloud
 https://rivet.dev/docs/actors
 https://rivet.dev/docs/actors/actions
+https://rivet.dev/docs/actors/api-reference
 https://rivet.dev/docs/actors/authentication
 https://rivet.dev/docs/actors/clients
 https://rivet.dev/docs/actors/communicating-between-actors
