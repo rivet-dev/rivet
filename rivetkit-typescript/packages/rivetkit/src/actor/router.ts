@@ -110,7 +110,6 @@ export function createActorRouter(
 		const upgradeWebSocket = runConfig.getUpgradeWebSocket?.();
 		if (upgradeWebSocket) {
 			return upgradeWebSocket(async (c) => {
-				// Parse configuration from Sec-WebSocket-Protocol header
 				const protocols = c.req.header("sec-websocket-protocol");
 				const { encoding, connParams } =
 					parseWebSocketProtocols(protocols);
@@ -165,6 +164,7 @@ export function createActorRouter(
 		});
 
 		return await handleRawRequest(
+			c,
 			correctedRequest,
 			actorDriver,
 			c.env.actorId,
@@ -178,12 +178,16 @@ export function createActorRouter(
 				const url = new URL(c.req.url);
 				const pathWithQuery = c.req.path + url.search;
 
+				const protocols = c.req.header("sec-websocket-protocol");
+				const { connParams } = parseWebSocketProtocols(protocols);
+
 				loggerWithoutContext().debug({
 					msg: "actor router raw websocket",
 					path: c.req.path,
 					url: c.req.url,
 					search: url.search,
 					pathWithQuery,
+					connParams,
 				});
 
 				return await handleRawWebSocket(
@@ -192,6 +196,7 @@ export function createActorRouter(
 					actorDriver,
 					c.env.actorId,
 					undefined,
+					connParams,
 				);
 			})(c, noopNext());
 		} else {
