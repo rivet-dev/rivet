@@ -45,7 +45,7 @@ export function ActorEvents({ actorId }: ActorEventsProps) {
 	// useActorEventsStream(actorId, { enabled: isLive });
 	const [settings] = useActorDetailsSettings();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
 	const { data } = useQuery(actorQueries.actorEventsQueryOptions(actorId));
 	const { onScroll } = useScrollToBottom(ref, [data]);
 

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/correctness/useHookAtTopLevel: guarded by build constant */
 import { useQuery } from "@tanstack/react-query";
 import {
 	createContext,
@@ -10,10 +11,10 @@ import {
 } from "react";
 import { match } from "ts-pattern";
 import { useInspectorCredentials } from "@/app/credentials-context";
-import { assertNonNullable, ls } from "../../lib/utils";
-import { useActor } from "../actor-queries-context";
+import { assertNonNullable } from "../../lib/utils";
 import { useDataProvider, useEngineCompatDataProvider } from "../data-provider";
-import { ActorFeature, type ActorId } from "../queries";
+import { useActorInspector } from "../inspector-context";
+import type { ActorId } from "../queries";
 import { ActorWorkerContainer } from "./actor-worker-container";
 
 export const ActorWorkerContext = createContext<ActorWorkerContainer | null>(
@@ -70,7 +71,6 @@ export const ActorWorkerContextProvider = ({
 
 	const {
 		data: {
-			features,
 			name,
 			endpoint,
 			destroyedAt,
@@ -81,16 +81,11 @@ export const ActorWorkerContextProvider = ({
 	} = useQuery(dataProvider.actorWorkerQueryOptions(actorId));
 	const inspectorToken = useInspectorToken(runner || "");
 
-	const enabled =
-		(features?.includes(ActorFeature.Console) &&
-			!destroyedAt &&
-			!sleepingAt &&
-			!!startedAt) ??
-		false;
+	const enabled = (!destroyedAt && !sleepingAt && !!startedAt) ?? false;
 
-	const actorQueries = useActor();
+	const actorInspector = useActorInspector();
 	const { data: { rpcs } = {} } = useQuery(
-		actorQueries.actorRpcsQueryOptions(actorId, { enabled }),
+		actorInspector.actorRpcsQueryOptions(actorId, { enabled }),
 	);
 
 	const [container] = useState<ActorWorkerContainer>(

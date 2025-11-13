@@ -1,10 +1,12 @@
+import { Rivet } from "@rivetkit/engine-api-full";
 import { Combobox } from "@/components";
-import { CrashPolicy } from "./queries";
 
-const VALUES = Array.from(Object.entries(CrashPolicy)).map(([key, value]) => ({
-	label: key,
-	value,
-}));
+const VALUES = Array.from(Object.entries(Rivet.CrashPolicy)).map(
+	([key, value]) => ({
+		label: key,
+		value,
+	}),
+);
 
 interface CrashPolicySelectProps {
 	onValueChange: (value: string) => void;

@@ -14,7 +14,7 @@ interface ActorStateTabProps {
 export function ActorStateTab({ actorId }: ActorStateTabProps) {
 	const { links } = useActorsView();
 
-	const actorQueries = useActor();
+	const actorQueries = useActorInspector();
 	const {
 		data: state,
 		isError,

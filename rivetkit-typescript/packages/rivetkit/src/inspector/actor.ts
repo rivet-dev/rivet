@@ -1,23 +1,18 @@
-import { sValidator } from "@hono/standard-validator";
-import jsonPatch from "@rivetkit/fast-json-patch";
-import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
-import { createNanoEvents, type Unsubscribe } from "nanoevents";
-import z from "zod/v4";
+import { createMiddleware } from "hono/factory";
+import type { WSContext } from "hono/ws";
+import { createNanoEvents } from "nanoevents";
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,
 } from "@/actor/database";
-import { promiseWithResolvers } from "@/utils";
+import type { ActorDriver } from "@/actor/driver";
+import type { UpgradeWebSocketArgs } from "@/mod";
+import type * as schema from "@/schemas/actor-inspector/mod";
 import {
-	ColumnsSchema,
-	type Connection,
-	ForeignKeysSchema,
-	PatchSchema,
-	type RealtimeEvent,
-	type RecordedRealtimeEvent,
-	TablesSchema,
-} from "./protocol/common";
+	TO_CLIENT_VERSIONED,
+	TO_SERVER_VERSIONED,
+} from "@/schemas/actor-inspector/versioned";
+import type { GetUpgradeWebSocket } from "@/utils";
 
 export type ActorInspectorRouterEnv = {
 	Variables: {
@@ -29,8 +24,47 @@ export type ActorInspectorRouterEnv = {
  * Create a router for the Actor Inspector.
  * @internal
  */
-export function createActorInspectorRouter() {
-	return new Hono<ActorInspectorRouterEnv>()
+export const createActorInspectorRouter = (config: {
+	upgradeWebSocket?: GetUpgradeWebSocket;
+	actorDriver: ActorDriver;
+}) =>
+	createMiddleware(async (c, next) => {
+		const upgradeWebSocket = config.upgradeWebSocket?.();
+
+		if (!upgradeWebSocket) {
+			throw new Error("WebSocket upgrade function is not provided.");
+			// return c.text(
+			// 	"WebSockets are not enabled for this driver, enable them to use the Actor Inspector.",
+			// 	400,
+			// );
+		}
+
+		return upgradeWebSocket(async (c) => {
+			const inspector = (
+				await config.actorDriver.loadActor(c.env.actorId)
+			).inspector;
+
+			if (!inspector) {
+				return c.text("Inspector is not enabled for this actor.", 400);
+			}
+
+			return {
+				onOpen: async (event, ws) => {
+					console.log("onOpen", event, ws);
+				},
+				onMessage: (event: any, ws: WSContext): void => {
+					console.log("onMsg", event, ws);
+				},
+				onClose: (event: any, ws: WSContext): void => {
+					console.log("onClose", event, ws);
+				},
+				onError: (error: any, ws: WSContext): void => {
+					console.log("onError", error, ws);
+				},
+			} satisfies UpgradeWebSocketArgs;
+		})(c, next);
+	});
+/*
 		.get("/ping", (c) => {
 			return c.json({ message: "pong" }, 200);
 		})
@@ -289,8 +323,7 @@ export function createActorInspectorRouter() {
 				);
 				return c.json({ result }, 200);
 			},
-		);
-}
+		);*/
 
 interface ActorInspectorAccessors {
 	isStateEnabled: () => Promise<boolean>;
@@ -306,8 +339,38 @@ interface ActorInspectorAccessors {
 interface ActorInspectorEmitterEvents {
 	stateUpdated: (state: unknown) => void;
 	connectionUpdated: () => void;
-	eventFired: (event: RealtimeEvent) => void;
+	eventFired: (event: EventDetails) => void;
 }
+
+type Connection = Omit<schema.Connection, "details"> & {
+	details: unknown;
+};
+
+type EventDetails =
+	| {
+			type: "action";
+			name: string;
+			args: unknown[];
+			connId: string;
+	  }
+	| {
+			type: "subscribe";
+			eventName: string;
+			connId: string;
+	  }
+	| {
+			type: "unsubscribe";
+			eventName: string;
+			connId: string;
+	  }
+	| {
+			type: "event";
+			eventName: string;
+			args: unknown[];
+			connId: string;
+	  };
+
+type Event = { id: string; timestamp: number } & EventDetails;
 
 /**
  * Provides a unified interface for inspecting actor external and internal state.
@@ -316,23 +379,23 @@ export class ActorInspector {
 	public readonly accessors: ActorInspectorAccessors;
 	public readonly emitter = createNanoEvents<ActorInspectorEmitterEvents>();
 
-	#lastRealtimeEvents: RecordedRealtimeEvent[] = [];
+	#lastEvents: Event[] = [];
 
-	get lastRealtimeEvents() {
-		return this.#lastRealtimeEvents;
+	get lastEvents() {
+		return this.#lastEvents;
 	}
 
 	constructor(accessors: () => ActorInspectorAccessors) {
 		this.accessors = accessors();
 		this.emitter.on("eventFired", (event) => {
-			this.#lastRealtimeEvents.push({
+			this.#lastEvents.push({
 				id: crypto.randomUUID(),
 				timestamp: Date.now(),
 				...event,
 			});
 			// keep the last 100 events
-			if (this.#lastRealtimeEvents.length > 100) {
-				this.#lastRealtimeEvents = this.#lastRealtimeEvents.slice(-100);
+			if (this.#lastEvents.length > 100) {
+				this.#lastEvents = this.#lastEvents.slice(-100);
 			}
 		});
 	}

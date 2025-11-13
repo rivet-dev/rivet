@@ -1,0 +1,183 @@
+# MARK: Message To Server
+
+type OpTest struct {
+	path: str
+	value: data
+}
+
+type OpCopy struct {
+	path: str
+	from: str
+}
+
+type OpMove struct {
+	path: str
+	from: str
+}
+
+type OpReplace struct {
+	path: str
+	value: data
+}
+
+type OpAdd struct {
+	path: str
+	value: data
+}
+
+type OpRemove struct {
+	path: str
+}
+
+type PatchOperation union {
+	OpRemove |
+	OpAdd |
+	OpReplace |
+	OpMove |
+	OpCopy |
+	OpTest
+}
+
+type PatchStateRequest struct {
+ 	operations: list<PatchOperation>
+}
+
+type ClearStateRequest void
+
+type DatabaseQueryRequest struct {
+	id: uint
+	query: str
+	params: data
+}
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: data
+}
+
+type ToServerBody union {
+	PatchStateRequest |
+	ClearStateRequest |
+	DatabaseQueryRequest | 
+	ActionRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: Message To Client
+
+type State data
+
+type Connection struct {
+	id: str
+	details: data
+}
+
+type ActionEvent struct {
+	name: str
+	args: data
+	connId: str
+}
+
+type BroadcastEvent struct {
+	eventName: str
+	args: data
+}
+
+type SubscribeEvent struct {
+	eventName: str
+	connId: str
+}
+
+type UnSubscribeEvent struct {
+	eventName: str
+	connId: str
+}
+
+type FiredEvent struct {
+	eventName: str
+	args: data
+	connId: str
+}
+
+type EventBody union {
+	ActionEvent |
+	BroadcastEvent |
+	SubscribeEvent |
+	UnSubscribeEvent |
+	FiredEvent
+}
+
+type Event struct {
+	id: str
+	timestamp: uint
+	body: EventBody
+}
+
+type Init struct {
+	connections: list<Connection>
+	events: list<Event>
+	state: State
+	rpcs: list<str>
+}
+
+type ConnectionsResponse struct {
+	connections: list<Connection>
+}
+
+type StateResponse struct {
+	state: State
+}
+
+type DatabaseColumn struct {
+	name: str
+	type: str
+}
+
+type DatabaseForeignKey struct {
+	id: str
+	table: str
+	from: str
+	to: str
+}
+
+type DatabaseTable struct {
+	name: str
+	schema: data
+	type: str
+	columns: list<DatabaseColumn>
+	foreignKeys: list<DatabaseForeignKey>
+	records: uint
+}
+
+type DatabaseResponse struct {
+	tables: list<DatabaseTable>
+}
+
+type DatabaseQueryResponse data
+
+type ActionResponse struct {
+	id: uint
+	output: data
+}
+
+type Error struct {
+	message: str
+}
+
+type ToClientBody union {
+	StateResponse |
+	ConnectionsResponse |
+	DatabaseResponse |
+	DatabaseQueryResponse |
+	ActionResponse |
+	Error |
+	Init
+}
+
+type ToClient struct {
+	body: ToClientBody
+}

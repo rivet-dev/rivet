@@ -1,10 +1,10 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
-import {
+import type {
 	Hono,
-	type Context as HonoContext,
-	type MiddlewareHandler,
-	type Next,
+	Context as HonoContext,
+	MiddlewareHandler,
+	Next,
 } from "hono";
 import { createMiddleware } from "hono/factory";
 import invariant from "invariant";
@@ -231,24 +231,6 @@ function addManagerRoutes(
 	managerDriver: ManagerDriver,
 	router: OpenAPIHono,
 ) {
-	// TODO(kacper): Remove this in favor of standard manager API
-	// Inspector
-	if (isInspectorEnabled(runConfig, "manager")) {
-		if (!managerDriver.inspector) {
-			throw new Unsupported("inspector");
-		}
-		router.route(
-			"/inspect",
-			new Hono<{ Variables: { inspector: any } }>()
-				.use(secureInspector(runConfig))
-				.use((c, next) => {
-					c.set("inspector", managerDriver.inspector!);
-					return next();
-				})
-				.route("/", createManagerInspectorRouter()),
-		);
-	}
-
 	// Actor gateway
 	router.use("*", actorGateway.bind(undefined, runConfig, managerDriver));
 
