@@ -1,9 +1,9 @@
-import { type ActorContext, actor } from "rivetkit";
+import { actor, type RequestContext } from "rivetkit";
 
 export const rawHttpRequestPropertiesActor = actor({
 	actions: {},
 	onRequest(
-		ctx: ActorContext<any, any, any, any, any, any>,
+		ctx: RequestContext<any, any, any, any, any, any>,
 		request: Request,
 	) {
 		// Extract all relevant Request properties
