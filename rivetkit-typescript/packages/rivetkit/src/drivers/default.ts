@@ -7,9 +7,7 @@ import type { DriverConfig, RunnerConfig } from "@/registry/run-config";
 /**
  * Chooses the appropriate driver based on the run configuration.
  */
-export async function chooseDefaultDriver(
-	runConfig: RunnerConfig,
-): Promise<DriverConfig> {
+export function chooseDefaultDriver(runConfig: RunnerConfig): DriverConfig {
 	if (runConfig.endpoint && runConfig.driver) {
 		throw new UserError(
 			"Cannot specify both 'endpoint' and 'driver' in configuration",
@@ -33,5 +31,5 @@ export async function chooseDefaultDriver(
 	}
 
 	loggerWithoutContext().debug({ msg: "using default file system driver" });
-	return await createFileSystemOrMemoryDriver(true);
+	return createFileSystemOrMemoryDriver(true);
 }
