@@ -30,7 +30,7 @@ pub enum IdError {
 	UnsupportedVersion(u8),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Id {
 	V1([u8; 18]),
 }

@@ -11,7 +11,7 @@ pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
 
 use crate::{
 	ctx::OperationCtx,
-	db::{DatabaseHandle, WorkflowData},
+	db::{BumpSubSubject, DatabaseHandle, WorkflowData},
 	error::WorkflowError,
 	operation::{Operation, OperationInput},
 	utils::tags::AsTags,
@@ -26,7 +26,9 @@ pub async fn wait_for_workflow_output<W: Workflow>(
 ) -> Result<W::Output> {
 	tracing::debug!(?workflow_id, "waiting for workflow");
 
-	let mut bump_sub = db.bump_sub().await?;
+	let mut bump_sub = db
+		.bump_sub(BumpSubSubject::WorkflowComplete { workflow_id })
+		.await?;
 	let mut interval = tokio::time::interval(db.sub_workflow_poll_interval());
 
 	// Skip first tick, we wait after the db call instead of before

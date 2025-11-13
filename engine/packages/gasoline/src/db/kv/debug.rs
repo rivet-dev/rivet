@@ -18,10 +18,13 @@ use universaldb::{
 
 use super::{DatabaseKv, keys, update_metric};
 use crate::{
-	db::debug::{
-		ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
-		MessageSendEvent, SignalData, SignalEvent, SignalSendEvent, SignalState, SubWorkflowEvent,
-		WorkflowData, WorkflowState,
+	db::{
+		BumpSubSubject,
+		debug::{
+			ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
+			MessageSendEvent, SignalData, SignalEvent, SignalSendEvent, SignalState,
+			SubWorkflowEvent, WorkflowData, WorkflowState,
+		},
 	},
 	error::{WorkflowError, WorkflowResult},
 	history::{
@@ -54,7 +57,7 @@ impl DatabaseKv {
 			let output_subspace = self.subspace.subspace(&output_key);
 			let error_key = keys::workflow::ErrorKey::new(workflow_id);
 			let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
-			let worker_instance_id_key = keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+			let worker_id_key = keys::workflow::WorkerIdKey::new(workflow_id);
 			let silence_ts_key = keys::workflow::SilenceTsKey::new(workflow_id);
 
 			let (
@@ -66,7 +69,7 @@ impl DatabaseKv {
 				output_chunks,
 				error_entry,
 				has_wake_condition_entry,
-				worker_instance_id_entry,
+				worker_id_entry,
 				silence_ts_entry,
 			) = tokio::try_join!(
 				tx.get_ranges_keyvalues(
@@ -111,7 +114,7 @@ impl DatabaseKv {
 				.try_collect::<Vec<_>>(),
 				tx.get(&self.subspace.pack(&error_key), Snapshot),
 				tx.get(&self.subspace.pack(&has_wake_condition_key), Snapshot),
-				tx.get(&self.subspace.pack(&worker_instance_id_key), Snapshot),
+				tx.get(&self.subspace.pack(&worker_id_key), Snapshot),
 				tx.get(&self.subspace.pack(&silence_ts_key), Snapshot),
 			)?;
 
@@ -148,7 +151,7 @@ impl DatabaseKv {
 				WorkflowState::Silenced
 			} else if output.is_some() {
 				WorkflowState::Complete
-			} else if worker_instance_id_entry.is_some() {
+			} else if worker_id_entry.is_some() {
 				WorkflowState::Running
 			} else if has_wake_condition_entry.is_some() {
 				WorkflowState::Sleeping
@@ -362,7 +365,7 @@ impl DatabaseDebug for DatabaseKv {
 							}
 						} else if let Ok(_) = self
 							.subspace
-							.unpack::<keys::workflow::WorkerInstanceIdKey>(entry.key())
+							.unpack::<keys::workflow::WorkerIdKey>(entry.key())
 						{
 							match state {
 								Some(WorkflowState::Running) => state_matches = true,
@@ -425,8 +428,7 @@ impl DatabaseDebug for DatabaseKv {
 							.subspace
 							.subspace(&keys::workflow::TagKey::subspace(workflow_id));
 						let name_key = keys::workflow::NameKey::new(workflow_id);
-						let worker_instance_id_key =
-							keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+						let worker_id_key = keys::workflow::WorkerIdKey::new(workflow_id);
 						let output_key = keys::workflow::OutputKey::new(workflow_id);
 						let output_subspace = self.subspace.subspace(&output_key);
 						let has_wake_condition_key =
@@ -509,7 +511,7 @@ impl DatabaseDebug for DatabaseKv {
 							})
 							.try_collect::<Vec<_>>(),
 							async {
-								tx.get(&self.subspace.pack(&worker_instance_id_key), Serializable)
+								tx.get(&self.subspace.pack(&worker_id_key), Serializable)
 									.await
 									.map(|x| x.is_some())
 							},
@@ -645,8 +647,7 @@ impl DatabaseDebug for DatabaseKv {
 
 					for workflow_id in workflow_ids {
 						let name_key = keys::workflow::NameKey::new(workflow_id);
-						let worker_instance_id_key =
-							keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+						let worker_id_key = keys::workflow::WorkerIdKey::new(workflow_id);
 						let has_wake_condition_key =
 							keys::workflow::HasWakeConditionKey::new(workflow_id);
 						let error_key = keys::workflow::ErrorKey::new(workflow_id);
@@ -663,7 +664,7 @@ impl DatabaseDebug for DatabaseKv {
 							error,
 						) = tokio::try_join!(
 							tx.read(&name_key, Serializable),
-							tx.exists(&worker_instance_id_key, Serializable),
+							tx.exists(&worker_id_key, Serializable),
 							tx.exists(&has_wake_condition_key, Serializable),
 							tx.exists(&silence_ts_key, Serializable),
 							async {
@@ -718,7 +719,7 @@ impl DatabaseDebug for DatabaseKv {
 			.instrument(tracing::info_span!("wake_workflows_tx"))
 			.await?;
 
-		self.bump_workers();
+		self.bump(BumpSubSubject::Worker);
 
 		Ok(())
 	}

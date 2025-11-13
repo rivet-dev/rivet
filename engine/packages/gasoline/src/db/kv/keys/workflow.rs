@@ -20,7 +20,7 @@ impl LeaseKey {
 }
 
 impl FormalKey for LeaseKey {
-	/// Workflow name, worker instance id.
+	/// Workflow name, worker id.
 	type Value = (String, Id);
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
@@ -1059,17 +1059,17 @@ impl<'de> TupleUnpack<'de> for HasWakeConditionKey {
 }
 
 #[derive(Debug)]
-pub struct WorkerInstanceIdKey {
+pub struct WorkerIdKey {
 	pub workflow_id: Id,
 }
 
-impl WorkerInstanceIdKey {
+impl WorkerIdKey {
 	pub fn new(workflow_id: Id) -> Self {
-		WorkerInstanceIdKey { workflow_id }
+		WorkerIdKey { workflow_id }
 	}
 }
 
-impl FormalKey for WorkerInstanceIdKey {
+impl FormalKey for WorkerIdKey {
 	type Value = Id;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
@@ -1081,28 +1081,26 @@ impl FormalKey for WorkerInstanceIdKey {
 	}
 }
 
-impl TuplePack for WorkerInstanceIdKey {
+impl TuplePack for WorkerIdKey {
 	fn pack<W: std::io::Write>(
 		&self,
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (WORKFLOW, DATA, self.workflow_id, WORKER_INSTANCE_ID);
+		let t = (WORKFLOW, DATA, self.workflow_id, WORKER_ID);
 		t.pack(w, tuple_depth)
 	}
 }
 
-impl<'de> TupleUnpack<'de> for WorkerInstanceIdKey {
+impl<'de> TupleUnpack<'de> for WorkerIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
 			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
-		if data != WORKER_INSTANCE_ID {
-			return Err(PackError::Message(
-				"expected WORKER_INSTANCE_ID data".into(),
-			));
+		if data != WORKER_ID {
+			return Err(PackError::Message("expected WORKER_ID data".into()));
 		}
 
-		let v = WorkerInstanceIdKey { workflow_id };
+		let v = WorkerIdKey { workflow_id };
 
 		Ok((input, v))
 	}
