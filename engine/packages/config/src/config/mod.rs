@@ -13,6 +13,7 @@ pub mod guard;
 pub mod logs;
 pub mod pegboard;
 pub mod pubsub;
+pub mod runtime;
 pub mod telemetry;
 pub mod topology;
 pub mod vector;
@@ -27,6 +28,7 @@ pub use guard::*;
 pub use logs::*;
 pub use pegboard::*;
 pub use pubsub::PubSub;
+pub use runtime::*;
 pub use telemetry::*;
 pub use topology::*;
 pub use vector::*;
@@ -102,7 +104,7 @@ pub struct Root {
 	pub telemetry: Telemetry,
 
 	#[serde(default)]
-	pub allow_version_rollback: bool,
+	pub runtime: Runtime,
 }
 
 impl Default for Root {
@@ -121,7 +123,7 @@ impl Default for Root {
 			clickhouse: None,
 			vector_http: None,
 			telemetry: Default::default(),
-			allow_version_rollback: false,
+			runtime: Default::default(),
 		}
 	}
 }

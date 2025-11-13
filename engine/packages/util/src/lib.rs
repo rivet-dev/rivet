@@ -12,7 +12,6 @@ pub mod geo;
 pub mod math;
 pub mod req;
 pub mod serde;
-pub mod signal;
 pub mod size;
 pub mod sort;
 pub mod timestamp;
