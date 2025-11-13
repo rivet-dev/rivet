@@ -25,6 +25,7 @@ import {
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
 	HEADER_ACTOR_ID,
+	type ListActorsInput,
 	type ManagerDisplayInformation,
 	type ManagerDriver,
 } from "@/driver-helpers/mod";
@@ -72,6 +73,9 @@ export function createTestInlineClientDriver(
 			return makeInlineRequest(endpoint, encoding, "createActor", [
 				input,
 			]);
+		},
+		listActors(input: ListActorsInput): Promise<ActorOutput[]> {
+			return makeInlineRequest(endpoint, encoding, "listActors", [input]);
 		},
 		async sendRequest(
 			actorId: string,
