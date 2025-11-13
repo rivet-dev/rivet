@@ -1,6 +1,6 @@
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
-import { generateConnRequestId } from "@/actor/conn";
+import { generateConnRequestId } from "@/actor/conn/mod";
 import { type ActorRouter, createActorRouter } from "@/actor/router";
 import {
 	handleRawWebSocketHandler,
