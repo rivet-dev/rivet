@@ -26,7 +26,7 @@ pub async fn wait_for_workflow_output<W: Workflow>(
 ) -> Result<W::Output> {
 	tracing::debug!(?workflow_id, "waiting for workflow");
 
-	let mut wake_sub = db.wake_sub().await?;
+	let mut bump_sub = db.bump_sub().await?;
 	let mut interval = tokio::time::interval(db.sub_workflow_poll_interval());
 
 	// Skip first tick, we wait after the db call instead of before
@@ -47,7 +47,7 @@ pub async fn wait_for_workflow_output<W: Workflow>(
 
 			// Poll and wait for a wake at the same time
 			tokio::select! {
-				_ = wake_sub.next() => {},
+				_ = bump_sub.next() => {},
 				_ = interval.tick() => {},
 			}
 		}

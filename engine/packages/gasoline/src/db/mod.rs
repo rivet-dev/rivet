@@ -30,12 +30,12 @@ pub trait Database: Send {
 
 	// MARK: Const fns
 
-	/// How often to pull workflows when polling. This runs alongside a wake sub.
+	/// How often to pull workflows when polling. This runs alongside a bump sub.
 	fn worker_poll_interval(&self) -> Duration {
 		Duration::from_secs(90)
 	}
 
-	/// Poll interval when polling for signals in-process. This runs alongside a wake sub.
+	/// Poll interval when polling for signals in-process. This runs alongside a bump sub.
 	fn signal_poll_interval(&self) -> Duration {
 		Duration::from_millis(500)
 	}
@@ -45,7 +45,7 @@ pub trait Database: Send {
 		4
 	}
 
-	/// Poll interval when polling for a sub workflow in-process. This runs alongside a wake sub.
+	/// Poll interval when polling for a sub workflow in-process. This runs alongside a bump sub.
 	fn sub_workflow_poll_interval(&self) -> Duration {
 		Duration::from_millis(500)
 	}
@@ -59,7 +59,7 @@ pub trait Database: Send {
 
 	/// This function returns a subscription which should resolve once the worker should fetch the database
 	/// again.
-	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>>;
+	async fn bump_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>>;
 
 	/// Updates the last ping ts for this worker.
 	async fn update_worker_ping(&self, worker_instance_id: Id) -> WorkflowResult<()>;

@@ -716,7 +716,7 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal");
 
-			let mut wake_sub = self.db.wake_sub().await?;
+			let mut bump_sub = self.db.bump_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -742,7 +742,7 @@ impl WorkflowCtx {
 
 				// Poll and wait for a wake at the same time
 				tokio::select! {
-					_ = wake_sub.next() => {},
+					_ = bump_sub.next() => {},
 					_ = interval.tick() => {},
 					res = self.wait_stop() => res?,
 				}
@@ -779,7 +779,7 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal");
 
-			let mut wake_sub = self.db.wake_sub().await?;
+			let mut bump_sub = self.db.bump_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -805,7 +805,7 @@ impl WorkflowCtx {
 
 				// Poll and wait for a wake at the same time
 				tokio::select! {
-					_ = wake_sub.next() => {},
+					_ = bump_sub.next() => {},
 					_ = interval.tick() => {},
 					res = self.wait_stop() => res?,
 				}
@@ -1186,7 +1186,7 @@ impl WorkflowCtx {
 				(async {
 					tracing::debug!("listening for signal with timeout");
 
-					let mut wake_sub = self.db.wake_sub().await?;
+					let mut bump_sub = self.db.bump_sub().await?;
 					let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -1206,7 +1206,7 @@ impl WorkflowCtx {
 
 						// Poll and wait for a wake at the same time
 						tokio::select! {
-							_ = wake_sub.next() => {},
+							_ = bump_sub.next() => {},
 							_ = interval.tick() => {},
 							res = self.wait_stop() => res?,
 						}
@@ -1229,7 +1229,7 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal with timeout");
 
-			let mut wake_sub = self.db.wake_sub().await?;
+			let mut bump_sub = self.db.bump_sub().await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1257,7 +1257,7 @@ impl WorkflowCtx {
 
 				// Poll and wait for a wake at the same time
 				tokio::select! {
-					_ = wake_sub.next() => {},
+					_ = bump_sub.next() => {},
 					_ = interval.tick() => {},
 					res = self.wait_stop() => res?,
 				}

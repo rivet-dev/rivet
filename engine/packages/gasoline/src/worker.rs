@@ -14,7 +14,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use crate::{ctx::WorkflowCtx, db::DatabaseHandle, error::WorkflowError, registry::RegistryHandle};
 
 /// How often to run gc and update ping.
-const PING_INTERVAL: Duration = Duration::from_secs(20);
+const PING_INTERVAL: Duration = Duration::from_secs(10);
 /// How often to publish metrics.
 const METRICS_INTERVAL: Duration = Duration::from_secs(20);
 /// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
@@ -57,7 +57,7 @@ impl Worker {
 		}
 	}
 
-	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
+	/// Polls the database periodically or wakes immediately when `Database::bump_sub` finishes
 	#[tracing::instrument(skip_all, fields(worker_instance_id=%self.worker_instance_id))]
 	pub async fn start(mut self, mut shutdown_rx: Option<watch::Receiver<()>>) -> Result<()> {
 		tracing::debug!(
@@ -67,7 +67,7 @@ impl Worker {
 
 		let cache = rivet_cache::CacheInner::from_env(&self.config, self.pools.clone())?;
 
-		let mut wake_sub = { self.db.wake_sub().await? };
+		let mut bump_sub = { self.db.bump_sub().await? };
 
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -89,7 +89,7 @@ impl Worker {
 
 			tokio::select! {
 				_ = tick_interval.tick() => {},
-				res = wake_sub.next() => {
+				res = bump_sub.next() => {
 					if res.is_none() {
 						break Err(WorkflowError::SubscriptionUnsubscribed.into());
 					}
