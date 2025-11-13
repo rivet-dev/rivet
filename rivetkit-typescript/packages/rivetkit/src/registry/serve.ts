@@ -9,12 +9,13 @@ export async function crossPlatformServe(
 ) {
 	const app = userRouter ?? new Hono();
 
-	// Import @hono/node-server
+	// Import @hono/node-server using string variable to prevent static analysis
+	const nodeServerModule = "@hono/node-server";
 	let serve: any;
 	try {
 		const dep = await import(
 			/* webpackIgnore: true */
-			"@hono/node-server"
+			nodeServerModule
 		);
 		serve = dep.serve;
 	} catch (err) {
@@ -28,12 +29,13 @@ export async function crossPlatformServe(
 	// app.route("/registry", rivetKitRouter);
 	app.route("/", rivetKitRouter);
 
-	// Import @hono/node-ws
+	// Import @hono/node-ws using string variable to prevent static analysis
+	const nodeWsModule = "@hono/node-ws";
 	let createNodeWebSocket: any;
 	try {
 		const dep = await import(
 			/* webpackIgnore: true */
-			"@hono/node-ws"
+			nodeWsModule
 		);
 		createNodeWebSocket = dep.createNodeWebSocket;
 	} catch (err) {
