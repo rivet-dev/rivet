@@ -2,12 +2,12 @@
 
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { EXAMPLE_METADATA } from './examplesData.mjs';
 
-const REPO_URL = 'https://github.com/rivet-dev/rivetkit.git';
-const BRANCH = 'main';
-const TEMP_DIR = '/tmp/rivetkit-examples';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const EXAMPLES_DIR = join(__dirname, '../../examples');
 const TEMP_EXAMPLE_DIR = '/tmp/rivet-example-temp';
 const OUTPUT_DIR = './src/data/examples';
 const OUTPUT_FILE = 'examples.ts';
@@ -17,57 +17,78 @@ if (!existsSync(OUTPUT_DIR)) {
   mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
-// Clone or update the repository
-function updateRepo() {
-  if (existsSync(TEMP_DIR)) {
-    console.log('Updating existing repository...');
-    execSync('git clean -fd', { cwd: TEMP_DIR });
-    execSync('git reset --hard', { cwd: TEMP_DIR });
-    execSync('git fetch origin', { cwd: TEMP_DIR });
-    execSync(`git checkout ${BRANCH}`, { cwd: TEMP_DIR });
-    execSync(`git pull origin ${BRANCH}`, { cwd: TEMP_DIR });
-  } else {
-    console.log('Cloning repository...');
-    execSync(`git clone -b ${BRANCH} ${REPO_URL} ${TEMP_DIR}`);
+// Verify examples directory exists
+function verifyExamplesDir() {
+  if (!existsSync(EXAMPLES_DIR)) {
+    throw new Error(`Examples directory not found at ${EXAMPLES_DIR}`);
+  }
+  console.log(`Using examples from: ${EXAMPLES_DIR}`);
+}
+
+// Get latest version from npm
+function getLatestVersion(packageName) {
+  try {
+    const result = execSync(`npm view ${packageName} version`, { encoding: 'utf-8' });
+    return result.trim();
+  } catch (error) {
+    console.warn(`Warning: Could not fetch version for ${packageName}, using ^0.9.1`);
+    return '0.9.1';
   }
 }
 
-// Replace workspace dependencies with version numbers
+// Cache for npm versions to avoid repeated lookups
+const versionCache = {};
+
+// Replace workspace dependencies with latest npm versions
 function replaceWorkspaceDependencies(content) {
-  return content
-    .replace(/@rivetkit\/([^"]+)": "workspace:\*"/g, '@rivetkit/$1": "^0.9.1"')
-    .replace(/"workspace:\*"/g, '"^0.9.1"');
+  const packageJson = JSON.parse(content);
+
+  // Process both dependencies and devDependencies
+  for (const depType of ['dependencies', 'devDependencies']) {
+    if (packageJson[depType]) {
+      for (const [pkgName, pkgVersion] of Object.entries(packageJson[depType])) {
+        if (pkgVersion === 'workspace:*') {
+          // Get version from cache or fetch from npm
+          if (!versionCache[pkgName]) {
+            console.log(`Fetching latest version for ${pkgName}...`);
+            versionCache[pkgName] = getLatestVersion(pkgName);
+          }
+          packageJson[depType][pkgName] = `^${versionCache[pkgName]}`;
+        }
+      }
+    }
+  }
+
+  return JSON.stringify(packageJson, null, '\t');
 }
 
 // Get only the examples defined in metadata
 function getExamplesToProcess() {
-  const examplesDir = join(TEMP_DIR, 'examples');
-  
-  if (!existsSync(examplesDir)) {
+  if (!existsSync(EXAMPLES_DIR)) {
     throw new Error('Examples directory not found');
   }
-  
+
   const definedExamples = Object.keys(EXAMPLE_METADATA);
   const availableExamples = [];
-  
+
   // Check which defined examples actually exist in the repository
   for (const exampleName of definedExamples) {
-    const examplePath = join(examplesDir, exampleName);
+    const examplePath = join(EXAMPLES_DIR, exampleName);
     if (existsSync(examplePath)) {
       availableExamples.push(exampleName);
     } else {
       throw new Error(`Example defined in metadata but not found in repo: ${exampleName}`);
     }
   }
-  
+
   console.log(`Processing ${availableExamples.length} examples: ${availableExamples.join(', ')}`);
   return availableExamples;
 }
 
 // Copy example to temp folder, install dependencies, then process files
 function processExample(exampleName) {
-  const exampleDir = join(TEMP_DIR, 'examples', exampleName);
-  
+  const exampleDir = join(EXAMPLES_DIR, exampleName);
+
   if (!existsSync(exampleDir)) {
     throw new Error(`Example directory not found: ${exampleName}`);
   }
@@ -95,14 +116,14 @@ function processExample(exampleName) {
   // Run npm install to generate lockfile
   console.log(`Running npm install for ${exampleName}...`);
   try {
-    execSync('npm install', { 
+    execSync('npm install', {
       cwd: tempExampleDir,
-      stdio: 'inherit' 
+      stdio: 'inherit'
     });
   } catch (error) {
     throw new Error(`npm install failed for ${exampleName}: ${error.message}`);
   }
-  
+
   // Remove node_modules after npm install
   console.log(`Removing node_modules for ${exampleName}...`);
   const nodeModulesPath = join(tempExampleDir, 'node_modules');
@@ -166,15 +187,15 @@ function processExample(exampleName) {
 // Main function
 function main() {
   console.log('Generating examples...');
-  
-  // Update the repository
-  updateRepo();
-  
+
+  // Verify examples directory exists
+  verifyExamplesDir();
+
   // Ensure temp example directory exists
   if (!existsSync(TEMP_EXAMPLE_DIR)) {
     mkdirSync(TEMP_EXAMPLE_DIR, { recursive: true });
   }
-  
+
   // Get examples to process (only those defined in metadata)
   const exampleNames = getExamplesToProcess();
   

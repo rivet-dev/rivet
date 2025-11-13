@@ -111,24 +111,49 @@ export const sitemap = [
 				]
 			},
 			{
-				title: "Use Cases",
+				title: "Quickstart",
 				pages: [
-					...useCases.slice(0, 3).map(({ title, href, icon }) => ({
-						title,
-						href,
-						icon,
-					})),
 					{
-						title: "More",
-						collapsible: true,
-						pages: useCases.slice(3).map(({ title, href, icon }) => ({
-							title,
-							href,
-							icon,
-						})),
+						title: "Node.js & Bun",
+						href: "/docs/actors/quickstart/backend",
+						icon: faNodeJs,
+					},
+					{
+						title: "React",
+						href: "/docs/actors/quickstart/react",
+						icon: faReact,
+					},
+					{
+						title: "Next.js",
+						href: "/docs/actors/quickstart/next-js",
+						icon: faNextjs,
+					},
+					{
+						title: "Cloudflare Workers",
+						href: "/docs/actors/quickstart/cloudflare-workers",
+						icon: faCloudflare,
 					},
 				],
 			},
+			// {
+			// 	title: "Use Cases",
+			// 	pages: [
+			// 		...useCases.slice(0, 3).map(({ title, href, icon }) => ({
+			// 			title,
+			// 			href,
+			// 			icon,
+			// 		})),
+			// 		{
+			// 			title: "More",
+			// 			collapsible: true,
+			// 			pages: useCases.slice(3).map(({ title, href, icon }) => ({
+			// 				title,
+			// 				href,
+			// 				icon,
+			// 			})),
+			// 		},
+			// 	],
+			// },
 			{
 				title: "Concepts",
 				pages: [
@@ -326,47 +351,6 @@ export const sitemap = [
 					// 	href: "/docs/general/system-architecture",
 					// 	icon: faLayerGroup,
 					// },
-				],
-			},
-		],
-	},
-	{
-		title: "Quickstart",
-		href: "/docs/quickstart",
-		sidebar: [
-			{
-				title: "General",
-				pages: [
-					{
-						title: "Overview",
-						href: "/docs/quickstart",
-						icon: faForward,
-					},
-				],
-			},
-			{
-				title: "Guides",
-				pages: [
-					{
-						title: "Node.js & Bun",
-						href: "/docs/actors/quickstart/backend",
-						icon: faNodeJs,
-					},
-					{
-						title: "React",
-						href: "/docs/actors/quickstart/react",
-						icon: faReact,
-					},
-					{
-						title: "Next.js",
-						href: "/docs/actors/quickstart/next-js",
-						icon: faNextjs,
-					},
-					{
-						title: "Cloudflare Workers",
-						href: "/docs/actors/quickstart/cloudflare-workers",
-						icon: faCloudflare,
-					},
 				],
 			},
 		],
