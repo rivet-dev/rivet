@@ -1,5 +1,6 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import { ToClientSchema } from "@/actor/client-protocol-schema-json/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -522,6 +523,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					},
 				},
 				TO_CLIENT_VERSIONED,
+				ToClientSchema,
 			),
 		);
 
