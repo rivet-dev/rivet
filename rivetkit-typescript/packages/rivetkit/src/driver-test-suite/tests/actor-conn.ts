@@ -1,5 +1,4 @@
 import { describe, expect, test, vi } from "vitest";
-import { SSE_PING_INTERVAL } from "@/actor/router-endpoints";
 import type { DriverTestConfig } from "../mod";
 import { FAKE_TIME, setupDriverTest, waitFor } from "../utils";
 
@@ -247,10 +246,7 @@ export function runActorConnTests(driverTestConfig: DriverTestConfig) {
 		});
 
 		describe("Lifecycle Hooks", () => {
-			test.skipIf(
-				driverTestConfig.transport === "sse" &&
-					driverTestConfig.clientType === "inline",
-			)("should trigger lifecycle hooks", async (c) => {
+			test("should trigger lifecycle hooks", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				// Create and connect

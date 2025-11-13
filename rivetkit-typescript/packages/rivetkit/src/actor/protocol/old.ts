@@ -19,13 +19,6 @@ import { ActionContext } from "../action";
 import type { Conn } from "../conn";
 import type { ActorInstance } from "../instance";
 
-export const TransportSchema = z.enum(["websocket", "sse"]);
-
-/**
- * Transport mechanism used to communicate between client & actor.
- */
-export type Transport = z.infer<typeof TransportSchema>;
-
 interface MessageEventOpts {
 	encoding: Encoding;
 	maxIncomingMessageSize: number;

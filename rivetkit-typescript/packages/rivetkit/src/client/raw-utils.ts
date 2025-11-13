@@ -1,5 +1,5 @@
 import invariant from "invariant";
-import { PATH_RAW_WEBSOCKET_PREFIX } from "@/common/actor-router-consts";
+import { PATH_WEBSOCKET_PREFIX } from "@/common/actor-router-consts";
 import { deconstructError } from "@/common/utils";
 import { HEADER_CONN_PARAMS, type ManagerDriver } from "@/driver-helpers/mod";
 import type { ActorQuery } from "@/manager/protocol/query";
@@ -69,7 +69,7 @@ export async function rawHttpFetch(
 
 		// Build the URL with normalized path
 		const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
-		const url = new URL(`http://actor/raw/http/${normalizedPath}`);
+		const url = new URL(`http://actor/request/${normalizedPath}`);
 
 		// Forward conn params if provided
 		const proxyRequestHeaders = new Headers(mergedInit.headers);
@@ -132,7 +132,7 @@ export async function rawWebSocket(
 		}
 	}
 
-	const fullPath = `${PATH_RAW_WEBSOCKET_PREFIX}${pathPortion}${queryPortion}`;
+	const fullPath = `${PATH_WEBSOCKET_PREFIX}${pathPortion}${queryPortion}`;
 
 	logger().debug({
 		msg: "opening websocket",

@@ -1,4 +1,3 @@
-export { generateConnId, generateConnToken } from "@/actor/conn";
 export * from "@/actor/mod";
 export {
 	type AnyClient,

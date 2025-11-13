@@ -25,13 +25,7 @@ import {
 } from "@/utils";
 import { ActionContext } from "./action";
 import type { ActorConfig, OnConnectOptions } from "./config";
-import {
-	Conn,
-	type ConnId,
-	generateConnId,
-	generateConnRequestId,
-	generateConnToken,
-} from "./conn";
+import { Conn, type ConnId, generateConnRequestId } from "./conn";
 import {
 	CONN_DRIVERS,
 	type ConnDriver,
@@ -200,7 +194,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB>>();
 	#subscriptionIndex = new Map<string, Set<Conn<S, CP, CS, V, I, DB>>>();
-	#checkConnLivenessInterval?: NodeJS.Timeout;
 
 	#sleepTimeout?: NodeJS.Timeout;
 
@@ -240,7 +233,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						id,
 						params: conn.params as any,
 						state: conn.__stateEnabled ? conn.state : undefined,
-						status: conn.status,
 						subscriptions: conn.subscriptions.size,
 						lastSeen: conn.lastSeen,
 						stateEnabled: conn.__stateEnabled,
@@ -427,25 +419,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Must be called after setting `#ready` or else it will not schedule sleep
 		this.#resetSleepTimer();
-
-		// Start conn liveness interval
-		//
-		// Check for liveness immediately since we may have connections that
-		// were in `reconnecting` state when the actor went to sleep that we
-		// need to purge.
-		//
-		// We don't use alarms for connection liveness since alarms require
-		// durability & are expensive. Connection liveness is safe to assume
-		// it only needs to be ran while the actor is awake and does not need
-		// to manually wake the actor. The only case this is not true is if the
-		// connection liveness timeout is greater than the actor sleep timeout
-		// OR if the actor is manually put to sleep. In this case, the connections
-		// will be stuck in a `reconnecting` state until the actor is awaken again.
-		this.#checkConnLivenessInterval = setInterval(
-			this.#checkConnectionsLiveness.bind(this),
-			this.#config.options.connectionLivenessInterval,
-		);
-		this.#checkConnectionsLiveness();
 
 		// Trigger any pending alarms
 		await this._onAlarm();
@@ -904,7 +877,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	/**
-	 * Call when conn is disconnected. Used by transports.
+	 * Call when conn is disconnected.
 	 *
 	 * If a clean diconnect, will be removed immediately.
 	 *
@@ -1016,11 +989,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// biome-ignore lint/suspicious/noExplicitAny: TypeScript bug with ExtractActorConnParams<this>,
 		params: any,
 		request?: Request,
-		connectionId?: string,
-		connectionToken?: string,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
 		this.#assertReady();
 
+		// TODO: Remove this for ws hibernation v2 since we don't receive an open message for ws
 		// Check for hibernatable websocket reconnection
 		if (socket.requestIdBuf && socket.hibernatable) {
 			this.rLog.debug({
@@ -1089,80 +1061,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			}
 		}
 
-		// If connection ID and token are provided, try to reconnect
-		if (connectionId && connectionToken) {
-			this.rLog.debug({
-				msg: "checking for existing connection",
-				connectionId,
-			});
-			const existingConn = this.#connections.get(connectionId);
-			if (existingConn && existingConn._token === connectionToken) {
-				// This is a valid reconnection
-				this.rLog.debug({
-					msg: "reconnecting existing connection",
-					connectionId,
-				});
-
-				// If there's an existing driver state, clean it up without marking as clean disconnect
-				if (existingConn.__driverState) {
-					const driverKind = getConnDriverKindFromState(
-						existingConn.__driverState,
-					);
-					const driver = CONN_DRIVERS[driverKind];
-					if (driver.disconnect) {
-						// Call driver disconnect to clean up directly. Don't use Conn.disconnect since that will remove the connection entirely.
-						driver.disconnect(
-							this,
-							existingConn,
-							(existingConn.__driverState as any)[driverKind],
-							"Reconnecting with new driver state",
-						);
-					}
-				}
-
-				// Update with new driver state
-				existingConn.__socket = socket;
-				existingConn.__persist.lastSeen = Date.now();
-
-				// Update sleep timer since connection is now active
-				this.#resetSleepTimer();
-
-				this.inspector.emitter.emit("connectionUpdated");
-
-				// Send init message for reconnection
-				existingConn._sendMessage(
-					new CachedSerializer<protocol.ToClient>(
-						{
-							body: {
-								tag: "Init",
-								val: {
-									actorId: this.id,
-									connectionId: existingConn.id,
-									connectionToken: existingConn._token,
-								},
-							},
-						},
-						TO_CLIENT_VERSIONED,
-					),
-				);
-
-				return existingConn;
-			} else {
-				this.rLog.debug({
-					msg: "connection not found or token mismatch, creating new connection",
-					connectionId,
-				});
-			}
-		}
-
-		// Generate new connection ID and token if not provided or if reconnection failed
-		const newConnId = generateConnId();
-		const newConnToken = generateConnToken();
-
-		if (this.#connections.has(newConnId)) {
-			throw new Error(`Connection already exists: ${newConnId}`);
-		}
-
 		// Prepare connection state
 		let connState: CS | undefined;
 
@@ -1211,8 +1109,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Create connection
 		const persist: PersistedConn<CP, CS> = {
-			connId: newConnId,
-			token: newConnToken,
+			connId: crypto.randomUUID(),
 			params: params,
 			state: connState as CS,
 			lastSeen: Date.now(),
@@ -1280,7 +1177,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 						val: {
 							actorId: this.id,
 							connectionId: conn.id,
-							connectionToken: conn._token,
 						},
 					},
 				},
@@ -1407,63 +1303,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		if (!this.#ready) throw new errors.InternalError("Actor not ready");
 		if (!allowStoppingState && this.#stopCalled)
 			throw new errors.InternalError("Actor is stopping");
-	}
-
-	/**
-	 * Check the liveness of all connections.
-	 * Sets up a recurring check based on the configured interval.
-	 */
-	#checkConnectionsLiveness() {
-		this.#rLog.debug({ msg: "checking connections liveness" });
-
-		let connected = 0;
-		let reconnecting = 0;
-		let removed = 0;
-		for (const conn of this.#connections.values()) {
-			if (conn.__status === "connected") {
-				connected += 1;
-				this.#rLog.debug({
-					msg: "connection is alive",
-					connId: conn.id,
-				});
-			} else {
-				reconnecting += 1;
-
-				const lastSeen = conn.__persist.lastSeen;
-				const sinceLastSeen = Date.now() - lastSeen;
-				if (
-					sinceLastSeen <
-					this.#config.options.connectionLivenessTimeout
-				) {
-					this.#rLog.debug({
-						msg: "connection might be alive, will check later",
-						connId: conn.id,
-						lastSeen,
-						sinceLastSeen,
-					});
-					continue;
-				}
-
-				// Connection is dead, remove it
-				this.#rLog.info({
-					msg: "connection is dead, removing",
-					connId: conn.id,
-					lastSeen,
-				});
-
-				// Assume that the connection is dead here, no need to disconnect anything
-				removed += 1;
-				this.#removeConn(conn);
-			}
-		}
-
-		this.#rLog.debug({
-			msg: "checked connection liveness",
-			total: connected + reconnecting,
-			connected,
-			reconnecting,
-			removed,
-		});
 	}
 
 	/**
@@ -2070,10 +1909,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Check for active conns. This will also cover active actions, since all actions have a connection.
 		for (const conn of this.#connections.values()) {
 			// TODO: Enable this when hibernation is implemented. We're waiting on support for Guard to not auto-wake the actor if it sleeps.
-			// if (conn.status === "connected" && !conn.isHibernatable)
+			// if (!conn.isHibernatable)
 			// 	return false;
 
-			if (conn.status === "connected") return CanSleep.ActiveConns;
+			// if (!conn.isHibernatable) return CanSleep.ActiveConns;
+			return CanSleep.ActiveConns;
 		}
 
 		return CanSleep.Yes;
@@ -2196,8 +2036,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Clear timeouts
 		if (this.#pendingSaveTimeout) clearTimeout(this.#pendingSaveTimeout);
-		if (this.#checkConnLivenessInterval)
-			clearInterval(this.#checkConnLivenessInterval);
 
 		// Write state
 		await this.saveState({ immediate: true, allowStoppingState: true });
@@ -2259,6 +2097,36 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#convertToBarePersisted(
 		persist: PersistedActor<S, CP, CS, I>,
 	): bareSchema.PersistedActor {
+		// Merge connections with hibernatableWebSocket data into hibernatableConns
+		const hibernatableConns: bareSchema.PersistedHibernatableConn[] = [];
+
+		for (const conn of persist.connections) {
+			if (conn.hibernatableRequestId) {
+				// Find matching hibernatable WebSocket
+				const ws = persist.hibernatableWebSocket.find((ws) =>
+					arrayBuffersEqual(
+						ws.requestId,
+						conn.hibernatableRequestId!,
+					),
+				);
+
+				if (ws) {
+					hibernatableConns.push({
+						id: conn.connId,
+						parameters: bufferToArrayBuffer(
+							cbor.encode(conn.params || {}),
+						),
+						state: bufferToArrayBuffer(
+							cbor.encode(conn.state || {}),
+						),
+						hibernatableRequestId: conn.hibernatableRequestId,
+						lastSeenTimestamp: ws.lastSeenTimestamp,
+						msgIndex: ws.msgIndex,
+					});
+				}
+			}
+		}
+
 		return {
 			input:
 				persist.input !== undefined
@@ -2266,32 +2134,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					: null,
 			hasInitialized: persist.hasInitiated,
 			state: bufferToArrayBuffer(cbor.encode(persist.state)),
-			connections: persist.connections.map((conn) => ({
-				id: conn.connId,
-				token: conn.token,
-				parameters: bufferToArrayBuffer(cbor.encode(conn.params || {})),
-				state: bufferToArrayBuffer(cbor.encode(conn.state || {})),
-				subscriptions: conn.subscriptions.map((sub) => ({
-					eventName: sub.eventName,
-				})),
-				lastSeen: BigInt(conn.lastSeen),
-				hibernatableRequestId: conn.hibernatableRequestId ?? null,
-			})),
+			hibernatableConns,
 			scheduledEvents: persist.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
 				timestamp: BigInt(event.timestamp),
-				kind: {
-					tag: "GenericPersistedScheduleEvent" as const,
-					val: {
-						action: event.kind.generic.actionName,
-						args: event.kind.generic.args ?? null,
-					},
-				},
-			})),
-			hibernatableWebSocket: persist.hibernatableWebSocket.map((ws) => ({
-				requestId: ws.requestId,
-				lastSeenTimestamp: ws.lastSeenTimestamp,
-				msgIndex: ws.msgIndex,
+				action: event.kind.generic.actionName,
+				args: event.kind.generic.args ?? null,
 			})),
 		};
 	}
@@ -2299,38 +2147,45 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#convertFromBarePersisted(
 		bareData: bareSchema.PersistedActor,
 	): PersistedActor<S, CP, CS, I> {
+		// Split hibernatableConns back into connections and hibernatableWebSocket
+		const connections: PersistedConn<CP, CS>[] = [];
+		const hibernatableWebSocket: PersistedHibernatableWebSocket[] = [];
+
+		for (const conn of bareData.hibernatableConns) {
+			connections.push({
+				connId: conn.id,
+				params: cbor.decode(new Uint8Array(conn.parameters)),
+				state: cbor.decode(new Uint8Array(conn.state)),
+				subscriptions: [],
+				lastSeen: 0, // Will be set from lastSeenTimestamp
+				hibernatableRequestId: conn.hibernatableRequestId,
+			});
+
+			hibernatableWebSocket.push({
+				requestId: conn.hibernatableRequestId,
+				lastSeenTimestamp: conn.lastSeenTimestamp,
+				msgIndex: conn.msgIndex,
+			});
+		}
+
 		return {
 			input: bareData.input
 				? cbor.decode(new Uint8Array(bareData.input))
 				: undefined,
 			hasInitiated: bareData.hasInitialized,
 			state: cbor.decode(new Uint8Array(bareData.state)),
-			connections: bareData.connections.map((conn) => ({
-				connId: conn.id,
-				token: conn.token,
-				params: cbor.decode(new Uint8Array(conn.parameters)),
-				state: cbor.decode(new Uint8Array(conn.state)),
-				subscriptions: conn.subscriptions.map((sub) => ({
-					eventName: sub.eventName,
-				})),
-				lastSeen: Number(conn.lastSeen),
-				hibernatableRequestId: conn.hibernatableRequestId ?? undefined,
-			})),
+			connections,
 			scheduledEvents: bareData.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
 				timestamp: Number(event.timestamp),
 				kind: {
 					generic: {
-						actionName: event.kind.val.action,
-						args: event.kind.val.args,
+						actionName: event.action,
+						args: event.args,
 					},
 				},
 			})),
-			hibernatableWebSocket: bareData.hibernatableWebSocket.map((ws) => ({
-				requestId: ws.requestId,
-				lastSeenTimestamp: ws.lastSeenTimestamp,
-				msgIndex: ws.msgIndex,
-			})),
+			hibernatableWebSocket,
 		};
 	}
 }

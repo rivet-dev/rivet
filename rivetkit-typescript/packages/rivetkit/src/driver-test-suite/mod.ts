@@ -4,7 +4,7 @@ import { bundleRequire } from "bundle-require";
 import invariant from "invariant";
 import { describe } from "vitest";
 import { ClientConfigSchema } from "@/client/config";
-import type { Encoding, Transport } from "@/client/mod";
+import type { Encoding } from "@/client/mod";
 import { configureInspectorAccessToken } from "@/inspector/utils";
 import { createManagerRouter } from "@/manager/router";
 import {
@@ -19,17 +19,13 @@ import { logger } from "./log";
 import { runActionFeaturesTests } from "./tests/action-features";
 import { runActorConnTests } from "./tests/actor-conn";
 import { runActorConnStateTests } from "./tests/actor-conn-state";
-import {
-	runActorDriverTests,
-	runActorDriverTestsWithTransport,
-} from "./tests/actor-driver";
+import { runActorDriverTests } from "./tests/actor-driver";
 import { runActorErrorHandlingTests } from "./tests/actor-error-handling";
 import { runActorHandleTests } from "./tests/actor-handle";
 import { runActorInlineClientTests } from "./tests/actor-inline-client";
 import { runActorInspectorTests } from "./tests/actor-inspector";
 import { runActorMetadataTests } from "./tests/actor-metadata";
 import { runActorOnStateChangeTests } from "./tests/actor-onstatechange";
-import { runActorReconnectTests } from "./tests/actor-reconnect";
 import { runActorVarsTests } from "./tests/actor-vars";
 import { runManagerDriverTests } from "./tests/manager-driver";
 import { runRawHttpTests } from "./tests/raw-http";
@@ -40,7 +36,6 @@ import { runRequestAccessTests } from "./tests/request-access";
 export interface SkipTests {
 	schedule?: boolean;
 	sleep?: boolean;
-	sse?: boolean;
 	inline?: boolean;
 }
 
@@ -58,8 +53,6 @@ export interface DriverTestConfig {
 	HACK_skipCleanupNet?: boolean;
 
 	skip?: SkipTests;
-
-	transport?: Transport;
 
 	encoding?: Encoding;
 
@@ -86,10 +79,7 @@ export interface DriverDeployOutput {
 
 /** Runs all Vitest tests against the provided drivers. */
 export function runDriverTests(
-	driverTestConfigPartial: Omit<
-		DriverTestConfig,
-		"clientType" | "transport" | "encoding"
-	>,
+	driverTestConfigPartial: Omit<DriverTestConfig, "clientType" | "encoding">,
 ) {
 	const clientTypes: ClientType[] = driverTestConfigPartial.skip?.inline
 		? ["http"]
@@ -109,37 +99,11 @@ export function runDriverTests(
 					runActorDriverTests(driverTestConfig);
 					runManagerDriverTests(driverTestConfig);
 
-					const transports: Transport[] = driverTestConfig.skip?.sse
-						? ["websocket"]
-						: ["websocket", "sse"];
-					for (const transport of transports) {
-						describe(`transport (${transport})`, () => {
-							runActorConnTests({
-								...driverTestConfig,
-								transport,
-							});
+					runActorConnTests(driverTestConfig);
 
-							runActorConnStateTests({
-								...driverTestConfig,
-								transport,
-							});
+					runActorConnStateTests(driverTestConfig);
 
-							runActorReconnectTests({
-								...driverTestConfig,
-								transport,
-							});
-
-							runRequestAccessTests({
-								...driverTestConfig,
-								transport,
-							});
-
-							runActorDriverTestsWithTransport({
-								...driverTestConfig,
-								transport,
-							});
-						});
-					}
+					runRequestAccessTests(driverTestConfig);
 
 					runActorHandleTests(driverTestConfig);
 
