@@ -17,6 +17,8 @@ use crate::{keys, metrics};
 
 use super::{Allocate, Destroy, Input, PendingAllocation, State, destroy};
 
+// TODO: Rewrite this as a series of nested structs/enums for better transparency of current state (likely
+// requires actor wf v2)
 #[derive(Deserialize, Serialize)]
 pub struct LifecycleState {
 	pub generation: u32,
@@ -26,6 +28,11 @@ pub struct LifecycleState {
 	pub runner_workflow_id: Option<Id>,
 
 	pub sleeping: bool,
+	#[serde(default)]
+	pub stopping: bool,
+	#[serde(default)]
+	pub going_away: bool,
+
 	/// If a wake was received in between an actor's intent to sleep and actor stop.
 	#[serde(default)]
 	pub will_wake: bool,
@@ -33,6 +40,9 @@ pub struct LifecycleState {
 	#[serde(default)]
 	pub wake_for_alarm: bool,
 	pub alarm_ts: Option<i64>,
+	/// Handles cleaning up the actor if it does not receive a certain state before the timeout (ex.
+	/// created -> running event, stop intent -> stop event). If the timeout is reached, the actor is
+	/// considered lost.
 	pub gc_timeout_ts: Option<i64>,
 
 	pub reschedule_state: RescheduleState,
@@ -45,6 +55,8 @@ impl LifecycleState {
 			runner_id: Some(runner_id),
 			runner_workflow_id: Some(runner_workflow_id),
 			sleeping: false,
+			stopping: false,
+			going_away: false,
 			will_wake: false,
 			wake_for_alarm: false,
 			alarm_ts: None,
@@ -59,6 +71,8 @@ impl LifecycleState {
 			runner_id: None,
 			runner_workflow_id: None,
 			sleeping: true,
+			stopping: false,
+			going_away: false,
 			will_wake: false,
 			wake_for_alarm: false,
 			alarm_ts: None,
@@ -69,9 +83,8 @@ impl LifecycleState {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct LifecycleRes {
+pub struct LifecycleResult {
 	pub generation: u32,
-	pub kill: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -104,6 +117,7 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 struct AllocateActorInput {
 	actor_id: Id,
 	generation: u32,
+	/// When set, forces actors with CrashPolicy::Sleep to pend instead of sleep.
 	force_allocate: bool,
 }
 
@@ -613,7 +627,6 @@ pub async fn reschedule_actor(
 	input: &Input,
 	state: &mut LifecycleState,
 	force_reschedule: bool,
-	reset_rescheduling: bool,
 ) -> Result<SpawnActorOutput> {
 	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
@@ -632,7 +645,7 @@ pub async fn reschedule_actor(
 		})
 		.await?;
 
-	state.reschedule_state.retry_count = if reset || reset_rescheduling {
+	state.reschedule_state.retry_count = if reset {
 		0
 	} else {
 		state.reschedule_state.retry_count + 1

@@ -1,6 +1,5 @@
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
-use rivet_runner_protocol as protocol;
 use universaldb::options::MutationType;
 use universaldb::utils::IsolationLevel::*;
 
@@ -15,9 +14,6 @@ pub(crate) struct Input {
 	pub name: String,
 	pub key: Option<String>,
 	pub generation: u32,
-	/// Whether or not to send signals to the pb actor. In the case that the actor was already stopped
-	/// or exited, signals are unnecessary.
-	pub kill: bool,
 }
 
 #[workflow]
@@ -32,19 +28,6 @@ pub(crate) async fn pegboard_actor_destroy(ctx: &mut WorkflowCtx, input: &Input)
 			actor_id: input.actor_id,
 		})
 		.await?;
-
-	// Destroy actor
-	if let (Some(runner_workflow_id), true) = (res.runner_workflow_id, &input.kill) {
-		ctx.signal(crate::workflows::runner::Command {
-			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-				actor_id: input.actor_id.to_string(),
-				generation: input.generation,
-			}),
-		})
-		.to_workflow_id(runner_workflow_id)
-		.send()
-		.await?;
-	}
 
 	// If a slot was allocated at the time of actor destruction then bump the serverless autoscaler so it can scale down
 	// if needed
@@ -75,7 +58,6 @@ struct UpdateStateAndDbInput {
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateStateAndDbOutput {
-	runner_workflow_id: Option<Id>,
 	allocated_serverless_slot: bool,
 }
 
@@ -151,13 +133,11 @@ async fn update_state_and_db(
 
 	state.destroy_ts = Some(destroy_ts);
 	state.runner_id = None;
-	let runner_workflow_id = state.runner_workflow_id.take();
 
 	let old_allocated_serverless_slot = state.allocated_serverless_slot;
 	state.allocated_serverless_slot = false;
 
 	Ok(UpdateStateAndDbOutput {
-		runner_workflow_id,
 		allocated_serverless_slot: old_allocated_serverless_slot,
 	})
 }
