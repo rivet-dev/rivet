@@ -33,8 +33,8 @@ import type {
 import {
 	type ActorDriver,
 	type AnyActorInstance,
+	getInitialActorKvState,
 	type ManagerDriver,
-	serializeEmptyPersistData,
 } from "@/driver-helpers/mod";
 import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
@@ -72,6 +72,11 @@ export class EngineActorDriver implements ActorDriver {
 	#runnerStarted: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#isRunnerStopped: boolean = false;
+
+	// HACK: Track actor stop intent locally since the runner protocol doesn't
+	// pass the stop reason to onActorStop. This will be fixed when the runner
+	// protocol is updated to send the intent directly (see RVT-5284)
+	#actorStopIntent: Map<string, "sleep" | "destroy"> = new Map();
 
 	// WebSocket message acknowledgment debouncing for hibernatable websockets
 	#hibernatableWebSocketAckQueue: Map<
@@ -461,6 +466,25 @@ export class EngineActorDriver implements ActorDriver {
 		invariant(actorConfig.key, "actor should have a key");
 		const key = deserializeActorKey(actorConfig.key);
 
+		// Initialize storage
+		const [persistDataBuffer] = await this.#runner.kvGet(actorId, [
+			KEYS.PERSIST_DATA,
+		]);
+		if (persistDataBuffer === null) {
+			const initialKvState = getInitialActorKvState(input);
+			await this.#runner.kvPut(actorId, initialKvState);
+			logger().debug({
+				msg: "initialized persist data for new actor",
+				actorId,
+			});
+		} else {
+			logger().debug({
+				msg: "found existing persist data for actor",
+				actorId,
+				dataSize: persistDataBuffer.byteLength,
+			});
+		}
+
 		// Create actor instance
 		const definition = lookupInRegistry(
 			this.#registryConfig,
@@ -491,10 +515,20 @@ export class EngineActorDriver implements ActorDriver {
 	): Promise<void> {
 		logger().debug({ msg: "runner actor stopping", actorId, generation });
 
+		// HACK: Retrieve the stop intent we tracked locally (see RVT-5284)
+		// Default to "sleep" if no intent was recorded (e.g., if the runner
+		// initiated the stop)
+		//
+		// TODO: This will not work if the actor is destroyed from the API
+		// correctly. Currently, it will use the sleep intent, but it's
+		// actually a destroy intent.
+		const reason = this.#actorStopIntent.get(actorId) ?? "sleep";
+		this.#actorStopIntent.delete(actorId);
+
 		const handler = this.#actors.get(actorId);
 		if (handler?.actor) {
 			try {
-				await handler.actor.onStop();
+				await handler.actor.onStop(reason);
 			} catch (err) {
 				logger().error({
 					msg: "error in onStop, proceeding with removing actor",
@@ -504,7 +538,7 @@ export class EngineActorDriver implements ActorDriver {
 			this.#actors.delete(actorId);
 		}
 
-		logger().debug({ msg: "runner actor stopped", actorId });
+		logger().debug({ msg: "runner actor stopped", actorId, reason });
 	}
 
 	async #runnerFetch(
@@ -777,7 +811,15 @@ export class EngineActorDriver implements ActorDriver {
 	}
 
 	startSleep(actorId: string) {
+		// HACK: Track intent for onActorStop (see RVT-5284)
+		this.#actorStopIntent.set(actorId, "sleep");
 		this.#runner.sleepActor(actorId);
+	}
+
+	startDestroy(actorId: string) {
+		// HACK: Track intent for onActorStop (see RVT-5284)
+		this.#actorStopIntent.set(actorId, "destroy");
+		this.#runner.stopActor(actorId);
 	}
 
 	async shutdownRunner(immediate: boolean): Promise<void> {
@@ -816,7 +858,7 @@ export class EngineActorDriver implements ActorDriver {
 		for (const [_actorId, handler] of this.#actors.entries()) {
 			if (handler.actor) {
 				stopPromises.push(
-					handler.actor.onStop().catch((err) => {
+					handler.actor.onStop("sleep").catch((err) => {
 						handler.actor?.rLog.error({
 							msg: "onStop errored",
 							error: stringifyError(err),

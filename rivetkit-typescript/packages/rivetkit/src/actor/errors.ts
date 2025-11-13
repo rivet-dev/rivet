@@ -250,6 +250,17 @@ export class ActorAlreadyExists extends ActorError {
 	}
 }
 
+export class ActorDestroying extends ActorError {
+	constructor(identifier?: string) {
+		super(
+			"actor",
+			"destroying",
+			identifier ? `Actor destroying: ${identifier}` : "Actor destroying",
+			{ public: true },
+		);
+	}
+}
+
 export class ProxyError extends ActorError {
 	constructor(operation: string, error?: unknown) {
 		super(
