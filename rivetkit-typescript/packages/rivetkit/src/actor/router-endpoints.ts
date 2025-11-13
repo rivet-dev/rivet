@@ -158,9 +158,12 @@ export async function handleWebSocketConnect(
 					// Check if this is a hibernatable websocket
 					const isHibernatable =
 						!!requestIdBuf &&
-						actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex(
-							(ws) =>
-								arrayBuffersEqual(ws.requestId, requestIdBuf),
+						actor[PERSIST_SYMBOL].hibernatableConns.findIndex(
+							(conn) =>
+								arrayBuffersEqual(
+									conn.hibernatableRequestId,
+									requestIdBuf,
+								),
 						) !== -1;
 
 					conn = await actor.createConn(
@@ -391,8 +394,11 @@ export async function handleRawWebSocketHandler(
 			// Extract rivetRequestId provided by engine runner
 			const rivetRequestId = evt?.rivetRequestId;
 			const isHibernatable =
-				actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex((ws) =>
-					arrayBuffersEqual(ws.requestId, rivetRequestId),
+				actor[PERSIST_SYMBOL].hibernatableConns.findIndex((conn) =>
+					arrayBuffersEqual(
+						conn.hibernatableRequestId,
+						rivetRequestId,
+					),
 				) !== -1;
 
 			// Wrap the Hono WebSocket in our adapter

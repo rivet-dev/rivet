@@ -1,4 +1,6 @@
 import * as cbor from "cbor-x";
+import onChange from "on-change";
+import { isCborSerializable } from "@/common/utils";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
@@ -44,7 +46,13 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * This will only be persisted if using hibernatable WebSockets. If not,
 	 * this is just used to hole state.
 	 */
-	__persist: PersistedConn<CP, CS>;
+	__persist!: PersistedConn<CP, CS>;
+
+	/** Raw persist object without the proxy wrapper */
+	#persistRaw: PersistedConn<CP, CS>;
+
+	/** Track if this connection's state has changed */
+	#changed = false;
 
 	get __driverState(): ConnDriverState | undefined {
 		return this.__socket?.driverState;
@@ -103,9 +111,9 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			return false;
 		}
 		return (
-			this.#actor[PERSIST_SYMBOL].hibernatableWebSocket.findIndex((x) =>
+			this.#actor[PERSIST_SYMBOL].hibernatableConns.findIndex((conn) =>
 				arrayBuffersEqual(
-					x.requestId,
+					conn.hibernatableRequestId,
 					this.__persist.hibernatableRequestId!,
 				),
 			) > -1
@@ -131,7 +139,80 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		persist: PersistedConn<CP, CS>,
 	) {
 		this.#actor = actor;
-		this.__persist = persist;
+		this.#persistRaw = persist;
+		this.#setupPersistProxy(persist);
+	}
+
+	/**
+	 * Sets up the proxy for connection persistence with change tracking
+	 */
+	#setupPersistProxy(persist: PersistedConn<CP, CS>) {
+		// If this can't be proxied, return raw value
+		if (persist === null || typeof persist !== "object") {
+			this.__persist = persist;
+			return;
+		}
+
+		// Listen for changes to the object
+		this.__persist = onChange(
+			persist,
+			(
+				path: string,
+				value: any,
+				_previousValue: any,
+				_applyData: any,
+			) => {
+				// Validate CBOR serializability for state changes
+				if (path.startsWith("state")) {
+					let invalidPath = "";
+					if (
+						!isCborSerializable(
+							value,
+							(invalidPathPart: string) => {
+								invalidPath = invalidPathPart;
+							},
+							"",
+						)
+					) {
+						throw new errors.InvalidStateType({
+							path: path + (invalidPath ? `.${invalidPath}` : ""),
+						});
+					}
+				}
+
+				this.#changed = true;
+				this.#actor.rLog.debug({
+					msg: "conn onChange triggered",
+					connId: this.id,
+					path,
+				});
+
+				// Notify actor that this connection has changed
+				this.#actor.__markConnChanged(this);
+			},
+			{ ignoreDetached: true },
+		);
+	}
+
+	/**
+	 * Returns whether this connection has unsaved changes
+	 */
+	get hasChanges(): boolean {
+		return this.#changed;
+	}
+
+	/**
+	 * Marks changes as saved
+	 */
+	markSaved() {
+		this.#changed = false;
+	}
+
+	/**
+	 * Gets the raw persist data for serialization
+	 */
+	get persistRaw(): PersistedConn<CP, CS> {
+		return this.#persistRaw;
 	}
 
 	#validateStateEnabled() {

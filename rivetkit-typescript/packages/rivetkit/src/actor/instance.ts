@@ -1,24 +1,21 @@
 import * as cbor from "cbor-x";
-import type { SSEStreamingApi } from "hono/streaming";
-import type { WSContext } from "hono/ws";
 import invariant from "invariant";
 import onChange from "on-change";
-import type { ActorKey, Encoding } from "@/actor/mod";
+import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { isCborSerializable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor";
 import type { Registry } from "@/mod";
-import type * as bareSchema from "@/schemas/actor-persist/mod";
-import { PERSISTED_ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
+import type * as persistSchema from "@/schemas/actor-persist/mod";
+import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import {
 	arrayBuffersEqual,
 	bufferToArrayBuffer,
 	EXTRA_ERROR_LOG,
-	getEnvUniversal,
 	idToStr,
 	promiseWithResolvers,
 	SinglePromiseQueue,
@@ -28,9 +25,7 @@ import type { ActorConfig, OnConnectOptions } from "./config";
 import { Conn, type ConnId, generateConnRequestId } from "./conn";
 import {
 	CONN_DRIVERS,
-	type ConnDriver,
 	ConnDriverKind,
-	type ConnDriverState,
 	getConnDriverKindFromState,
 } from "./conn-drivers";
 import type { ConnSocket } from "./conn-socket";
@@ -39,10 +34,11 @@ import type { AnyDatabaseProvider, InferDatabaseClient } from "./database";
 import type { ActorDriver } from "./driver";
 import * as errors from "./errors";
 import { serializeActorKey } from "./keys";
+import { KEYS, makeConnKey } from "./kv";
 import type {
 	PersistedActor,
 	PersistedConn,
-	PersistedHibernatableWebSocket,
+	PersistedHibernatableConn,
 	PersistedScheduleEvent,
 } from "./persisted";
 import { processMessage } from "./protocol/old";
@@ -146,8 +142,18 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	/** Actor log, intended for the user to call */
 	#log!: Logger;
 
+	get log(): Logger {
+		invariant(this.#log, "log not configured");
+		return this.#log;
+	}
+
 	/** Runtime log, intended for internal actor logs */
 	#rLog!: Logger;
+
+	get rLog(): Logger {
+		invariant(this.#rLog, "log not configured");
+		return this.#rLog;
+	}
 
 	#sleepCalled = false;
 	#stopCalled = false;
@@ -182,18 +188,42 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#vars?: V;
 
 	#backgroundPromises: Promise<void>[] = [];
+
 	#abortController = new AbortController();
+
 	#config: ActorConfig<S, CP, CS, V, I, DB>;
 	#actorDriver!: ActorDriver;
 	#inlineClient!: Client<Registry<any>>;
 	#actorId!: string;
+
 	#name!: string;
+
+	get name(): string {
+		return this.#name;
+	}
+
 	#key!: ActorKey;
+
+	get key(): ActorKey {
+		return this.#key;
+	}
+
 	#region!: string;
+
+	get region(): string {
+		return this.#region;
+	}
+
 	#ready = false;
 
 	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB>>();
+
+	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
+		return this.#connections;
+	}
+
 	#subscriptionIndex = new Map<string, Set<Conn<S, CP, CS, V, I, DB>>>();
+	#changedConnections = new Set<ConnId>();
 
 	#sleepTimeout?: NodeJS.Timeout;
 
@@ -205,7 +235,23 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#activeRawWebSockets = new Set<UniversalWebSocket>();
 
 	#schedule!: Schedule;
+
+	get schedule(): Schedule {
+		return this.#schedule;
+	}
+
 	#db!: InferDatabaseClient<DB>;
+
+	/**
+	 * Gets the database.
+	 * @experimental
+	 */
+	get db(): InferDatabaseClient<DB> {
+		if (!this.#db) {
+			throw new errors.DatabaseNotEnabled();
+		}
+		return this.#db;
+	}
 
 	#inspector = new ActorInspector(() => {
 		return {
@@ -311,6 +357,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.actorContext = new ActorContext(this);
 	}
 
+	// MARK: Initialization
 	async start(
 		actorDriver: ActorDriver,
 		inlineClient: Client<Registry<any>>,
@@ -349,10 +396,118 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#region = region;
 		this.#schedule = new Schedule(this);
 
-		// Initialize server
-		//
-		// Store the promise so network requests can await initialization
-		await this.#initialize();
+		// Read initial state from KV storage
+		const [persistDataBuffer] = await this.#actorDriver.kvBatchGet(
+			this.#actorId,
+			[KEYS.PERSIST_DATA],
+		);
+		invariant(
+			persistDataBuffer !== null,
+			"persist data has not been set, it should be set when initialized",
+		);
+		const bareData =
+			ACTOR_VERSIONED.deserializeWithEmbeddedVersion(persistDataBuffer);
+		const persistData = this.#convertFromBarePersisted(bareData);
+
+		if (persistData.hasInitialized) {
+			// List all connection keys
+			const connEntries = await this.#actorDriver.kvListPrefix(
+				this.#actorId,
+				KEYS.CONN_PREFIX,
+			);
+
+			// Decode connections
+			const connections: PersistedConn<CP, CS>[] = [];
+			for (const [_key, value] of connEntries) {
+				try {
+					const conn = cbor.decode(value) as PersistedConn<CP, CS>;
+					connections.push(conn);
+				} catch (error) {
+					this.#rLog.error({
+						msg: "failed to decode connection",
+						error: stringifyError(error),
+					});
+				}
+			}
+
+			this.#rLog.info({
+				msg: "actor restoring",
+				connections: connections.length,
+				hibernatableWebSockets: persistData.hibernatableConns.length,
+			});
+
+			// Set initial state
+			this.#initPersistProxy(persistData);
+
+			// Create connection instances
+			for (const connPersist of connections) {
+				// Create connections
+				const conn = new Conn<S, CP, CS, V, I, DB>(this, connPersist);
+				this.#connections.set(conn.id, conn);
+
+				// Register event subscriptions
+				for (const sub of connPersist.subscriptions) {
+					this.#addSubscription(sub.eventName, conn, true);
+				}
+			}
+		} else {
+			this.#rLog.info({ msg: "actor creating" });
+
+			// Initialize actor state
+			let stateData: unknown;
+			if (this.stateEnabled) {
+				this.#rLog.info({ msg: "actor state initializing" });
+
+				if ("createState" in this.#config) {
+					this.#config.createState;
+
+					// Convert state to undefined since state is not defined yet here
+					stateData = await this.#config.createState(
+						this.actorContext as unknown as ActorContext<
+							undefined,
+							undefined,
+							undefined,
+							undefined,
+							undefined,
+							undefined
+						>,
+						persistData.input!,
+					);
+				} else if ("state" in this.#config) {
+					stateData = structuredClone(this.#config.state);
+				} else {
+					throw new Error(
+						"Both 'createState' or 'state' were not defined",
+					);
+				}
+			} else {
+				this.#rLog.debug({ msg: "state not enabled" });
+			}
+
+			// Save state and mark as initialized
+			persistData.state = stateData as S;
+			persistData.hasInitialized = true;
+
+			// Update state
+			this.#rLog.debug({ msg: "writing state" });
+			const bareData = this.#convertToBarePersisted(persistData);
+			await this.#actorDriver.kvBatchPut(this.#actorId, [
+				[
+					KEYS.PERSIST_DATA,
+					ACTOR_VERSIONED.serializeWithEmbeddedVersion(bareData),
+				],
+			]);
+
+			this.#initPersistProxy(persistData);
+
+			// Notify creation
+			if (this.#config.onCreate) {
+				await this.#config.onCreate(
+					this.actorContext,
+					persistData.input!,
+				);
+			}
+		}
 
 		// TODO: Exit process if this errors
 		if (this.#varsEnabled) {
@@ -424,155 +579,275 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this._onAlarm();
 	}
 
-	async #scheduleEventInner(newEvent: PersistedScheduleEvent) {
-		this.actorContext.log.info({ msg: "scheduling event", ...newEvent });
-
-		// Insert event in to index
-		const insertIndex = this.#persist.scheduledEvents.findIndex(
-			(x) => x.timestamp > newEvent.timestamp,
-		);
-		if (insertIndex === -1) {
-			this.#persist.scheduledEvents.push(newEvent);
-		} else {
-			this.#persist.scheduledEvents.splice(insertIndex, 0, newEvent);
-		}
-
-		// Update alarm if:
-		// - this is the newest event (i.e. at beginning of array) or
-		// - this is the only event (i.e. the only event in the array)
-		if (insertIndex === 0 || this.#persist.scheduledEvents.length === 1) {
-			this.actorContext.log.info({
-				msg: "setting alarm",
-				timestamp: newEvent.timestamp,
-				eventCount: this.#persist.scheduledEvents.length,
-			});
-			await this.#queueSetAlarm(newEvent.timestamp);
-		}
+	#assertReady(allowStoppingState: boolean = false) {
+		if (!this.#ready) throw new errors.InternalError("Actor not ready");
+		if (!allowStoppingState && this.#stopCalled)
+			throw new errors.InternalError("Actor is stopping");
 	}
 
 	/**
-	 * Triggers any pending alarms.
-	 *
-	 * This method is idempotent. It's called automatically when the actor wakes
-	 * in order to trigger any pending alarms.
+	 * Check if the actor is ready to handle requests.
 	 */
-	async _onAlarm() {
-		const now = Date.now();
-		this.actorContext.log.debug({
-			msg: "alarm triggered",
-			now,
-			events: this.#persist.scheduledEvents.length,
-		});
+	isReady(): boolean {
+		return this.#ready;
+	}
 
-		// Update sleep
-		//
-		// Do this before any async logic
-		this.#resetSleepTimer();
-
-		// Remove events from schedule that we're about to run
-		const runIndex = this.#persist.scheduledEvents.findIndex(
-			(x) => x.timestamp <= now,
-		);
-		if (runIndex === -1) {
-			// This method is idempotent, so this will happen in scenarios like `start` and
-			// no events are pending.
-			this.#rLog.debug({ msg: "no events are due yet" });
-			if (this.#persist.scheduledEvents.length > 0) {
-				const nextTs = this.#persist.scheduledEvents[0].timestamp;
-				this.actorContext.log.debug({
-					msg: "alarm fired early, rescheduling for next event",
-					now,
-					nextTs,
-					delta: nextTs - now,
-				});
-				await this.#queueSetAlarm(nextTs);
-			}
-			this.actorContext.log.debug({ msg: "no events to run", now });
+	// MARK: Stop
+	/**
+	 * For the engine:
+	 * 1. Engine runner receives CommandStopActor
+	 * 2. Engine runner calls _onStop and waits for it to finish
+	 * 3. Engine runner publishes EventActorStateUpdate with ActorStateSTop
+	 */
+	async _onStop() {
+		if (this.#stopCalled) {
+			this.#rLog.warn({ msg: "already stopping actor" });
 			return;
 		}
-		const scheduleEvents = this.#persist.scheduledEvents.splice(
-			0,
-			runIndex + 1,
-		);
-		this.actorContext.log.debug({
-			msg: "running events",
-			count: scheduleEvents.length,
-		});
+		this.#stopCalled = true;
 
-		// Set alarm for next event
-		if (this.#persist.scheduledEvents.length > 0) {
-			const nextTs = this.#persist.scheduledEvents[0].timestamp;
-			this.actorContext.log.info({
-				msg: "setting next alarm",
-				nextTs,
-				remainingEvents: this.#persist.scheduledEvents.length,
-			});
-			await this.#queueSetAlarm(nextTs);
+		this.#rLog.info({ msg: "actor stopping" });
+
+		if (this.#sleepTimeout) {
+			clearTimeout(this.#sleepTimeout);
+			this.#sleepTimeout = undefined;
 		}
 
-		// Iterate by event key in order to ensure we call the events in order
-		for (const event of scheduleEvents) {
+		// Abort any listeners waiting for shutdown
+		try {
+			this.#abortController.abort();
+		} catch {}
+
+		// Call onStop lifecycle hook if defined
+		if (this.#config.onStop) {
 			try {
-				this.actorContext.log.info({
-					msg: "running action for event",
-					event: event.eventId,
-					timestamp: event.timestamp,
-					action: event.kind.generic.actionName,
-				});
-
-				// Look up function
-				const fn: unknown =
-					this.#config.actions[event.kind.generic.actionName];
-
-				if (!fn)
-					throw new Error(
-						`Missing action for alarm ${event.kind.generic.actionName}`,
-					);
-				if (typeof fn !== "function")
-					throw new Error(
-						`Alarm function lookup for ${event.kind.generic.actionName} returned ${typeof fn}`,
-					);
-
-				// Call function
-				try {
-					const args = event.kind.generic.args
-						? cbor.decode(new Uint8Array(event.kind.generic.args))
-						: [];
-					await fn.call(undefined, this.actorContext, ...args);
-				} catch (error) {
-					this.actorContext.log.error({
-						msg: "error while running event",
+				this.#rLog.debug({ msg: "calling onStop" });
+				const result = this.#config.onStop(this.actorContext);
+				if (result instanceof Promise) {
+					await deadline(result, this.#config.options.onStopTimeout);
+				}
+				this.#rLog.debug({ msg: "onStop completed" });
+			} catch (error) {
+				if (error instanceof DeadlineError) {
+					this.#rLog.error({ msg: "onStop timed out" });
+				} else {
+					this.#rLog.error({
+						msg: "error in onStop",
 						error: stringifyError(error),
-						event: event.eventId,
-						timestamp: event.timestamp,
-						action: event.kind.generic.actionName,
 					});
 				}
-			} catch (error) {
-				this.actorContext.log.error({
-					msg: "internal error while running event",
-					error: stringifyError(error),
-					...event,
-				});
 			}
+		}
+
+		const promises: Promise<unknown>[] = [];
+
+		// Disconnect existing non-hibernatable connections
+		for (const connection of this.#connections.values()) {
+			if (!connection.isHibernatable) {
+				this.#rLog.debug({
+					msg: "disconnecting non-hibernatable connection on actor stop",
+					connId: connection.id,
+				});
+				promises.push(connection.disconnect());
+			}
+
+			// TODO: Figure out how to abort HTTP requests on shutdown. This
+			// might already be handled by the engine runner tunnel shutdown.
+		}
+
+		// Wait for any background tasks to finish, with timeout
+		await this.#waitBackgroundPromises(
+			this.#config.options.waitUntilTimeout,
+		);
+
+		// Clear timeouts
+		if (this.#pendingSaveTimeout) clearTimeout(this.#pendingSaveTimeout);
+
+		// Write state
+		await this.saveState({ immediate: true, allowStoppingState: true });
+
+		// Await all `close` event listeners with 1.5 second timeout
+		const res = Promise.race([
+			Promise.all(promises).then(() => false),
+			new Promise<boolean>((res) =>
+				globalThis.setTimeout(() => res(true), 1500),
+			),
+		]);
+
+		if (await res) {
+			this.#rLog.warn({
+				msg: "timed out waiting for connections to close, shutting down anyway",
+			});
+		}
+
+		// Wait for queues to finish
+		if (this.#persistWriteQueue.runningDrainLoop)
+			await this.#persistWriteQueue.runningDrainLoop;
+		if (this.#alarmWriteQueue.runningDrainLoop)
+			await this.#alarmWriteQueue.runningDrainLoop;
+	}
+
+	/** Abort signal that fires when the actor is stopping. */
+	get abortSignal(): AbortSignal {
+		return this.#abortController.signal;
+	}
+
+	// MARK: Sleep
+	/**
+	 * Reset timer from the last actor interaction that allows it to be put to sleep.
+	 *
+	 * This should be called any time a sleep-related event happens:
+	 * - Connection opens (will clear timer)
+	 * - Connection closes (will schedule timer if there are no open connections)
+	 * - Alarm triggers (will reset timer)
+	 *
+	 * We don't need to call this on events like individual action calls, since there will always be a connection open for these.
+	 **/
+	#resetSleepTimer() {
+		if (this.#config.options.noSleep || !this.#sleepingSupported) return;
+
+		// Don't sleep if already stopping
+		if (this.#stopCalled) return;
+
+		const canSleep = this.#canSleep();
+
+		this.#rLog.debug({
+			msg: "resetting sleep timer",
+			canSleep: CanSleep[canSleep],
+			existingTimeout: !!this.#sleepTimeout,
+			timeout: this.#config.options.sleepTimeout,
+		});
+
+		if (this.#sleepTimeout) {
+			clearTimeout(this.#sleepTimeout);
+			this.#sleepTimeout = undefined;
+		}
+
+		// Don't set a new timer if already sleeping
+		if (this.#sleepCalled) return;
+
+		if (canSleep === CanSleep.Yes) {
+			this.#sleepTimeout = setTimeout(() => {
+				this._startSleep();
+			}, this.#config.options.sleepTimeout);
 		}
 	}
 
-	async scheduleEvent(
-		timestamp: number,
-		action: string,
-		args: unknown[],
-	): Promise<void> {
-		return this.#scheduleEventInner({
-			eventId: crypto.randomUUID(),
-			timestamp,
-			kind: {
-				generic: {
-					actionName: action,
-					args: bufferToArrayBuffer(cbor.encode(args)),
-				},
-			},
+	/** If this actor can be put in a sleeping state. */
+	#canSleep(): CanSleep {
+		if (!this.#ready) return CanSleep.NotReady;
+
+		// Do not sleep if Hono HTTP requests are in-flight
+		if (this.#activeHonoHttpRequests > 0)
+			return CanSleep.ActiveHonoHttpRequests;
+
+		// TODO: When WS hibernation is ready, update this to only count non-hibernatable websockets
+		// Do not sleep if there are raw websockets open
+		if (this.#activeRawWebSockets.size > 0)
+			return CanSleep.ActiveRawWebSockets;
+
+		// Check for active conns. This will also cover active actions, since all actions have a connection.
+		for (const conn of this.#connections.values()) {
+			// TODO: Enable this when hibernation is implemented. We're waiting on support for Guard to not auto-wake the actor if it sleeps.
+			// if (!conn.isHibernatable)
+			// 	return false;
+
+			// if (!conn.isHibernatable) return CanSleep.ActiveConns;
+			return CanSleep.ActiveConns;
+		}
+
+		return CanSleep.Yes;
+	}
+
+	/**
+	 * Puts an actor to sleep. This should just start the sleep sequence, most shutdown logic should be in _stop (which is called by the ActorDriver when sleeping).
+	 *
+	 * For the engine, this will:
+	 * 1. Publish EventActorIntent with ActorIntentSleep (via driver.startSleep)
+	 * 2. Engine runner will wait for CommandStopActor
+	 * 3. Engine runner will call _onStop and wait for it to finish
+	 * 4. Engine runner will publish EventActorStateUpdate with ActorStateSTop
+	 **/
+	_startSleep() {
+		if (this.#stopCalled) {
+			this.#rLog.debug({
+				msg: "cannot call _startSleep if actor already stopping",
+			});
+			return;
+		}
+
+		// IMPORTANT: #sleepCalled should have no effect on the actor's
+		// behavior aside from preventing calling _startSleep twice. Wait for
+		// `_onStop` before putting in a stopping state.
+		if (this.#sleepCalled) {
+			this.#rLog.warn({
+				msg: "cannot call _startSleep twice, actor already sleeping",
+			});
+			return;
+		}
+		this.#sleepCalled = true;
+
+		// NOTE: Publishes ActorIntentSleep
+		const sleep = this.#actorDriver.startSleep?.bind(
+			this.#actorDriver,
+			this.#actorId,
+		);
+		invariant(this.#sleepingSupported, "sleeping not supported");
+		invariant(sleep, "no sleep on driver");
+
+		this.#rLog.info({ msg: "actor sleeping" });
+
+		// Schedule sleep to happen on the next tick. This allows for any action that calls _sleep to complete.
+		setImmediate(() => {
+			// The actor driver should call stop when ready to stop
+			//
+			// This will call _stop once Pegboard responds with the new status
+			sleep();
 		});
+	}
+
+	/**
+	 * Called by router middleware when an HTTP request begins.
+	 */
+	__beginHonoHttpRequest() {
+		this.#activeHonoHttpRequests++;
+		this.#resetSleepTimer();
+	}
+
+	/**
+	 * Called by router middleware when an HTTP request ends.
+	 */
+	__endHonoHttpRequest() {
+		this.#activeHonoHttpRequests--;
+		if (this.#activeHonoHttpRequests < 0) {
+			this.#activeHonoHttpRequests = 0;
+			this.#rLog.warn({
+				msg: "active hono requests went below 0, this is a RivetKit bug",
+				...EXTRA_ERROR_LOG,
+			});
+		}
+		this.#resetSleepTimer();
+	}
+
+	// MARK: State
+	/**
+	 * Gets the current state.
+	 *
+	 * Changing properties of this value will automatically be persisted.
+	 */
+	get state(): S {
+		this.#validateStateEnabled();
+		return this.#persist.state;
+	}
+
+	/**
+	 * Sets the current state.
+	 *
+	 * This property will automatically be persisted.
+	 */
+	set state(value: S) {
+		this.#validateStateEnabled();
+		this.#persist.state = value;
 	}
 
 	get stateEnabled() {
@@ -589,6 +864,12 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		return "createConnState" in this.#config || "connState" in this.#config;
 	}
 
+	get vars(): V {
+		this.#validateVarsEnabled();
+		invariant(this.#vars !== undefined, "vars not enabled");
+		return this.#vars;
+	}
+
 	get #varsEnabled() {
 		return "createVars" in this.#config || "vars" in this.#config;
 	}
@@ -596,6 +877,43 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	#validateVarsEnabled() {
 		if (!this.#varsEnabled) {
 			throw new errors.VarsNotEnabled();
+		}
+	}
+
+	/**
+	 * Forces the state to get saved.
+	 *
+	 * This is helpful if running a long task that may fail later or when
+	 * running a background job that updates the state.
+	 *
+	 * @param opts - Options for saving the state.
+	 */
+	async saveState(opts: SaveStateOptions) {
+		this.#assertReady(opts.allowStoppingState);
+
+		this.#rLog.debug({
+			msg: "saveState called",
+			persistChanged: this.#persistChanged,
+			allowStoppingState: opts.allowStoppingState,
+			immediate: opts.immediate,
+		});
+
+		if (this.#persistChanged) {
+			if (opts.immediate) {
+				// Save immediately
+				await this.#savePersistInner();
+			} else {
+				// Create callback
+				if (!this.#onPersistSavedPromise) {
+					this.#onPersistSavedPromise = promiseWithResolvers();
+				}
+
+				// Save state throttled
+				this.#savePersistThrottled();
+
+				// Wait for save
+				await this.#onPersistSavedPromise.promise;
+			}
 		}
 	}
 
@@ -627,24 +945,18 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		try {
 			this.#lastSaveTime = Date.now();
 
-			if (this.#persistChanged) {
+			const hasChanges =
+				this.#persistChanged || this.#changedConnections.size > 0;
+
+			if (hasChanges) {
 				const finished = this.#persistWriteQueue.enqueue(async () => {
-					this.#rLog.debug({ msg: "saving persist" });
+					this.#rLog.debug({
+						msg: "saving persist",
+						actorChanged: this.#persistChanged,
+						connectionsChanged: this.#changedConnections.size,
+					});
 
-					// There might be more changes while we're writing, so we set this
-					// before writing to KV in order to avoid a race condition.
-					this.#persistChanged = false;
-
-					// Convert to BARE types and write to KV
-					const bareData = this.#convertToBarePersisted(
-						this.#persistRaw,
-					);
-					await this.#actorDriver.writePersistedData(
-						this.#actorId,
-						PERSISTED_ACTOR_VERSIONED.serializeWithEmbeddedVersion(
-							bareData,
-						),
-					);
+					await this.#writePersistedData();
 
 					this.#rLog.debug({ msg: "persist saved" });
 				});
@@ -663,16 +975,46 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	async #queueSetAlarm(timestamp: number): Promise<void> {
-		await this.#alarmWriteQueue.enqueue(async () => {
-			await this.#actorDriver.setAlarm(this, timestamp);
-		});
+	async #writePersistedData() {
+		const entries: [Uint8Array, Uint8Array][] = [];
+
+		// Save actor state if changed
+		if (this.#persistChanged) {
+			this.#persistChanged = false;
+
+			// Prepare actor state
+			const bareData = this.#convertToBarePersisted(this.#persistRaw);
+
+			// Key [1] for actor persist data
+			entries.push([
+				KEYS.PERSIST_DATA,
+				ACTOR_VERSIONED.serializeWithEmbeddedVersion(bareData),
+			]);
+		}
+
+		// Save changed connections
+		if (this.#changedConnections.size > 0) {
+			for (const connId of this.#changedConnections) {
+				const conn = this.#connections.get(connId);
+				if (conn) {
+					const connData = cbor.encode(conn.persistRaw);
+					entries.push([makeConnKey(connId), connData]);
+					conn.markSaved();
+				}
+			}
+			this.#changedConnections.clear();
+		}
+
+		// Write all entries in batch
+		if (entries.length > 0) {
+			await this.#actorDriver.kvBatchPut(this.#actorId, entries);
+		}
 	}
 
 	/**
 	 * Creates proxy for `#persist` that handles automatically flagging when state needs to be updated.
 	 */
-	#setPersist(target: PersistedActor<S, CP, CS, I>) {
+	#initPersistProxy(target: PersistedActor<S, CP, CS, I>) {
 		// Set raw persist object
 		this.#persistRaw = target;
 
@@ -775,105 +1117,21 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		);
 	}
 
-	async #initialize() {
-		// Read initial state
-		const persistDataBuffer = await this.#actorDriver.readPersistedData(
-			this.#actorId,
-		);
-		invariant(
-			persistDataBuffer !== undefined,
-			"persist data has not been set, it should be set when initialized",
-		);
-		const bareData =
-			PERSISTED_ACTOR_VERSIONED.deserializeWithEmbeddedVersion(
-				persistDataBuffer,
-			);
-		const persistData = this.#convertFromBarePersisted(bareData);
-
-		if (persistData.hasInitiated) {
-			this.#rLog.info({
-				msg: "actor restoring",
-				connections: persistData.connections.length,
-				hibernatableWebSockets:
-					persistData.hibernatableWebSocket.length,
-			});
-
-			// Set initial state
-			this.#setPersist(persistData);
-
-			// Load connections
-			for (const connPersist of this.#persist.connections) {
-				// Create connections
-				const conn = new Conn<S, CP, CS, V, I, DB>(this, connPersist);
-				this.#connections.set(conn.id, conn);
-
-				// Register event subscriptions
-				for (const sub of connPersist.subscriptions) {
-					this.#addSubscription(sub.eventName, conn, true);
-				}
-			}
-		} else {
-			this.#rLog.info({ msg: "actor creating" });
-
-			// Initialize actor state
-			let stateData: unknown;
-			if (this.stateEnabled) {
-				this.#rLog.info({ msg: "actor state initializing" });
-
-				if ("createState" in this.#config) {
-					this.#config.createState;
-
-					// Convert state to undefined since state is not defined yet here
-					stateData = await this.#config.createState(
-						this.actorContext as unknown as ActorContext<
-							undefined,
-							undefined,
-							undefined,
-							undefined,
-							undefined,
-							undefined
-						>,
-						persistData.input!,
-					);
-				} else if ("state" in this.#config) {
-					stateData = structuredClone(this.#config.state);
-				} else {
-					throw new Error(
-						"Both 'createState' or 'state' were not defined",
-					);
-				}
-			} else {
-				this.#rLog.debug({ msg: "state not enabled" });
-			}
-
-			// Save state and mark as initialized
-			persistData.state = stateData as S;
-			persistData.hasInitiated = true;
-
-			// Update state
-			this.#rLog.debug({ msg: "writing state" });
-			const bareData = this.#convertToBarePersisted(persistData);
-			await this.#actorDriver.writePersistedData(
-				this.#actorId,
-				PERSISTED_ACTOR_VERSIONED.serializeWithEmbeddedVersion(
-					bareData,
-				),
-			);
-
-			this.#setPersist(persistData);
-
-			// Notify creation
-			if (this.#config.onCreate) {
-				await this.#config.onCreate(
-					this.actorContext,
-					persistData.input!,
-				);
-			}
-		}
-	}
-
+	// MARK: Connections
 	__getConnForId(id: string): Conn<S, CP, CS, V, I, DB> | undefined {
 		return this.#connections.get(id);
+	}
+
+	/**
+	 * Mark a connection as changed so it will be persisted on next save
+	 */
+	__markConnChanged(conn: Conn<S, CP, CS, V, I, DB>) {
+		this.#changedConnections.add(conn.id);
+		this.#rLog.debug({
+			msg: "marked connection as changed",
+			connId: conn.id,
+			totalChanged: this.#changedConnections.size,
+		});
 	}
 
 	/**
@@ -930,22 +1188,26 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * Removes a connection and cleans up its resources.
 	 */
 	#removeConn(conn: Conn<S, CP, CS, V, I, DB>) {
-		// Remove from persist & save immediately
-		const connIdx = this.#persist.connections.findIndex(
-			(c) => c.connId === conn.id,
-		);
-		if (connIdx !== -1) {
-			this.#persist.connections.splice(connIdx, 1);
-			this.saveState({ immediate: true, allowStoppingState: true });
-		} else {
-			this.#rLog.warn({
-				msg: "could not find persisted connection to remove",
-				connId: conn.id,
+		// Remove conn from KV
+		const key = makeConnKey(conn.id);
+		this.#actorDriver
+			.kvBatchDelete(this.#actorId, [key])
+			.then(() => {
+				this.#rLog.debug({
+					msg: "removed connection from KV",
+					connId: conn.id,
+				});
+			})
+			.catch((err) => {
+				this.#rLog.error({
+					msg: "kvBatchDelete failed for conn",
+					err: stringifyError(err),
+				});
 			});
-		}
 
-		// Remove from state
+		// Remove from state and tracking
 		this.#connections.delete(conn.id);
+		this.#changedConnections.delete(conn.id);
 		this.#rLog.debug({ msg: "removed conn", connId: conn.id });
 
 		// Remove subscriptions
@@ -1119,8 +1381,11 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Check if this connection is for a hibernatable websocket
 		if (socket.requestIdBuf) {
 			const isHibernatable =
-				this.#persist.hibernatableWebSocket.findIndex((ws) =>
-					arrayBuffersEqual(ws.requestId, socket.requestIdBuf!),
+				this.#persist.hibernatableConns.findIndex((conn) =>
+					arrayBuffersEqual(
+						conn.hibernatableRequestId,
+						socket.requestIdBuf!,
+					),
 				) !== -1;
 
 			if (isHibernatable) {
@@ -1137,8 +1402,9 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Do this immediately after adding connection & before any async logic in order to avoid race conditions with sleep timeouts
 		this.#resetSleepTimer();
 
-		// Add to persistence & save immediately
-		this.#persist.connections.push(persist);
+		// Mark connection as changed for batch save
+		this.#changedConnections.add(conn.id);
+
 		this.saveState({ immediate: true });
 
 		// Handle connection
@@ -1221,97 +1487,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		});
 	}
 
-	// MARK: Events
-	#addSubscription(
-		eventName: string,
-		connection: Conn<S, CP, CS, V, I, DB>,
-		fromPersist: boolean,
-	) {
-		if (connection.subscriptions.has(eventName)) {
-			this.#rLog.debug({
-				msg: "connection already has subscription",
-				eventName,
-			});
-			return;
-		}
-
-		// Persist subscriptions & save immediately
-		//
-		// Don't update persistence if already restoring from persistence
-		if (!fromPersist) {
-			connection.__persist.subscriptions.push({ eventName: eventName });
-			this.saveState({ immediate: true });
-		}
-
-		// Update subscriptions
-		connection.subscriptions.add(eventName);
-
-		// Update subscription index
-		let subscribers = this.#subscriptionIndex.get(eventName);
-		if (!subscribers) {
-			subscribers = new Set();
-			this.#subscriptionIndex.set(eventName, subscribers);
-		}
-		subscribers.add(connection);
-	}
-
-	#removeSubscription(
-		eventName: string,
-		connection: Conn<S, CP, CS, V, I, DB>,
-		fromRemoveConn: boolean,
-	) {
-		if (!connection.subscriptions.has(eventName)) {
-			this.#rLog.warn({
-				msg: "connection does not have subscription",
-				eventName,
-			});
-			return;
-		}
-
-		// Persist subscriptions & save immediately
-		//
-		// Don't update the connection itself if the connection is already being removed
-		if (!fromRemoveConn) {
-			connection.subscriptions.delete(eventName);
-
-			const subIdx = connection.__persist.subscriptions.findIndex(
-				(s) => s.eventName === eventName,
-			);
-			if (subIdx !== -1) {
-				connection.__persist.subscriptions.splice(subIdx, 1);
-			} else {
-				this.#rLog.warn({
-					msg: "subscription does not exist with name",
-					eventName,
-				});
-			}
-
-			this.saveState({ immediate: true });
-		}
-
-		// Update scriptions index
-		const subscribers = this.#subscriptionIndex.get(eventName);
-		if (subscribers) {
-			subscribers.delete(connection);
-			if (subscribers.size === 0) {
-				this.#subscriptionIndex.delete(eventName);
-			}
-		}
-	}
-
-	#assertReady(allowStoppingState: boolean = false) {
-		if (!this.#ready) throw new errors.InternalError("Actor not ready");
-		if (!allowStoppingState && this.#stopCalled)
-			throw new errors.InternalError("Actor is stopping");
-	}
-
-	/**
-	 * Check if the actor is ready to handle requests.
-	 */
-	isReady(): boolean {
-		return this.#ready;
-	}
-
+	// MARK: Actions
 	/**
 	 * Execute an action call from a client.
 	 *
@@ -1514,7 +1690,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			// Track hibernatable WebSockets
 			let rivetRequestId: ArrayBuffer | undefined;
 			let persistedHibernatableWebSocket:
-				| PersistedHibernatableWebSocket
+				| PersistedHibernatableConn<CP, CS>
 				| undefined;
 
 			const onSocketOpened = (event: any) => {
@@ -1524,16 +1700,16 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				if (rivetRequestId) {
 					const rivetRequestIdLocal = rivetRequestId;
 					persistedHibernatableWebSocket =
-						this.#persist.hibernatableWebSocket.find((ws) =>
+						this.#persist.hibernatableConns.find((conn) =>
 							arrayBuffersEqual(
-								ws.requestId,
+								conn.hibernatableRequestId,
 								rivetRequestIdLocal,
 							),
 						);
 
 					if (persistedHibernatableWebSocket) {
 						persistedHibernatableWebSocket.lastSeenTimestamp =
-							BigInt(Date.now());
+							Date.now();
 					}
 				}
 
@@ -1549,12 +1725,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			const onSocketMessage = (event: any) => {
 				// Update state of hibernatable WS
 				if (persistedHibernatableWebSocket) {
-					persistedHibernatableWebSocket.lastSeenTimestamp = BigInt(
-						Date.now(),
-					);
-					persistedHibernatableWebSocket.msgIndex = BigInt(
-						event.rivetMessageIndex,
-					);
+					persistedHibernatableWebSocket.lastSeenTimestamp =
+						Date.now();
+					persistedHibernatableWebSocket.msgIndex =
+						event.rivetMessageIndex;
 				}
 
 				this.#rLog.debug({
@@ -1570,15 +1744,15 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				// Remove hibernatable WS
 				if (rivetRequestId) {
 					const rivetRequestIdLocal = rivetRequestId;
-					const wsIndex =
-						this.#persist.hibernatableWebSocket.findIndex((ws) =>
+					const wsIndex = this.#persist.hibernatableConns.findIndex(
+						(conn) =>
 							arrayBuffersEqual(
-								ws.requestId,
+								conn.hibernatableRequestId,
 								rivetRequestIdLocal,
 							),
-						);
+					);
 
-					const removed = this.#persist.hibernatableWebSocket.splice(
+					const removed = this.#persist.hibernatableConns.splice(
 						wsIndex,
 						1,
 					);
@@ -1604,7 +1778,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 					rivetRequestId,
 					isHibernatable: !!persistedHibernatableWebSocket,
 					hibernatableWebSocketCount:
-						this.#persist.hibernatableWebSocket.length,
+						this.#persist.hibernatableConns.length,
 				});
 
 				// Remove listener and socket from tracking
@@ -1643,90 +1817,89 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	// MARK: Lifecycle hooks
-
-	// MARK: Exposed methods
-	get log(): Logger {
-		invariant(this.#log, "log not configured");
-		return this.#log;
-	}
-
-	get rLog(): Logger {
-		invariant(this.#rLog, "log not configured");
-		return this.#rLog;
-	}
-
-	/**
-	 * Gets the name.
-	 */
-	get name(): string {
-		return this.#name;
-	}
-
-	/**
-	 * Gets the key.
-	 */
-	get key(): ActorKey {
-		return this.#key;
-	}
-
-	/**
-	 * Gets the region.
-	 */
-	get region(): string {
-		return this.#region;
-	}
-
-	/**
-	 * Gets the scheduler.
-	 */
-	get schedule(): Schedule {
-		return this.#schedule;
-	}
-
-	/**
-	 * Gets the map of connections.
-	 */
-	get conns(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
-		return this.#connections;
-	}
-
-	/**
-	 * Gets the current state.
-	 *
-	 * Changing properties of this value will automatically be persisted.
-	 */
-	get state(): S {
-		this.#validateStateEnabled();
-		return this.#persist.state;
-	}
-
-	/**
-	 * Gets the database.
-	 * @experimental
-	 * @throws {DatabaseNotEnabled} If the database is not enabled.
-	 */
-	get db(): InferDatabaseClient<DB> {
-		if (!this.#db) {
-			throw new errors.DatabaseNotEnabled();
+	// MARK: Events
+	#addSubscription(
+		eventName: string,
+		connection: Conn<S, CP, CS, V, I, DB>,
+		fromPersist: boolean,
+	) {
+		if (connection.subscriptions.has(eventName)) {
+			this.#rLog.debug({
+				msg: "connection already has subscription",
+				eventName,
+			});
+			return;
 		}
-		return this.#db;
+
+		// Persist subscriptions & save immediately
+		//
+		// Don't update persistence if already restoring from persistence
+		if (!fromPersist) {
+			connection.__persist.subscriptions.push({ eventName: eventName });
+
+			// Mark connection as changed
+			this.#changedConnections.add(connection.id);
+
+			this.saveState({ immediate: true });
+		}
+
+		// Update subscriptions
+		connection.subscriptions.add(eventName);
+
+		// Update subscription index
+		let subscribers = this.#subscriptionIndex.get(eventName);
+		if (!subscribers) {
+			subscribers = new Set();
+			this.#subscriptionIndex.set(eventName, subscribers);
+		}
+		subscribers.add(connection);
 	}
 
-	/**
-	 * Sets the current state.
-	 *
-	 * This property will automatically be persisted.
-	 */
-	set state(value: S) {
-		this.#validateStateEnabled();
-		this.#persist.state = value;
-	}
+	#removeSubscription(
+		eventName: string,
+		connection: Conn<S, CP, CS, V, I, DB>,
+		fromRemoveConn: boolean,
+	) {
+		if (!connection.subscriptions.has(eventName)) {
+			this.#rLog.warn({
+				msg: "connection does not have subscription",
+				eventName,
+			});
+			return;
+		}
 
-	get vars(): V {
-		this.#validateVarsEnabled();
-		invariant(this.#vars !== undefined, "vars not enabled");
-		return this.#vars;
+		// Persist subscriptions & save immediately
+		//
+		// Don't update the connection itself if the connection is already being removed
+		if (!fromRemoveConn) {
+			connection.subscriptions.delete(eventName);
+
+			const subIdx = connection.__persist.subscriptions.findIndex(
+				(s) => s.eventName === eventName,
+			);
+			if (subIdx !== -1) {
+				connection.__persist.subscriptions.splice(subIdx, 1);
+			} else {
+				this.#rLog.warn({
+					msg: "subscription does not exist with name",
+					eventName,
+				});
+			}
+
+			// Mark connection as changed
+			this.#changedConnections.add(connection.id);
+
+			this.saveState({ immediate: true });
+		}
+
+		// Update scriptions index
+		const subscribers = this.#subscriptionIndex.get(eventName);
+		if (subscribers) {
+			subscribers.delete(connection);
+			if (subscribers.size === 0) {
+				this.#subscriptionIndex.delete(eventName);
+			}
+		}
 	}
 
 	/**
@@ -1766,306 +1939,158 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	/**
-	 * Prevents the actor from sleeping until promise is complete.
-	 *
-	 * This allows the actor runtime to ensure that a promise completes while
-	 * returning from an action request early.
-	 *
-	 * @param promise - The promise to run in the background.
-	 */
-	_waitUntil(promise: Promise<void>) {
-		this.#assertReady();
+	// MARK: Alarms
+	async #scheduleEventInner(newEvent: PersistedScheduleEvent) {
+		this.actorContext.log.info({ msg: "scheduling event", ...newEvent });
 
-		// TODO: Should we force save the state?
-		// Add logging to promise and make it non-failable
-		const nonfailablePromise = promise
-			.then(() => {
-				this.#rLog.debug({ msg: "wait until promise complete" });
-			})
-			.catch((error) => {
-				this.#rLog.error({
-					msg: "wait until promise failed",
-					error: stringifyError(error),
-				});
-			});
-		this.#backgroundPromises.push(nonfailablePromise);
-	}
-
-	/**
-	 * Forces the state to get saved.
-	 *
-	 * This is helpful if running a long task that may fail later or when
-	 * running a background job that updates the state.
-	 *
-	 * @param opts - Options for saving the state.
-	 */
-	async saveState(opts: SaveStateOptions) {
-		this.#assertReady(opts.allowStoppingState);
-
-		this.#rLog.debug({
-			msg: "saveState called",
-			persistChanged: this.#persistChanged,
-			allowStoppingState: opts.allowStoppingState,
-			immediate: opts.immediate,
-		});
-
-		if (this.#persistChanged) {
-			if (opts.immediate) {
-				// Save immediately
-				await this.#savePersistInner();
-			} else {
-				// Create callback
-				if (!this.#onPersistSavedPromise) {
-					this.#onPersistSavedPromise = promiseWithResolvers();
-				}
-
-				// Save state throttled
-				this.#savePersistThrottled();
-
-				// Wait for save
-				await this.#onPersistSavedPromise.promise;
-			}
-		}
-	}
-
-	/**
-	 * Called by router middleware when an HTTP request begins.
-	 */
-	__beginHonoHttpRequest() {
-		this.#activeHonoHttpRequests++;
-		this.#resetSleepTimer();
-	}
-
-	/**
-	 * Called by router middleware when an HTTP request ends.
-	 */
-	__endHonoHttpRequest() {
-		this.#activeHonoHttpRequests--;
-		if (this.#activeHonoHttpRequests < 0) {
-			this.#activeHonoHttpRequests = 0;
-			this.#rLog.warn({
-				msg: "active hono requests went below 0, this is a RivetKit bug",
-				...EXTRA_ERROR_LOG,
-			});
-		}
-		this.#resetSleepTimer();
-	}
-
-	// MARK: Sleep
-	/**
-	 * Reset timer from the last actor interaction that allows it to be put to sleep.
-	 *
-	 * This should be called any time a sleep-related event happens:
-	 * - Connection opens (will clear timer)
-	 * - Connection closes (will schedule timer if there are no open connections)
-	 * - Alarm triggers (will reset timer)
-	 *
-	 * We don't need to call this on events like individual action calls, since there will always be a connection open for these.
-	 **/
-	#resetSleepTimer() {
-		if (this.#config.options.noSleep || !this.#sleepingSupported) return;
-
-		// Don't sleep if already stopping
-		if (this.#stopCalled) return;
-
-		const canSleep = this.#canSleep();
-
-		this.#rLog.debug({
-			msg: "resetting sleep timer",
-			canSleep: CanSleep[canSleep],
-			existingTimeout: !!this.#sleepTimeout,
-			timeout: this.#config.options.sleepTimeout,
-		});
-
-		if (this.#sleepTimeout) {
-			clearTimeout(this.#sleepTimeout);
-			this.#sleepTimeout = undefined;
-		}
-
-		// Don't set a new timer if already sleeping
-		if (this.#sleepCalled) return;
-
-		if (canSleep === CanSleep.Yes) {
-			this.#sleepTimeout = setTimeout(() => {
-				this._startSleep();
-			}, this.#config.options.sleepTimeout);
-		}
-	}
-
-	/** If this actor can be put in a sleeping state. */
-	#canSleep(): CanSleep {
-		if (!this.#ready) return CanSleep.NotReady;
-
-		// Do not sleep if Hono HTTP requests are in-flight
-		if (this.#activeHonoHttpRequests > 0)
-			return CanSleep.ActiveHonoHttpRequests;
-
-		// TODO: When WS hibernation is ready, update this to only count non-hibernatable websockets
-		// Do not sleep if there are raw websockets open
-		if (this.#activeRawWebSockets.size > 0)
-			return CanSleep.ActiveRawWebSockets;
-
-		// Check for active conns. This will also cover active actions, since all actions have a connection.
-		for (const conn of this.#connections.values()) {
-			// TODO: Enable this when hibernation is implemented. We're waiting on support for Guard to not auto-wake the actor if it sleeps.
-			// if (!conn.isHibernatable)
-			// 	return false;
-
-			// if (!conn.isHibernatable) return CanSleep.ActiveConns;
-			return CanSleep.ActiveConns;
-		}
-
-		return CanSleep.Yes;
-	}
-
-	/**
-	 * Puts an actor to sleep. This should just start the sleep sequence, most shutdown logic should be in _stop (which is called by the ActorDriver when sleeping).
-	 *
-	 * For the engine, this will:
-	 * 1. Publish EventActorIntent with ActorIntentSleep (via driver.startSleep)
-	 * 2. Engine runner will wait for CommandStopActor
-	 * 3. Engine runner will call _onStop and wait for it to finish
-	 * 4. Engine runner will publish EventActorStateUpdate with ActorStateSTop
-	 **/
-	_startSleep() {
-		if (this.#stopCalled) {
-			this.#rLog.debug({
-				msg: "cannot call _startSleep if actor already stopping",
-			});
-			return;
-		}
-
-		// IMPORTANT: #sleepCalled should have no effect on the actor's
-		// behavior aside from preventing calling _startSleep twice. Wait for
-		// `_onStop` before putting in a stopping state.
-		if (this.#sleepCalled) {
-			this.#rLog.warn({
-				msg: "cannot call _startSleep twice, actor already sleeping",
-			});
-			return;
-		}
-		this.#sleepCalled = true;
-
-		// NOTE: Publishes ActorIntentSleep
-		const sleep = this.#actorDriver.startSleep?.bind(
-			this.#actorDriver,
-			this.#actorId,
+		// Insert event in to index
+		const insertIndex = this.#persist.scheduledEvents.findIndex(
+			(x) => x.timestamp > newEvent.timestamp,
 		);
-		invariant(this.#sleepingSupported, "sleeping not supported");
-		invariant(sleep, "no sleep on driver");
+		if (insertIndex === -1) {
+			this.#persist.scheduledEvents.push(newEvent);
+		} else {
+			this.#persist.scheduledEvents.splice(insertIndex, 0, newEvent);
+		}
 
-		this.#rLog.info({ msg: "actor sleeping" });
+		// Update alarm if:
+		// - this is the newest event (i.e. at beginning of array) or
+		// - this is the only event (i.e. the only event in the array)
+		if (insertIndex === 0 || this.#persist.scheduledEvents.length === 1) {
+			this.actorContext.log.info({
+				msg: "setting alarm",
+				timestamp: newEvent.timestamp,
+				eventCount: this.#persist.scheduledEvents.length,
+			});
+			await this.#queueSetAlarm(newEvent.timestamp);
+		}
+	}
 
-		// Schedule sleep to happen on the next tick. This allows for any action that calls _sleep to complete.
-		setImmediate(() => {
-			// The actor driver should call stop when ready to stop
-			//
-			// This will call _stop once Pegboard responds with the new status
-			sleep();
+	async scheduleEvent(
+		timestamp: number,
+		action: string,
+		args: unknown[],
+	): Promise<void> {
+		return this.#scheduleEventInner({
+			eventId: crypto.randomUUID(),
+			timestamp,
+			action,
+			args: bufferToArrayBuffer(cbor.encode(args)),
 		});
 	}
 
-	// MARK: Stop
 	/**
-	 * For the engine:
-	 * 1. Engine runner receives CommandStopActor
-	 * 2. Engine runner calls _onStop and waits for it to finish
-	 * 3. Engine runner publishes EventActorStateUpdate with ActorStateSTop
+	 * Triggers any pending alarms.
+	 *
+	 * This method is idempotent. It's called automatically when the actor wakes
+	 * in order to trigger any pending alarms.
 	 */
-	async _onStop() {
-		if (this.#stopCalled) {
-			this.#rLog.warn({ msg: "already stopping actor" });
+	async _onAlarm() {
+		const now = Date.now();
+		this.actorContext.log.debug({
+			msg: "alarm triggered",
+			now,
+			events: this.#persist.scheduledEvents.length,
+		});
+
+		// Update sleep
+		//
+		// Do this before any async logic
+		this.#resetSleepTimer();
+
+		// Remove events from schedule that we're about to run
+		const runIndex = this.#persist.scheduledEvents.findIndex(
+			(x) => x.timestamp <= now,
+		);
+		if (runIndex === -1) {
+			// This method is idempotent, so this will happen in scenarios like `start` and
+			// no events are pending.
+			this.#rLog.debug({ msg: "no events are due yet" });
+			if (this.#persist.scheduledEvents.length > 0) {
+				const nextTs = this.#persist.scheduledEvents[0].timestamp;
+				this.actorContext.log.debug({
+					msg: "alarm fired early, rescheduling for next event",
+					now,
+					nextTs,
+					delta: nextTs - now,
+				});
+				await this.#queueSetAlarm(nextTs);
+			}
+			this.actorContext.log.debug({ msg: "no events to run", now });
 			return;
 		}
-		this.#stopCalled = true;
+		const scheduleEvents = this.#persist.scheduledEvents.splice(
+			0,
+			runIndex + 1,
+		);
+		this.actorContext.log.debug({
+			msg: "running events",
+			count: scheduleEvents.length,
+		});
 
-		this.#rLog.info({ msg: "actor stopping" });
-
-		if (this.#sleepTimeout) {
-			clearTimeout(this.#sleepTimeout);
-			this.#sleepTimeout = undefined;
+		// Set alarm for next event
+		if (this.#persist.scheduledEvents.length > 0) {
+			const nextTs = this.#persist.scheduledEvents[0].timestamp;
+			this.actorContext.log.info({
+				msg: "setting next alarm",
+				nextTs,
+				remainingEvents: this.#persist.scheduledEvents.length,
+			});
+			await this.#queueSetAlarm(nextTs);
 		}
 
-		// Abort any listeners waiting for shutdown
-		try {
-			this.#abortController.abort();
-		} catch {}
-
-		// Call onStop lifecycle hook if defined
-		if (this.#config.onStop) {
+		// Iterate by event key in order to ensure we call the events in order
+		for (const event of scheduleEvents) {
 			try {
-				this.#rLog.debug({ msg: "calling onStop" });
-				const result = this.#config.onStop(this.actorContext);
-				if (result instanceof Promise) {
-					await deadline(result, this.#config.options.onStopTimeout);
-				}
-				this.#rLog.debug({ msg: "onStop completed" });
-			} catch (error) {
-				if (error instanceof DeadlineError) {
-					this.#rLog.error({ msg: "onStop timed out" });
-				} else {
-					this.#rLog.error({
-						msg: "error in onStop",
+				this.actorContext.log.info({
+					msg: "running action for event",
+					event: event.eventId,
+					timestamp: event.timestamp,
+					action: event.action,
+				});
+
+				// Look up function
+				const fn: unknown = this.#config.actions[event.action];
+
+				if (!fn)
+					throw new Error(`Missing action for alarm ${event.action}`);
+				if (typeof fn !== "function")
+					throw new Error(
+						`Alarm function lookup for ${event.action} returned ${typeof fn}`,
+					);
+
+				// Call function
+				try {
+					const args = event.args
+						? cbor.decode(new Uint8Array(event.args))
+						: [];
+					await fn.call(undefined, this.actorContext, ...args);
+				} catch (error) {
+					this.actorContext.log.error({
+						msg: "error while running event",
 						error: stringifyError(error),
+						event: event.eventId,
+						timestamp: event.timestamp,
+						action: event.action,
 					});
 				}
-			}
-		}
-
-		const promises: Promise<unknown>[] = [];
-
-		// Disconnect existing non-hibernatable connections
-		for (const connection of this.#connections.values()) {
-			if (!connection.isHibernatable) {
-				this.#rLog.debug({
-					msg: "disconnecting non-hibernatable connection on actor stop",
-					connId: connection.id,
+			} catch (error) {
+				this.actorContext.log.error({
+					msg: "internal error while running event",
+					error: stringifyError(error),
+					...event,
 				});
-				promises.push(connection.disconnect());
 			}
-
-			// TODO: Figure out how to abort HTTP requests on shutdown. This
-			// might already be handled by the engine runner tunnel shutdown.
 		}
-
-		// Wait for any background tasks to finish, with timeout
-		await this.#waitBackgroundPromises(
-			this.#config.options.waitUntilTimeout,
-		);
-
-		// Clear timeouts
-		if (this.#pendingSaveTimeout) clearTimeout(this.#pendingSaveTimeout);
-
-		// Write state
-		await this.saveState({ immediate: true, allowStoppingState: true });
-
-		// Await all `close` event listeners with 1.5 second timeout
-		const res = Promise.race([
-			Promise.all(promises).then(() => false),
-			new Promise<boolean>((res) =>
-				globalThis.setTimeout(() => res(true), 1500),
-			),
-		]);
-
-		if (await res) {
-			this.#rLog.warn({
-				msg: "timed out waiting for connections to close, shutting down anyway",
-			});
-		}
-
-		// Wait for queues to finish
-		if (this.#persistWriteQueue.runningDrainLoop)
-			await this.#persistWriteQueue.runningDrainLoop;
-		if (this.#alarmWriteQueue.runningDrainLoop)
-			await this.#alarmWriteQueue.runningDrainLoop;
 	}
 
-	/** Abort signal that fires when the actor is stopping. */
-	get abortSignal(): AbortSignal {
-		return this.#abortController.signal;
+	async #queueSetAlarm(timestamp: number): Promise<void> {
+		await this.#alarmWriteQueue.enqueue(async () => {
+			await this.#actorDriver.setAlarm(this, timestamp);
+		});
 	}
 
+	// MARK: Background Promises
 	/** Wait for background waitUntil promises with a timeout. */
 	async #waitBackgroundPromises(timeoutMs: number) {
 		const pending = this.#backgroundPromises;
@@ -2093,99 +2118,100 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
+	/**
+	 * Prevents the actor from sleeping until promise is complete.
+	 *
+	 * This allows the actor runtime to ensure that a promise completes while
+	 * returning from an action request early.
+	 *
+	 * @param promise - The promise to run in the background.
+	 */
+	_waitUntil(promise: Promise<void>) {
+		this.#assertReady();
+
+		// TODO: Should we force save the state?
+		// Add logging to promise and make it non-failable
+		const nonfailablePromise = promise
+			.then(() => {
+				this.#rLog.debug({ msg: "wait until promise complete" });
+			})
+			.catch((error) => {
+				this.#rLog.error({
+					msg: "wait until promise failed",
+					error: stringifyError(error),
+				});
+			});
+		this.#backgroundPromises.push(nonfailablePromise);
+	}
+
 	// MARK: BARE Conversion Helpers
 	#convertToBarePersisted(
 		persist: PersistedActor<S, CP, CS, I>,
-	): bareSchema.PersistedActor {
-		// Merge connections with hibernatableWebSocket data into hibernatableConns
-		const hibernatableConns: bareSchema.PersistedHibernatableConn[] = [];
-
-		for (const conn of persist.connections) {
-			if (conn.hibernatableRequestId) {
-				// Find matching hibernatable WebSocket
-				const ws = persist.hibernatableWebSocket.find((ws) =>
-					arrayBuffersEqual(
-						ws.requestId,
-						conn.hibernatableRequestId!,
-					),
-				);
-
-				if (ws) {
-					hibernatableConns.push({
-						id: conn.connId,
-						parameters: bufferToArrayBuffer(
-							cbor.encode(conn.params || {}),
-						),
-						state: bufferToArrayBuffer(
-							cbor.encode(conn.state || {}),
-						),
-						hibernatableRequestId: conn.hibernatableRequestId,
-						lastSeenTimestamp: ws.lastSeenTimestamp,
-						msgIndex: ws.msgIndex,
-					});
-				}
-			}
-		}
+	): persistSchema.Actor {
+		// Convert hibernatable connections from the in-memory connections map
+		// Convert hibernatableConns from the persisted structure
+		const hibernatableConns: persistSchema.HibernatableConn[] =
+			persist.hibernatableConns.map((conn) => ({
+				id: conn.id,
+				parameters: bufferToArrayBuffer(
+					cbor.encode(conn.parameters || {}),
+				),
+				state: bufferToArrayBuffer(cbor.encode(conn.state || {})),
+				subscriptions: conn.subscriptions.map((sub) => ({
+					eventName: sub.eventName,
+				})),
+				hibernatableRequestId: conn.hibernatableRequestId,
+				lastSeenTimestamp: BigInt(conn.lastSeenTimestamp),
+				msgIndex: BigInt(conn.msgIndex),
+			}));
 
 		return {
 			input:
 				persist.input !== undefined
 					? bufferToArrayBuffer(cbor.encode(persist.input))
 					: null,
-			hasInitialized: persist.hasInitiated,
+			hasInitialized: persist.hasInitialized,
 			state: bufferToArrayBuffer(cbor.encode(persist.state)),
 			hibernatableConns,
 			scheduledEvents: persist.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
 				timestamp: BigInt(event.timestamp),
-				action: event.kind.generic.actionName,
-				args: event.kind.generic.args ?? null,
+				action: event.action,
+				args: event.args ?? null,
 			})),
 		};
 	}
 
 	#convertFromBarePersisted(
-		bareData: bareSchema.PersistedActor,
+		bareData: persistSchema.Actor,
 	): PersistedActor<S, CP, CS, I> {
-		// Split hibernatableConns back into connections and hibernatableWebSocket
-		const connections: PersistedConn<CP, CS>[] = [];
-		const hibernatableWebSocket: PersistedHibernatableWebSocket[] = [];
-
-		for (const conn of bareData.hibernatableConns) {
-			connections.push({
-				connId: conn.id,
-				params: cbor.decode(new Uint8Array(conn.parameters)),
-				state: cbor.decode(new Uint8Array(conn.state)),
-				subscriptions: [],
-				lastSeen: 0, // Will be set from lastSeenTimestamp
+		// Convert hibernatableConns from the BARE schema format
+		const hibernatableConns: PersistedHibernatableConn<CP, CS>[] =
+			bareData.hibernatableConns.map((conn) => ({
+				id: conn.id,
+				parameters: cbor.decode(new Uint8Array(conn.parameters)) as CP,
+				state: cbor.decode(new Uint8Array(conn.state)) as CS,
+				subscriptions: conn.subscriptions.map((sub) => ({
+					eventName: sub.eventName,
+				})),
 				hibernatableRequestId: conn.hibernatableRequestId,
-			});
-
-			hibernatableWebSocket.push({
-				requestId: conn.hibernatableRequestId,
-				lastSeenTimestamp: conn.lastSeenTimestamp,
-				msgIndex: conn.msgIndex,
-			});
-		}
+				lastSeenTimestamp: Number(conn.lastSeenTimestamp),
+				msgIndex: Number(conn.msgIndex),
+			}));
 
 		return {
 			input: bareData.input
 				? cbor.decode(new Uint8Array(bareData.input))
 				: undefined,
-			hasInitiated: bareData.hasInitialized,
+			hasInitialized: bareData.hasInitialized,
 			state: cbor.decode(new Uint8Array(bareData.state)),
-			connections,
+			hibernatableConns,
 			scheduledEvents: bareData.scheduledEvents.map((event) => ({
 				eventId: event.eventId,
 				timestamp: Number(event.timestamp),
-				kind: {
-					generic: {
-						actionName: event.action,
-						args: event.args,
-					},
-				},
+				action: event.action,
+				args: event.args ?? undefined,
 			})),
-			hibernatableWebSocket,
 		};
 	}
 }
