@@ -21,7 +21,7 @@ import {
 	ActorDestroying,
 	InternalError,
 } from "rivetkit/errors";
-import { stringifyError } from "rivetkit/utils";
+import { assertUnreachable, stringifyError } from "rivetkit/utils";
 import { buildActorId, parseActorId } from "./actor-id";
 import { GLOBAL_KV_KEYS } from "./global_kv";
 import { getCloudflareAmbientEnv } from "./handler";
@@ -333,25 +333,32 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 
 		// Get or create actor using the Durable Object's method
 		const actor = env.ACTOR_DO.get(doId);
-		const result = await actor.getOrCreate({
+		const result = await actor.create({
 			name,
 			key,
 			input,
+			allowExisting: true,
 		});
+		if ("success" in result) {
+			const { actorId, created } = result.success;
+			logger().debug({
+				msg: "getOrCreateWithKey result",
+				actorId,
+				name,
+				key,
+				created,
+			});
 
-		logger().debug({
-			msg: "getOrCreateWithKey result",
-			actorId: result.actorId,
-			name,
-			key,
-			created: result.created,
-		});
-
-		return {
-			actorId: result.actorId,
-			name,
-			key,
-		};
+			return {
+				actorId,
+				name,
+				key,
+			};
+		} else if ("error" in result) {
+			throw new Error(`Error: ${JSON.stringify(result.error)}`);
+		} else {
+			assertUnreachable(result);
+		}
 	}
 
 	async createActor({
@@ -373,22 +380,27 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			name,
 			key,
 			input,
+			allowExisting: false,
 		});
 
-		// Check if there was an error
-		if ("error" in result) {
+		if ("success" in result) {
+			const { actorId } = result.success;
+			return {
+				actorId,
+				name,
+				key,
+			};
+		} else if ("error" in result) {
 			if (result.error.actorAlreadyExists) {
 				throw new ActorAlreadyExists(name, key);
 			}
-			// Should never happen, but handle unknown errors
-			throw new InternalError("Unknown error creating actor");
-		}
 
-		return {
-			actorId: result.success.actorId,
-			name: result.success.name,
-			key: result.success.key,
-		};
+			throw new InternalError(
+				`Unknown error creating actor: ${JSON.stringify(result.error)}`,
+			);
+		} else {
+			assertUnreachable(result);
+		}
 	}
 
 	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
