@@ -11,10 +11,15 @@ use tokio::{signal::ctrl_c, sync::watch, task::JoinHandle};
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::{ctx::WorkflowCtx, db::DatabaseHandle, error::WorkflowError, registry::RegistryHandle};
+use crate::{
+	ctx::WorkflowCtx,
+	db::{BumpSubSubject, DatabaseHandle},
+	error::WorkflowError,
+	registry::RegistryHandle,
+};
 
 /// How often to run gc and update ping.
-const PING_INTERVAL: Duration = Duration::from_secs(10);
+pub(crate) const PING_INTERVAL: Duration = Duration::from_secs(10);
 /// How often to publish metrics.
 const METRICS_INTERVAL: Duration = Duration::from_secs(20);
 /// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
@@ -26,7 +31,7 @@ const PULL_WORKFLOWS_TIMEOUT: Duration = Duration::from_secs(10);
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
 /// the database.
 pub struct Worker {
-	worker_instance_id: Id,
+	worker_id: Id,
 
 	registry: RegistryHandle,
 	db: DatabaseHandle,
@@ -45,7 +50,7 @@ impl Worker {
 		pools: rivet_pools::Pools,
 	) -> Self {
 		Worker {
-			worker_instance_id: Id::new_v1(config.dc_label()),
+			worker_id: Id::new_v1(config.dc_label()),
 
 			registry,
 			db,
@@ -58,23 +63,30 @@ impl Worker {
 	}
 
 	/// Polls the database periodically or wakes immediately when `Database::bump_sub` finishes
-	#[tracing::instrument(skip_all, fields(worker_instance_id=%self.worker_instance_id))]
+	#[tracing::instrument(skip_all, fields(worker_id=%self.worker_id))]
 	pub async fn start(mut self, mut shutdown_rx: Option<watch::Receiver<()>>) -> Result<()> {
 		tracing::debug!(
 			registered_workflows = ?self.registry.size(),
-			"started worker instance",
+			"started worker",
 		);
 
 		let cache = rivet_cache::CacheInner::from_env(&self.config, self.pools.clone())?;
 
-		let mut bump_sub = { self.db.bump_sub().await? };
+		let mut bump_sub = { self.db.bump_sub(BumpSubSubject::Worker).await? };
 
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		let mut term_signal =
-			TermSignal::new().expect("failed to setup termination signal handler");
+			TermSignal::new().context("failed to setup termination signal handler")?;
 
+		// Update ping at least once before doing anything else
+		self.db
+			.update_worker_ping(self.worker_id)
+			.await
+			.context("failed updating worker ping")?;
+
+		// Create handles for bg tasks
 		let mut gc_handle = self.gc();
 		let mut metrics_handle = self.publish_metrics();
 
@@ -139,6 +151,123 @@ impl Worker {
 		res
 	}
 
+	/// Query the database for new workflows and run them.
+	#[tracing::instrument(skip_all)]
+	async fn tick(&mut self, cache: &rivet_cache::Cache) -> Result<()> {
+		// Create filter from registered workflow names
+		let filter = self
+			.registry
+			.workflows
+			.keys()
+			.map(|k| k.as_str())
+			.collect::<Vec<_>>();
+
+		// Query awake workflows
+		let workflows = tokio::time::timeout(
+			PULL_WORKFLOWS_TIMEOUT,
+			self.db.pull_workflows(self.worker_id, &filter),
+		)
+		.await
+		.context("took too long pulling workflows, worker cannot continue")??;
+
+		// Remove join handles for completed workflows. This must happen after we pull workflows to ensure an
+		// accurate state of the current workflows
+		self.running_workflows
+			.retain(|_, wf| !wf.handle.is_finished());
+
+		for workflow in workflows {
+			let workflow_id = workflow.workflow_id;
+
+			if self.running_workflows.contains_key(&workflow_id) {
+				tracing::error!(?workflow_id, "workflow already running");
+				continue;
+			}
+
+			let (stop_tx, stop_rx) = watch::channel(());
+
+			let ctx = WorkflowCtx::new(
+				self.registry.clone(),
+				self.db.clone(),
+				self.config.clone(),
+				self.pools.clone(),
+				cache.clone(),
+				workflow,
+				stop_rx,
+			)?;
+
+			let current_span_ctx = tracing::Span::current()
+				.context()
+				.span()
+				.span_context()
+				.clone();
+
+			let handle = tokio::task::spawn(
+				// NOTE: No .in_current_span() because we want this to be a separate trace
+				async move {
+					if let Err(err) = ctx.run(current_span_ctx).await {
+						tracing::error!(?err, ?workflow_id, "unhandled workflow error");
+					}
+				},
+			);
+
+			self.running_workflows.insert(
+				workflow_id,
+				WorkflowHandle {
+					stop: stop_tx,
+					handle,
+				},
+			);
+		}
+
+		Ok(())
+	}
+
+	fn gc(&self) -> JoinHandle<()> {
+		let db = self.db.clone();
+		let worker_id = self.worker_id;
+
+		tokio::task::spawn(
+			async move {
+				let mut ping_interval = tokio::time::interval(PING_INTERVAL);
+				ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+				loop {
+					ping_interval.tick().await;
+
+					if let Err(err) = db.update_worker_ping(worker_id).await {
+						tracing::error!(?err, "unhandled update ping error");
+					}
+
+					if let Err(err) = db.clear_expired_leases(worker_id).await {
+						tracing::error!(?err, "unhandled gc error");
+					}
+				}
+			}
+			.instrument(tracing::info_span!("worker_gc_task")),
+		)
+	}
+
+	fn publish_metrics(&self) -> JoinHandle<()> {
+		let db = self.db.clone();
+		let worker_id = self.worker_id;
+
+		tokio::task::spawn(
+			async move {
+				let mut metrics_interval = tokio::time::interval(METRICS_INTERVAL);
+				metrics_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+				loop {
+					metrics_interval.tick().await;
+
+					if let Err(err) = db.publish_metrics(worker_id).await {
+						tracing::error!(?err, "unhandled metrics error");
+					}
+				}
+			}
+			.instrument(tracing::info_span!("worker_metrics_task")),
+		)
+	}
+
 	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut term_signal: TermSignal) {
 		// Shutdown sequence
@@ -149,6 +278,10 @@ impl Worker {
 		);
 
 		let shutdown_start = Instant::now();
+
+		if let Err(err) = self.db.mark_worker_inactive(self.worker_id).await {
+			tracing::error!(?err, worker_id=?self.worker_id, "failed to mark worker as inactive");
+		}
 
 		for (workflow_id, wf) in &self.running_workflows {
 			if wf.stop.send(()).is_err() {
@@ -210,123 +343,6 @@ impl Worker {
 		tracing::info!("shutdown complete");
 
 		rivet_runtime::shutdown().await;
-	}
-
-	/// Query the database for new workflows and run them.
-	#[tracing::instrument(skip_all)]
-	async fn tick(&mut self, cache: &rivet_cache::Cache) -> Result<()> {
-		// Create filter from registered workflow names
-		let filter = self
-			.registry
-			.workflows
-			.keys()
-			.map(|k| k.as_str())
-			.collect::<Vec<_>>();
-
-		// Query awake workflows
-		let workflows = tokio::time::timeout(
-			PULL_WORKFLOWS_TIMEOUT,
-			self.db.pull_workflows(self.worker_instance_id, &filter),
-		)
-		.await
-		.context("took too long pulling workflows, worker cannot continue")??;
-
-		// Remove join handles for completed workflows. This must happen after we pull workflows to ensure an
-		// accurate state of the current workflows
-		self.running_workflows
-			.retain(|_, wf| !wf.handle.is_finished());
-
-		for workflow in workflows {
-			let workflow_id = workflow.workflow_id;
-
-			if self.running_workflows.contains_key(&workflow_id) {
-				tracing::error!(?workflow_id, "workflow already running");
-				continue;
-			}
-
-			let (stop_tx, stop_rx) = watch::channel(());
-
-			let ctx = WorkflowCtx::new(
-				self.registry.clone(),
-				self.db.clone(),
-				self.config.clone(),
-				self.pools.clone(),
-				cache.clone(),
-				workflow,
-				stop_rx,
-			)?;
-
-			let current_span_ctx = tracing::Span::current()
-				.context()
-				.span()
-				.span_context()
-				.clone();
-
-			let handle = tokio::task::spawn(
-				// NOTE: No .in_current_span() because we want this to be a separate trace
-				async move {
-					if let Err(err) = ctx.run(current_span_ctx).await {
-						tracing::error!(?err, ?workflow_id, "unhandled workflow error");
-					}
-				},
-			);
-
-			self.running_workflows.insert(
-				workflow_id,
-				WorkflowHandle {
-					stop: stop_tx,
-					handle,
-				},
-			);
-		}
-
-		Ok(())
-	}
-
-	fn gc(&self) -> JoinHandle<()> {
-		let db = self.db.clone();
-		let worker_instance_id = self.worker_instance_id;
-
-		tokio::task::spawn(
-			async move {
-				let mut ping_interval = tokio::time::interval(PING_INTERVAL);
-				ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-				loop {
-					ping_interval.tick().await;
-
-					if let Err(err) = db.update_worker_ping(worker_instance_id).await {
-						tracing::error!(?err, "unhandled update ping error");
-					}
-
-					if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
-						tracing::error!(?err, "unhandled gc error");
-					}
-				}
-			}
-			.instrument(tracing::info_span!("worker_gc_task")),
-		)
-	}
-
-	fn publish_metrics(&self) -> JoinHandle<()> {
-		let db = self.db.clone();
-		let worker_instance_id = self.worker_instance_id;
-
-		tokio::task::spawn(
-			async move {
-				let mut metrics_interval = tokio::time::interval(METRICS_INTERVAL);
-				metrics_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-				loop {
-					metrics_interval.tick().await;
-
-					if let Err(err) = db.publish_metrics(worker_instance_id).await {
-						tracing::error!(?err, "unhandled metrics error");
-					}
-				}
-			}
-			.instrument(tracing::info_span!("worker_metrics_task")),
-		)
 	}
 }
 

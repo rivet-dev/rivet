@@ -19,7 +19,7 @@ use crate::{
 	activity::{Activity, ActivityInput},
 	builder::{WorkflowRepr, workflow as builder},
 	ctx::{ActivityCtx, ListenCtx, MessageCtx, VersionedWorkflowCtx},
-	db::{DatabaseHandle, PulledWorkflowData},
+	db::{BumpSubSubject, DatabaseHandle, PulledWorkflowData},
 	error::{WorkflowError, WorkflowResult},
 	executable::{AsyncResult, Executable},
 	history::{
@@ -716,7 +716,12 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal");
 
-			let mut bump_sub = self.db.bump_sub().await?;
+			let mut bump_sub = self
+				.db
+				.bump_sub(BumpSubSubject::SignalPublish {
+					to_workflow_id: self.workflow_id,
+				})
+				.await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -779,7 +784,12 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal");
 
-			let mut bump_sub = self.db.bump_sub().await?;
+			let mut bump_sub = self
+				.db
+				.bump_sub(BumpSubSubject::SignalPublish {
+					to_workflow_id: self.workflow_id,
+				})
+				.await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1186,7 +1196,12 @@ impl WorkflowCtx {
 				(async {
 					tracing::debug!("listening for signal with timeout");
 
-					let mut bump_sub = self.db.bump_sub().await?;
+					let mut bump_sub = self
+						.db
+						.bump_sub(BumpSubSubject::SignalPublish {
+							to_workflow_id: self.workflow_id,
+						})
+						.await?;
 					let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -1229,7 +1244,12 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!("listening for signal with timeout");
 
-			let mut bump_sub = self.db.bump_sub().await?;
+			let mut bump_sub = self
+				.db
+				.bump_sub(BumpSubSubject::SignalPublish {
+					to_workflow_id: self.workflow_id,
+				})
+				.await?;
 			let mut retries = self.db.max_signal_poll_retries();
 			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);

@@ -34,14 +34,15 @@ sentry.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 strum.workspace = true
+sysinfo.workspace = true
 thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing-logfmt.workspace = true
 tracing-opentelemetry.workspace = true
-universaldb.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
+universaldb.workspace = true
 universalpubsub.workspace = true
 url.workspace = true
 uuid.workspace = true

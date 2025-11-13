@@ -1087,12 +1087,12 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{worker_instance_id}}",
+					"legendFormat": "{{worker_id}}",
 					"meta": {},
 					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],
@@ -1211,12 +1211,12 @@
 					"editorType": "sql",
 					"format": 1,
 					"instant": false,
-					"legendFormat": "{{worker_instance_id}}",
+					"legendFormat": "{{worker_id}}",
 					"meta": {},
 					"pluginVersion": "4.11.2",
 					"queryType": "table",
 					"range": true,
-					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_instance_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
+					"rawSql": "WITH 1 AS smoothness\nSELECT\n    time,\n    label,\n    avg(value) OVER (PARTITION BY label ORDER BY time ROWS BETWEEN smoothness - 1 PRECEDING AND CURRENT ROW) as value\nFROM (\n\tSELECT\n    $__timeInterval(TimeUnix) as time,\n    Attributes['worker_id'] as label,\n    max(Value) as value\nFROM otel.otel_metrics_gauge\nWHERE MetricName = 'rivet_gasoline_last_pull_workflows_history_duration'\n    AND ResourceAttributes['rivet.project'] IN array($project)\n    AND ResourceAttributes['rivet.datacenter'] IN array($datacenter)\n    AND $__timeFilter(TimeUnix)\nGROUP BY time, label\n)\nORDER BY label",
 					"refId": "A"
 				}
 			],

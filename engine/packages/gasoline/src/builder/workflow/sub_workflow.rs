@@ -10,6 +10,7 @@ use tracing::Instrument;
 use crate::{
 	builder::{BuilderError, WorkflowRepr},
 	ctx::WorkflowCtx,
+	db::BumpSubSubject,
 	error::{WorkflowError, WorkflowResult},
 	history::cursor::HistoryResult,
 	metrics,
@@ -266,7 +267,13 @@ where
 
 		tracing::debug!("waiting for sub workflow");
 
-		let mut bump_sub = self.ctx.db().bump_sub().await?;
+		let mut bump_sub = self
+			.ctx
+			.db()
+			.bump_sub(BumpSubSubject::WorkflowComplete {
+				workflow_id: sub_workflow_id,
+			})
+			.await?;
 		let mut retries = self.ctx.db().max_sub_workflow_poll_retries();
 		let mut interval = tokio::time::interval(self.ctx.db().sub_workflow_poll_interval());
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
