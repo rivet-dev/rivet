@@ -1,1 +1,1 @@
-export * from "../../../dist/schemas/client-protocol/v1";
+export * from "../../../dist/schemas/client-protocol/v2";

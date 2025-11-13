@@ -1,14 +1,10 @@
 import * as cbor from "cbor-x";
-import invariant from "invariant";
-import { PersistedHibernatableWebSocket } from "@/schemas/actor-persist/mod";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { arrayBuffersEqual, bufferToArrayBuffer } from "@/utils";
 import {
 	CONN_DRIVERS,
-	ConnDriverKind,
 	type ConnDriverState,
-	ConnReadyState,
 	getConnDriverKindFromState,
 } from "./conn-drivers";
 import type { ConnSocket } from "./conn-socket";
@@ -17,15 +13,6 @@ import * as errors from "./errors";
 import { type ActorInstance, PERSIST_SYMBOL } from "./instance";
 import type { PersistedConn } from "./persisted";
 import { CachedSerializer } from "./protocol/serde";
-import { generateSecureToken } from "./utils";
-
-export function generateConnId(): string {
-	return crypto.randomUUID();
-}
-
-export function generateConnToken(): string {
-	return generateSecureToken(32);
-}
 
 export function generateConnRequestId(): string {
 	return crypto.randomUUID();
@@ -34,8 +21,6 @@ export function generateConnRequestId(): string {
 export type ConnId = string;
 
 export type AnyConn = Conn<any, any, any, any, any, any>;
-
-export type ConnectionStatus = "connected" | "reconnecting";
 
 /**
  * Represents a client connection to a actor.
@@ -53,7 +38,11 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	/**
 	 * The proxied state that notifies of changes automatically.
 	 *
-	 * Any data that should be stored indefinitely should be held within this object.
+	 * Any data that should be stored indefinitely should be held within this
+	 * object.
+	 *
+	 * This will only be persisted if using hibernatable WebSockets. If not,
+	 * this is just used to hole state.
 	 */
 	__persist: PersistedConn<CP, CS>;
 
@@ -67,15 +56,6 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 * If undefined, then nothing is connected to this.
 	 */
 	__socket?: ConnSocket;
-
-	get __status(): ConnectionStatus {
-		// TODO: isHibernatible might be true while the actual hibernatable websocket has disconnected
-		if (this.__socket || this.isHibernatable) {
-			return "connected";
-		} else {
-			return "reconnecting";
-		}
-	}
 
 	public get params(): CP {
 		return this.__persist.params;
@@ -111,20 +91,6 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	public get id(): ConnId {
 		return this.__persist.connId;
-	}
-
-	/**
-	 * Token used to authenticate this request.
-	 */
-	public get _token(): string {
-		return this.__persist.token;
-	}
-
-	/**
-	 * Status of the connection.
-	 */
-	public get status(): ConnectionStatus {
-		return this.__status;
 	}
 
 	/**

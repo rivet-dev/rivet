@@ -5,7 +5,6 @@ import type { WebSocket } from "ws";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/actor/utils";
 import { ActorError as ClientActorError } from "@/client/errors";
-import type { Transport } from "@/client/mod";
 import {
 	HEADER_ACTOR_QUERY,
 	HEADER_CONN_PARAMS,
@@ -13,9 +12,8 @@ import {
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
-	WS_PROTOCOL_PATH,
 	WS_PROTOCOL_TARGET,
-	WS_PROTOCOL_TRANSPORT,
+	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
 import type { UniversalEventSource } from "@/common/eventsource-interface";
 import type { DeconstructedError } from "@/common/utils";
@@ -37,7 +35,6 @@ import { logger } from "./log";
 
 export interface TestInlineDriverCallRequest {
 	encoding: Encoding;
-	transport: Transport;
 	method: string;
 	args: unknown[];
 }
@@ -56,46 +53,25 @@ export type TestInlineDriverCallResponse<T> =
 export function createTestInlineClientDriver(
 	endpoint: string,
 	encoding: Encoding,
-	transport: Transport,
 ): ManagerDriver {
 	return {
 		getForId(input: GetForIdInput): Promise<ActorOutput | undefined> {
-			return makeInlineRequest(
-				endpoint,
-				encoding,
-				transport,
-				"getForId",
-				[input],
-			);
+			return makeInlineRequest(endpoint, encoding, "getForId", [input]);
 		},
 		getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined> {
-			return makeInlineRequest(
-				endpoint,
-				encoding,
-				transport,
-				"getWithKey",
-				[input],
-			);
+			return makeInlineRequest(endpoint, encoding, "getWithKey", [input]);
 		},
 		getOrCreateWithKey(
 			input: GetOrCreateWithKeyInput,
 		): Promise<ActorOutput> {
-			return makeInlineRequest(
-				endpoint,
-				encoding,
-				transport,
-				"getOrCreateWithKey",
-				[input],
-			);
+			return makeInlineRequest(endpoint, encoding, "getOrCreateWithKey", [
+				input,
+			]);
 		},
 		createActor(input: CreateInput): Promise<ActorOutput> {
-			return makeInlineRequest(
-				endpoint,
-				encoding,
-				transport,
-				"createActor",
-				[input],
-			);
+			return makeInlineRequest(endpoint, encoding, "createActor", [
+				input,
+			]);
 		},
 		async sendRequest(
 			actorId: string,
@@ -180,8 +156,6 @@ export function createTestInlineClientDriver(
 			actorId: string,
 			encoding: Encoding,
 			params: unknown,
-			connId?: string,
-			connToken?: string,
 		): Promise<UniversalWebSocket> {
 			const WebSocket = await importWebSocket();
 
@@ -209,9 +183,8 @@ export function createTestInlineClientDriver(
 			protocols.push(`${WS_PROTOCOL_TARGET}actor`);
 			protocols.push(`${WS_PROTOCOL_ACTOR}${actorId}`);
 			protocols.push(`${WS_PROTOCOL_ENCODING}${encoding}`);
-			protocols.push(`${WS_PROTOCOL_TRANSPORT}${transport}`);
 			protocols.push(
-				`${WS_PROTOCOL_PATH}${encodeURIComponent(normalizedPath)}`,
+				`${WS_TEST_PROTOCOL_PATH}${encodeURIComponent(normalizedPath)}`,
 			);
 			if (params !== undefined) {
 				protocols.push(
@@ -263,7 +236,6 @@ export function createTestInlineClientDriver(
 		// 	return makeInlineRequest<Response>(
 		// 		endpoint,
 		// 		encoding,
-		// 		transport,
 		// 		"action",
 		// 		[undefined, actorQuery, encoding, params, name, args],
 		// 	);
@@ -278,7 +250,6 @@ export function createTestInlineClientDriver(
 		// 	return makeInlineRequest<string>(
 		// 		endpoint,
 		// 		encodingKind,
-		// 		transport,
 		// 		"resolveActorId",
 		// 		[undefined, actorQuery, encodingKind, params],
 		// 	);
@@ -400,7 +371,6 @@ export function createTestInlineClientDriver(
 		// 		actorId,
 		// 		encoding,
 		// 		connectionId,
-		// 		transport,
 		// 	});
 		//
 		// 	const result = await fetch(
@@ -412,7 +382,6 @@ export function createTestInlineClientDriver(
 		// 			},
 		// 			body: JSON.stringify({
 		// 				encoding,
-		// 				transport,
 		// 				method: "sendHttpMessage",
 		// 				args: [
 		// 					undefined,
@@ -573,14 +542,12 @@ export function createTestInlineClientDriver(
 async function makeInlineRequest<T>(
 	endpoint: string,
 	encoding: Encoding,
-	transport: Transport,
 	method: string,
 	args: unknown[],
 ): Promise<T> {
 	logger().debug({
 		msg: "sending inline request",
 		encoding,
-		transport,
 		method,
 		args,
 	});
@@ -593,7 +560,6 @@ async function makeInlineRequest<T>(
 		},
 		body: cbor.encode({
 			encoding,
-			transport,
 			method,
 			args,
 		} satisfies TestInlineDriverCallRequest),

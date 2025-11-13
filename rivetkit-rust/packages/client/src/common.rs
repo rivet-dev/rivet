@@ -21,7 +21,7 @@ pub const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
 pub const HEADER_RIVET_TOKEN: &str = "x-rivet-token";
 
 // Paths
-pub const PATH_CONNECT_WEBSOCKET: &str = "/connect/websocket";
+pub const PATH_CONNECT_WEBSOCKET: &str = "/connect";
 
 // WebSocket protocol prefixes
 pub const WS_PROTOCOL_STANDARD: &str = "rivet";

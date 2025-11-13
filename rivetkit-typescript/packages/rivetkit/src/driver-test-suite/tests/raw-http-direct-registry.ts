@@ -25,7 +25,7 @@
 //
 // 			// Make a direct fetch request to the registry
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/hello`,
+// 				`${endpoint}/registry/actors/request/api/hello`,
 // 				{
 // 					method: "GET",
 // 					headers: {
@@ -52,7 +52,7 @@
 //
 // 			const testData = { test: "direct", number: 456 };
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/echo`,
+// 				`${endpoint}/registry/actors/request/api/echo`,
 // 				{
 // 					method: "POST",
 // 					headers: {
@@ -85,7 +85,7 @@
 // 			};
 //
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/headers`,
+// 				`${endpoint}/registry/actors/request/api/headers`,
 // 				{
 // 					method: "GET",
 // 					headers: {
@@ -114,7 +114,7 @@
 // 			const connParams = { token: "test-auth-token", userId: "user123" };
 //
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/hello`,
+// 				`${endpoint}/registry/actors/request/api/hello`,
 // 				{
 // 					method: "GET",
 // 					headers: {
@@ -140,7 +140,7 @@
 // 			};
 //
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/anything`,
+// 				`${endpoint}/registry/actors/request/api/anything`,
 // 				{
 // 					method: "GET",
 // 					headers: {
@@ -168,7 +168,7 @@
 //
 // 			for (const method of methods) {
 // 				const response = await fetch(
-// 					`${endpoint}/registry/actors/raw/http/api/echo`,
+// 					`${endpoint}/registry/actors/request/api/echo`,
 // 					{
 // 						method,
 // 						headers: {
@@ -207,7 +207,7 @@
 // 			// Send binary data
 // 			const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
 // 			const response = await fetch(
-// 				`${endpoint}/registry/actors/raw/http/api/echo`,
+// 				`${endpoint}/registry/actors/request/api/echo`,
 // 				{
 // 					method: "POST",
 // 					headers: {

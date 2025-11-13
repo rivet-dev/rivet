@@ -411,7 +411,7 @@ For HTTP requests, the router expects these headers:
 
 ```typescript
 // Direct HTTP request to actor
-const response = await fetch("http://localhost:8080/registry/actors/myActor/raw/http/api/hello", {
+const response = await fetch("http://localhost:8080/registry/actors/myActor/request/api/hello", {
     method: "GET",
     headers: {
         "X-RivetKit-Actor-Query": JSON.stringify({
@@ -426,7 +426,7 @@ const data = await response.json();
 console.log(data); // { message: "Hello from actor!" }
 
 // POST request with data
-const postResponse = await fetch("http://localhost:8080/registry/actors/myActor/raw/http/api/echo", {
+const postResponse = await fetch("http://localhost:8080/registry/actors/myActor/request/api/echo", {
     method: "POST",
     headers: {
         "X-RivetKit-Actor-Query": JSON.stringify({

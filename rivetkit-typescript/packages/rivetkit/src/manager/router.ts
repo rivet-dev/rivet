@@ -7,20 +7,16 @@ import {
 	type Next,
 } from "hono";
 import { createMiddleware } from "hono/factory";
-import { streamSSE } from "hono/streaming";
 import invariant from "invariant";
 import { z } from "zod";
 import { ActorNotFound, InvalidRequest, Unsupported } from "@/actor/errors";
 import { serializeActorKey } from "@/actor/keys";
-import type { Client, Encoding, Transport } from "@/client/mod";
+import type { Client, Encoding } from "@/client/mod";
 import {
 	WS_PROTOCOL_ACTOR,
-	WS_PROTOCOL_CONN_ID,
 	WS_PROTOCOL_CONN_PARAMS,
-	WS_PROTOCOL_CONN_TOKEN,
 	WS_PROTOCOL_ENCODING,
-	WS_PROTOCOL_PATH,
-	WS_PROTOCOL_TRANSPORT,
+	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
 import { cors } from "@/common/cors";
 import {
@@ -492,19 +488,12 @@ function addManagerRoutes(
 		router.post(".test/inline-driver/call", async (c) => {
 			// TODO: use openapi instead
 			const buffer = await c.req.arrayBuffer();
-			const {
-				encoding,
-				transport,
-				method,
-				args,
-			}: TestInlineDriverCallRequest = cbor.decode(
-				new Uint8Array(buffer),
-			);
+			const { encoding, method, args }: TestInlineDriverCallRequest =
+				cbor.decode(new Uint8Array(buffer));
 
 			logger().debug({
 				msg: "received inline request",
 				encoding,
-				transport,
 				method,
 				args,
 			});
@@ -541,11 +530,8 @@ function addManagerRoutes(
 				// Parse protocols to extract connection info
 				let actorId = "";
 				let encoding: Encoding = "bare";
-				let transport: Transport = "websocket";
 				let path = "";
 				let params: unknown;
-				let connId: string | undefined;
-				let connToken: string | undefined;
 
 				for (const protocol of protocols) {
 					if (protocol.startsWith(WS_PROTOCOL_ACTOR)) {
@@ -554,25 +540,15 @@ function addManagerRoutes(
 						encoding = protocol.substring(
 							WS_PROTOCOL_ENCODING.length,
 						) as Encoding;
-					} else if (protocol.startsWith(WS_PROTOCOL_TRANSPORT)) {
-						transport = protocol.substring(
-							WS_PROTOCOL_TRANSPORT.length,
-						) as Transport;
-					} else if (protocol.startsWith(WS_PROTOCOL_PATH)) {
+					} else if (protocol.startsWith(WS_TEST_PROTOCOL_PATH)) {
 						path = decodeURIComponent(
-							protocol.substring(WS_PROTOCOL_PATH.length),
+							protocol.substring(WS_TEST_PROTOCOL_PATH.length),
 						);
 					} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {
 						const paramsRaw = decodeURIComponent(
 							protocol.substring(WS_PROTOCOL_CONN_PARAMS.length),
 						);
 						params = JSON.parse(paramsRaw);
-					} else if (protocol.startsWith(WS_PROTOCOL_CONN_ID)) {
-						connId = protocol.substring(WS_PROTOCOL_CONN_ID.length);
-					} else if (protocol.startsWith(WS_PROTOCOL_CONN_TOKEN)) {
-						connToken = protocol.substring(
-							WS_PROTOCOL_CONN_TOKEN.length,
-						);
 					}
 				}
 
@@ -581,7 +557,6 @@ function addManagerRoutes(
 					actorId,
 					params,
 					encodingKind: encoding,
-					transport,
 					path: path,
 				});
 
@@ -591,8 +566,6 @@ function addManagerRoutes(
 					actorId,
 					encoding,
 					params,
-					connId,
-					connToken,
 				);
 
 				return await createTestWebSocketProxy(clientWsPromise);
