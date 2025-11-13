@@ -6,6 +6,7 @@ export const RIVET_NAMESPACE = process.env.RIVET_NAMESPACE ?? "default";
 export async function createActor(
 	namespaceName: string,
 	runnerNameSelector: string,
+	withKey: boolean = true
 ): Promise<any> {
 	const response = await fetch(
 		`${RIVET_ENDPOINT}/actors?namespace=${namespaceName}`,
@@ -17,7 +18,7 @@ export async function createActor(
 			},
 			body: JSON.stringify({
 				name: "thingy",
-				key: crypto.randomUUID(),
+				key: withKey ? crypto.randomUUID() : undefined,
 				input: btoa("hello"),
 				runner_name_selector: runnerNameSelector,
 				crash_policy: "destroy",
