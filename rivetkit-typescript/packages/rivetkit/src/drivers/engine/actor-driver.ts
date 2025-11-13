@@ -76,8 +76,8 @@ export class EngineActorDriver implements ActorDriver {
 	#runnerStopped: PromiseWithResolvers<undefined> = promiseWithResolvers();
 	#isRunnerStopped: boolean = false;
 
-	// WebSocket message acknowledgment debouncing
-	#wsAckQueue: Map<
+	// WebSocket message acknowledgment debouncing for hibernatable websockets
+	#hibernatableWebSocketAckQueue: Map<
 		string,
 		{ requestIdBuf: ArrayBuffer; messageIndex: number }
 	> = new Map();
@@ -176,7 +176,9 @@ export class EngineActorDriver implements ActorDriver {
 					msg: "checking hibernatable websockets",
 					requestId: idToStr(requestId),
 					existingHibernatableWebSockets: hibernatableArray.length,
+					actorId,
 				});
+
 				const existingWs = hibernatableArray.find((conn) =>
 					arrayBuffersEqual(conn.hibernatableRequestId, requestId),
 				);
@@ -184,14 +186,19 @@ export class EngineActorDriver implements ActorDriver {
 				// Determine configuration for new WS
 				let hibernationConfig: HibernationConfig;
 				if (existingWs) {
+					// Convert msgIndex to number, treating -1 as undefined (no messages processed yet)
+					const lastMsgIndex =
+						existingWs.msgIndex >= 0n
+							? Number(existingWs.msgIndex)
+							: undefined;
 					logger().debug({
 						msg: "found existing hibernatable websocket",
 						requestId: idToStr(requestId),
-						lastMsgIndex: existingWs.msgIndex,
+						lastMsgIndex: lastMsgIndex ?? -1,
 					});
 					hibernationConfig = {
 						enabled: true,
-						lastMsgIndex: Number(existingWs.msgIndex),
+						lastMsgIndex,
 					};
 				} else {
 					logger().debug({
@@ -268,6 +275,7 @@ export class EngineActorDriver implements ActorDriver {
 					logger().debug({
 						msg: "updated existing hibernatable websocket timestamp",
 						requestId: idToStr(requestId),
+						currentMsgIndex: existingWs.msgIndex,
 					});
 					existingWs.lastSeenTimestamp = Date.now();
 				} else if (path === PATH_CONNECT) {
@@ -277,7 +285,7 @@ export class EngineActorDriver implements ActorDriver {
 						msg: "will create hibernatable conn when connection is created",
 						requestId: idToStr(requestId),
 					});
-					// Note: The actual hibernatable connection is created in instance.ts
+					// Note: The actual hibernatable connection is created in connection-manager.ts
 					// when createConn is called with a hibernatable requestId
 				}
 
@@ -302,7 +310,10 @@ export class EngineActorDriver implements ActorDriver {
 		//
 		// Gateway timeout configured to 30s
 		// https://github.com/rivet-dev/rivet/blob/222dae87e3efccaffa2b503de40ecf8afd4e31eb/engine/packages/pegboard-gateway/src/shared_state.rs#L17
-		this.#wsAckFlushInterval = setInterval(() => this.#flushWsAcks(), 1000);
+		this.#wsAckFlushInterval = setInterval(
+			() => this.#flushHibernatableWebSocketAcks(),
+			1000,
+		);
 	}
 
 	async #loadActorHandler(actorId: string): Promise<ActorHandler> {
@@ -321,17 +332,17 @@ export class EngineActorDriver implements ActorDriver {
 		return handler.actor;
 	}
 
-	#flushWsAcks(): void {
-		if (this.#wsAckQueue.size === 0) return;
+	#flushHibernatableWebSocketAcks(): void {
+		if (this.#hibernatableWebSocketAckQueue.size === 0) return;
 
 		for (const {
 			requestIdBuf: requestId,
 			messageIndex: index,
-		} of this.#wsAckQueue.values()) {
+		} of this.#hibernatableWebSocketAckQueue.values()) {
 			this.#runner.sendWebsocketMessageAck(requestId, index);
 		}
 
-		this.#wsAckQueue.clear();
+		this.#hibernatableWebSocketAckQueue.clear();
 	}
 
 	getContext(actorId: string): DriverContext {
@@ -608,37 +619,169 @@ export class EngineActorDriver implements ActorDriver {
 			invariant(event.rivetRequestId, "missing rivetRequestId");
 			invariant(event.rivetMessageIndex, "missing rivetMessageIndex");
 
-			// Track only the highest seen message index per request
-			// Convert ArrayBuffer to string for Map key
-			const currentEntry = this.#wsAckQueue.get(requestId);
-			if (currentEntry) {
-				if (event.rivetMessageIndex > currentEntry.messageIndex) {
-					currentEntry.messageIndex = event.rivetMessageIndex;
-				} else {
-					logger().warn({
-						msg: "received lower index than ack queue for message",
+			// Handle hibernatable WebSockets:
+			// - Save msgIndex for WS restoration
+			// - Queue WS acks
+			const actorHandler = this.#actors.get(actorId);
+			if (actorHandler?.actor) {
+				const hibernatableWs = actorHandler.actor[
+					ACTOR_INSTANCE_PERSIST_SYMBOL
+				].hibernatableConns.find((conn: any) =>
+					arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+				);
+
+				if (hibernatableWs) {
+					// Update msgIndex for next WebSocket open msgIndex restoration
+					const oldMsgIndex = hibernatableWs.msgIndex;
+					hibernatableWs.msgIndex = event.rivetMessageIndex;
+					hibernatableWs.lastSeenTimestamp = Date.now();
+
+					logger().debug({
+						msg: "updated hibernatable websocket msgIndex in engine driver",
 						requestId,
-						queuedMessageIndex: currentEntry,
-						eventMessageIndex: event.rivetMessageIndex,
+						oldMsgIndex: oldMsgIndex.toString(),
+						newMsgIndex: event.rivetMessageIndex,
+						actorId,
 					});
+
+					// Track msgIndex for sending acks
+					const currentEntry =
+						this.#hibernatableWebSocketAckQueue.get(requestId);
+					if (currentEntry) {
+						const previousIndex = currentEntry.messageIndex;
+
+						// Warn about any non-sequential message indices
+						if (event.rivetMessageIndex !== previousIndex + 1) {
+							logger().warn({
+								msg: "websocket message index out of sequence",
+								requestId,
+								actorId,
+								previousIndex,
+								expectedIndex: previousIndex + 1,
+								receivedIndex: event.rivetMessageIndex,
+								sequenceType:
+									event.rivetMessageIndex < previousIndex
+										? "regressed"
+										: event.rivetMessageIndex ===
+												previousIndex
+											? "duplicate"
+											: "gap/skipped",
+								gap:
+									event.rivetMessageIndex > previousIndex
+										? event.rivetMessageIndex -
+											previousIndex -
+											1
+										: 0,
+							});
+						}
+
+						// Update to the highest seen index
+						if (event.rivetMessageIndex > previousIndex) {
+							currentEntry.messageIndex = event.rivetMessageIndex;
+						}
+					} else {
+						this.#hibernatableWebSocketAckQueue.set(requestId, {
+							requestIdBuf,
+							messageIndex: event.rivetMessageIndex,
+						});
+					}
 				}
 			} else {
-				this.#wsAckQueue.set(requestId, {
-					requestIdBuf,
+				// Warn if we receive a message for a hibernatable websocket but can't find the actor
+				logger().warn({
+					msg: "received websocket message but actor not found for hibernatable tracking",
+					actorId,
+					requestId,
 					messageIndex: event.rivetMessageIndex,
+					hasHandler: !!actorHandler,
+					hasActor: !!actorHandler?.actor,
 				});
 			}
 		});
 
 		websocket.addEventListener("close", (event) => {
 			// Flush any pending acks before closing
-			this.#flushWsAcks();
+			this.#flushHibernatableWebSocketAcks();
+
+			// Clean up hibernatable WebSocket
+			this.#cleanupHibernatableWebSocket(
+				actorId,
+				requestIdBuf,
+				requestId,
+				"close",
+				event,
+			);
+
 			wsHandlerPromise.then((x) => x.onClose?.(event, wsContext));
 		});
 
 		websocket.addEventListener("error", (event) => {
+			// Clean up hibernatable WebSocket on error
+			this.#cleanupHibernatableWebSocket(
+				actorId,
+				requestIdBuf,
+				requestId,
+				"error",
+				event,
+			);
+
 			wsHandlerPromise.then((x) => x.onError?.(event, wsContext));
 		});
+	}
+
+	/**
+	 * Helper method to clean up hibernatable WebSocket entries
+	 * Eliminates duplication between close and error handlers
+	 */
+	#cleanupHibernatableWebSocket(
+		actorId: string,
+		requestIdBuf: ArrayBuffer,
+		requestId: string,
+		eventType: "close" | "error",
+		event?: any,
+	) {
+		const actorHandler = this.#actors.get(actorId);
+		if (actorHandler?.actor) {
+			const hibernatableArray =
+				actorHandler.actor[ACTOR_INSTANCE_PERSIST_SYMBOL]
+					.hibernatableConns;
+			const wsIndex = hibernatableArray.findIndex((conn: any) =>
+				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
+			);
+
+			if (wsIndex !== -1) {
+				const removed = hibernatableArray.splice(wsIndex, 1);
+				const logData: any = {
+					msg: `removed hibernatable websocket on ${eventType}`,
+					requestId,
+					actorId,
+					removedMsgIndex:
+						removed[0]?.msgIndex?.toString() ?? "unknown",
+				};
+				// Add error context if this is an error event
+				if (eventType === "error" && event) {
+					logData.error = event;
+				}
+				logger().debug(logData);
+			}
+		} else {
+			// Warn if actor not found during cleanup
+			const warnData: any = {
+				msg: `websocket ${eventType === "close" ? "closed" : "error"} but actor not found for hibernatable cleanup`,
+				actorId,
+				requestId,
+				hasHandler: !!actorHandler,
+				hasActor: !!actorHandler?.actor,
+			};
+			// Add error context if this is an error event
+			if (eventType === "error" && event) {
+				warnData.error = event;
+			}
+			logger().warn(warnData);
+		}
+
+		// Also remove from ack queue
+		this.#hibernatableWebSocketAckQueue.delete(requestId);
 	}
 
 	startSleep(actorId: string) {
@@ -700,7 +843,7 @@ export class EngineActorDriver implements ActorDriver {
 		}
 
 		// Flush any remaining acks
-		this.#flushWsAcks();
+		this.#flushHibernatableWebSocketAcks();
 
 		await this.#runner.shutdown(immediate);
 	}
