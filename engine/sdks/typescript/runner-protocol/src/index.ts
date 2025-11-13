@@ -805,10 +805,30 @@ export function writeEventWrapper(bc: bare.ByteCursor, x: EventWrapper): void {
     writeEvent(bc, x.inner)
 }
 
+function read8(bc: bare.ByteCursor): readonly ArrayBuffer[] {
+    const len = bare.readUintSafe(bc)
+    if (len === 0) {
+        return []
+    }
+    const result = [bare.readData(bc)]
+    for (let i = 1; i < len; i++) {
+        result[i] = bare.readData(bc)
+    }
+    return result
+}
+
+function write8(bc: bare.ByteCursor, x: readonly ArrayBuffer[]): void {
+    bare.writeUintSafe(bc, x.length)
+    for (let i = 0; i < x.length; i++) {
+        bare.writeData(bc, x[i])
+    }
+}
+
 export type CommandStartActor = {
     readonly actorId: Id
     readonly generation: u32
     readonly config: ActorConfig
+    readonly hibernatingRequestIds: readonly ArrayBuffer[]
 }
 
 export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
@@ -816,6 +836,7 @@ export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
         actorId: readId(bc),
         generation: bare.readU32(bc),
         config: readActorConfig(bc),
+        hibernatingRequestIds: read8(bc),
     }
 }
 
@@ -823,6 +844,7 @@ export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor
     writeId(bc, x.actorId)
     bare.writeU32(bc, x.generation)
     writeActorConfig(bc, x.config)
+    write8(bc, x.hibernatingRequestIds)
 }
 
 export type CommandStopActor = {
@@ -923,7 +945,7 @@ export function writeMessageId(bc: bare.ByteCursor, x: MessageId): void {
  */
 export type TunnelAck = null
 
-function read8(bc: bare.ByteCursor): ReadonlyMap<string, string> {
+function read9(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, string>()
     for (let i = 0; i < len; i++) {
@@ -938,7 +960,7 @@ function read8(bc: bare.ByteCursor): ReadonlyMap<string, string> {
     return result
 }
 
-function write8(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
+function write9(bc: bare.ByteCursor, x: ReadonlyMap<string, string>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -963,7 +985,7 @@ export function readToClientRequestStart(bc: bare.ByteCursor): ToClientRequestSt
         actorId: readId(bc),
         method: bare.readString(bc),
         path: bare.readString(bc),
-        headers: read8(bc),
+        headers: read9(bc),
         body: read6(bc),
         stream: bare.readBool(bc),
     }
@@ -973,7 +995,7 @@ export function writeToClientRequestStart(bc: bare.ByteCursor, x: ToClientReques
     writeId(bc, x.actorId)
     bare.writeString(bc, x.method)
     bare.writeString(bc, x.path)
-    write8(bc, x.headers)
+    write9(bc, x.headers)
     write6(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -1007,7 +1029,7 @@ export type ToServerResponseStart = {
 export function readToServerResponseStart(bc: bare.ByteCursor): ToServerResponseStart {
     return {
         status: bare.readU16(bc),
-        headers: read8(bc),
+        headers: read9(bc),
         body: read6(bc),
         stream: bare.readBool(bc),
     }
@@ -1015,7 +1037,7 @@ export function readToServerResponseStart(bc: bare.ByteCursor): ToServerResponse
 
 export function writeToServerResponseStart(bc: bare.ByteCursor, x: ToServerResponseStart): void {
     bare.writeU16(bc, x.status)
-    write8(bc, x.headers)
+    write9(bc, x.headers)
     write6(bc, x.body)
     bare.writeBool(bc, x.stream)
 }
@@ -1052,14 +1074,14 @@ export function readToClientWebSocketOpen(bc: bare.ByteCursor): ToClientWebSocke
     return {
         actorId: readId(bc),
         path: bare.readString(bc),
-        headers: read8(bc),
+        headers: read9(bc),
     }
 }
 
 export function writeToClientWebSocketOpen(bc: bare.ByteCursor, x: ToClientWebSocketOpen): void {
     writeId(bc, x.actorId)
     bare.writeString(bc, x.path)
-    write8(bc, x.headers)
+    write9(bc, x.headers)
 }
 
 export type ToClientWebSocketMessage = {
@@ -1082,11 +1104,11 @@ export function writeToClientWebSocketMessage(bc: bare.ByteCursor, x: ToClientWe
     bare.writeBool(bc, x.binary)
 }
 
-function read9(bc: bare.ByteCursor): u16 | null {
+function read10(bc: bare.ByteCursor): u16 | null {
     return bare.readBool(bc) ? bare.readU16(bc) : null
 }
 
-function write9(bc: bare.ByteCursor, x: u16 | null): void {
+function write10(bc: bare.ByteCursor, x: u16 | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         bare.writeU16(bc, x)
@@ -1100,31 +1122,28 @@ export type ToClientWebSocketClose = {
 
 export function readToClientWebSocketClose(bc: bare.ByteCursor): ToClientWebSocketClose {
     return {
-        code: read9(bc),
+        code: read10(bc),
         reason: read5(bc),
     }
 }
 
 export function writeToClientWebSocketClose(bc: bare.ByteCursor, x: ToClientWebSocketClose): void {
-    write9(bc, x.code)
+    write10(bc, x.code)
     write5(bc, x.reason)
 }
 
 export type ToServerWebSocketOpen = {
     readonly canHibernate: boolean
-    readonly lastMsgIndex: i64
 }
 
 export function readToServerWebSocketOpen(bc: bare.ByteCursor): ToServerWebSocketOpen {
     return {
         canHibernate: bare.readBool(bc),
-        lastMsgIndex: bare.readI64(bc),
     }
 }
 
 export function writeToServerWebSocketOpen(bc: bare.ByteCursor, x: ToServerWebSocketOpen): void {
     bare.writeBool(bc, x.canHibernate)
-    bare.writeI64(bc, x.lastMsgIndex)
 }
 
 export type ToServerWebSocketMessage = {
@@ -1166,14 +1185,14 @@ export type ToServerWebSocketClose = {
 
 export function readToServerWebSocketClose(bc: bare.ByteCursor): ToServerWebSocketClose {
     return {
-        code: read9(bc),
+        code: read10(bc),
         reason: read5(bc),
         retry: bare.readBool(bc),
     }
 }
 
 export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebSocketClose): void {
-    write9(bc, x.code)
+    write10(bc, x.code)
     write5(bc, x.reason)
     bare.writeBool(bc, x.retry)
 }
@@ -1394,7 +1413,7 @@ export function writeToClientTunnelMessage(bc: bare.ByteCursor, x: ToClientTunne
     write5(bc, x.gatewayReplyTo)
 }
 
-function read10(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
+function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     const len = bare.readUintSafe(bc)
     const result = new Map<string, ActorName>()
     for (let i = 0; i < len; i++) {
@@ -1409,7 +1428,7 @@ function read10(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> {
     return result
 }
 
-function write10(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
+function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     bare.writeUintSafe(bc, x.size)
     for (const kv of x) {
         bare.writeString(bc, kv[0])
@@ -1417,22 +1436,22 @@ function write10(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName>): void {
     }
 }
 
-function read11(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
-    return bare.readBool(bc) ? read10(bc) : null
+function read12(bc: bare.ByteCursor): ReadonlyMap<string, ActorName> | null {
+    return bare.readBool(bc) ? read11(bc) : null
 }
 
-function write11(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
+function write12(bc: bare.ByteCursor, x: ReadonlyMap<string, ActorName> | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
-        write10(bc, x)
+        write11(bc, x)
     }
 }
 
-function read12(bc: bare.ByteCursor): Json | null {
+function read13(bc: bare.ByteCursor): Json | null {
     return bare.readBool(bc) ? readJson(bc) : null
 }
 
-function write12(bc: bare.ByteCursor, x: Json | null): void {
+function write13(bc: bare.ByteCursor, x: Json | null): void {
     bare.writeBool(bc, x != null)
     if (x != null) {
         writeJson(bc, x)
@@ -1457,8 +1476,8 @@ export function readToServerInit(bc: bare.ByteCursor): ToServerInit {
         version: bare.readU32(bc),
         totalSlots: bare.readU32(bc),
         lastCommandIdx: read7(bc),
-        prepopulateActorNames: read11(bc),
-        metadata: read12(bc),
+        prepopulateActorNames: read12(bc),
+        metadata: read13(bc),
     }
 }
 
@@ -1467,8 +1486,8 @@ export function writeToServerInit(bc: bare.ByteCursor, x: ToServerInit): void {
     bare.writeU32(bc, x.version)
     bare.writeU32(bc, x.totalSlots)
     write7(bc, x.lastCommandIdx)
-    write11(bc, x.prepopulateActorNames)
-    write12(bc, x.metadata)
+    write12(bc, x.prepopulateActorNames)
+    write13(bc, x.metadata)
 }
 
 export type ToServerEvents = readonly EventWrapper[]

@@ -4,5 +4,6 @@ pub mod get_for_gateway;
 pub mod get_for_key;
 pub mod get_reservation_for_key;
 pub mod get_runner;
+pub mod hibernating_request;
 pub mod list_for_ns;
 pub mod list_names;

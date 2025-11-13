@@ -530,6 +530,9 @@ pub async fn spawn_actor(
 							.map(|x| BASE64_STANDARD.decode(x))
 							.transpose()?,
 					},
+					// Empty because request ids are ephemeral. This is intercepted by guard and
+					// populated before it reaches the runner
+					hibernating_request_ids: Vec::new(),
 				}),
 			})
 			.to_workflow_id(runner_workflow_id)
@@ -567,8 +570,6 @@ pub async fn spawn_actor(
 							config: protocol::ActorConfig {
 								name: input.name.clone(),
 								key: input.key.clone(),
-								// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
-								// changes (like activity inputs) so this is fine for now.
 								create_ts: util::timestamp::now(),
 								input: input
 									.input
@@ -576,6 +577,9 @@ pub async fn spawn_actor(
 									.map(|x| BASE64_STANDARD.decode(x))
 									.transpose()?,
 							},
+							// Empty because request ids are ephemeral. This is intercepted by guard and
+							// populated before it reaches the runner
+							hibernating_request_ids: Vec::new(),
 						}),
 					})
 					.to_workflow_id(sig.runner_workflow_id)

@@ -1,0 +1,403 @@
+# Runner Protocol v1
+
+# MARK: Core Primitives
+
+type Id str
+type Json str
+
+# MARK: KV
+
+# Basic types
+type KvKey data
+type KvValue data
+type KvMetadata struct {
+	version: data
+	createTs: i64
+}
+
+# Query types
+type KvListAllQuery void
+type KvListRangeQuery struct {
+	start: KvKey
+	end: KvKey
+	exclusive: bool
+}
+
+type KvListPrefixQuery struct {
+	key: KvKey
+}
+
+type KvListQuery union {
+	KvListAllQuery |
+	KvListRangeQuery |
+	KvListPrefixQuery
+}
+
+# Request types
+type KvGetRequest struct {
+	keys: list<KvKey>
+}
+
+type KvListRequest struct {
+	query: KvListQuery
+	reverse: optional<bool>
+	limit: optional<u64>
+}
+
+type KvPutRequest struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+}
+
+type KvDeleteRequest struct {
+	keys: list<KvKey>
+}
+
+type KvDropRequest void
+
+# Response types
+type KvErrorResponse struct {
+	message: str
+}
+
+type KvGetResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvListResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvPutResponse void
+type KvDeleteResponse void
+type KvDropResponse void
+
+# Request/Response unions
+type KvRequestData union {
+	KvGetRequest |
+	KvListRequest |
+	KvPutRequest |
+	KvDeleteRequest |
+	KvDropRequest
+}
+
+type KvResponseData union {
+	KvErrorResponse |
+	KvGetResponse |
+	KvListResponse |
+	KvPutResponse |
+	KvDeleteResponse |
+	KvDropResponse
+}
+
+# MARK: Actor
+
+# Core
+type StopCode enum {
+	OK
+	ERROR
+}
+
+type ActorName struct {
+	metadata: Json
+}
+
+type ActorConfig struct {
+	name: str
+	key: optional<str>
+	createTs: i64
+	input: optional<data>
+}
+
+# Intent
+type ActorIntentSleep void
+
+type ActorIntentStop void
+
+type ActorIntent union {
+	ActorIntentSleep |
+	ActorIntentStop
+}
+
+# State
+type ActorStateRunning void
+
+type ActorStateStopped struct {
+	code: StopCode
+	message: optional<str>
+}
+
+type ActorState union {
+	ActorStateRunning |
+	ActorStateStopped
+}
+
+# MARK: Events
+type EventActorIntent struct {
+	actorId: Id
+	generation: u32
+	intent: ActorIntent
+}
+
+type EventActorStateUpdate struct {
+	actorId: Id
+	generation: u32
+	state: ActorState
+}
+
+type EventActorSetAlarm struct {
+	actorId: Id
+	generation: u32
+	alarmTs: optional<i64>
+}
+
+type Event union {
+	EventActorIntent |
+	EventActorStateUpdate |
+	EventActorSetAlarm
+}
+
+type EventWrapper struct {
+	index: i64
+	inner: Event
+}
+
+# MARK: Commands
+#
+type CommandStartActor struct {
+	actorId: Id
+	generation: u32
+	config: ActorConfig
+	hibernatingRequestIds: list<data>
+}
+
+type CommandStopActor struct {
+	actorId: Id
+	generation: u32
+}
+
+type Command union {
+	CommandStartActor |
+	CommandStopActor
+}
+
+type CommandWrapper struct {
+	index: i64
+	inner: Command
+}
+
+# MARK: Tunnel
+
+type RequestId data[16]  # UUIDv4
+type MessageId data[16]  # UUIDv4
+
+
+# Ack
+type TunnelAck void
+
+# HTTP
+type ToClientRequestStart struct {
+	actorId: Id
+	method: str
+	path: str
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToClientRequestChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToClientRequestAbort void
+
+type ToServerResponseStart struct {
+	status: u16
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToServerResponseChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToServerResponseAbort void
+
+# WebSocket
+type ToClientWebSocketOpen struct {
+	actorId: Id
+	path: str
+	headers: map<str><str>
+}
+
+type ToClientWebSocketMessage struct {
+	index: u16
+	data: data
+	binary: bool
+}
+
+type ToClientWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+}
+
+type ToServerWebSocketOpen struct {
+	canHibernate: bool
+}
+
+type ToServerWebSocketMessage struct {
+	data: data
+	binary: bool
+}
+
+type ToServerWebSocketMessageAck struct {
+	index: u16
+}
+
+type ToServerWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+	retry: bool
+}
+
+# To Server
+type ToServerTunnelMessageKind union {
+	TunnelAck |
+
+	# HTTP
+	ToServerResponseStart |
+	ToServerResponseChunk |
+	ToServerResponseAbort |
+	
+	# WebSocket
+	ToServerWebSocketOpen |
+	ToServerWebSocketMessage |
+	ToServerWebSocketMessageAck |
+	ToServerWebSocketClose
+}
+
+type ToServerTunnelMessage struct {
+	requestId: RequestId
+	messageId: MessageId
+	messageKind: ToServerTunnelMessageKind
+}
+
+# To Client
+type ToClientTunnelMessageKind union {
+	TunnelAck |
+
+	# HTTP
+	ToClientRequestStart |
+	ToClientRequestChunk |
+	ToClientRequestAbort |
+	
+	# WebSocket
+	ToClientWebSocketOpen |
+	ToClientWebSocketMessage |
+	ToClientWebSocketClose
+}
+
+type ToClientTunnelMessage struct {
+	requestId: RequestId
+	messageId: MessageId
+	messageKind: ToClientTunnelMessageKind
+
+	# Subject to send replies to.
+	#
+	# Only sent when opening a new request from gateway -> pegboard-runner-ws.
+	#
+	# Should be stripped before sending to the runner.
+	gatewayReplyTo: optional<str>
+}
+
+# MARK: To Server
+type ToServerInit struct {
+	name: str
+	version: u32
+	totalSlots: u32
+	lastCommandIdx: optional<i64>
+	prepopulateActorNames: optional<map<str><ActorName>>
+	metadata: optional<Json>
+}
+
+type ToServerEvents list<EventWrapper>
+
+type ToServerAckCommands struct {
+	lastCommandIdx: i64
+}
+
+type ToServerStopping void
+
+type ToServerPing struct {
+	ts: i64
+}
+
+type ToServerKvRequest struct {
+	actorId: Id
+	requestId: u32
+	data: KvRequestData
+}
+
+type ToServer union {
+	ToServerInit |
+	ToServerEvents |
+	ToServerAckCommands |
+	ToServerStopping |
+	ToServerPing |
+	ToServerKvRequest |
+	ToServerTunnelMessage
+}
+
+# MARK: To Client
+type ProtocolMetadata struct {
+	runnerLostThreshold: i64
+}
+
+type ToClientInit struct {
+	runnerId: Id
+	lastEventIdx: i64
+	metadata: ProtocolMetadata
+}
+
+type ToClientCommands list<CommandWrapper>
+
+type ToClientAckEvents struct {
+	lastEventIdx: i64
+}
+
+type ToClientKvResponse struct {
+	requestId: u32
+	data: KvResponseData
+}
+
+type ToClientClose void
+
+type ToClient union {
+	ToClientInit |
+	ToClientClose |
+	ToClientCommands |
+	ToClientAckEvents |
+	ToClientKvResponse |
+	ToClientTunnelMessage
+}
+
+# MARK: To Gateway
+type ToGateway struct {
+	message: ToServerTunnelMessage
+}
+
+# MARK: Serverless
+type ToServerlessServerInit struct {
+	runnerId: Id
+}
+
+type ToServerlessServer union {
+	ToServerlessServerInit
+}

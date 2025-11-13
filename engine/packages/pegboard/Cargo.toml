@@ -28,4 +28,5 @@ tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
 utoipa.workspace = true
+uuid.workspace = true
 vbare.workspace = true
