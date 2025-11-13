@@ -167,7 +167,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					name: input.name.clone(),
 					key: input.key.clone(),
 					generation: 0,
-					kill: false,
 				})
 				.output()
 				.await?;
@@ -192,7 +191,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					name: input.name.clone(),
 					key: input.key.clone(),
 					generation: 0,
-					kill: false,
 				})
 				.output()
 				.await?;
@@ -238,7 +236,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 				name: input.name.clone(),
 				key: input.key.clone(),
 				generation: 0,
-				kill: false,
 			})
 			.output()
 			.await?;
@@ -293,7 +290,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 								return Ok(Loop::Continue);
 							}
 
-							let (Some(runner_id), Some(runner_workflow_id)) = (state.runner_id, state.runner_workflow_id) else {
+							let (Some(runner_id), Some(runner_workflow_id)) =
+								(state.runner_id, state.runner_workflow_id)
+							else {
 								tracing::warn!("actor not allocated, ignoring event");
 								return Ok(Loop::Continue);
 							};
@@ -307,7 +306,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										if !state.sleeping {
 											state.gc_timeout_ts = Some(
 												util::timestamp::now()
-													+ ctx.config().pegboard().actor_stop_threshold(),
+													+ ctx
+														.config()
+														.pegboard()
+														.actor_stop_threshold(),
 											);
 											state.sleeping = true;
 
@@ -316,12 +318,14 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 											})
 											.await?;
 
-											// Send signal to kill actor now that we know it will be sleeping
+											// Send signal to stop actor now that we know it will be sleeping
 											ctx.signal(crate::workflows::runner::Command {
-												inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-													actor_id: input.actor_id.to_string(),
-													generation: state.generation,
-												}),
+												inner: protocol::Command::CommandStopActor(
+													protocol::CommandStopActor {
+														actor_id: input.actor_id.to_string(),
+														generation: state.generation,
+													},
+												),
 											})
 											.to_workflow_id(runner_workflow_id)
 											.send()
@@ -329,25 +333,33 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										}
 									}
 									protocol::ActorIntent::ActorIntentStop => {
-										state.gc_timeout_ts = Some(
-											util::timestamp::now()
-												+ ctx.config().pegboard().actor_stop_threshold(),
-										);
+										if !state.stopping {
+											state.gc_timeout_ts = Some(
+												util::timestamp::now()
+													+ ctx
+														.config()
+														.pegboard()
+														.actor_stop_threshold(),
+											);
+											state.stopping = true;
 
-										ctx.activity(runtime::SetNotConnectableInput {
-											actor_id: input.actor_id,
-										})
-										.await?;
+											ctx.activity(runtime::SetNotConnectableInput {
+												actor_id: input.actor_id,
+											})
+											.await?;
 
-										ctx.signal(crate::workflows::runner::Command {
-											inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
-												actor_id: input.actor_id.to_string(),
-												generation: state.generation,
-											}),
-										})
-										.to_workflow_id(runner_workflow_id)
-										.send()
-										.await?;
+											ctx.signal(crate::workflows::runner::Command {
+												inner: protocol::Command::CommandStopActor(
+													protocol::CommandStopActor {
+														actor_id: input.actor_id.to_string(),
+														generation: state.generation,
+													},
+												),
+											})
+											.to_workflow_id(runner_workflow_id)
+											.send()
+											.await?;
+										}
 									}
 								},
 								protocol::Event::EventActorStateUpdate(
@@ -363,21 +375,25 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 										})
 										.await?;
 
-										ctx.msg(Ready {
-											runner_id,
-										})
-										.tag("actor_id", input.actor_id)
-										.send()
-										.await?;
+										ctx.msg(Ready { runner_id })
+											.tag("actor_id", input.actor_id)
+											.send()
+											.await?;
 									}
 									protocol::ActorState::ActorStateStopped(
 										protocol::ActorStateStopped { code, .. },
 									) => {
-										if let Some(res) =
-											handle_stopped(ctx, &input, state, Some(code), None)
-												.await?
+										if let StoppedResult::Destroy = handle_stopped(
+											ctx,
+											&input,
+											state,
+											StoppedVariant::Normal { code },
+										)
+										.await?
 										{
-											return Ok(Loop::Break(res));
+											return Ok(Loop::Break(runtime::LifecycleResult {
+												generation: state.generation,
+											}));
 										}
 									}
 								},
@@ -395,18 +411,17 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 									state.sleeping = false;
 									state.will_wake = false;
 
-									match runtime::reschedule_actor(ctx, &input, state, false, false).await? {
-										runtime::SpawnActorOutput::Allocated { .. } => {},
+									match runtime::reschedule_actor(ctx, &input, state, false)
+										.await?
+									{
+										runtime::SpawnActorOutput::Allocated { .. } => {}
 										runtime::SpawnActorOutput::Sleep => {
 											state.sleeping = true;
 										}
 										runtime::SpawnActorOutput::Destroy => {
 											// Destroyed early
-											return Ok(Loop::Break(runtime::LifecycleRes {
+											return Ok(Loop::Break(runtime::LifecycleResult {
 												generation: state.generation,
-												// False here because if we received the destroy signal, it is
-												// guaranteed that we did not allocate another actor.
-												kill: false,
 											}));
 										}
 									}
@@ -430,21 +445,83 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 							}
 						}
 						Main::Lost(sig) => {
-							// Ignore state updates for previous generations
+							// Ignore signals for previous generations
 							if sig.generation != state.generation {
 								return Ok(Loop::Continue);
 							}
 
-							if let Some(res) =
-								handle_stopped(ctx, &input, state, None, Some(sig)).await?
+							if sig.reset_rescheduling {
+								state.reschedule_state = Default::default();
+							}
+
+							if let StoppedResult::Destroy = handle_stopped(
+								ctx,
+								&input,
+								state,
+								StoppedVariant::Lost {
+									force_reschedule: sig.force_reschedule,
+								},
+							)
+							.await?
 							{
-								return Ok(Loop::Break(res));
+								return Ok(Loop::Break(runtime::LifecycleResult {
+									generation: state.generation,
+								}));
+							}
+						}
+						Main::GoingAway(sig) => {
+							// Ignore signals for previous generations
+							if sig.generation != state.generation {
+								return Ok(Loop::Continue);
+							}
+
+							if sig.reset_rescheduling {
+								state.reschedule_state = Default::default();
+							}
+
+							if !state.going_away {
+								let Some(runner_workflow_id) = state.runner_workflow_id else {
+									return Ok(Loop::Continue);
+								};
+
+								state.gc_timeout_ts = Some(
+									util::timestamp::now()
+										+ ctx.config().pegboard().actor_stop_threshold(),
+								);
+								state.going_away = true;
+
+								ctx.activity(runtime::SetNotConnectableInput {
+									actor_id: input.actor_id,
+								})
+								.await?;
+
+								ctx.signal(crate::workflows::runner::Command {
+									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+										actor_id: input.actor_id.to_string(),
+										generation: state.generation,
+									}),
+								})
+								.to_workflow_id(runner_workflow_id)
+								.send()
+								.await?;
 							}
 						}
 						Main::Destroy(_) => {
-							return Ok(Loop::Break(runtime::LifecycleRes {
+							// If allocated, send stop actor command
+							if let Some(runner_workflow_id) = state.runner_workflow_id {
+								ctx.signal(crate::workflows::runner::Command {
+									inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
+										actor_id: input.actor_id.to_string(),
+										generation: state.generation,
+									}),
+								})
+								.to_workflow_id(runner_workflow_id)
+								.send()
+								.await?;
+							}
+
+							return Ok(Loop::Break(runtime::LifecycleResult {
 								generation: state.generation,
-								kill: true,
 							}));
 						}
 					}
@@ -462,7 +539,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		name: input.name.clone(),
 		key: input.key.clone(),
 		generation: lifecycle_res.generation,
-		kill: lifecycle_res.kill,
 	})
 	.output()
 	.await?;
@@ -490,22 +566,42 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	Ok(())
 }
 
+#[derive(Debug)]
+enum StoppedVariant {
+	Normal { code: protocol::StopCode },
+	Lost { force_reschedule: bool },
+}
+
+enum StoppedResult {
+	Continue,
+	Destroy,
+}
+
 async fn handle_stopped(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 	state: &mut runtime::LifecycleState,
-	code: Option<protocol::StopCode>,
-	lost_sig: Option<Lost>,
-) -> Result<Option<runtime::LifecycleRes>> {
-	tracing::debug!(?code, ?lost_sig, "actor stopped");
+	variant: StoppedVariant,
+) -> Result<StoppedResult> {
+	tracing::debug!(?variant, "actor stopped");
 
-	// Reset retry count on successful exit
-	if let Some(protocol::StopCode::Ok) = code {
-		state.reschedule_state = Default::default();
-	}
+	let force_reschedule = match &variant {
+		// Reset retry count on successful exit
+		StoppedVariant::Normal {
+			code: protocol::StopCode::Ok,
+		} => {
+			state.reschedule_state = Default::default();
+
+			false
+		}
+		StoppedVariant::Lost { force_reschedule } => *force_reschedule,
+		_ => false,
+	};
 
 	// Clear stop gc timeout to prevent being marked as lost in the lifecycle loop
 	state.gc_timeout_ts = None;
+	state.going_away = false;
+	state.stopping = false;
 	state.runner_id = None;
 	let old_runner_workflow_id = state.runner_workflow_id.take();
 
@@ -541,8 +637,11 @@ async fn handle_stopped(
 		}
 	}
 
-	// Kill old actor if lost (just in case it ended up allocating)
-	if let (Some(_), Some(old_runner_workflow_id)) = (&lost_sig, old_runner_workflow_id) {
+	// We don't know the state of the previous generation of this actor actor if it becomes lost, send stop
+	// command in case it ended up allocating
+	if let (StoppedVariant::Lost { .. }, Some(old_runner_workflow_id)) =
+		(&variant, old_runner_workflow_id)
+	{
 		ctx.signal(crate::workflows::runner::Command {
 			inner: protocol::Command::CommandStopActor(protocol::CommandStopActor {
 				actor_id: input.actor_id.to_string(),
@@ -554,15 +653,9 @@ async fn handle_stopped(
 		.await?;
 	}
 
-	let (force_reschedule, reset_rescheduling) = if let Some(lost_sig) = &lost_sig {
-		(lost_sig.force_reschedule, lost_sig.reset_rescheduling)
-	} else {
-		(false, false)
-	};
-
 	// Reschedule no matter what
 	if force_reschedule {
-		match runtime::reschedule_actor(ctx, &input, state, true, reset_rescheduling).await? {
+		match runtime::reschedule_actor(ctx, &input, state, true).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			// NOTE: This should be unreachable because force_reschedule is true
 			runtime::SpawnActorOutput::Sleep => {
@@ -573,37 +666,29 @@ async fn handle_stopped(
 				})
 				.await?;
 			}
-			runtime::SpawnActorOutput::Destroy => {
-				// Destroyed early
-				return Ok(Some(runtime::LifecycleRes {
-					generation: state.generation,
-					// False here because if we received the destroy signal, it is
-					// guaranteed that we did not allocate another actor.
-					kill: false,
-				}));
-			}
+			// Destroyed early
+			runtime::SpawnActorOutput::Destroy => return Ok(StoppedResult::Destroy),
 		}
 	}
 	// Handle rescheduling if not marked as sleeping
 	else if !state.sleeping {
-		let failed = matches!(code, None | Some(protocol::StopCode::Error));
+		// Anything besides a StopCode::Ok is considered a failure
+		let failed = !matches!(
+			variant,
+			StoppedVariant::Normal {
+				code: protocol::StopCode::Ok
+			}
+		);
 
 		match (input.crash_policy, failed) {
 			(CrashPolicy::Restart, true) => {
-				match runtime::reschedule_actor(ctx, &input, state, false, reset_rescheduling)
-					.await?
-				{
+				match runtime::reschedule_actor(ctx, &input, state, false).await? {
 					runtime::SpawnActorOutput::Allocated { .. } => {}
 					// NOTE: Its not possible for `SpawnActorOutput::Sleep` to be returned here, the crash
 					// policy is `Restart`.
 					runtime::SpawnActorOutput::Sleep | runtime::SpawnActorOutput::Destroy => {
 						// Destroyed early
-						return Ok(Some(runtime::LifecycleRes {
-							generation: state.generation,
-							// False here because if we received the destroy signal, it is
-							// guaranteed that we did not allocate another actor.
-							kill: false,
-						}));
+						return Ok(StoppedResult::Destroy);
 					}
 				}
 			}
@@ -620,10 +705,7 @@ async fn handle_stopped(
 			_ => {
 				ctx.activity(runtime::SetCompleteInput {}).await?;
 
-				return Ok(Some(runtime::LifecycleRes {
-					generation: state.generation,
-					kill: lost_sig.is_some(),
-				}));
+				return Ok(StoppedResult::Destroy);
 			}
 		}
 	}
@@ -631,20 +713,13 @@ async fn handle_stopped(
 	else if state.will_wake {
 		state.sleeping = false;
 
-		match runtime::reschedule_actor(ctx, &input, state, false, reset_rescheduling).await? {
+		match runtime::reschedule_actor(ctx, &input, state, false).await? {
 			runtime::SpawnActorOutput::Allocated { .. } => {}
 			runtime::SpawnActorOutput::Sleep => {
 				state.sleeping = true;
 			}
-			runtime::SpawnActorOutput::Destroy => {
-				// Destroyed early
-				return Ok(Some(runtime::LifecycleRes {
-					generation: state.generation,
-					// False here because if we received the destroy signal, it is
-					// guaranteed that we did not allocate another actor.
-					kill: false,
-				}));
-			}
+			// Destroyed early
+			runtime::SpawnActorOutput::Destroy => return Ok(StoppedResult::Destroy),
 		}
 	}
 
@@ -656,7 +731,7 @@ async fn handle_stopped(
 		.send()
 		.await?;
 
-	Ok(None)
+	Ok(StoppedResult::Continue)
 }
 
 #[message("pegboard_actor_create_complete")]
@@ -701,6 +776,15 @@ pub struct Lost {
 	pub reset_rescheduling: bool,
 }
 
+#[derive(Debug)]
+#[signal("pegboard_actor_going_away")]
+pub struct GoingAway {
+	pub generation: u32,
+	/// Resets the rescheduling retry count to 0.
+	#[serde(default)]
+	pub reset_rescheduling: bool,
+}
+
 #[signal("pegboard_actor_destroy")]
 pub struct Destroy {}
 
@@ -720,5 +804,6 @@ join_signal!(Main {
 	Event(Event),
 	Wake,
 	Lost,
+	GoingAway,
 	Destroy,
 });

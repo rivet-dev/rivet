@@ -412,9 +412,8 @@ async fn handle_stopping(
 		// Set all remaining actors to lost immediately
 		if !actors.is_empty() {
 			for (actor_id, generation) in &actors {
-				ctx.signal(crate::workflows::actor::Lost {
+				ctx.signal(crate::workflows::actor::GoingAway {
 					generation: *generation,
-					force_reschedule: false,
 					reset_rescheduling: reset_actor_rescheduling,
 				})
 				.to_workflow::<crate::workflows::actor::Workflow>()
