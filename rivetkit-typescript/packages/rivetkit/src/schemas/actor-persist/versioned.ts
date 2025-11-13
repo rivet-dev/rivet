@@ -17,7 +17,7 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 				...conn,
 				hibernatableRequestId: null,
 			})),
-			hibernatableWebSocket: [],
+			hibernatableWebSockets: [],
 		}),
 	],
 	[
@@ -30,7 +30,7 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 			for (const conn of v2Data.connections) {
 				if (conn.hibernatableRequestId) {
 					// Find the matching hibernatable WebSocket
-					const ws = v2Data.hibernatableWebSocket.find((ws) =>
+					const ws = v2Data.hibernatableWebSockets.find((ws) =>
 						Buffer.from(ws.requestId).equals(
 							Buffer.from(conn.hibernatableRequestId!),
 						),
