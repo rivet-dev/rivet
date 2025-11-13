@@ -2,7 +2,11 @@ import * as fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { ClientConfigSchema } from "@/client/config";
 import { createFileSystemOrMemoryDriver } from "@/drivers/file-system/mod";
-import type { ManagerDriver } from "@/manager/driver";
+import type {
+	ActorOutput,
+	ListActorsInput,
+	ManagerDriver,
+} from "@/manager/driver";
 import { createManagerRouter } from "@/manager/router";
 import {
 	createClientWithDriver,
@@ -32,13 +36,13 @@ async function main() {
 		getWithKey: unimplemented,
 		getOrCreateWithKey: unimplemented,
 		createActor: unimplemented,
+		listActors: unimplemented,
 		sendRequest: unimplemented,
 		openWebSocket: unimplemented,
 		proxyRequest: unimplemented,
 		proxyWebSocket: unimplemented,
 		displayInformation: unimplemented,
 		getOrCreateInspectorAccessToken: unimplemented,
-		listActors: unimplemented,
 	};
 
 	const client = createClientWithDriver(

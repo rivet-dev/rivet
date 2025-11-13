@@ -5,10 +5,7 @@ import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
-import {
-	type ActorDriver,
-	serializeEmptyPersistData,
-} from "@/driver-helpers/mod";
+import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import type * as schema from "@/schemas/file-system-driver/mod";
@@ -43,6 +40,7 @@ interface ActorEntry {
 	id: string;
 
 	state?: schema.ActorState;
+
 	/** Promise for loading the actor state. */
 	loadPromise?: Promise<ActorEntry>;
 
@@ -57,8 +55,13 @@ interface ActorEntry {
 	/** Resolver for pending write operations that need to be notified when any write completes */
 	pendingWriteResolver?: PromiseWithResolvers<void>;
 
-	/** If the actor has been removed by destroy or sleep. */
-	removed: boolean;
+	/** If the actor is being destroyed. */
+	destroying: boolean;
+
+	// TODO: This might make sense to move in to actorstate, but we have a
+	// single reader/writer so it's not an issue
+	/** Generation of this actor when creating/destroying. */
+	generation: string;
 }
 
 /**
@@ -71,7 +74,12 @@ export class FileSystemGlobalState {
 	#alarmsDir: string;
 
 	#persist: boolean;
+
+	// IMPORTANT: Never delete from this map. Doing so will result in race
+	// conditions since the actor generation will cease to be tracked
+	// correctly. Always increment generation if a new actor is created.
 	#actors = new Map<string, ActorEntry>();
+
 	#actorCountOnStartup: number = 0;
 
 	#runnerParams?: {
@@ -197,7 +205,8 @@ export class FileSystemGlobalState {
 
 		entry = {
 			id: actorId,
-			removed: false,
+			destroying: false,
+			generation: crypto.randomUUID(),
 		};
 		this.#actors.set(actorId, entry);
 		return entry;
@@ -220,15 +229,17 @@ export class FileSystemGlobalState {
 
 		const entry = this.#upsertEntry(actorId);
 
-		// Initialize kvStorage with the initial persist data
+		// Initialize storage
 		const kvStorage: schema.ActorKvEntry[] = [];
-		const persistData = serializeEmptyPersistData(input);
-		// Store under key [1]
-		kvStorage.push({
-			key: bufferToArrayBuffer(new Uint8Array([1])),
-			value: bufferToArrayBuffer(persistData),
-		});
+		const initialKvState = getInitialActorKvState(input);
+		for (const [key, value] of initialKvState) {
+			kvStorage.push({
+				key: bufferToArrayBuffer(key),
+				value: bufferToArrayBuffer(value),
+			});
+		}
 
+		// Initialize metadata
 		entry.state = {
 			actorId,
 			name,
@@ -236,7 +247,11 @@ export class FileSystemGlobalState {
 			createdAt: BigInt(Date.now()),
 			kvStorage,
 		};
-		await this.writeActor(actorId, entry.state);
+		entry.destroying = false;
+		entry.generation = crypto.randomUUID();
+
+		await this.writeActor(actorId, entry.generation, entry.state);
+
 		return entry;
 	}
 
@@ -264,6 +279,7 @@ export class FileSystemGlobalState {
 
 		// Start loading state
 		entry.loadPromise = this.loadActorState(entry);
+		entry.loadPromise.then((res) => {});
 		return entry.loadPromise;
 	}
 
@@ -307,14 +323,19 @@ export class FileSystemGlobalState {
 
 		// If no state for this actor, then create & write state
 		if (!entry.state) {
+			if (entry.destroying) {
+				throw new Error(`Actor ${actorId} destroying`);
+			}
+
 			// Initialize kvStorage with the initial persist data
 			const kvStorage: schema.ActorKvEntry[] = [];
-			const persistData = serializeEmptyPersistData(input);
-			// Store under key [1]
-			kvStorage.push({
-				key: bufferToArrayBuffer(new Uint8Array([1])),
-				value: bufferToArrayBuffer(persistData),
-			});
+			const initialKvState = getInitialActorKvState(input);
+			for (const [key, value] of initialKvState) {
+				kvStorage.push({
+					key: bufferToArrayBuffer(key),
+					value: bufferToArrayBuffer(value),
+				});
+			}
 
 			entry.state = {
 				actorId,
@@ -323,7 +344,7 @@ export class FileSystemGlobalState {
 				createdAt: BigInt(Date.now()),
 				kvStorage,
 			};
-			await this.writeActor(actorId, entry.state);
+			await this.writeActor(actorId, entry.generation, entry.state);
 		}
 		return entry;
 	}
@@ -334,29 +355,128 @@ export class FileSystemGlobalState {
 			"cannot sleep actor with memory driver, must use file system driver",
 		);
 
-		const actor = this.#actors.get(actorId);
+		// Get the actor. We upsert it even though we're about to destroy it so we have a lock on flagging `destroying` as true.
+		const actor = this.#upsertEntry(actorId);
 		invariant(actor, `tried to sleep ${actorId}, does not exist`);
+
+		// Check if already destroying
+		if (actor.destroying) {
+			return;
+		}
+		actor.destroying = true;
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
 		if (actor.startPromise?.promise)
 			await actor.startPromise.promise.catch();
 
-		// Mark as removed
-		actor.removed = true;
-
 		// Stop actor
 		invariant(actor.actor, "actor should be loaded");
-		await actor.actor.onStop();
+		await actor.actor.onStop("sleep");
 
 		// Remove from map after stop is complete
 		this.#actors.delete(actorId);
 	}
 
+	async destroyActor(actorId: string) {
+		// Get the actor. We upsert it even though we're about to destroy it so we have a lock on flagging `destroying` as true.
+		const actor = this.#upsertEntry(actorId);
+
+		// If actor is loaded, stop it first
+		// Check if already destroying
+		if (actor.destroying) {
+			return;
+		}
+		actor.destroying = true;
+
+		// Wait for actor to fully start before stopping it to avoid race conditions
+		if (actor.loadPromise) await actor.loadPromise.catch();
+		if (actor.startPromise?.promise)
+			await actor.startPromise.promise.catch();
+
+		// Stop actor if it's running
+		if (actor.actor) {
+			await actor.actor.onStop("destroy");
+		}
+
+		// Clear alarm timeout if exists
+		if (actor.alarmTimeout) {
+			actor.alarmTimeout.abort();
+		}
+
+		// Delete persisted files if using file system driver
+		if (this.#persist) {
+			const fs = getNodeFs();
+
+			// Delete all actor files in parallel
+			await Promise.all([
+				// Delete actor state file
+				(async () => {
+					try {
+						await fs.unlink(this.getActorStatePath(actorId));
+					} catch (err: any) {
+						if (err?.code !== "ENOENT") {
+							logger().error({
+								msg: "failed to delete actor state file",
+								actorId,
+								error: stringifyError(err),
+							});
+						}
+					}
+				})(),
+				// Delete actor database file
+				(async () => {
+					try {
+						await fs.unlink(this.getActorDbPath(actorId));
+					} catch (err: any) {
+						if (err?.code !== "ENOENT") {
+							logger().error({
+								msg: "failed to delete actor database file",
+								actorId,
+								error: stringifyError(err),
+							});
+						}
+					}
+				})(),
+				// Delete actor alarm file
+				(async () => {
+					try {
+						await fs.unlink(this.getActorAlarmPath(actorId));
+					} catch (err: any) {
+						if (err?.code !== "ENOENT") {
+							logger().error({
+								msg: "failed to delete actor alarm file",
+								actorId,
+								error: stringifyError(err),
+							});
+						}
+					}
+				})(),
+			]);
+		}
+
+		// Reset the entry
+		//
+		// Do not remove entry in order to avoid race condition with
+		// destroying. Next actor creation will increment the generation.
+		actor.state = undefined;
+		actor.loadPromise = undefined;
+		actor.actor = undefined;
+		actor.startPromise = undefined;
+		actor.alarmTimeout = undefined;
+		actor.alarmTimeout = undefined;
+		actor.pendingWriteResolver = undefined;
+		actor.destroying = false;
+	}
+
 	/**
 	 * Save actor state to disk.
 	 */
-	async writeActor(actorId: string, state: schema.ActorState): Promise<void> {
+	async writeActor(
+		actorId: string,
+		generation: string,
+		state: schema.ActorState,
+	): Promise<void> {
 		if (!this.#persist) {
 			return;
 		}
@@ -364,12 +484,25 @@ export class FileSystemGlobalState {
 		const entry = this.#actors.get(actorId);
 		invariant(entry, "actor entry does not exist");
 
-		await this.#performWrite(actorId, state);
+		await this.#performWrite(actorId, generation, state);
+	}
+
+	isGenerationCurrent(actorId: string, generation: string): boolean {
+		const entry = this.#upsertEntry(actorId);
+		if (!entry) return false;
+		return !entry.destroying && entry.generation === generation;
 	}
 
 	async setActorAlarm(actorId: string, timestamp: number) {
 		const entry = this.#actors.get(actorId);
 		invariant(entry, "actor entry does not exist");
+
+		// Track generation of the actor when the write started to detect
+		// destroy/create race condition
+		const writeGeneration = entry.generation;
+		if (entry.destroying) {
+			logger().info("skipping set alarm since actor destroying");
+		}
 
 		// Persist alarm to disk
 		if (this.#persist) {
@@ -389,6 +522,14 @@ export class FileSystemGlobalState {
 					);
 				const fs = getNodeFs();
 				await fs.writeFile(tempPath, data);
+
+				if (this.isGenerationCurrent(actorId, writeGeneration)) {
+					logger().debug(
+						"skipping writing alarm since actor destroying or new generation",
+					);
+					return;
+				}
+
 				await fs.rename(tempPath, alarmPath);
 			} catch (error) {
 				try {
@@ -413,6 +554,7 @@ export class FileSystemGlobalState {
 	 */
 	async #performWrite(
 		actorId: string,
+		generation: string,
 		state: schema.ActorState,
 	): Promise<void> {
 		const dataPath = this.getActorStatePath(actorId);
@@ -439,6 +581,14 @@ export class FileSystemGlobalState {
 				ACTOR_STATE_VERSIONED.serializeWithEmbeddedVersion(bareState);
 			const fs = getNodeFs();
 			await fs.writeFile(tempPath, serializedState);
+
+			if (this.isGenerationCurrent(actorId, generation)) {
+				logger().debug(
+					"skipping writing alarm since actor destroying or new generation",
+				);
+				return;
+			}
+
 			await fs.rename(tempPath, dataPath);
 		} catch (error) {
 			// Cleanup temp file on error
@@ -763,7 +913,11 @@ export class FileSystemGlobalState {
 	): Promise<void> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			throw new Error(`Actor ${actorId} state not loaded`);
+			if (entry.destroying) {
+				return;
+			} else {
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
 		}
 
 		// Create a mutable copy of kvStorage
@@ -798,7 +952,7 @@ export class FileSystemGlobalState {
 		};
 
 		// Save state to disk
-		await this.writeActor(actorId, entry.state);
+		await this.writeActor(actorId, entry.generation, entry.state);
 	}
 
 	/**
@@ -810,7 +964,11 @@ export class FileSystemGlobalState {
 	): Promise<(Uint8Array | null)[]> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			throw new Error(`Actor ${actorId} state not loaded`);
+			if (entry.destroying) {
+				throw new Error(`Actor ${actorId} is destroying`);
+			} else {
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
 		}
 
 		const results: (Uint8Array | null)[] = [];
@@ -835,7 +993,11 @@ export class FileSystemGlobalState {
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			throw new Error(`Actor ${actorId} state not loaded`);
+			if (entry.destroying) {
+				return;
+			} else {
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
 		}
 
 		// Create a mutable copy of kvStorage
@@ -859,7 +1021,7 @@ export class FileSystemGlobalState {
 		};
 
 		// Save state to disk
-		await this.writeActor(actorId, entry.state);
+		await this.writeActor(actorId, entry.generation, entry.state);
 	}
 
 	/**
@@ -871,7 +1033,11 @@ export class FileSystemGlobalState {
 	): Promise<[Uint8Array, Uint8Array][]> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			throw new Error(`Actor ${actorId} state not loaded`);
+			if (entry.destroying) {
+				throw new Error(`Actor ${actorId} is destroying`);
+			} else {
+				throw new Error(`Actor ${actorId} state not loaded`);
+			}
 		}
 
 		const results: [Uint8Array, Uint8Array][] = [];

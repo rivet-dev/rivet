@@ -16,30 +16,17 @@ import {
 	WS_PROTOCOL_STANDARD,
 	WS_PROTOCOL_TARGET,
 } from "rivetkit/driver-helpers";
-import { ActorAlreadyExists, InternalError } from "rivetkit/errors";
+import {
+	ActorAlreadyExists,
+	ActorDestroying,
+	InternalError,
+} from "rivetkit/errors";
+import { assertUnreachable } from "rivetkit/utils";
+import { parseActorId } from "./actor-id";
 import { getCloudflareAmbientEnv } from "./handler";
 import { logger } from "./log";
 import type { Bindings } from "./mod";
-import { serializeKey, serializeNameAndKey } from "./util";
-
-// Actor metadata structure
-interface ActorData {
-	name: string;
-	key: string[];
-}
-
-const KEYS = {
-	ACTOR: {
-		// Combined key for actor metadata (name and key)
-		metadata: (actorId: string) => `actor:${actorId}:metadata`,
-
-		// Key index function for actor lookup
-		keyIndex: (name: string, key: string[] = []) => {
-			// Use serializeKey for consistent handling of all keys
-			return `actor_key:${serializeKey(key)}`;
-		},
-	},
-};
+import { serializeNameAndKey } from "./util";
 
 const STANDARD_WEBSOCKET_HEADERS = [
 	"connection",
@@ -57,14 +44,18 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 	): Promise<Response> {
 		const env = getCloudflareAmbientEnv();
 
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+
 		logger().debug({
 			msg: "sending request to durable object",
 			actorId,
+			doId,
 			method: actorRequest.method,
 			url: actorRequest.url,
 		});
 
-		const id = env.ACTOR_DO.idFromString(actorId);
+		const id = env.ACTOR_DO.idFromString(doId);
 		const stub = env.ACTOR_DO.get(id);
 
 		return await stub.fetch(actorRequest);
@@ -78,14 +69,18 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 	): Promise<UniversalWebSocket> {
 		const env = getCloudflareAmbientEnv();
 
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+
 		logger().debug({
 			msg: "opening websocket to durable object",
 			actorId,
+			doId,
 			path,
 		});
 
 		// Make a fetch request to the Durable Object with WebSocket upgrade
-		const id = env.ACTOR_DO.idFromString(actorId);
+		const id = env.ACTOR_DO.idFromString(doId);
 		const stub = env.ACTOR_DO.get(id);
 
 		const protocols: string[] = [];
@@ -146,14 +141,18 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		actorRequest: Request,
 		actorId: string,
 	): Promise<Response> {
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+
 		logger().debug({
 			msg: "forwarding request to durable object",
 			actorId,
+			doId,
 			method: actorRequest.method,
 			url: actorRequest.url,
 		});
 
-		const id = c.env.ACTOR_DO.idFromString(actorId);
+		const id = c.env.ACTOR_DO.idFromString(doId);
 		const stub = c.env.ACTOR_DO.get(id);
 
 		return await stub.fetch(actorRequest);
@@ -218,7 +217,9 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			protocols.join(", "),
 		);
 
-		const id = c.env.ACTOR_DO.idFromString(actorId);
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+		const id = c.env.ACTOR_DO.idFromString(doId);
 		const stub = c.env.ACTOR_DO.get(id);
 
 		return await stub.fetch(actorRequest);
@@ -232,23 +233,42 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 	> {
 		const env = getCloudflareAmbientEnv();
 
-		// Get actor metadata from KV (combined name and key)
-		const actorData = (await env.ACTOR_KV.get(
-			KEYS.ACTOR.metadata(actorId),
-			{
-				type: "json",
-			},
-		)) as ActorData | null;
+		// Parse actor ID to get DO ID and expected generation
+		const [doId, expectedGeneration] = parseActorId(actorId);
 
-		// If the actor doesn't exist, return undefined
-		if (!actorData) {
+		// Get the Durable Object stub
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
+
+		// Call the DO's getMetadata method
+		const result = await stub.getMetadata();
+
+		if (!result) {
+			logger().debug({
+				msg: "getForId: actor not found",
+				actorId,
+			});
 			return undefined;
 		}
 
+		// Check if the actor IDs match in order to check if the generation matches
+		if (result.actorId !== actorId) {
+			logger().debug({
+				msg: "getForId: generation mismatch",
+				requestedActorId: actorId,
+				actualActorId: result.actorId,
+			});
+			return undefined;
+		}
+
+		if (result.destroying) {
+			throw new ActorDestroying(actorId);
+		}
+
 		return {
-			actorId,
-			name: actorData.name,
-			key: actorData.key,
+			actorId: result.actorId,
+			name: result.name,
+			key: result.key,
 		};
 	}
 
@@ -264,43 +284,79 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		logger().debug({ msg: "getWithKey: searching for actor", name, key });
 
 		// Generate deterministic ID from the name and key
-		// This is aligned with how createActor generates IDs
 		const nameKeyString = serializeNameAndKey(name, key);
-		const actorId = env.ACTOR_DO.idFromName(nameKeyString).toString();
+		const doId = env.ACTOR_DO.idFromName(nameKeyString).toString();
 
-		// Check if the actor metadata exists
-		const actorData = await env.ACTOR_KV.get(KEYS.ACTOR.metadata(actorId), {
-			type: "json",
-		});
+		// Try to get the Durable Object to see if it exists
+		const id = env.ACTOR_DO.idFromString(doId);
+		const stub = env.ACTOR_DO.get(id);
 
-		if (!actorData) {
+		// Check if actor exists without creating it
+		const result = await stub.getMetadata();
+
+		if (result) {
+			logger().debug({
+				msg: "getWithKey: found actor with matching name and key",
+				actorId: result.actorId,
+				name: result.name,
+				key: result.key,
+			});
+			return {
+				actorId: result.actorId,
+				name: result.name,
+				key: result.key,
+			};
+		} else {
 			logger().debug({
 				msg: "getWithKey: no actor found with matching name and key",
 				name,
 				key,
-				actorId,
+				doId,
 			});
 			return undefined;
 		}
-
-		logger().debug({
-			msg: "getWithKey: found actor with matching name and key",
-			actorId,
-			name,
-			key,
-		});
-		return this.#buildActorOutput(c, actorId);
 	}
 
-	async getOrCreateWithKey(
-		input: GetOrCreateWithKeyInput,
-	): Promise<ActorOutput> {
-		// TODO: Prevent race condition here
-		const getOutput = await this.getWithKey(input);
-		if (getOutput) {
-			return getOutput;
+	async getOrCreateWithKey({
+		c,
+		name,
+		key,
+		input,
+	}: GetOrCreateWithKeyInput<{ Bindings: Bindings }>): Promise<ActorOutput> {
+		const env = getCloudflareAmbientEnv();
+
+		// Create a deterministic ID from the actor name and key
+		// This ensures that actors with the same name and key will have the same ID
+		const nameKeyString = serializeNameAndKey(name, key);
+		const doId = env.ACTOR_DO.idFromName(nameKeyString);
+
+		// Get or create actor using the Durable Object's method
+		const actor = env.ACTOR_DO.get(doId);
+		const result = await actor.create({
+			name,
+			key,
+			input,
+			allowExisting: true,
+		});
+		if ("success" in result) {
+			const { actorId, created } = result.success;
+			logger().debug({
+				msg: "getOrCreateWithKey result",
+				actorId,
+				name,
+				key,
+				created,
+			});
+
+			return {
+				actorId,
+				name,
+				key,
+			};
+		} else if ("error" in result) {
+			throw new Error(`Error: ${JSON.stringify(result.error)}`);
 		} else {
-			return await this.createActor(input);
+			assertUnreachable(result);
 		}
 	}
 
@@ -312,41 +368,38 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 	}: CreateInput<{ Bindings: Bindings }>): Promise<ActorOutput> {
 		const env = getCloudflareAmbientEnv();
 
-		// Check if actor with the same name and key already exists
-		const existingActor = await this.getWithKey({ c, name, key });
-		if (existingActor) {
-			throw new ActorAlreadyExists(name, key);
-		}
-
 		// Create a deterministic ID from the actor name and key
 		// This ensures that actors with the same name and key will have the same ID
 		const nameKeyString = serializeNameAndKey(name, key);
 		const doId = env.ACTOR_DO.idFromName(nameKeyString);
-		const actorId = doId.toString();
 
-		// Init actor
+		// Create actor - this will fail if it already exists
 		const actor = env.ACTOR_DO.get(doId);
-		await actor.initialize({
+		const result = await actor.create({
 			name,
 			key,
 			input,
+			allowExisting: false,
 		});
 
-		// Store combined actor metadata (name and key)
-		const actorData: ActorData = { name, key };
-		await env.ACTOR_KV.put(
-			KEYS.ACTOR.metadata(actorId),
-			JSON.stringify(actorData),
-		);
+		if ("success" in result) {
+			const { actorId } = result.success;
+			return {
+				actorId,
+				name,
+				key,
+			};
+		} else if ("error" in result) {
+			if (result.error.actorAlreadyExists) {
+				throw new ActorAlreadyExists(name, key);
+			}
 
-		// Add to key index for lookups by name and key
-		await env.ACTOR_KV.put(KEYS.ACTOR.keyIndex(name, key), actorId);
-
-		return {
-			actorId,
-			name,
-			key,
-		};
+			throw new InternalError(
+				`Unknown error creating actor: ${JSON.stringify(result.error)}`,
+			);
+		} else {
+			assertUnreachable(result);
+		}
 	}
 
 	async listActors({ c, name }: ListActorsInput): Promise<ActorOutput[]> {
@@ -355,31 +408,6 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			name,
 		});
 		return [];
-	}
-
-	// Helper method to build actor output from an ID
-	async #buildActorOutput(
-		c: any,
-		actorId: string,
-	): Promise<ActorOutput | undefined> {
-		const env = getCloudflareAmbientEnv();
-
-		const actorData = (await env.ACTOR_KV.get(
-			KEYS.ACTOR.metadata(actorId),
-			{
-				type: "json",
-			},
-		)) as ActorData | null;
-
-		if (!actorData) {
-			return undefined;
-		}
-
-		return {
-			actorId,
-			name: actorData.name,
-			key: actorData.key,
-		};
 	}
 
 	displayInformation(): ManagerDisplayInformation {

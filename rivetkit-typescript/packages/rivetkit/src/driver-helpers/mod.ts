@@ -32,4 +32,4 @@ export {
 	DriverConfigSchema,
 	RunnerConfigSchema as RunConfigSchema,
 } from "@/registry/run-config";
-export { serializeEmptyPersistData } from "./utils";
+export { getInitialActorKvState } from "./utils";

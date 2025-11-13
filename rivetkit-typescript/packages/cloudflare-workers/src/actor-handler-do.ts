@@ -3,54 +3,47 @@ import type { ExecutionContext } from "hono";
 import invariant from "invariant";
 import type { ActorKey, ActorRouter, Registry, RunConfig } from "rivetkit";
 import { createActorRouter, createClientWithDriver } from "rivetkit";
-import type { ActorDriver } from "rivetkit/driver-helpers";
+import type { ActorDriver, ManagerDriver } from "rivetkit/driver-helpers";
+import { getInitialActorKvState } from "rivetkit/driver-helpers";
+import { stringifyError } from "rivetkit/utils";
 import {
-	type ManagerDriver,
-	serializeEmptyPersistData,
-} from "rivetkit/driver-helpers";
-import { promiseWithResolvers } from "rivetkit/utils";
-import {
+	ActorGlobalState,
 	CloudflareDurableObjectGlobalState,
 	createCloudflareActorsActorDriverBuilder,
 } from "./actor-driver";
+import { buildActorId, parseActorId } from "./actor-id";
+import { kvPut } from "./actor-kv";
+import { GLOBAL_KV_KEYS } from "./global-kv";
 import type { Bindings } from "./handler";
+import { getCloudflareAmbientEnv } from "./handler";
 import { logger } from "./log";
 
-export const KEYS = {
-	NAME: "rivetkit:name",
-	KEY: "rivetkit:key",
-	PERSIST_DATA: "rivetkit:data",
-	CONN_PREFIX: "rivetkit:conn:",
-};
-
-// Helper to create a connection key for Cloudflare
-export function makeCloudflareConnKey(connId: string): string {
-	return `${KEYS.CONN_PREFIX}${connId}`;
-}
-
 export interface ActorHandlerInterface extends DurableObject {
-	initialize(req: ActorInitRequest): Promise<void>;
+	create(req: ActorInitRequest): Promise<ActorInitResponse>;
+	getMetadata(): Promise<
+		| {
+				actorId: string;
+				name: string;
+				key: ActorKey;
+				destroying: boolean;
+		  }
+		| undefined
+	>;
 }
 
 export interface ActorInitRequest {
 	name: string;
 	key: ActorKey;
 	input?: unknown;
+	allowExisting: boolean;
 }
-
-interface InitializedData {
-	name: string;
-	key: ActorKey;
-}
+export type ActorInitResponse =
+	| { success: { actorId: string; created: boolean } }
+	| { error: { actorAlreadyExists: true } };
 
 export type DurableObjectConstructor = new (
 	...args: ConstructorParameters<typeof DurableObject<Bindings>>
 ) => DurableObject<Bindings>;
-
-interface LoadedActor {
-	actorRouter: ActorRouter;
-	actorDriver: ActorDriver;
-}
 
 export function createActorDurableObject(
 	registry: Registry<any>,
@@ -71,50 +64,104 @@ export function createActorDurableObject(
 		extends DurableObject<Bindings>
 		implements ActorHandlerInterface
 	{
-		#initialized?: InitializedData;
-		#initializedPromise?: ReturnType<typeof promiseWithResolvers<void>>;
+		/**
+		 * This holds a strong reference to ActorGlobalState.
+		 * CloudflareDurableObjectGlobalState holds a weak reference so we can
+		 * access it elsewhere.
+		 **/
+		#state: ActorGlobalState;
 
-		#actor?: LoadedActor;
+		constructor(
+			...args: ConstructorParameters<typeof DurableObject<Bindings>>
+		) {
+			super(...args);
 
-		async #loadActor(): Promise<LoadedActor> {
-			// Wait for init
-			if (!this.#initialized) {
-				// Wait for init
-				if (this.#initializedPromise) {
-					await this.#initializedPromise.promise;
-				} else {
-					this.#initializedPromise = promiseWithResolvers();
-					const res = await this.ctx.storage.get([
-						KEYS.NAME,
-						KEYS.KEY,
-						KEYS.PERSIST_DATA,
-					]);
-					if (res.get(KEYS.PERSIST_DATA)) {
-						const name = res.get(KEYS.NAME) as string;
-						if (!name) throw new Error("missing actor name");
-						const key = res.get(KEYS.KEY) as ActorKey;
-						if (!key) throw new Error("missing actor key");
+			// Initialize SQL table for key-value storage
+			//
+			// We do this instead of using the native KV storage so we can store blob keys. The native CF KV API only supports string keys.
+			this.ctx.storage.sql.exec(`
+				CREATE TABLE IF NOT EXISTS _rivetkit_kv_storage(
+					key BLOB PRIMARY KEY,
+					value BLOB
+				);
+			`);
 
+			// Initialize SQL table for actor metadata
+			//
+			// id always equals 1 in order to ensure that there's always exactly 1 row in this table
+			this.ctx.storage.sql.exec(`
+				CREATE TABLE IF NOT EXISTS _rivetkit_metadata(
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					name TEXT NOT NULL,
+					key TEXT NOT NULL,
+					destroyed INTEGER DEFAULT 0,
+					generation INTEGER DEFAULT 0
+				);
+			`);
+
+			// Get or create the actor state from the global WeakMap
+			const state = globalState.getActorState(this.ctx);
+			if (state) {
+				this.#state = state;
+			} else {
+				this.#state = new ActorGlobalState();
+				globalState.setActorState(this.ctx, this.#state);
+			}
+		}
+
+		async #loadActor() {
+			invariant(this.#state, "State should be initialized");
+
+			// Check if initialized
+			if (!this.#state.initialized) {
+				// Query SQL for initialization data
+				const cursor = this.ctx.storage.sql.exec(
+					"SELECT name, key, destroyed, generation FROM _rivetkit_metadata WHERE id = 1",
+				);
+				const result = cursor.raw().next();
+
+				if (!result.done && result.value) {
+					const name = result.value[0] as string;
+					const key = JSON.parse(
+						result.value[1] as string,
+					) as ActorKey;
+					const destroyed = result.value[2] as number;
+					const generation = result.value[3] as number;
+
+					// Only initialize if not destroyed
+					if (!destroyed) {
 						logger().debug({
 							msg: "already initialized",
 							name,
 							key,
+							generation,
 						});
 
-						this.#initialized = { name, key };
-						this.#initializedPromise.resolve();
+						this.#state.initialized = { name, key, generation };
 					} else {
-						logger().debug("waiting to initialize");
+						logger().debug("actor is destroyed, cannot load");
+						throw new Error("Actor is destroyed");
 					}
+				} else {
+					logger().debug("not initialized");
+					throw new Error("Actor is not initialized");
 				}
 			}
 
 			// Check if already loaded
-			if (this.#actor) {
-				return this.#actor;
+			if (this.#state.actor) {
+				// Assert that the cached actor has the correct generation
+				// This will catch any cases where #state.actor has a stale generation
+				invariant(
+					!this.#state.initialized ||
+						this.#state.actor.generation ===
+							this.#state.initialized.generation,
+					`Stale actor cached: actor generation ${this.#state.actor.generation} != initialized generation ${this.#state.initialized?.generation}. This should not happen.`,
+				);
+				return this.#state.actor;
 			}
 
-			if (!this.#initialized) throw new Error("Not initialized");
+			if (!this.#state.initialized) throw new Error("Not initialized");
 
 			// Register DO with global state first
 			// HACK: This leaks the DO context, but DO does not provide a native way
@@ -155,55 +202,237 @@ export function createActorDurableObject(
 				false,
 			);
 
-			// Save actor
-			this.#actor = {
+			// Save actor with generation
+			this.#state.actor = {
 				actorRouter,
 				actorDriver,
+				generation: this.#state.initialized.generation,
 			};
+
+			// Build actor ID with generation for loading
+			const actorIdWithGen = buildActorId(
+				actorId,
+				this.#state.initialized.generation,
+			);
 
 			// Initialize the actor instance with proper metadata
 			// This ensures the actor driver knows about this actor
-			await actorDriver.loadActor(actorId);
+			await actorDriver.loadActor(actorIdWithGen);
 
-			return this.#actor;
+			return this.#state.actor;
 		}
 
-		/** RPC called by the service that creates the DO to initialize it. */
-		async initialize(req: ActorInitRequest) {
-			// TODO: Need to add this to a core promise that needs to be resolved before start
+		/** RPC called to get actor metadata without creating it */
+		async getMetadata(): Promise<
+			| {
+					actorId: string;
+					name: string;
+					key: ActorKey;
+					destroying: boolean;
+			  }
+			| undefined
+		> {
+			// Query the metadata
+			const cursor = this.ctx.storage.sql.exec(
+				"SELECT name, key, destroyed, generation FROM _rivetkit_metadata WHERE id = 1",
+			);
+			const result = cursor.raw().next();
 
-			await this.ctx.storage.put({
-				[KEYS.NAME]: req.name,
-				[KEYS.KEY]: req.key,
-				[KEYS.PERSIST_DATA]: serializeEmptyPersistData(req.input),
+			if (!result.done && result.value) {
+				const name = result.value[0] as string;
+				const key = JSON.parse(result.value[1] as string) as ActorKey;
+				const destroyed = result.value[2] as number;
+				const generation = result.value[3] as number;
+
+				// Check if destroyed
+				if (destroyed) {
+					logger().debug({
+						msg: "getMetadata: actor is destroyed",
+						name,
+						key,
+						generation,
+					});
+					return undefined;
+				}
+
+				// Build actor ID with generation
+				const doId = this.ctx.id.toString();
+				const actorId = buildActorId(doId, generation);
+				const destroying =
+					globalState.getActorState(this.ctx)?.destroying ?? false;
+
+				logger().debug({
+					msg: "getMetadata: found actor metadata",
+					actorId,
+					name,
+					key,
+					generation,
+					destroying,
+				});
+
+				return { actorId, name, key, destroying };
+			}
+
+			logger().debug({
+				msg: "getMetadata: no metadata found",
 			});
-			this.#initialized = {
+			return undefined;
+		}
+
+		/** RPC called by the manager to create a DO. Can optionally allow existing actors. */
+		async create(req: ActorInitRequest): Promise<ActorInitResponse> {
+			// Check if actor exists
+			const checkCursor = this.ctx.storage.sql.exec(
+				"SELECT destroyed, generation FROM _rivetkit_metadata WHERE id = 1",
+			);
+			const checkResult = checkCursor.raw().next();
+
+			let created = false;
+			let generation = 0;
+
+			if (!checkResult.done && checkResult.value) {
+				const destroyed = checkResult.value[0] as number;
+				generation = checkResult.value[1] as number;
+
+				if (!destroyed) {
+					// Actor exists and is not destroyed
+					if (!req.allowExisting) {
+						// Fail if not allowing existing actors
+						logger().debug({
+							msg: "create failed: actor already exists",
+							name: req.name,
+							key: req.key,
+							generation,
+						});
+						return { error: { actorAlreadyExists: true } };
+					}
+
+					// Return existing actor
+					logger().debug({
+						msg: "actor already exists",
+						key: req.key,
+						generation,
+					});
+					const doId = this.ctx.id.toString();
+					const actorId = buildActorId(doId, generation);
+					return { success: { actorId, created: false } };
+				}
+
+				// Actor exists but is destroyed - resurrect with incremented generation
+				generation = generation + 1;
+				created = true;
+
+				// Clear stale actor from previous generation
+				// This is necessary because the DO instance may still be in memory
+				// with the old #state.actor field from before the destroy
+				if (this.#state) {
+					this.#state.actor = undefined;
+				}
+
+				logger().debug({
+					msg: "resurrecting destroyed actor",
+					key: req.key,
+					oldGeneration: generation - 1,
+					newGeneration: generation,
+				});
+			} else {
+				// No actor exists - will create with generation 0
+				generation = 0;
+				created = true;
+				logger().debug({
+					msg: "creating new actor",
+					key: req.key,
+					generation,
+				});
+			}
+
+			// Perform upsert - either inserts new or updates destroyed actor
+			this.ctx.storage.sql.exec(
+				`INSERT INTO _rivetkit_metadata (id, name, key, destroyed, generation)
+				VALUES (1, ?, ?, 0, ?)
+				ON CONFLICT(id) DO UPDATE SET
+					name = excluded.name,
+					key = excluded.key,
+					destroyed = 0,
+					generation = excluded.generation`,
+				req.name,
+				JSON.stringify(req.key),
+				generation,
+			);
+
+			this.#state.initialized = {
 				name: req.name,
 				key: req.key,
+				generation,
 			};
 
-			logger().debug({ msg: "initialized actor", key: req.key });
+			// Build actor ID with generation
+			const doId = this.ctx.id.toString();
+			const actorId = buildActorId(doId, generation);
 
-			// Preemptively actor so the lifecycle hooks are called
+			// Initialize storage and update KV when created or resurrected
+			if (created) {
+				// Initialize persist data in KV storage
+				initializeActorKvStorage(this.ctx.storage.sql, req.input);
+
+				// Update metadata in the background
+				const env = getCloudflareAmbientEnv();
+				const actorData = { name: req.name, key: req.key, generation };
+				this.ctx.waitUntil(
+					env.ACTOR_KV.put(
+						GLOBAL_KV_KEYS.actorMetadata(actorId),
+						JSON.stringify(actorData),
+					),
+				);
+			}
+
+			// Preemptively load actor so the lifecycle hooks are called
 			await this.#loadActor();
+
+			logger().debug({
+				msg: created
+					? "actor created/resurrected"
+					: "returning existing actor",
+				actorId,
+				created,
+				generation,
+			});
+
+			return { success: { actorId, created } };
 		}
 
 		async fetch(request: Request): Promise<Response> {
-			const { actorRouter } = await this.#loadActor();
+			const { actorRouter, generation } = await this.#loadActor();
 
-			const actorId = this.ctx.id.toString();
+			// Build actor ID with generation
+			const doId = this.ctx.id.toString();
+			const actorId = buildActorId(doId, generation);
+
 			return await actorRouter.fetch(request, {
 				actorId,
 			});
 		}
 
 		async alarm(): Promise<void> {
-			const { actorDriver } = await this.#loadActor();
-			const actorId = this.ctx.id.toString();
+			const { actorDriver, generation } = await this.#loadActor();
+
+			// Build actor ID with generation
+			const doId = this.ctx.id.toString();
+			const actorId = buildActorId(doId, generation);
 
 			// Load the actor instance and trigger alarm
 			const actor = await actorDriver.loadActor(actorId);
 			await actor.onAlarm();
 		}
 	};
+}
+
+function initializeActorKvStorage(
+	sql: SqlStorage,
+	input: unknown | undefined,
+): void {
+	const initialKvState = getInitialActorKvState(input);
+	for (const [key, value] of initialKvState) {
+		kvPut(sql, key, value);
+	}
 }

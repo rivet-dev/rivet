@@ -1,5 +1,7 @@
 import invariant from "invariant";
 import type {
+	ActorKey,
+	ActorRouter,
 	AnyActorInstance as CoreAnyActorInstance,
 	RegistryConfig,
 	RunConfig,
@@ -12,7 +14,10 @@ import type {
 	ManagerDriver,
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
-import { KEYS } from "./actor-handler-do";
+import { parseActorId } from "./actor-id";
+import { kvDelete, kvGet, kvListPrefix, kvPut } from "./actor-kv";
+import { GLOBAL_KV_KEYS } from "./global-kv";
+import { getCloudflareAmbientEnv } from "./handler";
 
 interface DurableObjectGlobalState {
 	ctx: DurableObjectState;
@@ -25,11 +30,14 @@ interface DurableObjectGlobalState {
  * This allows for storing the actor context globally and looking it up by ID in `CloudflareActorsActorDriver`.
  */
 export class CloudflareDurableObjectGlobalState {
-	// Single map for all actor state
+	// Map of actor ID -> DO state
 	#dos: Map<string, DurableObjectGlobalState> = new Map();
 
-	getDOState(actorId: string): DurableObjectGlobalState {
-		const state = this.#dos.get(actorId);
+	// WeakMap of DO state -> ActorGlobalState for proper GC
+	#actors: WeakMap<DurableObjectState, ActorGlobalState> = new WeakMap();
+
+	getDOState(doId: string): DurableObjectGlobalState {
+		const state = this.#dos.get(doId);
 		invariant(
 			state !== undefined,
 			"durable object state not in global state",
@@ -37,8 +45,16 @@ export class CloudflareDurableObjectGlobalState {
 		return state;
 	}
 
-	setDOState(actorId: string, state: DurableObjectGlobalState) {
-		this.#dos.set(actorId, state);
+	setDOState(doId: string, state: DurableObjectGlobalState) {
+		this.#dos.set(doId, state);
+	}
+
+	getActorState(ctx: DurableObjectState): ActorGlobalState | undefined {
+		return this.#actors.get(ctx);
+	}
+
+	setActorState(ctx: DurableObjectState, actorState: ActorGlobalState): void {
+		this.#actors.set(ctx, actorState);
 	}
 }
 
@@ -46,11 +62,44 @@ export interface DriverContext {
 	state: DurableObjectState;
 }
 
-// Actor handler to track running instances
-class ActorHandler {
-	actor?: AnyActorInstance;
-	actorPromise?: ReturnType<typeof promiseWithResolvers<void>> =
-		promiseWithResolvers();
+interface InitializedData {
+	name: string;
+	key: ActorKey;
+	generation: number;
+}
+
+interface LoadedActor {
+	actorRouter: ActorRouter;
+	actorDriver: ActorDriver;
+	generation: number;
+}
+
+// Actor global state to track running instances
+export class ActorGlobalState {
+	// Initialization state
+	initialized?: InitializedData;
+
+	// Loaded actor state
+	actor?: LoadedActor;
+	actorInstance?: AnyActorInstance;
+	actorPromise?: ReturnType<typeof promiseWithResolvers<void>>;
+
+	/**
+	 * Indicates if `startDestroy` has been called.
+	 *
+	 * This is stored in memory instead of SQLite since the destroy may be cancelled.
+	 *
+	 * See the corresponding `destroyed` property in SQLite metadata.
+	 */
+	destroying: boolean = false;
+
+	reset() {
+		this.initialized = undefined;
+		this.actor = undefined;
+		this.actorInstance = undefined;
+		this.actorPromise = undefined;
+		this.destroying = false;
+	}
 }
 
 export class CloudflareActorsActorDriver implements ActorDriver {
@@ -59,7 +108,6 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 	#managerDriver: ManagerDriver;
 	#inlineClient: Client<any>;
 	#globalState: CloudflareDurableObjectGlobalState;
-	#actors: Map<string, ActorHandler> = new Map();
 
 	constructor(
 		registryConfig: RegistryConfig,
@@ -76,49 +124,79 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 	}
 
 	#getDOCtx(actorId: string) {
-		return this.#globalState.getDOState(actorId).ctx;
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+		return this.#globalState.getDOState(doId).ctx;
 	}
 
 	async loadActor(actorId: string): Promise<AnyActorInstance> {
+		// Parse actor ID to get DO ID and generation
+		const [doId, expectedGeneration] = parseActorId(actorId);
+
+		// Get the DO state
+		const doState = this.#globalState.getDOState(doId);
+
 		// Check if actor is already loaded
-		let handler = this.#actors.get(actorId);
-		if (handler) {
-			if (handler.actorPromise) await handler.actorPromise.promise;
-			if (!handler.actor) throw new Error("Actor should be loaded");
-			return handler.actor;
+		let actorState = this.#globalState.getActorState(doState.ctx);
+		if (actorState?.actorInstance) {
+			// Actor is already loaded, return it
+			return actorState.actorInstance;
 		}
 
-		// Create new actor handler
-		handler = new ActorHandler();
-		this.#actors.set(actorId, handler);
+		// Create new actor state if it doesn't exist
+		if (!actorState) {
+			actorState = new ActorGlobalState();
+			actorState.actorPromise = promiseWithResolvers();
+			this.#globalState.setActorState(doState.ctx, actorState);
+		}
 
-		// Get the actor metadata from Durable Object storage
-		const doState = this.#globalState.getDOState(actorId);
-		const storage = doState.ctx.storage;
+		// Another request is already loading this actor, wait for it
+		if (actorState.actorPromise) {
+			await actorState.actorPromise.promise;
+			if (!actorState.actorInstance) {
+				throw new Error(
+					`Actor ${actorId} failed to load in concurrent request`,
+				);
+			}
+			return actorState.actorInstance;
+		}
 
 		// Load actor metadata
-		const [name, key] = await Promise.all([
-			storage.get<string>(KEYS.NAME),
-			storage.get<string[]>(KEYS.KEY),
-		]);
+		const sql = doState.ctx.storage.sql;
+		const cursor = sql.exec(
+			"SELECT name, key, destroyed, generation FROM _rivetkit_metadata LIMIT 1",
+		);
+		const result = cursor.raw().next();
 
-		if (!name) {
+		if (result.done || !result.value) {
 			throw new Error(
-				`Actor ${actorId} is not initialized - missing name`,
+				`Actor ${actorId} is not initialized - missing metadata`,
 			);
 		}
-		if (!key) {
+
+		const name = result.value[0] as string;
+		const key = JSON.parse(result.value[1] as string) as string[];
+		const destroyed = result.value[2] as number;
+		const generation = result.value[3] as number;
+
+		// Check if actor is destroyed
+		if (destroyed) {
+			throw new Error(`Actor ${actorId} is destroyed`);
+		}
+
+		// Check if generation matches
+		if (generation !== expectedGeneration) {
 			throw new Error(
-				`Actor ${actorId} is not initialized - missing key`,
+				`Actor ${actorId} generation mismatch - expected ${expectedGeneration}, got ${generation}`,
 			);
 		}
 
 		// Create actor instance
 		const definition = lookupInRegistry(this.#registryConfig, name);
-		handler.actor = definition.instantiate();
+		actorState.actorInstance = definition.instantiate();
 
 		// Start actor
-		await handler.actor.start(
+		await actorState.actorInstance.start(
 			this,
 			this.#inlineClient,
 			actorId,
@@ -128,14 +206,16 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		);
 
 		// Finish
-		handler.actorPromise?.resolve();
-		handler.actorPromise = undefined;
+		actorState.actorPromise?.resolve();
+		actorState.actorPromise = undefined;
 
-		return handler.actor;
+		return actorState.actorInstance;
 	}
 
 	getContext(actorId: string): DriverContext {
-		const state = this.#globalState.getDOState(actorId);
+		// Parse actor ID to get DO ID
+		const [doId] = parseActorId(actorId);
+		const state = this.#globalState.getDOState(doId);
 		return { state: state.ctx };
 	}
 
@@ -147,97 +227,98 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		return this.#getDOCtx(actorId).storage.sql;
 	}
 
-	// Batch KV operations - convert between Uint8Array and Cloudflare's string-based API
+	// Batch KV operations
 	async kvBatchPut(
 		actorId: string,
 		entries: [Uint8Array, Uint8Array][],
 	): Promise<void> {
-		const storage = this.#getDOCtx(actorId).storage;
-		const encoder = new TextDecoder();
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert Uint8Array entries to object for Cloudflare batch put
-		const storageObj: Record<string, Uint8Array> = {};
 		for (const [key, value] of entries) {
-			// Convert key from Uint8Array to string
-			const keyStr = this.#uint8ArrayToKey(key);
-			storageObj[keyStr] = value;
+			kvPut(sql, key, value);
 		}
-
-		await storage.put(storageObj);
 	}
 
 	async kvBatchGet(
 		actorId: string,
 		keys: Uint8Array[],
 	): Promise<(Uint8Array | null)[]> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert keys to strings
-		const keyStrs = keys.map((k) => this.#uint8ArrayToKey(k));
+		const results: (Uint8Array | null)[] = [];
+		for (const key of keys) {
+			results.push(kvGet(sql, key));
+		}
 
-		// Get values from storage
-		const results = await storage.get<Uint8Array>(keyStrs);
-
-		// Convert Map results to array in same order as input keys
-		return keyStrs.map((k) => results.get(k) ?? null);
+		return results;
 	}
 
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert keys to strings
-		const keyStrs = keys.map((k) => this.#uint8ArrayToKey(k));
-
-		await storage.delete(keyStrs);
+		for (const key of keys) {
+			kvDelete(sql, key);
+		}
 	}
 
 	async kvListPrefix(
 		actorId: string,
 		prefix: Uint8Array,
 	): Promise<[Uint8Array, Uint8Array][]> {
-		const storage = this.#getDOCtx(actorId).storage;
+		const sql = this.#getDOCtx(actorId).storage.sql;
 
-		// Convert prefix to string
-		const prefixStr = this.#uint8ArrayToKey(prefix);
-
-		// List with prefix
-		const results = await storage.list<Uint8Array>({ prefix: prefixStr });
-
-		// Convert Map to array of [key, value] tuples
-		const entries: [Uint8Array, Uint8Array][] = [];
-		for (const [key, value] of results) {
-			entries.push([this.#keyToUint8Array(key), value]);
-		}
-
-		return entries;
+		return kvListPrefix(sql, prefix);
 	}
 
-	// Helper to convert Uint8Array key to string for Cloudflare storage
-	#uint8ArrayToKey(key: Uint8Array): string {
-		// Check if this is a connection key (starts with [2])
-		if (key.length > 0 && key[0] === 2) {
-			// Connection key - extract connId
-			const connId = new TextDecoder().decode(key.slice(1));
-			return `${KEYS.CONN_PREFIX}${connId}`;
+	startDestroy(actorId: string): void {
+		// Parse actor ID to get DO ID and generation
+		const [doId, generation] = parseActorId(actorId);
+
+		// Get the DO state
+		const doState = this.#globalState.getDOState(doId);
+		const actorState = this.#globalState.getActorState(doState.ctx);
+
+		// Actor not loaded, nothing to destroy
+		if (!actorState?.actorInstance) {
+			return;
 		}
-		// Otherwise, treat as persist data key [1]
-		return KEYS.PERSIST_DATA;
+
+		// Check if already destroying
+		if (actorState.destroying) {
+			return;
+		}
+		actorState.destroying = true;
+
+		// Spawn onStop in background
+		this.#callOnStopAsync(actorId, doId, actorState.actorInstance);
 	}
 
-	// Helper to convert string key back to Uint8Array
-	#keyToUint8Array(key: string): Uint8Array {
-		if (key.startsWith(KEYS.CONN_PREFIX)) {
-			// Connection key
-			const connId = key.slice(KEYS.CONN_PREFIX.length);
-			const encoder = new TextEncoder();
-			const connIdBytes = encoder.encode(connId);
-			const result = new Uint8Array(1 + connIdBytes.length);
-			result[0] = 2; // Connection prefix
-			result.set(connIdBytes, 1);
-			return result;
-		}
-		// Persist data key
-		return Uint8Array.from([1]);
+	async #callOnStopAsync(
+		actorId: string,
+		doId: string,
+		actor: CoreAnyActorInstance,
+	) {
+		// Stop
+		await actor.onStop("destroy");
+
+		// Remove state
+		const doState = this.#globalState.getDOState(doId);
+		const sql = doState.ctx.storage.sql;
+		sql.exec("UPDATE _rivetkit_metadata SET destroyed = 1 WHERE 1=1");
+		sql.exec("DELETE FROM _rivetkit_kv_storage");
+
+		// Clear any scheduled alarms
+		await doState.ctx.storage.deleteAlarm();
+
+		// Delete from ACTOR_KV in the background - use full actorId including generation
+		const env = getCloudflareAmbientEnv();
+		doState.ctx.waitUntil(
+			env.ACTOR_KV.delete(GLOBAL_KV_KEYS.actorMetadata(actorId)),
+		);
+
+		// Reset global state using the DO context
+		const actorHandle = this.#globalState.getActorState(doState.ctx);
+		actorHandle?.reset();
 	}
 }
 

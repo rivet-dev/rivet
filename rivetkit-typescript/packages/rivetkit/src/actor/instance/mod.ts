@@ -34,7 +34,12 @@ import { serializeActorKey } from "../keys";
 import { processMessage } from "../protocol/old";
 import { CachedSerializer } from "../protocol/serde";
 import { Schedule } from "../schedule";
-import { DeadlineError, deadline, generateSecureToken } from "../utils";
+import {
+	assertUnreachable,
+	DeadlineError,
+	deadline,
+	generateSecureToken,
+} from "../utils";
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./kv";
@@ -97,6 +102,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	// MARK: - Lifecycle State
 	#ready = false;
 	#sleepCalled = false;
+	#destroyCalled = false;
 	#stopCalled = false;
 	#sleepTimeout?: NodeJS.Timeout;
 	#abortController = new AbortController();
@@ -369,7 +375,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - Stop
-	async onStop() {
+	async onStop(mode: "sleep" | "destroy") {
 		if (this.#stopCalled) {
 			this.#rLog.warn({ msg: "already stopping actor" });
 			return;
@@ -389,7 +395,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		} catch {}
 
 		// Call onStop lifecycle
-		await this.#callOnStop();
+		if (mode === "sleep") {
+			await this.#callOnSleep();
+		} else if (mode === "destroy") {
+			await this.#callOnDestroy();
+		} else {
+			assertUnreachable(mode);
+		}
 
 		// Disconnect non-hibernatable connections
 		await this.#disconnectConnections();
@@ -410,7 +422,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Sleep
 	startSleep() {
-		if (this.#stopCalled) {
+		if (this.#stopCalled || this.#destroyCalled) {
 			this.#rLog.debug({
 				msg: "cannot call startSleep if actor already stopping",
 			});
@@ -431,8 +443,39 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		this.#rLog.info({ msg: "actor sleeping" });
 
+		// Start sleep on next tick so call site of startSleep can exit
 		setImmediate(() => {
 			sleep();
+		});
+	}
+
+	// MARK: - Destroy
+	startDestroy() {
+		if (this.#stopCalled || this.#sleepCalled) {
+			this.#rLog.debug({
+				msg: "cannot call startDestroy if actor already stopping or sleeping",
+			});
+			return;
+		}
+
+		if (this.#destroyCalled) {
+			this.#rLog.warn({
+				msg: "cannot call startDestroy twice, actor already destroying",
+			});
+			return;
+		}
+		this.#destroyCalled = true;
+
+		const destroy = this.driver.startDestroy.bind(
+			this.driver,
+			this.#actorId,
+		);
+
+		this.#rLog.info({ msg: "actor destroying" });
+
+		// Start destroy on next tick so call site of startDestroy can exit
+		setImmediate(() => {
+			destroy();
 		});
 	}
 
@@ -855,21 +898,46 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 	}
 
-	async #callOnStop() {
+	async #callOnSleep() {
 		if (this.#config.onSleep) {
 			try {
-				this.#rLog.debug({ msg: "calling onStop" });
+				this.#rLog.debug({ msg: "calling onSleep" });
 				const result = this.#config.onSleep(this.actorContext);
 				if (result instanceof Promise) {
-					await deadline(result, this.#config.options.onStopTimeout);
+					await deadline(result, this.#config.options.onSleepTimeout);
 				}
-				this.#rLog.debug({ msg: "onStop completed" });
+				this.#rLog.debug({ msg: "onSleep completed" });
 			} catch (error) {
 				if (error instanceof DeadlineError) {
-					this.#rLog.error({ msg: "onStop timed out" });
+					this.#rLog.error({ msg: "onSleep timed out" });
 				} else {
 					this.#rLog.error({
-						msg: "error in onStop",
+						msg: "error in onSleep",
+						error: stringifyError(error),
+					});
+				}
+			}
+		}
+	}
+
+	async #callOnDestroy() {
+		if (this.#config.onDestroy) {
+			try {
+				this.#rLog.debug({ msg: "calling onDestroy" });
+				const result = this.#config.onDestroy(this.actorContext);
+				if (result instanceof Promise) {
+					await deadline(
+						result,
+						this.#config.options.onDestroyTimeout,
+					);
+				}
+				this.#rLog.debug({ msg: "onDestroy completed" });
+			} catch (error) {
+				if (error instanceof DeadlineError) {
+					this.#rLog.error({ msg: "onDestroy timed out" });
+				} else {
+					this.#rLog.error({
+						msg: "error in onDestroy",
 						error: stringifyError(error),
 					});
 				}

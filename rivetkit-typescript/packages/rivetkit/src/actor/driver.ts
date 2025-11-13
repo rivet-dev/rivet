@@ -55,9 +55,16 @@ export interface ActorDriver {
 	/**
 	 * Requests the actor to go to sleep.
 	 *
-	 * This will call `_stop` independently.
+	 * This will call `ActorInstance.onStop` independently.
 	 */
 	startSleep?(actorId: string): void;
+
+	/**
+	 * Destroys the actor and its associated data.
+	 *
+	 * This will call `ActorInstance.onStop` independently.
+	 */
+	startDestroy(actorId: string): void;
 
 	/**
 	 * Shuts down the actor runner.

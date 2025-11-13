@@ -91,4 +91,8 @@ export class FileSystemActorDriver implements ActorDriver {
 		// Spawns the sleepActor promise
 		this.#state.sleepActor(actorId);
 	}
+
+	async startDestroy(actorId: string): Promise<void> {
+		await this.#state.destroyActor(actorId);
+	}
 }
