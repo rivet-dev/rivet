@@ -17,8 +17,8 @@ import {
 	WS_PROTOCOL_TARGET,
 } from "rivetkit/driver-helpers";
 import {
-	ActorAlreadyExists,
-	ActorDestroying,
+	ActorDuplicateKey,
+	ActorNotFound,
 	InternalError,
 } from "rivetkit/errors";
 import { assertUnreachable } from "rivetkit/utils";
@@ -262,7 +262,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 		}
 
 		if (result.destroying) {
-			throw new ActorDestroying(actorId);
+			throw new ActorNotFound(actorId);
 		}
 
 		return {
@@ -391,7 +391,7 @@ export class CloudflareActorsManagerDriver implements ManagerDriver {
 			};
 		} else if ("error" in result) {
 			if (result.error.actorAlreadyExists) {
-				throw new ActorAlreadyExists(name, key);
+				throw new ActorDuplicateKey(name, key);
 			}
 
 			throw new InternalError(

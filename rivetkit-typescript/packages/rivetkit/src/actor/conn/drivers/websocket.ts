@@ -2,19 +2,23 @@ import type { WSContext } from "hono/ws";
 import type { AnyConn } from "@/actor/conn/mod";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { CachedSerializer, Encoding } from "@/actor/protocol/serde";
-import type * as protocol from "@/schemas/client-protocol/mod";
 import { loggerWithoutContext } from "../../log";
 import { type ConnDriver, DriverReadyState } from "../driver";
 
 export type ConnDriverWebSocketState = Record<never, never>;
 
-export function createWebSocketSocket(
+export function createWebSocketDriver(
 	requestId: string,
 	requestIdBuf: ArrayBuffer | undefined,
 	hibernatable: boolean,
 	encoding: Encoding,
 	closePromise: Promise<void>,
 ): { driver: ConnDriver; setWebSocket(ws: WSContext): void } {
+	loggerWithoutContext().debug({
+		msg: "createWebSocketDriver creating driver",
+		requestId,
+		hibernatable,
+	});
 	// Wait for WS to open
 	let websocket: WSContext | undefined;
 

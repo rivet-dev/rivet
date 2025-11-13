@@ -64,7 +64,11 @@ async fn test_list_edge_cases() -> Result<()> {
 		None,
 	)
 	.await?;
-	assert_eq!(no_match.len(), 0, "should return empty for non-matching prefix");
+	assert_eq!(
+		no_match.len(),
+		0,
+		"should return empty for non-matching prefix"
+	);
 
 	// Test 3: Range where start > end (should return empty)
 	tracing::info!("test 3: range where start > end");
@@ -137,8 +141,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	)
 	.await?;
 
-	let (null_keys, null_values, _) =
-		kv::get(db, actor_id, vec![null_key.clone()]).await?;
+	let (null_keys, null_values, _) = kv::get(db, actor_id, vec![null_key.clone()]).await?;
 	assert_eq!(null_keys.len(), 1, "should retrieve key with null byte");
 	assert_eq!(null_values[0], b"null_value");
 
@@ -191,9 +194,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (empty_prefix, _, _) = kv::list(
 		db,
 		actor_id,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
-			key: vec![],
-		}),
+		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
 		false,
 		None,
 	)
@@ -204,13 +205,7 @@ async fn test_list_edge_cases() -> Result<()> {
 
 	// Test 8: Prefix longer than any stored key
 	tracing::info!("test 8: prefix longer than stored keys");
-	kv::put(
-		db,
-		actor_id,
-		vec![b"ab".to_vec()],
-		vec![b"val".to_vec()],
-	)
-	.await?;
+	kv::put(db, actor_id, vec![b"ab".to_vec()], vec![b"val".to_vec()]).await?;
 
 	let (long_prefix, _, _) = kv::list(
 		db,
@@ -295,14 +290,26 @@ async fn test_list_edge_cases() -> Result<()> {
 	)
 	.await?;
 
-	let (zero_limit, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, Some(0)).await?;
+	let (zero_limit, _, _) = kv::list(
+		db,
+		actor_id,
+		rp::KvListQuery::KvListAllQuery,
+		false,
+		Some(0),
+	)
+	.await?;
 	assert_eq!(zero_limit.len(), 0, "limit of 0 should return empty");
 
 	// Test 11: Limit of 1
 	tracing::info!("test 11: limit of 1");
-	let (one_limit, _, _) =
-		kv::list(db, actor_id, rp::KvListQuery::KvListAllQuery, false, Some(1)).await?;
+	let (one_limit, _, _) = kv::list(
+		db,
+		actor_id,
+		rp::KvListQuery::KvListAllQuery,
+		false,
+		Some(1),
+	)
+	.await?;
 	assert_eq!(one_limit.len(), 1, "limit of 1 should return 1 key");
 
 	// Test 12: Limit larger than total keys
@@ -328,18 +335,8 @@ async fn test_list_edge_cases() -> Result<()> {
 	kv::put(
 		db,
 		actor_id,
-		vec![
-			b"a".to_vec(),
-			b"b".to_vec(),
-			b"c".to_vec(),
-			b"d".to_vec(),
-		],
-		vec![
-			b"1".to_vec(),
-			b"2".to_vec(),
-			b"3".to_vec(),
-			b"4".to_vec(),
-		],
+		vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec()],
+		vec![b"1".to_vec(), b"2".to_vec(), b"3".to_vec(), b"4".to_vec()],
 	)
 	.await?;
 
@@ -359,9 +356,7 @@ async fn test_list_edge_cases() -> Result<()> {
 	let (prefix_reverse, _, _) = kv::list(
 		db,
 		actor_id,
-		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery {
-			key: vec![],
-		}),
+		rp::KvListQuery::KvListPrefixQuery(rp::KvListPrefixQuery { key: vec![] }),
 		true,
 		None,
 	)

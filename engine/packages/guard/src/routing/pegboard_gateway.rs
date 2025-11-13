@@ -158,11 +158,11 @@ async fn route_request_inner(
 		.op(pegboard::ops::actor::get_for_gateway::Input { actor_id })
 		.await?
 	else {
-		return Err(errors::ActorNotFound { actor_id }.build());
+		return Err(pegboard::errors::Actor::NotFound.build());
 	};
 
 	if actor.destroyed {
-		return Err(errors::ActorDestroyed { actor_id }.build());
+		return Err(pegboard::errors::Actor::NotFound.build());
 	}
 
 	// Wake actor if sleeping
