@@ -6,7 +6,6 @@ import InteractionScreen from "./components/InteractionScreen";
 
 export interface AppState {
   // Configuration
-  transport: "websocket" | "sse";
   encoding: "json" | "cbor" | "bare";
   connectionMode: "handle" | "connection";
 
@@ -38,16 +37,15 @@ function App() {
     setState(prev => prev ? { ...prev, ...updates } : null);
   };
 
-  // Create client with user-selected encoding and transport
+  // Create client with user-selected encoding
   const client = useMemo(() => {
     if (!state) return null;
 
     return createClient<Registry>({
       endpoint: "http://localhost:6420",
       encoding: state.encoding,
-      transport: state.transport,
     });
-  }, [state?.encoding, state?.transport]);
+  }, [state?.encoding]);
 
   // Create the connection/handle once based on state
   const [actorHandle, setActorHandle] = useState<any>(null);
