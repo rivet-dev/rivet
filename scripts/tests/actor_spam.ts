@@ -28,7 +28,7 @@ async function testActor(i: number) {
 	try {
 		// Create an actor
 		console.log(`Creating actor ${i}...`);
-		const actorResponse = await createActor(RIVET_NAMESPACE, "test-runner");
+		const actorResponse = await createActor(RIVET_NAMESPACE, "test-runner", false);
 		console.log("Actor created:", actorResponse.actor);
 
 		actorId = actorResponse.actor.actor_id;
