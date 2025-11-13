@@ -148,10 +148,8 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 			actorState = new ActorGlobalState();
 			actorState.actorPromise = promiseWithResolvers();
 			this.#globalState.setActorState(doState.ctx, actorState);
-		}
-
-		// Another request is already loading this actor, wait for it
-		if (actorState.actorPromise) {
+		} else if (actorState.actorPromise) {
+			// Another request is already loading this actor, wait for it
 			await actorState.actorPromise.promise;
 			if (!actorState.actorInstance) {
 				throw new Error(
