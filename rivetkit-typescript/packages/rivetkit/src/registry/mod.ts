@@ -58,9 +58,7 @@ export class Registry<A extends RegistryActors> {
 	/**
 	 * Runs the registry for a server.
 	 */
-	public async start(
-		inputConfig?: RunnerConfigInput,
-	): Promise<ServerOutput<this>> {
+	public start(inputConfig?: RunnerConfigInput): ServerOutput<this> {
 		const config = RunnerConfigSchema.parse(inputConfig);
 
 		// Validate autoConfigureServerless is only used with serverless runner
@@ -137,7 +135,7 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		// Choose the driver based on configuration
-		const driver = await chooseDefaultDriver(config);
+		const driver = chooseDefaultDriver(config);
 
 		// Set defaults based on the driver
 		if (driver.name === "engine") {
