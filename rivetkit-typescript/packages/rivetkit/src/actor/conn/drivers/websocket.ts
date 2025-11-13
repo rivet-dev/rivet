@@ -23,7 +23,7 @@ export function createWebSocketSocket(
 		sendMessage: (
 			actor: AnyActorInstance,
 			conn: AnyConn,
-			message: CachedSerializer<protocol.ToClient>,
+			message: CachedSerializer<any, any, any>,
 		) => {
 			if (websocket.readyState !== DriverReadyState.OPEN) {
 				actor.rLog.warn({

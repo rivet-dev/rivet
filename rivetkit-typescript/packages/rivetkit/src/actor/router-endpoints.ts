@@ -1,10 +1,6 @@
 import * as cbor from "cbor-x";
 import type { Context as HonoContext, HonoRequest } from "hono";
 import type { WSContext } from "hono/ws";
-import {
-	HttpActionRequestSchema,
-	HttpActionResponseSchema,
-} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyConn } from "@/actor/conn/mod";
 import { ActionContext } from "@/actor/contexts/action";
 import * as errors from "@/actor/errors";
@@ -31,6 +27,12 @@ import {
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
+import {
+	type HttpActionRequest as HttpActionRequestJson,
+	HttpActionRequestSchema,
+	type HttpActionResponse as HttpActionResponseJson,
+	HttpActionResponseSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import {
 	contentTypeForEncoding,
 	deserializeWithEncoding,
@@ -339,8 +341,13 @@ export async function handleAction(
 		new Uint8Array(arrayBuffer),
 		HTTP_ACTION_REQUEST_VERSIONED,
 		HttpActionRequestSchema,
+		// JSON: args is already the decoded value (raw object/array)
+		(json: HttpActionRequestJson) => json.args,
+		// BARE/CBOR: args is ArrayBuffer that needs CBOR-decoding
+		(bare: protocol.HttpActionRequest) =>
+			cbor.decode(new Uint8Array(bare.args)),
 	);
-	const actionArgs = cbor.decode(new Uint8Array(request.args));
+	const actionArgs = request;
 
 	// Invoke the action
 	let actor: AnyActorInstance | undefined;
@@ -369,14 +376,17 @@ export async function handleAction(
 	}
 
 	// Send response
-	const responseData: protocol.HttpActionResponse = {
-		output: bufferToArrayBuffer(cbor.encode(output)),
-	};
 	const serialized = serializeWithEncoding(
 		encoding,
-		responseData,
+		output,
 		HTTP_ACTION_RESPONSE_VERSIONED,
 		HttpActionResponseSchema,
+		// JSON: output is the raw value (will be serialized by jsonStringifyCompat)
+		(value): HttpActionResponseJson => ({ output: value }),
+		// BARE/CBOR: output needs to be CBOR-encoded to ArrayBuffer
+		(value): protocol.HttpActionResponse => ({
+			output: bufferToArrayBuffer(cbor.encode(value)),
+		}),
 	);
 
 	// TODO: Remvoe any, Hono is being a dumbass

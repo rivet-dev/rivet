@@ -1,9 +1,5 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
-import {
-	HttpActionRequestSchema,
-	HttpActionResponseSchema,
-} from "@/actor/client-protocol-schema-json/mod";
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/actor/protocol/serde";
 import { assertUnreachable } from "@/actor/utils";
@@ -19,6 +15,12 @@ import {
 	HTTP_ACTION_REQUEST_VERSIONED,
 	HTTP_ACTION_RESPONSE_VERSIONED,
 } from "@/schemas/client-protocol/versioned";
+import {
+	type HttpActionRequest as HttpActionRequestJson,
+	HttpActionRequestSchema,
+	type HttpActionResponse as HttpActionResponseJson,
+	HttpActionResponseSchema,
+} from "@/schemas/client-protocol-zod/mod";
 import { bufferToArrayBuffer } from "@/utils";
 import type { ActorDefinitionActions } from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
@@ -104,8 +106,12 @@ export class ActorHandleRaw {
 				encoding: this.#encoding,
 			});
 			const responseData = await sendHttpRequest<
-				protocol.HttpActionRequest,
-				protocol.HttpActionResponse
+				protocol.HttpActionRequest, // Bare type
+				protocol.HttpActionResponse, // Bare type
+				HttpActionRequestJson, // Json type
+				HttpActionResponseJson, // Json type
+				unknown[], // Request type (the args array)
+				Response // Response type (the output value)
 			>({
 				url: `http://actor/action/${encodeURIComponent(opts.name)}`,
 				method: "POST",
@@ -115,9 +121,7 @@ export class ActorHandleRaw {
 						? { [HEADER_CONN_PARAMS]: JSON.stringify(this.#params) }
 						: {}),
 				},
-				body: {
-					args: bufferToArrayBuffer(cbor.encode(opts.args)),
-				} satisfies protocol.HttpActionRequest,
+				body: opts.args,
 				encoding: this.#encoding,
 				customFetch: this.#driver.sendRequest.bind(
 					this.#driver,
@@ -128,9 +132,22 @@ export class ActorHandleRaw {
 				responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
 				requestZodSchema: HttpActionRequestSchema,
 				responseZodSchema: HttpActionResponseSchema,
+				// JSON Request: args is the raw value
+				requestToJson: (args): HttpActionRequestJson => ({
+					args,
+				}),
+				// BARE Request: args needs to be CBOR-encoded
+				requestToBare: (args): protocol.HttpActionRequest => ({
+					args: bufferToArrayBuffer(cbor.encode(args)),
+				}),
+				// JSON Response: output is the raw value
+				responseFromJson: (json): Response => json.output as Response,
+				// BARE Response: output is ArrayBuffer that needs CBOR-decoding
+				responseFromBare: (bare): Response =>
+					cbor.decode(new Uint8Array(bare.output)) as Response,
 			});
 
-			return cbor.decode(new Uint8Array(responseData.output));
+			return responseData;
 		} catch (err) {
 			// Standardize to ClientActorError instead of the native backend error
 			const { group, code, message, metadata } = deconstructError(

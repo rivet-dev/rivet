@@ -54,5 +54,10 @@ export async function apiCall<TInput = unknown, TOutput = unknown>(
 		responseVersionedDataHandler: undefined,
 		requestZodSchema: z.any() as z.ZodType<TInput>,
 		responseZodSchema: z.any() as z.ZodType<TOutput>,
+		// Identity conversions (passthrough for generic API calls)
+		requestToJson: (value) => value,
+		requestToBare: (value) => value,
+		responseFromJson: (value) => value,
+		responseFromBare: (value) => value,
 	});
 }
