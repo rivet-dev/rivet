@@ -266,7 +266,7 @@ where
 
 		tracing::debug!("waiting for sub workflow");
 
-		let mut wake_sub = self.ctx.db().wake_sub().await?;
+		let mut bump_sub = self.ctx.db().bump_sub().await?;
 		let mut retries = self.ctx.db().max_sub_workflow_poll_retries();
 		let mut interval = tokio::time::interval(self.ctx.db().sub_workflow_poll_interval());
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -294,7 +294,7 @@ where
 
 			// Poll and wait for a wake at the same time
 			tokio::select! {
-				_ = wake_sub.next() => {},
+				_ = bump_sub.next() => {},
 				_ = interval.tick() => {},
 			}
 		}
