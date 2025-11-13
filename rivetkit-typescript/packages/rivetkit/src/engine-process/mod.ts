@@ -26,8 +26,7 @@ interface EnsureEngineProcessOptions {
 export async function ensureEngineProcess(
 	options: EnsureEngineProcessOptions,
 ): Promise<void> {
-	// Import Node.js dependencies first
-	await importNodeDependencies();
+	importNodeDependencies();
 
 	logger().debug({
 		msg: "ensuring engine process",

@@ -1,4 +1,14 @@
-// Global variables for Node.js modules
+import { createRequire } from "node:module";
+
+// Global variables for Node.js modules.
+//
+// We use synchronous require() instead of async import() for Node.js module loading because:
+// 1. These modules are only needed in Node.js environments (not browser/edge)
+// 2. registry.start() cannot be async and needs immediate access to Node modules
+// 3. The setup process must be synchronous to avoid breaking the API
+//
+// Biome only allows imports of node modules in this file in order to ensure
+// we're forcing the use of dynamic imports.
 let nodeCrypto: typeof import("node:crypto") | undefined;
 let nodeFsSync: typeof import("node:fs") | undefined;
 let nodeFs: typeof import("node:fs/promises") | undefined;
@@ -7,58 +17,64 @@ let nodeOs: typeof import("node:os") | undefined;
 let nodeChildProcess: typeof import("node:child_process") | undefined;
 let nodeStream: typeof import("node:stream/promises") | undefined;
 
-// Singleton promise to ensure imports happen only once
-let importPromise: Promise<void> | undefined;
+let hasImportedDependencies = false;
+
+// Helper to get a require function that works in both CommonJS and ESM.
+// We use require() instead of await import() because registry.start() cannot
+// be async and needs immediate access to Node.js modules during setup.
+function getRequireFn() {
+	// CommonJS context - use global require
+	if (typeof require !== "undefined") {
+		return require;
+	}
+
+	// ESM context - use createRequire with import.meta.url
+	// @ts-ignore - import.meta.url is available in ESM
+	return createRequire(import.meta.url);
+}
 
 /**
- * Dynamically imports all required Node.js dependencies.
+ * Dynamically imports all required Node.js dependencies. We do this early in a
+ * single function call in order to surface errors early.
+ *
  * This function is idempotent and will only import once.
+ *
  * @throws Error if Node.js modules are not available (e.g., in browser/edge environments)
  */
-export async function importNodeDependencies(): Promise<void> {
-	if (importPromise) return importPromise;
+export function importNodeDependencies(): void {
+	// Check if already loaded
+	if (hasImportedDependencies) return;
 
-	importPromise = (async () => {
-		try {
-			// Dynamic imports with webpack ignore comment to prevent bundling
-			const cryptoModule = "node:crypto";
-			const fsModule = "node:fs";
-			const fsPromisesModule = "node:fs/promises";
-			const pathModule = "node:path";
-			const osModule = "node:os";
-			const childProcessModule = "node:child_process";
-			const streamModule = "node:stream/promises";
+	try {
+		// Get a require function that works in both CommonJS and ESM
+		const requireFn = getRequireFn();
 
-			const modules = await Promise.all([
-				import(/* webpackIgnore: true */ cryptoModule),
-				import(/* webpackIgnore: true */ fsModule),
-				import(/* webpackIgnore: true */ fsPromisesModule),
-				import(/* webpackIgnore: true */ pathModule),
-				import(/* webpackIgnore: true */ osModule),
-				import(/* webpackIgnore: true */ childProcessModule),
-				import(/* webpackIgnore: true */ streamModule),
-			]);
+		// Use requireFn with webpack ignore comment to prevent bundling
+		// @ts-ignore - dynamic require usage
+		nodeCrypto = requireFn(/* webpackIgnore: true */ "node:crypto");
+		// @ts-ignore
+		nodeFsSync = requireFn(/* webpackIgnore: true */ "node:fs");
+		// @ts-ignore
+		nodeFs = requireFn(/* webpackIgnore: true */ "node:fs/promises");
+		// @ts-ignore
+		nodePath = requireFn(/* webpackIgnore: true */ "node:path");
+		// @ts-ignore
+		nodeOs = requireFn(/* webpackIgnore: true */ "node:os");
+		// @ts-ignore
+		nodeChildProcess = requireFn(
+			/* webpackIgnore: true */ "node:child_process",
+		);
+		// @ts-ignore
+		nodeStream = requireFn(/* webpackIgnore: true */ "node:stream/promises");
 
-			[
-				nodeCrypto,
-				nodeFsSync,
-				nodeFs,
-				nodePath,
-				nodeOs,
-				nodeChildProcess,
-				nodeStream,
-			] = modules;
-		} catch (err) {
-			// Node.js not available - will use memory driver fallback
-			console.warn(
-				"Node.js modules not available, file system driver will not work",
-				err,
-			);
-			throw err;
-		}
-	})();
-
-	return importPromise;
+		hasImportedDependencies = true;
+	} catch (err) {
+		console.warn(
+			"Node.js modules not available, file system driver will not work",
+			err,
+		);
+		throw err;
+	}
 }
 
 /**
@@ -150,20 +166,4 @@ export function getNodeStream(): typeof import("node:stream/promises") {
 		);
 	}
 	return nodeStream;
-}
-
-/**
- * Checks if Node.js dependencies are available.
- * @returns true if all Node.js modules are loaded
- */
-export function areNodeDependenciesAvailable(): boolean {
-	return !!(
-		nodeCrypto &&
-		nodeFsSync &&
-		nodeFs &&
-		nodePath &&
-		nodeOs &&
-		nodeChildProcess &&
-		nodeStream
-	);
 }
