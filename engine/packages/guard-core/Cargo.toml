@@ -32,6 +32,7 @@ rivet-api-builder.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
+rivet-runtime.workspace = true
 rivet-util.workspace = true
 rustls.workspace = true
 rustls-pemfile.workspace = true

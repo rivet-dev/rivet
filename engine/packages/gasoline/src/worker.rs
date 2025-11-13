@@ -4,10 +4,11 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use opentelemetry::trace::TraceContextExt;
-use rivet_util::{Id, signal::TermSignal};
-use tokio::{signal::ctrl_c, sync::watch, task::JoinHandle};
+use rivet_runtime::TermSignal;
+use rivet_util::Id;
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -22,8 +23,6 @@ use crate::{
 pub(crate) const PING_INTERVAL: Duration = Duration::from_secs(10);
 /// How often to publish metrics.
 const METRICS_INTERVAL: Duration = Duration::from_secs(20);
-/// Time to allow running workflows to shutdown after receiving a SIGINT or SIGTERM.
-const SHUTDOWN_DURATION: Duration = Duration::from_secs(30);
 // How long the pull workflows function can take before shutting down the runtime.
 const PULL_WORKFLOWS_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -62,7 +61,8 @@ impl Worker {
 		}
 	}
 
-	/// Polls the database periodically or wakes immediately when `Database::bump_sub` finishes
+	/// Polls the database periodically or wakes immediately when `Database::bump_sub` finishes.
+	/// Provide a shutdown_rx to allow shutting down without triggering SIGTERM.
 	#[tracing::instrument(skip_all, fields(worker_id=%self.worker_id))]
 	pub async fn start(mut self, mut shutdown_rx: Option<watch::Receiver<()>>) -> Result<()> {
 		tracing::debug!(
@@ -77,8 +77,7 @@ impl Worker {
 		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-		let mut term_signal =
-			TermSignal::new().context("failed to setup termination signal handler")?;
+		let mut term_signal = TermSignal::new().await;
 
 		// Update ping at least once before doing anything else
 		self.db
@@ -125,12 +124,11 @@ impl Worker {
 						break Ok(());
 					}
 				}
-				_ = ctrl_c() => break Ok(()),
 				_ = term_signal.recv() => break Ok(()),
 			}
 
 			if let Err(err) = self.tick(&cache).await {
-				// Cancel background tasks
+				// Cancel background tasks. We abort because these are not critical tasks.
 				gc_handle.abort();
 				metrics_handle.abort();
 
@@ -201,7 +199,7 @@ impl Worker {
 				.span_context()
 				.clone();
 
-			let handle = tokio::task::spawn(
+			let handle = tokio::spawn(
 				// NOTE: No .in_current_span() because we want this to be a separate trace
 				async move {
 					if let Err(err) = ctx.run(current_span_ctx).await {
@@ -226,7 +224,7 @@ impl Worker {
 		let db = self.db.clone();
 		let worker_id = self.worker_id;
 
-		tokio::task::spawn(
+		tokio::spawn(
 			async move {
 				let mut ping_interval = tokio::time::interval(PING_INTERVAL);
 				ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -251,7 +249,7 @@ impl Worker {
 		let db = self.db.clone();
 		let worker_id = self.worker_id;
 
-		tokio::task::spawn(
+		tokio::spawn(
 			async move {
 				let mut metrics_interval = tokio::time::interval(METRICS_INTERVAL);
 				metrics_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -270,79 +268,65 @@ impl Worker {
 
 	#[tracing::instrument(skip_all)]
 	async fn shutdown(mut self, mut term_signal: TermSignal) {
-		// Shutdown sequence
+		let shutdown_duration = self.config.runtime.worker_shutdown_duration();
+
 		tracing::info!(
-			duration=?SHUTDOWN_DURATION,
+			duration=?shutdown_duration,
 			remaining_workflows=?self.running_workflows.len(),
 			"starting worker shutdown"
 		);
-
-		let shutdown_start = Instant::now();
 
 		if let Err(err) = self.db.mark_worker_inactive(self.worker_id).await {
 			tracing::error!(?err, worker_id=?self.worker_id, "failed to mark worker as inactive");
 		}
 
+		// Send stop signal to all running workflows
 		for (workflow_id, wf) in &self.running_workflows {
 			if wf.stop.send(()).is_err() {
-				tracing::warn!(
+				tracing::debug!(
 					?workflow_id,
 					"stop channel closed, workflow likely already stopped"
 				);
 			}
 		}
 
-		let mut second_sigterm = false;
+		// Collect all workflow tasks
+		let mut wf_futs = self
+			.running_workflows
+			.iter_mut()
+			.map(|(_, wf)| &mut wf.handle)
+			.collect::<FuturesUnordered<_>>();
+
+		let shutdown_start = Instant::now();
 		loop {
-			self.running_workflows
-				.retain(|_, wf| !wf.handle.is_finished());
-
-			// Shutdown complete
-			if self.running_workflows.is_empty() {
-				break;
-			}
-
-			if shutdown_start.elapsed() > SHUTDOWN_DURATION {
-				tracing::debug!("shutdown timed out");
-				break;
-			}
+			// Future will resolve once all workflow tasks complete
+			let join_fut = async { while let Some(_) = wf_futs.next().await {} };
 
 			tokio::select! {
-				_ = ctrl_c() => {
-					if second_sigterm {
-						tracing::warn!("received third SIGTERM, aborting shutdown");
+				_ = join_fut => {
+					break;
+				}
+				abort = term_signal.recv() => {
+					if abort {
+						tracing::warn!("aborting worker shutdown");
 						break;
 					}
-
-					tracing::warn!("received second SIGTERM");
-					second_sigterm = true;
-
-					continue;
 				}
-				_ = term_signal.recv() => {
-					if second_sigterm {
-						tracing::warn!("received third SIGTERM, aborting shutdown");
-						break;
-					}
-
-					tracing::warn!("received second SIGTERM");
-					second_sigterm = true;
-
-					continue;
+				_ = tokio::time::sleep(shutdown_duration.saturating_sub(shutdown_start.elapsed())) => {
+					tracing::warn!("worker shutdown timed out");
+					break;
 				}
-				_ = tokio::time::sleep(Duration::from_secs(2)) => {}
 			}
 		}
 
-		if self.running_workflows.is_empty() {
+		let remaining_workflows = wf_futs.into_iter().count();
+		if remaining_workflows == 0 {
 			tracing::info!("all workflows evicted");
 		} else {
 			tracing::warn!(remaining_workflows=?self.running_workflows.len(), "not all workflows evicted");
 		}
 
-		tracing::info!("shutdown complete");
-
-		rivet_runtime::shutdown().await;
+		tracing::info!("worker shutdown complete");
 	}
 }
 

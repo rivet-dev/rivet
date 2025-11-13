@@ -7,9 +7,10 @@ use std::{
 use crate::cert_resolver::{CertResolverFn, create_tls_config};
 use crate::metrics;
 use crate::proxy_service::{CacheKeyFn, MiddlewareFn, ProxyServiceFactory, RoutingFn};
-use anyhow::*;
+use anyhow::Result;
+use futures_util::FutureExt;
 use hyper::service::service_fn;
-use rivet_util::signal::TermSignal;
+use rivet_runtime::TermSignal;
 use tokio_rustls::TlsAcceptor;
 use tracing::Instrument;
 
@@ -76,7 +77,7 @@ pub async fn run_server(
 	let graceful = hyper_util::server::graceful::GracefulShutdown::new();
 
 	// Set up signal handling for graceful shutdown
-	let mut term_signal = TermSignal::new()?;
+	let mut term_signal = TermSignal::new().await;
 
 	tracing::info!("HTTP server listening on {}", http_addr);
 	if let Some(addr) = &https_addr {
@@ -129,7 +130,7 @@ pub async fn run_server(
 
 	// Accept connections until we receive a shutdown signal
 	loop {
-		let result: Result<()> = tokio::select! {
+		let res = tokio::select! {
 			conn = http_listener.accept() => {
 				match conn {
 					Result::Ok((tcp_stream, remote_addr)) => {
@@ -143,12 +144,12 @@ pub async fn run_server(
 						);
 					},
 					Err(err) => {
-						tracing::debug!(?err, "Accept error on HTTP port");
+						tracing::debug!(?err, "accept error on HTTP port");
 						tokio::time::sleep(Duration::from_secs(1)).await;
 					}
 				}
 				Ok(())
-			},
+			}
 			conn = async {
 				match &https_listener {
 					Some(listener) => Some(listener.accept().await),
@@ -160,7 +161,7 @@ pub async fn run_server(
 			} => {
 				if let Some(conn) = conn {
 					match conn {
-						Result::Ok((tcp_stream, remote_addr)) => {
+						Ok((tcp_stream, remote_addr)) => {
 							if let Some(factory) = &https_factory {
 								// Check if we have a TLS acceptor
 								if let Some(acceptor) = &https_acceptor {
@@ -230,34 +231,49 @@ pub async fn run_server(
 							}
 						},
 						Err(err) => {
-							tracing::debug!(?err, "Accept error on HTTPS port");
+							tracing::debug!(?err, "accept error on HTTPS port");
 							tokio::time::sleep(Duration::from_secs(1)).await;
 						}
 					}
 				}
-				Ok(())
-			},
 
+				anyhow::Ok(())
+			}
 			_ = term_signal.recv() => {
-				tracing::info!("Termination signal received, starting shutdown");
 				break;
 			}
 		};
 
-		if let Err(err) = result {
-			tracing::error!(?err, "Error in server loop");
+		if let Err(err) = res {
+			tracing::error!(?err, "error in guard server loop");
 		}
 	}
 
-	// Start graceful shutdown with timeout
-	tokio::select! {
-		_ = graceful.shutdown() => {
-			tracing::info!("Graceful shutdown completed");
-		},
-		_ = tokio::time::sleep(Duration::from_secs(30)) => {
-			tracing::error!("Waited 30 seconds for graceful shutdown, aborting...");
+	let shutdown_duration = config.runtime.guard_shutdown_duration();
+	tracing::info!(duration=?shutdown_duration, "starting guard shutdown");
+
+	let mut graceful_fut = async move { graceful.shutdown().await }.boxed();
+	let shutdown_start = Instant::now();
+	loop {
+		tokio::select! {
+			_ = &mut graceful_fut => {
+				tracing::info!("all guard requests completed");
+				break;
+			}
+			abort = term_signal.recv() => {
+				if abort {
+					tracing::warn!("aborting guard shutdown");
+					break;
+				}
+			}
+			_ = tokio::time::sleep(shutdown_duration.saturating_sub(shutdown_start.elapsed())) => {
+				tracing::warn!("guard shutdown timed out before all requests completed");
+				break;
+			}
 		}
 	}
+
+	tracing::info!("guard shutdown complete");
 
 	Ok(())
 }

@@ -533,6 +533,9 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		)
 		.await?;
 
+	// At this point, the actor is not allocated so no cleanup related to alloc idx/desired slots needs to be
+	// done.
+
 	ctx.workflow(destroy::Input {
 		namespace_id: input.namespace_id,
 		actor_id: input.actor_id,
@@ -542,26 +545,6 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	})
 	.output()
 	.await?;
-
-	// NOTE: The reason we allocate other actors from this actor workflow is because if we instead sent a
-	// signal to the runner wf here it would incur a heavy throughput hit and we need the runner wf to be as
-	// lightweight as possible; processing as few signals that aren't events/commands.
-	// Allocate other pending actors from queue
-	let res = ctx
-		.activity(AllocatePendingActorsInput {
-			namespace_id: input.namespace_id,
-			name: input.runner_name_selector.clone(),
-		})
-		.await?;
-
-	// Dispatch pending allocs
-	for alloc in res.allocations {
-		ctx.signal(alloc.signal)
-			.to_workflow::<Workflow>()
-			.tag("actor_id", alloc.actor_id)
-			.send()
-			.await?;
-	}
 
 	Ok(())
 }
@@ -611,6 +594,9 @@ async fn handle_stopped(
 		})
 		.await?;
 
+	// NOTE: The reason we allocate other actors from this actor workflow is because if we instead sent a
+	// signal to the runner wf here it would incur a heavy throughput hit and we need the runner wf to be as
+	// lightweight as possible; processing as few signals that aren't events/commands.
 	// Allocate other pending actors from queue since a slot has now cleared
 	let allocate_pending_res = ctx
 		.activity(AllocatePendingActorsInput {
