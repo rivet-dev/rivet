@@ -14,14 +14,14 @@ export const demo = actor({
 	connState: {
 		connectionTime: 0,
 	},
-	onStart: (c) => {
+	onWake: (c) => {
 		c.state.startCount += 1;
 		c.log.info({
 			msg: "demo actor started",
 			startCount: c.state.startCount,
 		});
 	},
-	onStop: (c) => {
+	onSleep: (c) => {
 		c.state.stopCount += 1;
 		c.log.info({ msg: "demo actor stopped", stopCount: c.state.stopCount });
 	},
