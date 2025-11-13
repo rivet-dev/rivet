@@ -69,6 +69,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		path: &str,
 		_request_context: &mut RequestContext,
 		_unique_request_id: Uuid,
+		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		// Get UPS
 		let ups = self.ctx.ups().context("failed to get UPS instance")?;
@@ -137,6 +138,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		let (ping_abort_tx, ping_abort_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
+			self.ctx.clone(),
 			conn.clone(),
 			sub,
 			eviction_sub,

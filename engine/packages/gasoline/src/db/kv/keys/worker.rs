@@ -1,6 +1,4 @@
-use std::result::Result::Ok;
-
-use anyhow::*;
+use anyhow::Result;
 use rivet_util::Id;
 use universaldb::prelude::*;
 

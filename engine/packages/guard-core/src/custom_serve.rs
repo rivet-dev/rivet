@@ -34,6 +34,8 @@ pub trait CustomServeTrait: Send + Sync {
 		_request_context: &mut RequestContext,
 		// Identifies the websocket across retries.
 		_unique_request_id: Uuid,
+		// True if this websocket is reconnecting after hibernation.
+		_after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		bail!("service does not support websockets");
 	}
@@ -42,6 +44,7 @@ pub trait CustomServeTrait: Send + Sync {
 	async fn handle_websocket_hibernation(
 		&self,
 		_websocket: WebSocketHandle,
+		_unique_request_id: Uuid,
 	) -> Result<HibernationResult> {
 		bail!("service does not support websocket hibernation");
 	}

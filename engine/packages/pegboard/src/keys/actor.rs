@@ -1,8 +1,7 @@
-use std::result::Result::Ok;
-
-use anyhow::*;
+use anyhow::Result;
 use gas::prelude::*;
 use universaldb::prelude::*;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct CreateTsKey {
@@ -311,5 +310,115 @@ impl<'de> TupleUnpack<'de> for NamespaceIdKey {
 		let v = NamespaceIdKey { actor_id };
 
 		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct HibernatingRequestKey {
+	actor_id: Id,
+	last_ping_ts: i64,
+	pub request_id: Uuid,
+}
+
+impl HibernatingRequestKey {
+	pub fn new(actor_id: Id, last_ping_ts: i64, request_id: Uuid) -> Self {
+		HibernatingRequestKey {
+			actor_id,
+			last_ping_ts,
+			request_id,
+		}
+	}
+
+	pub fn subspace_with_ts(actor_id: Id, last_ping_ts: i64) -> HibernatingRequestSubspaceKey {
+		HibernatingRequestSubspaceKey::new_with_ts(actor_id, last_ping_ts)
+	}
+
+	pub fn subspace(actor_id: Id) -> HibernatingRequestSubspaceKey {
+		HibernatingRequestSubspaceKey::new(actor_id)
+	}
+}
+
+impl FormalKey for HibernatingRequestKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for HibernatingRequestKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			ACTOR,
+			HIBERNATING_REQUEST,
+			self.actor_id,
+			self.last_ping_ts,
+			self.request_id,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for HibernatingRequestKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, actor_id, last_ping_ts, request_id)) =
+			<(usize, usize, Id, i64, Uuid)>::unpack(input, tuple_depth)?;
+
+		let v = HibernatingRequestKey {
+			actor_id,
+			last_ping_ts,
+			request_id,
+		};
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct HibernatingRequestSubspaceKey {
+	actor_id: Id,
+	last_ping_ts: Option<i64>,
+}
+
+impl HibernatingRequestSubspaceKey {
+	pub fn new(actor_id: Id) -> Self {
+		HibernatingRequestSubspaceKey {
+			actor_id,
+			last_ping_ts: None,
+		}
+	}
+
+	pub fn new_with_ts(actor_id: Id, last_ping_ts: i64) -> Self {
+		HibernatingRequestSubspaceKey {
+			actor_id,
+			last_ping_ts: Some(last_ping_ts),
+		}
+	}
+}
+
+impl TuplePack for HibernatingRequestSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let mut offset = VersionstampOffset::None { size: 0 };
+
+		let t = (ACTOR, HIBERNATING_REQUEST, self.actor_id);
+		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(last_ping_ts) = self.last_ping_ts {
+			offset += last_ping_ts.pack(w, tuple_depth)?;
+		}
+
+		Ok(offset)
 	}
 }

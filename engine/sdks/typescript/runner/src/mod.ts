@@ -13,7 +13,7 @@ import { importWebSocket } from "./websocket.js";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
 
 const KV_EXPIRE: number = 30_000;
-const PROTOCOL_VERSION: number = 2;
+const PROTOCOL_VERSION: number = 3;
 const RUNNER_PING_INTERVAL = 3_000;
 
 /** Warn once the backlog significantly exceeds the server's ack batch size. */
