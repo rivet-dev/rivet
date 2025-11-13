@@ -23,6 +23,7 @@ export type ConnId = string;
 export type AnyConn = Conn<any, any, any, any, any, any>;
 
 export const CONN_CONNECTED_SYMBOL = Symbol("connected");
+export const CONN_SPEAKS_RIVETKIT_SYMBOL = Symbol("speaksRivetKit");
 export const CONN_PERSIST_SYMBOL = Symbol("persist");
 export const CONN_DRIVER_SYMBOL = Symbol("driver");
 export const CONN_ACTOR_SYMBOL = Symbol("actor");
@@ -61,6 +62,10 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	/** Connections exist before being connected to an actor. If true, this connection has been connected. */
 	[CONN_CONNECTED_SYMBOL] = false;
+
+	[CONN_SPEAKS_RIVETKIT_SYMBOL](): boolean {
+		return this[CONN_DRIVER_SYMBOL]?.rivetKitProtocol !== undefined;
+	}
 
 	#assertConnected() {
 		if (!this[CONN_CONNECTED_SYMBOL])
@@ -174,11 +179,12 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	[CONN_SEND_MESSAGE_SYMBOL](message: CachedSerializer<any, any, any>) {
 		if (this[CONN_DRIVER_SYMBOL]) {
 			const driver = this[CONN_DRIVER_SYMBOL];
-			if (driver.sendMessage) {
-				driver.sendMessage(this.#actor, this, message);
+
+			if (driver.rivetKitProtocol) {
+				driver.rivetKitProtocol.sendMessage(this.#actor, this, message);
 			} else {
 				this.#actor.rLog.debug({
-					msg: "conn driver does not support sending messages",
+					msg: "attempting to send RivetKit protocol message to connection that does not support it",
 					conn: this.id,
 				});
 			}
@@ -199,6 +205,13 @@ export class Conn<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	 */
 	send(eventName: string, ...args: unknown[]) {
 		this.#assertConnected();
+		if (!this[CONN_SPEAKS_RIVETKIT_SYMBOL]) {
+			this.#actor.rLog.warn({
+				msg: "cannot send messages to this connection type",
+				connId: this.id,
+				connType: this[CONN_DRIVER_SYMBOL]?.type,
+			});
+		}
 
 		this.#actor.inspector.emitter.emit("eventFired", {
 			type: "event",
