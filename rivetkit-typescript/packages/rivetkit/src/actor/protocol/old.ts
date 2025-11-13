@@ -142,10 +142,7 @@ export async function processMessage<
 				actionName: name,
 			});
 
-			const ctx = new ActionContext<S, CP, CS, V, I, DB>(
-				actor.actorContext,
-				conn,
-			);
+			const ctx = new ActionContext<S, CP, CS, V, I, DB>(actor, conn);
 
 			// Process the action request and wait for the result
 			// This will wait for async actions to complete

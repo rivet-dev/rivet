@@ -3,6 +3,9 @@ import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Conn } from "./conn/mod";
 import type { ActionContext } from "./contexts/action";
 import type { ActorContext } from "./contexts/actor";
+import type { CreateConnStateContext } from "./contexts/create-conn-state";
+import type { OnBeforeConnectContext } from "./contexts/on-before-connect";
+import type { OnConnectContext } from "./contexts/on-connect";
 import type { RequestContext } from "./contexts/request";
 import type { WebSocketContext } from "./contexts/websocket";
 import type { AnyDatabaseProvider } from "./database";
@@ -113,15 +116,6 @@ export const ActorConfigSchema = z
 		},
 	);
 
-export interface OnConnectOptions {
-	/**
-	 * The request object associated with the connection.
-	 *
-	 * @experimental
-	 */
-	request?: Request;
-}
-
 // Creates state config
 //
 // This must have only one or the other or else TState will not be able to be inferred
@@ -148,13 +142,12 @@ type CreateConnState<
 	TConnState,
 	TVars,
 	TInput,
-	TDatabase,
+	TDatabase extends AnyDatabaseProvider,
 > =
 	| { connState: TConnState }
 	| {
 			createConnState: (
-				c: InitContext,
-				opts: OnConnectOptions,
+				c: CreateConnStateContext<TState, TVars, TInput, TDatabase>,
 				params: TConnParams,
 			) => TConnState | Promise<TConnState>;
 	  }
@@ -323,15 +316,7 @@ interface BaseActorConfig<
 	 * @throws Throw an error to reject the connection
 	 */
 	onBeforeConnect?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
-		opts: OnConnectOptions,
+		c: OnBeforeConnectContext<TState, TVars, TInput, TDatabase>,
 		params: TConnParams,
 	) => void | Promise<void>;
 
@@ -345,14 +330,7 @@ interface BaseActorConfig<
 	 * @returns Void or a Promise that resolves when connection handling is complete
 	 */
 	onConnect?: (
-		c: ActorContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase
-		>,
+		c: OnConnectContext<TState, TVars, TInput, TDatabase>,
 		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase>,
 	) => void | Promise<void>;
 
@@ -446,7 +424,6 @@ interface BaseActorConfig<
 			TDatabase
 		>,
 		websocket: UniversalWebSocket,
-		opts: { request: Request },
 	) => void | Promise<void>;
 
 	actions: TActions;
