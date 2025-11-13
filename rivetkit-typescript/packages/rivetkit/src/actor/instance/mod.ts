@@ -1,6 +1,5 @@
 import * as cbor from "cbor-x";
 import invariant from "invariant";
-import { ToClientSchema } from "@/actor/client-protocol-schema-json/mod";
 import type { ActorKey } from "@/actor/mod";
 import type { Client } from "@/client/client";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
@@ -11,6 +10,7 @@ import type { Registry } from "@/mod";
 import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
+import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { EXTRA_ERROR_LOG, idToStr } from "@/utils";
 import type { ActorConfig, InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
@@ -511,19 +511,26 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		await this.saveState({ immediate: true });
 
 		// Send init message
+		const initData = { actorId: this.id, connectionId: conn.id };
 		conn[CONN_SEND_MESSAGE_SYMBOL](
-			new CachedSerializer<protocol.ToClient>(
-				{
-					body: {
-						tag: "Init",
-						val: {
-							actorId: this.id,
-							connectionId: conn.id,
-						},
-					},
-				},
+			new CachedSerializer(
+				initData,
 				TO_CLIENT_VERSIONED,
 				ToClientSchema,
+				// JSON: identity conversion (no nested data to encode)
+				(value) => ({
+					body: {
+						tag: "Init" as const,
+						val: value,
+					},
+				}),
+				// BARE/CBOR: identity conversion (no nested data to encode)
+				(value) => ({
+					body: {
+						tag: "Init" as const,
+						val: value,
+					},
+				}),
 			),
 		);
 
@@ -532,7 +539,17 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	// MARK: - Message Processing
 	async processMessage(
-		message: protocol.ToServer,
+		message: {
+			body:
+				| {
+						tag: "ActionRequest";
+						val: { id: bigint; name: string; args: unknown };
+				  }
+				| {
+						tag: "SubscriptionRequest";
+						val: { eventName: string; subscribe: boolean };
+				  };
+		},
 		conn: Conn<S, CP, CS, V, I, DB>,
 	) {
 		await processMessage(message, this, conn, {
