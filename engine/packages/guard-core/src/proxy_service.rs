@@ -35,6 +35,7 @@ use crate::{
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors, metrics,
 	request_context::RequestContext,
+	task_group::TaskGroup,
 };
 
 const X_RIVET_TARGET: HeaderName = HeaderName::from_static("x-rivet-target");
@@ -350,6 +351,7 @@ pub struct ProxyState {
 	in_flight_counters: Cache<(Id, std::net::IpAddr), Arc<Mutex<InFlightCounter>>>,
 	port_type: PortType,
 	clickhouse_inserter: Option<clickhouse_inserter::ClickHouseInserterHandle>,
+	tasks: Arc<TaskGroup>,
 }
 
 impl ProxyState {
@@ -377,6 +379,7 @@ impl ProxyState {
 				.build(),
 			port_type,
 			clickhouse_inserter,
+			tasks: TaskGroup::new(),
 		}
 	}
 
@@ -782,14 +785,6 @@ impl ProxyService {
 		metrics::PROXY_REQUEST_PENDING.add(1, &[]);
 		metrics::PROXY_REQUEST_TOTAL.add(1, &[]);
 
-		// Prepare to release in-flight counter when done
-		let state_clone = self.state.clone();
-		crate::defer! {
-			tokio::spawn(async move {
-				state_clone.release_in_flight(client_ip, &actor_id).await;
-			}.instrument(tracing::info_span!("release_in_flight_task")));
-		}
-
 		// Update request context with target info
 		if let Some(actor_id) = actor_id {
 			request_context.service_actor_id = Some(actor_id);
@@ -813,6 +808,15 @@ impl ProxyService {
 			.record(duration_secs, &[KeyValue::new("status", status.clone())]);
 
 		metrics::PROXY_REQUEST_PENDING.add(-1, &[]);
+
+		// Release in-flight counter when done
+		let state_clone = self.state.clone();
+		tokio::spawn(
+			async move {
+				state_clone.release_in_flight(client_ip, &actor_id).await;
+			}
+			.instrument(tracing::info_span!("release_in_flight_task")),
+		);
 
 		res
 	}
@@ -1254,7 +1258,7 @@ impl ProxyService {
 		match target {
 			ResolveRouteOutput::Target(mut target) => {
 				tracing::debug!("Spawning task to handle WebSocket communication");
-				tokio::spawn(
+				self.state.tasks.spawn(
 					async move {
 						// Set up a timeout for the entire operation
 						let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
@@ -1837,7 +1841,7 @@ impl ProxyService {
 				let req_path = req_path.clone();
 				let req_host = req_host.clone();
 
-				tokio::spawn(
+				self.state.tasks.spawn(
 					async move {
 						let request_id = Uuid::new_v4();
 						let mut ws_hibernation_close = false;
@@ -2194,7 +2198,7 @@ impl ProxyService {
 						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
-							tokio::spawn(
+							self.state.tasks.spawn(
 								async move {
 									let ws_handle = match WebSocketHandle::new(client_ws).await {
 										Ok(ws_handle) => ws_handle,
@@ -2337,11 +2341,14 @@ impl ProxyService {
 
 		// Insert analytics event asynchronously
 		let mut context_clone = request_context.clone();
-		tokio::spawn(async move {
-			if let Err(error) = context_clone.insert_event().await {
-				tracing::warn!(?error, "failed to insert guard analytics event");
+		tokio::spawn(
+			async move {
+				if let Err(error) = context_clone.insert_event().await {
+					tracing::warn!(?error, "failed to insert guard analytics event");
+				}
 			}
-		});
+			.instrument(tracing::info_span!("insert_event_task")),
+		);
 
 		let content_length = res
 			.headers()
@@ -2407,24 +2414,10 @@ impl ProxyServiceFactory {
 	pub fn create_service(&self, remote_addr: SocketAddr) -> ProxyService {
 		ProxyService::new(self.state.clone(), remote_addr)
 	}
-}
 
-// Helper macro for defer-like functionality
-#[macro_export]
-macro_rules! defer {
-    ($($body:tt)*) => {
-        let _guard = {
-            struct Guard<F: FnOnce()>(Option<F>);
-            impl<F: FnOnce()> Drop for Guard<F> {
-                fn drop(&mut self) {
-                    if let Some(f) = self.0.take() {
-                        f()
-                    }
-                }
-            }
-            Guard(Some(|| { $($body)* }))
-        };
-    };
+	pub async fn wait_idle(&self) {
+		self.state.tasks.wait_idle().await
+	}
 }
 
 fn add_proxy_headers_with_addr(

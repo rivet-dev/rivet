@@ -9,10 +9,10 @@ pub struct Runtime {
 	/// Defaults to 30 seconds.
 	worker_shutdown_duration: Option<u32>,
 	/// Time (in seconds) to allow for guard to wait for pending requests after receiving SIGTERM. Defaults
-	// to 1 hour.
+	/// to 1 hour.
 	guard_shutdown_duration: Option<u32>,
 	/// Whether or not to allow running the engine when the previous version that was run is higher than
-	// the current version.
+	/// the current version.
 	allow_version_rollback: Option<bool>,
 }
 
