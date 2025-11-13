@@ -5,9 +5,7 @@ import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
 import { bufferToArrayBuffer } from "@/utils";
 import type { ActorDriver } from "./mod";
 
-export function serializeEmptyPersistData(
-	input: unknown | undefined,
-): Uint8Array {
+function serializeEmptyPersistData(input: unknown | undefined): Uint8Array {
 	const persistData: persistSchema.Actor = {
 		input:
 			input !== undefined
@@ -22,14 +20,12 @@ export function serializeEmptyPersistData(
 }
 
 /**
- * Initialize an actor's KV store with empty persist data.
- * This must be called when creating a new actor, before starting it.
+ * Returns the initial KV state for a new actor. This is ued by the drivers to
+ * write the initial state in to KV storage before starting the actor.
  */
-export async function initializeActorKv(
-	driver: ActorDriver,
-	actorId: string,
+export function getInitialActorKvState(
 	input: unknown | undefined,
-): Promise<void> {
+): [Uint8Array, Uint8Array][] {
 	const persistData = serializeEmptyPersistData(input);
-	await driver.kvBatchPut(actorId, [[KEYS.PERSIST_DATA, persistData]]);
+	return [[KEYS.PERSIST_DATA, persistData]];
 }

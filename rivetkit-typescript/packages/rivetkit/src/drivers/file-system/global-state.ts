@@ -5,10 +5,7 @@ import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
 import type { AnyClient } from "@/client/client";
-import {
-	type ActorDriver,
-	serializeEmptyPersistData,
-} from "@/driver-helpers/mod";
+import { type ActorDriver, getInitialActorKvState } from "@/driver-helpers/mod";
 import type { RegistryConfig } from "@/registry/config";
 import type { RunnerConfig } from "@/registry/run-config";
 import type * as schema from "@/schemas/file-system-driver/mod";
@@ -234,11 +231,13 @@ export class FileSystemGlobalState {
 
 		// Initialize storage
 		const kvStorage: schema.ActorKvEntry[] = [];
-		const persistData = serializeEmptyPersistData(input);
-		kvStorage.push({
-			key: bufferToArrayBuffer(new Uint8Array([1])),
-			value: bufferToArrayBuffer(persistData),
-		});
+		const initialKvState = getInitialActorKvState(input);
+		for (const [key, value] of initialKvState) {
+			kvStorage.push({
+				key: bufferToArrayBuffer(key),
+				value: bufferToArrayBuffer(value),
+			});
+		}
 
 		// Initialize metadata
 		entry.state = {
@@ -330,12 +329,13 @@ export class FileSystemGlobalState {
 
 			// Initialize kvStorage with the initial persist data
 			const kvStorage: schema.ActorKvEntry[] = [];
-			const persistData = serializeEmptyPersistData(input);
-			// Store under key [1]
-			kvStorage.push({
-				key: bufferToArrayBuffer(new Uint8Array([1])),
-				value: bufferToArrayBuffer(persistData),
-			});
+			const initialKvState = getInitialActorKvState(input);
+			for (const [key, value] of initialKvState) {
+				kvStorage.push({
+					key: bufferToArrayBuffer(key),
+					value: bufferToArrayBuffer(value),
+				});
+			}
 
 			entry.state = {
 				actorId,
