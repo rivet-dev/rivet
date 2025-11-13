@@ -323,7 +323,7 @@ impl Worker {
 		if remaining_workflows == 0 {
 			tracing::info!("all workflows evicted");
 		} else {
-			tracing::warn!(remaining_workflows=?self.running_workflows.len(), "not all workflows evicted");
+			tracing::warn!(?remaining_workflows, "not all workflows evicted");
 		}
 
 		tracing::info!("worker shutdown complete");

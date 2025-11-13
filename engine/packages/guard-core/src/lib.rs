@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod proxy_service;
 pub mod request_context;
 mod server;
+mod task_group;
 pub mod types;
 pub mod websocket_handle;
 
