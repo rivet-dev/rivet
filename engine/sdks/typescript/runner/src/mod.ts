@@ -3,7 +3,8 @@ import type { Logger } from "pino";
 import type WebSocket from "ws";
 import { logger, setLogger } from "./log.js";
 import { stringifyCommandWrapper, stringifyEvent } from "./stringify";
-import { Tunnel } from "./tunnel";
+import type { PendingRequest, PendingTunnelMessage } from "./tunnel";
+import { type HibernatingWebSocketMetadata, Tunnel } from "./tunnel";
 import {
 	calculateBackoff,
 	parseWebSocketCloseReason,
@@ -11,6 +12,8 @@ import {
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
 import type { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+
+export type { HibernatingWebSocketMetadata };
 
 const KV_EXPIRE: number = 30_000;
 const PROTOCOL_VERSION: number = 3;
@@ -20,12 +23,13 @@ const RUNNER_PING_INTERVAL = 3_000;
 const EVENT_BACKLOG_WARN_THRESHOLD = 10_000;
 const SIGNAL_HANDLERS: (() => void)[] = [];
 
-export interface ActorInstance {
+export interface RunnerActor {
 	actorId: string;
 	generation: number;
 	config: ActorConfig;
-	requests: Set<string>; // Track active request IDs
-	webSockets: Set<string>; // Track active WebSocket IDs
+	pendingRequests: Map<string, PendingRequest>;
+	webSockets: Map<string, WebSocketTunnelAdapter>;
+	pendingTunnelMessages: Map<string, PendingTunnelMessage>;
 }
 
 export interface ActorConfig {
@@ -51,36 +55,135 @@ export interface RunnerConfig {
 	onConnected: () => void;
 	onDisconnected: (code: number, reason: string) => void;
 	onShutdown: () => void;
+
+	/** Called when receiving a network request. */
 	fetch: (
 		runner: Runner,
 		actorId: string,
 		requestId: protocol.RequestId,
 		request: Request,
 	) => Promise<Response>;
-	websocket?: (
+
+	/**
+	 * Called when receiving a WebSocket connection.
+	 *
+	 * All event listeners must be added synchronously inside this function or
+	 * else events may be missed. The open event will fire immediately after
+	 * this function finishes.
+	 *
+	 * Any errors thrown here will disconnect the WebSocket immediately.
+	 *
+	 * While `path` and `headers` are partially redundant to the data in the
+	 * `Request`, they may vary slightly from the actual content of `Request`.
+	 * Prefer to persist the `path` and `headers` properties instead of the
+	 * `Request` itself.
+	 *
+	 * ## Hibernating Web Sockets
+	 *
+	 * ### Implementation Requirements
+	 *
+	 * **Requirement 1: Persist HWS Immediately**
+	 *
+	 * This is responsible for persisting hibernatable WebSockets immediately
+	 * (do not wait for open event). It is not time sensitive to flush the
+	 * connection state. If this fails to persist the HWS, the client's
+	 * WebSocket will be disconnected on next wake in
+	 * `Tunnel::restoreHibernatingRequests` since the connection entry will not
+	 * exist.
+	 *
+	 * **Requirement 2: Persist Message Index On `message`**
+	 *
+	 * In the `message` event listener, this handler must persist the message
+	 * index from the event. The request ID is available at
+	 * `event.rivetRequestId` and message index at `event.rivetMessageIndex`.
+	 *
+	 * The message index should not be flushed immediately. Instead, this
+	 * should:
+	 *
+	 * - Debounce calls to persist the message index
+	 * - After each persist, call
+	 *   `Runner::sendHibernatableWebSocketMessageAck` to acknowledge the
+	 *   message
+	 *
+	 * This mechanism allows us to buffer messages on the gateway so we can
+	 * batch-persist events on our end on a given interval.
+	 *
+	 * If this fails to persist, then the gateway will replay unacked
+	 * messages when the actor starts again.
+	 *
+	 * **Requirement 3: Remove HWS From Storage On `close`**
+	 *
+	 * This handler should add an event listener for `close` to remove the
+	 * connection from storage.
+	 *
+	 * If the connection remove fails to persist, the close event will be
+	 * called again on the next actor start in
+	 * `Tunnel::restoreHibernatingRequests` since there will be no request for
+	 * the given connection.
+	 *
+	 * ### Restoring Connections
+	 *
+	 * `loadAll` will be called from `Tunnel::restoreHibernatingRequests` to
+	 * restore this connection on the next actor wake.
+	 *
+	 * `restoreHibernatingRequests` is responsible for both making sure that
+	 * new connections are registered with the actor and zombie connections are
+	 * appropriately cleaned up.
+	 *
+	 * ### No Open Event On Restoration
+	 *
+	 * When restoring a HWS, the open event will not be called again. It will
+	 * go straight to the message or close event.
+	 */
+	websocket: (
 		runner: Runner,
 		actorId: string,
 		ws: any,
 		requestId: protocol.RequestId,
 		request: Request,
+		path: string,
+		headers: Record<string, string>,
+		isHibernatable: boolean,
+		isRestoringHibernatable: boolean,
 	) => Promise<void>;
+
+	hibernatableWebSocket: {
+		/**
+		 * Determines if a WebSocket can continue to live while an actor goes to
+		 * sleep.
+		 */
+		canHibernate: (
+			actorId: string,
+			requestId: ArrayBuffer,
+			request: Request,
+		) => boolean;
+
+		/**
+		 * Returns all hibernatable WebSockets that are stored for this actor.
+		 *
+		 * This is called on actor start.
+		 *
+		 * This list will be diffed with the list of hibernating requests in
+		 * the ActorStart message.
+		 *
+		 * This that are connected but not loaded (i.e. were not successfully
+		 * persisted to this actor) will be disconnected.
+		 *
+		 * This that are not connected but were loaded (i.e. disconnected but
+		 * this actor has not received the event yet) will also be
+		 * disconnected.
+		 */
+		loadAll(actorId: string): Promise<HibernatingWebSocketMetadata[]>;
+	};
+
 	onActorStart: (
 		actorId: string,
 		generation: number,
 		config: ActorConfig,
 	) => Promise<void>;
-	onActorStop: (actorId: string, generation: number) => Promise<void>;
-	getActorHibernationConfig: (
-		actorId: string,
-		requestId: ArrayBuffer,
-		request: Request,
-	) => HibernationConfig;
-	noAutoShutdown?: boolean;
-}
 
-export interface HibernationConfig {
-	enabled: boolean;
-	lastMsgIndex: number | undefined;
+	onActorStop: (actorId: string, generation: number) => Promise<void>;
+	noAutoShutdown?: boolean;
 }
 
 export interface KvListOptions {
@@ -104,8 +207,7 @@ export class Runner {
 		return this.#config;
 	}
 
-	#actors: Map<string, ActorInstance> = new Map();
-	#actorWebSockets: Map<string, Set<WebSocketTunnelAdapter>> = new Map();
+	#actors: Map<string, RunnerActor> = new Map();
 
 	// WebSocket
 	#pegboardWebSocket?: WebSocket;
@@ -232,7 +334,7 @@ export class Runner {
 		}
 	}
 
-	getActor(actorId: string, generation?: number): ActorInstance | undefined {
+	getActor(actorId: string, generation?: number): RunnerActor | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
 			this.log?.error({
@@ -262,11 +364,15 @@ export class Runner {
 		);
 	}
 
+	get actors() {
+		return this.#actors;
+	}
+
 	// IMPORTANT: Make sure to call stopActiveRequests if calling #removeActor
 	#removeActor(
 		actorId: string,
 		generation?: number,
-	): ActorInstance | undefined {
+	): RunnerActor | undefined {
 		const actor = this.#actors.get(actorId);
 		if (!actor) {
 			this.log?.error({
@@ -641,7 +747,7 @@ export class Runner {
 				this.#config.onConnected();
 			} else if (message.tag === "ToClientCommands") {
 				const commands = message.val;
-				this.#handleCommands(commands);
+				await this.#handleCommands(commands);
 			} else if (message.tag === "ToClientAckEvents") {
 				this.#handleAckEvents(message.val);
 			} else if (message.tag === "ToClientKvResponse") {
@@ -746,7 +852,7 @@ export class Runner {
 		});
 	}
 
-	#handleCommands(commands: protocol.ToClientCommands) {
+	async #handleCommands(commands: protocol.ToClientCommands) {
 		this.log?.info({
 			msg: "received commands",
 			commandCount: commands.length,
@@ -758,9 +864,10 @@ export class Runner {
 				command: stringifyCommandWrapper(commandWrapper),
 			});
 			if (commandWrapper.inner.tag === "CommandStartActor") {
+				// Spawn background promise
 				this.#handleCommandStartActor(commandWrapper);
 			} else if (commandWrapper.inner.tag === "CommandStopActor") {
-				this.#handleCommandStopActor(commandWrapper);
+				await this.#handleCommandStopActor(commandWrapper);
 			} else {
 				unreachable(commandWrapper.inner);
 			}
@@ -808,7 +915,9 @@ export class Runner {
 		}
 	}
 
-	#handleCommandStartActor(commandWrapper: protocol.CommandWrapper) {
+	async #handleCommandStartActor(commandWrapper: protocol.CommandWrapper) {
+		if (!this.#tunnel) throw new Error("missing tunnel on actor start");
+
 		const startCommand = commandWrapper.inner
 			.val as protocol.CommandStartActor;
 
@@ -823,43 +932,55 @@ export class Runner {
 			input: config.input ? new Uint8Array(config.input) : null,
 		};
 
-		const instance: ActorInstance = {
+		const instance: RunnerActor = {
 			actorId,
 			generation,
 			config: actorConfig,
-			requests: new Set(),
-			webSockets: new Set(),
+			pendingRequests: new Map(),
+			webSockets: new Map(),
+			pendingTunnelMessages: new Map(),
 		};
 
 		this.#actors.set(actorId, instance);
 
 		this.#sendActorStateUpdate(actorId, generation, "running");
 
-		// TODO: Add timeout to onActorStart
-		// Call onActorStart asynchronously and handle errors
-		this.#config
-			.onActorStart(actorId, generation, actorConfig)
-			.catch((err) => {
-				this.log?.error({
-					msg: "error in onactorstart for actor",
-					actorId,
-					err,
-				});
-
-				// TODO: Mark as crashed
-				// Send stopped state update if start failed
-				this.forceStopActor(actorId, generation);
+		try {
+			// TODO: Add timeout to onActorStart
+			// Call onActorStart asynchronously and handle errors
+			this.log?.debug({
+				msg: "calling onActorStart",
+				actorId,
+				generation,
 			});
+			await this.#config.onActorStart(actorId, generation, actorConfig);
+
+			// Restore hibernating requests
+			await this.#tunnel.restoreHibernatingRequests(
+				actorId,
+				startCommand.hibernatingRequestIds,
+			);
+		} catch (err) {
+			this.log?.error({
+				msg: "error in onactorstart for actor",
+				actorId,
+				err,
+			});
+
+			// TODO: Mark as crashed
+			// Send stopped state update if start failed
+			await this.forceStopActor(actorId, generation);
+		}
 	}
 
-	#handleCommandStopActor(commandWrapper: protocol.CommandWrapper) {
+	async #handleCommandStopActor(commandWrapper: protocol.CommandWrapper) {
 		const stopCommand = commandWrapper.inner
 			.val as protocol.CommandStopActor;
 
 		const actorId = stopCommand.actorId;
 		const generation = stopCommand.generation;
 
-		this.forceStopActor(actorId, generation);
+		await this.forceStopActor(actorId, generation);
 	}
 
 	#sendActorIntent(
@@ -1427,8 +1548,10 @@ export class Runner {
 		}
 	}
 
-	sendWebsocketMessageAck(requestId: ArrayBuffer, index: number) {
-		this.#tunnel?.__ackWebsocketMessage(requestId, index);
+	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
+		if (!this.#tunnel)
+			throw new Error("missing tunnel to send message ack");
+		this.#tunnel.sendHibernatableWebSocketMessageAck(requestId, index);
 	}
 
 	getServerlessInitPacket(): string | undefined {

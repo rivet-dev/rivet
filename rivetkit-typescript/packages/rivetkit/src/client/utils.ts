@@ -134,17 +134,19 @@ export async function sendHttpRequest<
 
 	// Parse response error
 	if (!response.ok) {
-		// Attempt to parse structured data
 		const bufferResponse = await response.arrayBuffer();
-		let responseData: {
-			group: string;
-			code: string;
-			message: string;
-			metadata: unknown;
-		};
+		const contentType = response.headers.get("content-type");
+		const rayId = response.headers.get("x-rivet-ray-id");
+
+		// Determine encoding from Content-Type header, defaulting to provided encoding
+		const encoding: Encoding = contentType?.includes("application/json")
+			? "json"
+			: opts.encoding;
+
+		// Attempt to parse structured error data
 		try {
-			responseData = deserializeWithEncoding(
-				opts.encoding,
+			const responseData = deserializeWithEncoding(
+				encoding,
 				new Uint8Array(bufferResponse),
 				HTTP_RESPONSE_ERROR_VERSIONED,
 				HttpResponseErrorSchema,
@@ -160,17 +162,23 @@ export async function sendHttpRequest<
 						: undefined,
 				}),
 			);
-		} catch (error) {
-			//logger().warn("failed to cleanly parse error, this is likely because a non-structured response is being served", {
-			//	error: stringifyError(error),
-			//});
 
-			// Error is not structured
+			throw new ActorError(
+				responseData.group,
+				responseData.code,
+				responseData.message,
+				responseData.metadata,
+			);
+		} catch (error) {
+			// If it's already an ActorError, re-throw it
+			if (error instanceof ActorError) {
+				throw error;
+			}
+
+			// Otherwise, fall back to generic error with text response
 			const textResponse = new TextDecoder("utf-8", {
 				fatal: false,
 			}).decode(bufferResponse);
-
-			const rayId = response.headers.get("x-rivet-ray-id");
 
 			if (rayId) {
 				throw new HttpRequestError(
@@ -182,14 +190,6 @@ export async function sendHttpRequest<
 				);
 			}
 		}
-
-		// Throw structured error
-		throw new ActorError(
-			responseData.group,
-			responseData.code,
-			responseData.message,
-			responseData.metadata,
-		);
 	}
 
 	// Some requests don't need the success response to be parsed, so this can speed things up

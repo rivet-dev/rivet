@@ -138,7 +138,7 @@ export class ActorContext<
 	 * @param opts - Options for saving the state.
 	 */
 	async saveState(opts: SaveStateOptions): Promise<void> {
-		return this.#actor.saveState(opts);
+		return this.#actor.stateManager.saveState(opts);
 	}
 
 	/**

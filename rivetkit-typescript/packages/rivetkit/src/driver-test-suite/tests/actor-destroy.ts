@@ -85,7 +85,7 @@ export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 				"test-destroy-without-connect",
 			]);
 
-			// Verify state is fresh (default value)
+			// Verify state is fresh (default value, not the old value)
 			const newValue = await newActor.getValue();
 			expect(newValue).toBe(0);
 		});
@@ -178,8 +178,116 @@ export function runActorDestroyTests(driverTestConfig: DriverTestConfig) {
 				"test-destroy-with-connect",
 			]);
 
-			// Verify state is fresh (default value)
+			// Verify state is fresh (default value, not the old value)
 			const newValue = await newActor.getValue();
+			expect(newValue).toBe(0);
+		});
+
+		test("actor destroy allows recreation via getOrCreate with resolve", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actorKey = "test-destroy-getorcreate-resolve";
+
+			// Get destroy observer
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			// Create actor
+			const destroyActor = client.destroyActor.getOrCreate([actorKey]);
+
+			// Update state and save immediately
+			await destroyActor.setValue(123);
+
+			// Verify state was saved
+			const value = await destroyActor.getValue();
+			expect(value).toBe(123);
+
+			// Get actor ID before destroying
+			const actorId = await destroyActor.resolve();
+
+			// Destroy the actor
+			await destroyActor.destroy();
+
+			// Wait until the observer confirms the actor was destroyed
+			await vi.waitFor(async () => {
+				const wasDestroyed = await observer.wasDestroyed(actorKey);
+				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
+			});
+
+			// Wait until the actor is fully cleaned up
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.destroyActor.getForId(actorId).getValue();
+					actorRunning = true;
+				} catch (err) {
+					expect((err as ActorError).group).toBe("actor");
+					expect((err as ActorError).code).toBe("not_found");
+				}
+
+				expect(actorRunning, "actor still running").toBeFalsy();
+			});
+
+			// Recreate using getOrCreate with resolve
+			const newHandle = client.destroyActor.getOrCreate([actorKey]);
+			const newActorId = await newHandle.resolve();
+
+			// Verify state is fresh (default value, not the old value)
+			const newValue = await newHandle.getValue();
+			expect(newValue).toBe(0);
+		});
+
+		test("actor destroy allows recreation via create", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actorKey = "test-destroy-create";
+
+			// Get destroy observer
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			// Create actor using create()
+			const initialHandle = await client.destroyActor.create([actorKey]);
+
+			// Update state and save immediately
+			await initialHandle.setValue(456);
+
+			// Verify state was saved
+			const value = await initialHandle.getValue();
+			expect(value).toBe(456);
+
+			// Get actor ID before destroying
+			const actorId = await initialHandle.resolve();
+
+			// Destroy the actor
+			await initialHandle.destroy();
+
+			// Wait until the observer confirms the actor was destroyed
+			await vi.waitFor(async () => {
+				const wasDestroyed = await observer.wasDestroyed(actorKey);
+				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
+			});
+
+			// Wait until the actor is fully cleaned up
+			await vi.waitFor(async () => {
+				let actorRunning = false;
+				try {
+					await client.destroyActor.getForId(actorId).getValue();
+					actorRunning = true;
+				} catch (err) {
+					expect((err as ActorError).group).toBe("actor");
+					expect((err as ActorError).code).toBe("not_found");
+				}
+
+				expect(actorRunning, "actor still running").toBeFalsy();
+			});
+
+			// Recreate using create()
+			const newHandle = await client.destroyActor.create([actorKey]);
+			const newActorId = await newHandle.resolve();
+
+			// Verify state is fresh (default value, not the old value)
+			const newValue = await newHandle.getValue();
 			expect(newValue).toBe(0);
 		});
 	});

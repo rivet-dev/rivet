@@ -23,35 +23,6 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 	[
 		2,
 		(v2Data: v2.PersistedActor): v3.Actor => {
-			// Merge connections and hibernatableWebSocket into hibernatableConns
-			const hibernatableConns: v3.HibernatableConn[] = [];
-
-			// Convert connections with hibernatable request IDs to hibernatable conns
-			for (const conn of v2Data.connections) {
-				if (conn.hibernatableRequestId) {
-					// Find the matching hibernatable WebSocket
-					const ws = v2Data.hibernatableWebSockets.find((ws) =>
-						Buffer.from(ws.requestId).equals(
-							Buffer.from(conn.hibernatableRequestId!),
-						),
-					);
-
-					if (ws) {
-						hibernatableConns.push({
-							id: conn.id,
-							parameters: conn.parameters,
-							state: conn.state,
-							subscriptions: conn.subscriptions.map((sub) => ({
-								eventName: sub.eventName,
-							})),
-							hibernatableRequestId: conn.hibernatableRequestId,
-							lastSeenTimestamp: ws.lastSeenTimestamp,
-							msgIndex: ws.msgIndex,
-						});
-					}
-				}
-			}
-
 			// Transform scheduled events from nested structure to flat structure
 			const scheduledEvents: v3.ScheduleEvent[] =
 				v2Data.scheduledEvents.map((event) => {
@@ -74,7 +45,6 @@ const migrations = new Map<number, MigrationFn<any, any>>([
 				input: v2Data.input,
 				hasInitialized: v2Data.hasInitialized,
 				state: v2Data.state,
-				hibernatableConns,
 				scheduledEvents,
 			};
 		},
@@ -86,4 +56,11 @@ export const ACTOR_VERSIONED = createVersionedDataHandler<v3.Actor>({
 	migrations,
 	serializeVersion: (data) => v3.encodeActor(data),
 	deserializeVersion: (bytes) => v3.decodeActor(bytes),
+});
+
+export const CONN_VERSIONED = createVersionedDataHandler<v3.Conn>({
+	currentVersion: CURRENT_VERSION,
+	migrations: new Map(),
+	serializeVersion: (data) => v3.encodeConn(data),
+	deserializeVersion: (bytes) => v3.decodeConn(bytes),
 });

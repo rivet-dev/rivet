@@ -8,7 +8,7 @@ import { DriverReadyState } from "../driver";
  * Unlike the standard HTTP driver, this provides connection lifecycle management
  * for tracking the HTTP request through the actor's onRequest handler.
  */
-export function createRawRequestSocket(): ConnDriver {
+export function createRawRequestDriver(): ConnDriver {
 	return {
 		type: "raw-request",
 		requestId: crypto.randomUUID(),

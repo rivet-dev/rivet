@@ -46,6 +46,12 @@ importers:
         specifier: ^8.8.5
         version: 8.8.5
 
+  engine:
+    dependencies:
+      '@vbare/compiler':
+        specifier: ^0.0.3
+        version: 0.0.3(@bare-ts/lib@0.4.0)
+
   engine/docker/template:
     dependencies:
       '@types/js-yaml':
@@ -2331,6 +2337,9 @@ importers:
       '@bare-ts/tools':
         specifier: ^0.13.0
         version: 0.13.0(@bare-ts/lib@0.3.0)
+      '@biomejs/biome':
+        specifier: ^2.2.3
+        version: 2.2.3
       '@hono/node-server':
         specifier: ^1.18.2
         version: 1.19.1(hono@4.9.8)
@@ -2349,9 +2358,6 @@ importers:
       '@vitest/ui':
         specifier: 3.1.1
         version: 3.1.1(vitest@3.2.4)
-      bundle-require:
-        specifier: ^5.1.0
-        version: 5.1.0(esbuild@0.25.9)
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -2367,6 +2373,9 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.2
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.2)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.1.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
@@ -2451,7 +2460,7 @@ importers:
         version: 15.5.2(@mdx-js/loader@3.1.1(webpack@5.101.3))(@mdx-js/react@3.1.1(@types/react@19.2.2)(react@19.1.1))
       '@next/third-parties':
         specifier: latest
-        version: 16.0.1(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)
+        version: 16.0.3(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)
       '@rivet-gg/api':
         specifier: 0.0.1-rc8
         version: 0.0.1-rc8
@@ -3246,6 +3255,13 @@ packages:
   '@bare-ts/tools@0.15.0':
     resolution: {integrity: sha512-YMDrsZjyzW0rFMya0CgNDwR8O0rH1QdbZG1jZblwvt0dCCxbAseapnc3BZ5h1/bkJ9mYdPTedge0S7UaQzZKmg==}
     engines: {node: '>=16.9.0'}
+    hasBin: true
+    peerDependencies:
+      '@bare-ts/lib': '>=0.3.0 <=0.4.0'
+
+  '@bare-ts/tools@0.16.1':
+    resolution: {integrity: sha512-eKXTnVqzuKDxr1ozKsFSZfM1wcN4g/iMRnG9GB2fA8oyUcHxwokJC50CANfuSLe6rLnjhZ8Ave1Y2TnZqUqGcQ==}
+    engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
       '@bare-ts/lib': '>=0.3.0 <=0.4.0'
@@ -5180,8 +5196,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@next/third-parties@16.0.1':
-    resolution: {integrity: sha512-OFgku/XgeZPrPaI33qGqwoLkKW5cN5pY0VKETH2J+cUxY3iboJuYK5gRdcx+crjg/bEo0M38BhPrXHUxBUljwQ==}
+  '@next/third-parties@16.0.3':
+    resolution: {integrity: sha512-QjTRQ4ydXguFkpMCUMl5oSslxmh8mAtmnzc9DEtLkZcGmAuQcZg2M3lswMn62sdID+F06crS3IQ58X3sjjBLVA==}
     peerDependencies:
       next: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0-beta.0
       react: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
@@ -7020,6 +7036,11 @@ packages:
     resolution: {integrity: sha512-TQMCz2pFJMfpNxmSfX1VSfTjwUIFx/mL+p1bnfM1xjjdla7Z+KnGMW/EhFbpckp3LyWAH4PgOsMwOMnIN+MBFg==}
     peerDependencies:
       '@urql/core': ^5.0.0
+
+  '@vbare/compiler@0.0.3':
+    resolution: {integrity: sha512-Dhz0iwYjIhyGAPsNpiqDmDqgwLXfEonjFJLVQ0m/s4Tt9CsTjY0WV3KiQtJi5BdPt9481HR+0uwExH36FuuR2A==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -14436,6 +14457,10 @@ snapshots:
       '@bare-ts/lib': 0.4.0
       commander: 11.1.0
 
+  '@bare-ts/tools@0.16.1(@bare-ts/lib@0.4.0)':
+    dependencies:
+      '@bare-ts/lib': 0.4.0
+
   '@base-org/account@2.0.1(@types/react@19.2.2)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.5.0(react@19.1.1))(zod@3.25.76)':
     dependencies:
       '@noble/hashes': 1.4.0
@@ -16439,7 +16464,7 @@ snapshots:
   '@next/swc-win32-x64-msvc@15.5.2':
     optional: true
 
-  '@next/third-parties@16.0.1(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)':
+  '@next/third-parties@16.0.3(next@15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2))(react@19.1.1)':
     dependencies:
       next: 15.5.2(@opentelemetry/api@1.9.0)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(sass@1.93.2)
       react: 19.1.1
@@ -18676,6 +18701,13 @@ snapshots:
     dependencies:
       '@urql/core': 5.2.0
       wonka: 6.3.5
+
+  '@vbare/compiler@0.0.3(@bare-ts/lib@0.4.0)':
+    dependencies:
+      '@bare-ts/tools': 0.16.1(@bare-ts/lib@0.4.0)
+      commander: 11.1.0
+    transitivePeerDependencies:
+      - '@bare-ts/lib'
 
   '@vitejs/plugin-react@4.7.0(vite@5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0))':
     dependencies:
@@ -26589,6 +26621,17 @@ snapshots:
       tsconfck: 3.1.6(typescript@5.9.2)
     optionalDependencies:
       vite: 5.4.20(@types/node@20.19.13)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
+  vite-tsconfig-paths@5.1.4(typescript@5.9.2)(vite@5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)):
+    dependencies:
+      debug: 4.4.1
+      globrex: 0.1.2
+      tsconfck: 3.1.6(typescript@5.9.2)
+    optionalDependencies:
+      vite: 5.4.20(@types/node@22.18.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.93.2)(stylus@0.62.0)(terser@5.44.0)
     transitivePeerDependencies:
       - supports-color
       - typescript

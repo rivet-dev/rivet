@@ -46,8 +46,8 @@ export function stringifyToServerTunnelMessageKind(
 		case "ToServerResponseAbort":
 			return "ToServerResponseAbort";
 		case "ToServerWebSocketOpen": {
-			const { canHibernate, lastMsgIndex } = kind.val;
-			return `ToServerWebSocketOpen{canHibernate: ${canHibernate}, lastMsgIndex: ${stringifyBigInt(lastMsgIndex)}}`;
+			const { canHibernate } = kind.val;
+			return `ToServerWebSocketOpen{canHibernate: ${canHibernate}}`;
 		}
 		case "ToServerWebSocketMessage": {
 			const { data, binary } = kind.val;
@@ -58,10 +58,10 @@ export function stringifyToServerTunnelMessageKind(
 			return `ToServerWebSocketMessageAck{index: ${index}}`;
 		}
 		case "ToServerWebSocketClose": {
-			const { code, reason, retry } = kind.val;
+			const { code, reason, hibernate } = kind.val;
 			const codeStr = code === null ? "null" : code.toString();
 			const reasonStr = reason === null ? "null" : `"${reason}"`;
-			return `ToServerWebSocketClose{code: ${codeStr}, reason: ${reasonStr}, retry: ${retry}}`;
+			return `ToServerWebSocketClose{code: ${codeStr}, reason: ${reasonStr}, hibernate: ${hibernate}}`;
 		}
 	}
 }

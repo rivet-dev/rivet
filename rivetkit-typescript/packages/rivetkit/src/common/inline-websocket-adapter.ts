@@ -1,4 +1,5 @@
 import { WSContext } from "hono/ws";
+import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import type {
 	RivetCloseEvent,
 	RivetEvent,
@@ -11,20 +12,11 @@ export function logger() {
 	return getLogger("fake-event-source2");
 }
 
-// TODO: Merge with ConnectWebSocketOutput interface
-export interface UpgradeWebSocketArgs {
-	onOpen: (event: any, ws: WSContext) => void;
-	onMessage: (event: any, ws: WSContext) => void;
-	onClose: (event: any, ws: WSContext) => void;
-	onError: (error: any, ws: WSContext) => void;
-}
-
-// TODO: Remove `2` suffix
 /**
  * InlineWebSocketAdapter implements a WebSocket-like interface
  * that connects to a UpgradeWebSocketArgs handler
  */
-export class InlineWebSocketAdapter2 implements UniversalWebSocket {
+export class InlineWebSocketAdapter implements UniversalWebSocket {
 	// WebSocket readyState values
 	readonly CONNECTING = 0 as const;
 	readonly OPEN = 1 as const;
@@ -36,14 +28,8 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 	#wsContext: WSContext;
 	#readyState: 0 | 1 | 2 | 3 = 0; // Start in CONNECTING state
 	#queuedMessages: Array<string | ArrayBuffer | Uint8Array> = [];
-	// Event buffering is needed since events can be fired
-	// before JavaScript has a chance to add event listeners (e.g. within the same tick)
-	#bufferedEvents: Array<{
-		type: string;
-		event: any;
-	}> = [];
 
-	// Event listeners with buffering
+	// Event listeners
 	#eventListeners: Map<string, ((ev: any) => void)[]> = new Map();
 
 	constructor(handler: UpgradeWebSocketArgs) {
@@ -65,7 +51,11 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 		});
 
 		// Initialize the connection
-		this.#initialize();
+		//
+		// Defer initialization to allow event listeners to be attached first
+		setTimeout(() => {
+			this.#initialize();
+		}, 0);
 	}
 
 	get readyState(): 0 | 1 | 2 | 3 {
@@ -99,19 +89,28 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 	send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
 		logger().debug({ msg: "send called", readyState: this.readyState });
 
-		if (this.readyState !== this.OPEN) {
-			const error = new Error("WebSocket is not open");
-			logger().warn({
-				msg: "cannot send message, websocket not open",
+		// Handle different ready states
+		if (this.readyState === this.CONNECTING) {
+			// Throw InvalidStateError if still connecting
+			throw new DOMException(
+				"WebSocket is still in CONNECTING state",
+				"InvalidStateError",
+			);
+		}
+
+		if (
+			this.readyState === this.CLOSING ||
+			this.readyState === this.CLOSED
+		) {
+			// Silently ignore if closing or closed
+			logger().debug({
+				msg: "ignoring send, websocket is closing or closed",
 				readyState: this.readyState,
-				dataType: typeof data,
-				dataLength: typeof data === "string" ? data.length : "binary",
-				error,
 			});
-			this.#fireError(error);
 			return;
 		}
 
+		// Must be OPEN at this point
 		this.#handler.onMessage({ data }, this.#wsContext);
 	}
 
@@ -284,9 +283,6 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 			this.#eventListeners.set(type, []);
 		}
 		this.#eventListeners.get(type)!.push(listener);
-
-		// Flush any buffered events for this type
-		this.#flushBufferedEvents(type);
 	}
 
 	removeEventListener(type: string, listener: (ev: any) => void): void {
@@ -315,11 +311,6 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 					});
 				}
 			}
-		} else {
-			logger().debug({
-				msg: `no ${type} listeners registered, buffering event`,
-			});
-			this.#bufferedEvents.push({ type, event });
 		}
 
 		// Also check for on* properties
@@ -378,19 +369,6 @@ export class InlineWebSocketAdapter2 implements UniversalWebSocket {
 	dispatchEvent(event: RivetEvent): boolean {
 		this.#dispatchEvent(event.type, event);
 		return true;
-	}
-
-	#flushBufferedEvents(type: string): void {
-		const eventsToFlush = this.#bufferedEvents.filter(
-			(buffered) => buffered.type === type,
-		);
-		this.#bufferedEvents = this.#bufferedEvents.filter(
-			(buffered) => buffered.type !== type,
-		);
-
-		for (const { event } of eventsToFlush) {
-			this.#dispatchEvent(type, event);
-		}
 	}
 
 	#fireOpen(): void {

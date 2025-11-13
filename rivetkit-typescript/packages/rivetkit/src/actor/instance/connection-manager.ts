@@ -1,5 +1,7 @@
+import { HibernatingWebSocketMetadata } from "@rivetkit/engine-runner";
 import * as cbor from "cbor-x";
 import invariant from "invariant";
+import { CONN_VERSIONED } from "@/schemas/actor-persist/versioned";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { arrayBuffersEqual, stringifyError } from "@/utils";
@@ -7,14 +9,17 @@ import type { ConnDriver } from "../conn/driver";
 import {
 	CONN_CONNECTED_SYMBOL,
 	CONN_DRIVER_SYMBOL,
-	CONN_MARK_SAVED_SYMBOL,
-	CONN_PERSIST_RAW_SYMBOL,
-	CONN_PERSIST_SYMBOL,
 	CONN_SEND_MESSAGE_SYMBOL,
 	CONN_SPEAKS_RIVETKIT_SYMBOL,
+	CONN_STATE_MANAGER_SYMBOL,
 	Conn,
 	type ConnId,
 } from "../conn/mod";
+import {
+	convertConnToBarePersistedConn,
+	type PersistedConn,
+} from "../conn/persisted";
+import type { ConnDataInput } from "../conn/state-manager";
 import { CreateConnStateContext } from "../contexts/create-conn-state";
 import { OnBeforeConnectContext } from "../contexts/on-before-connect";
 import { OnConnectContext } from "../contexts/on-connect";
@@ -23,8 +28,6 @@ import { CachedSerializer } from "../protocol/serde";
 import { deadline } from "../utils";
 import { makeConnKey } from "./kv";
 import type { ActorInstance } from "./mod";
-import type { PersistedConn } from "./persisted";
-
 /**
  * Manages all connection-related operations for an actor instance.
  * Handles connection creation, tracking, hibernation, and cleanup.
@@ -39,37 +42,45 @@ export class ConnectionManager<
 > {
 	#actor: ActorInstance<S, CP, CS, V, I, DB>;
 	#connections = new Map<ConnId, Conn<S, CP, CS, V, I, DB>>();
-	#changedConnections = new Set<ConnId>();
+
+	/** Connections that have had their state changed and need to be persisted. */
+	#connsWithPersistChanged = new Set<ConnId>();
 
 	constructor(actor: ActorInstance<S, CP, CS, V, I, DB>) {
 		this.#actor = actor;
 	}
 
-	// MARK: - Public API
-
 	get connections(): Map<ConnId, Conn<S, CP, CS, V, I, DB>> {
 		return this.#connections;
-	}
-
-	get changedConnections(): Set<ConnId> {
-		return this.#changedConnections;
-	}
-
-	clearChangedConnections() {
-		this.#changedConnections.clear();
 	}
 
 	getConnForId(id: string): Conn<S, CP, CS, V, I, DB> | undefined {
 		return this.#connections.get(id);
 	}
 
-	markConnChanged(conn: Conn<S, CP, CS, V, I, DB>) {
-		this.#changedConnections.add(conn.id);
+	get connsWithPersistChanged(): Set<ConnId> {
+		return this.#connsWithPersistChanged;
+	}
+
+	clearConnWithPersistChanged() {
+		this.#connsWithPersistChanged.clear();
+	}
+
+	markConnWithPersistChanged(conn: Conn<S, CP, CS, V, I, DB>) {
+		invariant(
+			conn.isHibernatable,
+			"cannot mark non-hibernatable conn for persist",
+		);
+
 		this.#actor.rLog.debug({
 			msg: "marked connection as changed",
 			connId: conn.id,
-			totalChanged: this.#changedConnections.size,
+			totalChanged: this.#connsWithPersistChanged.size,
 		});
+
+		this.#connsWithPersistChanged.add(conn.id);
+
+		this.#actor.stateManager.savePersistThrottled();
 	}
 
 	// MARK: - Connection Lifecycle
@@ -80,22 +91,26 @@ export class ConnectionManager<
 		driver: ConnDriver,
 		params: CP,
 		request: Request | undefined,
+		requestPath: string | undefined,
+		requestHeaders: Record<string, string> | undefined,
+		isHibernatable: boolean,
+		isRestoringHibernatable: boolean,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
 		this.#actor.assertReady();
 
-		// Check for hibernatable websocket reconnection
-		if (driver.requestIdBuf && driver.hibernatable) {
-			const existingConn = this.#findHibernatableConn(
-				driver.requestIdBuf,
-			);
+		// TODO: Add back
+		// const url = request?.url;
+		// invariant(
+		// 	url?.startsWith("http://actor/") ?? true,
+		// 	`url ${url} must start with 'http://actor/'`,
+		// );
 
-			if (existingConn) {
-				return this.#reconnectHibernatableConn(existingConn, driver);
-			}
+		// Check for hibernatable websocket reconnection
+		if (isRestoringHibernatable) {
+			return this.#reconnectHibernatableConn(driver);
 		}
 
 		// Create new connection
-		const persist = this.#actor.persist;
 		if (this.#actor.config.onBeforeConnect) {
 			const ctx = new OnBeforeConnectContext(this.#actor, request);
 			await this.#actor.config.onBeforeConnect(ctx, params);
@@ -108,26 +123,45 @@ export class ConnectionManager<
 		}
 
 		// Create connection persist data
-		const connPersist: PersistedConn<CP, CS> = {
-			connId: crypto.randomUUID(),
-			params: params,
-			state: connState as CS,
-			lastSeen: Date.now(),
-			subscriptions: [],
-		};
-
-		// Check if hibernatable
-		if (driver.requestIdBuf) {
-			const isHibernatable = this.#isHibernatableRequest(
+		let connData: ConnDataInput<CP, CS>;
+		if (isHibernatable) {
+			invariant(
 				driver.requestIdBuf,
+				"must have requestIdBuf if hibernatable",
 			);
-			if (isHibernatable) {
-				connPersist.hibernatableRequestId = driver.requestIdBuf;
-			}
+			invariant(requestPath, "missing requestPath for hibernatable ws");
+			invariant(
+				requestHeaders,
+				"missing requestHeaders for hibernatable ws",
+			);
+			connData = {
+				hibernatable: {
+					id: crypto.randomUUID(),
+					parameters: params,
+					state: connState as CS,
+					subscriptions: [],
+					// Fallback to empty buf if not provided since we don't use this value
+					hibernatableRequestId: driver.hibernatable
+						? driver.requestIdBuf
+						: new ArrayBuffer(),
+					// First message index will be 1, so we start at 0
+					msgIndex: 0,
+					requestPath,
+					requestHeaders,
+				},
+			};
+		} else {
+			connData = {
+				ephemeral: {
+					id: crypto.randomUUID(),
+					parameters: params,
+					state: connState as CS,
+				},
+			};
 		}
 
 		// Create connection instance
-		const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, connPersist);
+		const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, connData);
 		conn[CONN_DRIVER_SYMBOL] = driver;
 
 		return conn;
@@ -146,7 +180,17 @@ export class ConnectionManager<
 
 		this.#connections.set(conn.id, conn);
 
-		this.#changedConnections.add(conn.id);
+		// Notify driver about new connection BEFORE marking as changed
+		//
+		// This ensures the driver can set up any necessary state (like #hwsMessageIndex)
+		// before saveState is triggered by markConnWithPersistChanged
+		if (this.#actor.driver.onCreateConn) {
+			this.#actor.driver.onCreateConn(conn);
+		}
+
+		if (conn.isHibernatable) {
+			this.markConnWithPersistChanged(conn);
+		}
 
 		this.#callOnConnect(conn);
 
@@ -183,6 +227,50 @@ export class ConnectionManager<
 		}
 	}
 
+	#reconnectHibernatableConn(driver: ConnDriver): Conn<S, CP, CS, V, I, DB> {
+		invariant(driver.requestIdBuf, "missing requestIdBuf");
+		const existingConn = this.findHibernatableConn(driver.requestIdBuf);
+		invariant(
+			existingConn,
+			"cannot find connection for restoring connection",
+		);
+
+		this.#actor.rLog.debug({
+			msg: "reconnecting hibernatable websocket connection",
+			connectionId: existingConn.id,
+			requestId: driver.requestId,
+		});
+
+		// Clean up existing driver state if present
+		if (existingConn[CONN_DRIVER_SYMBOL]) {
+			this.#disconnectExistingDriver(existingConn);
+		}
+
+		// Update connection with new socket
+		existingConn[CONN_DRIVER_SYMBOL] = driver;
+
+		// Reset sleep timer since we have an active connection
+		this.#actor.resetSleepTimer();
+
+		// Mark connection as connected
+		existingConn[CONN_CONNECTED_SYMBOL] = true;
+
+		this.#actor.inspector.emitter.emit("connectionUpdated");
+
+		return existingConn;
+	}
+
+	#disconnectExistingDriver(conn: Conn<S, CP, CS, V, I, DB>) {
+		const driver = conn[CONN_DRIVER_SYMBOL];
+		if (driver?.disconnect) {
+			driver.disconnect(
+				this.#actor,
+				conn,
+				"Reconnecting hibernatable websocket with new driver state",
+			);
+		}
+	}
+
 	/**
 	 * Handle connection disconnection.
 	 *
@@ -191,8 +279,17 @@ export class ConnectionManager<
 	async connDisconnected(conn: Conn<S, CP, CS, V, I, DB>) {
 		// Remove from tracking
 		this.#connections.delete(conn.id);
-		this.#changedConnections.delete(conn.id);
+
+		if (conn.isHibernatable) {
+			this.markConnWithPersistChanged(conn);
+		}
+
 		this.#actor.rLog.debug({ msg: "removed conn", connId: conn.id });
+
+		// Notify driver about connection removal
+		if (this.#actor.driver.onDestroyConn) {
+			this.#actor.driver.onDestroyConn(conn);
+		}
 
 		for (const eventName of [...conn.subscriptions.values()]) {
 			this.#actor.eventManager.removeSubscription(eventName, conn, true);
@@ -242,14 +339,24 @@ export class ConnectionManager<
 	}
 
 	/**
-	 * Utilify funtion for call sites that don't need a separate prepare and connect phase.
+	 * Utilify function for call sites that don't need a separate prepare and connect phase.
 	 */
 	async prepareAndConnectConn(
 		driver: ConnDriver,
 		params: CP,
 		request: Request | undefined,
+		requestPath: string | undefined,
+		requestHeaders: Record<string, string> | undefined,
 	): Promise<Conn<S, CP, CS, V, I, DB>> {
-		const conn = await this.prepareConn(driver, params, request);
+		const conn = await this.prepareConn(
+			driver,
+			params,
+			request,
+			requestPath,
+			requestHeaders,
+			false,
+			false,
+		);
 		this.connectConn(conn);
 		return conn;
 	}
@@ -262,11 +369,15 @@ export class ConnectionManager<
 	restoreConnections(connections: PersistedConn<CP, CS>[]) {
 		for (const connPersist of connections) {
 			// Create connection instance
-			const conn = new Conn<S, CP, CS, V, I, DB>(
-				this.#actor,
-				connPersist,
-			);
+			const conn = new Conn<S, CP, CS, V, I, DB>(this.#actor, {
+				hibernatable: connPersist,
+			});
 			this.#connections.set(conn.id, conn);
+
+			// Notify driver about restored connection
+			if (this.#actor.driver.onCreateConn) {
+				this.#actor.driver.onCreateConn(conn);
+			}
 
 			// Restore subscriptions
 			for (const sub of connPersist.subscriptions) {
@@ -279,72 +390,19 @@ export class ConnectionManager<
 		}
 	}
 
-	/**
-	 * Gets persistence data for all changed connections.
-	 */
-	getChangedConnectionsData(): Array<[Uint8Array, Uint8Array]> {
-		const entries: Array<[Uint8Array, Uint8Array]> = [];
-
-		for (const connId of this.#changedConnections) {
-			const conn = this.#connections.get(connId);
-			if (conn) {
-				const connData = cbor.encode(conn[CONN_PERSIST_RAW_SYMBOL]);
-				entries.push([makeConnKey(connId), connData]);
-				conn[CONN_MARK_SAVED_SYMBOL]();
-			}
-		}
-
-		return entries;
-	}
-
 	// MARK: - Private Helpers
 
-	#findHibernatableConn(
+	findHibernatableConn(
 		requestIdBuf: ArrayBuffer,
 	): Conn<S, CP, CS, V, I, DB> | undefined {
-		return Array.from(this.#connections.values()).find(
-			(conn) =>
-				conn[CONN_PERSIST_SYMBOL].hibernatableRequestId &&
-				arrayBuffersEqual(
-					conn[CONN_PERSIST_SYMBOL].hibernatableRequestId,
-					requestIdBuf,
-				),
-		);
-	}
-
-	#reconnectHibernatableConn(
-		existingConn: Conn<S, CP, CS, V, I, DB>,
-		driver: ConnDriver,
-	): Conn<S, CP, CS, V, I, DB> {
-		this.#actor.rLog.debug({
-			msg: "reconnecting hibernatable websocket connection",
-			connectionId: existingConn.id,
-			requestId: driver.requestId,
-		});
-
-		// Clean up existing driver state if present
-		if (existingConn[CONN_DRIVER_SYMBOL]) {
-			this.#cleanupDriverState(existingConn);
-		}
-
-		// Update connection with new socket
-		existingConn[CONN_DRIVER_SYMBOL] = driver;
-		existingConn[CONN_PERSIST_SYMBOL].lastSeen = Date.now();
-
-		this.#actor.inspector.emitter.emit("connectionUpdated");
-
-		return existingConn;
-	}
-
-	#cleanupDriverState(conn: Conn<S, CP, CS, V, I, DB>) {
-		const driver = conn[CONN_DRIVER_SYMBOL];
-		if (driver?.disconnect) {
-			driver.disconnect(
-				this.#actor,
-				conn,
-				"Reconnecting hibernatable websocket with new driver state",
+		return Array.from(this.#connections.values()).find((conn) => {
+			const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+			const connRequestId =
+				connStateManager.hibernatableDataRaw?.hibernatableRequestId;
+			return (
+				connRequestId && arrayBuffersEqual(connRequestId, requestIdBuf)
 			);
-		}
+		});
 	}
 
 	async #createConnState(
@@ -370,14 +428,6 @@ export class ConnectionManager<
 
 		throw new Error(
 			"Could not create connection state from 'createConnState' or 'connState'",
-		);
-	}
-
-	#isHibernatableRequest(requestIdBuf: ArrayBuffer): boolean {
-		return (
-			this.#actor.persist.hibernatableConns.findIndex((conn) =>
-				arrayBuffersEqual(conn.hibernatableRequestId, requestIdBuf),
-			) !== -1
 		);
 	}
 

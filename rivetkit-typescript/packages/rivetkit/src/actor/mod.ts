@@ -64,7 +64,6 @@ export type {
 	UniversalEventSource,
 	UniversalMessageEvent,
 } from "@/common/eventsource-interface";
-export type { UpgradeWebSocketArgs } from "@/common/inline-websocket-adapter2";
 export type {
 	RivetCloseEvent,
 	RivetEvent,
@@ -73,7 +72,7 @@ export type {
 } from "@/common/websocket-interface";
 export type { ActorKey } from "@/manager/protocol/query";
 export type * from "./config";
-export type { Conn } from "./conn/mod";
+export type { AnyConn, Conn } from "./conn/mod";
 export type { ActionContext } from "./contexts/action";
 export type { ActorContext } from "./contexts/actor";
 export type { ConnInitContext } from "./contexts/conn-init";
@@ -95,7 +94,4 @@ export {
 	type ActorRouter,
 	createActorRouter,
 } from "./router";
-export {
-	handleRawWebSocket as handleRawWebSocketHandler,
-	handleWebSocketConnect,
-} from "./router-endpoints";
+export { routeWebSocket } from "./router-websocket-endpoints";

@@ -20,6 +20,7 @@ import { counter } from "./counter";
 import { counterConn } from "./counter-conn";
 import { destroyActor, destroyObserver } from "./destroy";
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
+import { hibernationActor } from "./hibernation";
 import { inlineClientActor } from "./inline-client";
 import { counterWithLifecycle } from "./lifecycle";
 import { metadataActor } from "./metadata";
@@ -110,5 +111,7 @@ export const registry = setup({
 		// From destroy.ts
 		destroyActor,
 		destroyObserver,
+		// From hibernation.ts
+		hibernationActor,
 	},
 });

@@ -7,22 +7,27 @@ import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor";
 import type { Registry } from "@/mod";
-import { ACTOR_VERSIONED } from "@/schemas/actor-persist/versioned";
+import {
+	ACTOR_VERSIONED,
+	CONN_VERSIONED,
+} from "@/schemas/actor-persist/versioned";
 import type * as protocol from "@/schemas/client-protocol/mod";
 import { TO_CLIENT_VERSIONED } from "@/schemas/client-protocol/versioned";
 import { ToClientSchema } from "@/schemas/client-protocol-zod/mod";
 import { EXTRA_ERROR_LOG, idToStr } from "@/utils";
 import type { ActorConfig, InitContext } from "../config";
 import type { ConnDriver } from "../conn/driver";
-import { createHttpSocket } from "../conn/drivers/http";
+import { createHttpDriver } from "../conn/drivers/http";
 import {
 	CONN_DRIVER_SYMBOL,
-	CONN_PERSIST_SYMBOL,
-	CONN_SEND_MESSAGE_SYMBOL,
-	CONN_STATE_ENABLED_SYMBOL,
+	CONN_STATE_MANAGER_SYMBOL,
 	type Conn,
 	type ConnId,
 } from "../conn/mod";
+import {
+	convertConnFromBarePersistedConn,
+	type PersistedConn,
+} from "../conn/persisted";
 import { ActionContext } from "../contexts/action";
 import { ActorContext } from "../contexts/actor";
 import { RequestContext } from "../contexts/request";
@@ -43,7 +48,10 @@ import {
 import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS } from "./kv";
-import type { PersistedActor, PersistedConn } from "./persisted";
+import {
+	convertActorFromBarePersisted,
+	type PersistedActor,
+} from "./persisted";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
 
@@ -89,7 +97,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	// MARK: - Managers
 	connectionManager!: ConnectionManager<S, CP, CS, V, I, DB>;
 
-	#stateManager!: StateManager<S, CP, CS, I>;
+	stateManager!: StateManager<S, CP, CS, I>;
 
 	eventManager!: EventManager<S, CP, CS, V, I, DB>;
 
@@ -137,7 +145,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 				if (!this.stateEnabled) {
 					throw new errors.StateNotEnabled();
 				}
-				return this.#stateManager.persistRaw.state as Record<
+				return this.stateManager.persistRaw.state as Record<
 					string,
 					any
 				> as unknown;
@@ -148,37 +156,43 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			getConnections: async () => {
 				return Array.from(
 					this.connectionManager.connections.entries(),
-				).map(([id, conn]) => ({
-					type: conn[CONN_DRIVER_SYMBOL]?.type,
-					id,
-					params: conn.params as any,
-					state: conn[CONN_STATE_ENABLED_SYMBOL]
-						? conn.state
-						: undefined,
-					subscriptions: conn.subscriptions.size,
-					lastSeen: conn.lastSeen,
-					stateEnabled: conn[CONN_STATE_ENABLED_SYMBOL],
-					isHibernatable: conn.isHibernatable,
-					hibernatableRequestId: conn[CONN_PERSIST_SYMBOL]
-						.hibernatableRequestId
-						? idToStr(
-								conn[CONN_PERSIST_SYMBOL].hibernatableRequestId,
-							)
-						: undefined,
-				}));
+				).map(([id, conn]) => {
+					const connStateManager = conn[CONN_STATE_MANAGER_SYMBOL];
+					return {
+						type: conn[CONN_DRIVER_SYMBOL]?.type,
+						id,
+						params: conn.params as any,
+						stateEnabled: connStateManager.stateEnabled,
+						state: connStateManager.stateEnabled
+							? connStateManager.state
+							: undefined,
+						subscriptions: conn.subscriptions.size,
+						isHibernatable: conn.isHibernatable,
+						hibernatableRequestId: connStateManager
+							.hibernatableDataRaw?.hibernatableRequestId
+							? idToStr(
+									connStateManager.hibernatableDataRaw
+										.hibernatableRequestId,
+								)
+							: undefined,
+						// TODO: Include the underlying request for path & headers?
+					};
+				});
 			},
 			setState: async (state: unknown) => {
 				if (!this.stateEnabled) {
 					throw new errors.StateNotEnabled();
 				}
-				this.#stateManager.state = { ...(state as S) };
-				await this.#stateManager.saveState({ immediate: true });
+				this.stateManager.state = { ...(state as S) };
+				await this.stateManager.saveState({ immediate: true });
 			},
 			executeAction: async (name, params) => {
 				const conn = await this.connectionManager.prepareAndConnectConn(
-					createHttpSocket(),
+					createHttpDriver(),
 					// TODO: This may cause issues
 					undefined as unknown as CP,
+					undefined,
+					undefined,
 					undefined,
 				);
 
@@ -265,20 +279,20 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 	}
 
 	// MARK: - State Access
-	get persist(): PersistedActor<S, CP, CS, I> {
-		return this.#stateManager.persist;
+	get persist(): PersistedActor<S, I> {
+		return this.stateManager.persist;
 	}
 
 	get state(): S {
-		return this.#stateManager.state;
+		return this.stateManager.state;
 	}
 
 	set state(value: S) {
-		this.#stateManager.state = value;
+		this.stateManager.state = value;
 	}
 
 	get stateEnabled(): boolean {
-		return this.#stateManager.stateEnabled;
+		return this.stateManager.stateEnabled;
 	}
 
 	get connStateEnabled(): boolean {
@@ -321,7 +335,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		// Initialize managers
 		this.connectionManager = new ConnectionManager(this);
-		this.#stateManager = new StateManager(this, actorDriver, this.#config);
+		this.stateManager = new StateManager(this, actorDriver, this.#config);
 		this.eventManager = new EventManager(this);
 		this.#scheduleManager = new ScheduleManager(
 			this,
@@ -332,8 +346,8 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		// Legacy schedule object (for compatibility)
 		this.#schedule = new Schedule(this);
 
-		// Read and initialize state
-		await this.#initializeState();
+		// Load state
+		await this.#loadState();
 
 		// Generate or load inspector token
 		await this.#initializeInspectorToken();
@@ -381,7 +395,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			return;
 		}
 		this.#stopCalled = true;
-		this.#rLog.info({ msg: "actor stopping" });
+		this.#rLog.info({
+			msg: "[STOP] actor stopping - setting stopCalled=true",
+			mode,
+		});
 
 		// Clear sleep timeout
 		if (this.#sleepTimeout) {
@@ -412,11 +429,16 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		);
 
 		// Clear timeouts and save state
-		this.#stateManager.clearPendingSaveTimeout();
-		await this.saveState({ immediate: true, allowStoppingState: true });
+		this.#rLog.info({ msg: "[STOP] Clearing pending save timeouts" });
+		this.stateManager.clearPendingSaveTimeout();
+		this.#rLog.info({ msg: "[STOP] Saving state immediately" });
+		await this.stateManager.saveState({
+			immediate: true,
+			allowStoppingState: true,
+		});
 
 		// Wait for write queues
-		await this.#stateManager.waitForPendingWrites();
+		await this.stateManager.waitForPendingWrites();
 		await this.#scheduleManager.waitForPendingAlarmWrites();
 	}
 
@@ -495,23 +517,6 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 		}
 		this.resetSleepTimer();
-	}
-
-	// MARK: - State Management
-	async saveState(opts: SaveStateOptions) {
-		this.assertReady(opts.allowStoppingState);
-
-		// Save state through StateManager
-		await this.#stateManager.saveState(opts);
-
-		// Save connection changes
-		if (this.connectionManager.changedConnections.size > 0) {
-			const entries = this.connectionManager.getChangedConnectionsData();
-			if (entries.length > 0) {
-				await this.driver.kvBatchPut(this.#actorId, entries);
-			}
-			this.connectionManager.clearChangedConnections();
-		}
 	}
 
 	// MARK: - Message Processing
@@ -638,7 +643,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			throw error;
 		} finally {
-			this.#stateManager.savePersistThrottled();
+			this.stateManager.savePersistThrottled();
 		}
 	}
 
@@ -667,7 +672,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			});
 			throw error;
 		} finally {
-			this.#stateManager.savePersistThrottled();
+			this.stateManager.savePersistThrottled();
 		}
 	}
 
@@ -697,10 +702,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 			// Save changes from the WebSocket open
 			if (voidOrPromise instanceof Promise) {
 				voidOrPromise.then(() => {
-					this.#stateManager.savePersistThrottled();
+					this.stateManager.savePersistThrottled();
 				});
 			} else {
-				this.#stateManager.savePersistThrottled();
+				this.stateManager.savePersistThrottled();
 			}
 		} catch (error) {
 			this.#rLog.error({
@@ -767,7 +772,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		);
 	}
 
-	async #initializeState() {
+	async #loadState() {
 		// Read initial state from KV
 		const [persistDataBuffer] = await this.driver.kvBatchGet(
 			this.#actorId,
@@ -780,8 +785,7 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 		const bareData =
 			ACTOR_VERSIONED.deserializeWithEmbeddedVersion(persistDataBuffer);
-		const persistData =
-			this.#stateManager.convertFromBarePersisted(bareData);
+		const persistData = convertActorFromBarePersisted<S, I>(bareData);
 
 		if (persistData.hasInitialized) {
 			// Restore existing actor
@@ -792,10 +796,22 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		}
 
 		// Pass persist reference to schedule manager
-		this.#scheduleManager.setPersist(this.#stateManager.persist);
+		this.#scheduleManager.setPersist(this.stateManager.persist);
 	}
 
-	async #restoreExistingActor(persistData: PersistedActor<S, CP, CS, I>) {
+	async #createNewActor(persistData: PersistedActor<S, I>) {
+		this.#rLog.info({ msg: "actor creating" });
+
+		// Initialize state
+		await this.stateManager.initializeState(persistData);
+
+		// Call onCreate lifecycle
+		if (this.#config.onCreate) {
+			await this.#config.onCreate(this.actorContext, persistData.input!);
+		}
+	}
+
+	async #restoreExistingActor(persistData: PersistedActor<S, I>) {
 		// List all connection keys
 		const connEntries = await this.driver.kvListPrefix(
 			this.#actorId,
@@ -806,7 +822,10 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		const connections: PersistedConn<CP, CS>[] = [];
 		for (const [_key, value] of connEntries) {
 			try {
-				const conn = cbor.decode(value) as PersistedConn<CP, CS>;
+				const bareData = CONN_VERSIONED.deserializeWithEmbeddedVersion(
+					new Uint8Array(value),
+				);
+				const conn = convertConnFromBarePersistedConn<CP, CS>(bareData);
 				connections.push(conn);
 			} catch (error) {
 				this.#rLog.error({
@@ -819,26 +838,13 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 		this.#rLog.info({
 			msg: "actor restoring",
 			connections: connections.length,
-			hibernatableWebSockets: persistData.hibernatableConns.length,
 		});
 
 		// Initialize state
-		this.#stateManager.initPersistProxy(persistData);
+		this.stateManager.initPersistProxy(persistData);
 
 		// Restore connections
 		this.connectionManager.restoreConnections(connections);
-	}
-
-	async #createNewActor(persistData: PersistedActor<S, CP, CS, I>) {
-		this.#rLog.info({ msg: "actor creating" });
-
-		// Initialize state
-		await this.#stateManager.initializeState(persistData);
-
-		// Call onCreate lifecycle
-		if (this.#config.onCreate) {
-			await this.#config.onCreate(this.actorContext, persistData.input!);
-		}
 	}
 
 	async #initializeInspectorToken() {
@@ -959,13 +965,27 @@ export class ActorInstance<S, CP, CS, V, I, DB extends AnyDatabaseProvider> {
 
 	async #disconnectConnections() {
 		const promises: Promise<unknown>[] = [];
+		this.#rLog.debug({
+			msg: "disconnecting connections on actor stop",
+			totalConns: this.connectionManager.connections.size,
+		});
 		for (const connection of this.connectionManager.connections.values()) {
+			this.#rLog.debug({
+				msg: "checking connection for disconnect",
+				connId: connection.id,
+				isHibernatable: connection.isHibernatable,
+			});
 			if (!connection.isHibernatable) {
 				this.#rLog.debug({
 					msg: "disconnecting non-hibernatable connection on actor stop",
 					connId: connection.id,
 				});
 				promises.push(connection.disconnect());
+			} else {
+				this.#rLog.debug({
+					msg: "preserving hibernatable connection on actor stop",
+					connId: connection.id,
+				});
 			}
 		}
 

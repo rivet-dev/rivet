@@ -13,7 +13,6 @@ function serializeEmptyPersistData(input: unknown | undefined): Uint8Array {
 				: null,
 		hasInitialized: false,
 		state: bufferToArrayBuffer(cbor.encode(undefined)),
-		hibernatableConns: [],
 		scheduledEvents: [],
 	};
 	return ACTOR_VERSIONED.serializeWithEmbeddedVersion(persistData);

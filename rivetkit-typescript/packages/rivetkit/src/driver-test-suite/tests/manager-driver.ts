@@ -43,7 +43,7 @@ export function runManagerDriverTests(driverTestConfig: DriverTestConfig) {
 					expect.fail("did not error on duplicate create");
 				} catch (err) {
 					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("already_exists");
+					expect((err as ActorError).code).toBe("duplicate_key");
 				}
 
 				// Verify the original actor still works and has its state

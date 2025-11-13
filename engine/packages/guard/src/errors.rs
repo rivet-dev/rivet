@@ -41,28 +41,6 @@ pub struct WrongAddrProtocol {
 #[derive(RivetError, Serialize)]
 #[error(
 	"guard",
-	"actor_not_found",
-	"Actor not found.",
-	"Actor with ID {actor_id} not found."
-)]
-pub struct ActorNotFound {
-	pub actor_id: Id,
-}
-
-#[derive(RivetError, Serialize)]
-#[error(
-	"guard",
-	"actor_destroyed",
-	"Actor destroyed.",
-	"Actor {actor_id} was destroyed."
-)]
-pub struct ActorDestroyed {
-	pub actor_id: Id,
-}
-
-#[derive(RivetError, Serialize)]
-#[error(
-	"guard",
 	"actor_ready_timeout",
 	"Timed out waiting for actor to become ready. Ensure that the runner name selector is accurate and there are runners available in the namespace you created this actor."
 )]

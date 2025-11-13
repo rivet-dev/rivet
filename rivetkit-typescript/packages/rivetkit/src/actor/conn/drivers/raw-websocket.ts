@@ -12,7 +12,7 @@ import { type ConnDriver, DriverReadyState } from "../driver";
  * don't handle messages from the RivetKit protocol - they handle messages directly in the
  * actor's onWebSocket handler.
  */
-export function createRawWebSocketSocket(
+export function createRawWebSocketDriver(
 	requestId: string,
 	requestIdBuf: ArrayBuffer | undefined,
 	hibernatable: boolean,

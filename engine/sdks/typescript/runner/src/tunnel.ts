@@ -1,28 +1,40 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
 import type { MessageId, RequestId } from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
-import { stringify as uuidstringify, v4 as uuidv4 } from "uuid";
-import { logger } from "./log";
-import type { ActorInstance, Runner } from "./mod";
+import {
+	parse as uuidparse,
+	stringify as uuidstringify,
+	v4 as uuidv4,
+} from "uuid";
+import type { Runner, RunnerActor } from "./mod";
 import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
 import { unreachable } from "./utils";
-import { WebSocketTunnelAdapter } from "./websocket-tunnel-adapter";
+import {
+	HIBERNATABLE_SYMBOL,
+	WebSocketTunnelAdapter,
+} from "./websocket-tunnel-adapter";
 
 const GC_INTERVAL = 60000; // 60 seconds
 const MESSAGE_ACK_TIMEOUT = 5000; // 5 seconds
-const WEBSOCKET_STATE_PERSIST_TIMEOUT = 30000; // 30 seconds
 
-interface PendingRequest {
+export interface PendingRequest {
 	resolve: (response: Response) => void;
 	reject: (error: Error) => void;
 	streamController?: ReadableStreamDefaultController<Uint8Array>;
 	actorId?: string;
 }
 
-interface PendingTunnelMessage {
+export interface HibernatingWebSocketMetadata {
+	requestId: RequestId;
+	path: string;
+	headers: Record<string, string>;
+	messageIndex: number;
+}
+
+export interface PendingTunnelMessage {
 	sentAt: number;
 	requestIdStr: string;
 }
@@ -36,13 +48,8 @@ class RunnerShutdownError extends Error {
 export class Tunnel {
 	#runner: Runner;
 
-	/** Requests over the tunnel to the actor that are in flight. */
-	#actorPendingRequests: Map<string, PendingRequest> = new Map();
-	/** WebSockets over the tunnel to the actor that are in flight. */
-	#actorWebSockets: Map<string, WebSocketTunnelAdapter> = new Map();
-
-	/** Messages sent from the actor over the tunnel that have not been acked by the gateway. */
-	#pendingTunnelMessages: Map<string, PendingTunnelMessage> = new Map();
+	/** Maps request IDs to actor IDs for lookup */
+	#requestToActor: Map<string, string> = new Map();
 
 	#gcInterval?: NodeJS.Timeout;
 
@@ -67,28 +74,320 @@ export class Tunnel {
 			this.#gcInterval = undefined;
 		}
 
-		// Reject all pending requests
-		//
+		// Reject all pending requests and close all WebSockets for all actors
 		// RunnerShutdownError will be explicitly ignored
-		for (const [_, request] of this.#actorPendingRequests) {
-			request.reject(new RunnerShutdownError());
-		}
-		this.#actorPendingRequests.clear();
+		for (const [_actorId, actor] of this.#runner.actors) {
+			// Reject all pending requests for this actor
+			for (const [_, request] of actor.pendingRequests) {
+				request.reject(new RunnerShutdownError());
+			}
+			actor.pendingRequests.clear();
 
-		// Close all WebSockets
-		//
-		// The WebSocket close event with retry is automatically sent when the
-		// runner WS closes, so we only need to notify the client that the WS
-		// closed:
-		// https://github.com/rivet-dev/rivet/blob/00d4f6a22da178a6f8115e5db50d96c6f8387c2e/engine/packages/pegboard-runner/src/lib.rs#L157
-		for (const [_, ws] of this.#actorWebSockets) {
-			// Only close non-hibernatable websockets to prevent sending
-			// unnecessary close messages for websockets that will be hibernated
-			if (!ws.canHibernate) {
-				ws.__closeWithoutCallback(1000, "ws.tunnel_shutdown");
+			// Close all WebSockets for this actor
+			// The WebSocket close event with retry is automatically sent when the
+			// runner WS closes, so we only need to notify the client that the WS
+			// closed:
+			// https://github.com/rivet-dev/rivet/blob/00d4f6a22da178a6f8115e5db50d96c6f8387c2e/engine/packages/pegboard-runner/src/lib.rs#L157
+			for (const [_, ws] of actor.webSockets) {
+				// Only close non-hibernatable websockets to prevent sending
+				// unnecessary close messages for websockets that will be hibernated
+				if (!ws[HIBERNATABLE_SYMBOL]) {
+					ws._closeWithoutCallback(1000, "ws.tunnel_shutdown");
+				}
+			}
+			actor.webSockets.clear();
+		}
+
+		// Clear the request-to-actor mapping
+		this.#requestToActor.clear();
+	}
+
+	async restoreHibernatingRequests(
+		actorId: string,
+		requestIds: readonly RequestId[],
+	) {
+		this.log?.debug({
+			msg: "restoring hibernating requests",
+			actorId,
+			requests: requestIds.length,
+		});
+
+		// Load all persisted metadata
+		const metaEntries =
+			await this.#runner.config.hibernatableWebSocket.loadAll(actorId);
+
+		// Create maps for efficient lookup
+		const requestIdMap = new Map<string, RequestId>();
+		for (const requestId of requestIds) {
+			requestIdMap.set(idToStr(requestId), requestId);
+		}
+
+		const metaMap = new Map<string, HibernatingWebSocketMetadata>();
+		for (const meta of metaEntries) {
+			metaMap.set(idToStr(meta.requestId), meta);
+		}
+
+		// Track all background operations
+		const backgroundOperations: Promise<void>[] = [];
+
+		// Process connected WebSockets
+		let connectedButNotLoadedCount = 0;
+		let restoredCount = 0;
+		for (const [requestIdStr, requestId] of requestIdMap) {
+			const meta = metaMap.get(requestIdStr);
+
+			if (!meta) {
+				// Connected but not loaded (not persisted) - close it
+				//
+				// This may happen if
+				this.log?.warn({
+					msg: "closing websocket that is not persisted",
+					requestId: requestIdStr,
+				});
+
+				this.#sendMessage(requestId, {
+					tag: "ToServerWebSocketClose",
+					val: {
+						code: 1000,
+						reason: "ws.meta_not_found_during_restore",
+						hibernate: false,
+					},
+				});
+
+				connectedButNotLoadedCount++;
+			} else {
+				// Both connected and persisted - restore it
+				const request = buildRequestForWebSocket(
+					meta.path,
+					meta.headers,
+				);
+
+				// This will call `runner.config.websocket` under the hood to
+				// attach the event listeners to the WebSocket.
+				// Track this operation to ensure it completes
+				const restoreOperation = this.#createWebSocket(
+					actorId,
+					requestId,
+					requestIdStr,
+					true,
+					true,
+					meta.messageIndex,
+					request,
+					meta.path,
+					meta.headers,
+					false,
+				)
+					.then(() => {
+						this.log?.info({
+							msg: "connection successfully restored",
+							actorId,
+							requestId: requestIdStr,
+						});
+					})
+					.catch((err) => {
+						this.log?.error({
+							msg: "error creating websocket during restore",
+							requestId: requestIdStr,
+							err,
+						});
+
+						// Close the WebSocket on error
+						this.#sendMessage(requestId, {
+							tag: "ToServerWebSocketClose",
+							val: {
+								code: 1011,
+								reason: "ws.restore_error",
+								hibernate: false,
+							},
+						});
+					});
+
+				backgroundOperations.push(restoreOperation);
+				restoredCount++;
 			}
 		}
-		this.#actorWebSockets.clear();
+
+		// Process loaded but not connected (stale) - remove them
+		let loadedButNotConnectedCount = 0;
+		for (const [requestIdStr, meta] of metaMap) {
+			if (!requestIdMap.has(requestIdStr)) {
+				this.log?.warn({
+					msg: "removing stale persisted websocket",
+					requestId: requestIdStr,
+				});
+
+				const request = buildRequestForWebSocket(
+					meta.path,
+					meta.headers,
+				);
+
+				// Create adapter to register user's event listeners.
+				// Pass engineAlreadyClosed=true so close callback won't send tunnel message.
+				// Track this operation to ensure it completes
+				const cleanupOperation = this.#createWebSocket(
+					actorId,
+					meta.requestId,
+					requestIdStr,
+					true,
+					true,
+					meta.messageIndex,
+					request,
+					meta.path,
+					meta.headers,
+					true,
+				)
+					.then((adapter) => {
+						// Close the adapter normally - this will fire user's close event handler
+						// (which should clean up persistence) and trigger the close callback
+						// (which will clean up maps but skip sending tunnel message)
+						adapter.close(1000, "ws.stale_metadata");
+					})
+					.catch((err) => {
+						this.log?.error({
+							msg: "error creating stale websocket during restore",
+							requestId: requestIdStr,
+							err,
+						});
+					});
+
+				backgroundOperations.push(cleanupOperation);
+				loadedButNotConnectedCount++;
+			}
+		}
+
+		// Wait for all background operations to complete before finishing
+		await Promise.allSettled(backgroundOperations);
+
+		this.log?.info({
+			msg: "restored hibernatable websockets",
+			actorId,
+			restoredCount,
+			connectedButNotLoadedCount,
+			loadedButNotConnectedCount,
+		});
+	}
+
+	/**
+	 * Called from WebSocketOpen message and when restoring hibernatable WebSockets.
+	 *
+	 * engineAlreadyClosed will be true if this is only being called to trigger
+	 * the close callback and not to send a close message to the server. This
+	 * is used specifically to clean up zombie WebSocket connections.
+	 */
+	async #createWebSocket(
+		actorId: string,
+		requestId: RequestId,
+		requestIdStr: string,
+		isHibernatable: boolean,
+		isRestoringHibernatable: boolean,
+		messageIndex: number,
+		request: Request,
+		path: string,
+		headers: Record<string, string>,
+		engineAlreadyClosed: boolean,
+	): Promise<WebSocketTunnelAdapter> {
+		this.log?.debug({
+			msg: "createWebSocket creating adapter",
+			actorId,
+			requestIdStr,
+			isHibernatable,
+			path,
+		});
+		// Create WebSocket adapter
+		const adapter = new WebSocketTunnelAdapter(
+			this,
+			actorId,
+			requestIdStr,
+			isHibernatable,
+			messageIndex,
+			isRestoringHibernatable,
+			request,
+			(data: ArrayBuffer | string, isBinary: boolean) => {
+				// Send message through tunnel
+				const dataBuffer =
+					typeof data === "string"
+						? (new TextEncoder().encode(data).buffer as ArrayBuffer)
+						: data;
+
+				this.#sendMessage(requestId, {
+					tag: "ToServerWebSocketMessage",
+					val: {
+						data: dataBuffer,
+						binary: isBinary,
+					},
+				});
+			},
+			(code?: number, reason?: string, hibernate: boolean = false) => {
+				// Send close through tunnel if engine doesn't already know it's closed
+				if (!engineAlreadyClosed) {
+					this.#sendMessage(requestId, {
+						tag: "ToServerWebSocketClose",
+						val: {
+							code: code || null,
+							reason: reason || null,
+							hibernate,
+						},
+					});
+				}
+
+				// Clean up actor tracking
+				const actor = this.#runner.getActor(actorId);
+				if (actor) {
+					actor.webSockets.delete(requestIdStr);
+				}
+
+				// Clean up request-to-actor mapping
+				this.#requestToActor.delete(requestIdStr);
+			},
+		);
+
+		// Get actor and add websocket to it
+		const actor = this.#runner.getActor(actorId);
+		if (!actor) {
+			throw new Error(`Actor ${actorId} not found`);
+		}
+
+		actor.webSockets.set(requestIdStr, adapter);
+		this.#requestToActor.set(requestIdStr, actorId);
+
+		// Call WebSocket handler. This handler will add event listeners
+		// for `open`, etc.
+		await this.#runner.config.websocket(
+			this.#runner,
+			actorId,
+			adapter,
+			requestId,
+			request,
+			path,
+			headers,
+			isHibernatable,
+			isRestoringHibernatable,
+		);
+
+		return adapter;
+	}
+
+	getRequestActor(requestIdStr: string): RunnerActor | undefined {
+		const actorId = this.#requestToActor.get(requestIdStr);
+		if (!actorId) {
+			this.log?.warn({
+				msg: "missing requestToActor entry",
+				requestId: requestIdStr,
+			});
+			return undefined;
+		}
+
+		const actor = this.#runner.getActor(actorId);
+		if (!actor) {
+			this.log?.warn({
+				msg: "missing actor for requestToActor lookup",
+				requestId: requestIdStr,
+				actorId,
+			});
+			return undefined;
+		}
+
+		return actor;
 	}
 
 	#sendMessage(
@@ -110,10 +409,15 @@ export class Tunnel {
 
 		const requestIdStr = idToStr(requestId);
 		const messageIdStr = idToStr(messageId);
-		this.#pendingTunnelMessages.set(messageIdStr, {
-			sentAt: Date.now(),
-			requestIdStr,
-		});
+
+		// Store the pending message in the actor's map
+		const actor = this.getRequestActor(requestIdStr);
+		if (actor) {
+			actor.pendingTunnelMessages.set(messageIdStr, {
+				sentAt: Date.now(),
+				requestIdStr,
+			});
+		}
 
 		this.log?.debug({
 			msg: "send tunnel msg",
@@ -169,84 +473,97 @@ export class Tunnel {
 
 	#gc() {
 		const now = Date.now();
-		const messagesToDelete: string[] = [];
+		let totalMessagesToDelete = 0;
 
-		for (const [messageId, pendingMessage] of this.#pendingTunnelMessages) {
-			// Check if message is older than timeout
-			if (now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT) {
-				messagesToDelete.push(messageId);
+		// Iterate through all actors
+		for (const [_actorId, actor] of this.#runner.actors) {
+			const messagesToDelete: string[] = [];
 
-				const requestIdStr = pendingMessage.requestIdStr;
+			for (const [
+				messageId,
+				pendingMessage,
+			] of actor.pendingTunnelMessages) {
+				// Check if message is older than timeout
+				if (now - pendingMessage.sentAt > MESSAGE_ACK_TIMEOUT) {
+					messagesToDelete.push(messageId);
 
-				// Check if this is an HTTP request
-				const pendingRequest =
-					this.#actorPendingRequests.get(requestIdStr);
-				if (pendingRequest) {
-					// Reject the pending HTTP request
-					pendingRequest.reject(
-						new Error("Message acknowledgment timeout"),
-					);
+					const requestIdStr = pendingMessage.requestIdStr;
 
-					// Close stream controller if it exists
-					if (pendingRequest.streamController) {
-						pendingRequest.streamController.error(
+					// Check if this is an HTTP request
+					const pendingRequest =
+						actor.pendingRequests.get(requestIdStr);
+					if (pendingRequest) {
+						// Reject the pending HTTP request
+						pendingRequest.reject(
 							new Error("Message acknowledgment timeout"),
 						);
+
+						// Close stream controller if it exists
+						if (pendingRequest.streamController) {
+							pendingRequest.streamController.error(
+								new Error("Message acknowledgment timeout"),
+							);
+						}
+
+						// Clean up from pendingRequests map
+						actor.pendingRequests.delete(requestIdStr);
 					}
 
-					// Clean up from actorPendingRequests map
-					this.#actorPendingRequests.delete(requestIdStr);
-				}
+					// Check if this is a WebSocket
+					const webSocket = actor.webSockets.get(requestIdStr);
+					if (webSocket) {
+						// Close the WebSocket connection
+						webSocket._closeWithHibernate(
+							1000,
+							"Message acknowledgment timeout",
+						);
 
-				// Check if this is a WebSocket
-				const webSocket = this.#actorWebSockets.get(requestIdStr);
-				if (webSocket) {
-					// Close the WebSocket connection
-					webSocket.__closeWithHibernate(
-						1000,
-						"Message acknowledgment timeout",
-					);
+						// Clean up from webSockets map
+						actor.webSockets.delete(requestIdStr);
+					}
 
-					// Clean up from actorWebSockets map
-					this.#actorWebSockets.delete(requestIdStr);
+					// Clean up request-to-actor mapping
+					this.#requestToActor.delete(requestIdStr);
 				}
 			}
+
+			// Remove timed out messages for this actor
+			for (const messageId of messagesToDelete) {
+				actor.pendingTunnelMessages.delete(messageId);
+			}
+
+			totalMessagesToDelete += messagesToDelete.length;
 		}
 
-		// Remove timed out messages
-		if (messagesToDelete.length > 0) {
+		// Log if we purged any messages
+		if (totalMessagesToDelete > 0) {
 			this.log?.warn({
 				msg: "purging unacked tunnel messages, this indicates that the Rivet Engine is disconnected or not responding",
-				count: messagesToDelete.length,
+				count: totalMessagesToDelete,
 			});
-			for (const messageId of messagesToDelete) {
-				this.#pendingTunnelMessages.delete(messageId);
-			}
 		}
 	}
 
-	closeActiveRequests(actor: ActorInstance) {
+	closeActiveRequests(actor: RunnerActor) {
 		const actorId = actor.actorId;
 
-		// Terminate all requests for this actor
-		for (const requestId of actor.requests) {
-			const pending = this.#actorPendingRequests.get(requestId);
-			if (pending) {
-				pending.reject(new Error(`Actor ${actorId} stopped`));
-				this.#actorPendingRequests.delete(requestId);
-			}
+		// Terminate all requests for this actor. This will no send a
+		// ToServerResponse* message since the actor will no longer be loaded.
+		// The gateway is responsible for closing the request.
+		for (const [requestIdStr, pending] of actor.pendingRequests) {
+			pending.reject(new Error(`Actor ${actorId} stopped`));
+			this.#requestToActor.delete(requestIdStr);
 		}
-		actor.requests.clear();
 
-		// Flush acks and close all WebSockets for this actor
-		for (const requestIdStr of actor.webSockets) {
-			const ws = this.#actorWebSockets.get(requestIdStr);
-			if (ws) {
-				ws.__closeWithHibernate(1000, "Actor stopped");
-				this.#actorWebSockets.delete(requestIdStr);
+		// Close all WebSockets. Only send close event to non-HWS. The gateway is
+		// responsible for hibernating HWS and closing regular WS.
+		for (const [requestIdStr, ws] of actor.webSockets) {
+			const isHibernatable = ws[HIBERNATABLE_SYMBOL];
+			if (!isHibernatable) {
+				ws._closeWithoutCallback(1000, "actor.stopped");
 			}
+			this.#requestToActor.delete(requestIdStr);
 		}
-		actor.webSockets.clear();
 	}
 
 	async #fetch(
@@ -297,10 +614,10 @@ export class Tunnel {
 
 		if (message.messageKind.tag === "TunnelAck") {
 			// Mark pending message as acknowledged and remove it
-			const pending = this.#pendingTunnelMessages.get(messageIdStr);
-			if (pending) {
+			const actor = this.getRequestActor(requestIdStr);
+			if (actor) {
 				const didDelete =
-					this.#pendingTunnelMessages.delete(messageIdStr);
+					actor.pendingTunnelMessages.delete(messageIdStr);
 				if (!didDelete) {
 					this.log?.warn({
 						msg: "received tunnel ack for nonexistent message",
@@ -343,7 +660,7 @@ export class Tunnel {
 				case "ToClientWebSocketMessage": {
 					this.#sendAck(message.requestId, message.messageId);
 
-					const _unhandled = await this.#handleWebSocketMessage(
+					this.#handleWebSocketMessage(
 						message.requestId,
 						message.messageKind.val,
 					);
@@ -370,9 +687,17 @@ export class Tunnel {
 		// Track this request for the actor
 		const requestIdStr = idToStr(requestId);
 		const actor = this.#runner.getActor(req.actorId);
-		if (actor) {
-			actor.requests.add(requestIdStr);
+		if (!actor) {
+			this.log?.warn({
+				msg: "actor does not exist in handleRequestStart, request will leak",
+				actorId: req.actorId,
+				requestId: requestIdStr,
+			});
+			return;
 		}
+
+		// Add to request-to-actor mapping
+		this.#requestToActor.set(requestIdStr, req.actorId);
 
 		try {
 			// Convert headers map to Headers object
@@ -395,14 +720,14 @@ export class Tunnel {
 					start: (controller) => {
 						// Store controller for chunks
 						const existing =
-							this.#actorPendingRequests.get(requestIdStr);
+							actor.pendingRequests.get(requestIdStr);
 						if (existing) {
 							existing.streamController = controller;
 							existing.actorId = req.actorId;
 						} else {
-							this.#actorPendingRequests.set(requestIdStr, {
-								resolve: () => { },
-								reject: () => { },
+							actor.pendingRequests.set(requestIdStr, {
+								resolve: () => {},
+								reject: () => {},
 								streamController: controller,
 								actorId: req.actorId,
 							});
@@ -422,7 +747,12 @@ export class Tunnel {
 					requestId,
 					streamingRequest,
 				);
-				await this.#sendResponse(requestId, response);
+				await this.#sendResponse(
+					actor.actorId,
+					actor.generation,
+					requestId,
+					response,
+				);
 			} else {
 				// Non-streaming request
 				const response = await this.#fetch(
@@ -430,7 +760,12 @@ export class Tunnel {
 					requestId,
 					request,
 				);
-				await this.#sendResponse(requestId, response);
+				await this.#sendResponse(
+					actor.actorId,
+					actor.generation,
+					requestId,
+					response,
+				);
 			}
 		} catch (error) {
 			if (error instanceof RunnerShutdownError) {
@@ -438,6 +773,8 @@ export class Tunnel {
 			} else {
 				this.log?.error({ msg: "error handling request", error });
 				this.#sendResponseError(
+					actor.actorId,
+					actor.generation,
 					requestId,
 					500,
 					"Internal Server Error",
@@ -445,9 +782,9 @@ export class Tunnel {
 			}
 		} finally {
 			// Clean up request tracking
-			const actor = this.#runner.getActor(req.actorId);
-			if (actor) {
-				actor.requests.delete(requestIdStr);
+			if (this.#runner.hasActor(req.actorId, actor.generation)) {
+				actor.pendingRequests.delete(requestIdStr);
+				this.#requestToActor.delete(requestIdStr);
 			}
 		}
 	}
@@ -457,26 +794,49 @@ export class Tunnel {
 		chunk: protocol.ToClientRequestChunk,
 	) {
 		const requestIdStr = idToStr(requestId);
-		const pending = this.#actorPendingRequests.get(requestIdStr);
-		if (pending?.streamController) {
-			pending.streamController.enqueue(new Uint8Array(chunk.body));
-			if (chunk.finish) {
-				pending.streamController.close();
-				this.#actorPendingRequests.delete(requestIdStr);
+		const actor = this.getRequestActor(requestIdStr);
+		if (actor) {
+			const pending = actor.pendingRequests.get(requestIdStr);
+			if (pending?.streamController) {
+				pending.streamController.enqueue(new Uint8Array(chunk.body));
+				if (chunk.finish) {
+					pending.streamController.close();
+					actor.pendingRequests.delete(requestIdStr);
+					this.#requestToActor.delete(requestIdStr);
+				}
 			}
 		}
 	}
 
 	async #handleRequestAbort(requestId: ArrayBuffer) {
 		const requestIdStr = idToStr(requestId);
-		const pending = this.#actorPendingRequests.get(requestIdStr);
-		if (pending?.streamController) {
-			pending.streamController.error(new Error("Request aborted"));
+		const actor = this.getRequestActor(requestIdStr);
+		if (actor) {
+			const pending = actor.pendingRequests.get(requestIdStr);
+			if (pending?.streamController) {
+				pending.streamController.error(new Error("Request aborted"));
+			}
+			actor.pendingRequests.delete(requestIdStr);
+			this.#requestToActor.delete(requestIdStr);
 		}
-		this.#actorPendingRequests.delete(requestIdStr);
 	}
 
-	async #sendResponse(requestId: ArrayBuffer, response: Response) {
+	async #sendResponse(
+		actorId: string,
+		generation: number,
+		requestId: ArrayBuffer,
+		response: Response,
+	) {
+		if (this.#runner.hasActor(actorId, generation)) {
+			this.log?.warn({
+				msg: "actor not loaded to send response, assuming gateway has closed request",
+				actorId,
+				generation,
+				requestId,
+			});
+			return;
+		}
+
 		// Always treat responses as non-streaming for now
 		// In the future, we could detect streaming responses based on:
 		// - Transfer-Encoding: chunked
@@ -497,7 +857,7 @@ export class Tunnel {
 			headers.set("content-length", String(body.byteLength));
 		}
 
-		// Send as non-streaming response
+		// Send as non-streaming response if actor has not stopped
 		this.#sendMessage(requestId, {
 			tag: "ToServerResponseStart",
 			val: {
@@ -510,10 +870,22 @@ export class Tunnel {
 	}
 
 	#sendResponseError(
+		actorId: string,
+		generation: number,
 		requestId: ArrayBuffer,
 		status: number,
 		message: string,
 	) {
+		if (this.#runner.hasActor(actorId, generation)) {
+			this.log?.warn({
+				msg: "actor not loaded to send response, assuming gateway has closed request",
+				actorId,
+				generation,
+				requestId,
+			});
+			return;
+		}
+
 		const headers = new Map<string, string>();
 		headers.set("content-type", "text/plain");
 
@@ -532,6 +904,12 @@ export class Tunnel {
 		requestId: protocol.RequestId,
 		open: protocol.ToClientWebSocketOpen,
 	) {
+		// NOTE: This method is safe to be async since we will not receive any
+		// further WebSocket events until we send a ToServerWebSocketOpen
+		// tunnel message. We can do any async logic we need to between thoes two events.
+		//
+		// Sedning a ToServerWebSocketClose will terminate the WebSocket early.
+
 		const requestIdStr = idToStr(requestId);
 
 		// Validate actor exists
@@ -558,32 +936,10 @@ export class Tunnel {
 			return;
 		}
 
-		const websocketHandler = this.#runner.config.websocket;
-
-		if (!websocketHandler) {
-			this.log?.error({
-				msg: "no websocket handler configured for tunnel",
-			});
-			// Send close immediately
-			this.#sendMessage(requestId, {
-				tag: "ToServerWebSocketClose",
-				val: {
-					code: 1011,
-					reason: "Not Implemented",
-					hibernate: false,
-				},
-			});
-			return;
-		}
-
 		// Close existing WebSocket if one already exists for this request ID.
-		// There should always be a close message sent before another open
-		// message for the same message ID.
-		//
-		// This should never occur if all is functioning correctly, but this
-		// prevents any edge case that would result in duplicate WebSockets for
-		// the same request.
-		const existingAdapter = this.#actorWebSockets.get(requestIdStr);
+		// This should never happen, but prevents any potential duplicate
+		// WebSockets from retransmits.
+		const existingAdapter = actor.webSockets.get(requestIdStr);
 		if (existingAdapter) {
 			this.log?.warn({
 				msg: "closing existing websocket for duplicate open event for the same request id",
@@ -591,109 +947,57 @@ export class Tunnel {
 			});
 			// Close without sending a message through the tunnel since the server
 			// already knows about the new connection
-			existingAdapter.__closeWithoutCallback(1000, "ws.duplicate_open");
+			existingAdapter._closeWithoutCallback(1000, "ws.duplicate_open");
 		}
 
-		// Track this WebSocket for the actor
-		if (actor) {
-			actor.webSockets.add(requestIdStr);
-		}
-
+		// Create WebSocket
 		try {
-			// Create WebSocket adapter
-			const adapter = new WebSocketTunnelAdapter(
-				requestIdStr,
-				(data: ArrayBuffer | string, isBinary: boolean) => {
-					// Send message through tunnel
-					const dataBuffer =
-						typeof data === "string"
-							? (new TextEncoder().encode(data)
-								.buffer as ArrayBuffer)
-							: data;
-
-					this.#sendMessage(requestId, {
-						tag: "ToServerWebSocketMessage",
-						val: {
-							data: dataBuffer,
-							binary: isBinary,
-						},
-					});
-				},
-				(code?: number, reason?: string, hibernate: boolean = false) => {
-					// Send close through tunnel
-					this.#sendMessage(requestId, {
-						tag: "ToServerWebSocketClose",
-						val: {
-							code: code || null,
-							reason: reason || null,
-							hibernate,
-						},
-					});
-
-					// Remove from map
-					this.#actorWebSockets.delete(requestIdStr);
-
-					// Clean up actor tracking
-					if (actor) {
-						actor.webSockets.delete(requestIdStr);
-					}
-				},
+			const request = buildRequestForWebSocket(
+				open.path,
+				Object.fromEntries(open.headers),
 			);
 
-			// Store adapter
-			this.#actorWebSockets.set(requestIdStr, adapter);
-
-			// Convert headers to map
-			//
-			// We need to manually ensure the original Upgrade/Connection WS
-			// headers are present
-			const headerInit: Record<string, string> = {};
-			if (open.headers) {
-				for (const [k, v] of open.headers as ReadonlyMap<
-					string,
-					string
-				>) {
-					headerInit[k] = v;
-				}
-			}
-			headerInit["Upgrade"] = "websocket";
-			headerInit["Connection"] = "Upgrade";
-
-			const request = new Request(`http://localhost${open.path}`, {
-				method: "GET",
-				headers: headerInit,
-			});
-
-			// Send open confirmation
-			const hibernationConfig =
-				this.#runner.config.getActorHibernationConfig(
+			const canHibernate =
+				this.#runner.config.hibernatableWebSocket.canHibernate(
 					actor.actorId,
 					requestId,
 					request,
 				);
-			adapter.canHibernate = hibernationConfig.enabled;
 
+			// #createWebSocket will call `runner.config.websocket` under the
+			// hood to add the event listeners for open, etc. If this handler
+			// throws, then the WebSocket will be closed before sending the
+			// open event.
+			const adapter = await this.#createWebSocket(
+				actor.actorId,
+				requestId,
+				requestIdStr,
+				canHibernate,
+				false,
+				0,
+				request,
+				open.path,
+				Object.fromEntries(open.headers),
+				false,
+			);
+
+			// Open the WebSocket after `config.socket` so (a) the event
+			// handlers can be added and (b) any errors in `config.websocket`
+			// will cause the WebSocket to terminate before the open event.
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketOpen",
 				val: {
-					canHibernate: hibernationConfig.enabled,
-					lastMsgIndex: BigInt(hibernationConfig.lastMsgIndex ?? -1),
+					canHibernate,
 				},
 			});
 
-			// Notify adapter that connection is open
+			// Dispatch open event
 			adapter._handleOpen(requestId);
-
-			// Call websocket handler
-			await websocketHandler(
-				this.#runner,
-				open.actorId,
-				adapter,
-				requestId,
-				request,
-			);
 		} catch (error) {
 			this.log?.error({ msg: "error handling websocket open", error });
+
+			// TODO: Call close event on adapter if needed
+
 			// Send close on error
 			this.#sendMessage(requestId, {
 				tag: "ToServerWebSocketClose",
@@ -704,39 +1008,41 @@ export class Tunnel {
 				},
 			});
 
-			this.#actorWebSockets.delete(requestIdStr);
-
 			// Clean up actor tracking
-			if (actor) {
-				actor.webSockets.delete(requestIdStr);
-			}
+			actor.webSockets.delete(requestIdStr);
+			this.#requestToActor.delete(requestIdStr);
 		}
 	}
 
-	/// Returns false if the message was sent off
-	async #handleWebSocketMessage(
+	#handleWebSocketMessage(
 		requestId: ArrayBuffer,
 		msg: protocol.ToClientWebSocketMessage,
-	): Promise<boolean> {
-		const requestIdStr = idToStr(requestId);
-		const adapter = this.#actorWebSockets.get(requestIdStr);
-		if (adapter) {
-			const data = msg.binary
-				? new Uint8Array(msg.data)
-				: new TextDecoder().decode(new Uint8Array(msg.data));
+	) {
+		// NOTE: This method cannot be async in order to ensure in-order
+		// message processing.
 
-			return adapter._handleMessage(
-				requestId,
-				data,
-				msg.index,
-				msg.binary,
-			);
-		} else {
-			return true;
+		const requestIdStr = idToStr(requestId);
+		const actor = this.getRequestActor(requestIdStr);
+		if (actor) {
+			const adapter = actor.webSockets.get(requestIdStr);
+			if (adapter) {
+				const data = msg.binary
+					? new Uint8Array(msg.data)
+					: new TextDecoder().decode(new Uint8Array(msg.data));
+
+				adapter._handleMessage(requestId, data, msg.index, msg.binary);
+				return;
+			}
 		}
+
+		// TODO: This will never retransmit the socket and the socket will close
+		this.log?.warn({
+			msg: "missing websocket for incoming websocket message, this may indicate the actor stopped before processing a message",
+			requestId,
+		});
 	}
 
-	__ackWebsocketMessage(requestId: ArrayBuffer, index: number) {
+	sendHibernatableWebSocketMessageAck(requestId: ArrayBuffer, index: number) {
 		this.log?.debug({
 			msg: "ack ws msg",
 			requestId: idToStr(requestId),
@@ -760,14 +1066,18 @@ export class Tunnel {
 		close: protocol.ToClientWebSocketClose,
 	) {
 		const requestIdStr = idToStr(requestId);
-		const adapter = this.#actorWebSockets.get(requestIdStr);
-		if (adapter) {
-			adapter._handleClose(
-				requestId,
-				close.code || undefined,
-				close.reason || undefined,
-			);
-			this.#actorWebSockets.delete(requestIdStr);
+		const actor = this.getRequestActor(requestIdStr);
+		if (actor) {
+			const adapter = actor.webSockets.get(requestIdStr);
+			if (adapter) {
+				adapter._handleClose(
+					requestId,
+					close.code || undefined,
+					close.reason || undefined,
+				);
+				actor.webSockets.delete(requestIdStr);
+				this.#requestToActor.delete(requestIdStr);
+			}
 		}
 	}
 }
@@ -781,4 +1091,33 @@ function generateUuidBuffer(): ArrayBuffer {
 
 function idToStr(id: ArrayBuffer): string {
 	return uuidstringify(new Uint8Array(id));
+}
+
+/**
+ * Builds a request that represents the incoming request for a given WebSocket.
+ *
+ * This request is not a real request and will never be sent. It's used to be passed to the actor to behave like a real incoming request.
+ */
+function buildRequestForWebSocket(
+	path: string,
+	headers: Record<string, string>,
+): Request {
+	// We need to manually ensure the original Upgrade/Connection WS
+	// headers are present
+	const fullHeaders = {
+		...headers,
+		Upgrade: "websocket",
+		Connection: "Upgrade",
+	};
+
+	if (!path.startsWith("/")) {
+		throw new Error("path must start with leading slash");
+	}
+
+	const request = new Request(`http://actor${path}`, {
+		method: "GET",
+		headers: fullHeaders,
+	});
+
+	return request;
 }

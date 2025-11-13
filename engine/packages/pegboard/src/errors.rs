@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
 #[error("actor")]
 pub enum Actor {
-	#[error("not_found", "The actor does not exist.")]
+	#[error("not_found", "The actor does not exist or was destroyed.")]
 	NotFound,
 
 	#[error("namespace_not_found", "The namespace does not exist.")]

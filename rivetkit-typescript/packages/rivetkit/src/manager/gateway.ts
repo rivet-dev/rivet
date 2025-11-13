@@ -1,21 +1,18 @@
 import type { Context as HonoContext, Next } from "hono";
 import type { WSContext } from "hono/ws";
 import { MissingActorHeader, WebSocketsNotEnabled } from "@/actor/errors";
-import type { Encoding } from "@/client/mod";
+import type { UpgradeWebSocketArgs } from "@/actor/router-websocket-endpoints";
 import {
 	HEADER_RIVET_ACTOR,
-	HEADER_RIVET_NAMESPACE,
 	HEADER_RIVET_TARGET,
 	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_TARGET,
-	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
-import { deconstructError, noopNext } from "@/common/utils";
-import type { UniversalWebSocket, UpgradeWebSocketArgs } from "@/mod";
+import type { UniversalWebSocket } from "@/mod";
 import type { RunnerConfig } from "@/registry/run-config";
-import { promiseWithResolvers, stringifyError } from "@/utils";
+import { promiseWithResolvers } from "@/utils";
 import type { ManagerDriver } from "./driver";
 import { logger } from "./log";
 

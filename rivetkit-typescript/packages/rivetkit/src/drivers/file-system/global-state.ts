@@ -1,6 +1,6 @@
 import invariant from "invariant";
 import { lookupInRegistry } from "@/actor/definition";
-import { ActorAlreadyExists } from "@/actor/errors";
+import { ActorDuplicateKey } from "@/actor/errors";
 import type { AnyActorInstance } from "@/actor/instance/mod";
 import type { ActorKey } from "@/actor/mod";
 import { generateRandomString } from "@/actor/utils";
@@ -36,6 +36,14 @@ import {
 
 // Actor handler to track running instances
 
+enum ActorLifecycleState {
+	NONEXISTENT, // Entry exists but actor not yet created
+	AWAKE, // Actor is running normally
+	STARTING_SLEEP, // Actor is being put to sleep
+	STARTING_DESTROY, // Actor is being destroyed
+	DESTROYED, // Actor was destroyed, should not be recreated
+}
+
 interface ActorEntry {
 	id: string;
 
@@ -55,8 +63,7 @@ interface ActorEntry {
 	/** Resolver for pending write operations that need to be notified when any write completes */
 	pendingWriteResolver?: PromiseWithResolvers<void>;
 
-	/** If the actor is being destroyed. */
-	destroying: boolean;
+	lifecycleState: ActorLifecycleState;
 
 	// TODO: This might make sense to move in to actorstate, but we have a
 	// single reader/writer so it's not an issue
@@ -205,7 +212,7 @@ export class FileSystemGlobalState {
 
 		entry = {
 			id: actorId,
-			destroying: false,
+			lifecycleState: ActorLifecycleState.NONEXISTENT,
 			generation: crypto.randomUUID(),
 		};
 		this.#actors.set(actorId, entry);
@@ -223,11 +230,21 @@ export class FileSystemGlobalState {
 	): Promise<ActorEntry> {
 		// TODO: Does not check if actor already exists on fs
 
-		if (this.#actors.has(actorId)) {
-			throw new ActorAlreadyExists(name, key);
+		const entry = this.#upsertEntry(actorId);
+
+		// Check if actor already exists (has state or is being stopped)
+		if (entry.state) {
+			throw new ActorDuplicateKey(name, key);
+		}
+		if (this.isActorStopping(actorId)) {
+			throw new Error(`Actor ${actorId} is stopping`);
 		}
 
-		const entry = this.#upsertEntry(actorId);
+		// If actor was destroyed, reset to NONEXISTENT and increment generation
+		if (entry.lifecycleState === ActorLifecycleState.DESTROYED) {
+			entry.lifecycleState = ActorLifecycleState.NONEXISTENT;
+			entry.generation = crypto.randomUUID();
+		}
 
 		// Initialize storage
 		const kvStorage: schema.ActorKvEntry[] = [];
@@ -247,8 +264,7 @@ export class FileSystemGlobalState {
 			createdAt: BigInt(Date.now()),
 			kvStorage,
 		};
-		entry.destroying = false;
-		entry.generation = crypto.randomUUID();
+		entry.lifecycleState = ActorLifecycleState.AWAKE;
 
 		await this.writeActor(actorId, entry.generation, entry.state);
 
@@ -260,6 +276,11 @@ export class FileSystemGlobalState {
 	 */
 	async loadActor(actorId: string): Promise<ActorEntry> {
 		const entry = this.#upsertEntry(actorId);
+
+		// Check if destroyed - don't load from disk
+		if (entry.lifecycleState === ActorLifecycleState.DESTROYED) {
+			return entry;
+		}
 
 		// Check if already loaded
 		if (entry.state) {
@@ -279,7 +300,6 @@ export class FileSystemGlobalState {
 
 		// Start loading state
 		entry.loadPromise = this.loadActorState(entry);
-		entry.loadPromise.then((res) => {});
 		return entry.loadPromise;
 	}
 
@@ -323,8 +343,14 @@ export class FileSystemGlobalState {
 
 		// If no state for this actor, then create & write state
 		if (!entry.state) {
-			if (entry.destroying) {
-				throw new Error(`Actor ${actorId} destroying`);
+			if (this.isActorStopping(actorId)) {
+				throw new Error(`Actor ${actorId} stopping`);
+			}
+
+			// If actor was destroyed, reset to NONEXISTENT and increment generation
+			if (entry.lifecycleState === ActorLifecycleState.DESTROYED) {
+				entry.lifecycleState = ActorLifecycleState.NONEXISTENT;
+				entry.generation = crypto.randomUUID();
 			}
 
 			// Initialize kvStorage with the initial persist data
@@ -360,10 +386,10 @@ export class FileSystemGlobalState {
 		invariant(actor, `tried to sleep ${actorId}, does not exist`);
 
 		// Check if already destroying
-		if (actor.destroying) {
+		if (this.isActorStopping(actorId)) {
 			return;
 		}
-		actor.destroying = true;
+		actor.lifecycleState = ActorLifecycleState.STARTING_SLEEP;
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -384,10 +410,10 @@ export class FileSystemGlobalState {
 
 		// If actor is loaded, stop it first
 		// Check if already destroying
-		if (actor.destroying) {
+		if (this.isActorStopping(actorId)) {
 			return;
 		}
-		actor.destroying = true;
+		actor.lifecycleState = ActorLifecycleState.STARTING_DESTROY;
 
 		// Wait for actor to fully start before stopping it to avoid race conditions
 		if (actor.loadPromise) await actor.loadPromise.catch();
@@ -466,7 +492,7 @@ export class FileSystemGlobalState {
 		actor.alarmTimeout = undefined;
 		actor.alarmTimeout = undefined;
 		actor.pendingWriteResolver = undefined;
-		actor.destroying = false;
+		actor.lifecycleState = ActorLifecycleState.DESTROYED;
 	}
 
 	/**
@@ -487,10 +513,25 @@ export class FileSystemGlobalState {
 		await this.#performWrite(actorId, generation, state);
 	}
 
-	isGenerationCurrent(actorId: string, generation: string): boolean {
+	isGenerationCurrentAndNotDestroyed(
+		actorId: string,
+		generation: string,
+	): boolean {
 		const entry = this.#upsertEntry(actorId);
 		if (!entry) return false;
-		return !entry.destroying && entry.generation === generation;
+		return (
+			entry.generation === generation &&
+			entry.lifecycleState !== ActorLifecycleState.STARTING_DESTROY
+		);
+	}
+
+	isActorStopping(actorId: string) {
+		const entry = this.#upsertEntry(actorId);
+		if (!entry) return false;
+		return (
+			entry.lifecycleState === ActorLifecycleState.STARTING_SLEEP ||
+			entry.lifecycleState === ActorLifecycleState.STARTING_DESTROY
+		);
 	}
 
 	async setActorAlarm(actorId: string, timestamp: number) {
@@ -500,8 +541,9 @@ export class FileSystemGlobalState {
 		// Track generation of the actor when the write started to detect
 		// destroy/create race condition
 		const writeGeneration = entry.generation;
-		if (entry.destroying) {
-			logger().info("skipping set alarm since actor destroying");
+		if (this.isActorStopping(actorId)) {
+			logger().info("skipping set alarm since actor stopping");
+			return;
 		}
 
 		// Persist alarm to disk
@@ -523,7 +565,12 @@ export class FileSystemGlobalState {
 				const fs = getNodeFs();
 				await fs.writeFile(tempPath, data);
 
-				if (this.isGenerationCurrent(actorId, writeGeneration)) {
+				if (
+					!this.isGenerationCurrentAndNotDestroyed(
+						actorId,
+						writeGeneration,
+					)
+				) {
 					logger().debug(
 						"skipping writing alarm since actor destroying or new generation",
 					);
@@ -582,7 +629,7 @@ export class FileSystemGlobalState {
 			const fs = getNodeFs();
 			await fs.writeFile(tempPath, serializedState);
 
-			if (this.isGenerationCurrent(actorId, generation)) {
+			if (!this.isGenerationCurrentAndNotDestroyed(actorId, generation)) {
 				logger().debug(
 					"skipping writing alarm since actor destroying or new generation",
 				);
@@ -913,7 +960,7 @@ export class FileSystemGlobalState {
 	): Promise<void> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			if (entry.destroying) {
+			if (this.isActorStopping(actorId)) {
 				return;
 			} else {
 				throw new Error(`Actor ${actorId} state not loaded`);
@@ -964,8 +1011,8 @@ export class FileSystemGlobalState {
 	): Promise<(Uint8Array | null)[]> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			if (entry.destroying) {
-				throw new Error(`Actor ${actorId} is destroying`);
+			if (this.isActorStopping(actorId)) {
+				throw new Error(`Actor ${actorId} is stopping`);
 			} else {
 				throw new Error(`Actor ${actorId} state not loaded`);
 			}
@@ -993,7 +1040,7 @@ export class FileSystemGlobalState {
 	async kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			if (entry.destroying) {
+			if (this.isActorStopping(actorId)) {
 				return;
 			} else {
 				throw new Error(`Actor ${actorId} state not loaded`);
@@ -1033,7 +1080,7 @@ export class FileSystemGlobalState {
 	): Promise<[Uint8Array, Uint8Array][]> {
 		const entry = await this.loadActor(actorId);
 		if (!entry.state) {
-			if (entry.destroying) {
+			if (this.isActorStopping(actorId)) {
 				throw new Error(`Actor ${actorId} is destroying`);
 			} else {
 				throw new Error(`Actor ${actorId} state not loaded`);
