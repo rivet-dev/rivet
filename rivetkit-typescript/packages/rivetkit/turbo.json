@@ -9,13 +9,25 @@
 			],
 			"dependsOn": ["build:schema"]
 		},
+		"dump-asyncapi": {
+			"inputs": [
+				"package.json",
+				"packages/rivetkit/src/manager/router.ts"
+			],
+			"dependsOn": ["build:schema"]
+		},
 		"build:schema": {
 			"dependsOn": ["^build"],
 			"inputs": ["schemas/**/*.bare"],
 			"outputs": ["dist/schemas/**/*.ts"]
 		},
 		"build": {
-			"dependsOn": ["^build", "dump-openapi", "build:schema"],
+			"dependsOn": [
+				"^build",
+				"dump-openapi",
+				"dump-asyncapi",
+				"build:schema"
+			],
 			"inputs": [
 				"src/**",
 				"tsconfig.json",
