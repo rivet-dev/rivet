@@ -16,7 +16,7 @@ export function runActorMetadataTests(driverTestConfig: DriverTestConfig) {
 				expect(actorName).toBe("metadataActor");
 			});
 
-			test("should preserve actor name in state during onStart", async (c) => {
+			test("should preserve actor name in state during onWake", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				// Get the stored actor name
