@@ -6,10 +6,10 @@ import type {
 } from "rivetkit";
 import { lookupInRegistry } from "rivetkit";
 import type { Client } from "rivetkit/client";
-import type {
-	ActorDriver,
-	AnyActorInstance,
-	ManagerDriver,
+import {
+	type ActorDriver,
+	type AnyActorInstance,
+	type ManagerDriver,
 } from "rivetkit/driver-helpers";
 import { promiseWithResolvers } from "rivetkit/utils";
 import { KEYS } from "./actor-handler-do";
@@ -239,6 +239,7 @@ export class CloudflareActorsActorDriver implements ActorDriver {
 		// Persist data key
 		return Uint8Array.from([1]);
 	}
+
 }
 
 export function createCloudflareActorsActorDriverBuilder(
