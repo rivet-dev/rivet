@@ -24,13 +24,26 @@ pub enum IsolationLevel {
 #[derive(Debug, Clone, Copy)]
 pub struct MaybeCommitted(pub bool);
 
+/// Calculate exponential backoff based on attempt.
+///
+/// Ours:
+///   0 -> 10ms + 0-1ms jitter
+///   1 -> 20ms + 0-2ms jitter
+///   2 -> 40ms + 0-4ms jitter
+///   ...
+///   7 (max) -> 1280ms + 0-128ms jitter
+/// FDB (see https://github.com/apple/foundationdb/blob/b1fbbd87a794b7c6c2f456925c45d8af339a8ae0/fdbclient/NativeAPI.actor.cpp#L4333 and https://github.com/apple/foundationdb/blob/b1fbbd87a794b7c6c2f456925c45d8af339a8ae0/fdbclient/ClientKnobs.cpp#L74-L76):
+///   0 -> 10ms
+///   1 -> 20ms
+///   2 -> 40ms
+///   ...
+///   X -> max 1s
 pub fn calculate_tx_retry_backoff(attempt: usize) -> u64 {
-	// TODO: Update this to mirror fdb 1:1:
-	// https://github.com/apple/foundationdb/blob/21407341d9b49e1d343514a7a5f395bd5f232079/fdbclient/NativeAPI.actor.cpp#L3162
+	let base = 2_u64.pow((attempt as u32).min(7));
+	let base_backoff_ms = base * 10;
 
-	let base_backoff_ms = 2_u64.pow((attempt as u32).min(10)) * 10;
-
-	let jitter_ms = rand::random::<u64>() % 100;
+	// Jitter is 0-10% of backoff ms
+	let jitter_ms = rand::random::<u64>() % base;
 
 	base_backoff_ms + jitter_ms
 }
