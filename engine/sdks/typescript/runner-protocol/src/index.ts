@@ -1183,21 +1183,21 @@ export function writeToServerWebSocketMessageAck(bc: bare.ByteCursor, x: ToServe
 export type ToServerWebSocketClose = {
     readonly code: u16 | null
     readonly reason: string | null
-    readonly retry: boolean
+    readonly hibernate: boolean
 }
 
 export function readToServerWebSocketClose(bc: bare.ByteCursor): ToServerWebSocketClose {
     return {
         code: read10(bc),
         reason: read5(bc),
-        retry: bare.readBool(bc),
+        hibernate: bare.readBool(bc),
     }
 }
 
 export function writeToServerWebSocketClose(bc: bare.ByteCursor, x: ToServerWebSocketClose): void {
     write10(bc, x.code)
     write5(bc, x.reason)
-    bare.writeBool(bc, x.retry)
+    bare.writeBool(bc, x.hibernate)
 }
 
 /**
