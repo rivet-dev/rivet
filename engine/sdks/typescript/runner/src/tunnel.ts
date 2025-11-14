@@ -202,7 +202,7 @@ export class Tunnel {
 				const webSocket = this.#actorWebSockets.get(requestIdStr);
 				if (webSocket) {
 					// Close the WebSocket connection
-					webSocket.__closeWithRetry(
+					webSocket.__closeWithHibernate(
 						1000,
 						"Message acknowledgment timeout",
 					);
@@ -242,7 +242,7 @@ export class Tunnel {
 		for (const requestIdStr of actor.webSockets) {
 			const ws = this.#actorWebSockets.get(requestIdStr);
 			if (ws) {
-				ws.__closeWithRetry(1000, "Actor stopped");
+				ws.__closeWithHibernate(1000, "Actor stopped");
 				this.#actorWebSockets.delete(requestIdStr);
 			}
 		}
@@ -401,8 +401,8 @@ export class Tunnel {
 							existing.actorId = req.actorId;
 						} else {
 							this.#actorPendingRequests.set(requestIdStr, {
-								resolve: () => {},
-								reject: () => {},
+								resolve: () => { },
+								reject: () => { },
 								streamController: controller,
 								actorId: req.actorId,
 							});
@@ -552,7 +552,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Actor not found",
-					retry: false,
+					hibernate: false,
 				},
 			});
 			return;
@@ -570,7 +570,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Not Implemented",
-					retry: false,
+					hibernate: false,
 				},
 			});
 			return;
@@ -608,7 +608,7 @@ export class Tunnel {
 					const dataBuffer =
 						typeof data === "string"
 							? (new TextEncoder().encode(data)
-									.buffer as ArrayBuffer)
+								.buffer as ArrayBuffer)
 							: data;
 
 					this.#sendMessage(requestId, {
@@ -619,14 +619,14 @@ export class Tunnel {
 						},
 					});
 				},
-				(code?: number, reason?: string, retry: boolean = false) => {
+				(code?: number, reason?: string, hibernate: boolean = false) => {
 					// Send close through tunnel
 					this.#sendMessage(requestId, {
 						tag: "ToServerWebSocketClose",
 						val: {
 							code: code || null,
 							reason: reason || null,
-							retry,
+							hibernate,
 						},
 					});
 
@@ -700,7 +700,7 @@ export class Tunnel {
 				val: {
 					code: 1011,
 					reason: "Server Error",
-					retry: false,
+					hibernate: false,
 				},
 			});
 

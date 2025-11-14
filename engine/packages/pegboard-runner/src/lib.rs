@@ -257,7 +257,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 					protocol::ToServerWebSocketClose {
 						code: Some(close_code),
 						reason: close_reason,
-						retry: true,
+						hibernate: true,
 					},
 				)
 			} else {
