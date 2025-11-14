@@ -33,7 +33,12 @@ pub async fn namespace_resolve_for_name_global(
 						let url = leader_dc.peer_url.join("/namespaces")?;
 						let res = client
 							.get(url)
-							.query(&[("name", &input.name)])
+							.query(&rivet_api_types::namespaces::list::ListQuery {
+								namespace_ids: None,
+								limit: None,
+								cursor: None,
+								name: Some(input.name.clone()),
+							})
 							.send()
 							.custom_instrument(tracing::info_span!("namespaces_http_request"))
 							.await?;
