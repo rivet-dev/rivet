@@ -94,19 +94,17 @@ export function StudioSection() {
 					{/* Header */}
 					<div className="max-w-7xl mx-auto relative z-20 pointer-events-auto">
 						<h2 className="max-w-lg text-4xl font-medium tracking-tight text-white">
-							Built-In Observability at Scale
+							Built-In Observability
 						</h2>
 						<p className="max-w-lg mt-4 text-lg text-white/70">
-							Powerful debugging and monitoring tools that work
-							seamlessly from local development to production at
-							scale.
+							Powerful debugging and monitoring tools that work from local development to production.
 						</p>
 
 						{/* Visit the Studio link */}
 						<div className="mt-3">
 							<a
 								href="https://inspect.rivet.dev"
-								className="inline-flex items-center gap-2 text-white hover:text-white/80 transition-colors group/link"
+								className="inline-flex items-center gap-2 text-[#FF5C00] hover:text-[#FF5C00]/80 transition-colors group/link"
 								target="_blank"
 								rel="noopener noreferrer"
 							>

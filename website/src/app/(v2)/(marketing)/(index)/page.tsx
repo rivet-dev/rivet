@@ -4,6 +4,7 @@ import { UseCases } from "./sections/UseCases";
 import { PlatformSection } from "./sections/PlatformSection";
 import { CodeSnippetsSection } from "./sections/CodeSnippetsSection";
 import { FeaturesSection } from "./sections/FeaturesSection";
+import { FeaturesBentoBox } from "./sections/FeaturesBentoBox";
 import { TechSection } from "./sections/TechSection";
 import { DeploymentOptionsSection } from "./sections/DeploymentOptionsSection";
 import { StudioSection } from "./sections/StudioSection";
@@ -31,6 +32,10 @@ export default function IndexPage() {
 
 				<div className="py-24 sm:py-32">
 					<CodeSnippetsSection />
+				</div>
+
+				<div className="py-24 sm:py-32">
+					<FeaturesBentoBox />
 				</div>
 
 				{/*<div className="py-24 sm:py-32">
