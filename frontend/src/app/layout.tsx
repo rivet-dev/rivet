@@ -393,12 +393,13 @@ const Subnav = () => {
 			: { to: "/", fuzzy: true },
 	);
 
+	const hasDataProvider = useDataProviderCheck();
+	const dataProvider = useDataProvider();
+	const hasQuery = hasDataProvider && !!dataProvider.buildsQueryOptions;
+
 	if (nsMatch === false) {
 		return null;
 	}
-
-	const hasDataProvider = useDataProviderCheck();
-	const hasQuery = hasDataProvider && !!useDataProvider().buildsQueryOptions;
 
 	return (
 		<div className="flex gap-1.5 flex-col">

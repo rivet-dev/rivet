@@ -8,24 +8,110 @@ export function SolutionSection() {
 		const codeSteps = document.querySelectorAll<HTMLDivElement>(".code-highlight-step");
 		if (codeSteps.length === 0) return;
 
+		const sectionTrigger = document.querySelector<HTMLDivElement>(".section-scale-trigger");
+		const codeBox = document.querySelector<HTMLDivElement>(".code-box-container");
+		const codePre = document.querySelector<HTMLElement>(".code-content pre");
+		const sectionHeader = document.querySelector<HTMLHeadingElement>(".section-header");
 		const codeRefs = new Map(
 			Array.from(document.querySelectorAll<HTMLElement>(".code-highlight-ref")).map((el) => [el.id, el])
 		);
+		const allHighlightRefs = document.querySelectorAll<HTMLElement>(".code-highlight-ref");
 		let activeCodeRef: HTMLElement | null = null;
 		let activeStep: HTMLElement | null = null;
 
-		const codeObserver = new IntersectionObserver(
+		// Track state
+		let isInExpandedZone = false; // Are we in the zone where box should be 1.2?
+		let currentActiveStepIndex = -1; // Which step is currently active
+
+		// Helper function to apply scale
+		const applyScale = (shouldExpand: boolean) => {
+			if (!codeBox) return;
+
+			if (shouldExpand) {
+				codeBox.style.transform = "scale(1.20)";
+				codeBox.style.transition = "transform 0.5s ease-in-out";
+
+				if (codePre) {
+					codePre.style.transform = "scale(0.85)";
+					codePre.style.transformOrigin = "0 0";
+					codePre.style.transition = "transform 0.5s ease-in-out";
+				}
+
+				allHighlightRefs.forEach((ref) => {
+					ref.style.marginLeft = "-1.8rem";
+					ref.style.marginRight = "0";
+					ref.style.paddingLeft = "2.5rem";
+					ref.style.paddingRight = "2.5rem";
+					ref.style.width = "calc((100% / 0.85) + 1.8rem + 1.5rem + 0.235rem)";
+					ref.style.transition = "margin 0.5s ease-in-out, padding 0.5s ease-in-out, width 0.5s ease-in-out";
+				});
+
+				if (sectionHeader) {
+					sectionHeader.style.marginBottom = "4.8rem"; // 4rem * 1.2 to maintain constant visual spacing
+					sectionHeader.style.transition = "margin-bottom 0.5s ease-in-out";
+				}
+			} else {
+				codeBox.style.transform = "scale(1)";
+				codeBox.style.transition = "transform 0.5s ease-in-out";
+
+				if (codePre) {
+					codePre.style.transform = "scale(1)";
+					codePre.style.transformOrigin = "";
+					codePre.style.transition = "transform 0.5s ease-in-out";
+				}
+
+				allHighlightRefs.forEach((ref) => {
+					ref.style.marginLeft = "";
+					ref.style.marginRight = "";
+					ref.style.paddingLeft = "";
+					ref.style.paddingRight = "";
+					ref.style.width = "";
+					ref.style.transition = "margin 0.5s ease-in-out, padding 0.5s ease-in-out, width 0.5s ease-in-out";
+				});
+
+				if (sectionHeader) {
+					sectionHeader.style.marginBottom = "";
+					sectionHeader.style.transition = "margin-bottom 0.5s ease-in-out";
+				}
+			}
+		};
+
+		// Helper to determine if box should be expanded
+		const updateScale = () => {
+			// Expand if: we're in the expanded zone AND active step is 0-3
+			const shouldExpand = isInExpandedZone && currentActiveStepIndex >= 0 && currentActiveStepIndex <= 3;
+			applyScale(shouldExpand);
+		};
+
+		// Observer for the section trigger - determines if we're in the "expanded zone"
+		const triggerObserver = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
-					const targetId = (entry.target as HTMLElement).dataset.targetCode;
-					const codeEl = codeRefs.get(targetId || "");
+					isInExpandedZone = entry.isIntersecting;
+					updateScale();
+				});
+			},
+			{
+				rootMargin: "-42% 0px -42% 0px",
+				threshold: 0,
+			}
+		);
+
+		// Observer for steps - determines which step is active
+		const stepObserver = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
 					const stepEl = entry.target as HTMLElement;
 					const stepIndex = Array.from(codeSteps).indexOf(stepEl as HTMLDivElement);
-					const isFirstStep = stepIndex === 0;
+					const targetId = stepEl.dataset.targetCode;
+					const codeEl = codeRefs.get(targetId || "");
 					const isLastStep = stepIndex === codeSteps.length - 1;
 
 					if (entry.isIntersecting) {
-						// Hide all other steps first
+						// This step is now active
+						currentActiveStepIndex = stepIndex;
+
+						// Hide all other steps
 						codeSteps.forEach((step) => {
 							if (step !== stepEl) {
 								const rect = step.getBoundingClientRect();
@@ -37,7 +123,7 @@ export function SolutionSection() {
 							}
 						});
 
-						// Activate code highlighting - only deactivate previous when activating new one
+						// Activate code highlighting
 						if (activeCodeRef && activeCodeRef !== codeEl) {
 							activeCodeRef.classList.remove("is-active");
 						}
@@ -46,18 +132,20 @@ export function SolutionSection() {
 							activeCodeRef = codeEl;
 						}
 
-						// Show step with animation (centered and visible)
+						// Show step
 						stepEl.style.opacity = "1";
 						stepEl.style.transform = "translateY(0) scale(1)";
 						activeStep = stepEl;
+
+						// Update scale based on new active step
+						updateScale();
 					} else {
 						// Special handling for last step
 						if (isLastStep) {
-							// Last step: check if we've scrolled past it
 							const rect = stepEl.getBoundingClientRect();
 							const hasScrolledPast = rect.top < window.innerHeight / 2;
 							if (hasScrolledPast) {
-								// Keep last step visible and keep code highlighted
+								currentActiveStepIndex = stepIndex;
 								stepEl.style.opacity = "1";
 								stepEl.style.transform = "translateY(0) scale(1)";
 								if (codeEl && !codeEl.classList.contains("is-active")) {
@@ -66,11 +154,12 @@ export function SolutionSection() {
 									activeCodeRef = codeEl;
 								}
 								activeStep = stepEl;
-								return; // Don't hide it
+								updateScale();
+								return;
 							}
 						}
 
-						// Hide step with animation
+						// Hide step
 						const rect = stepEl.getBoundingClientRect();
 						const isAbove = rect.top < window.innerHeight / 2;
 						stepEl.style.opacity = "0";
@@ -86,31 +175,22 @@ export function SolutionSection() {
 			}
 		);
 
-		// Initialize steps: first step visible and centered, others hidden
-		codeSteps.forEach((step, index) => {
+		// Observe the trigger element
+		if (sectionTrigger) {
+			triggerObserver.observe(sectionTrigger);
+		}
+
+		// Observe all steps
+		codeSteps.forEach((step) => {
 			step.style.transition = "opacity 0.35s ease-in-out, transform 0.35s ease-in-out";
-			if (index === 0) {
-				// First step starts visible and centered
-				step.style.opacity = "1";
-				step.style.transform = "translateY(0) scale(1)";
-				activeStep = step;
-				// Also activate the first code highlight
-				const targetId = step.dataset.targetCode;
-				const codeEl = codeRefs.get(targetId || "");
-				if (codeEl) {
-					codeEl.classList.add("is-active");
-					activeCodeRef = codeEl;
-				}
-			} else {
-				// Other steps start hidden and slightly offset
-				step.style.opacity = "0";
-				step.style.transform = "translateY(30px) scale(0.95)";
-			}
-			codeObserver.observe(step);
+			stepObserver.observe(step);
 		});
 
 		return () => {
-			codeSteps.forEach((step) => codeObserver.unobserve(step));
+			if (sectionTrigger) {
+				triggerObserver.unobserve(sectionTrigger);
+			}
+			codeSteps.forEach((step) => stepObserver.unobserve(step));
 		};
 	}, []);
 
@@ -119,7 +199,7 @@ export function SolutionSection() {
 			{/* Centered Container */}
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 				{/* Header */}
-				<h2 className="text-center font-heading text-4xl md:text-5xl font-bold tracking-tighter text-text-primary mb-16">
+				<h2 className="section-header text-center font-heading text-4xl md:text-5xl font-bold tracking-tighter text-text-primary mb-16">
 					Stop Writing Glue Code.
 				</h2>
 
@@ -128,12 +208,12 @@ export function SolutionSection() {
 					{/* Left Side: Sticky Code */}
 					<div>
 						<div className="sticky top-32 md:top-40 z-10">
-							<div className="flex-none rounded-xl border border-border bg-black/50">
+							<div className="code-box-container flex-none rounded-xl border border-border bg-black/50" style={{ transformOrigin: "center center" }}>
 								<div className="flex items-center justify-between border-b border-border px-4 py-3">
 									<span className="text-sm font-medium text-text-primary">ai-agent.ts</span>
 									<span className="text-sm text-text-secondary font-mono">actor.ts</span>
 								</div>
-								<div className="p-6 font-mono text-sm overflow-x-auto">
+								<div className="code-content p-6 font-mono text-sm overflow-x-auto overflow-y-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ transformOrigin: "center center" }}>
 								<pre>
 									<code>
 										<span className="code-comment">// Define your actor</span>
@@ -211,7 +291,11 @@ export function SolutionSection() {
 
 					{/* Right Side: The Explanation (Scroll-triggers) */}
 					<div className="mt-8 md:mt-0">
-						<div className="flex flex-col items-center">
+						<div className="flex flex-col items-center relative">
+							{/* Invisible trigger element - spans from before step 1 through step 4 */}
+							{/* This keeps isInExpandedZone true throughout steps 1-4 */}
+							<div className="section-scale-trigger absolute top-0 left-0 right-0" style={{ height: "calc(10vh + 20vh + 20vh + 20vh + 40vh)", pointerEvents: "none" }}></div>
+
 							<div className="h-[10vh]"></div>
 							<div className="code-highlight-step text-center" data-target-code="code-ref-1">
 								<h3 className="font-heading text-xl font-bold text-text-primary">1. Define Your State</h3>

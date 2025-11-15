@@ -464,7 +464,7 @@ export function ConnectionCheck({ provider }: { provider: string }) {
 
 	useEffect(() => {
 		onChange(isSuccess);
-	}, [isSuccess]);
+	}, [isSuccess, onChange]);
 
 	return (
 		<AnimatePresence>

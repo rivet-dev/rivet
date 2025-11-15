@@ -2,155 +2,168 @@
 
 import { useEffect } from "react";
 
+const primitives = [
+	{
+		category: "Compute",
+		number: "01",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<rect x="4" y="4" width="16" height="16" rx="2"></rect>
+				<rect x="9" y="9" width="6" height="6"></rect>
+				<path d="M9 1v3"></path>
+				<path d="M15 1v3"></path>
+				<path d="M9 20v3"></path>
+				<path d="M15 20v3"></path>
+				<path d="M20 9h3"></path>
+				<path d="M20 14h3"></path>
+				<path d="M1 9h3"></path>
+				<path d="M1 14h3"></path>
+			</svg>
+		),
+		title: "Long-Lived Compute",
+		description: "Like Lambda, but with memory. No 5-minute timeouts, no state loss. Your logic runs as long as your product does.",
+		code: "persistent.process()",
+	},
+	{
+		category: "State",
+		number: "02",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M12 14l4-4"></path>
+				<path d="M3.34 19a10 10 0 1 1 17.32 0"></path>
+			</svg>
+		),
+		title: "Zero-Latency State",
+		description: "State lives beside your compute. Reads and writes are in-memory—no cache invalidation, no round-trips, no gymnastics.",
+		code: "read(<1ms)",
+	},
+	{
+		category: "Realtime",
+		number: "03",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<circle cx="12" cy="12" r="1"></circle>
+				<path d="M5 8.55a7 7 0 0 1 0 6.9"></path>
+				<path d="M19 8.55a7 7 0 0 0 0 6.9"></path>
+				<path d="M8.5 6a10 10 0 0 1 0 12"></path>
+				<path d="M15.5 6a10 10 0 0 0 0 12"></path>
+			</svg>
+		),
+		title: "Realtime, Built-in",
+		description: "WebSockets and SSE out of the box. Broadcast updates with one line—no extra infrastructure, no pub/sub layer.",
+		code: "c.broadcast()",
+	},
+	{
+		category: "Economics",
+		number: "04",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path>
+			</svg>
+		),
+		title: "Sleep When Idle",
+		description: "Actors automatically hibernate to save costs and wake instantly on demand. You only pay for work done—not uptime.",
+		code: "idle → sleep()",
+	},
+	{
+		category: "Ownership",
+		number: "05",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M15 22v-2.5a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 19.5 5.77 5.07 5.07 0 0 0 19.4 2S18.27 1.65 15 3.46a13.38 13.38 0 0 0-6 0C5.73 1.65 4.6 2 4.6 2a5.07 5.07 0 0 0-.1 3.77A5.44 5.44 0 0 0 3.5 9.89c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 19.5V22"></path>
+				<path d="M9 18c-4.51 2-5-2-7-2"></path>
+			</svg>
+		),
+		title: "Open Source & Self-Hostable",
+		description: "No lock-in. Run on your platform of choice or bare metal with the same API and mental model.",
+		code: "apache-2.0",
+	},
+	{
+		category: "Reliability",
+		number: "06",
+		icon: (
+			<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="m9 12 2 2 4-4"></path>
+				<path d="M12 22c4.5-2 8-5 8-10V5l-8-3-8 3v7c0 5 3.5 8 8 10"></path>
+			</svg>
+		),
+		title: "Resilient by Design",
+		description: "Automatic failover and restarts maintain state integrity. Your actors survive crashes, deploys, noisy neighbors.",
+		code: "uptime > 99.9%",
+	},
+];
+
 export function NewFeaturesBento() {
 	useEffect(() => {
-		// Bento box glow effect
-		const bentoBoxes = document.querySelectorAll<HTMLDivElement>(".bento-box");
-		bentoBoxes.forEach((box) => {
-			const handleMouseMove = (e: MouseEvent) => {
-				const rect = box.getBoundingClientRect();
-				const x = e.clientX - rect.left;
-				const y = e.clientY - rect.top;
-				box.style.setProperty("--mouse-x", `${x}px`);
-				box.style.setProperty("--mouse-y", `${y}px`);
-			};
+		// Scroll animation setup using existing system
+		const scrollElements = document.querySelectorAll(".animate-on-scroll");
 
-			const handleMouseLeave = () => {
-				box.style.setProperty("--mouse-x", "50%");
-				box.style.setProperty("--mouse-y", "50%");
-			};
+		const observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						entry.target.classList.add("is-visible");
+						observer.unobserve(entry.target);
+					}
+				});
+			},
+			{ threshold: 0.1 }
+		);
 
-			box.addEventListener("mousemove", handleMouseMove);
-			box.addEventListener("mouseleave", handleMouseLeave);
+		scrollElements.forEach((el) => observer.observe(el));
 
-			return () => {
-				box.removeEventListener("mousemove", handleMouseMove);
-				box.removeEventListener("mouseleave", handleMouseLeave);
-			};
-		});
+		return () => {
+			scrollElements.forEach((el) => observer.unobserve(el));
+		};
 	}, []);
 
 	return (
 		<section className="py-24 md:py-32">
-			<h2 className="animate-on-scroll animate-fade-up text-center font-heading text-4xl md:text-5xl font-bold tracking-tighter text-text-primary">
-				A New Primitive for Your Backend.
-			</h2>
+			<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+				<h2 className="text-center font-heading text-4xl md:text-5xl font-bold tracking-tighter text-text-primary animate-on-scroll animate-fade-up mb-16">
+					A New Primitive for Your Backend.
+				</h2>
 
-			<div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-				<div className="bento-box animate-on-scroll animate-fade-up delay-100 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth="1.5"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-1.5m-12.75 0h1.5m11.25 0h1.5m-1.5 0v-1.5m0 1.5v1.5m0 0v1.5m0 0h1.5m-1.5 0h-1.5m0 0h-1.5m0 0h-1.5m9 3.75H9A2.25 2.25 0 0 1 6.75 18v-1.5M17.25 18v-1.5m0 1.5v-1.5m-10.5 0v1.5m0-1.5v1.5m0 0v-1.5m0 0h1.5m0 0H9"
-						/>
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Long-Lived Compute</h3>
-					<p className="mt-2 text-text-secondary">Like Lambda, but with memory. No 5-minute timeouts. No state loss.</p>
-				</div>
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+					{primitives.map((primitive, index) => {
+						const delayClasses = ["delay-100", "delay-200", "delay-300", "delay-400", "delay-500", "delay-600"];
+						return (
+						<div key={index} className={`bento-box animate-on-scroll animate-fade-up ${delayClasses[index] || ""} border border-border rounded-xl p-6 md:p-8 bg-background/50 flex flex-col justify-between`}>
+							{/* Header with category badge and number */}
+							<div className="flex items-start justify-between gap-4 mb-6">
+								<div className="inline-flex bg-black/50 border border-border rounded-full px-3 py-1.5 items-center justify-center">
+									<span className="w-1.5 h-1.5 rounded-full bg-accent mr-2"></span>
+									<span className="text-xs uppercase tracking-wider text-text-secondary">
+										{primitive.category}
+									</span>
+								</div>
+								<span className="text-xs font-mono text-text-secondary">
+									{primitive.number}
+								</span>
+							</div>
 
-				<div className="bento-box animate-on-scroll animate-fade-up delay-200 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth="1.5"
-						stroke="currentColor"
-					>
-						<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Zero-Latency State</h3>
-					<p className="mt-2 text-text-secondary">
-						State lives with your compute. Reads and writes are in-memory. No database round-trips.
-					</p>
-				</div>
+							{/* Icon, title, and description */}
+							<div className="flex-1">
+								<div className="inline-flex items-center justify-center rounded-lg bg-black/30 border border-border p-3 mb-4">
+									{primitive.icon}
+								</div>
+								<h3 className="font-heading text-xl font-bold text-text-primary mb-2">
+									{primitive.title}
+								</h3>
+								<p className="text-text-secondary">
+									{primitive.description}
+								</p>
+							</div>
 
-				<div className="bento-box animate-on-scroll animate-fade-up delay-300 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth="1.5"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M9 9.563C9 9.252 9.252 9 9.563 9h4.874c.311 0 .563.252.563.563v4.874c0 .311-.252.563-.563.563H9.564A.562.562 0 0 1 9 14.437V9.564ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-						/>
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Realtime, Built-in</h3>
-					<p className="mt-2 text-text-secondary">
-						WebSockets and SSE out-of-the-box. Broadcast updates with one line of code.
-					</p>
-				</div>
-
-				<div className="bento-box animate-on-scroll animate-fade-up delay-400 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth="1.5"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
-						/>
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Sleep When Idle</h3>
-					<p className="mt-2 text-text-secondary">
-						Actors automatically hibernate to save costs and wake up instantly (zero cold start) on demand.
-					</p>
-				</div>
-
-				<div className="bento-box animate-on-scroll animate-fade-up delay-500 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						role="img"
-						viewBox="0 0 24 24"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="currentColor"
-					>
-						<title>GitHub</title>
-						<path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Open Source & Self-Hostable</h3>
-					<p className="mt-2 text-text-secondary">
-						No vendor lock-in, ever. Run on Rivet Cloud, Vercel, Railway, or your own bare metal.
-					</p>
-				</div>
-
-				<div className="bento-box animate-on-scroll animate-fade-up delay-600 border border-border rounded-xl p-6 md:p-8">
-					<svg
-						className="h-8 w-8 text-accent"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth="1.5"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.25-8.25-3.286Zm0 13.036h.008v.008H12v-.008Z"
-						/>
-					</svg>
-					<h3 className="mt-4 font-heading text-xl font-bold text-text-primary">Resilient by Design</h3>
-					<p className="mt-2 text-text-secondary">
-						Built-in failover and automatic restarts preserve state integrity.
-					</p>
+							{/* Footer with code */}
+							<div className="mt-6 pt-4 border-t border-border">
+								<span className="text-xs font-mono text-text-secondary">
+									{primitive.code}
+								</span>
+							</div>
+						</div>
+						);
+					})}
 				</div>
 			</div>
 		</section>

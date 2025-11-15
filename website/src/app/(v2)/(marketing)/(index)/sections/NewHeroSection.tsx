@@ -35,7 +35,7 @@ const StyleInjector = () => (
       bottom: 0;
       width: 100%;
       height: 100%;
-      background: radial-gradient(ellipse at 50% 50%, rgba(10, 10, 10, 0.2) 0%, rgba(10, 10, 10, 1) 90%);
+      background: radial-gradient(ellipse 70% 40% at 50% 50%, rgba(255, 240, 220, 0.08) 0%, rgba(10, 10, 10, 1) 70%);
     }
     
     @keyframes pan-grid {
@@ -69,8 +69,8 @@ const StyleInjector = () => (
     
     /* --- Actor Processing Pulse --- */
     @keyframes pulse-actor {
-      0% { box-shadow: 0 0 0 0 rgba(255, 69, 0, 0.5); }
-      50% { box-shadow: 0 0 20px 10px rgba(255, 69, 0, 0.3); }
+      0% { box-shadow: 0 0 0 0 rgba(255, 69, 0, 0.3); }
+      50% { box-shadow: 0 0 15px 8px rgba(255, 69, 0, 0.15); }
       100% { box-shadow: 0 0 0 0 rgba(255, 69, 0, 0); }
     }
     
@@ -87,6 +87,17 @@ const StyleInjector = () => (
     }
     
     .animate-fly-green { animation: fly-green 0.6s linear forwards; }
+    
+    /* Database glow animation - triggers when ball reaches database */
+    @keyframes glow-database {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+      50% { box-shadow: 0 0 8px 4px rgba(34, 197, 94, 0.08); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    
+    .animate-glow-database { 
+      animation: glow-database 0.3s ease-out;
+    }
     
     /* Connection lines */
     .connection-line {
@@ -125,9 +136,9 @@ const UserNode = ({ label, position, style }: { label: string; position: string;
 );
 
 // DatabaseNode Component - Green dot for database/API
-const DatabaseNode = ({ label, position }: { label: string; position: string }) => (
+const DatabaseNode = ({ label, position, shouldGlow }: { label: string; position: string; shouldGlow?: boolean }) => (
 	<div className={`absolute ${position} flex items-center space-x-3`} style={{ zIndex: 3 }}>
-		<div className="w-10 h-10 rounded-full bg-green-600 border-2 border-green-400 flex items-center justify-center shadow-lg shadow-green-500/50">
+		<div className={`w-10 h-10 rounded-full bg-green-600 border-2 border-green-400 flex items-center justify-center ${shouldGlow ? "animate-glow-database" : ""}`}>
 			<svg className="w-5 h-5 text-green-200" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
 				<path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
 			</svg>
@@ -188,31 +199,53 @@ const ActorAnimation = () => {
 	const [actorStatus, setActorStatus] = useState<"hibernating" | "active" | "processing">("hibernating");
 	const [requests, setRequests] = useState({ req1: "idle", req2: "idle", req3: "idle" });
 	const [step, setStep] = useState(0);
+	const [shouldGlowDatabase, setShouldGlowDatabase] = useState(false);
 
 	useEffect(() => {
 		const sequence = [
-			() => setActorStatus("active"),
+			() => {
+				setActorStatus("active");
+				setShouldGlowDatabase(false); // Reset glow when status changes
+			},
 			() => setRequests((r) => ({ ...r, req1: "flying" })),
 			() => {
 				setRequests((r) => ({ ...r, req1: "idle" }));
 				setActorStatus("processing");
 				setActorState((s) => ({ count: s.count + 1 }));
+				// Trigger database glow when ball reaches (after 0.6s)
+				setShouldGlowDatabase(false); // Reset first
+				setTimeout(() => setShouldGlowDatabase(true), 600);
 			},
-			() => setActorStatus("active"),
+			() => {
+				setActorStatus("active");
+				setShouldGlowDatabase(false); // Reset glow when status changes
+			},
 			() => setRequests((r) => ({ ...r, req2: "flying" })),
 			() => {
 				setRequests((r) => ({ ...r, req2: "idle" }));
 				setActorStatus("processing");
-				setActorState((s) => ({ count: s.count + 2 }));
+				setActorState((s) => ({ count: s.count + 1 }));
+				// Trigger database glow when ball reaches (after 0.6s)
+				setShouldGlowDatabase(false); // Reset first
+				setTimeout(() => setShouldGlowDatabase(true), 600);
 			},
-			() => setActorStatus("active"),
+			() => {
+				setActorStatus("active");
+				setShouldGlowDatabase(false); // Reset glow when status changes
+			},
 			() => setRequests((r) => ({ ...r, req3: "flying" })),
 			() => {
 				setRequests((r) => ({ ...r, req3: "idle" }));
 				setActorStatus("processing");
 				setActorState((s) => ({ count: s.count + 1 }));
+				// Trigger database glow when ball reaches (after 0.6s)
+				setShouldGlowDatabase(false); // Reset first
+				setTimeout(() => setShouldGlowDatabase(true), 600);
 			},
-			() => setActorStatus("hibernating"),
+			() => {
+				setActorStatus("hibernating");
+				setShouldGlowDatabase(false); // Reset glow when status changes
+			},
 			() => {
 				setActorState({ count: 10 });
 				setStep(0);
@@ -233,7 +266,7 @@ const ActorAnimation = () => {
 
 	const getActorClasses = () => {
 		let classes =
-			"w-48 h-48 rounded-2xl border-2 flex flex-col items-center justify-center transition-all duration-500";
+			"w-48 h-48 border-2 flex flex-col items-center justify-center transition-all duration-500";
 
 		if (actorStatus === "hibernating") {
 			classes += " bg-orange-900/30 border-orange-500/20 opacity-60";
@@ -301,7 +334,7 @@ const ActorAnimation = () => {
 				{/* Actor on the right - lines connect at x=280, y=60, y=125, y=190 */}
 				{/* Actor is 192px wide (w-48), so if lines connect at x=280, position actor so left edge is at x=280 */}
 				<div className="absolute left-[280px] top-[125px]" style={{ transform: "translateY(-50%)", zIndex: 2 }}>
-					<div className={`relative ${getActorClasses()}`}>
+					<div className={`relative ${getActorClasses()}`} style={{ borderRadius: "42px" }}>
 						<div className="absolute top-3 px-3 py-1 bg-orange-400/20 text-orange-300 text-xs rounded-full font-medium">
 							Actor
 						</div>
@@ -321,7 +354,7 @@ const ActorAnimation = () => {
 				{/* Database/API Node below the actor - centered with actor */}
 				<div className="absolute left-[376px] bottom-0" style={{ transform: "translateX(-50%)", zIndex: 3 }}>
 					<div className="flex items-center space-x-3">
-						<div className="w-10 h-10 rounded-full bg-green-600 border-2 border-green-400 flex items-center justify-center shadow-lg shadow-green-500/50">
+						<div className={`w-10 h-10 rounded-full bg-green-600 border-2 border-green-400 flex items-center justify-center ${shouldGlowDatabase ? "animate-glow-database" : ""}`}>
 							<svg className="w-5 h-5 text-green-200" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
 								<path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
 							</svg>
